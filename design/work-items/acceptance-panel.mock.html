@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Story-acceptance panel (3 states) + org card + board badge — MOTIR-1627 ·
+      MOTIR-1633
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the STORY-ACCEPTANCE surfaces — Subtask
+      MOTIR-1633, the design that blocks the code Subtasks MOTIR-1634 (panel UI),
+      MOTIR-1635 (org settings toggle card) and MOTIR-1636 (board badge).
+
+      detail.pen / the item-detail page reserve NO acceptance section, so the
+      panel + its three eligibility states, the org toggle card, and the board
+      pill are whole elements no design specifies — the design gate (notes.html
+      mistake #31) requires this asset first, exactly as attachments.mock.html
+      (5.2.4) and relationships.mock.html closed their gates.
+
+      GROUNDED IN (read at design time, not invented):
+        · MOTIR-1628 ADR (docs/decisions/acceptance-video.md) — the 3-states +
+          the applicable:false (self-host/meta) UNGATED case + retention/provenance.
+        · MOTIR-1630 eligibility DTO — { applicable, eligible, reason
+          (eligible|no_plan|toggle_off|not_applicable), toggleEnabled,
+          canManageBilling, canManageToggle } — the exact fields the panel
+          branches on. State A = eligible; B = toggle_off; C = no_plan.
+        · MOTIR-1629 evidence DTO — { status (pending|approved|changes_requested),
+          videoUrl, chapters[{label,tSeconds}], commitSha, ciRunUrl, producedByKey }.
+
+      COMPOSES ONLY SHIPPED PRIMITIVES — ContentSectionCard (the detail-page
+      section-card grammar, .card here), Button variants (.btn-*), Pill (tint bg +
+      --el-text-strong + icon, finding #35), the Switch (role="switch", .sw — the
+      github.mock.html vocabulary), Card (the settings card), and the BoardCard
+      readiness-pill placement (BoardCard.tsx:81). No new visual primitive is
+      invented: the native <video> is a browser element, and the chapter scrubber
+      reuses the badge/mono-chip + track grammar. Tokens copied 1:1 from
+      app/globals.css; colour ONLY via Tier-3 --el-*; shape via the
+      element-semantic radius/spacing/height/shadow tokens (never Tier-0
+      --color-* or a raw rounded-*/p-*/h-*). Toggle data-theme="dark" for parity.
+
+      PANELS (multi-panel board — review EACH):
+        0 · Placement / access path — the acceptance card in the item-detail main
+            column, AFTER the Development section (page.tsx:436).
+        A1 · State A (plan + ON, evidence present) — the chaptered player +
+            provenance + test summary + Approve / Request changes (the gate).
+        A2 · State A pending — in_review, no video yet ("Waiting for the video").
+        A3 · State A approved — the accepted read-only variant.
+        B1 · State B (plan + toggle OFF) — org-admin: inline Turn-on Switch + Go
+            to settings.
+        B2 · State B — non-admin: read-only "ask an org admin" + settings link.
+        C · State C (no plan) — the Upgrade upsell (→ billing) + Learn more.
+        S · Org settings card — the "Acceptance video" toggle (settings →
+            organization, OrgGeneralCard sibling), + its access path.
+        D · Board badge — the "Awaiting acceptance" Pill on a BoardCard, + path.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bb1;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-green: #2fc94f;
+        --color-success: #2fc94f;
+        --color-warning: #f08c00;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #4088cc;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --el-switch-knob: #d4d4d4;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 940px;
+        line-height: 1.55;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── Detail-page placement chrome (panel 0) ───────────────────────────── */
+      .detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 20px;
+        max-width: 1000px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 0;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 18px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: var(--el-page-bg);
+      }
+      .ghost.is-here {
+        border-style: solid;
+        border-color: var(--el-accent);
+        color: var(--el-text);
+      }
+      .rail-box {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        background: var(--el-page-bg);
+        color: var(--el-text-faint);
+        font-size: 12px;
+      }
+
+      /* ── THE SECTION CARD — the shipped ContentSectionCard grammar ────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        width: 100%;
+        max-width: 560px;
+      }
+      .card.is-narrow {
+        max-width: 420px;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .section-head svg.h-ic {
+        width: 17px;
+        height: 17px;
+        color: var(--el-text-secondary);
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .head-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── Pill (tint bg + --el-text-strong + icon — finding #35) ───────────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11.5px;
+        font-weight: 600;
+        line-height: 1;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        color: var(--el-text-strong);
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.is-info {
+        background: var(--el-tint-sky);
+      }
+      .pill.is-success {
+        background: var(--el-tint-mint);
+      }
+      .pill.is-warning {
+        background: var(--el-tint-peach);
+      }
+      .pill.is-neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Button variants (the shipped Button grammar) ─────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        border: 0;
+        border-radius: var(--radius-btn);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border: 1px solid var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-link {
+        background: transparent;
+        color: var(--el-link);
+        padding: 0;
+        height: auto;
+        font-weight: 600;
+      }
+
+      /* ── The video player (native <video> frame + chapter scrubber) ───────── */
+      .player {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .player-frame {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        background: radial-gradient(120% 120% at 50% 0%, #26243a 0%, #14131f 70%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .player-frame .play {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.14);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(2px);
+      }
+      .player-frame .play svg {
+        width: 22px;
+        height: 22px;
+        color: #ffffff;
+        margin-left: 3px;
+      }
+      .player-frame .frame-cap {
+        position: absolute;
+        left: 12px;
+        top: 10px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.72);
+      }
+      .player-frame .frame-dur {
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: #ffffff;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 2px 7px;
+        border-radius: var(--radius-badge);
+      }
+      /* scrubber with chapter ticks */
+      .scrub {
+        position: relative;
+        height: 6px;
+        margin: 12px 14px 8px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+      }
+      .scrub .fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 38%;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+      .scrub .tick {
+        position: absolute;
+        top: -3px;
+        width: 2px;
+        height: 12px;
+        border-radius: 2px;
+        background: var(--el-border-strong);
+      }
+      .chapters {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px 14px 14px;
+      }
+      .chap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .chap:hover {
+        background: var(--el-surface);
+      }
+      .chap.is-active {
+        background: var(--el-surface);
+      }
+      .chap .n {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .chap .t {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* test summary + provenance row */
+      .summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 14px 0 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .summary svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-success);
+      }
+      .summary strong {
+        color: var(--el-text);
+      }
+      .prov {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .prov .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+        padding: 3px 8px;
+        border-radius: var(--radius-control);
+      }
+      .prov .chip svg {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-faint);
+      }
+      .prov .chip.is-link {
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .actions .spacer {
+        margin-left: auto;
+      }
+
+      /* ── Empty / pending state (the "waiting for video" variant) ──────────── */
+      .empty {
+        text-align: center;
+        padding: 28px 16px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+      }
+      .empty .ic {
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        background: var(--el-tint-sky);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+      .empty .ic svg {
+        width: 20px;
+        height: 20px;
+        color: var(--el-info);
+      }
+      .empty h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .empty p {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 auto;
+        max-width: 340px;
+        line-height: 1.5;
+      }
+
+      /* ── Off / non-admin / upsell inline boxes ────────────────────────────── */
+      .infobox {
+        display: flex;
+        gap: 14px;
+        padding: 16px;
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+      }
+      .infobox.is-upsell {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+      }
+      .infobox .lead-ic {
+        width: 36px;
+        height: 36px;
+        flex: none;
+        border-radius: var(--radius-control);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .infobox .lead-ic.is-accent {
+        background: var(--el-page-bg);
+      }
+      .infobox .lead-ic.is-accent svg {
+        color: var(--el-accent-on-surface);
+      }
+      .infobox .lead-ic.is-muted {
+        background: var(--el-muted);
+      }
+      .infobox .lead-ic.is-muted svg {
+        color: var(--el-text-muted);
+      }
+      .infobox .lead-ic svg {
+        width: 18px;
+        height: 18px;
+      }
+      .infobox .body {
+        min-width: 0;
+      }
+      .infobox .body h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 3px;
+        color: var(--el-text);
+      }
+      .infobox .body p {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+        line-height: 1.5;
+      }
+      .infobox .cta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      /* ── Switch (role="switch") — the github.mock.html vocabulary ─────────── */
+      .sw {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        cursor: pointer;
+      }
+      .sw .kn {
+        position: absolute;
+        top: 1px;
+        left: 1px;
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        background: var(--el-switch-knob);
+        box-shadow: var(--shadow-subtle);
+        transition: transform 120ms;
+      }
+      .sw.is-on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .sw.is-on .kn {
+        transform: translateX(16px);
+      }
+      .turnon {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* ── Settings card (OrgGeneralCard sibling) ───────────────────────────── */
+      .set-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        max-width: 520px;
+      }
+      .set-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      .set-row .body h3 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .set-row .body p {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0;
+        line-height: 1.5;
+      }
+      .set-row .sw {
+        margin-top: 2px;
+      }
+      .set-foot {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .set-foot svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-success);
+      }
+
+      /* ── Board card (the badge placement — BoardCard.tsx) ─────────────────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 12px 14px;
+        width: 264px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .bcard .key {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bcard .key .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 3px;
+        background: var(--el-type-story);
+      }
+      .bcard .title {
+        font-size: 13.5px;
+        line-height: 1.35;
+        color: var(--el-text);
+      }
+      .bcard .foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .bcard .avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        margin-left: auto;
+      }
+
+      .breadcrumb {
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+        font-family: var(--font-mono);
+        margin-bottom: 2px;
+      }
+      .breadcrumb b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- icon sprite -->
+    <svg style="display: none" xmlns="http://www.w3.org/2000/svg">
+      <symbol
+        id="i-video"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m22 8-6 4 6 4V8Z" />
+        <rect width="14" height="12" x="2" y="6" rx="2" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M8 5v14l11-7z" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.4"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-check-circle"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <path d="m9 11 3 3L22 4" />
+      </symbol>
+      <symbol
+        id="i-revise"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+      </symbol>
+      <symbol
+        id="i-commit"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <line x1="3" x2="9" y1="12" y2="12" />
+        <line x1="15" x2="21" y1="12" y2="12" />
+      </symbol>
+      <symbol
+        id="i-external"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </symbol>
+      <symbol
+        id="i-clock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" x2="12" y1="8" y2="12" />
+        <line x1="12" x2="12.01" y1="16" y2="16" />
+      </symbol>
+      <symbol
+        id="i-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m2 2 20 20" />
+        <path d="M6.34 6.34A2 2 0 0 0 6 8v8a2 2 0 0 0 2 2h8" />
+        <path d="M22 8v8l-6-4Z" opacity=".5" />
+      </symbol>
+      <symbol
+        id="i-sparkles"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+        />
+      </symbol>
+      <symbol
+        id="i-settings"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"
+        />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+    </svg>
+
+    <div class="review-head">
+      <h1>Story-acceptance panel · org settings toggle · board badge</h1>
+      <p>
+        MOTIR-1633 — the design for MOTIR-1627's acceptance surfaces. The panel is a
+        <code>ContentSectionCard</code> in the item-detail main column (after Development,
+        page.tsx:436) and branches on the MOTIR-1630 eligibility DTO into THREE states (A eligible ·
+        B toggle-off · C no-plan), plus a pending + an approved variant. All colour via
+        <code>--el-*</code>, all shape via element-semantic tokens; primitives are
+        ContentSectionCard / Button / Pill / Switch / Card. Toggle
+        <code>data-theme="dark"</code> for token parity.
+      </p>
+    </div>
+
+    <div class="stack">
+      <!-- ── PANEL 0 · PLACEMENT / ACCESS PATH ──────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          0 · Placement — the acceptance card in the item-detail main column
+        </div>
+        <div class="panel-note">
+          The access path: on a <b>story</b>'s detail page, the Acceptance section renders in the
+          main column <b>after the Development section</b> (the GitHub PR/CI block). It appears once
+          the story is <code>in_review</code>. The right rail (scalars) is untouched.
+        </div>
+        <div class="detail-grid">
+          <div class="col">
+            <div class="ghost">Description · Acceptance criteria</div>
+            <div class="ghost">Development — branch · PR · CI checks (MOTIR-810)</div>
+            <div class="ghost is-here">▼ Acceptance (this design) — mounts here</div>
+            <div class="ghost">Activity — comments · history</div>
+          </div>
+          <div class="col">
+            <div class="rail-box">Status · Assignee · Priority · Sprint · Labels</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── STATE A — plan + ON ─────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          A1 · State A — eligible (paid plan + toggle ON), evidence present
+        </div>
+        <div class="panel-note">
+          <code>eligible:true</code> + evidence <code>status:pending</code>. The chaptered player
+          (native <code>&lt;video&gt;</code> + a scrubber with chapter ticks + the chapter list from
+          <code>chapters[]</code>), a compact test summary, provenance (<code>commitSha</code> ·
+          <code>ciRunUrl</code>), and the gate buttons — <b>Approve</b> (<code
+            >in_review → done</code
+          >) / <b>Request changes</b> (<code>in_review → in_progress</code>).
+        </div>
+        <div class="row-of">
+          <div class="card">
+            <div class="section-head">
+              <svg class="h-ic"><use href="#i-video" /></svg>
+              <h2>Acceptance</h2>
+              <span class="pill is-info"
+                ><svg><use href="#i-clock" /></svg>Awaiting review</span
+              >
+            </div>
+            <div class="player">
+              <div class="player-frame">
+                <span class="frame-cap">MOTIR-1627 · acceptance run</span>
+                <span class="play"
+                  ><svg><use href="#i-play" /></svg
+                ></span>
+                <span class="frame-dur">0:00 / 0:48</span>
+              </div>
+              <div class="scrub">
+                <span class="fill"></span>
+                <span class="tick" style="left: 8%"></span>
+                <span class="tick" style="left: 34%"></span>
+                <span class="tick" style="left: 62%"></span>
+                <span class="tick" style="left: 83%"></span>
+              </div>
+              <div class="chapters">
+                <div class="chap is-active">
+                  <span class="n">1</span> Open the story detail <span class="t">0:00</span>
+                </div>
+                <div class="chap">
+                  <span class="n">2</span> Create acceptance evidence <span class="t">0:16</span>
+                </div>
+                <div class="chap">
+                  <span class="n">3</span> Reviewer watches + approves <span class="t">0:30</span>
+                </div>
+                <div class="chap">
+                  <span class="n">4</span> Story moves to Done <span class="t">0:40</span>
+                </div>
+              </div>
+            </div>
+            <div class="summary">
+              <svg><use href="#i-check-circle" /></svg>
+              <span><strong>12 assertions passed</strong> · 0 failed</span>
+            </div>
+            <div class="prov">
+              <span class="chip"
+                ><svg><use href="#i-commit" /></svg>a981c09</span
+              >
+              <span class="chip is-link"
+                ><svg><use href="#i-external" /></svg>CI run #4821</span
+              >
+              <span class="chip">by MOTIR-1638</span>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary">
+                <svg><use href="#i-check" /></svg>Approve
+              </button>
+              <button class="btn btn-secondary">
+                <svg><use href="#i-revise" /></svg>Request changes
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 28px">
+            <div class="panel" style="gap: 12px">
+              <div class="panel-label">A2 · State A — pending (in_review, no video yet)</div>
+              <div class="card is-narrow">
+                <div class="section-head">
+                  <svg class="h-ic"><use href="#i-video" /></svg>
+                  <h2>Acceptance</h2>
+                </div>
+                <div class="empty">
+                  <span class="ic"
+                    ><svg><use href="#i-clock" /></svg
+                  ></span>
+                  <h3>Waiting for the acceptance video</h3>
+                  <p>The story's E2E publishes its recording here on the next green run.</p>
+                </div>
+              </div>
+            </div>
+            <div class="panel" style="gap: 12px">
+              <div class="panel-label">A3 · State A — approved (accepted, read-only)</div>
+              <div class="card is-narrow">
+                <div class="section-head">
+                  <svg class="h-ic"><use href="#i-video" /></svg>
+                  <h2>Acceptance</h2>
+                  <span class="pill is-success"
+                    ><svg><use href="#i-check" /></svg>Approved</span
+                  >
+                </div>
+                <div class="player">
+                  <div class="player-frame" style="aspect-ratio: 16/8">
+                    <span class="play"
+                      ><svg><use href="#i-play" /></svg
+                    ></span>
+                    <span class="frame-dur">0:48</span>
+                  </div>
+                </div>
+                <div class="summary" style="margin-bottom: 0">
+                  <svg><use href="#i-check-circle" /></svg>
+                  <span>Approved by <strong>Yue</strong> · Jul 5</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── STATE B — plan + toggle OFF ─────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          B · State B — toggle OFF (paid plan, org switch off) — admin vs non-admin
+        </div>
+        <div class="panel-note">
+          <code>reason:'toggle_off'</code>. An org <b>admin</b> (<code>canManageToggle</code>) gets
+          an inline Turn-on Switch + a Go-to-settings link; a <b>non-admin</b> sees a read-only note
+          pointing at an admin. No video is generated until the switch is on.
+        </div>
+        <div class="row-of">
+          <div class="card is-narrow">
+            <div
+              class="mini-label"
+              style="
+                font-family: var(--font-mono);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--el-text-faint);
+                margin-bottom: 8px;
+              "
+            >
+              Org admin
+            </div>
+            <div class="section-head">
+              <svg class="h-ic"><use href="#i-video" /></svg>
+              <h2>Acceptance</h2>
+            </div>
+            <div class="infobox">
+              <span class="lead-ic is-muted"
+                ><svg><use href="#i-off" /></svg
+              ></span>
+              <div class="body">
+                <h3>Acceptance video is off</h3>
+                <p>Turn it on to record and attach a video receipt when this story's E2E passes.</p>
+                <div class="cta turnon">
+                  <span class="sw"><span class="kn"></span></span>
+                  <span style="font-size: 13px; font-weight: 600">Turn on</span>
+                  <a class="btn btn-link" style="margin-left: 8px">Go to settings →</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card is-narrow">
+            <div
+              class="mini-label"
+              style="
+                font-family: var(--font-mono);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--el-text-faint);
+                margin-bottom: 8px;
+              "
+            >
+              Non-admin (read-only)
+            </div>
+            <div class="section-head">
+              <svg class="h-ic"><use href="#i-video" /></svg>
+              <h2>Acceptance</h2>
+            </div>
+            <div class="infobox">
+              <span class="lead-ic is-muted"
+                ><svg><use href="#i-off" /></svg
+              ></span>
+              <div class="body">
+                <h3>Acceptance video is off</h3>
+                <p>Ask an org admin to turn on acceptance video in the organization settings.</p>
+                <div class="cta">
+                  <a class="btn btn-link"
+                    ><svg style="width: 13px; height: 13px"><use href="#i-settings" /></svg> View
+                    settings</a
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── STATE C — no plan ───────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-label">C · State C — no paid plan (the upsell)</div>
+        <div class="panel-note">
+          <code>reason:'no_plan'</code>. The Upgrade CTA routes to billing; Learn more opens the
+          feature doc. Mirrors the <code>useAiAccess</code> paywall tone — a lavender upsell surface
+          with the accent CTA. (Owner vs member picks Upgrade vs "ask your owner" via
+          <code>canManageBilling</code>.) On self-host / the meta org
+          (<code>applicable:false</code>) the feature is <b>ungated</b> and this state never renders
+          — the player shows directly.
+        </div>
+        <div class="card is-narrow">
+          <div class="section-head">
+            <svg class="h-ic"><use href="#i-video" /></svg>
+            <h2>Acceptance</h2>
+          </div>
+          <div class="infobox is-upsell">
+            <span class="lead-ic is-accent"
+              ><svg><use href="#i-sparkles" /></svg
+            ></span>
+            <div class="body">
+              <h3>Get a video receipt for every story</h3>
+              <p>
+                A paid Motir AI plan records your story E2Es and attaches the video here for
+                one-click acceptance.
+              </p>
+              <div class="cta">
+                <button class="btn btn-primary">
+                  <svg><use href="#i-sparkles" /></svg>Upgrade
+                </button>
+                <a class="btn btn-link">Learn more</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── ORG SETTINGS CARD ───────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-label">
+          S · Org settings — the "Acceptance video" toggle card (OrgGeneralCard sibling)
+        </div>
+        <div class="panel-note">
+          Access path: <b>Settings → Organization</b>. A <code>Card</code> beside the General card;
+          the Switch PATCHes <code>/api/organizations/[orgId]</code>
+          (<code>acceptanceVideoEnabled</code>). Org owner/admin only (a non-admin sees it
+          read-only, switch disabled). Default ON.
+        </div>
+        <div class="breadcrumb">Settings › <b>Organization</b></div>
+        <div class="set-card">
+          <div class="set-row">
+            <div class="body" style="flex: 1">
+              <h3>Acceptance video</h3>
+              <p>
+                Record a short video when a story's E2E passes and attach it to the story for review
+                &amp; approval. Requires a paid Motir AI plan.
+              </p>
+            </div>
+            <span class="sw is-on"><span class="kn"></span></span>
+          </div>
+          <div class="set-foot">
+            <svg><use href="#i-check" /></svg> Saved
+          </div>
+        </div>
+      </section>
+
+      <!-- ── BOARD BADGE ─────────────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panel-label">D · Board badge — "Awaiting acceptance" Pill on a BoardCard</div>
+        <div class="panel-note">
+          Access path: any <b>board</b>. An <code>in_review</code> story awaiting its acceptance
+          video/approval shows an "Awaiting acceptance" Pill in the card foot — the same slot +
+          grammar as the readiness "Blocked" pill (BoardCard.tsx:81): tint background +
+          <code>--el-text-strong</code> + an icon (state by text+icon, never colour alone). Info
+          tone (sky) distinguishes it from the warning "Blocked" pill.
+        </div>
+        <div class="row-of" style="align-items: flex-end">
+          <div class="bcard">
+            <span class="key"><span class="dot"></span> MOTIR-1627</span>
+            <span class="title"
+              >Story acceptance gate — E2E acceptance video, review &amp; approve</span
+            >
+            <span class="foot">
+              <span class="pill is-info"
+                ><svg><use href="#i-clock" /></svg>Awaiting acceptance</span
+              >
+              <span class="avatar"></span>
+            </span>
+          </div>
+          <div class="panel" style="gap: 6px">
+            <div
+              class="mini-label"
+              style="
+                font-family: var(--font-mono);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--el-text-faint);
+              "
+            >
+              For contrast — the shipped Blocked pill (same slot)
+            </div>
+            <div class="bcard">
+              <span class="key"><span class="dot"></span> MOTIR-1640</span>
+              <span class="title">Downstream story, not yet ready</span>
+              <span class="foot">
+                <span class="pill is-warning"
+                  ><svg><use href="#i-alert" /></svg>Blocked</span
+                >
+                <span class="avatar"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
