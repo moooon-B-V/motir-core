@@ -9,6 +9,8 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { sprintsService } from '@/lib/services/sprintsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
+import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
+import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -34,6 +36,7 @@ import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
+import { AcceptancePanel } from './_components/AcceptancePanel';
 import {
   DevelopmentLinkProvider,
   LinkPullRequestDoor,
@@ -207,6 +210,27 @@ export default async function IssueDetailPage({
   } catch {
     initialAttachments = null;
   }
+
+  // Acceptance (Story MOTIR-1627 · Subtask MOTIR-1634): the story-acceptance
+  // panel shows on a STORY once it reaches in_review (and stays on the accepted,
+  // done story). It reads the eligibility verdict (plan + org toggle) + the
+  // current evidence; the panel branches into its three states. Non-stories and
+  // earlier statuses render nothing.
+  const showAcceptance =
+    item.kind === 'story' && (item.status === 'in_review' || item.status === 'done');
+  const acceptanceEligibility = showAcceptance
+    ? await acceptanceVideoEligibilityService.resolve({
+        actorUserId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      })
+    : null;
+  const acceptanceEvidence = showAcceptance
+    ? await acceptanceEvidenceService.getCurrentForStory(item.id, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      })
+    : null;
+  const tAcceptance = await getTranslations('acceptance');
 
   // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
   // detail read above; the rail's Components picker additionally needs the
@@ -446,6 +470,20 @@ export default async function IssueDetailPage({
                 />
               </ContentSectionCard>
             </DevelopmentLinkProvider>
+            {/* MOTIR-1634: the story-acceptance panel — after Development, on a
+              story in_review/done (per design/work-items/acceptance-panel.png). */}
+            {showAcceptance && acceptanceEligibility ? (
+              <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
+                <AcceptancePanel
+                  workItemId={item.id}
+                  organizationId={acceptanceEligibility.organizationId}
+                  eligibility={acceptanceEligibility}
+                  initialEvidence={acceptanceEvidence}
+                  canDecide={canEdit && item.status === 'in_review'}
+                  settingsHref="/settings/organization"
+                />
+              </ContentSectionCard>
+            ) : null}
             {/* 2.4.3: direct children (a leaf renders nothing). */}
             <ChildList items={detail.children} workflow={detail.workflow} members={members} />
             {/* 5.2.5: the Attachments panel — after Children, before Activity

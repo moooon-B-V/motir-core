@@ -1,4 +1,45 @@
 {
+  "acceptance": {
+    "title": "验收",
+    "gloss": "查看端到端测试视频",
+    "pending": {
+      "title": "正在等待验收视频",
+      "body": "该故事的端到端测试将在下次通过时把录制视频发布到此处。"
+    },
+    "summary": {
+      "recorded": "录制自一次通过的验收运行"
+    },
+    "approvedBy": "由 {name} 批准",
+    "provenance": {
+      "ciRun": "CI 运行"
+    },
+    "status": {
+      "approved": "已批准",
+      "changesRequested": "已请求修改"
+    },
+    "actions": {
+      "approve": "批准",
+      "requestChanges": "请求修改"
+    },
+    "toast": {
+      "approved": "故事已批准",
+      "changesRequested": "已请求修改"
+    },
+    "off": {
+      "title": "验收视频已关闭",
+      "adminBody": "开启后，当该故事的端到端测试通过时将录制并附上视频凭证。",
+      "memberBody": "请联系组织管理员在组织设置中开启验收视频。",
+      "turnOn": "开启",
+      "goToSettings": "前往设置",
+      "viewSettings": "查看设置"
+    },
+    "upsell": {
+      "title": "为每个故事获取视频凭证",
+      "body": "付费的 Motir AI 方案会录制你的故事端到端测试，并将视频附于此处以便一键验收。",
+      "upgrade": "升级",
+      "askOwner": "请联系组织所有者升级 Motir AI 方案。"
+    }
+  },
   "markdownEditor": {
     "mentionPeople": "成员",
     "mentionWorkItems": "工作项",

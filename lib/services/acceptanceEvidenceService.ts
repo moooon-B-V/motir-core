@@ -5,6 +5,7 @@ import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { putAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedAcceptanceVideoType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
@@ -202,5 +203,38 @@ export const acceptanceEvidenceService = {
       },
     );
     return toAcceptanceEvidenceDto(row);
+  },
+
+  /**
+   * The acceptance GATE (Story MOTIR-1627 · Subtask MOTIR-1634). A reviewer's
+   * decision on the current evidence moves BOTH the story and the evidence:
+   * **approve** → story `in_review → done` + evidence `approved` (stamped);
+   * **request_changes** → story `in_review → in_progress` + evidence
+   * `changes_requested`. The story transition runs FIRST through
+   * `workItemsService.updateStatus`, so the workflow enforces the legal edge (a
+   * story that is not `in_review` has no `→ done` edge and is rejected there);
+   * the evidence is stamped only once the transition succeeds.
+   */
+  async decide(
+    input: { workItemId: string; decision: 'approve' | 'request_changes' },
+    ctx: ServiceContext,
+  ): Promise<{ evidence: AcceptanceEvidenceDTO; storyStatus: 'done' | 'in_progress' }> {
+    const current = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => acceptanceEvidenceRepository.findCurrentByWorkItem(input.workItemId, tx),
+    );
+    if (!current) throw new AcceptanceEvidenceNotFoundError(input.workItemId);
+
+    const storyStatus = input.decision === 'approve' ? 'done' : 'in_progress';
+    // The gate: the workflow rejects an illegal edge (e.g. approve when the story
+    // is not in_review — there is no in_progress/todo → done edge).
+    await workItemsService.updateStatus(input.workItemId, storyStatus, ctx);
+
+    const evidence = await this.setStatus(
+      current.id,
+      input.decision === 'approve' ? 'approved' : 'changes_requested',
+      ctx,
+    );
+    return { evidence, storyStatus };
   },
 };
