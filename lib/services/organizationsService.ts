@@ -265,6 +265,32 @@ export const organizationsService = {
     return toOrganizationDTO(org);
   },
 
+  /**
+   * Flip the org-wide story-acceptance-video switch (Story MOTIR-1627 · Subtask
+   * MOTIR-1630). Org owner/admin only (mirrors renameOrganization). A non-plan
+   * org may still hold the flag — the entitlement gate blocks generation
+   * regardless — so this write never leaks cost; it only decides the panel state
+   * for orgs that ARE eligible.
+   */
+  async setAcceptanceVideoEnabled(input: {
+    organizationId: string;
+    actorUserId: string;
+    enabled: boolean;
+  }): Promise<OrganizationDTO> {
+    const org = await withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      async (tx) => {
+        await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
+        return organizationRepository.update(
+          input.organizationId,
+          { acceptanceVideoEnabled: input.enabled },
+          tx,
+        );
+      },
+    );
+    return toOrganizationDTO(org);
+  },
+
   // ── Membership management (asymmetric direction, 6.10.2 §5) ───────────────
 
   /**

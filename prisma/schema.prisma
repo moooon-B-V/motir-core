@@ -392,6 +392,14 @@ model Organization {
   /// motir-ai on the job-submit envelope so the AI credit gate honours it too.
   isMeta Boolean @default(false)
 
+  /// Org-wide switch for story-acceptance video generation (Story MOTIR-1627 ·
+  /// Subtask MOTIR-1630). Default ON: an ELIGIBLE (paid-AI) org opted into the
+  /// (bounded) cost by paying, and a non-eligible org's toggle is moot (the
+  /// entitlement gate blocks generation regardless), so ON never leaks cost.
+  /// Set by an org admin via PATCH /api/organizations/[orgId]; read by
+  /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
+  acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
+
   memberships OrganizationMembership[]
   workspaces  Workspace[]
 

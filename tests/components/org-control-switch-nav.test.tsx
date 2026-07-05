@@ -28,8 +28,18 @@ vi.mock('@/app/(authed)/_actions', () => ({
 
 import { OrgControl } from '@/app/(authed)/_components/OrgControl';
 
-const ACME: OrganizationDTO = { id: 'org_acme', name: 'Acme', slug: 'acme' };
-const BEACON: OrganizationDTO = { id: 'org_beacon', name: 'Beacon', slug: 'beacon' };
+const ACME: OrganizationDTO = {
+  id: 'org_acme',
+  name: 'Acme',
+  slug: 'acme',
+  acceptanceVideoEnabled: true,
+};
+const BEACON: OrganizationDTO = {
+  id: 'org_beacon',
+  name: 'Beacon',
+  slug: 'beacon',
+  acceptanceVideoEnabled: true,
+};
 
 function renderOrgControl() {
   return render(

@@ -69,11 +69,11 @@ affordable comes with it — while keeping the cost bound explicit.
 
 **Decision (pinned):**
 
-| Check                                                             | Axis | Rule                                                                                                                                                                       |
-| ----------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Feature **eligibility** (may this org generate video?)            | A    | `getAiAccess(...).hasPaidAiPlan === true` **AND** the org toggle (decision 3) is ON                                                                                        |
-| Per-upload **cost bound** (enforced on every publish, regardless) | B    | `entitlementsService.resolvePerFileLimitBytes(orgId)` (per-file) **AND** `assertWithinStorageCap(orgId, bytes)` (total)                                                    |
-| **Off-cloud / self-host / meta org**                              | —    | `getAiAccess` → `applicable:false`: **short-circuit to eligible=false** (self-host has no AI plan and no storage metering; the panel shows nothing gated, never an upsell) |
+| Check                                                             | Axis | Rule                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Feature **eligibility** (may this org generate video?)            | A    | `getAiAccess(...).hasPaidAiPlan === true` **AND** the org toggle (decision 3) is ON                                                                                                                                                                                        |
+| Per-upload **cost bound** (enforced on every publish, regardless) | B    | `entitlementsService.resolvePerFileLimitBytes(orgId)` (per-file) **AND** `assertWithinStorageCap(orgId, bytes)` (total)                                                                                                                                                    |
+| **Off-cloud / self-host / meta org**                              | —    | `getAiAccess` → `applicable:false`: **UNGATED → eligible=true** (no AI plan to buy, no storage to meter; the panel shows the player directly, no upsell). This is what lets a self-hoster use the feature AND the moooon META org publish its own self-test dogfood video. |
 
 So the AI plan **gates the feature** and the storage cap **still bounds the
 cost** — the cap is defence-in-depth (a paid org is `scaled`, so 100 MB/file is

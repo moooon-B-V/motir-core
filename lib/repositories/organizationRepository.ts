@@ -65,7 +65,7 @@ export const organizationRepository = {
 
   async update(
     id: string,
-    data: { name?: string; slug?: string; isMeta?: boolean },
+    data: { name?: string; slug?: string; isMeta?: boolean; acceptanceVideoEnabled?: boolean },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {
     return tx.organization.update({ where: { id }, data });

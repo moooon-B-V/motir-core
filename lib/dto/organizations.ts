@@ -6,6 +6,8 @@ export interface OrganizationDTO {
   id: string;
   name: string;
   slug: string;
+  /** Org-wide story-acceptance-video switch (MOTIR-1630); the settings card binds it. */
+  acceptanceVideoEnabled: boolean;
 }
 
 // A workspace the member belongs to within the org, for the cross-workspace

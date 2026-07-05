@@ -9,8 +9,9 @@ import { mapOrgError } from '@/lib/organizations/errorResponse';
 // (404 for a non-member — the no-leak rule — / 403 for a non-admin member) and
 // the transaction. No db.* / no $transaction here.
 
-// PATCH /api/organizations/[orgId] — rename the organization. Body: { name }.
-// Org owner/admin only (enforced in the service).
+// PATCH /api/organizations/[orgId] — update org settings. Body may carry `name`
+// (rename) and/or `acceptanceVideoEnabled` (the MOTIR-1630 toggle); at least one
+// is required. Org owner/admin only (enforced in the service).
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ orgId: string }> },
@@ -30,20 +31,44 @@ export async function PATCH(
       },
     );
   }
-  const { name } = (body ?? {}) as Record<string, unknown>;
-  if (typeof name !== 'string' || !name.trim()) {
+  const { name, acceptanceVideoEnabled } = (body ?? {}) as Record<string, unknown>;
+  const hasName = name !== undefined;
+  const hasToggle = acceptanceVideoEnabled !== undefined;
+  if (!hasName && !hasToggle) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`name` or `acceptanceVideoEnabled` is required.' },
+      { status: 400 },
+    );
+  }
+  if (hasName && (typeof name !== 'string' || !name.trim())) {
     return NextResponse.json(
       { code: 'BAD_REQUEST', error: '`name` is required.' },
       { status: 400 },
     );
   }
+  if (hasToggle && typeof acceptanceVideoEnabled !== 'boolean') {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`acceptanceVideoEnabled` must be a boolean.' },
+      { status: 400 },
+    );
+  }
 
   try {
-    const organization = await organizationsService.renameOrganization({
-      organizationId: orgId,
-      actorUserId: session.user.id,
-      name,
-    });
+    let organization;
+    if (hasName) {
+      organization = await organizationsService.renameOrganization({
+        organizationId: orgId,
+        actorUserId: session.user.id,
+        name: name as string,
+      });
+    }
+    if (hasToggle) {
+      organization = await organizationsService.setAcceptanceVideoEnabled({
+        organizationId: orgId,
+        actorUserId: session.user.id,
+        enabled: acceptanceVideoEnabled as boolean,
+      });
+    }
     return NextResponse.json({ organization });
   } catch (err) {
     const mapped = mapOrgError(err);
