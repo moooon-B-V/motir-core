@@ -4473,6 +4473,7 @@
     "errorLoadMore": "Couldn’t load more findings.",
     "errorSave": "Couldn’t save the draft.",
     "errorApprove": "Couldn’t approve the convention.",
+    "errorReaudit": "Couldn’t start the re-audit.",
     "audit": {
       "emptyTitle": "No codebase to analyze yet",
       "emptyDescription": "Your convention is established from your chosen stack — the code-health audit runs later, once there’s code to read.",
@@ -4530,6 +4531,35 @@
         "standard": "Standard",
         "proposed": "Proposed",
         "superseded": "Superseded"
+      }
+    },
+    "deepen": {
+      "eyebrow": "Optional · non-blocking",
+      "dismiss": "Dismiss",
+      "title": "Deepen this audit with an external scanner",
+      "subtitle": "This report is already complete — no external scanner is connected. Connect one to add its findings on top.",
+      "bestFit": "Best-fit for your repository",
+      "recommended": "Recommended",
+      "reauditNow": "Re-audit now",
+      "reauditing": "Re-auditing your code…",
+      "reauditPending": "Re-audit started — it’ll appear here once it finishes.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "useSonarInstead": "Use SonarQube instead",
+      "useCodeqlInstead": "Use GitHub CodeQL instead",
+      "footerHint": "Once a scanner is configured, re-audit and Motir detects it automatically — its findings merge into this report.",
+      "reopen": "Deepen this audit with an external scanner",
+      "codeql": {
+        "name": "GitHub code scanning (CodeQL)",
+        "action": "Set up CodeQL",
+        "blurb": "The lightest native path for a GitHub repo — results upload as SARIF to the code-scanning API Motir already reads.",
+        "setupHint": "Add this workflow to your repo. Motir detects the upload automatically on the next audit — no separate connect step."
+      },
+      "sonar": {
+        "name": "SonarQube / SonarCloud",
+        "action": "Connect Sonar",
+        "blurb": "For teams already in the Sonar ecosystem — ingested through the same SARIF adapter.",
+        "setupHint": "Add a sonar-project.properties to your repo and run your Sonar analysis. Motir ingests its SARIF on the next audit."
       }
     }
   }

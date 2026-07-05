@@ -7,10 +7,12 @@ import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useRowWindow } from '@/components/ui/useRowWindow';
+import { DeepenAuditCard, DeepenReopenLink } from './DeepenAuditCard';
 import type {
   CodeAuditFindingDTO,
   CodeAuditSurfaceDTO,
   CodeHealthSummaryDTO,
+  ExternalScannerStateDTO,
 } from '@/lib/dto/codeHealth';
 
 const ROW_ESTIMATE_PX = 84;
@@ -28,6 +30,12 @@ export function AuditPanel({
   hasMore,
   loadingMore,
   onLoadMore,
+  scanner,
+  reauditing,
+  onReaudit,
+  deepenDismissed,
+  onDeepenDismiss,
+  onDeepenReopen,
 }: {
   audit: CodeAuditSurfaceDTO['audit'];
   findings: CodeAuditFindingDTO[];
@@ -35,6 +43,12 @@ export function AuditPanel({
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
+  scanner: ExternalScannerStateDTO | null;
+  reauditing: boolean;
+  onReaudit: () => void;
+  deepenDismissed: boolean;
+  onDeepenDismiss: () => void;
+  onDeepenReopen: () => void;
 }) {
   const t = useTranslations('codeHealth');
 
@@ -49,9 +63,23 @@ export function AuditPanel({
   }
 
   const summary = audit.healthSummary;
+  // The "Deepen this audit" affordance is NON-BLOCKING: shown ONLY when the backend
+  // reports no external scanner, sits BETWEEN the summary and the findings, and is
+  // fully dismissible (a quiet re-open link remains). The report renders unchanged
+  // whether it is shown, dismissed, or absent.
+  const showDeepen = scanner?.noExternalScanner === true;
   return (
     <div className="flex flex-col gap-4">
       <HealthSummary summary={summary} findingCount={total} />
+      {showDeepen && !deepenDismissed ? (
+        <DeepenAuditCard
+          scanner={scanner}
+          reauditing={reauditing}
+          onReaudit={onReaudit}
+          onDismiss={onDeepenDismiss}
+        />
+      ) : null}
+      {showDeepen && deepenDismissed ? <DeepenReopenLink onReopen={onDeepenReopen} /> : null}
       <FindingsList
         findings={findings}
         total={total}
