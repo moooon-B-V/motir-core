@@ -36,7 +36,10 @@ import type { LinkedPullRequestDto } from '@/lib/dto/github';
 
 type PillTone = Pick<PillProps, 'status' | 'severity'>;
 
-const PR_STATE_META: Record<
+/** State → glyph + Pill tone (the design's tone table), shared by the linked-PR
+ *  rows here AND the explicit-link picker's option pills (MOTIR-1596) so both
+ *  read from ONE mapping — no new token/variant. */
+export const PR_STATE_META: Record<
   LinkedPullRequestDto['state'],
   { icon: ComponentType<{ className?: string }>; pill: PillTone }
 > = {
@@ -69,6 +72,15 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
         </div>
         <div className="truncate font-sans text-xs text-(--el-text-identifier)">
           {pr.repo} · #{pr.number}
+          {pr.linkedManually ? (
+            // Provenance at a glance (design Panel 5a) — a manual link (set by
+            // the explicit affordance, not the auto-resolver) carries the quiet
+            // "linked manually" suffix.
+            <>
+              {' · '}
+              <span className="font-mono">{t('development.linkedManually')}</span>
+            </>
+          ) : null}
         </div>
       </div>
       <span className="flex shrink-0 items-center gap-1.5">
@@ -107,10 +119,15 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
 export function DevelopmentSectionBody({
   pullRequests,
   itemIdentifier,
+  manualLinkable = false,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
   itemIdentifier: string;
+  /** True on the detail-page host, where the "+ Link pull request" affordance
+   *  lives — the caption then adds "— or linked by hand from here" (design Panel
+   *  5a). The read-only peek leaves it false (its caption names only auto-link). */
+  manualLinkable?: boolean;
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
@@ -132,7 +149,13 @@ export function DevelopmentSectionBody({
         ))}
       </ul>
       <p className="mt-3 font-sans text-xs text-(--el-text-muted)">
-        {t.rich('development.autoLinkCaption', { key: itemIdentifier, mono })}
+        {t.rich(
+          manualLinkable ? 'development.autoLinkCaptionManual' : 'development.autoLinkCaption',
+          {
+            key: itemIdentifier,
+            mono,
+          },
+        )}
       </p>
     </>
   );

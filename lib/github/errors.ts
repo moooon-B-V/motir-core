@@ -60,3 +60,31 @@ export class GithubWebhookSignatureError extends Error {
     this.name = 'GithubWebhookSignatureError';
   }
 }
+
+/**
+ * The workspace has no GitHub App installation (Story 7.10 · MOTIR-1596). The
+ * explicit item→PR link picker can offer no candidates — design/github Panel 5c's
+ * disconnected-workspace banner. The two grants are independent, so this means
+ * the installation grant is absent, regardless of the per-user identity grant.
+ */
+export class GithubNotConnectedError extends Error {
+  readonly code = 'GITHUB_NOT_CONNECTED' as const;
+  constructor() {
+    super('GitHub is not connected for this workspace.');
+    this.name = 'GithubNotConnectedError';
+  }
+}
+
+/**
+ * The target PR does not exist in the caller's workspace (Story 7.10 ·
+ * MOTIR-1596): an unknown id OR a cross-workspace probe — collapsed to ONE error
+ * so existence never leaks (the no-leak convention). Surfaced in the explicit-
+ * link form's rose banner.
+ */
+export class GithubPullRequestNotFoundError extends Error {
+  readonly code = 'GITHUB_PR_NOT_FOUND' as const;
+  constructor(id: string) {
+    super(`GitHub pull request not found: ${id}`);
+    this.name = 'GithubPullRequestNotFoundError';
+  }
+}

@@ -269,40 +269,53 @@ export const githubWebhookService = {
       );
       if (!repo) return { kind: 'unknown_repo' as const };
 
-      const workItem = await resolveWorkItem(installation.workspaceId, cr, tx);
+      // Resolve the PR's linked work item. A MANUAL link (MOTIR-1596, the
+      // explicit item→PR affordance) is the STICKY override of this branch/title
+      // auto-resolver: lock the row, and if it is already manually linked, keep
+      // that work item — this delivery does NOT re-derive the link (so a PR whose
+      // branch never named the key stays linked and still drives the status sync
+      // below, e.g. merged → Done). Otherwise resolve from the head ref / title
+      // as before. The lock closes the clobber race with a concurrent manual link.
+      await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
+      const existingPr = await githubPullRequestRepository.findByRepoAndNumber(
+        repo.id,
+        cr.number,
+        tx,
+      );
+      let workItem: { id: string; projectId: string; status: string } | null;
+      let linkedManually: boolean;
+      if (existingPr?.linkedManually && existingPr.workItemId) {
+        const manual = await workItemRepository.findById(existingPr.workItemId, tx);
+        // A manual link whose target was hard-deleted falls back to unlinked.
+        workItem = manual
+          ? { id: manual.id, projectId: manual.projectId, status: manual.status }
+          : null;
+        linkedManually = manual !== null;
+      } else {
+        workItem = await resolveWorkItem(installation.workspaceId, cr, tx);
+        linkedManually = false;
+      }
 
       // Upsert the PR row — the PR→work-item link entity. Idempotent under
       // concurrent redelivery: a lost unique-`(repo,number)` race throws P2002;
-      // catch it and re-read (the row the winner wrote is the same state).
+      // catch it and re-write (the row the winner wrote is the same state).
+      const prRow = {
+        repoId: repo.id,
+        number: cr.number,
+        state: cr.state,
+        merged: cr.merged,
+        headRef: cr.headRef,
+        title: cr.title,
+        workItemId: workItem?.id ?? null,
+        linkedManually,
+      };
       try {
-        await githubPullRequestRepository.upsert(
-          {
-            repoId: repo.id,
-            number: cr.number,
-            state: cr.state,
-            merged: cr.merged,
-            headRef: cr.headRef,
-            title: cr.title,
-            workItemId: workItem?.id ?? null,
-          },
-          tx,
-        );
+        await githubPullRequestRepository.upsert(prRow, tx);
       } catch (err) {
         if (!isUniqueViolation(err)) throw err;
         // Converge: the concurrent winner wrote the same (repo, number); update
         // to reflect this delivery's state so the row is never left stale.
-        await githubPullRequestRepository.upsert(
-          {
-            repoId: repo.id,
-            number: cr.number,
-            state: cr.state,
-            merged: cr.merged,
-            headRef: cr.headRef,
-            title: cr.title,
-            workItemId: workItem?.id ?? null,
-          },
-          tx,
-        );
+        await githubPullRequestRepository.upsert(prRow, tx);
       }
 
       if (!workItem) return { kind: 'no_work_item' as const };

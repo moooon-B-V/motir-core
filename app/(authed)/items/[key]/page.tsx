@@ -34,6 +34,11 @@ import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
+import {
+  DevelopmentLinkProvider,
+  LinkPullRequestDoor,
+  LinkPullRequestForm,
+} from './_components/DevelopmentLinkControl';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
@@ -422,16 +427,25 @@ export default async function IssueDetailPage({
             {/* 7.10.11 (MOTIR-1579): the Development section — linked PRs with
               PR/CI state, per design/github Panel 5a: a ContentSectionCard after
               Relationships (the linkage cluster), same shared body as the peek.
-              Display-only; MOTIR-1596 adds the explicit-link door to its header. */}
-            <ContentSectionCard
-              title={tGithub('development.title')}
-              subtitle={tGithub('development.gloss')}
-            >
-              <DevelopmentSectionBody
-                pullRequests={pullRequests}
-                itemIdentifier={item.identifier}
-              />
-            </ContentSectionCard>
+              7.10.14 (MOTIR-1596): the explicit-link affordance — the "+ Link
+              pull request" door (header) + inline picker (body) share state via
+              the provider; gated on canEdit (a read-only actor sees no door and
+              the caption drops the "or linked by hand" clause). The peek stays
+              read-only (no door). */}
+            <DevelopmentLinkProvider currentItemId={item.id} identifier={item.identifier}>
+              <ContentSectionCard
+                title={tGithub('development.title')}
+                subtitle={tGithub('development.gloss')}
+                headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
+              >
+                {canEdit ? <LinkPullRequestForm /> : null}
+                <DevelopmentSectionBody
+                  pullRequests={pullRequests}
+                  itemIdentifier={item.identifier}
+                  manualLinkable={canEdit}
+                />
+              </ContentSectionCard>
+            </DevelopmentLinkProvider>
             {/* 2.4.3: direct children (a leaf renders nothing). */}
             <ChildList items={detail.children} workflow={detail.workflow} members={members} />
             {/* 5.2.5: the Attachments panel — after Children, before Activity

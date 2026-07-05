@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 
-export type LinkCandidateFetcher = (
+export type LinkCandidateFetcher<T> = (
   query: string,
-) => Promise<{ ok: true; candidates: WorkItemSummaryDto[] } | { ok: false; error: string }>;
+) => Promise<{ ok: true; candidates: T[] } | { ok: false; error: string }>;
 
 /** One server fetch per settled keystroke — long enough to coalesce a fast typer. */
 const DEBOUNCE_MS = 250;
@@ -24,15 +23,15 @@ const DEBOUNCE_MS = 250;
  * `MultiSelectPicker` "caller debounces its fetch off the controlled query"
  * contract and the `ParentPicker` data-fetch-effect precedent.
  */
-export function useLinkCandidateSearch({
+export function useLinkCandidateSearch<T>({
   fetcher,
   refetchKey,
 }: {
-  fetcher: LinkCandidateFetcher;
+  fetcher: LinkCandidateFetcher<T>;
   refetchKey?: string;
 }) {
   const [query, setQuery] = useState('');
-  const [candidates, setCandidates] = useState<WorkItemSummaryDto[]>([]);
+  const [candidates, setCandidates] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -4,8 +4,12 @@ import type {
   GithubInstallationDTO,
   GithubRepoDTO,
   LinkedPullRequestDto,
+  PullRequestLinkCandidateDto,
 } from '@/lib/dto/github';
-import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
+import type {
+  GithubPullRequestCandidate,
+  GithubPullRequestWithContext,
+} from '@/lib/repositories/githubPullRequestRepository';
 import { derivePrCiState } from '@/lib/github/prCiState';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
@@ -64,5 +68,26 @@ export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): Linke
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
     ci: derivePrCiState(row.checkRuns),
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
+    linkedManually: row.linkedManually,
+  };
+}
+
+/**
+ * A candidate PR row → the explicit-link picker's display shape (Story 7.10 ·
+ * MOTIR-1596, design/github Panel 5b). Same title fallback + merged collapse as
+ * the linked-row DTO; `linkedTo` surfaces the takeover chip when the PR already
+ * points at ANOTHER item (callers exclude PRs linked to the current item, so a
+ * present `workItem` here is always a different item).
+ */
+export function toPullRequestLinkCandidateDto(
+  row: GithubPullRequestCandidate,
+): PullRequestLinkCandidateDto {
+  return {
+    id: row.id,
+    title: row.title ?? row.headRef,
+    repo: `${row.repo.owner}/${row.repo.name}`,
+    number: row.number,
+    state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
+    linkedTo: row.workItem?.identifier ?? null,
   };
 }
