@@ -3192,6 +3192,10 @@ model GithubPullRequest {
   state      String
   merged     Boolean  @default(false)
   headRef    String   @map("head_ref")
+  /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
+  /// Development surface renders it). Nullable: rows ingested before title
+  /// capture display their `head_ref` instead.
+  title      String?
   /// Nullable link to the work item this PR resolves. SetNull on delete so the
   /// PR row (history) survives a work-item deletion with a null link.
   workItemId String?  @map("work_item_id")

@@ -37,3 +37,26 @@ export interface GithubInstallationDTO {
   repos: GithubRepoDTO[];
   createdAt: string;
 }
+
+/**
+ * One linked pull request on a work item's "Development" surface (Story 7.10
+ * · MOTIR-1579, design/github Panels 3 + 4a + 5a) — rendered on BOTH the
+ * quick-view peek and the detail page. Display-ready: the title fallback,
+ * merged/closed collapse, per-PR CI derivation, and link-out URL are all
+ * resolved server-side so the client stays purely presentational.
+ */
+export interface LinkedPullRequestDto {
+  /** The PR title, falling back to its head branch for rows ingested before
+   *  title capture (MOTIR-1579). */
+  title: string;
+  /** `owner/name` — the pr-meta line's repo half. */
+  repo: string;
+  number: number;
+  /** Display state: `merged` wins over the raw open/closed pair. */
+  state: 'open' | 'merged' | 'closed';
+  /** Per-PR CI at its latest recorded commit (lib/github/prCiState) — null
+   *  renders NO CI pill (absence of CI is not a state). */
+  ci: 'passing' | 'failing' | 'running' | null;
+  /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
+  url: string;
+}

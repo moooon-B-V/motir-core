@@ -4374,6 +4374,24 @@
       "reconnect": "重新连接 GitHub",
       "install": "安装 Motir GitHub App",
       "stillConnected": "身份已连接 · 尚未授予仓库访问权限"
+    },
+    "development": {
+      "title": "开发",
+      "gloss": "已关联的拉取请求 · 实时 PR 与 CI 状态",
+      "emptyTitle": "暂无关联的拉取请求",
+      "emptyDescription": "从提及 <mono>{key}</mono> 的分支创建 PR 后，它会出现在这里，并实时显示 PR 与 CI 状态。",
+      "autoLinkCaption": "当分支或 PR 提及 <mono>{key}</mono> 时会自动关联。",
+      "openOnGithub": "在 GitHub 上打开",
+      "prState": {
+        "open": "开放",
+        "merged": "已合并",
+        "closed": "已关闭"
+      },
+      "ciState": {
+        "passing": "检查通过",
+        "failing": "检查失败",
+        "running": "检查运行中"
+      }
     }
   },
   "aiPlanning": {

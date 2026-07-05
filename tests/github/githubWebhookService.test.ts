@@ -261,7 +261,8 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
     expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
     const prRow = await db.githubPullRequest.findFirst({ where: { number: 9 } });
-    expect(prRow).toMatchObject({ workItemId: null });
+    // Title is captured on upsert (MOTIR-1579 — the Development surface renders it).
+    expect(prRow).toMatchObject({ workItemId: null, title: 'no key here' });
   });
 
   it('an illegal transition logs a no-op instead of crashing (item unchanged)', async () => {

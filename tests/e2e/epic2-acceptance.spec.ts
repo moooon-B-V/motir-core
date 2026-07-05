@@ -157,7 +157,9 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
   await page.goto(`/items/${identifier}`);
   // Header + body: title (h1), identifier, kind, initial status, parent breadcrumb.
   await expect(page.getByRole('heading', { name: 'Acceptance subtask', level: 1 })).toBeVisible();
-  await expect(page.getByText(identifier, { exact: true })).toBeVisible();
+  // The header identifier (testid: the bare key text is no longer unique on
+  // the detail page — the Development empty-state copy names it too, MOTIR-1579).
+  await expect(page.getByTestId('item-identifier')).toHaveText(identifier);
   await expect(page.getByText('Sub-task', { exact: true })).toBeVisible(); // the Type field card
   // exact: the status Pill reads "To Do" — without exact it also matches the
   // description empty-state placeholder ("— what to do").

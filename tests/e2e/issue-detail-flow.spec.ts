@@ -136,7 +136,9 @@ test('@smoke renders the canonical detail page (header · rendered Markdown · c
 
   // Header: identifier + title h1.
   await expect(page.getByRole('heading', { name: 'Wire the dashboard', level: 1 })).toBeVisible();
-  await expect(page.getByText(item.identifier, { exact: true })).toBeVisible();
+  // Header identifier via testid — the bare key text is no longer unique on
+  // the detail page (the Development empty-state copy names it, MOTIR-1579).
+  await expect(page.getByTestId('item-identifier')).toHaveText(item.identifier);
 
   // Rendered Markdown (not raw source): a real anchor, bold, and inline code.
   const desc = page.getByLabel('Work item description');

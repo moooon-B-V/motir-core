@@ -7,6 +7,7 @@ import type {
   WorkItemRefMap,
 } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
+import type { LinkedPullRequestDto } from '@/lib/dto/github';
 
 // The quick-view (peek) payload (Subtask 2.5.19; bug 8.8.2). A serializable,
 // already-shaped slice of the detail read that the /api/work-items/peek route
@@ -98,4 +99,10 @@ export interface QuickViewData {
     blockers: string[];
     blockedByAncestor: { identifier: string; title: string } | null;
   } | null;
+  /**
+   * The Development section's linked PRs (Story 7.10 · MOTIR-1579),
+   * newest-updated first. Empty → the section renders its EmptyState
+   * (design/github Panel 4a).
+   */
+  pullRequests: LinkedPullRequestDto[];
 }

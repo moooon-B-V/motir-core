@@ -78,6 +78,9 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
+import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
+import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
@@ -3073,7 +3076,24 @@ export const workItemsService = {
       projectId,
       ctx,
     );
-    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix);
+    // The Development section's linked PRs (MOTIR-1579). Tenancy rides the
+    // detail read above: the PR link is keyed by the item's internal id, which
+    // getIssueDetail already gated to the caller's workspace.
+    const pullRequests = await this.listLinkedPullRequests(detail.item.id);
+    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix, pullRequests);
+  },
+
+  /**
+   * A work item's linked PRs for the Development surface (Story 7.10 ·
+   * MOTIR-1579) — display-ready (title fallback, merged collapse, per-PR CI,
+   * link-out URL), newest-updated first. Shared by the quick-view peek payload
+   * AND the detail page. Takes the item's INTERNAL id; callers pass an id an
+   * access-gated read (getIssueDetail / getQuickView) already resolved — this
+   * method adds no tenancy gate of its own.
+   */
+  async listLinkedPullRequests(workItemId: string): Promise<LinkedPullRequestDto[]> {
+    const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId);
+    return rows.map(toLinkedPullRequestDto);
   },
 
   /**

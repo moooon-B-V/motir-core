@@ -40,6 +40,7 @@ import { ChildList } from './_components/ChildList';
 import { ActivitySection } from './_components/ActivitySection';
 import { AttachmentsPanel } from './_components/AttachmentsPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
+import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import { IssueQuickViewController } from '../_components/IssueQuickViewController';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
@@ -70,6 +71,7 @@ export default async function IssueDetailPage({
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('issueViews');
+  const tGithub = await getTranslations('github');
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -114,6 +116,10 @@ export default async function IssueDetailPage({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+
+  // The Development section's linked PRs (MOTIR-1579) — the same display-ready
+  // read the peek payload uses; item.id came from the access-gated detail read.
+  const pullRequests = await workItemsService.listLinkedPullRequests(detail.item.id);
 
   // Members back the inline assignee picker + reporter display (getIssueDetail
   // carries ids only); the workflow (already in the detail bundle) backs the
@@ -271,7 +277,15 @@ export default async function IssueDetailPage({
         <header className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
-            <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
+            {/* data-testid: the header identifier is asserted by several E2E
+              journeys; the bare text is no longer unique on the page (the
+              Development empty-state copy also names the key — MOTIR-1579). */}
+            <span
+              data-testid="item-identifier"
+              className="text-(--el-text-muted) font-mono text-sm"
+            >
+              {item.identifier}
+            </span>
             {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
               a `min-w-0 flex-1` cell so it has a BOUNDED track to truncate against
               — its inner `<span className="truncate">` (ParentBreadcrumb) only
@@ -405,6 +419,19 @@ export default async function IssueDetailPage({
               currentItemId={item.id}
               identifier={item.identifier}
             />
+            {/* 7.10.11 (MOTIR-1579): the Development section — linked PRs with
+              PR/CI state, per design/github Panel 5a: a ContentSectionCard after
+              Relationships (the linkage cluster), same shared body as the peek.
+              Display-only; MOTIR-1596 adds the explicit-link door to its header. */}
+            <ContentSectionCard
+              title={tGithub('development.title')}
+              subtitle={tGithub('development.gloss')}
+            >
+              <DevelopmentSectionBody
+                pullRequests={pullRequests}
+                itemIdentifier={item.identifier}
+              />
+            </ContentSectionCard>
             {/* 2.4.3: direct children (a leaf renders nothing). */}
             <ChildList items={detail.children} workflow={detail.workflow} members={members} />
             {/* 5.2.5: the Attachments panel — after Children, before Activity
