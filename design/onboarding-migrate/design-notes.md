@@ -55,6 +55,51 @@ implemented app, it does not invent a host:
 
 ---
 
+## ⭐ Multi-repo — a project spans several repositories (Yue, 2026-07-05)
+
+**A real existing codebase usually spans more than one repository** (a web app + an API + a shared
+package). The first draft collapsed the flow to a single repo (`acme/web@a1b9f30`, one code graph, one
+plan); this is corrected so the WHOLE wizard is multi-repo. Grounded in **shipped reality** (rung 2 —
+read on disk this session, not assumed):
+
+- **`GithubInstallation` is WORKSPACE-scoped and owns many `GithubRepo`s** (`prisma/schema.prisma`:
+  `GithubInstallation { workspaceId } → repos GithubRepo[]`). Repo selection is a set, per workspace —
+  a project is not "one repo."
+- **The code graph is PROJECT-scoped and aggregates repos.**
+  `lib/services/codeGraphIndexService.ts` → `indexRepoIntoWorkspaceProjects` fetches each repo's tarball
+  and indexes it **into each of the workspace's projects' code-graph stores** ("A repo installed at a
+  workspace is therefore indexed into each of that workspace's projects' code-graph stores"). So a
+  project's code graph is **built from multiple repos**; the audit and the plan read that whole-project
+  graph. (The service's own comment flags that a _precise_ repo↔project association — so a repo only
+  indexes into the projects it belongs to — is a **future refinement, deliberately not built yet**; the
+  wizard's per-project repo selection is exactly where that association gets captured.)
+- **The convention is ONE per project** (`design/coding-convention`: "exactly ONE `standard` per
+  project"), so it governs the whole multi-repo codebase — NOT one convention per repo.
+
+**How each step becomes multi-repo (what the mock now draws):**
+
+| Step                    | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connect** (Panel 1)   | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                |
+| **Index** (Panel 2)     | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols". |
+| **Audit** (Panel 3)     | The audit is **measured across all 3 repositories** (a per-repo grade line — acme/web B · acme/api A− · acme/shared A), but **one convention governs the whole project**.                                                                                                                                                                                                    |
+| **Discovery** (Panel 4) | "I've read your **3 repositories** — a Next.js web app, a Node API and a shared package…" — the AI's code context is the whole project.                                                                                                                                                                                                                                      |
+| **Generate** (Panel 5)  | The plan is grounded in the **whole-project code graph**; each proposed node carries a **repo tag** (`acme/api` / `acme/web`) so it's clear which repo the work lands in, and a cross-repo proposal (reminders reuse the API's notification service) reads naturally.                                                                                                        |
+| **States** (Panel 6)    | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("Your import (3 repositories) is paused at step 3").                                                                                                                                                        |
+
+**Implications for the downstream build cards (flagged, not built here):**
+
+- **MOTIR-931 (orchestration)** indexes **N repos** into the project code graph — a fan-out over the
+  selected repos (mirrors `indexRepoIntoWorkspaceProjects`), with an aggregate "all repos done" gate
+  before the audit runs.
+- **MOTIR-1499 (state machine)** tracks **per-repo index status** (not a single boolean) so Save & exit,
+  resume, and a per-repo retry all work; the step is "done" only when every repo is indexed.
+- **MOTIR-934 (wizard UI)** renders the per-repo index list + the multi-select connect list; the repo↔
+  project association captured at Connect is what a future refinement uses to stop indexing a repo into
+  unrelated projects.
+
+---
+
 ## Mirror grounding (rung-1, VERIFIED this session — cited, not asserted)
 
 The card names these; drawn as THAT guided, gated wizard:
@@ -121,26 +166,32 @@ convention-before-generation gate."**
 
 ### Panel 1 — Connect GitHub (step 1) — **composes 7.7.1 (`design/github/`)**
 
-The 7.7 connect surface as step 1, drawn as a COMPOSITION of 7.7.1, not a new connect screen. Two
-independent `.grant-row`s — **Step 1 · Identity** ("Verify your GitHub identity" · reads public profile
-only, grants no code access) and **Step 2 · Repository access** ("Install the Motir GitHub App" · you
-pick the exact repos on GitHub) — the **"Connect GitHub"** primary `Button` (github-mark), and the
-**repo-selection** list (`repo-row`s: repo icon + `owner/name` + a `main` branch `code` chip + a
-sync/selection `Pill` + a `Switch`). Copy honesty: "you pick the exact repos on GitHub" + "To add or
-remove repositories, update the Motir App's access on GitHub" (the "Manage on GitHub" out lives in the
-7.7.1 settings surface; here it's the first-run selection). **Owned by 7.7.1 — cited, not re-designed.**
+The 7.7 connect surface as step 1, drawn as a COMPOSITION of 7.7.1, not a new connect screen — and
+framed as **multi-repo** (§Multi-repo above). H1 **"Connect the repositories in this project"**, lead
+"A project usually spans more than one repository — a web app, an API, a shared package. Select every
+repo that makes up this project…". Two independent `.grant-row`s — **Step 1 · Identity** ("Verify your
+GitHub identity" · reads public profile only, grants no code access) and **Step 2 · Repository access**
+("Install the Motir GitHub App" · you pick the exact repos on GitHub) — the **"Connect GitHub"** primary
+`Button` (github-mark), and the **multi-select repo list** (`repo-row`s: repo icon + `owner/name` + a
+`main` branch `code` chip + a **Selected** `Pill` + a `Switch` — **acme/web · acme/api · acme/shared**
+all on) with a "**3 repositories** selected for this project" summary. Copy honesty: "you pick the exact
+repos on GitHub" + "To add or remove repositories, update the Motir App's access on GitHub" (the "Manage
+on GitHub" out lives in the 7.7.1 settings surface; here it's the first-run selection). **Owned by 7.7.1
+— cited, not re-designed.**
 
 ### Panel 2 — Index progress (step 2) — **NEW (the step this card owns)**
 
-The code-graph indexing step (Cursor mirror). Eyebrow "Step 2 of 6", H1 **"Indexing your codebase"**,
-lead "Motir builds a code graph of your repository — files, symbols and how they reference each other …
-This can take a few minutes for a large repo." An **in-flight** card: a `.spin` ring + "Building the
-code graph…" + `acme/web@a1b9f30 · you can leave this step — we'll keep indexing and notify you" + a
-sky `61%`pill + the`.idx-meter`bar + a three-up`.idx-grid`(**1,284** of ~2,100 files · **8,732**
-symbols · **TypeScript** primary language). An info`.callout`: **"Next stays disabled until indexing
-finishes"** and the forward CTA drawn as `.btn.disabled`(the gate). Then a **complete** state (mint
-**"Index ready"** pill · "Code graph built · 2,104 files · 14,318 symbols" · Next enabled). The index
-feeds the code graph the CodeRabbit-style code context / the 7.14 audit reads (the`codeGraphRef`).
+The code-graph indexing step (Cursor mirror), drawn **multi-repo** (§Multi-repo above). Eyebrow "Step 2
+of 6", H1 **"Indexing your codebase"**, lead "Motir builds **one code graph for the project across all
+three repositories** — files, symbols and how they reference each other, **including across repos** …".
+An **in-flight** card: a `.spin` ring + "Building the code graph…" + "**2 of 3 repositories done** · you
+can leave this step…" + a sky `78%` pill + the aggregate `.idx-meter`, then a **per-repo `.idx-repo`
+list** — each repo a row with its own mini progress bar + state `Pill`: **acme/web** `Indexed` (mint,
+100%, "2,104 files · 14,318 symbols") · **acme/api** `Indexing…` (sky, 62%) · **acme/shared** `Queued`
+(neutral, 0%). An info `.callout`: **"Next stays disabled until every repository finishes"** and the
+forward CTA drawn as `.btn.disabled` (the **aggregate** gate). Then a **complete** state (mint "**3 of 3
+indexed**" pill · "Code graph built · 3 repositories · 5,412 files · 31,208 symbols" · Next enabled). The
+index feeds the whole-project code graph the 7.14 audit + the plan read (the `codeGraphRef`).
 
 ### Panel 3 — Audit + proposed-convention approve (step 3, ★ the gate) — **composes 7.14.1 (`design/coding-convention/`)**
 
@@ -234,6 +285,7 @@ background with `--el-text-strong` ink, AA-safe in both themes (finding #35).
 | Primary / secondary / ghost / disabled CTA | `--el-accent`+`--el-accent-text` · `--el-page-bg`+`--el-button-border` · `--el-text` · `--el-muted`+`--el-text-faint`                                                                   |
 | Index meter                                | track `--el-muted` · fill `--el-accent`; the spinner ring `--el-border-strong` + head `--el-accent-on-surface`                                                                          |
 | Index stat tiles                           | `--el-surface-soft` + `--el-border`; number serif `--el-text-strong`, label `--el-text-muted`                                                                                           |
+| Per-repo index row (`.idx-repo`)           | `--el-border` + `--radius-control`; per-repo bar track `--el-muted` + fill `--el-accent` (done → `--el-success`); state `Pill` mint `Indexed` / sky `Indexing…` / neutral `Queued`      |
 | Info callout / progress note               | `--el-surface-soft` + `--el-border`; icon `--el-info`                                                                                                                                   |
 | Grade tile (audit)                         | `--el-success-surface` bg + `--el-text-strong` (a B grade; a poor grade falls to `--el-warning`/`--el-danger`-surface)                                                                  |
 | Category dots                              | `--el-success` (ok) · `--el-warning` (watch) · `--el-danger` (gap) — each paired with a redundant text label                                                                            |
@@ -283,7 +335,10 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
       spine + lucide glyphs (`check`, `lock`), generalising the `design/coding-convention` Panel 5
       wizard step-strip. Done/current/upcoming/locked states pair a glyph + a label + a tint (never
       colour-alone — finding #35).
-- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows + Switch; Audit/convention = 7.14.1's grade tile + provenance pills + banners; Discovery = 7.2.1's
+- [x] **The per-repo index list** (`.idx-repo`) — a NEW ARRANGEMENT of list-row grammar + a per-repo
+      progress bar + a state `Pill`, so a **multi-repo** project indexes with per-repo status under an
+      aggregate gate. No new primitive — rows + bars + shipped `Pill` tones.
+- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Audit/convention = 7.14.1's grade tile + provenance pills + banners; Discovery = 7.2.1's
       chat bubbles + composer; Generate = 7.3.1's canvas node + confirm-to-persist. Reproduced from their
       shipped assets, **not re-designed**.
 - [x] Icons are **lucide** (`Sparkles`, `History`, `check`, `lock`, `github`, `badge-check`, `layout-grid`,
