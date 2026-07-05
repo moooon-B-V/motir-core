@@ -163,6 +163,20 @@ export const acceptanceEvidenceService = {
     return toAcceptanceEvidenceDto(row);
   },
 
+  /**
+   * The subset of `workItemIds` awaiting acceptance — a current `pending`
+   * evidence (Story MOTIR-1627 · Subtask MOTIR-1636). Batched (one query) for the
+   * board projection; empty input short-circuits.
+   */
+  async findAwaitingIds(workItemIds: string[], ctx: ServiceContext): Promise<Set<string>> {
+    if (workItemIds.length === 0) return new Set();
+    const ids = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => acceptanceEvidenceRepository.findPendingWorkItemIds(workItemIds, tx),
+    );
+    return new Set(ids);
+  },
+
   /** The current acceptance evidence for a story, as a DTO (null if none yet). */
   async getCurrentForStory(
     workItemId: string,

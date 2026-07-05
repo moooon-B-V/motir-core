@@ -98,6 +98,18 @@ describe('acceptanceEvidenceService.decide', () => {
     expect(current!.status).toBe('pending');
   });
 
+  it('findAwaitingIds returns a story with pending evidence, and clears on approve (MOTIR-1636)', async () => {
+    const story = await storyWithEvidence(fx, 'in_review');
+    const other = await makeStory(fx); // no evidence
+    let awaiting = await acceptanceEvidenceService.findAwaitingIds([story.id, other.id], fx.ctx);
+    expect(awaiting.has(story.id)).toBe(true);
+    expect(awaiting.has(other.id)).toBe(false);
+
+    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    awaiting = await acceptanceEvidenceService.findAwaitingIds([story.id], fx.ctx);
+    expect(awaiting.has(story.id)).toBe(false); // approved → no longer pending
+  });
+
   it('decide with no current evidence → not found', async () => {
     const story = await makeStory(fx);
     await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);

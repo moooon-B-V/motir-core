@@ -2138,6 +2138,7 @@
     "wipSaveErrorDescription": "The WIP limit for {column} wasn’t saved. Try again.",
     "openIssueAria": "Open {key}: {title}",
     "blocked": "Blocked",
+    "awaitingAcceptance": "Awaiting acceptance",
     "estimateLabel": "Estimate {value}",
     "assignedTo": "Assigned to {name}",
     "unassigned": "Unassigned",

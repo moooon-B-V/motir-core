@@ -61,6 +61,24 @@ export const acceptanceEvidenceRepository = {
     return result.count;
   },
 
+  /**
+   * The subset of `workItemIds` whose CURRENT evidence is `pending` — the board
+   * "Awaiting acceptance" batch (MOTIR-1636). ONE query over the candidate ids
+   * (no N+1); empty input short-circuits without a DB round-trip.
+   */
+  async findPendingWorkItemIds(
+    workItemIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (workItemIds.length === 0) return [];
+    const client = tx ?? db;
+    const rows = await client.acceptanceEvidence.findMany({
+      where: { workItemId: { in: workItemIds }, isCurrent: true, status: 'pending' },
+      select: { workItemId: true },
+    });
+    return rows.map((r) => r.workItemId);
+  },
+
   /** Set the acceptance status (+ approver stamp on approve) for one row. */
   async updateStatus(
     id: string,

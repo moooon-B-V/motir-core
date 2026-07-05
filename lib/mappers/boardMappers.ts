@@ -86,7 +86,7 @@ export function toBoardColumnStatusDto(row: BoardColumnStatus): BoardColumnStatu
  */
 export function toBoardCardDto(
   row: WorkItem,
-  opts: { ready: boolean; swimlaneKey?: string },
+  opts: { ready: boolean; awaitingAcceptance?: boolean; swimlaneKey?: string },
 ): BoardCardDto {
   const dto: BoardCardDto = {
     id: row.id,
@@ -104,6 +104,7 @@ export function toBoardCardDto(
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     position: row.position,
     ready: opts.ready,
+    awaitingAcceptance: opts.awaitingAcceptance ?? false,
   };
   if (opts.swimlaneKey !== undefined) dto.swimlaneKey = opts.swimlaneKey;
   return dto;

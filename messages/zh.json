@@ -2138,6 +2138,7 @@
     "wipSaveErrorDescription": "未能保存“{column}”列的在制品限制，请重试。",
     "openIssueAria": "打开 {key}：{title}",
     "blocked": "受阻",
+    "awaitingAcceptance": "等待验收",
     "estimateLabel": "预估 {value}",
     "assignedTo": "负责人：{name}",
     "unassigned": "未分配",
