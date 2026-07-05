@@ -3596,3 +3596,146 @@ The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `internal-links.mock.html` (source of truth) · `internal-links.png` (full-page
 export). Rendered with Playwright chromium (full-page, light, `deviceScaleFactor:
 2`, ~1240px wide); `prettier --check` clean.
+
+---
+
+## Story-acceptance surfaces — panel (3 states) + org toggle card + board badge (MOTIR-1633)
+
+The design that blocks MOTIR-1634 (panel UI), MOTIR-1635 (org settings toggle
+card) and MOTIR-1636 (board badge) for the story-acceptance gate (Story
+MOTIR-1627). Source: `acceptance-panel.mock.html` → `acceptance-panel.png`. The
+item-detail page reserves **no** acceptance section, so the panel + its three
+eligibility states + the org card + the board pill are whole elements no design
+specifies — the design gate (mistake #31) requires this asset first, as
+`attachments.mock.html` did for the Epic-5 slot.
+
+**Grounded in** (read at design time, cited — not invented): the MOTIR-1628 ADR
+(`docs/decisions/acceptance-video.md`) for the three states + the
+`applicable:false` (self-host / meta) **ungated** case; the MOTIR-1630
+eligibility DTO (`{ applicable, eligible, reason, toggleEnabled,
+canManageBilling, canManageToggle }`) which the panel branches on; and the
+MOTIR-1629 evidence DTO (`{ status, videoUrl, chapters[{label,tSeconds}],
+commitSha, ciRunUrl, producedByKey }`).
+
+### Access paths (drawn, not just named)
+
+- **Panel** — the item-detail **main column, AFTER the Development section**
+  (`page.tsx:436`), on a `story` once it is `in_review`. Panel 0 draws the column
+  order (Description → Development → **Acceptance** → Activity); the right rail is
+  untouched.
+- **Org card** — **Settings → Organization** (breadcrumb drawn), an
+  `OrgGeneralCard` sibling.
+- **Board badge** — any **board**; the pill sits in the `BoardCard` foot, the
+  same slot as the readiness "Blocked" pill (`BoardCard.tsx:81`).
+
+### The panel — a `ContentSectionCard` that branches on eligibility
+
+Header: a `video` lucide glyph + **"Acceptance"** title + a right-aligned status
+`Pill`. Five renders, keyed on the MOTIR-1630 `reason` + the MOTIR-1629 evidence:
+
+1. **State A · eligible, evidence present** (`eligible:true`, evidence
+   `pending`) — the **chaptered player**: a native `<video>` frame + a scrubber
+   whose ticks mark `chapters[].tSeconds` + a chapter list (index dot · label ·
+   mono timestamp, from `chapters[]`). Below: a **test summary** ("N assertions
+   passed · M failed", `--el-success` check) and a **provenance** row of mono
+   chips (`commitSha` with a commit glyph · `ciRunUrl` as an `--el-link` external
+   chip · `producedByKey`). Footer: **Approve** (`btn-primary` — the
+   `in_review → done` gate) + **Request changes** (`btn-secondary` —
+   `in_review → in_progress`). Status pill "Awaiting review" (info/sky).
+2. **State A · pending** (`in_review`, no evidence yet) — an EmptyState:
+   `--el-tint-sky` clock disc, **"Waiting for the acceptance video"**, "The
+   story's E2E publishes its recording here on the next green run."
+3. **State A · approved** (evidence `approved`) — read-only: the collapsed
+   player + a `--el-tint-mint` **"Approved"** pill + "Approved by {name} · {date}".
+4. **State B · toggle_off, ORG-ADMIN** (`reason:'toggle_off'` +
+   `canManageToggle`) — an infobox (muted `video-off` glyph): **"Acceptance video
+   is off"** + an inline **Turn on** `Switch` + a **"Go to settings →"**
+   `btn-link`.
+5. **State B · toggle_off, NON-ADMIN** — the same infobox, read-only: "Ask an org
+   admin to turn on acceptance video…" + a **"View settings"** `btn-link` (no
+   switch).
+6. **State C · no_plan** (`reason:'no_plan'`) — the **upsell** infobox
+   (`--el-tint-lavender`, an accent `sparkles` glyph on an `--el-page-bg` tile):
+   **"Get a video receipt for every story"** + **Upgrade** (`btn-primary` →
+   billing) + **Learn more** (`btn-link`). Mirrors the `useAiAccess` paywall tone;
+   owner vs member picks Upgrade vs "ask your owner" via `canManageBilling`.
+   **`applicable:false` (self-host / meta org) is UNGATED** — State A renders
+   directly, this upsell never shows.
+
+   **Reuse the SHIPPED upgrade workflow (verified — Epic 8.1, no new story).** The
+   Upgrade CTA routes to the existing billing surface — **do NOT build a new
+   checkout.** The shipped path (verified against `origin/main`): the
+   `components/ai/AiPaywall.tsx` component exports
+   `BILLING_PLANS_PATH = '/settings/organization/billing'` (the plan-selection
+   page, `BillingClient`) → `POST /api/organizations/[orgId]/billing/checkout`
+   (Stripe checkout) → the webhook flips `hasPaidAiPlan`, which this feature's
+   eligibility (MOTIR-1630) already reads. MOTIR-1634 SHOULD compose the shipped
+   `AiPaywall` (or reuse `BILLING_PLANS_PATH`) rather than a bespoke upsell, so the
+   acceptance upsell is consistent with every other AI paywall in the app.
+
+### Org settings card (MOTIR-1635)
+
+A `Card` beside `OrgGeneralCard`: title **"Acceptance video"** + a one-line
+description + a right-aligned `Switch`. Two variants (both drawn):
+
+- **With a paid plan** — the `Switch` (`is-on` by default) PATCHes
+  `/api/organizations/[orgId]` (`acceptanceVideoEnabled`); a `--el-success`
+  "Saved" foot on write. Org owner/admin only — a non-admin sees it disabled.
+- **No paid plan — the switch is moot** (the entitlement blocks generation
+  regardless): the `Switch` is **disabled** and the card foot carries a
+  "Requires a paid Motir AI plan" note (sparkles glyph) **+ an Upgrade
+  `btn-primary`** (→ billing). This is the same plan gate the panel's State C
+  shows, surfaced where an admin manages the org — so the admin isn't left
+  flipping a switch that does nothing. (Owner vs member gates the Upgrade button
+  on `canManageBilling`, like the panel.) The Upgrade CTA routes to the SHIPPED
+  `BILLING_PLANS_PATH` (`/settings/organization/billing`) — the same reuse as
+  State C; MOTIR-1635 builds no new checkout.
+
+### Board badge (MOTIR-1636)
+
+An **"Awaiting acceptance"** `Pill` — **info tone** (`--el-tint-sky` bg +
+`--el-text-strong` + a clock glyph) — in the `BoardCard` foot, the exact slot +
+grammar as the readiness **"Blocked"** pill (warning/peach). Info vs warning
+keeps the two visually distinct; state is carried by **text + icon**, never
+colour alone (finding #35). Shown for an `in_review` story awaiting its
+video/approval.
+
+### Colour + shape (tokens only)
+
+- **Colour** via `--el-*` only — **no new token**. Player chapter dot
+  `--el-tint-lavender`; status pills reuse Pill tones (info `--el-tint-sky`,
+  success `--el-tint-mint`, warning `--el-tint-peach`); upsell surface
+  `--el-tint-lavender` with `--el-accent-on-surface`; provenance chips
+  `--el-surface` + `--el-link`; summary check `--el-success`; buttons
+  `--el-accent`/`--el-accent-text` (primary) + `--el-border-strong` (secondary).
+  AA holds — tint backgrounds carry `--el-text-strong` (finding #35).
+- **The video player frame** is a dark gradient MEDIA stand-in for real video
+  pixels (the same sanctioned pattern `attachments.mock.html` uses for thumbnail
+  stand-ins) — non-semantic media decoration, never a card/pill/state fill.
+- **Shape** via element-semantic tokens — `--radius-card` (the section card),
+  `--radius-input` (the player + infoboxes + empty state), `--radius-badge`
+  (pills), `--radius-btn` (buttons), `--radius-control` (chapter rows, chips).
+  `--spacing-card-padding`, `--spacing-chip-*`, `--height-btn-sm`; `--shadow-card`
+  / `--shadow-subtle`. No raw `rounded-*` / `p-*` / `h-*`.
+
+### A11y + i18n
+
+The Switch is `role="switch"` + `aria-checked`; Approve/Request-changes are
+buttons with text; the player uses a native `<video>` (built-in controls +
+keyboard); chapter rows are buttons that seek. Decorative glyphs `aria-hidden`.
+All new copy (the state strings, the org card, the pill) lands in **en + zh**
+(the i18n-catalog parity gate).
+
+### Out of scope (for the code subtasks)
+
+- The **gate transition** wiring (Approve → `in_review → done`) is MOTIR-1634's
+  code (the button calls setStatus(approved) + the work-item transition); this
+  design fixes only its affordance.
+- The **hosted** video-delivery variant is Epic 9; this is the **BYOK** surface.
+
+### Deliverable
+
+The three-file set under `design/work-items/`: this `design-notes.md` section ·
+`acceptance-panel.mock.html` (source of truth) · `acceptance-panel.png`
+(full-page export). Rendered with Playwright chromium (full-page, light,
+`deviceScaleFactor: 2`, ~1200px wide); `prettier --check` clean.
