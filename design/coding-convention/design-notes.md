@@ -5,6 +5,16 @@ Design reference for the **coding-convention + code-health audit** surface (Stor
 gate (MOTIR-922); it is the layout source of truth for the UI code subtask **7.14.5** (MOTIR-926 —
 the review/approve UI + API), which is `blocked_by` this card.
 
+> **Amendment (7.14.x · MOTIR-1607, 2026-07-04):** added the **§10.3 "Deepen this audit"
+> connect-scanner affordance** — a non-blocking, dismissible card that renders INSIDE the audit
+> report when no external scanner is connected (Panel 1, in situ) — plus **Panel 6**, its state
+> gallery (setup guidance · re-audit · connected/auto-detected · dismissed). It grounds the flow in
+> the decision **MOTIR-1590** (§10.3: detect → auto-ingest → no-scanner still-audit + optional
+> best-fit Deepen → re-audit-on-connect; GitHub code scanning/CodeQL as the GH-native default,
+> SonarQube/SonarCloud as the ecosystem branch; NEVER a required install) and the backend
+> **MOTIR-1591** (the structured `noExternalScanner` state + best-fit suggestion exposed over the 7.1
+> read-back contract). It is the design reference the code subtask **MOTIR-1592** is `blocked_by`.
+
 Built from the real design system: the mock inlines the token layer from
 `packages/design-system/theme.css` (the `@theme` Tier-0 `--color-*`/shape scale, the Tier-3
 `--el-*` element layer, the `[data-theme='dark']` overrides) and composes the SHIPPED
@@ -54,16 +64,18 @@ conventionRuleRef? }]`, cursor-paginated), `codeGraphRef`, **`conventionId` / `c
 
 ## Multi-panel board — review EACH panel (mistake #31)
 
-The `.mock.html` is a five-panel board; do not review only the first. Each panel is a `.panel-label`
+The `.mock.html` is a six-panel board; do not review only the first. Each panel is a `.panel-label`
 mono caption + a centred `.panel` wrapper (the `design/ready` convention).
 
 1. **Panel 1 — THE FULL SCREEN, in the real app shell (Audit tab).** The complete Code health page
    as it renders: the full-width **TopNav**, the **persistent left `SidebarNav`** (Code health
    active), and the content region — page header + **Audit / Convention tabs** + the audit content
    (conformance SUMMARY: grade + % conform + six-category breakdown, measured against the approved
-   convention; then a grouped, virtualized findings list where each finding cites the convention rule
-   it breaks, or the clean-code baseline). This is the panel that answers "where am I / is the nav
-   there / how do I leave".
+   convention; the **"Deepen this audit" affordance** in situ — the non-blocking §10.3 connect-scanner
+   card, shown only in the `noExternalScanner` state, between the summary and the findings; then a
+   grouped, virtualized findings list where each finding cites the convention rule it breaks, or the
+   clean-code baseline). This is the panel that answers "where am I / is the nav there / how do I
+   leave".
 2. **Panel 2 — Content region · the Convention tab.** The `contentMd` as a sectioned document with a
    header toolbar (Edit / Approve), each rule badged by provenance (Adopted vs Proposed), BOTH status
    banners (PROPOSED and STANDARD).
@@ -75,6 +87,13 @@ mono caption + a centred `.panel` wrapper (the `design/ready` convention).
    "Re-run audit" action.
 5. **Panel 5 — The fresh-project door.** The onboarding wizard step (the steady-state door is the
    persistent sidebar entry, drawn in Panel 1's shell).
+6. **Panel 6 — The "Deepen this audit" affordance, state by state** (§10.3; MOTIR-1590 + MOTIR-1591).
+   The DEFAULT card lives in Panel 1's audit report; this panel zooms its four states: **A** set-up
+   guidance (the best-fit CodeQL branch, copy-paste `.github/workflows/codeql.yml` + a "Use SonarQube
+   instead" out), **B** connected → re-auditing (the report refreshes — page-state-after-mutation),
+   **C** deepened (external findings ingested — the Tier-2 chip on the audit sub-line + the connected
+   banner; and the auto-detected variant that shows the same result with NO setup card), **D**
+   dismissed (report fully usable, a quiet one-line re-open link remains).
 
 Panels 2–4 are the **content region of the Panel 1 screen** in each state — each carries a `.ctx`
 breadcrumb strip ("Code health › Convention tab", etc.) so the reader always knows it's the same
@@ -148,6 +167,20 @@ subtask 7.14.5 wires both.
   Severities: **Critical** (danger), **High** (warning), **Medium** (info), **Low** (neutral). Footer +
   `.virt-note` review-only annotation naming the `useRowWindow` primitive + the cursor-paginated
   `codeAuditRepository` read (the scale mechanism — see "Scale" below).
+- **"Deepen this audit" affordance** (`.deepen`, in situ between the health-summary card and the
+  findings card) — the §10.3 connect-scanner card, drawn ONLY in the backend `noExternalScanner`
+  state (MOTIR-1591). It is deliberately a **secondary, dismissible aside**, not a report card: a
+  quiet `--el-surface-soft` fill (vs the white `--el-card` of the report), a `.deepen-dismiss` ghost
+  **×** (lucide `x`, top-right), and an **"Optional · non-blocking"** eyebrow — so it visibly only
+  _deepens_ the already-complete report and never gates it. Anatomy: a `scan-search` lead glyph +
+  serif title "**Deepen this audit with an external scanner**" + a sub that states the report is
+  already complete and **no external scanner is connected**; a **best-fit** label naming the repo
+  (`acme/web`, a GitHub repo); then two `.tool` option rows — **GitHub code scanning (CodeQL)** as the
+  `.tool-rec` **Recommended** default (accent edge + a lavender "Recommended" `.tag-rec`; lucide
+  `github`; primary **Set up CodeQL**) and **SonarQube / SonarCloud** as the ecosystem branch (lucide
+  `shield-check`; secondary **Connect Sonar**) — and a `.setup-hint` footer that names the re-audit
+  behaviour and points to Panel 6. The **access path** for the affordance is exactly this: it renders
+  in the audit report the user is already reading, so the door is the report itself.
 
 ### Panel 2 — proposed-convention review
 
@@ -228,6 +261,37 @@ subtask 7.14.5 wires both.
   in the accent-outlined `.step.current` state; note that the surface opens IN the wizard for a fresh
   project, then stays reachable at the sidebar entry.
 
+### Panel 6 — the "Deepen this audit" affordance, state by state (§10.3)
+
+Grounds the flow in **MOTIR-1590** (the §10.3 decision) + **MOTIR-1591** (the backend
+`noExternalScanner` + best-fit state) — the affordance does NOT invent a flow. The DEFAULT card is
+Panel 1's in-situ `.deepen`; this panel is the state gallery.
+
+- **State A — set up CodeQL (the recommended branch).** The `.deepen` card zoomed into guided setup:
+  a `github` lead glyph + "**Set up GitHub code scanning (CodeQL)**", a copy-paste `.setup-code`
+  block (`.github/workflows/codeql.yml` — the lightest native path, SARIF into the code-scanning API
+  Motir already reads), a `.setup-hint` that Motir **detects the upload automatically and re-audits**
+  (no explicit connect step), and a `.deepen-foot` with a primary **Re-audit now** (lucide
+  `refresh-cw`), ghost **Copy workflow**, and ghost **Use SonarQube instead** (the branch out). This
+  is the GH-native default; the Sonar branch is the `sonar-project.properties` path.
+- **State B — connected → re-auditing** (page-state-after-mutation). The audit card with a
+  `.deepen-done` running banner on `--el-surface-soft`: a `.spin` ring + "**CodeQL connected —
+  re-auditing your code…**" · the existing report stays readable while Tier-2 findings ingest and the
+  report refreshes. (The page-state contract: connecting is a mutation on the audit surface, so the
+  report re-reads — it does not silently keep the pre-connect state.)
+- **State C — deepened / connected** (and the auto-detected variant). The audit sub-line now carries a
+  Tier-2 `.tier2-chip` "**CodeQL · 8 findings ingested**" (lucide `github`), the count is bumped
+  (143 → 151), and a green `.deepen-done` "**Scanner connected — this audit now includes CodeQL
+  findings**" banner replaces the setup card (external findings merge into the list, tagged by
+  source). A `.setup-hint` documents the **auto-detected variant**: when MOTIR-1591 finds an existing
+  SARIF source (code-scanning API / `sonar-project.properties` / a CI scan workflow / an ESLint
+  config) it ingests silently — the same chip + banner appear with **no** setup card ever shown
+  (Tier 2, zero user action).
+- **State D — dismissed.** The audit report unchanged and fully usable; the card is replaced by a
+  quiet one-line `.deepen-link` ("Deepen this audit with an external scanner", lucide `scan-search`)
+  that re-opens it. A `.setup-hint` notes the dismissal is per-project so it doesn't nag on every
+  visit — the non-blocking contract taken to its conclusion.
+
 ---
 
 ## Per-element `--el-*` colour role (the token map)
@@ -264,6 +328,15 @@ background with `--el-text-strong` ink, AA-safe in both themes (finding #35).
 | Current-version highlight                       | border `--el-accent-on-surface`, bg `--el-surface-soft`                                                                                                                                          | the active standard row                                                                     |
 | Sidebar rail (Panel 1 shell)                    | `--el-sidebar-bg` + `--el-sidebar-border`; active row `--el-sidebar-item-bg-active` + `--el-accent-on-surface` glyph; wizard current-step `--el-accent-on-surface`                               | the persistent nav                                                                          |
 | Top bar (TopNav) + tabs (Segmented)             | bar `--el-page-bg` + `--el-border` bottom hairline; Plan-with-AI `--el-accent`; tabs track `--el-tabnav-track`, active tab `--el-page-bg` + `--shadow-subtle`, active glyph `--el-tabnav-active` | the shell chrome + in-page view switch                                                      |
+| **Deepen card** (`.deepen`, secondary aside)    | bg `--el-surface-soft` (quiet, NOT `--el-card`) + `--el-border`; lead glyph `--el-accent-on-surface`; dismiss × `--el-text-muted`                                                                | reads as an optional aside inside the report, not a report card                             |
+| Tool option row (`.tool`)                       | bg `--el-page-bg` + `--el-border`; icon `--el-text-secondary`                                                                                                                                    | the SonarQube branch                                                                        |
+| **Recommended** tool (`.tool-rec`, best-fit)    | border `--el-accent-on-surface` + bg `--el-surface-soft`; icon `--el-accent-on-surface` (reuses the current-version-highlight pattern)                                                           | the GH-native CodeQL default                                                                |
+| "Recommended" tag (`.tag-rec`)                  | `--el-callout-text` on `--el-callout-bg` (lavender = the brand/recommendation identity)                                                                                                          | matches the convention-identity tone                                                        |
+| Copy-paste setup block (`.setup-code`)          | `--el-code-text` on `--el-code-bg` + `--el-border`, `--radius-input` editor surface                                                                                                              | the `codeql.yml` guidance                                                                   |
+| Tier-2 ingested chip (`.tier2-chip`)            | `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                              | on the audit sub-line, connected/auto-detected                                              |
+| Connected banner (`.deepen-done`)               | `--el-success-surface` fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                        | settled/deepened (State C); the re-auditing variant uses `--el-surface-soft` + a `.spin`    |
+| Re-open link (`.deepen-link`, dismissed)        | `--el-link`                                                                                                                                                                                      | the quiet one-line re-open (State D)                                                        |
+| Re-audit spinner (`.spin`)                      | ring `--el-border-strong`, head `--el-accent-on-surface`                                                                                                                                         | the re-auditing affordance (State B)                                                        |
 
 **Shape** flows through element-semantic shape tokens ONLY (no raw `rounded-*`/`p-*`/`h-*`; the
 `motir-core/CLAUDE.md` shape rule): cards `--radius-card` + `--spacing-card-padding`; buttons
@@ -312,6 +385,13 @@ invented in this Story — if one were needed, that is a NEW `design/` subtask, 
       subtitle (mirrors `reports/page.tsx`).
 - [x] **`useRowWindow`** (`components/ui/useRowWindow.ts`) — the virtualization primitive the
       findings list uses (annotated, not re-implemented in the mock).
+- [x] **Deepen affordance composes only shipped primitives** — the `.deepen` card is a `Card` on the
+      `data-surface` quiet (`--el-surface-soft`) fill; the tool rows are `Card`s; **Set up CodeQL** /
+      **Connect Sonar** / **Re-audit now** are `Button` (primary / secondary / ghost, size sm); the
+      dismiss × is a ghost icon `Button` (`--radius-control`); the **Recommended** tag + Tier-2 chip
+      are `Pill`-grammar chips on the lavender callout tokens; the `codeql.yml` block is a code
+      surface on the shipped `--el-code-*` tokens. **No new design-system entry is invented** — if the
+      code subtask (MOTIR-1592) finds it needs one, that is a NEW `design/` subtask, not a workaround.
 - [x] Icons are lucide glyphs (`refresh-cw`, `alert-triangle`, `shield-check`, `check`,
       `file-search`, `sparkles`, `activity`, `layout-dashboard`, `circle-dot`, `columns-3`,
       `bar-chart-3`, `settings`), coloured via `currentColor` from the element token.
@@ -328,6 +408,13 @@ invented in this Story — if one were needed, that is a NEW `design/` subtask, 
   before it enters any prompt — the productized CLAUDE.md is curated, not bloated auto-gen. (Fuller
   citation set — SonarQube, Sourcery "Teaching Sourcery", the "Learning Natural Coding Conventions"
   research — lives in the 7.14.2 decision record.)
+- **GitHub code scanning / CodeQL — the SARIF-native, GitHub-integrated default** (Panel 1/6 best-fit).
+  For a GitHub repo it is the lightest path: a workflow file, results uploaded as SARIF to the
+  code-scanning API Motir already reads (no new account). Grounds why CodeQL is the `.tool-rec`
+  Recommended branch, not "install SonarQube by default" (MOTIR-1590 §10.3). **SonarQube / SonarCloud**
+  is cited as the ecosystem branch for teams already configured with a `sonar-project.properties`
+  (ingested through the same §10.1 SARIF adapter, MOTIR-1574). Both are OPTIONAL — the Tier-1 +
+  Opengrep audit always produces a report with nothing connected (§10.2 zero-setup posture).
 
 ## Token / a11y rules honoured
 
