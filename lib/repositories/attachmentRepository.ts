@@ -43,7 +43,11 @@ export const attachmentRepository = {
     const { take = 50, cursor } = options;
     const client = tx ?? db;
     return client.attachment.findMany({
-      where: { workItemId },
+      // `acceptance_video` rows (MOTIR-1629) are linked to their story only to
+      // shield the current video from the orphan-GC; they are owned by the
+      // AcceptanceEvidence lifecycle and rendered in the acceptance panel, NOT
+      // the generic attachments panel — so exclude them here.
+      where: { workItemId, source: { not: 'acceptance_video' } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -53,7 +57,10 @@ export const attachmentRepository = {
   /** The panel's total count ("Show more (N)" + the header badge, 5.2.2). */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
     const client = tx ?? db;
-    return client.attachment.count({ where: { workItemId } });
+    // Mirror listByWorkItem: acceptance videos never count toward the panel.
+    return client.attachment.count({
+      where: { workItemId, source: { not: 'acceptance_video' } },
+    });
   },
 
   /**
