@@ -52,7 +52,8 @@ const { PATCH: conventionPATCH } =
 const { POST: approvePOST } =
   await import('@/app/api/ai/coding-convention/convention/[conventionId]/approve/route');
 const { POST: refreshPOST } = await import('@/app/api/ai/coding-convention/refresh/route');
-const { createTestWorkspace, createTestProject } = await import('./fixtures');
+const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
+const { workspacesService } = await import('@/lib/services/workspacesService');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
@@ -230,5 +231,54 @@ describe('POST /api/ai/coding-convention/convention/:id/approve', () => {
       params('conv_1'),
     );
     expect(res.status).toBe(401);
+  });
+
+  // The project-admin gate runs for real at the route (MOTIR-1613): a signed-in
+  // non-admin is 403 and a cross-tenant project 404, and the motir-ai boundary is
+  // never reached. Companion service assertions live in aiConventionService.test.ts.
+  it('403s a signed-in non-admin member without calling the boundary', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+    sessionRef.current = { user: { id: member.id, email: `${member.id}@t.dev` } };
+    ctxRef.current = {
+      userId: member.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+      project,
+    };
+
+    const res = await approvePOST(
+      new Request(`${BASE}/convention/conv_1/approve`, { method: 'POST' }),
+      params('conv_1'),
+    );
+    expect(res.status).toBe(403);
+    expect(approveConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('404s approving a cross-tenant project (never confirms it exists)', async () => {
+    const a = await createTestWorkspace();
+    const b = await createTestWorkspace();
+    const projectB = await createTestProject({
+      workspaceId: b.workspace.id,
+      actorUserId: b.owner.id,
+    });
+    // Actor A is signed in, but the active-project ctx points at project B in
+    // another workspace — the gate must 404, never 403.
+    sessionRef.current = { user: { id: a.owner.id, email: `${a.owner.id}@t.dev` } };
+    ctxRef.current = {
+      userId: a.owner.id,
+      workspaceId: a.workspace.id,
+      projectId: projectB.id,
+      project: projectB,
+    };
+
+    const res = await approvePOST(
+      new Request(`${BASE}/convention/conv_1/approve`, { method: 'POST' }),
+      params('conv_1'),
+    );
+    expect(res.status).toBe(404);
+    expect(approveConventionMock).not.toHaveBeenCalled();
   });
 });
