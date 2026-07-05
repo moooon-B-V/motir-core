@@ -27,6 +27,15 @@
       is an explicit opt-out. This design draws THAT decided flow — it invents
       no step the ADR does not name.
 
+      PLUGS INTO the existing-project onboarding (MOTIR-815 / Workflow B — the
+      ADR's "Journey A: onboard an existing project"), relates_to MOTIR-930 (the
+      migrate-onboarding wizard design). The import is NOT a bespoke standalone
+      wizard: it is reached from the onboarding-entrance EXISTING-project fork,
+      it COMPOSES the shared onboarding wizard SHELL (the step-rail + Back/Next +
+      leave-and-resume chrome MOTIR-930 establishes), and the items it imports
+      land on the SAME reusable onboarding CANVAS (MOTIR-1009) and fold into the
+      plan — the tracker-backlog counterpart to MOTIR-930's connect-a-repo path.
+
       VERIFIED mirrors (cited in design-notes.md). NOTE Plane is BOTH a mirror we
       studied AND now an import source:
         · Plane Jira import — connect → map statuses → map priorities → a
@@ -1468,17 +1477,24 @@
           Grounded in the 7.16.2 decision (MOTIR-938): the connector-interface source set, the full
           field mapping, the unmatched-value policy, the external-id-map idempotency (re-run =
           upsert), and the dry-run-shares-the-engine gate. Mirrors Plane (Summary→Confirm gate),
-          Linear (multi-source→one model), and Atlassian's CSV external-id skip. Reached from the
-          onboarding entrance "I have an existing project — import it" door and Settings › Project ›
-          Import.
+          Linear (multi-source→one model), and Atlassian's CSV external-id skip.
+          <b
+            >This wizard is part of the existing-project onboarding (MOTIR-815 / Workflow B):
+            reached from the onboarding-entrance "I have an existing project" fork, it composes the
+            shared onboarding wizard shell (MOTIR-930) and lands imported items on the reusable
+            onboarding canvas</b
+          >
+          — it is the tracker-backlog counterpart to MOTIR-930's connect-a-repo path, not a bespoke
+          standalone wizard. Also reachable from Settings › Project › Import for an existing
+          project.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-937 · 7.16.1</span>
           <span class="ref muted">Story MOTIR-816</span>
           <span class="ref muted">ADR docs/decisions/issue-importer.md</span>
+          <span class="ref muted">plugs into onboarding MOTIR-815 · relates_to MOTIR-930</span>
           <span class="ref muted">Plane connector → MOTIR-1639</span>
           <span class="ref muted">renders in MOTIR-942 (UI)</span>
-          <span class="ref muted">entry → design/onboarding-entrance</span>
         </div>
       </div>
       <button
@@ -1503,6 +1519,28 @@
       >
     </div>
     <div class="panel">
+      <div class="callout info" style="margin-bottom: 16px; max-width: none">
+        <span class="cic"
+          ><svg
+            class="ic"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M5 12h14" />
+            <path d="m12 5 7 7-7 7" /></svg
+        ></span>
+        <span
+          ><b>This wizard lives inside the existing-project onboarding (MOTIR-815 / Workflow B).</b>
+          The onboarding-entrance fork routes “I have an existing project” into the migrate journey;
+          importing a tracker backlog is that journey’s counterpart to MOTIR-930’s connect-a-repo
+          path. The import composes MOTIR-930’s shared wizard shell (step rail · Back/Next ·
+          leave-and-resume) and lands its items on the reusable onboarding canvas (MOTIR-1009) to
+          fold into the plan — the chrome below is that shared shell, not a bespoke one.</span
+        >
+      </div>
       <div class="doors">
         <!-- DOOR 1 — the onboarding entrance secondary path -->
         <div class="door">

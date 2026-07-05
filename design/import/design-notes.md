@@ -37,6 +37,35 @@ is a new `design/` subtask, not an improvisation here.)
 
 ---
 
+## Plugs into the existing-project onboarding (MOTIR-815 / MOTIR-930) — the workflow it lives in
+
+Per the **design-CONTENT (workflow) dependency rule** (`plan-rules.md`), a design that draws a flow
+plugging into a host workflow must `relates_to` and GROUND IN the subtask that defines that host
+flow. The import wizard is **not a standalone wizard** — it is the tracker-backlog path of the
+**existing-project onboarding journey** (MOTIR-815 / Workflow B; the ADR's "Journey A: onboard an
+existing project"). So this design **`relates_to` MOTIR-930** (the migrate-onboarding wizard design)
+and **MOTIR-815**, and composes what they establish:
+
+- **The shared onboarding wizard SHELL (MOTIR-930).** The step-rail + Back/Next + leave-and-resume
+  chrome is the SAME shell MOTIR-930 designs for the existing-project onboarding (connect · index ·
+  audit · discovery · generate). The import is that journey's counterpart to MOTIR-930's
+  connect-a-repo step: **connect a tracker → map → preview → import**. The chrome here is that shared
+  shell, not a bespoke one — MOTIR-942 (the import UI) is therefore **`blocked_by` MOTIR-934** (the
+  migrate-onboarding wizard UI it renders inside — the UI-composition axis).
+- **The reusable onboarding CANVAS (MOTIR-1009).** Imported items land on the same canvas the
+  onboarding uses to display the existing work-item tree and fold it into the generated plan (MOTIR-815:
+  "load and display the existing work-item tree on the canvas … use it to seed/generate the plan").
+- **The entrance is the existing-project fork** (MOTIR-1459 / MOTIR-1461), not a bare access door —
+  see the Panel A note.
+
+**Why the whole Story MOTIR-816 is NOT `blocked_by` MOTIR-815:** only the WIZARD (this design + the
+UI MOTIR-942) plugs into the onboarding shell. The importer's backend (model MOTIR-939, connectors
+MOTIR-940/1501/1639, resolver MOTIR-1504, persist MOTIR-941) has no onboarding dependency, so per the
+KIND-based `blocked_by` rule (`plan-rules.md` #6 — don't over-serialize backend) the edge sits on the
+UI, not the Story. (Recorded as planning bug MOTIR-1640.)
+
+---
+
 ## Verified mirrors (cited per the mirror rule)
 
 - **Plane — Jira import wizard.** connect → map statuses → map priorities → a **Summary** step that
