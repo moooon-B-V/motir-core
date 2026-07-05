@@ -48,19 +48,24 @@ cover, that is a new `design/` subtask, not an improvisation here.)
 
 ---
 
-## Access path (draw the door, not just the room)
+## Access path — DRAWN as **Panel A** (the door, not just the room)
 
-The wizard is reached from two shipped affordances — named so MOTIR-942 wires the entry, not just
-the screen:
+The two entrances that OPEN the wizard are **drawn as real affordances in Panel A** (not merely
+named in prose — the reader sees the door they click):
 
-1. **Onboarding entrance** — the secondary **"I have an existing project — import it"** row
-   (`design/onboarding-entrance/onboarding-entrance.mock.html`, panel 1). Its "bring over existing
-   work items from Jira, Linear or Plane" copy lands here.
-2. **Settings › Project › Import** — the in-app entry for an existing project (a member importing
-   into an already-created project). The wizard chrome title reads "Import work items · into
-   <project>" for that path.
+1. **Door 1 — /onboarding entrance.** The secondary **"I have an existing project — import it"** row
+   (mirrors `design/onboarding-entrance/onboarding-entrance.mock.html`, panel 1), shown inside a
+   compact onboarding card below the idea box + "OR" divider. Its **Import →** affordance
+   (`--el-accent` border + halo, `--el-tint-sky` icon) opens the wizard at step 1 (Connect). Copy:
+   "Bring over existing work items from Jira, Linear, GitHub or a CSV."
+2. **Door 2 — Settings › Project › Import.** An in-app settings shell (left nav with the **Import**
+   item active in `--el-page-bg` + `--el-accent` icon) and a content pane: heading **"Import work
+   items"**, body "Bring an existing backlog from Jira, Linear, GitHub Issues or a CSV into this
+   project. You'll review a preview before anything is written.", and a primary **"Start an import"**
+   button that opens the wizard at step 1, scoped to this project. The wizard chrome then reads
+   "Import work items · into <project>".
 
-Rendered as a centred wizard panel over a dimmed app shell — the routed-Modal pattern
+The wizard itself is rendered as a centred panel over a dimmed app shell — the routed-Modal pattern
 (`components/ui/Modal.tsx`), like the onboarding flow.
 
 ---
