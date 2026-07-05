@@ -205,6 +205,9 @@ model User {
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
   decidedPlans              Plan[]                    @relation("PlanDecidedBy")
+  // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
+  // the FK so a deleted initiator never destroys import history; both sides.
+  createdImports            Import[]                  @relation("ImportCreatedBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -479,6 +482,10 @@ model Workspace {
   // GitHub App installations on this workspace (Story 7.10 · MOTIR-891) — "Grant
   // 2" of the GitHub integration (repo access). Cascade with the workspace.
   githubInstallations      GithubInstallation[]
+  // Issue-import runs + their external-id → work-item map (Story 7.16 · MOTIR-939).
+  // Workspace-scoped tenant data — cascade with the workspace.
+  imports                  Import[]
+  importedIssues           ImportedIssue[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -660,6 +667,10 @@ model Project {
   tagAssignments         ProjectTagAssignment[]
   // AI-planning proposal bundles for this project (Story 7.21). Cascade.
   plans                  Plan[]
+  // Issue-import runs into this project + their idempotency map (Story 7.16 ·
+  // MOTIR-939). Cascade: a deleted project takes its import history + map rows.
+  imports                Import[]
+  importedIssues         ImportedIssue[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1132,6 +1143,12 @@ model WorkItem {
   // SetNull on delete (PR history survives). Modelled both sides per the
   // FK-`@relation` rule.
   githubPullRequests   GithubPullRequest[]
+  // Import idempotency map rows pointing at this work item (Story 7.16 ·
+  // MOTIR-939): the `(project, source, externalId) → workItem` mapping a re-run
+  // resolves through. CASCADE on delete — if the work item is deleted its
+  // mapping row goes too, so a re-import re-creates it. Modelled both sides per
+  // the FK-`@relation` rule.
+  importedIssues       ImportedIssue[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1958,12 +1975,12 @@ model Comment {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workItem  WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  author    User             @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
-  parent    Comment?         @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies   Comment[]        @relation("CommentReplies")
-  mentions  CommentMention[]
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem        WorkItem         @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author          User             @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  parent          Comment?         @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[]        @relation("CommentReplies")
+  mentions        CommentMention[]
   // CI feedback (Subtask 7.10.6 / MOTIR-894): the check-run rows whose feedback
   // comment THIS is — so a re-run updates it in place. SetNull on delete.
   githubCheckRuns GithubCheckRun[]
@@ -3182,23 +3199,23 @@ model GithubRepo {
 /// repo AND the work item modelled on both sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedChangeRequest.
 model GithubPullRequest {
-  id         String   @id @default(cuid())
+  id             String   @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider   String   @default("github")
+  provider       String   @default("github")
   /// FK → GithubRepo.id (internal cuid).
-  repoId     String   @map("repo_id")
-  number     Int
+  repoId         String   @map("repo_id")
+  number         Int
   /// Normalized change-request state: "open" | "closed" (merged is the boolean).
-  state      String
-  merged     Boolean  @default(false)
-  headRef    String   @map("head_ref")
+  state          String
+  merged         Boolean  @default(false)
+  headRef        String   @map("head_ref")
   /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
-  title      String?
+  title          String?
   /// Nullable link to the work item this PR resolves. SetNull on delete so the
   /// PR row (history) survives a work-item deletion with a null link.
-  workItemId String?  @map("work_item_id")
+  workItemId     String?  @map("work_item_id")
   /// Whether `workItemId` was set by the EXPLICIT item→PR link affordance
   /// (MOTIR-1596, design/github Panel 5) rather than the MOTIR-892 auto-resolver.
   /// A manual link is the manual OVERRIDE of the resolver: it is STICKY — the
@@ -3207,9 +3224,9 @@ model GithubPullRequest {
   /// the key stays linked (and drives status sync) across later PR events. A
   /// takeover (moving the link to another item) keeps this true; the auto-
   /// resolver only ever writes rows where this is false.
-  linkedManually Boolean @default(false) @map("linked_manually")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  linkedManually Boolean  @default(false) @map("linked_manually")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   repo      GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
   workItem  WorkItem?        @relation(fields: [workItemId], references: [id], onDelete: SetNull)
@@ -3259,4 +3276,128 @@ model GithubCheckRun {
   @@unique([pullRequestId, commitSha, checkName])
   @@index([pullRequestId])
   @@map("github_check_run")
+}
+
+/// The SOURCE a set of issues is imported FROM (Story 7.16 · MOTIR-939). Live
+/// connectors — `jira` / `linear` / `github` (paginated REST) + `plane` (added
+/// as a planned connector, MOTIR-1639) — and `csv`, the credential-free
+/// uploaded-file fallback. The decision (MOTIR-938) records the connector layer
+/// as an INTERFACE (`IssueSourceConnector`), so a new source is a new connector
+/// plus one enum value here — never a wizard rewrite.
+enum ImportSource {
+  jira
+  linear
+  github
+  plane
+  csv
+
+  @@map("import_source")
+}
+
+/// The lifecycle of one import RUN (Story 7.16 · MOTIR-938 decision). Every
+/// import is PREVIEWED before it writes (the dry-run is the run minus the
+/// writes): `draft` (created, no mapping confirmed) → `previewed` (the dry-run
+/// plan computed) → `running` → a terminal `succeeded` / `partially_failed` (some
+/// issues failed, the rest committed) / `failed`.
+enum ImportStatus {
+  draft
+  previewed
+  running
+  succeeded
+  partially_failed
+  failed
+
+  @@map("import_status")
+}
+
+/// One issue-import RUN (Story 7.16 · MOTIR-939) — the persistence record the
+/// importer rides. It captures WHERE from (`source` + `sourceRef`, e.g. the
+/// connected Jira project / GitHub repo / uploaded CSV ref), the confirmed
+/// field-`mapping` (typed JSON, decided in MOTIR-938), the run `status`, and the
+/// per-outcome `*Count` tallies. This card (MOTIR-939) is the SCHEMA + the
+/// single-op repository; the mapping/persist ENGINE that owns the transaction +
+/// the create-vs-update decision is MOTIR-941 (7.16.5).
+///
+/// Workspace-scoped tenant data, so it lands WITH its RLS policy in the same
+/// migration (migration-by-concern — no unguarded window). Every FK is modelled
+/// as a Prisma `@relation` on BOTH sides with an explicit `onDelete` (the
+/// FK-`@relation`/migrate-dev-no-drift rule): workspace/project CASCADE (tenant +
+/// project teardown), `createdBy` SET NULL (a deleted initiator never destroys
+/// import history — the `plan.decidedBy` precedent).
+model Import {
+  id           String       @id @default(cuid())
+  workspaceId  String       @map("workspace_id")
+  projectId    String       @map("project_id")
+  source       ImportSource
+  /// The connected project / repo / file ref the issues come from (Jira project
+  /// key, GitHub `owner/repo`, an uploaded-file handle). Nullable — a `draft`
+  /// import may not have picked its source ref yet.
+  sourceRef    String?      @map("source_ref")
+  /// The confirmed field-mapping config as typed JSON (MOTIR-938's mapping table:
+  /// type/status/priority/users/labels/…). Nullable — a `draft` has none yet; the
+  /// engine (MOTIR-941) reads it, this card only stores it.
+  mapping      Json?
+  status       ImportStatus @default(draft)
+  createdCount Int          @default(0) @map("created_count")
+  updatedCount Int          @default(0) @map("updated_count")
+  skippedCount Int          @default(0) @map("skipped_count")
+  failedCount  Int          @default(0) @map("failed_count")
+  createdById  String?      @map("created_by_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User?           @relation("ImportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  importedIssues ImportedIssue[]
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
+  @@map("import")
+}
+
+/// The idempotency MAP (Story 7.16 · MOTIR-939) — one row per imported source
+/// issue, mapping its stable `(project, source, externalId)` identity to the
+/// Motir `workItem` it became. This is what makes a re-run idempotent: the
+/// importer (MOTIR-941) resolves each source issue through this map and UPSERTS
+/// the mapped work item instead of creating a duplicate. `sourceHash` lets the
+/// engine detect a source-side change since the last run (re-sync vs skip).
+///
+/// The `@@unique([projectId, source, externalId])` is the idempotency guarantee
+/// AT THE DB — a second import of the same external id cannot insert a second
+/// mapping row, not merely "the app checks first" (MOTIR-938's Atlassian
+/// external-id-skip precedent). The identity is STABLE ACROSS runs, so it is keyed
+/// on the source identity, NOT `importId` (which changes each run — `importId` is
+/// provenance only, SET NULL so deleting an old run never wipes the map and breaks
+/// idempotency). `workItem` is CASCADE: delete the work item and its mapping row
+/// goes too, so a re-import re-creates it. Workspace-scoped → RLS in the same
+/// migration; every FK a both-sides `@relation` (the FK-`@relation` rule).
+model ImportedIssue {
+  id          String       @id @default(cuid())
+  workspaceId String       @map("workspace_id")
+  projectId   String       @map("project_id")
+  /// The run that most recently wrote this mapping (provenance). Nullable +
+  /// SET NULL: the map SURVIVES an import-run delete so re-runs stay idempotent.
+  importId    String?      @map("import_id")
+  source      ImportSource
+  /// The source's stable id for the issue (Jira `PROJ-123`, Linear identifier,
+  /// GitHub `owner/repo#42`, a CSV id column).
+  externalId  String       @map("external_id")
+  workItemId  String       @map("work_item_id")
+  /// Hash of the source issue's mapped fields at last import — lets a re-run
+  /// detect a source-side change (re-sync) vs an unchanged issue (skip). Nullable.
+  sourceHash  String?      @map("source_hash")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  import    Import?   @relation(fields: [importId], references: [id], onDelete: SetNull)
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, source, externalId])
+  @@index([workspaceId])
+  @@index([importId])
+  @@index([workItemId])
+  @@map("imported_issue")
 }
