@@ -10,69 +10,70 @@
       DESIGN ASSET (HTML mockup) for the MIGRATE-ONBOARDING WIZARD (Story 7.15 /
       MOTIR-815 — "Migrate-existing-codebase onboarding (Workflow B)"). No
       design/onboarding-migrate/ asset existed; the 7.15.1 design gate (MOTIR-930)
-      produces it. It is the layout source of truth for the wizard UI code subtask
-      7.15.5 (MOTIR-934) and the orchestration wiring 7.15.2 (MOTIR-931), both
-      blocked_by this card.
+      produces it. Layout source of truth for the wizard UI 7.15.5 (MOTIR-934) +
+      the orchestration 7.15.2 (MOTIR-931) + the state machine 7.15.2a (MOTIR-1499).
 
-      THIS CARD DESIGNS THE ORCHESTRATION SHELL + THE INDEX-PROGRESS STEP. It
-      COMPOSES surfaces other Stories already designed into one stepped, gated
-      flow — it does NOT re-design those embedded surfaces:
-        · Connect GitHub (step 1)        → 7.7.1  (design/github/)            — composed, cited
-        · Index progress (step 2)        → NEW here (the code-graph indexing) — the one step this card fully owns
-        · Audit + convention (step 3, ★) → 7.14.1 (design/coding-convention/) — composed, cited (the GATE)
-        · Light discovery (step 4)       → 7.2.1  (design/ai-chat/)           — composed, cited
-        · Generate + review (steps 5-6)  → 7.3.1  (design/ai-planning/)       — composed, cited
+      This card designs the ORCHESTRATION SHELL + the INDEX step and COMPOSES the
+      surfaces other Stories already designed (7.7.1 connect · 7.14.1 audit/convention ·
+      7.2.1 discovery · 7.3.1 generate) — it does not re-design them.
 
-      Built FROM the real design system: the token block below is copied 1:1 from
-      the shipped packages/design-system/theme.css layer (the @theme Tier-0
-      --color-*/shape scale, the Tier-3 --el-* element layer, the [data-theme='dark']
-      overrides) — exactly as design/coding-convention/convention.mock.html does.
-      Every element references the Tier-3 --el-* tokens ONLY (no Tier-0 --color-* in
-      product UI) and the element-semantic shape tokens ONLY (--radius-*/--spacing-*/
-      --height-*/--shadow-*, the layer a [data-style]/[data-display-style] block
-      overrides) — no raw rounded-*/p-*/h-*, no invented hue. The step rail, the
-      wizard chrome, and the index step are NEW ARRANGEMENTS of the shipped
-      primitives (Card / Button / Pill / EmptyState / Switch); no new vocabulary is
-      invented (if one is needed that is a NEW design/ subtask, not a workaround).
+      THREE product truths this revision bakes in:
+        (1) MULTI-REPO — a project spans SEVERAL repos (web + api + shared). Connect
+            multi-selects the project's repos; Index shows per-repo progress under an
+            aggregate gate; audit + plan run across the whole-project code graph.
+            Grounded in shipped reality: GithubInstallation is workspace-scoped and
+            owns GithubRepo[]; codeGraphIndexService.indexRepoIntoWorkspaceProjects
+            indexes repos into a project's code graph.
+        (2) CONVENTIONS ARE PER REPO (Yue) — NOT one convention per project. A legacy
+            API and a modern web app in the same company rarely share a standard, so
+            step 3 reviews + approves a convention PER repository. (This CORRECTS the
+            7.14 "one standard per project" model — flagged for the 7.14 owner in
+            design-notes; here the migrate wizard composes 7.14's convention surface
+            once per repo.)
+        (3) PLANNING IS OPTIONAL (Yue) — linking + reading the code must not force a
+            planning commitment. The required core is "Set up your codebase"
+            (Connect · Index · Audit & conventions). "Plan your project" (Discovery ·
+            Generate · Review) is OPTIONAL and skippable: after set-up the user gets a
+            DECISION — plan now, or finish and plan later. Plan with AI is always in
+            the top bar, so nothing is lost by finishing early.
 
-      HOST — designed against SHIPPED REALITY. The wizard replaces the shipped
-      /onboarding/import placeholder (app/(onboarding)/onboarding/import/page.tsx,
-      MOTIR-1462, today a "coming soon" EmptyState). It renders in the (onboarding)
-      route group — FULL-SCREEN, OUTSIDE the (authed) AppLayout (no top nav / no
-      project sidebar), but AUTHENTICATED — so it owns the whole viewport with only
-      a minimal brand bar, exactly like design/onboarding-entrance. The entrance's
-      secondary "I have an existing project — import it" row is the inbound door.
+      Built FROM the real design system: the token block below is copied 1:1 from the
+      shipped packages/design-system/theme.css (Tier-0 @theme --color- and shape
+      scale, Tier-3 --el- element layer, [data-theme='dark'] overrides), exactly as
+      design/coding-convention/convention.mock.html does. Product UI references the
+      Tier-3 --el- tokens ONLY and the element-semantic shape tokens ONLY (no Tier-0
+      --color- in product UI, no raw radius/padding utility, no invented hue). The
+      rail, chrome, index step, per-repo convention list and decision block are NEW
+      ARRANGEMENTS of the shipped primitives (Card / Button / Pill / EmptyState /
+      Switch) — no new vocabulary is invented.
 
-      MIRROR (rung-1, VERIFIED this session — cited in design-notes.md): CodeRabbit's
-      connect-your-repo onboarding, Cursor's codebase-indexing PROGRESS + completion
-      gate, Plane's Jira-import WIZARD (connect → configure → review + Confirm before
-      it writes). The flow is drawn as THAT guided, gated wizard.
+      HOST — designed against SHIPPED REALITY. Replaces the shipped /onboarding/import
+      placeholder (app/(onboarding)/onboarding/import/page.tsx, MOTIR-1462). Renders in
+      the (onboarding) route group — full-screen, OUTSIDE the (authed) AppLayout, but
+      authenticated — owning the viewport with a minimal brand bar, like
+      design/onboarding-entrance.
 
-      Covers (multi-panel board — review EACH panel, mistake #31):
-        Panel 0 — the wizard chrome + the six-step RAIL (done/current/locked), the
-                  Back/Next footer, the Save & exit / resume affordance. Drawn at the
-                  audit step so the LOCKED Generate gate is visible on the rail.
-        Panel 1 — Connect GitHub (step 1)      — composition of 7.7.1.
-        Panel 2 — Index progress (step 2)      — the NEW code-graph indexing step,
-                  in-flight (Next DISABLED) + complete (Next enabled). The Cursor gate.
-        Panel 3 — Audit + proposed-convention approve (step 3, ★ the gate) — 7.14.1,
-                  with the "approve the convention to continue" copy + locked Generate.
-        Panel 4 — Light discovery (step 4)     — a SHORT 7.2 chat pass, migrate-framed.
-        Panel 5 — Code-aware generate + review (steps 5-6) — 7.3, grounded-in-your-code.
-        Panel 6 — empty / error / resume states — connect/index/audit failed + RESUME.
-      Toggle dark mode (top-right) to confirm token parity in both themes.
+      MIRROR (rung-1, VERIFIED — cited in design-notes.md): CodeRabbit connect-your-repo;
+      Cursor codebase-indexing progress + completion gate; Plane Jira-import wizard
+      (connect -> configure -> review + Confirm).
+
+      Panels (review EACH — mistake #31):
+        0  wizard chrome + the grouped rail (Set up 1-3 required · Plan 4-6 optional),
+           drawn at the decision moment (set-up done -> plan now or later).
+        1  Connect (multi-select the project's repos) — composes 7.7.1.
+        2  Index (per-repo progress + aggregate gate) — the NEW step.
+        3  Audit + PER-REPO conventions -> the plan-now-or-later DECISION — composes 7.14.1.
+        4  Discovery (OPTIONAL, skippable) — composes 7.2.1.
+        5  Generate + review (OPTIONAL, skippable) — composes 7.3.1.
+        6  finished-early / error / resume states.
+      Toggle dark mode (top-right) to confirm token parity.
     -->
     <style>
-      /* ══════════════════════════════════════════════════════════════════════
+      /* ==============================================================
          TOKENS — copied 1:1 from packages/design-system/theme.css.
-         Tier-0 @theme (--color-* + shape scale) + Tier-3 --el-* element layer +
-         [data-theme='dark'] overrides. A mock.html can't @import the package CSS,
-         so the used subset is inlined verbatim (the design/coding-convention +
-         design/ready convention). Product UI references --el-* + the shape tokens
-         ONLY — never a Tier-0 --color-* and never a raw rounded / p / h utility.
-         ══════════════════════════════════════════════════════════════════════ */
+         Product UI references Tier-3 --el- + the shape tokens ONLY.
+         ============================================================== */
       :root {
-        /* Tier 0 — colour (light base) */
         --color-primary: #5645d4;
         --color-primary-foreground: #ffffff;
         --color-primary-pressed: #4534b3;
@@ -108,7 +109,6 @@
         --color-link: #0070d2;
         --color-link-pressed: #005bab;
 
-        /* Tier 0 — shape (warm-editorial base) */
         --radius-btn: 8px;
         --radius-card: 12px;
         --radius-input: 8px;
@@ -136,7 +136,6 @@
         --font-serif: 'Iowan Old Style', Georgia, 'Times New Roman', serif;
         --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
-        /* Tier 3 — semantic element tokens (the layer components consume) */
         --el-page-bg: var(--color-background);
         --el-text: var(--color-foreground);
         --el-text-strong: var(--color-charcoal);
@@ -184,8 +183,6 @@
         --el-card-icon-fg: var(--color-charcoal);
         --el-input-border: var(--color-hairline-strong);
         --el-button-border: var(--color-hairline-strong);
-        --el-count-bg: var(--color-muted);
-        --el-count-text: var(--color-slate);
         --el-code-bg: var(--color-muted);
         --el-code-text: var(--color-charcoal);
         --el-overlay-scrim: #00000066;
@@ -223,10 +220,9 @@
         --el-overlay-scrim: #000000a6;
       }
 
-      /* ══════════════════════════════════════════════════════════════════════
-         Mock chrome (NOT product UI — the review-page scaffold, mirroring
-         design/coding-convention + design/ready).
-         ══════════════════════════════════════════════════════════════════════ */
+      /* ============================================================
+         Mock scaffold (review-page chrome, NOT product UI)
+         ============================================================ */
       * {
         box-sizing: border-box;
       }
@@ -256,12 +252,11 @@
         margin: 6px 0 0;
         color: var(--el-text-secondary);
         font-size: 13px;
-        max-width: 780px;
+        max-width: 820px;
         line-height: 1.55;
       }
       .toggle {
         flex: none;
-        font-family: var(--font-sans);
         font-size: 13px;
         font-weight: 600;
         padding: 8px 14px;
@@ -272,9 +267,7 @@
         cursor: pointer;
       }
       .panel-label {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-weight: 600;
+        font: 600 11px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--el-text-faint);
@@ -290,11 +283,9 @@
         margin: 0 auto;
       }
 
-      /* ══════════════════════════════════════════════════════════════════════
-         WIZARD CHROME — the (onboarding)-group full-screen frame. Brand bar +
-         [rail | content] grid + Back/Next footer. NEW ARRANGEMENT of shipped
-         primitives; owns the whole viewport (no app nav), like the entrance.
-         ══════════════════════════════════════════════════════════════════════ */
+      /* ============================================================
+         WIZARD CHROME — full-screen (onboarding)-group frame
+         ============================================================ */
       .wz {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -327,7 +318,7 @@
         display: grid;
         place-items: center;
       }
-      .wz-bar .flow-name {
+      .flow-name {
         font-size: 12px;
         color: var(--el-text-muted);
         padding-left: 12px;
@@ -340,9 +331,26 @@
         align-items: center;
         gap: 12px;
       }
-      /* "Save & exit" — the resume affordance (lucide History), the EXIT half of
-         the save→resume loop (MOTIR-1488 vocabulary; a half-finished wizard resumes
-         to its saved step). */
+      /* "Plan with AI" — the ALWAYS-PRESENT launcher (design/ai-chat). It lives in
+         the app top bar on every screen, so finishing onboarding early loses nothing.
+         Drawn here on the wizard bar as the persistent entrance. */
+      .plan-ai {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border: 0;
+        border-radius: var(--radius-badge);
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      .plan-ai svg {
+        width: 13px;
+        height: 13px;
+      }
       .save-exit {
         display: inline-flex;
         align-items: center;
@@ -372,19 +380,19 @@
 
       .wz-body {
         display: grid;
-        grid-template-columns: 248px 1fr;
+        grid-template-columns: 260px 1fr;
       }
-      @media (max-width: 780px) {
+      @media (max-width: 800px) {
         .wz-body {
           grid-template-columns: 1fr;
         }
       }
 
-      /* ---- the STEP RAIL (done / current / locked / upcoming) ---- */
+      /* ---- the STEP RAIL (grouped: Set up 1-3 required · Plan 4-6 optional) ---- */
       .rail {
         border-right: 1px solid var(--el-border);
         background: var(--el-surface);
-        padding: 22px 16px;
+        padding: 20px 16px;
       }
       .rail-title {
         font: 600 11px var(--font-mono);
@@ -397,30 +405,30 @@
         font-size: 12px;
         color: var(--el-text-muted);
         line-height: 1.45;
-        margin: 0 8px 16px;
+        margin: 0 8px 4px;
+      }
+      .rail-group {
+        font: 600 10px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        margin: 18px 8px 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .rail-group .opt {
+        color: var(--el-accent-on-surface);
+        background: var(--el-callout-bg);
+        border-radius: var(--radius-badge);
+        padding: 1px 7px;
+        letter-spacing: 0.04em;
       }
       .step {
         display: flex;
         gap: 11px;
-        padding: 9px 8px;
+        padding: 8px 8px;
         border-radius: var(--radius-control);
-        position: relative;
-      }
-      .step + .step {
-        margin-top: 2px;
-      }
-      /* the connector spine between markers */
-      .step:not(:last-child)::after {
-        content: '';
-        position: absolute;
-        left: 21px;
-        top: 32px;
-        bottom: -3px;
-        width: 2px;
-        background: var(--el-border);
-      }
-      .step.done:not(:last-child)::after {
-        background: var(--el-success);
       }
       .step .marker {
         flex: none;
@@ -431,24 +439,23 @@
         place-items: center;
         font-size: 11px;
         font-weight: 700;
-        z-index: 1;
       }
       .step .marker svg {
         width: 13px;
         height: 13px;
       }
-      .step .s-body .s-name {
+      .step .s-name {
         font-size: 13.5px;
         font-weight: 600;
         line-height: 1.3;
       }
-      .step .s-body .s-meta {
+      .step .s-meta {
         font-size: 11.5px;
         color: var(--el-text-muted);
         margin-top: 2px;
         line-height: 1.35;
+        display: block;
       }
-      /* DONE — mint marker + check */
       .step.done .marker {
         background: var(--el-success-surface);
         color: var(--el-success);
@@ -456,7 +463,6 @@
       .step.done .s-name {
         color: var(--el-text-strong);
       }
-      /* CURRENT — accent-filled marker + a soft ring row */
       .step.current {
         background: var(--el-surface-soft);
         outline: 1px solid var(--el-accent-on-surface);
@@ -468,7 +474,6 @@
       .step.current .s-name {
         color: var(--el-text-strong);
       }
-      /* UPCOMING — a quiet outline marker */
       .step.upcoming .marker {
         background: var(--el-page-bg);
         color: var(--el-text-faint);
@@ -477,36 +482,23 @@
       .step.upcoming .s-name {
         color: var(--el-text-secondary);
       }
-      /* LOCKED — muted, a padlock, gated on the convention approve */
-      .step.locked .marker {
-        background: var(--el-muted);
-        color: var(--el-text-faint);
-      }
-      .step.locked .s-name {
+      /* OPTIONAL step — reachable, not locked (dashed marker, no padlock) */
+      .step.optional .marker {
+        background: var(--el-page-bg);
         color: var(--el-text-muted);
+        border: 1px dashed var(--el-border-strong);
       }
-      .lock-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        margin-top: 4px;
-        font: 600 10.5px var(--font-mono);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--el-accent-on-surface);
-      }
-      .lock-tag svg {
-        width: 11px;
-        height: 11px;
+      .step.optional .s-name {
+        color: var(--el-text-secondary);
       }
 
       /* ---- the CONTENT region ---- */
       .content {
-        padding: 26px 30px 22px;
+        padding: 24px 30px 22px;
         min-width: 0;
       }
       .step-head {
-        margin-bottom: 18px;
+        margin-bottom: 16px;
       }
       .step-eyebrow {
         font: 600 11px var(--font-mono);
@@ -525,7 +517,7 @@
         color: var(--el-text-secondary);
         font-size: 13.5px;
         line-height: 1.55;
-        max-width: 62ch;
+        max-width: 64ch;
       }
       .cite {
         display: inline-flex;
@@ -539,12 +531,11 @@
         padding: 3px 10px;
       }
 
-      /* ---- the Back / Next footer ---- */
       .wz-foot {
         display: flex;
         align-items: center;
         gap: 12px;
-        margin-top: 22px;
+        margin-top: 20px;
         padding-top: 16px;
         border-top: 1px solid var(--el-border);
       }
@@ -555,19 +546,13 @@
         align-items: center;
         gap: 6px;
       }
-      .wz-foot .foot-note svg {
-        width: 14px;
-        height: 14px;
-        color: var(--el-accent-on-surface);
-      }
       .wz-foot .spacer {
         margin-left: auto;
       }
 
-      /* ══════════════════════════════════════════════════════════════════════
-         SHIPPED-PRIMITIVE mirrors (Card / Button / Pill / EmptyState / Switch /
-         Callout) — each reproduces a components/ui/* primitive's tokens.
-         ══════════════════════════════════════════════════════════════════════ */
+      /* ============================================================
+         SHIPPED-PRIMITIVE mirrors
+         ============================================================ */
       .card {
         background: var(--el-card);
         border: 1px solid var(--el-border);
@@ -608,7 +593,6 @@
         color: var(--el-text-eyebrow);
         margin-bottom: 8px;
       }
-
       .btn {
         display: inline-flex;
         align-items: center;
@@ -650,7 +634,6 @@
         border-color: var(--el-border);
         cursor: not-allowed;
       }
-
       .pill {
         display: inline-flex;
         align-items: center;
@@ -686,7 +669,6 @@
         color: var(--el-text-secondary);
         border: 1px solid var(--el-chip-border);
       }
-
       .callout {
         display: flex;
         gap: 10px;
@@ -708,12 +690,12 @@
         width: 16px;
         height: 16px;
       }
-      .callout.gate {
+      .callout.info-accent {
         background: var(--el-callout-bg);
         border-color: transparent;
         color: var(--el-callout-text);
       }
-      .callout.gate .ic {
+      .callout.info-accent .ic {
         color: var(--el-accent-on-surface);
       }
       .callout.danger {
@@ -727,11 +709,9 @@
       .callout strong {
         color: var(--el-text-strong);
       }
-
-      /* EmptyState — Card root, centred icon + serif title + subtitle + action */
       .empty {
         text-align: center;
-        padding: 34px 24px;
+        padding: 30px 24px;
       }
       .empty .e-ic {
         width: 44px;
@@ -754,13 +734,11 @@
       }
       .empty p {
         margin: 0 auto 14px;
-        max-width: 46ch;
+        max-width: 48ch;
         font-size: 13px;
         color: var(--el-text-subtitle);
         line-height: 1.55;
       }
-
-      /* Switch — repo sync toggle */
       .switch {
         width: 36px;
         height: 20px;
@@ -786,14 +764,17 @@
       .switch.off .knob {
         left: 2px;
       }
-
-      /* code / branch chip */
       .code {
         font: 600 12px var(--font-mono);
         background: var(--el-code-bg);
         color: var(--el-code-text);
         border-radius: var(--radius-control);
         padding: 1px 7px;
+      }
+      .muted-note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
       }
 
       /* ---- Connect (step 1, 7.7.1) ---- */
@@ -848,11 +829,15 @@
       .repo-row + .repo-row {
         margin-top: 8px;
       }
-      .repo-row .r-ic {
+      .repo-row .r-ic,
+      .idx-repo .r-ic,
+      .conv-repo .r-ic {
         color: var(--el-icon-muted);
         flex: none;
       }
-      .repo-row .r-ic svg {
+      .repo-row .r-ic svg,
+      .idx-repo .r-ic svg,
+      .conv-repo .r-ic svg {
         width: 16px;
         height: 16px;
         display: block;
@@ -861,7 +846,7 @@
         font-size: 13.5px;
         font-weight: 600;
       }
-      .repo-row .r-name .owner {
+      .r-name .owner {
         color: var(--el-text-muted);
         font-weight: 500;
       }
@@ -874,7 +859,7 @@
         gap: 10px;
       }
 
-      /* ---- Index progress (step 2, NEW) ---- */
+      /* ---- Index (step 2, NEW) — per-repo progress + aggregate gate ---- */
       .idx-meter {
         height: 10px;
         border-radius: var(--radius-badge);
@@ -887,34 +872,6 @@
         border-radius: var(--radius-badge);
         background: var(--el-accent);
       }
-      .idx-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 12px;
-        margin-top: 16px;
-      }
-      @media (max-width: 620px) {
-        .idx-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-      .idx-stat {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-control);
-        padding: 12px 14px;
-        background: var(--el-surface-soft);
-      }
-      .idx-stat .n {
-        font-family: var(--font-serif);
-        font-size: 22px;
-        color: var(--el-text-strong);
-        line-height: 1.1;
-      }
-      .idx-stat .l {
-        font-size: 12px;
-        color: var(--el-text-muted);
-        margin-top: 3px;
-      }
       .spin {
         width: 15px;
         height: 15px;
@@ -923,15 +880,6 @@
         border-top-color: var(--el-accent-on-surface);
         flex: none;
       }
-      .row-line {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        color: var(--el-text-secondary);
-      }
-      /* per-repo index list — a project spans several repos, so indexing runs
-         per repo with an aggregate gate (all repos must finish before Next) */
       .idx-repo {
         display: flex;
         align-items: center;
@@ -943,29 +891,18 @@
       .idx-repo + .idx-repo {
         margin-top: 8px;
       }
-      .idx-repo .r-ic {
-        color: var(--el-icon-muted);
-        flex: none;
-      }
-      .idx-repo .r-ic svg {
-        width: 16px;
-        height: 16px;
-        display: block;
-      }
       .idx-repo .r-main {
-        min-width: 0;
         flex: none;
-        width: 168px;
+        width: 176px;
+        min-width: 0;
       }
       .idx-repo .r-name {
+        display: block;
         font-size: 13px;
         font-weight: 600;
       }
-      .idx-repo .r-name .owner {
-        color: var(--el-text-muted);
-        font-weight: 500;
-      }
       .idx-repo .r-sub {
+        display: block;
         font-size: 11.5px;
         color: var(--el-text-muted);
         margin-top: 1px;
@@ -987,11 +924,11 @@
       }
       .idx-repo .r-state {
         flex: none;
-        width: 96px;
+        width: 100px;
         text-align: right;
       }
 
-      /* ---- Audit + convention (step 3, 7.14.1) ---- */
+      /* ---- Audit + PER-REPO conventions (step 3, 7.14.1) ---- */
       .grade {
         display: flex;
         gap: 14px;
@@ -1002,54 +939,69 @@
       }
       .grade .g-letter {
         font-family: var(--font-serif);
-        font-size: 34px;
+        font-size: 32px;
         font-weight: 700;
         color: var(--el-text-strong);
         line-height: 1;
       }
-      .grade .g-body .g-top {
+      .grade .g-top {
+        display: block;
         font-size: 14px;
         font-weight: 700;
         color: var(--el-text-strong);
       }
-      .grade .g-body .g-sub {
+      .grade .g-sub {
+        display: block;
         font-size: 12.5px;
         color: var(--el-text-secondary);
         margin-top: 2px;
         line-height: 1.45;
       }
-      .cat-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 8px 18px;
-        margin-top: 14px;
-      }
-      @media (max-width: 620px) {
-        .cat-grid {
-          grid-template-columns: 1fr 1fr;
-        }
-      }
-      .cat {
+      /* a per-repo convention row — conventions are PER REPO, not one per project */
+      .conv-repo {
         display: flex;
         align-items: center;
-        gap: 7px;
-        font-size: 12.5px;
-        color: var(--el-text-secondary);
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
       }
-      .cat .dot {
-        width: 8px;
-        height: 8px;
-        border-radius: var(--radius-badge);
+      .conv-repo + .conv-repo {
+        margin-top: 8px;
+      }
+      .conv-repo .cr-grade {
         flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-success-surface);
+        color: var(--el-text-strong);
+        font-family: var(--font-serif);
+        font-weight: 700;
+        font-size: 15px;
+        display: grid;
+        place-items: center;
       }
-      .cat .dot.ok {
-        background: var(--el-success);
+      .conv-repo .cr-body {
+        flex: 1;
+        min-width: 0;
       }
-      .cat .dot.watch {
-        background: var(--el-warning);
+      .conv-repo .cr-name {
+        display: block;
+        font-size: 13.5px;
+        font-weight: 600;
       }
-      .cat .dot.gap {
-        background: var(--el-danger);
+      .conv-repo .cr-sub {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .conv-repo .cr-actions {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
       .doc-section {
         border-top: 1px solid var(--el-border-soft);
@@ -1070,6 +1022,55 @@
       }
       .rule + .rule {
         margin-top: 7px;
+      }
+
+      /* the plan-now-or-later DECISION block (planning is OPTIONAL after set-up) */
+      .decision {
+        margin-top: 16px;
+        border: 1px solid var(--el-accent-on-surface);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 18px 20px;
+      }
+      .decision h3 {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        margin: 0 0 5px;
+      }
+      .decision > p {
+        margin: 0 0 14px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        max-width: 64ch;
+      }
+      .d-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .d-note {
+        margin: 12px 0 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.7;
+      }
+      .d-note .ai-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        vertical-align: middle;
+        font-weight: 600;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+      }
+      .d-note .ai-pill svg {
+        width: 12px;
+        height: 12px;
       }
 
       /* ---- Discovery (step 4, 7.2.1) ---- */
@@ -1114,16 +1115,16 @@
         font-size: 13px;
       }
 
-      /* ---- Generate + review (steps 5-6, 7.3.1) ---- */
+      /* ---- Generate + review (step 5, 7.3.1) ---- */
       .canvas {
         position: relative;
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
-        background: var(--el-canvas);
+        background: var(--el-canvas, var(--color-canvas));
         background-image: radial-gradient(var(--el-border-strong) 1px, transparent 0);
         background-size: 20px 20px;
         padding: 18px;
-        min-height: 208px;
+        min-height: 196px;
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
@@ -1135,7 +1136,7 @@
         border-radius: var(--radius-card);
         box-shadow: var(--shadow-subtle);
         padding: 10px 12px;
-        width: 168px;
+        width: 172px;
       }
       .node.proposed {
         border: 1.5px dashed var(--el-accent-on-surface);
@@ -1161,6 +1162,9 @@
         margin-top: 5px;
         line-height: 1.35;
       }
+      .node .n-repo {
+        margin-top: 6px;
+      }
       .confirm-bar {
         display: flex;
         align-items: center;
@@ -1182,6 +1186,7 @@
         margin-left: auto;
       }
 
+      /* ---- Panel 6 states ---- */
       .states-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1199,38 +1204,22 @@
         color: var(--el-text-faint);
         margin-bottom: 9px;
       }
-      .stack {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-top: 10px;
-      }
-      .muted-note {
-        font-size: 12px;
-        color: var(--el-text-muted);
-        line-height: 1.5;
-      }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
-        <h1>
-          Migrate-onboarding wizard — connect → index → audit &amp; convention → discovery →
-          generate
-        </h1>
+        <h1>Migrate-onboarding wizard — set up your codebase, then plan (optional)</h1>
         <p>
-          Story 7.15 (MOTIR-815, Workflow&nbsp;B) · design gate 7.15.1 (MOTIR-930). The guided,
-          gated wizard for onboarding an EXISTING codebase: connect the repos, index them, review
-          the code-health audit and <strong>approve the proposed coding convention</strong>, a short
-          discovery pass, then a <strong>code-aware</strong> plan generate + review. A project
-          usually spans <strong>several repositories</strong> (a web app + an API + a shared
-          package), so the whole flow is <strong>multi-repo</strong>: connect all of them, index
-          each into one project code graph (per-repo progress, aggregate gate), audit + plan across
-          them. This card designs the ORCHESTRATION SHELL + the index step and COMPOSES the
-          already-designed surfaces (7.7.1 / 7.14.1 / 7.2.1 / 7.3.1) — it does not re-design them.
-          Full-screen in the (onboarding) group; replaces the shipped /onboarding/import
-          placeholder. Toggle the theme →
+          Story 7.15 (MOTIR-815, Workflow&nbsp;B) · design gate 7.15.1 (MOTIR-930). Onboard an
+          EXISTING codebase. A project usually spans <strong>several repositories</strong>, so the
+          flow is multi-repo. The required core is <strong>Set up your codebase</strong> (Connect ·
+          Index · Audit &amp; conventions);
+          <strong>coding conventions are per repository</strong> (a legacy API and a modern web app
+          rarely share one standard). <strong>Planning is optional</strong> — after set-up the user
+          chooses to plan now or finish and plan later; <strong>Plan with AI</strong>
+          is always in the top bar. This card designs the SHELL + index step and COMPOSES the
+          already-designed surfaces (7.7.1 / 7.14.1 / 7.2.1 / 7.3.1). Toggle the theme →
         </p>
       </div>
       <button
@@ -1244,12 +1233,12 @@
       </button>
     </div>
 
-    <!-- ============================================================
-         PANEL 0 — the wizard chrome + the six-step RAIL (the gate visible)
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 0 — wizard chrome + grouped rail (Set up · Plan optional)
+    =========================================================== -->
     <div class="panel-label">
-      Panel 0 · The wizard chrome + step rail —
-      <b>Generate is LOCKED until the convention is approved</b>
+      Panel 0 · Wizard chrome + the grouped rail —
+      <b>Set up (1–3, required) · Plan (4–6, OPTIONAL)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -1266,15 +1255,28 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
             </span>
             Motir
           </span>
           <span class="flow-name">Import an existing project</span>
           <span class="right">
+            <button class="plan-ai" type="button" title="Always available">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+                <path d="M18 4v3M19.5 5.5h-3" />
+              </svg>
+              Plan with AI
+            </button>
             <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
@@ -1290,17 +1292,16 @@
               </svg>
               Save &amp; exit
             </button>
-            <span class="avatar" title="Signed in">YZ</span>
+            <span class="avatar">YZ</span>
           </span>
         </div>
 
         <div class="wz-body">
           <nav class="rail" aria-label="Migration steps">
             <div class="rail-title">Your migration</div>
-            <div class="rail-sub">
-              Leave any time — we save your place and bring you back to this step.
-            </div>
+            <div class="rail-sub">Leave any time — we save your place and bring you back.</div>
 
+            <div class="rail-group">Set up your codebase</div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -1313,7 +1314,7 @@
                 >
                   <path d="M20 6 9 17l-5-5" /></svg
               ></span>
-              <span class="s-body"
+              <span
                 ><span class="s-name">Connect</span
                 ><span class="s-meta">3 repos · connected</span></span
               >
@@ -1330,129 +1331,88 @@
                 >
                   <path d="M20 6 9 17l-5-5" /></svg
               ></span>
-              <span class="s-body"
+              <span
                 ><span class="s-name">Index</span
-                ><span class="s-meta">3 repos · 5,412 files · ready</span></span
+                ><span class="s-meta">3 repos · code graph ready</span></span
               >
             </div>
             <div class="step current" aria-current="step">
               <span class="marker">3</span>
-              <span class="s-body"
-                ><span class="s-name">Audit &amp; convention</span
-                ><span class="s-meta">Review the audit · approve your standard</span></span
+              <span
+                ><span class="s-name">Audit &amp; conventions</span
+                ><span class="s-meta">Per-repo · approve your standards</span></span
               >
             </div>
-            <div class="step upcoming">
+
+            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="step optional">
               <span class="marker">4</span>
-              <span class="s-body"
+              <span
                 ><span class="s-name">Discovery</span
-                ><span class="s-meta">Tell us your goals</span></span
+                ><span class="s-meta">Skip if you just want to link the code</span></span
               >
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-              ></span>
-              <span class="s-body"
-                ><span class="s-name">Generate</span
-                ><span class="lock-tag"
-                  ><svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect width="18" height="11" x="3" y="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Approve the convention to unlock</span
-                ></span
-              >
+            <div class="step optional">
+              <span class="marker">5</span>
+              <span><span class="s-name">Generate</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-              ></span>
-              <span class="s-body"
-                ><span class="s-name">Review &amp; approve plan</span
-                ><span class="s-meta">Add it to your backlog</span></span
-              >
+            <div class="step optional">
+              <span class="marker">6</span>
+              <span><span class="s-name">Review &amp; approve</span></span>
             </div>
           </nav>
 
           <div class="content">
             <div class="step-head">
-              <div class="step-eyebrow">Step 3 of 6 · The gate</div>
-              <h2>Review your code health &amp; approve a coding convention</h2>
+              <div class="step-eyebrow">Step 3 of 3 · Set up · the decision point</div>
+              <h2>Your codebase is set up — plan now, or finish and plan later</h2>
               <p>
-                Motir read your code and drafted a coding convention — the standard it injects into
-                every prompt when it builds. <strong>Approve it to continue</strong>: the Generate
-                step stays locked until you do, so nothing is planned before your standard is set.
+                Connect, index and per-repo conventions are done — Motir knows your code. Planning
+                is
+                <strong>optional</strong>: start now for a code-aware plan, or finish and come back
+                whenever. <strong>Plan with AI</strong> is always in the top bar.
               </p>
-              <span class="cite" aria-hidden="true"
-                >Composes 7.14.1 · design/coding-convention/</span
-              >
             </div>
 
-            <div class="callout gate">
-              <span class="ic" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-              ></span>
-              <span
-                ><strong>Approve the convention to continue.</strong> The Generate step is locked on
-                the rail until your coding standard is approved — this is the
-                convention-before-generation gate.</span
-              >
-            </div>
-
-            <div style="margin-top: 14px">
-              <div class="grade">
-                <span class="g-letter">B</span>
-                <span class="g-body">
-                  <span class="g-top">78% conform · 12 files below the standard</span>
-                  <span class="g-sub"
-                    >How far your existing code is from the convention Motir will inject. This is a
-                    starting picture, not a blocker — you can plan improvements later.</span
+            <div class="decision">
+              <h3>Plan your project now?</h3>
+              <p>
+                Motir can propose a plan grounded in your code and the audit — reminders that reuse
+                your API's notification service, work that honours each repo's convention. Or finish
+                here; nothing is lost.
+              </p>
+              <div class="d-actions">
+                <button class="btn primary" type="button">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                   >
-                </span>
+                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+                  </svg>
+                  Plan my project now
+                </button>
+                <button class="btn secondary" type="button">Finish — I'll plan later</button>
               </div>
-              <div class="cat-grid">
-                <span class="cat"><span class="dot ok"></span> Layering · conforms</span>
-                <span class="cat"><span class="dot ok"></span> Naming · conforms</span>
-                <span class="cat"><span class="dot watch"></span> Complexity · 12 off</span>
-                <span class="cat"><span class="dot watch"></span> Duplication · 6 clusters</span>
-                <span class="cat"><span class="dot gap"></span> Testing · below</span>
-                <span class="cat"><span class="dot ok"></span> Error handling · conforms</span>
-              </div>
+              <p class="d-note">
+                <span class="ai-pill" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+                  </svg>
+                  Plan with AI</span
+                >
+                is always in the top bar — start planning your project any time after onboarding.
+              </p>
             </div>
 
             <div class="wz-foot">
@@ -1470,45 +1430,19 @@
                 </svg>
                 Back
               </button>
-              <span class="foot-note"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Next unlocks after you approve the convention</span
-              >
-              <span class="spacer"></span>
-              <button class="btn primary" type="button">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                Approve &amp; set as standard
-              </button>
+              <span class="foot-note">Required set-up is complete · steps 4–6 are optional</span>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ============================================================
-         PANEL 1 — Connect GitHub (step 1) — composition of 7.7.1
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 1 — Connect (multi-select the project's repos) · 7.7.1
+    =========================================================== -->
     <div class="panel-label">
-      Panel 1 · Step 1 — Connect GitHub <b>(composes 7.7.1 · design/github)</b>
+      Panel 1 · Step 1 — Connect the project's repositories
+      <b>(MULTI-REPO · composes 7.7.1)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -1525,15 +1459,27 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                /></svg
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg
             ></span>
             Motir</span
           >
           <span class="flow-name">Import an existing project</span>
-          <span class="right"
-            ><button class="save-exit" type="button">
+          <span class="right">
+            <button class="plan-ai" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+              </svg>
+              Plan with AI
+            </button>
+            <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -1546,87 +1492,50 @@
                 <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
                 <path d="M12 7v5l4 2" />
               </svg>
-              Save &amp; exit</button
-            ><span class="avatar">YZ</span></span
-          >
+              Save &amp; exit
+            </button>
+            <span class="avatar">YZ</span>
+          </span>
         </div>
         <div class="wz-body">
           <nav class="rail" aria-label="Migration steps">
             <div class="rail-title">Your migration</div>
-            <div class="rail-sub">Leave any time — we save your place and bring you back.</div>
+            <div class="rail-sub">Leave any time — we save your place.</div>
+            <div class="rail-group">Set up your codebase</div>
             <div class="step current" aria-current="step">
               <span class="marker">1</span
-              ><span class="s-body"
+              ><span
                 ><span class="s-name">Connect</span
                 ><span class="s-meta">The repos in this project</span></span
               >
             </div>
             <div class="step upcoming">
-              <span class="marker">2</span
-              ><span class="s-body"><span class="s-name">Index</span></span>
+              <span class="marker">2</span><span><span class="s-name">Index</span></span>
             </div>
             <div class="step upcoming">
               <span class="marker">3</span
-              ><span class="s-body"><span class="s-name">Audit &amp; convention</span></span>
+              ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
-            <div class="step upcoming">
-              <span class="marker">4</span
-              ><span class="s-body"><span class="s-name">Discovery</span></span>
+            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span
-              ><span class="s-body"
-                ><span class="s-name">Generate</span
-                ><span class="lock-tag"
-                  ><svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect width="18" height="11" x="3" y="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Locked</span
-                ></span
-              >
+            <div class="step optional">
+              <span class="marker">5</span><span><span class="s-name">Generate</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span
-              ><span class="s-body"><span class="s-name">Review &amp; approve plan</span></span>
+            <div class="step optional">
+              <span class="marker">6</span
+              ><span><span class="s-name">Review &amp; approve</span></span>
             </div>
           </nav>
           <div class="content">
             <div class="step-head">
-              <div class="step-eyebrow">Step 1 of 6</div>
+              <div class="step-eyebrow">Step 1 of 3 · Set up</div>
               <h2>Connect the repositories in this project</h2>
               <p>
                 A project usually spans more than one repository — a web app, an API, a shared
                 package. Select every repo that makes up this project; Motir reads them all to build
-                one code graph and plan across them. Two independent grants — identity, then
-                repository access. You pick the exact repos on GitHub.
+                one code graph and plan across them. Two grants — identity, then repository access.
               </p>
               <span class="cite" aria-hidden="true"
                 >Composes 7.7.1 · design/github/ — not a new connect screen</span
@@ -1651,8 +1560,8 @@
                   <div class="grant-eyebrow">Step 1 · Identity</div>
                   <h4>Verify your GitHub identity</h4>
                   <p>
-                    Confirm who you are on GitHub — your username and avatar. Reads your public
-                    profile only. It grants no access to any code.
+                    Confirm who you are on GitHub — username and avatar. Reads your public profile
+                    only. Grants no access to any code.
                   </p>
                 </div>
               </div>
@@ -1698,8 +1607,8 @@
             <div class="card">
               <div class="seclabel">Repositories in this project</div>
               <p class="muted-note" style="margin: -2px 0 12px">
-                Only the repositories you selected on GitHub. Motir reads these — it can't see any
-                others. Toggle which repos belong to this project.
+                Only the repositories you selected on GitHub. Toggle which repos belong to this
+                project.
               </p>
               <div class="repo-row">
                 <span class="r-ic" aria-hidden="true"
@@ -1715,8 +1624,7 @@
                     <path d="M3 5v14a9 3 0 0 0 18 0V5" /></svg
                 ></span>
                 <span class="r-name"><span class="owner">acme/</span>web</span>
-                <span class="code">main</span>
-                <span class="spacer"></span>
+                <span class="code">main</span><span class="spacer"></span>
                 <span class="r-right"
                   ><span class="pill mint"
                     ><svg
@@ -1747,8 +1655,7 @@
                     <path d="M3 5v14a9 3 0 0 0 18 0V5" /></svg
                 ></span>
                 <span class="r-name"><span class="owner">acme/</span>api</span>
-                <span class="code">main</span>
-                <span class="spacer"></span>
+                <span class="code">main</span><span class="spacer"></span>
                 <span class="r-right"
                   ><span class="pill mint"
                     ><svg
@@ -1779,8 +1686,7 @@
                     <path d="M3 5v14a9 3 0 0 0 18 0V5" /></svg
                 ></span>
                 <span class="r-name"><span class="owner">acme/</span>shared</span>
-                <span class="code">main</span>
-                <span class="spacer"></span>
+                <span class="code">main</span><span class="spacer"></span>
                 <span class="r-right"
                   ><span class="pill mint"
                     ><svg
@@ -1826,12 +1732,12 @@
       </div>
     </div>
 
-    <!-- ============================================================
-         PANEL 2 — Index progress (step 2) — the NEW step (Cursor-mirror gate)
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 2 — Index (per-repo progress + aggregate gate) · NEW
+    =========================================================== -->
     <div class="panel-label">
-      Panel 2 · Step 2 — Index progress
-      <b>(NEW — the step this card owns; Next DISABLED until ready)</b>
+      Panel 2 · Step 2 — Index the code
+      <b>(NEW · per-repo progress · Next DISABLED until every repo finishes)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -1848,15 +1754,27 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                /></svg
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg
             ></span>
             Motir</span
           >
           <span class="flow-name">Import an existing project</span>
-          <span class="right"
-            ><button class="save-exit" type="button">
+          <span class="right">
+            <button class="plan-ai" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+              </svg>
+              Plan with AI
+            </button>
+            <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -1869,16 +1787,16 @@
                 <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
                 <path d="M12 7v5l4 2" />
               </svg>
-              Save &amp; exit</button
-            ><span class="avatar">YZ</span></span
-          >
+              Save &amp; exit
+            </button>
+            <span class="avatar">YZ</span>
+          </span>
         </div>
         <div class="wz-body">
           <nav class="rail" aria-label="Migration steps">
             <div class="rail-title">Your migration</div>
-            <div class="rail-sub">
-              Indexing runs in the background — you can leave and come back.
-            </div>
+            <div class="rail-sub">Indexing runs in the background — leave and come back.</div>
+            <div class="rail-group">Set up your codebase</div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -1890,80 +1808,42 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"
+              ><span
                 ><span class="s-name">Connect</span
                 ><span class="s-meta">3 repos · connected</span></span
               >
             </div>
             <div class="step current" aria-current="step">
               <span class="marker">2</span
-              ><span class="s-body"
+              ><span
                 ><span class="s-name">Index</span
                 ><span class="s-meta">Reading your code…</span></span
               >
             </div>
             <div class="step upcoming">
               <span class="marker">3</span
-              ><span class="s-body"><span class="s-name">Audit &amp; convention</span></span>
+              ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
-            <div class="step upcoming">
-              <span class="marker">4</span
-              ><span class="s-body"><span class="s-name">Discovery</span></span>
+            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span
-              ><span class="s-body"
-                ><span class="s-name">Generate</span
-                ><span class="lock-tag"
-                  ><svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect width="18" height="11" x="3" y="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Locked</span
-                ></span
-              >
+            <div class="step optional">
+              <span class="marker">5</span><span><span class="s-name">Generate</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span
-              ><span class="s-body"><span class="s-name">Review &amp; approve plan</span></span>
+            <div class="step optional">
+              <span class="marker">6</span
+              ><span><span class="s-name">Review &amp; approve</span></span>
             </div>
           </nav>
           <div class="content">
             <div class="step-head">
-              <div class="step-eyebrow">Step 2 of 6</div>
+              <div class="step-eyebrow">Step 2 of 3 · Set up</div>
               <h2>Indexing your codebase</h2>
               <p>
                 Motir builds one code graph for the project across all three repositories — files,
-                symbols and how they reference each other, including across repos — so the audit and
-                the plan are grounded in what you actually have. This can take a few minutes for a
-                large codebase.
+                symbols and how they reference each other, including across repos. This can take a
+                few minutes for a large codebase.
               </p>
             </div>
 
@@ -1973,15 +1853,12 @@
                 <div>
                   <h3>Building the code graph…</h3>
                   <p class="sub">
-                    2 of 3 repositories done · you can leave this step — we'll keep indexing and
-                    notify you.
+                    2 of 3 repositories done · you can leave — we'll keep indexing and notify you.
                   </p>
                 </div>
-                <span class="spacer"></span>
-                <span class="pill sky">78%</span>
+                <span class="spacer"></span><span class="pill sky">78%</span>
               </div>
               <div class="idx-meter"><span class="fill" style="width: 78%"></span></div>
-
               <div class="seclabel" style="margin: 14px 0 8px">Per repository</div>
               <div class="idx-repo">
                 <span class="r-ic" aria-hidden="true"
@@ -2074,7 +1951,7 @@
                   <path d="M12 8h.01" /></svg
               ></span>
               <span
-                >The audit and plan need the whole project indexed —
+                >The audit and any plan need the whole project indexed —
                 <strong>Next stays disabled until every repository finishes.</strong></span
               >
             </div>
@@ -2119,7 +1996,7 @@
                     <h3 style="font-size: 14px">
                       Code graph built · 3 repositories · 5,412 files · 31,208 symbols
                     </h3>
-                    <p class="sub">Ready to audit your code against a proposed convention.</p>
+                    <p class="sub">Ready to audit your code and review per-repo conventions.</p>
                   </div>
                   <span class="spacer"></span>
                   <button class="btn primary sm" type="button">
@@ -2144,12 +2021,12 @@
       </div>
     </div>
 
-    <!-- ============================================================
-         PANEL 3 — Audit + proposed-convention approve (step 3, ★ the gate)
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 3 — Audit + PER-REPO conventions -> the DECISION · 7.14.1
+    =========================================================== -->
     <div class="panel-label">
-      Panel 3 · Step 3 — Audit &amp; convention approve
-      <b>★ the gate (composes 7.14.1 · design/coding-convention)</b>
+      Panel 3 · Step 3 — Audit &amp; PER-REPO conventions → plan-now-or-later
+      <b>(composes 7.14.1 · conventions are PER REPO)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -2166,15 +2043,27 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                /></svg
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg
             ></span>
             Motir</span
           >
           <span class="flow-name">Import an existing project</span>
-          <span class="right"
-            ><button class="save-exit" type="button">
+          <span class="right">
+            <button class="plan-ai" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+              </svg>
+              Plan with AI
+            </button>
+            <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -2187,14 +2076,16 @@
                 <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
                 <path d="M12 7v5l4 2" />
               </svg>
-              Save &amp; exit</button
-            ><span class="avatar">YZ</span></span
-          >
+              Save &amp; exit
+            </button>
+            <span class="avatar">YZ</span>
+          </span>
         </div>
         <div class="wz-body">
           <nav class="rail" aria-label="Migration steps">
             <div class="rail-title">Your migration</div>
-            <div class="rail-sub">Approve your standard to unlock Generate.</div>
+            <div class="rail-sub">Last set-up step — then plan now or later.</div>
+            <div class="rail-group">Set up your codebase</div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -2206,7 +2097,7 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Connect</span></span>
+              ><span><span class="s-name">Connect</span></span>
             </div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
@@ -2219,112 +2110,140 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Index</span></span>
+              ><span><span class="s-name">Index</span></span>
             </div>
             <div class="step current" aria-current="step">
               <span class="marker">3</span
-              ><span class="s-body"
-                ><span class="s-name">Audit &amp; convention</span
-                ><span class="s-meta">Review · approve your standard</span></span
+              ><span
+                ><span class="s-name">Audit &amp; conventions</span
+                ><span class="s-meta">One convention per repo</span></span
               >
             </div>
-            <div class="step upcoming">
-              <span class="marker">4</span
-              ><span class="s-body"><span class="s-name">Discovery</span></span>
+            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span
-              ><span class="s-body"
-                ><span class="s-name">Generate</span
-                ><span class="lock-tag"
-                  ><svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.4"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect width="18" height="11" x="3" y="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Approve to unlock</span
-                ></span
-              >
+            <div class="step optional">
+              <span class="marker">5</span><span><span class="s-name">Generate</span></span>
             </div>
-            <div class="step locked">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span
-              ><span class="s-body"><span class="s-name">Review &amp; approve plan</span></span>
+            <div class="step optional">
+              <span class="marker">6</span
+              ><span><span class="s-name">Review &amp; approve</span></span>
             </div>
           </nav>
           <div class="content">
             <div class="step-head">
-              <div class="step-eyebrow">Step 3 of 6 · The gate</div>
-              <h2>Your code health &amp; a proposed coding convention</h2>
+              <div class="step-eyebrow">Step 3 of 3 · Set up</div>
+              <h2>Your code health &amp; a coding convention per repository</h2>
               <p>
-                Motir measured your code and drafted a convention — the standard it injects into
-                every prompt for the NEW code it writes. Adopted rules already match your code;
-                proposed rules are clean-code defaults to review.
+                Motir measured your code and drafted a convention
+                <strong>for each repository</strong> — conventions differ per repo (a legacy API and
+                a modern web app rarely share a standard). Each is the standard Motir uses when it
+                plans work in that repo.
               </p>
               <span class="cite" aria-hidden="true"
-                >Composes 7.14.1 · design/coding-convention/ (the embedded review/approve
-                surface)</span
+                >Composes 7.14.1 · design/coding-convention/ (once per repo)</span
               >
             </div>
 
             <div class="card">
               <div class="card-h">
                 <h3>Code health</h3>
-                <span class="pill neutral">3 repos · against § Convention v1 · proposed</span>
+                <span class="pill neutral">across 3 repositories</span>
               </div>
               <div class="grade">
                 <span class="g-letter">B</span>
-                <span class="g-body"
-                  ><span class="g-top">78% of your code already meets the convention</span
+                <span
+                  ><span class="g-top">78% of your code already meets its repo's convention</span
                   ><span class="g-sub"
-                    >Measured across all 3 repositories · 12 files below the standard
-                    (acme/web&nbsp;B, acme/api&nbsp;A−, acme/shared&nbsp;A). One convention governs
-                    the whole project. A starting picture — you can plan improvements after
-                    onboarding.</span
+                    >Per repo: acme/web&nbsp;B · acme/api&nbsp;A− · acme/shared&nbsp;A. A starting
+                    picture — plan improvements later.</span
                   ></span
                 >
-              </div>
-              <div class="cat-grid">
-                <span class="cat"><span class="dot ok"></span> Layering · conforms</span>
-                <span class="cat"><span class="dot ok"></span> Naming · conforms</span>
-                <span class="cat"><span class="dot watch"></span> Complexity · 12 off</span>
-                <span class="cat"><span class="dot watch"></span> Duplication · 6 clusters</span>
-                <span class="cat"><span class="dot gap"></span> Testing · below</span>
-                <span class="cat"><span class="dot ok"></span> Error handling · conforms</span>
               </div>
             </div>
 
             <div class="card">
               <div class="card-h">
-                <h3>Coding convention</h3>
-                <span class="pill lavender">v1 · proposed</span>
-                <span class="spacer"></span>
-                <button class="btn ghost sm" type="button">
+                <h3>Coding conventions</h3>
+                <span class="pill neutral">one per repository</span>
+              </div>
+              <p class="muted-note" style="margin: -4px 0 12px">
+                Conventions are per repository — approve each. Each becomes the standard Motir
+                injects into prompts when it generates work for THAT repo.
+              </p>
+              <div class="conv-repo">
+                <span class="cr-grade">B</span>
+                <span class="cr-body"
+                  ><span class="cr-name"><span class="owner">acme/</span>web</span
+                  ><span class="cr-sub">Next.js / React · component + hooks conventions</span></span
+                >
+                <span class="cr-actions"
+                  ><span class="pill mint"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                    Approved</span
+                  ><button class="btn ghost sm" type="button">Edit</button></span
+                >
+              </div>
+              <div class="conv-repo">
+                <span class="cr-grade" style="background: var(--el-warning-surface)">A−</span>
+                <span class="cr-body"
+                  ><span class="cr-name"><span class="owner">acme/</span>api</span
+                  ><span class="cr-sub"
+                    >Node service · layering, error-handling, testing</span
+                  ></span
+                >
+                <span class="cr-actions"
+                  ><span class="pill lavender">v1 · proposed</span
+                  ><button class="btn ghost sm" type="button">Edit</button
+                  ><button class="btn primary sm" type="button">Approve</button></span
+                >
+              </div>
+              <div class="conv-repo">
+                <span class="cr-grade">A</span>
+                <span class="cr-body"
+                  ><span class="cr-name"><span class="owner">acme/</span>shared</span
+                  ><span class="cr-sub"
+                    >TypeScript library · exports, types, no side-effects</span
+                  ></span
+                >
+                <span class="cr-actions"
+                  ><span class="pill lavender">v1 · proposed</span
+                  ><button class="btn ghost sm" type="button">Edit</button
+                  ><button class="btn primary sm" type="button">Approve</button></span
+                >
+              </div>
+
+              <div class="doc-section">
+                <h5>acme/api · convention (v1 · proposed) — expanded</h5>
+                <div class="rule">
+                  <span class="pill mint">Adopted</span> Routes call one service method; data access
+                  lives in repositories (your code already does this).
+                </div>
+                <div class="rule">
+                  <span class="pill lavender">Proposed</span> Every new service branch ships a test
+                  against a real Postgres — a clean-code default this repo is inconsistent on.
+                </div>
+              </div>
+            </div>
+
+            <div class="decision">
+              <h3>You're set up — plan your project now?</h3>
+              <p>
+                Connect, index and per-repo conventions are done. Plan a code-aware project now, or
+                finish and come back whenever.
+              </p>
+              <div class="d-actions">
+                <button class="btn primary" type="button">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -2333,96 +2252,48 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
                   </svg>
-                  Edit
+                  Plan my project now
                 </button>
+                <button class="btn secondary" type="button">Finish — I'll plan later</button>
               </div>
-              <div class="doc-section" style="border-top: 0; padding-top: 0; margin-top: 0">
-                <h5>Layering</h5>
-                <div class="rule">
-                  <span class="pill mint">Adopted</span> Routes call one service method; data access
-                  lives in repositories.
-                </div>
-                <div class="rule">
-                  <span class="pill mint">Adopted</span> Services own transactions; write repo
-                  methods require a <span class="code">tx</span>.
-                </div>
-              </div>
-              <div class="doc-section">
-                <h5>Testing</h5>
-                <div class="rule">
-                  <span class="pill lavender">Proposed</span> Every new service branch ships a test
-                  against a real Postgres — a clean-code default your code is inconsistent on.
-                </div>
-              </div>
-            </div>
-
-            <div class="callout gate">
-              <span class="ic" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+              <p class="d-note">
+                <span class="ai-pill" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+                  </svg>
+                  Plan with AI</span
                 >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
-              ></span>
-              <span
-                ><strong>Approve the convention to continue.</strong> Nothing is injected into a
-                prompt until you approve it as your standard — and the
-                <strong>Generate step stays locked</strong> until you do. You can edit it
-                first.</span
-              >
+                is always in the top bar — nothing is lost by finishing now. When you plan, Motir
+                uses each repo's approved convention.
+              </p>
             </div>
 
             <div class="wz-foot">
               <button class="btn secondary" type="button">Back</button>
               <span class="foot-note"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect width="18" height="11" x="3" y="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Approving unlocks Generate &amp; re-audits your code</span
+                >Approving each convention is optional now — you can approve when you plan</span
               >
-              <span class="spacer"></span>
-              <button class="btn ghost" type="button">Save draft</button>
-              <button class="btn primary" type="button">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.4"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                Approve &amp; set as standard
-              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ============================================================
-         PANEL 4 — Light discovery (step 4) — a SHORT 7.2 chat pass
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 4 — Discovery (OPTIONAL, skippable) · 7.2.1
+    =========================================================== -->
     <div class="panel-label">
       Panel 4 · Step 4 — Light discovery
-      <b>(composes 7.2.1 · design/ai-chat — migrate-framed, short)</b>
+      <b>(OPTIONAL · skippable · composes 7.2.1)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -2439,15 +2310,27 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                /></svg
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg
             ></span>
             Motir</span
           >
           <span class="flow-name">Import an existing project</span>
-          <span class="right"
-            ><button class="save-exit" type="button">
+          <span class="right">
+            <button class="plan-ai" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+              </svg>
+              Plan with AI
+            </button>
+            <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -2460,14 +2343,16 @@
                 <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
                 <path d="M12 7v5l4 2" />
               </svg>
-              Save &amp; exit</button
-            ><span class="avatar">YZ</span></span
-          >
+              Save &amp; exit
+            </button>
+            <span class="avatar">YZ</span>
+          </span>
         </div>
         <div class="wz-body">
           <nav class="rail" aria-label="Migration steps">
             <div class="rail-title">Your migration</div>
-            <div class="rail-sub">Your standard is set — Generate is unlocked.</div>
+            <div class="rail-sub">Planning — optional. Skip any step or finish any time.</div>
+            <div class="rail-group">Set up your codebase</div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -2479,7 +2364,7 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Connect</span></span>
+              ><span><span class="s-name">Connect</span></span>
             </div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
@@ -2492,7 +2377,7 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Index</span></span>
+              ><span><span class="s-name">Index</span></span>
             </div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
@@ -2505,39 +2390,34 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"
-                ><span class="s-name">Audit &amp; convention</span
-                ><span class="s-meta">Standard approved ✓</span></span
-              >
+              ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
+            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
             <div class="step current" aria-current="step">
               <span class="marker">4</span
-              ><span class="s-body"
+              ><span
                 ><span class="s-name">Discovery</span><span class="s-meta">Your goals</span></span
               >
             </div>
-            <div class="step upcoming">
-              <span class="marker">5</span
-              ><span class="s-body"
-                ><span class="s-name">Generate</span><span class="s-meta">Unlocked</span></span
-              >
+            <div class="step optional">
+              <span class="marker">5</span><span><span class="s-name">Generate</span></span>
             </div>
-            <div class="step upcoming">
+            <div class="step optional">
               <span class="marker">6</span
-              ><span class="s-body"><span class="s-name">Review &amp; approve plan</span></span>
+              ><span><span class="s-name">Review &amp; approve</span></span>
             </div>
           </nav>
           <div class="content">
             <div class="step-head">
-              <div class="step-eyebrow">Step 4 of 6</div>
+              <div class="step-eyebrow">Step 4 of 6 · Plan (optional)</div>
               <h2>We read your code — now tell us your goals</h2>
               <p>
-                A short conversation about where you want to take the project. We already know your
-                stack and structure from the code, so this is about intent and scope — not
-                re-deriving what you've built.
+                A short, optional conversation about where you want to take the project. We already
+                know your stack from the code, so this is about intent and scope. Skip it and Motir
+                plans from the code alone — or finish here and plan later.
               </p>
               <span class="cite" aria-hidden="true"
-                >Composes 7.2.1 · design/ai-chat/ (the discovery chat, migrate-framed)</span
+                >Composes 7.2.1 · design/ai-chat/ (discovery chat, migrate-framed)</span
               >
             </div>
 
@@ -2552,8 +2432,8 @@
                   Add SMS reminders for upcoming bookings, and a no-show report for the owner.
                 </div>
                 <div class="bubble ai">
-                  Got it. Should reminders reuse your existing notification service, or is that new?
-                  And is the no-show report a new page or part of the current dashboard?
+                  Got it. Reminders can reuse the notification service in <strong>acme/api</strong>;
+                  the report extends the dashboard in <strong>acme/web</strong>.
                 </div>
               </div>
               <div class="composer">
@@ -2576,7 +2456,9 @@
 
             <div class="wz-foot">
               <button class="btn secondary" type="button">Back</button>
+              <button class="btn ghost" type="button">Finish — plan later</button>
               <span class="spacer"></span>
+              <button class="btn ghost" type="button">Skip discovery</button>
               <button class="btn primary" type="button">
                 Next: generate the plan
                 <svg
@@ -2597,12 +2479,12 @@
       </div>
     </div>
 
-    <!-- ============================================================
-         PANEL 5 — Code-aware generate + review (steps 5-6)
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 5 — Code-aware generate + review (OPTIONAL) · 7.3.1
+    =========================================================== -->
     <div class="panel-label">
-      Panel 5 · Steps 5-6 — Code-aware generate + review
-      <b>(composes 7.3.1 · design/ai-planning — grounded in your code)</b>
+      Panel 5 · Steps 5–6 — Code-aware generate + review
+      <b>(OPTIONAL · repo-tagged nodes · composes 7.3.1)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -2619,15 +2501,27 @@
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                /></svg
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg
             ></span>
             Motir</span
           >
           <span class="flow-name">Import an existing project</span>
-          <span class="right"
-            ><button class="save-exit" type="button">
+          <span class="right">
+            <button class="plan-ai" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+              </svg>
+              Plan with AI
+            </button>
+            <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -2640,14 +2534,18 @@
                 <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
                 <path d="M12 7v5l4 2" />
               </svg>
-              Save &amp; exit</button
-            ><span class="avatar">YZ</span></span
-          >
+              Save &amp; exit
+            </button>
+            <span class="avatar">YZ</span>
+          </span>
         </div>
         <div class="wz-body">
           <nav class="rail" aria-label="Migration steps">
             <div class="rail-title">Your migration</div>
-            <div class="rail-sub">Almost there — review the plan, then add it to your backlog.</div>
+            <div class="rail-sub">
+              Review the plan, then add it — or finish and keep it as a draft.
+            </div>
+            <div class="rail-group">Set up your codebase</div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -2659,7 +2557,7 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Connect</span></span>
+              ><span><span class="s-name">Connect</span></span>
             </div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
@@ -2672,7 +2570,7 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Index</span></span>
+              ><span><span class="s-name">Index</span></span>
             </div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
@@ -2685,8 +2583,9 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Audit &amp; convention</span></span>
+              ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
+            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -2698,36 +2597,38 @@
                   stroke-linejoin="round"
                 >
                   <path d="M20 6 9 17l-5-5" /></svg></span
-              ><span class="s-body"><span class="s-name">Discovery</span></span>
+              ><span><span class="s-name">Discovery</span></span>
             </div>
             <div class="step current" aria-current="step">
               <span class="marker">5</span
-              ><span class="s-body"
+              ><span
                 ><span class="s-name">Generate</span
                 ><span class="s-meta">Reading your codebase…</span></span
               >
             </div>
-            <div class="step upcoming">
+            <div class="step optional">
               <span class="marker">6</span
-              ><span class="s-body"><span class="s-name">Review &amp; approve plan</span></span>
+              ><span><span class="s-name">Review &amp; approve</span></span>
             </div>
           </nav>
           <div class="content">
             <div class="step-head">
-              <div class="step-eyebrow">Steps 5-6 of 6</div>
+              <div class="step-eyebrow">Steps 5–6 of 6 · Plan (optional)</div>
               <h2>A plan grounded in your code</h2>
               <p>
-                Motir generated a plan on top of what you already have — it reflects your existing
-                code and the audit, so proposed work fits your architecture. Review it on the
-                canvas, then add it to your backlog. Nothing is saved until you confirm.
+                Motir generated a plan on top of what you already have — across all 3 repositories,
+                honouring each repo's convention. Review it, then add it to your backlog. Nothing is
+                saved until you confirm; you can also finish and keep it as a draft.
               </p>
               <span class="cite" aria-hidden="true"
-                >Composes 7.3.1 · design/ai-planning/ (the generate → review → approve
-                surface)</span
+                >Composes 7.3.1 · design/ai-planning/ (generate → review → approve)</span
               >
             </div>
 
-            <div class="callout gate" style="background: var(--el-success-surface)">
+            <div
+              class="callout info-accent"
+              style="background: var(--el-success-surface); color: var(--el-text-strong)"
+            >
               <span class="ic" aria-hidden="true" style="color: var(--el-success)"
                 ><svg
                   viewBox="0 0 24 24"
@@ -2743,10 +2644,9 @@
               ></span>
               <span
                 ><strong>This plan reflects your existing code — across all 3 repositories.</strong>
-                Proposals reuse the notification service in <span class="code">acme/api</span>,
-                extend the admin dashboard in <span class="code">acme/web</span>, and honour your
+                Each proposed item is tagged with the repo it lands in and honours that repo's
                 approved convention — grounded in the whole-project code graph + the audit, not a
-                blank-slate plan. Each proposed item is tagged with the repo it lands in.</span
+                blank slate.</span
               >
             </div>
 
@@ -2768,7 +2668,7 @@
                   Subtask · add</span
                 >
                 <div class="n-title">SMS via existing notifications service</div>
-                <div style="margin-top: 6px">
+                <div class="n-repo">
                   <span class="code" style="font-size: 10.5px">acme/api</span>
                 </div>
               </div>
@@ -2778,7 +2678,7 @@
                   Subtask · add</span
                 >
                 <div class="n-title">No-show report on the admin dashboard</div>
-                <div style="margin-top: 6px">
+                <div class="n-repo">
                   <span class="code" style="font-size: 10.5px">acme/web</span>
                 </div>
               </div>
@@ -2788,7 +2688,7 @@
                   Subtask · add</span
                 >
                 <div class="n-title">Reminder scheduling job</div>
-                <div style="margin-top: 6px">
+                <div class="n-repo">
                   <span class="code" style="font-size: 10.5px">acme/api</span>
                 </div>
               </div>
@@ -2804,27 +2704,32 @@
               <button class="btn ghost" type="button">Discard</button>
               <button class="btn primary" type="button">Add 4 items to your backlog</button>
             </div>
+
+            <div class="wz-foot">
+              <button class="btn secondary" type="button">Back</button>
+              <button class="btn ghost" type="button">Finish — plan later</button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ============================================================
-         PANEL 6 — empty / error / resume states
-    ============================================================ -->
+    <!-- ==========================================================
+         PANEL 6 — finished-early / error / resume states
+    =========================================================== -->
     <div class="panel-label">
-      Panel 6 · Error &amp; RESUME states
-      <b>(connect / index / audit failed · resume to the saved step)</b>
+      Panel 6 · Finish-early &amp; error / resume states
+      <b>(link-only exit · per-repo index failure · resume to saved step)</b>
     </div>
     <div class="panel">
       <div class="states-grid">
         <div>
-          <div class="state-cap">Connect failed</div>
+          <div class="state-cap">Finished at set-up — plan later (the link-only exit)</div>
           <div class="card">
             <div class="empty">
               <span
                 class="e-ic"
-                style="background: var(--el-danger-surface); color: var(--el-danger)"
+                style="background: var(--el-tint-mint); color: var(--el-success)"
                 aria-hidden="true"
                 ><svg
                   viewBox="0 0 24 24"
@@ -2834,14 +2739,31 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64" />
-                  <path d="M12 2v10" /></svg
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <path d="M22 4 12 14.01l-3-3" /></svg
               ></span>
-              <h4>Couldn't reach GitHub</h4>
+              <h4>Your codebase is in Motir</h4>
               <p>
-                We couldn't complete the connection. Your place is saved — try connecting again.
+                3 repositories connected, indexed and conventions reviewed. You didn't have to plan
+                anything — start whenever you're ready with <strong>Plan with AI</strong> in the top
+                bar.
               </p>
-              <button class="btn primary sm" type="button">Retry connect</button>
+              <div style="display: flex; gap: 10px; justify-content: center">
+                <button class="btn primary sm" type="button">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+                  </svg>
+                  Plan with AI
+                </button>
+                <button class="btn ghost sm" type="button">Go to project</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2892,7 +2814,7 @@
         </div>
 
         <div>
-          <div class="state-cap">Audit failed</div>
+          <div class="state-cap">Connect failed</div>
           <div class="card">
             <div class="callout danger">
               <span class="ic" aria-hidden="true"
@@ -2911,14 +2833,12 @@
                   <path d="M12 17h.01" /></svg
               ></span>
               <span
-                ><strong>We couldn't finish the audit.</strong> Your index is intact, so this is
-                safe to retry. You can also skip the audit and set your convention from clean-code
-                defaults.</span
+                ><strong>Couldn't reach GitHub.</strong> We couldn't complete the connection. Your
+                place is saved — try connecting again.</span
               >
             </div>
             <div style="margin-top: 12px; display: flex; gap: 10px">
-              <button class="btn primary sm" type="button">Re-run audit</button>
-              <button class="btn secondary sm" type="button">Set from defaults instead</button>
+              <button class="btn primary sm" type="button">Retry connect</button>
             </div>
           </div>
         </div>
@@ -2946,8 +2866,8 @@
               <h4>Welcome back — pick up where you left off</h4>
               <p>
                 Your import (<strong>3 repositories</strong>) is paused at
-                <strong>Audit &amp; convention (step 3 of 6)</strong>. Connect and Index — all 3
-                repos — are done and saved.
+                <strong>Audit &amp; conventions (step 3)</strong>. Connect and Index — all 3 repos —
+                are done and saved.
               </p>
               <div style="display: flex; gap: 10px; justify-content: center">
                 <button class="btn primary sm" type="button">Resume at step 3</button>
@@ -2959,13 +2879,13 @@
       </div>
 
       <p class="muted-note" style="max-width: 1120px; margin: 14px auto 0">
-        Every step persists its result — including <strong>per-repo index status</strong> for the
-        project's repositories (MOTIR-1499's <span class="code">MigrateOnboarding</span> state
-        machine, MOTIR-931's resumable routes), so <strong>Save &amp; exit</strong> and any drop
-        return the user to the exact saved step — the wizard never restarts from scratch. Errors
-        keep completed work and offer a scoped retry (a single failed repo re-runs on its own, the
-        others stay indexed); a failed audit additionally offers the clean-code-defaults path (the
-        fresh-convention route 7.14.1 already draws).
+        Every step persists its result — including <strong>per-repo index status</strong> and
+        per-repo convention approval (MOTIR-1499's <span class="code">MigrateOnboarding</span> state
+        machine, MOTIR-931's resumable routes) — so Save &amp; exit and any drop return the user to
+        the exact saved step. Because planning (steps 4–6) is optional, a user can
+        <strong>finish at set-up</strong> and plan later via the always-present
+        <strong>Plan with AI</strong> launcher; errors keep completed work and offer a scoped retry
+        (a single failed repo re-runs on its own).
       </p>
     </div>
   </body>
