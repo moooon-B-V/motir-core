@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
+  Activity,
   BarChart3,
   BookOpen,
   CircleDot,
@@ -285,6 +286,14 @@ export function SidebarNav({
         label: t('nav.reports'),
         href: '/reports',
         active: isActive(pathname, '/reports'),
+      },
+      {
+        // Code health (7.14.5) — the code-health audit + coding-convention
+        // review/approve surface; sits after Reports (a top-level project page).
+        icon: <Activity />,
+        label: t('nav.codeHealth'),
+        href: '/code-health',
+        active: isActive(pathname, '/code-health'),
       },
     ];
     // The labeled "Resume onboarding" re-entry door (MOTIR-1533; design
