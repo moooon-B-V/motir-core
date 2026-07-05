@@ -755,6 +755,23 @@
         height: 13px;
         color: var(--el-success);
       }
+      .sw.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .set-foot.is-upsell {
+        justify-content: space-between;
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .set-foot .req {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .set-foot .req svg {
+        color: var(--el-text-faint);
+      }
 
       /* ── Board card (the badge placement — BoardCard.tsx) ─────────────────── */
       .bcard {
@@ -1243,24 +1260,78 @@
         </div>
         <div class="panel-note">
           Access path: <b>Settings → Organization</b>. A <code>Card</code> beside the General card;
-          the Switch PATCHes <code>/api/organizations/[orgId]</code>
-          (<code>acceptanceVideoEnabled</code>). Org owner/admin only (a non-admin sees it
-          read-only, switch disabled). Default ON.
+          the Switch PATCHes
+          <code>/api/organizations/[orgId]</code> (<code>acceptanceVideoEnabled</code>). Org
+          owner/admin only (a non-admin sees it read-only, switch disabled). Default ON.
+          <b>When the org has no paid plan the toggle is moot</b> (the entitlement blocks generation
+          regardless), so the card disables the switch and carries an <b>Upgrade</b> CTA — the same
+          plan gate the panel's State C shows, surfaced where an admin manages it.
         </div>
         <div class="breadcrumb">Settings › <b>Organization</b></div>
-        <div class="set-card">
-          <div class="set-row">
-            <div class="body" style="flex: 1">
-              <h3>Acceptance video</h3>
-              <p>
-                Record a short video when a story's E2E passes and attach it to the story for review
-                &amp; approval. Requires a paid Motir AI plan.
-              </p>
+        <div class="row-of">
+          <div class="set-card">
+            <div
+              class="mini-label"
+              style="
+                font-family: var(--font-mono);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--el-text-faint);
+                margin-bottom: 10px;
+              "
+            >
+              S1 · with a paid plan
             </div>
-            <span class="sw is-on"><span class="kn"></span></span>
+            <div class="set-row">
+              <div class="body" style="flex: 1">
+                <h3>Acceptance video</h3>
+                <p>
+                  Record a short video when a story's E2E passes and attach it to the story for
+                  review &amp; approval.
+                </p>
+              </div>
+              <span class="sw is-on"><span class="kn"></span></span>
+            </div>
+            <div class="set-foot">
+              <svg><use href="#i-check" /></svg> Saved
+            </div>
           </div>
-          <div class="set-foot">
-            <svg><use href="#i-check" /></svg> Saved
+
+          <div class="set-card">
+            <div
+              class="mini-label"
+              style="
+                font-family: var(--font-mono);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--el-text-faint);
+                margin-bottom: 10px;
+              "
+            >
+              S2 · no paid plan — the switch is moot
+            </div>
+            <div class="set-row">
+              <div class="body" style="flex: 1">
+                <h3>Acceptance video</h3>
+                <p>
+                  Record a short video when a story's E2E passes and attach it to the story for
+                  review &amp; approval.
+                </p>
+              </div>
+              <span class="sw is-disabled"><span class="kn"></span></span>
+            </div>
+            <div class="set-foot is-upsell">
+              <span class="req"
+                ><svg><use href="#i-sparkles" /></svg> Requires a paid Motir AI plan</span
+              >
+              <button class="btn btn-primary">
+                <svg><use href="#i-sparkles" /></svg>Upgrade
+              </button>
+            </div>
           </div>
         </div>
       </section>

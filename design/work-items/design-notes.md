@@ -3665,9 +3665,18 @@ Header: a `video` lucide glyph + **"Acceptance"** title + a right-aligned status
 ### Org settings card (MOTIR-1635)
 
 A `Card` beside `OrgGeneralCard`: title **"Acceptance video"** + a one-line
-description + a right-aligned `Switch` (`is-on` by default) that PATCHes
-`/api/organizations/[orgId]` (`acceptanceVideoEnabled`). Org owner/admin only —
-a non-admin sees it disabled. A `--el-success` "Saved" foot on write.
+description + a right-aligned `Switch`. Two variants (both drawn):
+
+- **With a paid plan** — the `Switch` (`is-on` by default) PATCHes
+  `/api/organizations/[orgId]` (`acceptanceVideoEnabled`); a `--el-success`
+  "Saved" foot on write. Org owner/admin only — a non-admin sees it disabled.
+- **No paid plan — the switch is moot** (the entitlement blocks generation
+  regardless): the `Switch` is **disabled** and the card foot carries a
+  "Requires a paid Motir AI plan" note (sparkles glyph) **+ an Upgrade
+  `btn-primary`** (→ billing). This is the same plan gate the panel's State C
+  shows, surfaced where an admin manages the org — so the admin isn't left
+  flipping a switch that does nothing. (Owner vs member gates the Upgrade button
+  on `canManageBilling`, like the panel.)
 
 ### Board badge (MOTIR-1636)
 
