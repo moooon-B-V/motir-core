@@ -3662,6 +3662,17 @@ Header: a `video` lucide glyph + **"Acceptance"** title + a right-aligned status
    **`applicable:false` (self-host / meta org) is UNGATED** — State A renders
    directly, this upsell never shows.
 
+   **Reuse the SHIPPED upgrade workflow (verified — Epic 8.1, no new story).** The
+   Upgrade CTA routes to the existing billing surface — **do NOT build a new
+   checkout.** The shipped path (verified against `origin/main`): the
+   `components/ai/AiPaywall.tsx` component exports
+   `BILLING_PLANS_PATH = '/settings/organization/billing'` (the plan-selection
+   page, `BillingClient`) → `POST /api/organizations/[orgId]/billing/checkout`
+   (Stripe checkout) → the webhook flips `hasPaidAiPlan`, which this feature's
+   eligibility (MOTIR-1630) already reads. MOTIR-1634 SHOULD compose the shipped
+   `AiPaywall` (or reuse `BILLING_PLANS_PATH`) rather than a bespoke upsell, so the
+   acceptance upsell is consistent with every other AI paywall in the app.
+
 ### Org settings card (MOTIR-1635)
 
 A `Card` beside `OrgGeneralCard`: title **"Acceptance video"** + a one-line
@@ -3676,7 +3687,9 @@ description + a right-aligned `Switch`. Two variants (both drawn):
   `btn-primary`** (→ billing). This is the same plan gate the panel's State C
   shows, surfaced where an admin manages the org — so the admin isn't left
   flipping a switch that does nothing. (Owner vs member gates the Upgrade button
-  on `canManageBilling`, like the panel.)
+  on `canManageBilling`, like the panel.) The Upgrade CTA routes to the SHIPPED
+  `BILLING_PLANS_PATH` (`/settings/organization/billing`) — the same reuse as
+  State C; MOTIR-1635 builds no new checkout.
 
 ### Board badge (MOTIR-1636)
 
