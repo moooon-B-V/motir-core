@@ -27,14 +27,16 @@
       is an explicit opt-out. This design draws THAT decided flow — it invents
       no step the ADR does not name.
 
-      PLUGS INTO the existing-project onboarding (MOTIR-815 / Workflow B — the
-      ADR's "Journey A: onboard an existing project"), relates_to MOTIR-930 (the
-      migrate-onboarding wizard design). The import is NOT a bespoke standalone
-      wizard: it is reached from the onboarding-entrance EXISTING-project fork,
-      it COMPOSES the shared onboarding wizard SHELL (the step-rail + Back/Next +
-      leave-and-resume chrome MOTIR-930 establishes), and the items it imports
-      land on the SAME reusable onboarding CANVAS (MOTIR-1009) and fold into the
-      plan — the tracker-backlog counterpart to MOTIR-930's connect-a-repo path.
+      A STANDALONE, independently-accessible surface — its PRIMARY home is
+      Settings › Project › Import (its own access, exactly as GitHub integration
+      MOTIR-810 / the audit engine MOTIR-814 have their own GitHub-nav access).
+      It is a BUILD-FIRST building block: implement these screens first, THEN the
+      existing-project onboarding (MOTIR-815 / Workflow B) COMPOSES it as its
+      optional step 2 ("import the work items") — so MOTIR-815 is blocked_by
+      MOTIR-816, the same shape as MOTIR-815 blocked_by 810 / 814. When embedded
+      in onboarding, the imported items feed the reusable onboarding canvas
+      (MOTIR-1009); the onboarding-side embedding is owned by MOTIR-930/934, not
+      by making this surface subordinate. relates_to MOTIR-815 / MOTIR-930.
 
       VERIFIED mirrors (cited in design-notes.md). NOTE Plane is BOTH a mirror we
       studied AND now an import source:
@@ -1479,20 +1481,21 @@
           upsert), and the dry-run-shares-the-engine gate. Mirrors Plane (Summary→Confirm gate),
           Linear (multi-source→one model), and Atlassian's CSV external-id skip.
           <b
-            >This wizard is part of the existing-project onboarding (MOTIR-815 / Workflow B):
-            reached from the onboarding-entrance "I have an existing project" fork, it composes the
-            shared onboarding wizard shell (MOTIR-930) and lands imported items on the reusable
-            onboarding canvas</b
+            >A standalone, independently-accessible surface — its primary home is Settings › Project
+            › Import (its own access, like GitHub integration and the audit engine have their own
+            nav). Build these screens first; the existing-project onboarding (MOTIR-815 / Workflow
+            B) then composes them as its optional step 2</b
           >
-          — it is the tracker-backlog counterpart to MOTIR-930's connect-a-repo path, not a bespoke
-          standalone wizard. Also reachable from Settings › Project › Import for an existing
-          project.
+          — so MOTIR-815 is blocked_by MOTIR-816 (the same shape as 815 blocked_by 810 / 814), not
+          the reverse. The onboarding-side embedding (feeding the onboarding canvas) is owned by
+          MOTIR-930 / 934.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-937 · 7.16.1</span>
           <span class="ref muted">Story MOTIR-816</span>
           <span class="ref muted">ADR docs/decisions/issue-importer.md</span>
-          <span class="ref muted">plugs into onboarding MOTIR-815 · relates_to MOTIR-930</span>
+          <span class="ref muted">standalone · primary home = Settings › Project › Import</span>
+          <span class="ref muted">onboarding step 2 (optional): MOTIR-815 blocked_by 816</span>
           <span class="ref muted">Plane connector → MOTIR-1639</span>
           <span class="ref muted">renders in MOTIR-942 (UI)</span>
         </div>
@@ -1533,12 +1536,19 @@
             <path d="m12 5 7 7-7 7" /></svg
         ></span>
         <span
-          ><b>This wizard lives inside the existing-project onboarding (MOTIR-815 / Workflow B).</b>
-          The onboarding-entrance fork routes “I have an existing project” into the migrate journey;
-          importing a tracker backlog is that journey’s counterpart to MOTIR-930’s connect-a-repo
-          path. The import composes MOTIR-930’s shared wizard shell (step rail · Back/Next ·
-          leave-and-resume) and lands its items on the reusable onboarding canvas (MOTIR-1009) to
-          fold into the plan — the chrome below is that shared shell, not a bespoke one.</span
+          ><b
+            >A standalone surface, built first — then composed into the existing-project
+            onboarding.</b
+          >
+          Its PRIMARY home is <b>Settings › Project › Import</b> (Door 2) — its own access, exactly
+          as GitHub integration (MOTIR-810) and the audit engine (MOTIR-814) have their own
+          GitHub-nav access and are built before the onboarding that composes them. So MOTIR-815
+          (the existing-project onboarding) is <b>blocked_by MOTIR-816</b>, the same shape as 815
+          blocked_by 810 / 814 — we implement these screens first. The existing-project onboarding
+          then plugs them in as its <b>optional step 2 (“import the work items”)</b>, feeding the
+          reusable onboarding canvas (MOTIR-1009); that embedding is owned by MOTIR-930 / 934, not
+          by making this surface subordinate. The onboarding entrance (Door 1) is a second entry,
+          not the home.</span
         >
       </div>
       <div class="doors">

@@ -37,32 +37,35 @@ is a new `design/` subtask, not an improvisation here.)
 
 ---
 
-## Plugs into the existing-project onboarding (MOTIR-815 / MOTIR-930) — the workflow it lives in
+## A standalone surface, built first — then composed into the existing-project onboarding (MOTIR-815 blocked_by MOTIR-816)
 
-Per the **design-CONTENT (workflow) dependency rule** (`plan-rules.md`), a design that draws a flow
-plugging into a host workflow must `relates_to` and GROUND IN the subtask that defines that host
-flow. The import wizard is **not a standalone wizard** — it is the tracker-backlog path of the
-**existing-project onboarding journey** (MOTIR-815 / Workflow B; the ADR's "Journey A: onboard an
-existing project"). So this design **`relates_to` MOTIR-930** (the migrate-onboarding wizard design)
-and **MOTIR-815**, and composes what they establish:
+The import is a **standalone, independently-accessible surface**: its **primary home is Settings ›
+Project › Import** — its own access, exactly as **GitHub integration (MOTIR-810)** and the **audit
+engine (MOTIR-814)** have their own GitHub-nav access. Those two are Part 1 of the existing-project
+onboarding ("link the repos") and **block MOTIR-815**; the importer is **Part 2 ("import the work
+items", optional)** and is the SAME shape. So the dependency runs onboarding → importer, not the
+reverse:
 
-- **The shared onboarding wizard SHELL (MOTIR-930).** The step-rail + Back/Next + leave-and-resume
-  chrome is the SAME shell MOTIR-930 designs for the existing-project onboarding (connect · index ·
-  audit · discovery · generate). The import is that journey's counterpart to MOTIR-930's
-  connect-a-repo step: **connect a tracker → map → preview → import**. The chrome here is that shared
-  shell, not a bespoke one — MOTIR-942 (the import UI) is therefore **`blocked_by` MOTIR-934** (the
-  migrate-onboarding wizard UI it renders inside — the UI-composition axis).
-- **The reusable onboarding CANVAS (MOTIR-1009).** Imported items land on the same canvas the
-  onboarding uses to display the existing work-item tree and fold it into the generated plan (MOTIR-815:
-  "load and display the existing work-item tree on the canvas … use it to seed/generate the plan").
-- **The entrance is the existing-project fork** (MOTIR-1459 / MOTIR-1461), not a bare access door —
-  see the Panel A note.
+> **MOTIR-815 (existing-project onboarding) `blocked_by` MOTIR-816 (issue importer)** — the same
+> shape as `815 blocked_by 810` and `815 blocked_by 814`.
 
-**Why the whole Story MOTIR-816 is NOT `blocked_by` MOTIR-815:** only the WIZARD (this design + the
-UI MOTIR-942) plugs into the onboarding shell. The importer's backend (model MOTIR-939, connectors
-MOTIR-940/1501/1639, resolver MOTIR-1504, persist MOTIR-941) has no onboarding dependency, so per the
-KIND-based `blocked_by` rule (`plan-rules.md` #6 — don't over-serialize backend) the edge sits on the
-UI, not the Story. (Recorded as planning bug MOTIR-1640.)
+**Build order.** Implement these screens FIRST as their own surface; THEN the existing-project
+onboarding (MOTIR-815 / Workflow B) COMPOSES them as its optional step 2. Concretely:
+
+- **Primary home — Settings › Project › Import** (Panel A · Door 2): the standalone entry, with its
+  own wizard chrome (the four steps drawn here). This is what MOTIR-942 builds.
+- **Composed into onboarding as step 2** — the existing-project onboarding wizard (MOTIR-930 design /
+  MOTIR-934 UI) embeds this surface as its optional "import the work items" step, feeding the reusable
+  onboarding canvas (MOTIR-1009: "load and display the existing work-item tree … use it to
+  seed/generate the plan"). **That embedding is owned by the onboarding side (MOTIR-930/934), NOT by
+  making this surface subordinate** — so this design stays standalone and MOTIR-942 carries no
+  `blocked_by` on the onboarding.
+- **The onboarding entrance** (Panel A · Door 1, MOTIR-1459/1461) is a SECOND entry, not the home.
+
+`relates_to` MOTIR-815 / MOTIR-930 records the composition relationship (informational). Recorded as
+planning bug MOTIR-1640. (This corrects an earlier mis-wiring that had the direction reversed —
+`816 blocked_by 815` / `942 blocked_by 934` — and framed the import as mounting inside the onboarding
+shell; the import is the build-first building block the onboarding consumes.)
 
 ---
 
