@@ -188,6 +188,46 @@ describe('aiConventionService — project-admin gate', () => {
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
     expect(getConventionMock).not.toHaveBeenCalled();
   });
+
+  // Same gate on the APPROVE write specifically (MOTIR-1613): approving the
+  // standard is a manager action, so a non-admin is 403 and a cross-tenant
+  // project 404 — and the motir-ai boundary is never reached. (The
+  // approve→standard happy path is proved by the "writes carry the actor" suite;
+  // do not re-assert it here.)
+  it('blocks a non-admin member from approving (403) without calling the boundary', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+
+    await expect(
+      aiConventionService.approveConvention(
+        project.id,
+        { userId: member.id, workspaceId: workspace.id },
+        'conv_1',
+      ),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    expect(approveConventionMock).not.toHaveBeenCalled();
+  });
+
+  it('treats approving a cross-tenant convention as 404 (never confirms it exists)', async () => {
+    const a = await createTestWorkspace();
+    const b = await createTestWorkspace();
+    const projectB = await createTestProject({
+      workspaceId: b.workspace.id,
+      actorUserId: b.owner.id,
+    });
+
+    // Actor A tries to approve on project B (another workspace) — 404, not 403.
+    await expect(
+      aiConventionService.approveConvention(
+        projectB.id,
+        { userId: a.owner.id, workspaceId: a.workspace.id },
+        'conv_1',
+      ),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    expect(approveConventionMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('aiConventionService — writes carry the actor', () => {
