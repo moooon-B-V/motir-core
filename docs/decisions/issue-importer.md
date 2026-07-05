@@ -66,6 +66,17 @@ Every connector normalises its source into ONE internal shape — the **normalis
 
 Connectors carry paginate + retry scaffolding (MOTIR-1501); Jira + Linear live-field-mapping into `SourceIssue` is MOTIR-940; the interface + `SourceIssue` + CSV + GitHub connector is MOTIR-1501.
 
+**How the data actually leaves each source — a LIVE API is the primary path, a FILE EXPORT is the credential-free alternative.** Every live source has a first-class read API we connect to directly; every source that can produce a file export routes that export through the ONE CSV/file connector — so a user who can't or won't grant API access can still import. The two paths converge on the same `SourceIssue` and the same mapping/dry-run/persist pipeline.
+
+| Source     | Live API (primary connector)                        | Auth                                               | File export → CSV connector                                                 |
+| ---------- | --------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Jira**   | REST issue-search (JQL), offset-paginated           | OAuth 2.0 (3LO) or API token (MOTIR-943)           | ✅ Jira's native CSV export (Issues → Export → CSV)                         |
+| **Linear** | GraphQL `issues` query, cursor-paginated            | OAuth 2.0 or personal API key (MOTIR-943)          | ✅ Linear's CSV export                                                      |
+| **GitHub** | REST list-repo-issues (`state=all`), page-paginated | Reuse `GithubIdentity` OAuth token; else MOTIR-943 | ⚠️ no first-party issues CSV export — API is the path (or a hand-built CSV) |
+| **CSV**    | — (this IS the file path)                           | **none**                                           | ✅ the universal target: any of the above exports, or a hand-made sheet     |
+
+**Deliberate altitude:** this ADR fixes the access _model_ per source (API type, auth model, pagination, the export alternative) — it does NOT pin exact endpoint URLs, OAuth scopes, or the JQL string. Those are connector-implementation detail owned by **MOTIR-940** (Jira + Linear), **MOTIR-1501** (GitHub + CSV), and **MOTIR-943** (OAuth-app / token provisioning), which read the vendor's _current_ API docs at build time — deliberately, because vendor endpoints move (e.g. Jira Cloud is mid-migration from `/rest/api/3/search` to a token-paginated `/search/jql`), and a durable decision doc must not hard-code a moving endpoint.
+
 **Every connector fetches ALL states (open + closed/done), per the whole-history scope above.** No connector applies an open-only filter. Concretely: **GitHub** must pass `state=all` (its list-issues API defaults to `state=open` — omitting this silently drops closed issues); **Jira** uses a JQL with no `status`/`resolution` clause (an unfiltered JQL returns every state, resolved and unresolved); **Linear** fetches without a state filter (all workflow states, including completed/cancelled); **CSV** carries whatever rows the export contains. A closed source issue therefore reaches the resolver with its real closed status, which maps to a done-category `workflow_status` (§2, status).
 
 ### 2 · Field mapping (`SourceIssue` → Motir work item)
