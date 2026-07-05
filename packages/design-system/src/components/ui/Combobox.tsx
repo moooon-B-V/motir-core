@@ -60,6 +60,10 @@ export interface ComboboxOption<T extends string> {
   icon?: ReactNode;
   /** Trailing muted text (e.g. the identifier). */
   secondary?: string;
+  /** Trailing rich content pinned to the option row's far end (e.g. a state
+   *  Pill or a "Linked to …" chip in the PR-link picker, MOTIR-1596).
+   *  Decorative — the accessible name is `label`; renders after `secondary`. */
+  trailing?: ReactNode;
   /**
    * Optional section label. When consecutive options carry different `group`
    * values, a non-interactive header row is rendered at each transition (the
@@ -81,7 +85,9 @@ export interface ComboboxProps<T extends string> {
   placeholder?: string;
   searchable?: boolean;
   searchPlaceholder?: string;
-  emptyText?: string;
+  /** Empty-listbox content. A string, or rich nodes (e.g. a "no matches" line
+   *  plus a hint sub-line — use block `<span>`s, since this renders in a `<p>`). */
+  emptyText?: ReactNode;
   loading?: boolean;
   loadingText?: string;
   disabled?: boolean;
@@ -494,6 +500,18 @@ export function Combobox<T extends string>({
                     // sidebar-caption contrast lesson) — identifier/slate clears it.
                     <span className="text-(--el-text-identifier) ml-auto truncate text-xs">
                       {opt.secondary}
+                    </span>
+                  ) : null}
+                  {opt.trailing ? (
+                    // Rich trailing content (a Pill / chip). Pinned right; takes
+                    // the `ml-auto` itself when there is no `secondary` before it.
+                    <span
+                      className={cn(
+                        'flex shrink-0 items-center gap-1.5',
+                        opt.secondary ? 'ml-1.5' : 'ml-auto',
+                      )}
+                    >
+                      {opt.trailing}
                     </span>
                   ) : null}
                   {isSelected ? (

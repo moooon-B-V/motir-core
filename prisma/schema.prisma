@@ -3199,6 +3199,15 @@ model GithubPullRequest {
   /// Nullable link to the work item this PR resolves. SetNull on delete so the
   /// PR row (history) survives a work-item deletion with a null link.
   workItemId String?  @map("work_item_id")
+  /// Whether `workItemId` was set by the EXPLICIT item→PR link affordance
+  /// (MOTIR-1596, design/github Panel 5) rather than the MOTIR-892 auto-resolver.
+  /// A manual link is the manual OVERRIDE of the resolver: it is STICKY — the
+  /// webhook (`handlePullRequest`) never overwrites a `linkedManually` row's
+  /// `workItemId` from the branch/title parse, so a PR whose branch never names
+  /// the key stays linked (and drives status sync) across later PR events. A
+  /// takeover (moving the link to another item) keeps this true; the auto-
+  /// resolver only ever writes rows where this is false.
+  linkedManually Boolean @default(false) @map("linked_manually")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 

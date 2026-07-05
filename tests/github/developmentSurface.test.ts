@@ -164,6 +164,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'open',
         ci: 'running',
         url: 'https://github.com/moooon/acme/pull/41',
+        linkedManually: false,
       },
     ]);
 
@@ -208,6 +209,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'merged',
         ci: null, // no check rows → no CI pill
         url: 'https://github.com/moooon/acme/pull/7',
+        linkedManually: false,
       },
     ]);
   });

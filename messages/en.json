@@ -4396,7 +4396,19 @@
         "passing": "Checks passing",
         "failing": "Checks failing",
         "running": "Checks running"
-      }
+      },
+      "linkPr": "Link pull request",
+      "linkPrField": "Pull request to link",
+      "searchPlaceholder": "Search pull requests…",
+      "typeToSearch": "Type to search pull requests",
+      "noMatches": "No matching pull requests",
+      "noMatchesHint": "Repositories sync in Settings → Workspace → GitHub.",
+      "linkedTo": "Linked to {key}",
+      "linkedManually": "linked manually",
+      "linkAction": "Link",
+      "notConnected": "GitHub isn't connected for this workspace. Connect it in Settings → Workspace → GitHub.",
+      "prNotFound": "That pull request could not be found.",
+      "autoLinkCaptionManual": "Linked automatically when a branch or PR mentions <mono>{key}</mono> — or linked by hand from here."
     }
   },
   "aiPlanning": {

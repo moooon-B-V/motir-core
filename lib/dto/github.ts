@@ -59,4 +59,30 @@ export interface LinkedPullRequestDto {
   ci: 'passing' | 'failing' | 'running' | null;
   /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
   url: string;
+  /** Provenance (MOTIR-1596): true when the link was set by the explicit item→PR
+   *  affordance rather than the MOTIR-892 auto-resolver — the detail row shows the
+   *  quiet "linked manually" meta suffix (design/github Panel 5a). */
+  linkedManually: boolean;
+}
+
+/**
+ * One candidate PR for the explicit item→PR link picker (Story 7.10 ·
+ * MOTIR-1596, design/github Panel 5b) — a workspace-ingested PR the "+ Link pull
+ * request" Combobox offers. `id` is the internal `GithubPullRequest.id` (the
+ * link target the Server Action takes).
+ */
+export interface PullRequestLinkCandidateDto {
+  /** Internal `GithubPullRequest.id` — the value the link action receives. */
+  id: string;
+  /** The PR title, falling back to its head branch (pre-title-capture rows). */
+  title: string;
+  /** `owner/name` — the option meta line's repo half. */
+  repo: string;
+  number: number;
+  /** Display state: `merged` wins over the raw open/closed pair. */
+  state: 'open' | 'merged' | 'closed';
+  /** When the PR is already linked to ANOTHER item, that item's identifier
+   *  (`MOTIR-<n>`) — the neutral "Linked to {key}" takeover chip; picking it MOVES
+   *  the link. Null when the PR is unlinked. */
+  linkedTo: string | null;
 }

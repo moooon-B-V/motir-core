@@ -4392,7 +4392,19 @@
         "passing": "检查通过",
         "failing": "检查失败",
         "running": "检查运行中"
-      }
+      },
+      "linkPr": "关联拉取请求",
+      "linkPrField": "要关联的拉取请求",
+      "searchPlaceholder": "搜索拉取请求…",
+      "typeToSearch": "输入以搜索拉取请求",
+      "noMatches": "没有匹配的拉取请求",
+      "noMatchesHint": "仓库在“设置 → 工作区 → GitHub”中同步。",
+      "linkedTo": "已关联到 {key}",
+      "linkedManually": "手动关联",
+      "linkAction": "关联",
+      "notConnected": "此工作区尚未连接 GitHub。请在“设置 → 工作区 → GitHub”中进行连接。",
+      "prNotFound": "找不到该拉取请求。",
+      "autoLinkCaptionManual": "当分支或 PR 提及 <mono>{key}</mono> 时会自动关联，也可在此手动关联。"
     }
   },
   "aiPlanning": {
