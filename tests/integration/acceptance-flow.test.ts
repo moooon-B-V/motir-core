@@ -21,7 +21,7 @@ vi.mock('@/lib/blob/uploader', () => {
   };
 });
 
-const { POST } = await import('@/app/api/work-items/[key]/acceptance-evidence/route');
+const { POST } = await import('@/app/api/work-items/[id]/acceptance-evidence/route');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { acceptanceEvidenceService } = await import('@/lib/services/acceptanceEvidenceService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
@@ -53,7 +53,7 @@ async function publishVia(
     headers: { authorization: `Bearer ${token}` },
     body: form,
   });
-  return POST(req, { params: Promise.resolve({ key: identifier }) });
+  return POST(req, { params: Promise.resolve({ id: identifier }) });
 }
 
 let fx: WorkItemFixture;

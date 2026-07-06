@@ -1,4 +1,5 @@
 import { type GithubInstallation, type GithubRepo, type Prisma } from '@prisma/client';
+import { db } from '@/lib/db';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table
 // (Story 7.10 · MOTIR-891). `installationId` here is the INTERNAL
@@ -71,6 +72,28 @@ export const githubRepoRepository = {
         owner: { equals: owner, mode: 'insensitive' },
         name: { equals: name, mode: 'insensitive' },
         installation: { is: { workspaceId } },
+      },
+      include: { installation: true },
+    });
+  },
+
+  /** Resolve a connected repo GLOBALLY by `(owner, name)` — the keyless-OIDC
+   *  trust seam (MOTIR-1650). A GitHub Actions OIDC token's `repository` claim
+   *  (`owner/name`) DETERMINES the tenant, so this read runs OUTSIDE any
+   *  workspace context (like the webhook keying on GitHub's global installation
+   *  id), on the `db` singleton. Case-insensitive (GitHub coordinates are).
+   *  Returns EVERY match so the caller can reject an AMBIGUOUS coordinate (the
+   *  same repo connected under two workspaces) rather than silently pick one —
+   *  it never scopes to a workspace because the caller has none yet. Read-only →
+   *  no `tx`. Includes the parent installation (its `workspaceId` is the tenant). */
+  async findConnectedByName(
+    owner: string,
+    name: string,
+  ): Promise<(GithubRepo & { installation: GithubInstallation })[]> {
+    return db.githubRepo.findMany({
+      where: {
+        owner: { equals: owner, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
       },
       include: { installation: true },
     });

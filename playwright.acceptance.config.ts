@@ -51,7 +51,12 @@ export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance-video.spec.ts'],
   timeout: 90_000,
-  expect: { timeout: 5_000 },
+  // Generous assertion timeout: this lane runs `next dev` (below), which compiles
+  // routes ON-DEMAND, so the FIRST test to hit `/items/[id]` pays a cold-compile
+  // cost that can exceed the 5s default under CI load (only the first — the route
+  // is warm for the rest). With retries:0, one cold-compile overrun would red the
+  // whole leg, so give the panel-load assertions headroom (MOTIR-1648).
+  expect: { timeout: 20_000 },
   fullyParallel: false,
   forbidOnly: Boolean(process.env['CI']),
   retries: 0, // never retry — a retry would record a second (confusing) clip

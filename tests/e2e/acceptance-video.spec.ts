@@ -46,23 +46,23 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
 
   await chapter('Open the story in review', async () => {
     await page.goto(`/items/${story.identifier}`);
-    await expect(page.getByRole('heading', { name: 'Acceptance' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Acceptance', exact: true })).toBeVisible();
     // The chaptered player + the gate buttons are present (State A).
-    await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
     await expect(page.getByText('Open the story')).toBeVisible(); // a chapter marker
   });
 
   await chapter('Review the evidence + Approve', async () => {
-    await page.getByRole('button', { name: 'Approve' }).click();
+    await page.getByRole('button', { name: 'Approve', exact: true }).click();
     // Authoritative: the server response reconciles the panel to the Approved
     // pill (the response IS the confirmation — the inline-edit rule).
-    await expect(page.getByText('Approved')).toBeVisible();
+    await expect(page.getByText('Approved', { exact: true })).toBeVisible();
   });
 
   await chapter('The story is Done', async () => {
     // Committed-state read: reload and confirm the story reached Done.
     await page.reload();
-    await expect(page.getByText('Approved')).toBeVisible();
+    await expect(page.getByText('Approved', { exact: true })).toBeVisible();
     const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(persisted.status).toBe('done');
   });
@@ -78,7 +78,7 @@ test('paid + on → Request changes sends the story back to In Progress', async 
 
   await page.goto(`/items/${story.identifier}`);
   await page.getByRole('button', { name: 'Request changes' }).click();
-  await expect(page.getByText('Changes requested')).toBeVisible();
+  await expect(page.getByText('Changes requested', { exact: true })).toBeVisible();
   await page.reload();
   const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
   expect(persisted.status).toBe('in_progress');
@@ -93,7 +93,7 @@ test('paid + on, no evidence yet → the pending "waiting for the video" state',
 
   await page.goto(`/items/${story.identifier}`);
   await expect(page.getByText('Waiting for the acceptance video')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
 
 test('paid + toggle OFF (admin) → the Turn-on switch + Go to settings', async ({ page }) => {
@@ -124,7 +124,7 @@ test('no plan → the Upgrade CTA (no player)', async ({ page }) => {
     'href',
     '/settings/organization/billing',
   );
-  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
 
 test('the board shows the "Awaiting acceptance" badge, cleared on approve', async ({ page }) => {
@@ -140,8 +140,8 @@ test('the board shows the "Awaiting acceptance" badge, cleared on approve', asyn
 
   // Approve from the detail page, then the badge clears on the board.
   await page.goto(`/items/${story.identifier}`);
-  await page.getByRole('button', { name: 'Approve' }).click();
-  await expect(page.getByText('Approved')).toBeVisible();
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(page.getByText('Approved', { exact: true })).toBeVisible();
   await page.goto(`/boards`);
   await expect(page.getByText('Awaiting acceptance')).toHaveCount(0);
 });

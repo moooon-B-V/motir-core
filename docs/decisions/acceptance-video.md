@@ -4,6 +4,29 @@
   decision-subtask ladder). This is the rung-1 policy the rest of MOTIR-1627
   implements — no acceptance-video code ships until these four decisions are
   pinned. **No application behaviour ships in this subtask** (the ADR only).
+- **Amendment (2026-07-06, MOTIR-1648 / MOTIR-1649) — CI-upload auth (§4) now
+  PREFERS keyless GitHub OIDC; the `integration` PAT becomes the FALLBACK.**
+  §4 originally pinned a per-org `integration`-scoped API token stored as a CI
+  secret. It works, but it imposes **per-org setup friction** (every org mints +
+  stores a token), and it overlooked that **MOTIR-810's GitHub App already
+  establishes repo→workspace trust**. Amended: for a repo connected via the App,
+  the publish authenticates **keylessly** off the customer's GitHub Actions
+  **OIDC** identity — verify the Actions OIDC JWT (GitHub JWKS + `aud` + the
+  `repository` claim), resolve the repo → `GithubInstallation.workspaceId` (the
+  mapping `githubWebhookService` already uses), authorize under that workspace —
+  **no token to mint or store**. The `integration` PAT stays as the documented
+  **fallback** for repos NOT connected via the App; the `applicable:false`
+  (meta/self-host) short-circuit is unchanged. **Keyless-publish actor:** OIDC
+  carries no user, but `Attachment.uploaderUserId` is required — the evidence is
+  attributed to the **workspace OWNER** (`GithubInstallation` records no
+  connecting user, so the workspace-owner membership — `role: 'owner'` — is the
+  resolvable, accountable analog of the PAT's owner), an existing User; no
+  synthetic user, no nullable FK. Why: removes the
+  per-org token friction, reuses existing App trust instead of a parallel
+  credential, and matches the modern keyless-CI standard (cloud providers accept
+  GitHub OIDC). Implemented by MOTIR-1650 (endpoint) + MOTIR-1651 (BYOK docs /
+  Action); §4 below is rewritten to reflect it. This is the "recommend the BEST,
+  not the shipped" correction to the original §4.
 - **Story / Subtask:** MOTIR-1627 (Story acceptance gate — E2E acceptance video,
   review & approve, BYOK, motir-ai-plan-gated) · Subtask MOTIR-1628.
 - **Consumed by:** MOTIR-1629 (data model + video allowlist), MOTIR-1630
@@ -122,22 +145,42 @@ Default ON (not OFF) because the feature is the story's whole point and the cost
 is already bounded by decisions 1–2; forcing every paid org to hunt for a switch
 before their first acceptance video is friction with no cost upside.
 
-### 4. CI upload auth (BYOK)
+### 4. CI upload auth (BYOK) — keyless GitHub OIDC, `integration` PAT fallback
+
+> _Amended 2026-07-06 (MOTIR-1648 / MOTIR-1649): keyless OIDC is now the PRIMARY
+> path; the `integration` PAT is the fallback. The original PAT-only reasoning is
+> preserved as the fallback bullet below._
 
 No artifact-upload endpoint exists. The BYOK model is: **the user's own CI** runs
 the acceptance E2E and POSTs the video to a new motir-core publish endpoint.
 
-**Decision: reuse an existing API token with the `integration` scope** as a CI
-secret — **no new auth mechanism.**
+**Decision: authenticate keylessly via GitHub OIDC when the repo is App-connected;
+fall back to an `integration`-scoped API token otherwise.**
 
-- The `integration` scope already exists for "external-agent integration writes"
-  (`lib/mcp/scopes.ts:34`), verified by `apiTokensService.verify`. Publishing an
-  acceptance receipt from CI is exactly an external-agent integration write, so it
-  belongs on that scope.
-- The publish endpoint (MOTIR-1631) authenticates the token, resolves its
-  workspace/actor, then applies the **same eligibility + cap checks** as any
-  in-app path (the token is not a bypass — a token for a non-eligible org still
+- **Primary — keyless GitHub OIDC (no secret).** A repo connected via the
+  MOTIR-810 GitHub App already has a `GithubInstallation` binding repo → workspace.
+  The customer's Actions job requests an OIDC token (`permissions: id-token: write`)
+  and presents it; the publish endpoint verifies the JWT against GitHub's JWKS
+  (`token.actions.githubusercontent.com`, checking `aud` + expiry + the
+  `repository` claim), resolves the repo → `GithubInstallation.workspaceId` (the
+  resolution `githubWebhookService` already uses), and authorizes the publish under
+  that workspace — the **same eligibility + cap checks** as any path (OIDC is not a
+  bypass). **No token to mint or store**, reusing the App trust already established
+  instead of a parallel credential. This is the modern keyless-CI standard (cloud
+  providers accept GitHub OIDC for keyless auth).
+- **Fallback — the `integration` API-token scope.** For a repo NOT connected via
+  the App, reuse an existing API token with the `integration` scope
+  (`lib/mcp/scopes.ts:34`, verified by `apiTokensService.verify`) as a CI secret —
+  publishing an acceptance receipt from CI is exactly an external-agent integration
+  write. The endpoint authenticates the token, resolves its workspace/actor, then
+  applies the same eligibility + cap checks (a token for a non-eligible org still
   gets 402/403).
+- **Keyless-publish actor.** OIDC carries no user, but `Attachment.uploaderUserId`
+  is required. `GithubInstallation` records no connecting user, so the evidence is
+  attributed to the **workspace OWNER** — the `role: 'owner'` membership resolved
+  via `workspaceMembershipRepository.findOwnerByWorkspace`, the accountable analog
+  of the PAT's owner — an existing User in the workspace; no synthetic user and no
+  nullable FK. The **workspace** is the authorization scope either way.
 - **Not** a brand-new service bearer: that would duplicate token issuance,
   rotation, and scoping for one endpoint. (Epic 9's _hosted_ runner uses its own
   service principal inside its sandbox — explicitly out of scope here.)
@@ -163,6 +206,12 @@ secret — **no new auth mechanism.**
     per-file cap) as distinct signals the panel can render.
 - **MOTIR-1632** pins the Playwright `use.video` size/duration budget and ships a
   reusable uploader the acceptance E2E (and the self-test dogfood run) call.
+- **Keyless follow-up (2026-07-06 amendment, MOTIR-1648):** **MOTIR-1650** adds
+  the GitHub-OIDC auth path on the publish endpoint (`lib/github/oidcAuth.ts` →
+  verify JWKS + `repository` claim → resolve `GithubInstallation.workspaceId`,
+  PAT retained as fallback); **MOTIR-1651** updates the BYOK docs + uploader
+  Action to keyless (drop `MOTIR_UPLOAD_TOKEN` for App-connected repos, PAT as
+  fallback). No change to the eligibility / cap / record flow.
 - **Retention** rides the existing orphan-GC — no new GC job. **Plan lapse** needs
   no pruning code (evidence is left read-only).
 - **Self-host / meta** never see a gated surface (eligibility=false via
