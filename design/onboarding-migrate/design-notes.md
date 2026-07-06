@@ -122,9 +122,16 @@ read on disk this session, not assumed):
 - **Conventions + code-health: derive + auto-use, NO gate, on the Code-health page — a 7.14 re-scope.**
   The migrate wizard CONSUMES the derived per-repo conventions; it never surfaces or approves them. The
   7.14 story owner must: scope `CodingConvention` + `CodeAudit` to `(project, repo)` (7.14.3 / MOTIR-924);
-  **drop the approval gate + free-edit** and move the audit + read-only View + chat-to-revise onto the
-  Code-health page (7.14.1 design + 7.14.2 decision + the shipped MOTIR-926 UI). **Recommend a 7.14
-  re-plan** (out of this card's scope to execute).
+  **drop the approval gate + free-edit**; show the convention **read-only** on the Code-health page with a
+  **"refine with Motir"** entry that opens the **UNIVERSAL AI chat** (`PlanWithAILauncher` / the "M"
+  callout → `PlanningWorkspace`, MOTIR-1193 / 1299) — **NOT a new convention-chat seam** (Yue). **Recommend
+  a 7.14 re-plan** (out of this card's scope to execute) — no new AI capability, it reuses the universal
+  chat.
+- **All AI conversation rides ONE surface (Yue).** Planning (the migrate wizard's Generate/Review composes
+  it via 7.3.1), the convention refine, project Q&A, task help — every AI chat is the **universal
+  `PlanningWorkspace` / "Plan with AI" launcher** (the always-present top-bar pill + floating-"M" callout,
+  "the home of ALL AI"). This card invents NO bespoke chat: the migrate wizard's discovery + generate
+  compose the shared surfaces, and the top-bar Plan-with-AI is that one universal entrance.
 
 ---
 
@@ -253,17 +260,20 @@ discoverable by whoever wants them, never a wizard step. This is grounded in the
 curation the ETH-Zurich "no-blind-auto-gen" caveat actually wanted (a non-expert rubber-stamp is not); it
 also matches how chat-first builders (Lovable / Bolt / Replit) treat code style — invisibly.
 
-⚠️ **This substantially re-scopes the 7.14 coding-convention story (flagged, not owned here — the migrate
-wizard only CONSUMES the derived conventions).** The 7.14.5 review/approve UI (MOTIR-926, the
-`/code-health` page) **ships today** with a **free-edit Textarea + an Approve gate**
-(`design/coding-convention`). The new model is: **derive + auto-use (NO approval gate); read-only VIEW +
-chat-to-revise, on the Code-health page only.** On the 7.14 side that needs: **(1)** drop the approval
-gate (the convention is used automatically); **(2)** a **decision** — chat-to-revise a convention is a NEW
-conversational capability (the convention-revision seam, like the onboarding conductor scoped to a
-convention); **(3)** a **design amendment** to `design/coding-convention`; **(4)** a **code change** to
-MOTIR-926's shipped UI (remove the approve + Textarea-edit; add read-only View + the convention-chat).
+⚠️ **This re-scopes the 7.14 coding-convention story (flagged, not owned here — the migrate wizard only
+CONSUMES the derived conventions).** The 7.14.5 review/approve UI (MOTIR-926, the `/code-health` page)
+**ships today** with a **free-edit Textarea + an Approve gate** (`design/coding-convention`). The new
+model is: **derive + auto-use (NO approval gate); read-only VIEW; refine via the UNIVERSAL AI chat.** On
+the 7.14 side that needs: **(1)** drop the approval gate (the convention is used automatically);
+**(2)** on the Code-health page, show the convention **read-only** with a **"refine with Motir"** entry
+that **opens the EXISTING universal AI surface** — the `PlanWithAILauncher` / floating-"M" callout →
+`PlanningWorkspace` chat (`design/ai-chat` / MOTIR-1193 / MOTIR-1299, "the home of ALL AI": _Plan with AI_
+· _Ask about this project_ · _Help with a task_), scoped to that convention. **Do NOT invent a new
+convention-chat seam (Yue)** — refining a convention is just another intent of the universal AI chat, like
+planning or asking; **(3)** a **design amendment** to `design/coding-convention` (remove approve +
+Textarea; add read-only View + the universal-chat entry); **(4)** a **code change** to MOTIR-926.
 Also still open from §Multi-repo: conventions are **per repo**, not one per project. **Recommend a 7.14
-re-plan.**
+re-plan.** (No new AI capability to build — it reuses the universal chat surface.)
 
 ### Panel 3 — Import work items (**OPTIONAL**) — **composes `design/import` (7.16.1 / MOTIR-937), embedded not redrawn**
 
