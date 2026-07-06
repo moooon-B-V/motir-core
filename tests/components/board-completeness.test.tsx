@@ -70,6 +70,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
+    awaitingAcceptance: false,
     ...over,
   };
 }

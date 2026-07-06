@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CircleAlert, GripVertical } from 'lucide-react';
+import { CircleAlert, Clock, GripVertical } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -77,10 +77,18 @@ export function BoardCardView({
       </span>
 
       <span className="flex items-center gap-1.5">
-        {/* Blocked cards swap the priority chip for a "Blocked" peach pill — the
-            ReadinessBadge tone, driven by the finding-#21 `ready` flag. State is
-            carried by text + icon, never colour alone (finding #35). */}
-        {card.ready ? (
+        {/* A story in review is AWAITING ACCEPTANCE (MOTIR-1636) — an info-tone
+            pill in the same slot as the readiness/priority chip, distinct from
+            the warning "Blocked" pill. Blocked cards swap the priority chip for a
+            "Blocked" peach pill — the ReadinessBadge tone, driven by the
+            finding-#21 `ready` flag. State is carried by text + icon, never
+            colour alone (finding #35). */}
+        {card.awaitingAcceptance ? (
+          <Pill severity="info">
+            <Clock className="h-3 w-3" aria-hidden />
+            {t('awaitingAcceptance')}
+          </Pill>
+        ) : card.ready ? (
           <PriorityValue priority={card.priority} />
         ) : (
           <Pill severity="warning">

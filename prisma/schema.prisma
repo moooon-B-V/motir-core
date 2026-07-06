@@ -110,6 +110,10 @@ model User {
   // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
   // with the migration-built FK (bug-attachment-fk-migration-drift).
   uploadedAttachments       Attachment[]
+  // Back-relation for AcceptanceEvidence (Story MOTIR-1627 · MOTIR-1629). A user
+  // approves many story-acceptance videos; SetNull on the FK (the approval stamp
+  // survives the approver's deletion — it's audit, not ownership).
+  approvedAcceptanceEvidences AcceptanceEvidence[]
   // Back-relation for ProjectMembership (Subtask 6.4.2). A user holds explicit
   // membership in many projects (Cascade on the FK: deleting a user removes
   // their project-membership rows, mirroring workspaceMemberships).
@@ -391,6 +395,14 @@ model Organization {
   /// motir-ai on the job-submit envelope so the AI credit gate honours it too.
   isMeta Boolean @default(false)
 
+  /// Org-wide switch for story-acceptance video generation (Story MOTIR-1627 ·
+  /// Subtask MOTIR-1630). Default ON: an ELIGIBLE (paid-AI) org opted into the
+  /// (bounded) cost by paying, and a non-eligible org's toggle is moot (the
+  /// entitlement gate blocks generation regardless), so ON never leaks cost.
+  /// Set by an org admin via PATCH /api/organizations/[orgId]; read by
+  /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
+  acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
+
   memberships OrganizationMembership[]
   workspaces  Workspace[]
 
@@ -449,6 +461,7 @@ model Workspace {
   workflowStatuses         WorkflowStatus[]
   workflowTransitions      WorkflowTransition[]
   attachments              Attachment[]
+  acceptanceEvidences      AcceptanceEvidence[]
   boards                   Board[]
   boardColumns             BoardColumn[]
   boardColumnStatuses      BoardColumnStatus[]
@@ -1108,6 +1121,10 @@ model WorkItem {
   // issue must leave the attachment rows behind (unlinked) so the orphan-GC
   // (5.2.7) can remove their blobs too; a cascade would strand the blobs.
   attachments          Attachment[]
+  // Story-acceptance videos (Story MOTIR-1627 · MOTIR-1629) — evidence rows for
+  // a STORY. Cascade with the story: deleting the story removes its evidence
+  // rows (the underlying video Attachment is unlinked/GC-reclaimed separately).
+  acceptanceEvidences  AcceptanceEvidence[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -1887,8 +1904,26 @@ enum JobRunStatus {
 enum AttachmentSource {
   editor
   panel
+  // Story-acceptance video (Story MOTIR-1627 · MOTIR-1629). Set ONLY on the
+  // acceptance-upload path; a video via the generic editor/panel upload is still
+  // 415 (the allowlist gate stays unchanged for `editor`/`panel`). These rows are
+  // owned by the AcceptanceEvidence lifecycle, so the attachments panel excludes
+  // this source from its listing.
+  acceptance_video
 
   @@map("attachment_source")
+}
+
+/// The acceptance state of a story-acceptance video (Story MOTIR-1627 ·
+/// MOTIR-1629). `pending` = a video is attached and awaiting a reviewer;
+/// `approved` = the reviewer accepted (drives the `in_review → done` gate);
+/// `changes_requested` = the reviewer sent it back.
+enum AcceptanceEvidenceStatus {
+  pending
+  approved
+  changes_requested
+
+  @@map("acceptance_evidence_status")
 }
 
 /// An uploaded blob (Subtask 2.3.7) — a description image/file persisted to
@@ -1929,11 +1964,71 @@ model Attachment {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploader  User      @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
   workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  // Back-relation for AcceptanceEvidence (MOTIR-1629). An `acceptance_video`
+  // Attachment is wrapped by at most one evidence row; SetNull on that FK, so
+  // the orphan-GC deleting this blob leaves the evidence history row intact.
+  acceptanceEvidence AcceptanceEvidence?
 
   @@index([workspaceId, createdAt(sort: Desc)])
   // The paged panel read (5.2.2): an issue's attachments, newest first.
   @@index([workItemId, createdAt(sort: Desc)])
   @@map("attachment")
+}
+
+/// Story-acceptance evidence (Story MOTIR-1627 · Subtask MOTIR-1629). Wraps a
+/// video Attachment (the E2E's recorded receipt) with acceptance semantics on a
+/// STORY: the reviewer watches the video in the acceptance panel and Approves
+/// (drives `in_review → done`) or Requests changes.
+///
+/// **One CURRENT evidence per story.** A new green run SUPERSEDES the prior
+/// current (`isCurrent` flips to false on the old row and its video Attachment is
+/// unlinked so the orphan-GC reclaims the blob after its safety window). A
+/// partial unique index (`WHERE is_current`, in the migration SQL) enforces the
+/// invariant at the DB level; history rows are retained (audit), only one is
+/// current.
+///
+/// `workspaceId` is the denormalised tenancy gate every read filters on and the
+/// RLS policy uses (pure active-workspace gate, mirroring `attachment` — policy
+/// in the MOTIR-1629 migration; the publish path runs under withWorkspaceContext).
+/// Every FK is modelled as an `@relation` (the migration rule): `workItem`
+/// (Cascade — evidence dies with its story), `attachment` (SetNull — GC deleting
+/// the blob leaves the history row), `approvedBy` (SetNull — the approval stamp
+/// outlives the approver).
+model AcceptanceEvidence {
+  id            String                   @id @default(cuid())
+  workspaceId   String                   @map("workspace_id")
+  // The STORY this evidence accepts.
+  workItemId    String                   @map("work_item_id")
+  // The stored video (source `acceptance_video`). Nullable + SetNull so the
+  // orphan-GC removing a superseded blob leaves the history row intact.
+  attachmentId  String?                  @unique @map("attachment_id")
+  // The Playwright trace blob URL (dev-only diagnostic; not gated storage).
+  traceUrl      String?                  @map("trace_url")
+  // `[{ label, tSeconds }]` chapter markers the player renders as scrubbable
+  // jumps. Defaults to an empty array so a video with no chapters is well-formed.
+  chapters      Json                     @default("[]")
+  status        AcceptanceEvidenceStatus @default(pending)
+  // Provenance from the CI run that produced the video (the BYOK publish path).
+  commitSha     String?                  @map("commit_sha")
+  ciRunUrl      String?                  @map("ci_run_url")
+  // The E2E subtask key that produced this receipt (e.g. "MOTIR-1638").
+  producedByKey String?                  @map("produced_by_key")
+  // True for exactly one row per story (the partial unique index enforces it);
+  // a superseded row is false.
+  isCurrent     Boolean                  @default(true) @map("is_current")
+  approvedById  String?                  @map("approved_by_id")
+  approvedAt    DateTime?                @map("approved_at")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  attachment Attachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  approvedBy User?       @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+
+  // The panel read: a story's evidence, newest first (the current is the head).
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@map("acceptance_evidence")
 }
 
 /// A comment on a work item (Story 5.1 · Subtask 5.1.1) — the Activity

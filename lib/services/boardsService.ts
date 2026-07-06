@@ -11,6 +11,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
+import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
@@ -343,6 +344,14 @@ export const boardsService = {
       ctx,
     );
 
+    // The board "Awaiting acceptance" badge (MOTIR-1636): a story in_review whose
+    // CURRENT AcceptanceEvidence is pending. ONE batched query over the candidate
+    // ids only (no N+1), mirroring the readiness batch above.
+    const awaitingAcceptanceIds = await acceptanceEvidenceService.findAwaitingIds(
+      allRows.filter((r) => r.kind === 'story' && r.status === 'in_review').map((r) => r.id),
+      ctx,
+    );
+
     // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
     // IS the board's card population, so lane membership (per loaded card) and
     // the lane list are both resolved over that set — a bounded aggregate, never
@@ -392,6 +401,7 @@ export const boardsService = {
       cards: b.rows.map((r) =>
         toBoardCardDto(r, {
           ready: readyById.get(r.id) ?? true,
+          awaitingAcceptance: awaitingAcceptanceIds.has(r.id),
           swimlaneKey: swimlaneKeyByCard.get(r.id),
         }),
       ),

@@ -42,6 +42,23 @@ export function isAllowedUploadType(mime: string): boolean {
   return ALLOWED_UPLOAD_TYPES.includes(mime);
 }
 
+/**
+ * Story-acceptance video MIME types (Story MOTIR-1627 · Subtask MOTIR-1629).
+ * DELIBERATELY SEPARATE from {@link ALLOWED_UPLOAD_TYPES}: video is accepted
+ * ONLY on the acceptance-upload path (the publish endpoint MOTIR-1631), never on
+ * the generic editor / panel upload — a video pasted into a description or
+ * dropped on the attachments panel is still rejected (415). `video/webm` is
+ * Playwright's native recording output (primary); `video/mp4` is allowed for a
+ * transcoded upload. Keeping this list out of the generic allowlist is what
+ * makes the gate a hard, one-place policy rather than a per-call-site check.
+ */
+export const ALLOWED_ACCEPTANCE_VIDEO_TYPES: readonly string[] = ['video/webm', 'video/mp4'];
+
+/** True when a MIME type is an allowed story-acceptance video (MOTIR-1629). */
+export function isAllowedAcceptanceVideoType(mime: string): boolean {
+  return ALLOWED_ACCEPTANCE_VIDEO_TYPES.includes(mime);
+}
+
 /** True when a MIME type embeds inline in Markdown (drives `![]` vs `[]`). */
 export function isImageType(mime: string): boolean {
   return ALLOWED_IMAGE_TYPES.includes(mime);

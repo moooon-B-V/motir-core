@@ -42,7 +42,9 @@ export function toAttachmentDto(row: Attachment, uploadersById: Map<string, User
     filename: row.originalFilename,
     mimeType: row.mimeType,
     sizeBytes: row.sizeBytes,
-    source: row.source,
+    // acceptance_video rows are excluded from the panel read (MOTIR-1629), so a
+    // row reaching this mapper is always editor|panel.
+    source: row.source as 'editor' | 'panel',
     blobUrl: row.blobUrl,
     isImage: isImageType(row.mimeType),
     isPdf: isPdfType(row.mimeType),

@@ -151,7 +151,10 @@ function attachmentsDiffCell(
   const item: AttachmentDiffItem = {
     attachmentId: row.id,
     name: row.originalFilename,
-    source: row.source,
+    // Only editor/panel uploads appear in a body diff; an acceptance_video row
+    // (MOTIR-1629) is never embedded in a description/comment, so it never
+    // reaches this diff cell.
+    source: row.source as 'editor' | 'panel',
   };
   return { attachments: { [op]: [item] } };
 }

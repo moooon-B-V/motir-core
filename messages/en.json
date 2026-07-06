@@ -1,4 +1,55 @@
 {
+  "acceptance": {
+    "title": "Acceptance",
+    "gloss": "review the E2E video",
+    "card": {
+      "title": "Acceptance video",
+      "desc": "Record a short video when a story's E2E passes and attach it to the story for review & approval.",
+      "on": "On",
+      "off": "Off",
+      "requiresPlan": "Requires a paid Motir AI plan",
+      "upgrade": "Upgrade",
+      "saved": "Saved",
+      "saveError": "Couldn't save — try again."
+    },
+    "pending": {
+      "title": "Waiting for the acceptance video",
+      "body": "The story's E2E publishes its recording here on the next green run."
+    },
+    "summary": {
+      "recorded": "Recorded from a green acceptance run"
+    },
+    "approvedBy": "Approved by {name}",
+    "provenance": {
+      "ciRun": "CI run"
+    },
+    "status": {
+      "approved": "Approved",
+      "changesRequested": "Changes requested"
+    },
+    "actions": {
+      "approve": "Approve",
+      "requestChanges": "Request changes"
+    },
+    "toast": {
+      "approved": "Story approved",
+      "changesRequested": "Changes requested"
+    },
+    "off": {
+      "title": "Acceptance video is off",
+      "adminBody": "Turn it on to record and attach a video receipt when this story's E2E passes.",
+      "memberBody": "Ask an org admin to turn on acceptance video in the organization settings.",
+      "turnOn": "Turn on",
+      "goToSettings": "Go to settings",
+      "viewSettings": "View settings"
+    },
+    "upsell": {
+      "title": "Get a video receipt for every story",
+      "body": "A paid Motir AI plan records your story E2Es and attaches the video here for one-click acceptance.",
+      "upgrade": "Upgrade",
+      "askOwner": "Ask your org owner to upgrade the Motir AI plan."
+    }
+  },
   "markdownEditor": {
     "mentionPeople": "People",
     "mentionWorkItems": "Work items",
@@ -2087,6 +2138,7 @@
     "wipSaveErrorDescription": "The WIP limit for {column} wasn’t saved. Try again.",
     "openIssueAria": "Open {key}: {title}",
     "blocked": "Blocked",
+    "awaitingAcceptance": "Awaiting acceptance",
     "estimateLabel": "Estimate {value}",
     "assignedTo": "Assigned to {name}",
     "unassigned": "Unassigned",

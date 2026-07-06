@@ -25,6 +25,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
+    awaitingAcceptance: false,
     ...over,
   };
 }
@@ -66,6 +67,30 @@ describe('BoardCard', () => {
     // is absent.
     expect(screen.getByText('Medium')).toBeTruthy();
     expect(screen.queryByTitle(/^Estimate/)).toBeNull();
+  });
+
+  it('a story in review shows the "Awaiting acceptance" pill instead of the priority (MOTIR-1636)', () => {
+    render(
+      <BoardCard
+        card={card({ id: 's1', key: 3, kind: 'story', priority: 'high', awaitingAcceptance: true })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.getByText('Awaiting acceptance')).toBeTruthy();
+    expect(screen.queryByText('High')).toBeNull(); // the acceptance pill takes the slot
+  });
+
+  it('without the awaiting-acceptance flag the priority chip shows (no pill)', () => {
+    render(
+      <BoardCard
+        card={card({ id: 't1', key: 4, kind: 'task', priority: 'high', awaitingAcceptance: false })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.queryByText('Awaiting acceptance')).toBeNull();
+    expect(screen.getByText('High')).toBeTruthy();
   });
 
   it('shows the assignee initial avatar when assigned', () => {

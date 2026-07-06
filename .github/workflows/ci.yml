@@ -296,6 +296,15 @@ jobs:
           # self-host spec (billing-selfhost) rides a normal bulk shard.
           - id: billing-cloud
             args: '--config playwright.billing.config.ts'
+          # Story MOTIR-1627 — the acceptance E2E + self-test dogfood (MOTIR-1638),
+          # CLOUD-ON + video:'on'. Its OWN lane (playwright.acceptance.config.ts:
+          # MOTIR_CLOUD + the E2E_TEST_BILLING mock, isolated ports 3200/8488) so
+          # the plan/toggle panel states are reachable and the green run is
+          # recorded. acceptance-video.spec.ts is testIgnore'd from the main config.
+          # A green run's video is published to MOTIR-1627's OWN panel by the step
+          # below (BYOK — only when the MOTIR_UPLOAD_TOKEN secret is set).
+          - id: acceptance-video
+            args: '--config playwright.acceptance.config.ts'
     services:
       postgres:
         image: postgres:16-alpine
@@ -377,6 +386,25 @@ jobs:
       # defaults. workers=1, so this leg's own DB resets never race.
       - name: Run E2E (${{ matrix.id }})
         run: pnpm test:e2e ${{ matrix.args }}
+
+      # MOTIR-1638 self-test dogfood: on a GREEN acceptance run, publish the
+      # recorded video to MOTIR-1627's OWN acceptance panel (BYOK). Opt-in — a
+      # no-op unless the MOTIR_UPLOAD_TOKEN secret (an integration-scoped Motir
+      # API token bound to the moooon workspace) is set, so forks / unconfigured
+      # runs never fail here.
+      - name: Publish the acceptance video (self-test)
+        if: matrix.id == 'acceptance-video' && success()
+        env:
+          MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
+          MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
+          ACCEPTANCE_STORY_KEY: MOTIR-1627
+          ACCEPTANCE_PRODUCED_BY: MOTIR-1638
+        run: |
+          if [ -z "$MOTIR_UPLOAD_TOKEN" ]; then
+            echo "MOTIR_UPLOAD_TOKEN not set — skipping the acceptance-video publish (BYOK is opt-in)."
+            exit 0
+          fi
+          node scripts/upload-acceptance-video.mjs
         env:
           BOARD_ISSUE_CAP_OVERRIDE: ${{ matrix.board_issue_cap }}
           DONE_AGE_WINDOW_DAYS_OVERRIDE: ${{ matrix.done_age_window_days }}

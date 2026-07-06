@@ -160,6 +160,9 @@ export interface BoardCardDto {
   position: string;
   /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21). */
   ready: boolean;
+  /** A story in `in_review` whose CURRENT AcceptanceEvidence is pending — drives
+   *  the board "Awaiting acceptance" badge (MOTIR-1636). */
+  awaitingAcceptance: boolean;
   /**
    * The lane this card belongs to under the board's active swimlane group-by
    * (Subtask 3.3.4), resolved SERVER-SIDE so the client never re-derives it:

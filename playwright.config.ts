@@ -117,7 +117,7 @@ export default defineConfig({
   // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
   // would break unrelated at-scale/menu specs). The self-host-ABSENT billing spec
   // (billing-selfhost) is off-cloud and DOES run in this lane.
-  testIgnore: ['**/billing-cloud.spec.ts'],
+  testIgnore: ['**/billing-cloud.spec.ts', '**/acceptance-video.spec.ts'],
   // Each spec has its own truncate + sign-up flow; 30s is plenty for the
   // longest path (request reset → poll file outbox → follow link → set
   // new password).

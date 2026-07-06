@@ -1,4 +1,55 @@
 {
+  "acceptance": {
+    "title": "验收",
+    "gloss": "查看端到端测试视频",
+    "card": {
+      "title": "验收视频",
+      "desc": "当故事的端到端测试通过时录制一段短视频，并附于故事以供审阅与批准。",
+      "on": "已开启",
+      "off": "已关闭",
+      "requiresPlan": "需要付费的 Motir AI 方案",
+      "upgrade": "升级",
+      "saved": "已保存",
+      "saveError": "保存失败，请重试。"
+    },
+    "pending": {
+      "title": "正在等待验收视频",
+      "body": "该故事的端到端测试将在下次通过时把录制视频发布到此处。"
+    },
+    "summary": {
+      "recorded": "录制自一次通过的验收运行"
+    },
+    "approvedBy": "由 {name} 批准",
+    "provenance": {
+      "ciRun": "CI 运行"
+    },
+    "status": {
+      "approved": "已批准",
+      "changesRequested": "已请求修改"
+    },
+    "actions": {
+      "approve": "批准",
+      "requestChanges": "请求修改"
+    },
+    "toast": {
+      "approved": "故事已批准",
+      "changesRequested": "已请求修改"
+    },
+    "off": {
+      "title": "验收视频已关闭",
+      "adminBody": "开启后，当该故事的端到端测试通过时将录制并附上视频凭证。",
+      "memberBody": "请联系组织管理员在组织设置中开启验收视频。",
+      "turnOn": "开启",
+      "goToSettings": "前往设置",
+      "viewSettings": "查看设置"
+    },
+    "upsell": {
+      "title": "为每个故事获取视频凭证",
+      "body": "付费的 Motir AI 方案会录制你的故事端到端测试，并将视频附于此处以便一键验收。",
+      "upgrade": "升级",
+      "askOwner": "请联系组织所有者升级 Motir AI 方案。"
+    }
+  },
   "markdownEditor": {
     "mentionPeople": "成员",
     "mentionWorkItems": "工作项",
@@ -2087,6 +2138,7 @@
     "wipSaveErrorDescription": "未能保存“{column}”列的在制品限制，请重试。",
     "openIssueAria": "打开 {key}：{title}",
     "blocked": "受阻",
+    "awaitingAcceptance": "等待验收",
     "estimateLabel": "预估 {value}",
     "assignedTo": "负责人：{name}",
     "unassigned": "未分配",

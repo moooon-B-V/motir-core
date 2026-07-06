@@ -12,7 +12,12 @@ import type {
 // the API boundary. Mirrors lib/mappers/workspaceMappers.ts.
 
 export function toOrganizationDTO(org: Organization): OrganizationDTO {
-  return { id: org.id, name: org.name, slug: org.slug };
+  return {
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    acceptanceVideoEnabled: org.acceptanceVideoEnabled,
+  };
 }
 
 export function toCurrentOrganizationDTO(org: Organization, role: string): CurrentOrganizationDTO {
