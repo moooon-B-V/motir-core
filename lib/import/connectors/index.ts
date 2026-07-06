@@ -37,3 +37,5 @@ export {
 
 export { CsvConnector, type CsvConnectorConfig, type CsvColumnMap } from './csvConnector';
 export { GithubConnector, type GithubConnectorConfig } from './githubConnector';
+export { JiraConnector, type JiraConnectorConfig, adfToText } from './jiraConnector';
+export { LinearConnector, type LinearConnectorConfig } from './linearConnector';
