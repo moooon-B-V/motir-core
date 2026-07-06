@@ -1,0 +1,1157 @@
+<!doctype html>
+<!--
+  ROADMAP NODE — the MANUAL / HUMAN work-item distinction (MOTIR-1641 / 8.8.35).
+
+  A design amendment to the `roadmap` area. Today the canvas node
+  (components/planning/WorkItemNode.tsx) shows the item's KIND (epic/story/subtask)
+  but NOT its work TYPE — so a `type: manual` (executor `human`) item is
+  indistinguishable from a `code` one on the roadmap, even though it is the one a
+  person must pick up. This asset specifies how a manual/human node reads as
+  DISTINCT.
+
+  Grounded in SHIPPED REALITY (design-against-shipped-reality):
+   - the node CSS below is the shipped WorkItemNode language, verbatim from
+     design/roadmap/done-ready.mock.html (the fixed tile, the status spill, the
+     kind tile, the title, the done/ready/here/not-in-sprint/cross chromes).
+   - the manual chip COMPOSES the already-shipped work-type language, NOT a new
+     visual: the lucide `Hand` glyph + `--el-type-manual` hue (= --color-stone) +
+     the `color-mix(... 18% ...)` tint recipe are lifted from
+     `components/issues/WorkItemTypeChip.tsx` / `lib/issues/workItemTypeMeta.ts`
+     and from the shipped ready-list manual design
+     (design/ready/work-type-manual.mock.html, 8.8.5 / 8.8.10).
+   - the "is this manual?" test is the shipped predicate
+     `executor === 'human' || type === 'manual'` (lib/dto/ready.ts) — the SAME one
+     the ready-list *Show instruction* affordance keys on, so the two surfaces
+     agree.
+
+  PLACEMENT (revised): the chip lives in the node BODY, on the identifier line —
+  NOT the top row. The top row is already contended (status pill + the
+  not-in-sprint tag / cross-blocked flag / drill chevron), and a 280-wide card
+  cannot hold the status pill AND a labelled Manual chip AND one of those tags on
+  one line. The body's identifier line has its own room and is untouched by the
+  top-row tags, so the two never collide under ANY node state.
+
+  Colours are the real Motir light palette (app/globals.css --el-* values, inlined
+  for the static mock exactly as the sibling roadmap mocks do). NOT the shipped
+  component — a design artifact to pin the treatment before the build (MOTIR-1642).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap node — manual / human distinction (MOTIR-1641)</title>
+    <style>
+      :root {
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-danger: #e03131;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        /* work-item TYPE hues (--el-type-*) — the shipped map (workItemTypeMeta.ts) */
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --el-type-epic: #ff64c8;
+        --el-type-code: #0075de; /* --color-info */
+        --el-type-manual: #a4a097; /* --color-stone — the shipped manual hue */
+        /* derived, token-only (no invented hex): the danger flag surfaces */
+        --el-danger-surface: color-mix(in srgb, var(--el-danger) 13%, var(--el-page-bg));
+        --el-danger-text: color-mix(in srgb, var(--el-danger) 70%, var(--el-text-strong));
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --spacing-chip-x: 8px;
+        --spacing-chip-y: 2px;
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead .n {
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--el-accent);
+        background: #ece9fb;
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .board {
+        display: flex;
+        gap: 26px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        padding: 26px 22px;
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+      }
+      .cell {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        width: 260px;
+        flex: none;
+      }
+      .celltag {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        text-align: center;
+        line-height: 1.4;
+      }
+      .celltag b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── WorkItemNode (components/planning/WorkItemNode.tsx) — verbatim shipped language ── */
+      .node {
+        position: relative;
+        width: 260px;
+        min-height: 112px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 13px;
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .node.here {
+        border-color: var(--el-accent);
+      }
+      .node.ready {
+        background: var(--el-tint-mint);
+        border-color: color-mix(in srgb, var(--el-success) 22%, var(--el-border));
+      }
+      .node.ready .ntitle {
+        color: var(--el-text-strong);
+      }
+      .node.done {
+        background: var(--el-tint-sky);
+        border-color: var(--el-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .node.done .ntitle {
+        color: var(--el-text-muted);
+        text-decoration: line-through;
+        text-decoration-color: var(--el-text-faint);
+      }
+      .node.done .nid {
+        color: var(--el-text-faint);
+      }
+      /* NOT-IN-SPRINT — dotted border + receded muted fill + NO shadow (flat), so a
+         hard offset-shadow style can't add a second frame (the shipped chrome). */
+      .node.notinsprint {
+        background: var(--el-muted);
+        border-style: dotted;
+        border-color: var(--el-border-strong);
+        box-shadow: none;
+      }
+      /* CROSS-BLOCKED — the loud red frame (the shipped chrome). */
+      .node.cross {
+        border-color: var(--el-danger);
+        box-shadow:
+          inset 0 0 0 1px var(--el-danger),
+          var(--shadow-card);
+      }
+      .ntop {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .spill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .spill.ready {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+      }
+      .spill.ready svg {
+        color: var(--el-success);
+      }
+      .spill.done {
+        background: var(--el-text-secondary);
+        color: var(--el-text-inverted);
+      }
+      .spill.done svg {
+        color: var(--el-text-inverted);
+      }
+      .spill.here {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .spill.here svg {
+        color: var(--el-accent-text);
+      }
+      .rcluster {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .drill {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      /* the small neutral "not in sprint" tag (shipped) */
+      .nistag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 10.5px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .nistag svg {
+        width: 10px;
+        height: 10px;
+      }
+      /* the red cross-blocked flag (shipped) */
+      .crossflag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-danger-surface);
+        color: var(--el-danger-text);
+        font-size: 10.5px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .crossflag svg {
+        width: 10px;
+        height: 10px;
+      }
+
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--el-tint-lavender);
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-type-subtask);
+      }
+      .ntext {
+        min-width: 0;
+        flex: 1;
+      }
+      /* the identifier line — now shares its row with the Manual chip (which
+         right-aligns), instead of the crowded top row */
+      .nidrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 2px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.25;
+      }
+
+      /* ★★ THE MANUAL / HUMAN WORK-TYPE CHIP — the ONE new element ★★
+         Composes the shipped WorkItemTypeChip recipe (workItemTypeMeta.ts): the
+         `Hand` glyph in --el-type-manual + the color-mix(...18%...) tint. ONE canvas
+         adaptation (documented): a hairline border so the chip lifts off EVERY node
+         fill (surface / tint-sky / tint-mint / muted) — the ready-list chip sits on
+         a white row and needs none. It sits on the BODY identifier line (right-
+         aligned), NOT the top row, so it never competes with the status pill or the
+         not-in-sprint / cross-blocked tags — it composes with every data-node-state
+         without collision or crowding. */
+      .wt {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        font-size: 10.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        color: var(--el-text-strong);
+      }
+      .wt svg {
+        width: 11px;
+        height: 11px;
+      }
+      .wt.manual {
+        background: color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg));
+        border-color: color-mix(in srgb, var(--el-type-manual) 34%, var(--el-border));
+      }
+      .wt.manual svg {
+        color: var(--el-type-manual);
+      }
+
+      /* zoom-out legibility row */
+      .zoomrow {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        flex-wrap: wrap;
+        padding: 22px;
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+      }
+      .zoomlbl {
+        width: 190px;
+        flex: none;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .zoomlbl b {
+        color: var(--el-text-strong);
+      }
+      .mini {
+        display: flex;
+        gap: 16px;
+        transform: scale(0.64);
+        transform-origin: left center;
+      }
+
+      .note {
+        max-width: 1180px;
+        margin: 20px auto 0;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .note h3 {
+        font-size: 13.5px;
+        color: var(--el-text-strong);
+        margin: 18px 0 6px;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .note ul {
+        margin: 6px 0;
+        padding-left: 20px;
+      }
+      .note li {
+        margin: 3px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap node — the manual / human distinction</h1>
+    <p class="docsub">
+      MOTIR-1641 · 8.8.35 — a <code>type: manual</code> (executor <code>human</code>) work item
+      reads as DISTINCT on the roadmap canvas, so a person scanning the plan spots at a glance which
+      items need THEM. Composes the shipped work-type language onto the shipped
+      <code>WorkItemNode</code> — one new element (the Manual chip, on the body's identifier line),
+      zero changes to the existing state chromes.
+    </p>
+
+    <!-- ═══════════ SHEET 1 — the core difference ═══════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span><b>The difference — agent vs. human, at a glance</b>
+        <span class="cap">same node, same status; only the human-gated one carries the chip</span>
+      </div>
+      <div class="board">
+        <div class="cell">
+          <div class="node">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+                To do
+              </span>
+              <span class="rcluster">
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div class="ntext">
+                <div class="nidrow"><span class="nid">MOTIR-1642</span></div>
+                <div class="ntitle">Thread work type through the read seam</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>Agent</b> — <code>type: code</code>, no chip (the default)</div>
+        </div>
+
+        <div class="cell">
+          <div class="node">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+                To do
+              </span>
+              <span class="rcluster">
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-943</span>
+                  <span class="wt manual">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      />
+                    </svg>
+                    Manual
+                  </span>
+                </div>
+                <div class="ntitle">Provision the source OAuth apps / API tokens</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag">
+            <b>Human</b> — <code>type: manual</code>, the <b>Manual</b> chip (Hand +
+            <code>--el-type-manual</code>) on the id line
+          </div>
+        </div>
+      </div>
+
+      <div class="zoomrow">
+        <div class="zoomlbl">
+          <b>At a legible read zoom</b> — the chip's Hand glyph + stone tint reads immediately; on
+          the body line it never fights the status row.
+        </div>
+        <div class="mini">
+          <div class="node">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do
+              </span>
+              <span class="rcluster"
+                ><svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+              ></span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow"><span class="nid">MOTIR-1642</span></div>
+                <div class="ntitle">Agent node</div>
+              </div>
+            </div>
+          </div>
+          <div class="node">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do
+              </span>
+              <span class="rcluster"
+                ><svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+              ></span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-943</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Human node</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SHEET 2 — composes with EVERY node state ═══════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span><b>Composes with every <code>data-node-state</code></b>
+        <span class="cap"
+          >chip on the body id line; the status row keeps its own tags — no collision</span
+        >
+      </div>
+      <div class="board">
+        <!-- NORMAL -->
+        <div class="cell">
+          <div class="node">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do
+              </span>
+              <span class="rcluster">
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+              ></span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-1473</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Register the GitLab OAuth application</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>normal</b> — surface fill</div>
+        </div>
+
+        <!-- HERE -->
+        <div class="cell">
+          <div class="node here">
+            <div class="ntop">
+              <span class="spill here">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                  <circle cx="12" cy="10" r="3" /></svg
+                >Here
+              </span>
+              <span class="rcluster">
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+              ></span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-1521</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Apply the production deploy on live Fly</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>here</b> — accent border; chip on the id line</div>
+        </div>
+
+        <!-- READY -->
+        <div class="cell">
+          <div class="node ready">
+            <div class="ntop">
+              <span class="spill ready">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" /></svg
+                >Ready
+              </span>
+              <span class="rcluster">
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m9 18 6-6-6-6" /></svg
+              ></span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-1164</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Configure DB backups + tested restore</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>ready</b> — mint wash; chip reads on the tint (hairline)</div>
+        </div>
+
+        <!-- DONE -->
+        <div class="cell">
+          <div class="node done">
+            <div class="ntop">
+              <span class="spill done">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="m9 12 2 2 4-4" /></svg
+                >Done
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-890</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Register the Motir GitHub App</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>done</b> — sky tint + struck title; chip still legible</div>
+        </div>
+
+        <!-- NOT IN SPRINT -->
+        <div class="cell">
+          <div class="node notinsprint">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-dasharray="3 3"
+                >
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do
+              </span>
+              <span class="rcluster">
+                <span class="nistag">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-dasharray="3 3"
+                  >
+                    <circle cx="12" cy="12" r="9" /></svg
+                  >not in sprint
+                </span>
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-1325</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Anthropic phase-1 — mint the key</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>not-in-sprint</b> — tag owns the status row; chip below</div>
+        </div>
+
+        <!-- CROSS-BLOCKED -->
+        <div class="cell">
+          <div class="node cross">
+            <div class="ntop">
+              <span class="spill todo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do
+              </span>
+              <span class="rcluster">
+                <span class="crossflag">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" /></svg
+                  >blocked elsewhere
+                </span>
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div class="ntext">
+                <div class="nidrow">
+                  <span class="nid">MOTIR-1455</span>
+                  <span class="wt manual"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+                      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+                      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+                      <path
+                        d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                      /></svg
+                    >Manual</span
+                  >
+                </div>
+                <div class="ntitle">Provision the motir-marketing repo + domain</div>
+              </div>
+            </div>
+          </div>
+          <div class="celltag"><b>cross-blocked</b> — red flag owns the status row; chip below</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ NOTES ═══════════ -->
+    <div class="note">
+      <h3>The decision</h3>
+      A <b>manual/human node carries a compact "Manual" work-type chip</b> on the node BODY's
+      identifier line (right-aligned). An agent node carries nothing new — the roadmap is a
+      dispatch-scanning surface, so the majority (agent-run) nodes stay clean and the human-gated
+      ones POP. This is a justified rung-1 deviation from "show the type chip on every row" (as the
+      denser <code>/ready</code> and list/tree rows do, 8.8.9 / 8.8.10): on a pannable canvas a chip
+      on every node is clutter, and the whole point of the ask is that <i>manual</i> stands out.
+      <b>Trigger:</b> the shipped predicate
+      <code>executor === 'human' || type === 'manual'</code> (<code>lib/dto/ready.ts</code>) — the
+      SAME one the ready-list <i>Show instruction</i> keys on.
+
+      <h3>Why the body id line, not the top row</h3>
+      The top row is already contended — the status pill on the left, and on the right the
+      not-in-sprint tag / the cross-blocked flag / the drill chevron. A 280-wide node cannot hold
+      the status pill AND a labelled Manual chip AND one of those tags on one line (the first draft
+      wrapped the "To do" pill). So the chip drops to the <b>identifier line in the body</b>, which
+      has its own room and is untouched by the top-row tags — the two <b>never share a row</b>,
+      under any state. The title keeps its two-line clamp below.
+
+      <h3>Composed, not invented</h3>
+      <ul>
+        <li>
+          <b>Glyph + hue + tint</b> are the shipped work-type language verbatim: the lucide
+          <code>Hand</code> glyph, <code>--el-type-manual</code> (= <code>--color-stone</code>), and
+          the <code>color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg))</code> tint —
+          from <code>components/issues/WorkItemTypeChip.tsx</code> /
+          <code>lib/issues/workItemTypeMeta.ts</code> and the ready-list manual design
+          (<code>design/ready/work-type-manual.mock.html</code>). No new hue, no new glyph.
+        </li>
+        <li>
+          <b>One canvas adaptation</b> — a hairline <code>1px solid --el-border</code> (tinted a
+          touch by the hue) so the chip lifts off EVERY node fill (surface /
+          <code>--el-tint-sky</code> done / <code>--el-tint-mint</code> ready /
+          <code>--el-muted</code> not-in-sprint). The ready-list chip sits on a white row and needs
+          none; this is a variant, not a redraw.
+        </li>
+        <li>
+          <b>Shape</b> via element-semantic tokens (<code>--radius-badge</code>,
+          <code>--spacing-chip-*</code>) — reshapes under <code>data-style</code>; label
+          <code>--el-text-strong</code> for AA on the light stone tint.
+        </li>
+      </ul>
+
+      <h3>Composes with every <code>data-node-state</code> — no collision</h3>
+      Because the chip lives in the body and
+      <b>never touches the card fill, border, or the status row</b>, it rides cleanly under every
+      state chrome (sheet 2): the
+      <code>cross-blocked &gt; here &gt; done &gt; ready &gt; not-in-sprint &gt; normal</code>
+      precedence owns the fill/border/status-row, the chip owns the id line. Even the two loud
+      status-row tags — <b>not in sprint</b> and <b>blocked elsewhere</b> — keep their full room,
+      because the Manual chip is no longer competing for it.
+
+      <h3>Why a chip and not a whole-card wash</h3>
+      The card-fill washes are deliberately reserved for <b>status</b> — done
+      (<code>--el-tint-sky</code>) and ready (<code>--el-tint-mint</code>) — because status is the
+      primary scan axis and a wash survives zoom-out where a pill vanishes (MOTIR-1422). Work type
+      is a secondary, legible-zoom hint (who picks this up), so a type wash would both collide with
+      the status washes and overload the fill. The chip is the honest altitude for it — exactly how
+      type is shown everywhere else in the app.
+
+      <h3>Access path</h3>
+      None new. The roadmap view (<code>app/(authed)/roadmap/page.tsx</code>) is already a
+      first-class nav entry; this only changes an existing node's appearance — no new door to draw.
+      Build: MOTIR-1642 threads work <code>type</code>/<code>executor</code> through the roadmap
+      read seam and renders this treatment in <code>components/planning/WorkItemNode.tsx</code>.
+    </div>
+  </body>
+</html>

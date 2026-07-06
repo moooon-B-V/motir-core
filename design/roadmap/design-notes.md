@@ -867,9 +867,85 @@ before/after) are in the mock.
 
 ---
 
+## ⭐ Work-type: the MANUAL / HUMAN node distinction (MOTIR-1641 / 8.8.35 — `node-worktype.mock.html`)
+
+`node-worktype.mock.html` adds ONE element to the roadmap `WorkItemNode` (MOTIR-1194): a compact
+**"Manual" work-type chip**, so a `type: manual` (executor `human`) item reads as DISTINCT on the
+canvas — the item a PERSON must pick up, not an agent. COMPOSES the shipped work-type language;
+does NOT redraw the node or invent a visual.
+
+### The problem it fixes
+
+The node shows the item's KIND (epic/story/subtask, via the kind tile) but never its work TYPE, so
+a `manual` item is pixel-identical to a `code` one — invisible on the very surface where you scan
+for what needs YOU.
+
+### The treatment
+
+- A **"Manual" chip** on the node BODY's identifier line (right-aligned) — **not** the top row: the
+  lucide **`Hand`** glyph in **`--el-type-manual`** (= `--color-stone`) + the label, on the shipped
+  chip tint
+  `color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg))`. This is the SHIPPED
+  work-type language verbatim — `components/issues/WorkItemTypeChip.tsx` /
+  `lib/issues/workItemTypeMeta.ts`, the same recipe the ready-list manual design uses
+  (`design/ready/work-type-manual.mock.html`, 8.8.5 / 8.8.10). No new hue, no new glyph.
+- **Trigger:** the shipped predicate `executor === 'human' || type === 'manual'`
+  (`lib/dto/ready.ts`) — the SAME one the ready-list _Show instruction_ keys on, so the two
+  surfaces agree on what "manual" means.
+- **One canvas adaptation:** a hairline `--el-border` (tinted a touch by the hue) so the chip lifts
+  off EVERY node fill — surface / `--el-tint-sky` (done) / `--el-tint-mint` (ready) / `--el-muted`
+  (not-in-sprint). The ready-list chip sits on a white row and needs none; this is a variant, not a
+  redraw.
+
+### Manual-ONLY, not a chip on every type (justified deviation)
+
+The denser list / tree / ready rows show the type chip on EVERY row (8.8.9 / 8.8.10); the canvas
+deliberately shows it **only for manual/human** nodes. The roadmap is a dispatch-scanning surface —
+a chip on every node of a pannable canvas is clutter, and the ask is that _manual_ stands out.
+Agent-run nodes stay clean; the human-gated ones pop. (Rung-1 justified deviation: a concrete use
+case — canvas legibility + "spot what needs a person" — earns the divergence.)
+
+### Why the body id line, not the top row
+
+The top row is already contended — the status pill on the left, and on the right the **not-in-sprint**
+tag / the **cross-blocked** flag / the drill chevron. A 280-wide node cannot hold the status pill AND
+a labelled Manual chip AND one of those tags on one line (the first draft wrapped the "To do" pill).
+So the chip drops to the **identifier line in the body**, which has its own room and is untouched by
+the top-row tags — the two **never share a row**, under any state. The title keeps its two-line clamp
+below.
+
+### Precedence + boundaries (composes with every `data-node-state`)
+
+Because the chip lives in the body and **never touches the card fill, border, or the status row**, it
+rides cleanly under every state chrome (sheet 2): the `cross-blocked > here > done > ready >
+not-in-sprint > normal` precedence owns the fill / border / status row, the chip owns the id line —
+so the two loud status-row tags (**not in sprint**, **blocked elsewhere**) keep their full room.
+**Why a chip, not a card-fill wash:** the fill washes are
+reserved for STATUS (done `--el-tint-sky` / ready `--el-tint-mint`), because status is the primary
+scan axis and a wash survives zoom-out where a pill fades (MOTIR-1422); a type wash would collide
+with those and overload the fill. The chip is the honest altitude for a secondary, legible-zoom
+hint — exactly how type is shown everywhere else in the app.
+
+### Access path
+
+None new — the roadmap view (`app/(authed)/roadmap/page.tsx`) is already a first-class nav entry;
+this only changes an existing node's appearance. Build: MOTIR-1642 threads work
+`type` / `executor` through the roadmap read seam (`app/api/projects/[key]/roadmap/route.ts` →
+`lib/planning/roadmapClient.ts` → `lib/planning/projectCanvasModel.ts`) and renders this treatment
+in `components/planning/WorkItemNode.tsx`.
+
+### Token / a11y discipline
+
+Colour via `--el-*` only (`--el-type-manual` + a `color-mix` over `--el-*` / `--el-page-bg`); label
+`--el-text-strong` for AA on the light stone tint. Shape via `--radius-badge` + `--spacing-chip-*` —
+no Tier-0 `--color-*` or raw `rounded-*`. Two sheets in the mock (the agent-vs-human pair + a zoom
+row; the chip under all six node states).
+
+---
+
 ## Deliverable
 
-Eight three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Nine three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
@@ -882,6 +958,8 @@ Eight three-file surfaces under `design/roadmap/`, sharing this `design-notes.md
 - **Done & ready styles** — `done-ready.mock.html` + `done-ready.png` (MOTIR-1434).
 - **Refresh control + URL scope** — `roadmap-refresh.mock.html` +
   `roadmap-refresh.png` (MOTIR-1540).
+- **Work-type: manual/human node** — `node-worktype.mock.html` +
+  `node-worktype.png` (MOTIR-1641 / 8.8.35).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
