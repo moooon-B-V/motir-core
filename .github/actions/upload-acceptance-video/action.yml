@@ -3,15 +3,25 @@ description: >
   Publish a green acceptance E2E's recorded video (+ trace + chapters) to a Motir
   story as pending acceptance evidence (Story MOTIR-1627, BYOK). Run it AFTER the
   acceptance E2E step and only on success — a red run records no video, so this is
-  a no-op.
+  a no-op. Auth is KEYLESS GitHub OIDC when the repo is connected via the Motir
+  GitHub App — the calling JOB must grant `permissions: id-token: write` (no
+  secret needed); otherwise pass a `token` (the `integration`-scope PAT fallback).
 
 inputs:
   story-key:
     description: The story key to attach the evidence to (e.g. MOTIR-1627).
     required: true
   token:
-    description: A Motir API token with the `integration` scope (store as a secret).
-    required: true
+    description: >
+      (Fallback) A Motir API token with the `integration` scope, for a repo NOT
+      connected via the Motir GitHub App. Store it as a secret. Leave empty to use
+      keyless GitHub OIDC (requires `permissions: id-token: write` on the job).
+    required: false
+    default: ''
+  audience:
+    description: The OIDC audience the token is minted for (must match the server).
+    required: false
+    default: motir-acceptance-video
   base-url:
     description: The Motir base URL.
     required: false
@@ -29,8 +39,12 @@ runs:
   using: composite
   steps:
     - shell: bash
+      # GitHub injects ACTIONS_ID_TOKEN_REQUEST_URL/_TOKEN here automatically when
+      # the job has `id-token: write` — the uploader exchanges them for the OIDC
+      # token, so nothing to pass through. MOTIR_UPLOAD_TOKEN is the PAT fallback.
       env:
         MOTIR_UPLOAD_TOKEN: ${{ inputs.token }}
+        MOTIR_OIDC_AUDIENCE: ${{ inputs.audience }}
         MOTIR_BASE_URL: ${{ inputs.base-url }}
         ACCEPTANCE_STORY_KEY: ${{ inputs.story-key }}
         ACCEPTANCE_OUTPUT_DIR: ${{ inputs.output-dir }}

@@ -39,13 +39,49 @@ test('story acceptance flow', async ({ page, chapter }) => {
 Keep the spec **short** (≤ ~60 s) — it is a focused happy-path drive, and the
 clip is capped to a few MB per the ADR.
 
-## Run + upload in CI
+## Run + upload in CI (keyless — no secret)
+
+If your repo is connected via the **Motir GitHub App**, publishing is **keyless**
+— there is **no token to mint or store**. Grant the job `id-token: write` and the
+uploader authenticates off the run's own GitHub **OIDC** identity:
 
 ```yaml
 # In the acceptance E2E job, AFTER the app + acceptance E2E succeed:
-- name: Acceptance E2E (records the video)
-  run: pnpm exec playwright test --config playwright.acceptance.config.ts
+jobs:
+  acceptance:
+    permissions:
+      contents: read
+      id-token: write # ← lets the uploader mint a keyless OIDC token
+    steps:
+      - name: Acceptance E2E (records the video)
+        run: pnpm exec playwright test --config playwright.acceptance.config.ts
 
+      - name: Publish the acceptance video (green only)
+        if: success()
+        uses: ./.github/actions/upload-acceptance-video
+        with:
+          story-key: MOTIR-1627
+          produced-by: MOTIR-1638
+          # no `token:` — keyless OIDC. base-url defaults to https://app.motir.co
+```
+
+`if: success()` (plus the uploader's own no-video no-op) guarantees a **red run
+publishes nothing**. The endpoint verifies the run's OIDC token, resolves the
+repo → your Motir workspace (via the GitHub App connection), and attributes the
+evidence to the **workspace owner** — subject to the same eligibility gate as the
+in-app path (an org without the paid AI plan is rejected `402`).
+
+## Fallback — the `MOTIR_UPLOAD_TOKEN` secret (unconnected repos)
+
+If your repo is **not** connected via the Motir GitHub App, authenticate with a
+token instead of OIDC:
+
+1. In Motir, mint an **API token** scoped to **`integration`** (Settings → API
+   tokens), bound to the workspace that owns the story.
+2. Add it to your repo as the **`MOTIR_UPLOAD_TOKEN`** secret and pass it to the
+   Action — you can then drop the `id-token: write` permission:
+
+```yaml
 - name: Publish the acceptance video (green only)
   if: success()
   uses: ./.github/actions/upload-acceptance-video
@@ -53,19 +89,7 @@ clip is capped to a few MB per the ADR.
     story-key: MOTIR-1627
     produced-by: MOTIR-1638
     token: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
-    # base-url defaults to https://app.motir.co
 ```
 
-`if: success()` (plus the uploader's own no-video no-op) guarantees a **red run
-publishes nothing**.
-
-## The `MOTIR_UPLOAD_TOKEN` secret
-
-1. In Motir, mint an **API token** scoped to **`integration`** (Settings →
-   API tokens), bound to the workspace that owns the story.
-2. Add it to your repo as the **`MOTIR_UPLOAD_TOKEN`** secret.
-
-The token authorizes the publish endpoint
-(`POST /api/work-items/<storyKey>/acceptance-evidence`); it is subject to the
-same eligibility gate as the in-app path (a token for an org without the paid AI
-plan is rejected `402`).
+Same endpoint (`POST /api/work-items/<storyKey>/acceptance-evidence`) and the
+same eligibility gate — only the authentication differs.

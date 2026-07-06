@@ -67,6 +67,28 @@ describe('uploadAcceptanceVideo', () => {
     expect(init.body.get('commitSha')).toBe('abc');
   });
 
+  it('uses keyless OIDC headers (marker + OIDC bearer) when an oidcToken is given', async () => {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    fs.writeFileSync(video, 'bytes');
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ evidence: { id: 'ev2' } }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await uploadAcceptanceVideo({
+      baseUrl: 'https://app.motir.co',
+      oidcToken: 'oidc.jwt.token',
+      storyKey: 'MOTIR-1627',
+      artifacts: { video, trace: null, chapters: null },
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init.headers.authorization).toBe('Bearer oidc.jwt.token');
+    expect(init.headers['x-motir-auth']).toBe('github-oidc');
+  });
+
   it('throws on a non-2xx response', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
