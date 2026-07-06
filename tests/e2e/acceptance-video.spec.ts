@@ -78,7 +78,7 @@ test('paid + on → Request changes sends the story back to In Progress', async 
 
   await page.goto(`/items/${story.identifier}`);
   await page.getByRole('button', { name: 'Request changes' }).click();
-  await expect(page.getByText('Changes requested')).toBeVisible();
+  await expect(page.getByText('Changes requested', { exact: true })).toBeVisible();
   await page.reload();
   const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
   expect(persisted.status).toBe('in_progress');
