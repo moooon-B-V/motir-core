@@ -238,4 +238,34 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
     const { edges } = await workItemsService.getProjectRoadmap(fx.projectId, f.B.id, fx.ctx);
     expect(edges).toEqual([]);
   });
+
+  // MOTIR-1642 / 8.8.36 — the roadmap read carries each node's work `type` +
+  // `executor`, so the canvas can flag a human-gated (manual) item. Threaded from
+  // the repo SELECT → RoadmapNodeDto → the mapper.
+  it('carries work type + executor on each node (manual vs agent)', async () => {
+    const fx = await makeFixture();
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Story WT' });
+    const manual = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Manual subtask',
+      parentId: story.id,
+      type: 'manual',
+      executor: 'human',
+    });
+    const code = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Code subtask',
+      parentId: story.id,
+      type: 'code',
+      executor: 'coding_agent',
+    });
+
+    const { nodes } = await workItemsService.getProjectRoadmap(fx.projectId, story.id, fx.ctx);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+
+    expect(byId.get(manual.id)?.type).toBe('manual');
+    expect(byId.get(manual.id)?.executor).toBe('human');
+    expect(byId.get(code.id)?.type).toBe('code');
+    expect(byId.get(code.id)?.executor).toBe('coding_agent');
+  });
 });

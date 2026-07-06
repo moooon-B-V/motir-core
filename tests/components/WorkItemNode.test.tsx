@@ -225,3 +225,37 @@ describe('GhostAnchor', () => {
     );
   });
 });
+
+// MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36) — a human-gated node carries
+// a "Manual" chip (the shipped WorkItemTypeChip) on the body id line; an agent node
+// does not. The gate is the shipped `isManualReadyItem` predicate
+// (`executor === 'human' || type === 'manual'`). The chip sits in the body, so it
+// composes with every node state without touching the status row.
+describe('WorkItemNode — manual / human work-type chip (MOTIR-1642)', () => {
+  it('renders the Manual chip for a type:manual node', () => {
+    render(<WorkItemNode item={{ ...item, type: 'manual', executor: 'human' }} />);
+    expect(screen.getByText('Manual')).toBeTruthy();
+  });
+
+  it('renders the Manual chip for a human-executor node even when the type is not manual', () => {
+    render(<WorkItemNode item={{ ...item, type: 'deploy', executor: 'human' }} />);
+    expect(screen.getByText('Manual')).toBeTruthy();
+  });
+
+  it('does NOT render the Manual chip for an agent (type:code) node', () => {
+    render(<WorkItemNode item={{ ...item, type: 'code', executor: 'coding_agent' }} />);
+    expect(screen.queryByText('Manual')).toBeNull();
+  });
+
+  it('does NOT render the Manual chip when type/executor are absent (onboarding / plan-preview node)', () => {
+    render(<WorkItemNode item={item} />);
+    expect(screen.queryByText('Manual')).toBeNull();
+  });
+
+  it('keeps the Manual chip on a done node (composes with the state chrome)', () => {
+    render(<WorkItemNode item={{ ...item, status: 'done', type: 'manual', executor: 'human' }} />);
+    // the done chrome strikes the title but the chip still shows
+    expect(screen.getByText('Manual')).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
+  });
+});

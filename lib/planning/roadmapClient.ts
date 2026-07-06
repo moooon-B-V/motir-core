@@ -1,5 +1,6 @@
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemStatus } from '@/components/planning/WorkItemNode';
+import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 
 // Client read of ONE LEVEL of the project roadmap (Subtask 7.20.2 / MOTIR-1194)
 // from the per-level endpoint (`GET /api/projects/[key]/roadmap?parentId=`,
@@ -22,6 +23,14 @@ export interface RoadmapLevelItem {
   title: string;
   kind: IssueType;
   status: WorkItemStatus;
+  /** The leaf's work TYPE (Story 2.7) — `code` / `design` / `manual` / … or `null`
+   *  on a container / untyped leaf. Together with {@link RoadmapLevelItem.executor}
+   *  it drives the manual/human node chip (MOTIR-1642 / 8.8.36). Optional
+   *  client-side: an older / onboarding read that omits it degrades to "no chip". */
+  type?: WorkItemTypeDto | null;
+  /** WHO executes the leaf (Story 2.7) — `coding_agent` / `human` / `null`. Paired
+   *  with `type` for the `isManualReadyItem` predicate. Optional client-side. */
+  executor?: ExecutorDto | null;
   /** Has children → the canvas can DRILL into it. */
   hasChildren: boolean;
   /** Subtree progress roll-up — present on container nodes, `null` on leaves
@@ -69,6 +78,8 @@ interface RoadmapNode {
   id: string;
   parentId: string | null;
   kind: string;
+  type?: string | null;
+  executor?: string | null;
   identifier: string;
   title: string;
   status: string;
@@ -97,13 +108,34 @@ function toStatus(raw: string, isDone: boolean): WorkItemStatus {
 
 const KNOWN_KINDS = new Set<IssueType>(['epic', 'story', 'task', 'bug', 'subtask']);
 
-function toItem(n: RoadmapNode): RoadmapLevelItem {
+// The ten work-item TYPE members (Story 2.7 · the 2.7.2 taxonomy ADR). Used to
+// guard the raw wire value the SAME way `KNOWN_KINDS` guards `kind`: an
+// unrecognised / absent `type` degrades to `null` (no chip) rather than crashing
+// the best-effort level read (MOTIR-1642 / 8.8.36).
+const KNOWN_TYPES = new Set<WorkItemTypeDto>([
+  'code',
+  'design',
+  'test',
+  'content',
+  'research',
+  'review',
+  'decision',
+  'deploy',
+  'manual',
+  'chore',
+]);
+
+/** Map one raw `RoadmapNode` wire row to a `RoadmapLevelItem` — exported for the
+ *  unit test (the fallback behaviour matters and is otherwise internal). */
+export function toItem(n: RoadmapNode): RoadmapLevelItem {
   return {
     id: n.id,
     parentId: n.parentId,
     identifier: n.identifier,
     title: n.title,
     kind: KNOWN_KINDS.has(n.kind as IssueType) ? (n.kind as IssueType) : 'subtask',
+    type: KNOWN_TYPES.has(n.type as WorkItemTypeDto) ? (n.type as WorkItemTypeDto) : null,
+    executor: n.executor === 'human' || n.executor === 'coding_agent' ? n.executor : null,
     status: toStatus(n.status, n.isDone),
     hasChildren: n.hasChildren,
     progress: n.progress ?? null,

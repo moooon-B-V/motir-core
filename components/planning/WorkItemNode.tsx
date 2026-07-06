@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
+import { isManualReadyItem } from '@/lib/dto/ready';
+import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 
@@ -67,6 +70,14 @@ export interface WorkItemNodeData {
   title: string;
   kind: IssueType;
   status: WorkItemStatus;
+  /** The work TYPE (Story 2.7) — drives the MANUAL / human chip (MOTIR-1642 /
+   *  8.8.36), paired with `executor` via the shipped `isManualReadyItem`
+   *  predicate. Optional: a node built without it (onboarding / plan preview)
+   *  simply shows no chip. */
+  type?: WorkItemTypeDto | null;
+  /** WHO executes the work — `human` (or `type: 'manual'`) makes the node
+   *  human-gated, so it carries the Manual chip. Optional (see `type`). */
+  executor?: ExecutorDto | null;
   assigneeName?: string | null;
 }
 
@@ -155,6 +166,14 @@ export function WorkItemNode({
   ready?: boolean;
 }) {
   const t = useTranslations('roadmap.canvas');
+  // MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36): a human-gated node — the
+  // SHIPPED `executor === 'human' || type === 'manual'` predicate the ready-list
+  // *Show instruction* keys on (8.8.10) — carries a "Manual" chip so a person
+  // scanning the roadmap spots what needs THEM. Reuses the shipped `WorkItemTypeChip`
+  // (no new visual) on the BODY identifier line, so it never crowds the status row or
+  // fights a state chrome (design/roadmap/node-worktype.*, MOTIR-1641). Nodes built
+  // without type/executor (onboarding / plan preview) show no chip.
+  const isManual = isManualReadyItem({ type: item.type ?? null, executor: item.executor ?? null });
   const showMeter = progress !== null && progress.total > 0;
   const pct = showMeter ? Math.round((progress.done / progress.total) * 100) : 0;
   // The ready treatment is suppressed on the "you are here" frontier (its accent
@@ -293,7 +312,18 @@ export function WorkItemNode({
           <IssueTypeIcon type={item.kind} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <span className="block font-mono text-xs text-(--el-text-faint)">{item.identifier}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-(--el-text-faint)">{item.identifier}</span>
+            {/* The Manual chip rides the id line (right-aligned), NOT the crowded
+                status row — a hairline `--el-border` lifts it off every node fill.
+                Composed from the shipped WorkItemTypeChip; manual-only by design. */}
+            {isManual ? (
+              <WorkItemTypeChip
+                type="manual"
+                className="ml-auto shrink-0 gap-1 border-(--el-border) px-1.5 py-0 text-[10.5px]"
+              />
+            ) : null}
+          </div>
           <span
             className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
               showDone ? 'text-(--el-text-muted) line-through' : 'text-(--el-text)'
