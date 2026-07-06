@@ -882,8 +882,9 @@ for what needs YOU.
 
 ### The treatment
 
-- A **"Manual" chip** in the node's top row (right cluster): the lucide **`Hand`** glyph in
-  **`--el-type-manual`** (= `--color-stone`) + the label, on the shipped chip tint
+- A **"Manual" chip** on the node BODY's identifier line (right-aligned) — **not** the top row: the
+  lucide **`Hand`** glyph in **`--el-type-manual`** (= `--color-stone`) + the label, on the shipped
+  chip tint
   `color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg))`. This is the SHIPPED
   work-type language verbatim — `components/issues/WorkItemTypeChip.tsx` /
   `lib/issues/workItemTypeMeta.ts`, the same recipe the ready-list manual design uses
@@ -904,14 +905,22 @@ a chip on every node of a pannable canvas is clutter, and the ask is that _manua
 Agent-run nodes stay clean; the human-gated ones pop. (Rung-1 justified deviation: a concrete use
 case — canvas legibility + "spot what needs a person" — earns the divergence.)
 
+### Why the body id line, not the top row
+
+The top row is already contended — the status pill on the left, and on the right the **not-in-sprint**
+tag / the **cross-blocked** flag / the drill chevron. A 280-wide node cannot hold the status pill AND
+a labelled Manual chip AND one of those tags on one line (the first draft wrapped the "To do" pill).
+So the chip drops to the **identifier line in the body**, which has its own room and is untouched by
+the top-row tags — the two **never share a row**, under any state. The title keeps its two-line clamp
+below.
+
 ### Precedence + boundaries (composes with every `data-node-state`)
 
-The chip lives in the top row and **never touches the card fill or border**, where the whole
-state-chrome precedence lives (`cross-blocked > here > done > ready > not-in-sprint > normal`), so
-it rides ON TOP of every state (sheet 2). Two adjacency rules keep the fixed-width row from
-crowding: beside the quiet **not-in-sprint** tag the two small chips sit side by side; beside the
-loud red **cross-blocked** flag the flag wins the row and the Manual chip **collapses to its icon**
-(the title tooltip keeps the label). **Why a chip, not a card-fill wash:** the fill washes are
+Because the chip lives in the body and **never touches the card fill, border, or the status row**, it
+rides cleanly under every state chrome (sheet 2): the `cross-blocked > here > done > ready >
+not-in-sprint > normal` precedence owns the fill / border / status row, the chip owns the id line —
+so the two loud status-row tags (**not in sprint**, **blocked elsewhere**) keep their full room.
+**Why a chip, not a card-fill wash:** the fill washes are
 reserved for STATUS (done `--el-tint-sky` / ready `--el-tint-mint`), because status is the primary
 scan axis and a wash survives zoom-out where a pill fades (MOTIR-1422); a type wash would collide
 with those and overload the fill. The chip is the honest altitude for a secondary, legible-zoom
