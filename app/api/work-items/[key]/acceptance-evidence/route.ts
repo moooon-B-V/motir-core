@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
+import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -50,18 +51,31 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
-  const auth = await authenticateApiToken(req, 'integration');
-  if (!auth.ok) {
-    return auth.reason === 'unauthenticated'
-      ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })
-      : NextResponse.json(
-          { code: 'FORBIDDEN', error: 'The token lacks the integration scope.' },
-          {
-            status: 403,
-          },
-        );
+  // Auth: keyless GitHub OIDC first (MOTIR-1650) when the caller opts in via the
+  // `X-Motir-Auth: github-oidc` marker; otherwise the `integration` PAT
+  // (MOTIR-1631). Both resolve the `{ userId, workspaceId }` the publish consumes
+  // — for OIDC, `userId` is the workspace owner (OIDC carries no user).
+  let ctx: { userId: string; workspaceId: string };
+  const oidc = await authenticateGithubOidc(req);
+  if (oidc) {
+    if (!oidc.ok) {
+      return oidc.status === 401
+        ? NextResponse.json({ code: 'UNAUTHENTICATED', reason: oidc.reason }, { status: 401 })
+        : NextResponse.json({ code: 'FORBIDDEN', reason: oidc.reason }, { status: 403 });
+    }
+    ctx = { userId: oidc.userId, workspaceId: oidc.workspaceId };
+  } else {
+    const auth = await authenticateApiToken(req, 'integration');
+    if (!auth.ok) {
+      return auth.reason === 'unauthenticated'
+        ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })
+        : NextResponse.json(
+            { code: 'FORBIDDEN', error: 'The token lacks the integration scope.' },
+            { status: 403 },
+          );
+    }
+    ctx = { userId: auth.userId, workspaceId: auth.workspaceId };
   }
-  const ctx = { userId: auth.userId, workspaceId: auth.workspaceId };
 
   const { key } = await params;
   const identifier = key.trim().toUpperCase();
@@ -102,8 +116,8 @@ export async function POST(
     // Eligibility gate (MOTIR-1630) — reject with the reason BEFORE any blob
     // spend. not_applicable (self-host / meta) is eligible (ungated).
     const eligibility = await acceptanceVideoEligibilityService.resolve({
-      actorUserId: auth.userId,
-      workspaceId: auth.workspaceId,
+      actorUserId: ctx.userId,
+      workspaceId: ctx.workspaceId,
     });
     if (!eligibility.eligible) {
       const status = eligibility.reason === 'no_plan' ? 402 : 403;
