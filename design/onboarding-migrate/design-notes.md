@@ -149,24 +149,26 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 
 ## The spine — a two-tier, resumable wizard (the model this draws)
 
-1. **Six steps in TWO tiers, one grouped rail.** The rail is split into **"Set up your codebase"
-   (required)** — `Connect · Index · Audit & conventions` — and **"Plan your project · optional"** —
-   `Discovery · Generate · Review`. Each step's state: **done** (mint check), **current** (accent marker
-   - an `--el-accent-on-surface` ring row), **upcoming** (quiet outline marker), **optional** (a
-     **dashed** marker — reachable, not forced). A `.rail-group` header carries the tier name; the optional
-     tier's header carries an `optional` chip.
-2. **★ Planning is OPTIONAL — the plan-now-or-later DECISION (Yue, 2026-07-05).** Linking + reading the
-   code must NOT force a planning commitment. The required core ends at **Audit & conventions (step 3)**;
-   after it the user hits a **`.decision`** block — **"Plan your project now?"** with **"Plan my project
-   now"** (primary) and **"Finish — I'll plan later"** (secondary). Steps 4–6 are the optional planning
-   tier: Discovery carries **"Skip discovery"** + **"Finish — plan later"**, Generate carries **"Finish —
-   plan later"**. **"Plan with AI" is drawn in the top bar on every panel** (the always-present launcher,
-   `design/ai-chat` — composed, cited), so finishing at set-up loses nothing: the user plans anytime
-   later. The finish-early exit is drawn in Panel 6 ("Your codebase is in Motir · Plan with AI"). This
-   REPLACES the earlier "Generate is LOCKED until convention approved" framing: conventions are approved
-   in the required set-up tier, so by the time (optional) generation runs they're already the standard —
-   there is no locked-then-forced step; the convention→generation relationship is stated as copy ("Motir
-   uses each repo's approved convention when it plans"), and the optional steps are dashed, not padlocked.
+1. **Two tiers, one grouped rail.** The rail is split into **"Set up your codebase"
+   (required)** — `Connect · Index · Audit & conventions` — and **"Import & plan · optional"** —
+   **`Import work items · Discovery · Generate · Review`**. Each step's state: **done** (mint check),
+   **current** (accent marker + an `--el-accent-on-surface` ring row), **upcoming** (quiet outline
+   marker), **optional** (a **dashed** marker — reachable, not forced). A `.rail-group` header carries the
+   tier name; the optional tier's header carries an `optional` chip. The **Import work items** step uses an
+   **icon marker** (a download glyph), not a number, so the numbered steps stay `Discovery 4 · Generate 5 ·
+Review 6` — import is an extra optional step, not a renumber.
+2. **★ Import + planning are OPTIONAL — the import/plan-or-later DECISION (Yue, 2026-07-05).** Linking +
+   reading the code must NOT force a commitment. The required core ends at **Audit & conventions**; after
+   it the user hits a **`.decision`** block — **"Bring in your work or plan now?"** with **"Continue"**
+   (primary, into the optional tier) and **"Finish — I'll do it later"** (secondary). The optional tier:
+   **Import work items** (skippable — "Skip — no backlog to import" + "Finish — plan later"), Discovery
+   ("Skip discovery" + "Finish — plan later"), Generate ("Finish — plan later"). **"Plan with AI" is drawn
+   in the top bar on every panel** (the always-present launcher, `design/ai-chat` — composed, cited), so
+   finishing at set-up loses nothing: the user imports / plans anytime later. The finish-early exit is
+   drawn in Panel 7 ("Your codebase is in Motir · Plan with AI"). This REPLACES the earlier "Generate is
+   LOCKED until convention approved" framing: conventions are approved in the required set-up tier, so by
+   the time (optional) generation runs they're already the standard — no locked-then-forced step; the
+   optional steps are dashed, not padlocked.
 3. **The index gate (Cursor mirror) — aggregate across repos.** `Next` on step 2 is **disabled** (a
    `.btn.disabled`) until the code graph is built for **every** repo — the audit and any plan need the
    whole project indexed. Drawn in an **in-flight** state (per-repo `.idx-repo` rows + an aggregate
@@ -244,7 +246,27 @@ you can approve when you plan". **The convention SURFACE (audit + per-repo revie
 7.14.1** — this panel composes it once per repo. ⚠️ The **per-repo model** (one standard per repo, not
 per project) is an **upstream correction for the 7.14 story** (§Multi-repo) — flagged, not owned here.
 
-### Panel 4 — Light discovery (step 4, **OPTIONAL · skippable**) — **composes 7.2.1 (`design/ai-chat/`)**
+### Panel 4 — Import work items (**OPTIONAL**) — **composes `design/import` (7.16.1 / MOTIR-937), embedded not redrawn**
+
+The **optional import step** — bring an existing backlog (Jira / Linear / GitHub / Plane / CSV) into the
+project. Eyebrow "Optional · Import & plan", H1 **"Bring in your existing backlog"**, lead frames it as
+optional + names the reconcile. **This step COMPOSES the shipped import-wizard design
+[`design/import`](../import/design-notes.md) (7.16.1 / MOTIR-937), embedded — NOT redrawn** (#82): the
+migrate wizard owns the _embedding_ (the import wizard's own design-notes explicitly assigns "composed
+into onboarding as step 2 … owned by the onboarding side, MOTIR-930/934"). Drawn as: a `.substeps`
+sub-rail of the importer's own four steps (**Connect → Map → Preview → Import**, Connect current) + the
+note "the full flow runs here — **nothing is written until you confirm the dry-run preview**"; a
+`.src-grid` source picker (five `.src` tiles — Jira `--el-tint-sky` · Linear `--el-tint-lavender` ·
+GitHub `--el-tint-mint` · Plane `--el-tint-rose` · CSV `--el-tint-peach`, the exact tint slots
+`design/import` assigns, Jira selected); and an accent **`.callout.info-accent` reconcile** note:
+"**Imported items reconcile with your plan** — when you generate next, Motir de-dupes against the
+imported backlog; an imported ticket wins, generation only adds the gaps your code implies." Footer: Back
+· **"Skip — no backlog to import"** · **"Finish — plan later"** · "Next: discovery". The step is wired by
+[MOTIR-1643] (the import-step state machine + reconcile) and built by [MOTIR-934]; the importer engine +
+its standalone wizard are [MOTIR-816] / [MOTIR-942]. **The importer's Connect/Map/Preview/Import internals
+are OWNED by `design/import` — cited, not re-specified here.**
+
+### Panel 5 — Light discovery (step 4, **OPTIONAL · skippable**) — **composes 7.2.1 (`design/ai-chat/`)**
 
 A SHORT, **optional** discovery pass, migrate-framed. Eyebrow "Step 4 of 6 · Plan (optional)", H1 **"We
 read your code — now tell us your goals"**, lead "A short, optional conversation … Skip it and Motir
@@ -254,7 +276,7 @@ repositories** and points work at the right repo (reminders → `acme/api`, repo
 carries the **skip outs**: **"Finish — plan later"** + **"Skip discovery"** alongside "Next: generate".
 **Owned by 7.2.1** — cited, not re-designed.
 
-### Panel 5 — Code-aware generate + review (steps 5–6, **OPTIONAL**) — **composes 7.3.1 (`design/ai-planning/`)**
+### Panel 6 — Code-aware generate + review (steps 5–6, **OPTIONAL**) — **composes 7.3.1 (`design/ai-planning/`)**
 
 The 7.3/7.4 generate → review → approve surface embedded, **migrate-specific** and **optional**. Eyebrow
 "Steps 5–6 of 6 · Plan (optional)", H1 **"A plan grounded in your code"**. A **success-tinted** callout:
@@ -266,7 +288,7 @@ repo tag** (`acme/api` / `acme/web`) so cross-repo work is legible — over the 
 — plan later"** (a plan left unconfirmed is just a draft). **Owned by 7.3.1 / 7.4** — cited, not
 re-designed.
 
-### Panel 6 — finished-early / error / resume states
+### Panel 7 — finished-early / error / resume states
 
 Four states in a `.states-grid`: the ★ **finish-at-set-up exit** — a mint `EmptyState` **"Your codebase
 is in Motir"** ("3 repositories connected, indexed and conventions reviewed. You didn't have to plan
@@ -289,6 +311,7 @@ contract.
 | **Index-progress step**              | **MOTIR-930 (this design)** — the NEW step it owns                                     | designs   |
 | Connect GitHub (step 1)              | **7.7.1** — `design/github/` (build MOTIR-895)                                         | composes  |
 | Audit + convention (step 3, ★ gate)  | **7.14.1** — `design/coding-convention/` (build MOTIR-926)                             | composes  |
+| **Import work items (optional)**     | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)       | composes  |
 | Light discovery (step 4)             | **7.2.1** — `design/ai-chat/` (build MOTIR-804)                                        | composes  |
 | Code-aware generate + review (5–6)   | **7.3.1** — `design/ai-planning/` + `design/ai-chat/planning-workspace` (7.4)          | composes  |
 | The `/onboarding/import` host route  | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                     | replaces  |
@@ -380,7 +403,12 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
 - [x] **The decision block** (`.decision`) + the **"Plan with AI" launcher** (`.plan-ai`) — a `Card`-grammar
       accent-bordered panel with `Button`s, and the always-present top-bar launcher (composes
       `design/ai-chat` / MOTIR-1299). No new primitive.
-- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Audit/conventions = 7.14.1's grade tile + provenance pills, composed **once per repo**; Discovery = 7.2.1's
+- [x] **The optional import step composes `design/import`, embedded not redrawn** (#82) — the `.substeps`
+      sub-rail (Connect → Map → Preview → Import) + the `.src-grid` source picker (5 `.src` tiles on the
+      exact `--el-tint-*` slots `design/import` assigns) are a compact EMBED that cites the importer's own
+      asset; its Connect/Map/Preview/Import internals are NOT re-specified here. New arrangement of `Card` +
+      tile grammar; no new primitive.
+- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Audit/conventions = 7.14.1's grade tile + provenance pills, composed **once per repo**; Import = `design/import`'s wizard (embedded); Discovery = 7.2.1's
       chat bubbles + composer; Generate = 7.3.1's canvas node + confirm-to-persist. Reproduced from their
       shipped assets, **not re-designed**.
 - [x] Icons are **lucide** (`Sparkles`, `History`, `check`, `github`, `badge-check`, `layout-grid`,

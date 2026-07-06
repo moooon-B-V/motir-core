@@ -58,14 +58,15 @@
       (connect -> configure -> review + Confirm).
 
       Panels (review EACH — mistake #31):
-        0  wizard chrome + the grouped rail (Set up 1-3 required · Plan 4-6 optional),
-           drawn at the decision moment (set-up done -> plan now or later).
+        0  wizard chrome + the grouped rail (Set up required · Import & plan optional),
+           drawn at the decision moment (set-up done -> import / plan now or later).
         1  Connect (multi-select the project's repos) — composes 7.7.1.
         2  Index (per-repo progress + aggregate gate) — the NEW step.
-        3  Audit + PER-REPO conventions -> the plan-now-or-later DECISION — composes 7.14.1.
-        4  Discovery (OPTIONAL, skippable) — composes 7.2.1.
-        5  Generate + review (OPTIONAL, skippable) — composes 7.3.1.
-        6  finished-early / error / resume states.
+        3  Audit + PER-REPO conventions -> the import/plan-or-later DECISION — composes 7.14.1.
+        4  Import work items (OPTIONAL) — composes design/import (937), embedded not redrawn.
+        5  Discovery (OPTIONAL, skippable) — composes 7.2.1.
+        6  Generate + review (OPTIONAL, skippable) — composes 7.3.1.
+        7  finished-early / error / resume states.
       Toggle dark mode (top-right) to confirm token parity.
     -->
     <style>
@@ -1204,6 +1205,89 @@
         color: var(--el-text-faint);
         margin-bottom: 9px;
       }
+
+      /* ---- Import step (composes design/import — the Connect·Map·Preview·Import wizard) ---- */
+      .substeps {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px 0;
+        margin: 2px 0 6px;
+      }
+      .substep {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .substep .n {
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        display: grid;
+        place-items: center;
+        font: 600 10px var(--font-mono);
+      }
+      .substep.current .n {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .substep.current {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .substep .sep {
+        width: 20px;
+        height: 1px;
+        background: var(--el-border);
+        margin: 0 8px;
+      }
+      .src-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        margin-top: 6px;
+      }
+      @media (max-width: 640px) {
+        .src-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      .src {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 10px 8px;
+        text-align: center;
+      }
+      .src.sel {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+      }
+      .src .ic {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        margin: 0 auto 6px;
+        color: var(--el-text-strong);
+      }
+      .src .ic svg {
+        width: 16px;
+        height: 16px;
+      }
+      .src .nm {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .src .mt {
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
     </style>
   </head>
   <body>
@@ -1216,10 +1300,13 @@
           flow is multi-repo. The required core is <strong>Set up your codebase</strong> (Connect ·
           Index · Audit &amp; conventions);
           <strong>coding conventions are per repository</strong> (a legacy API and a modern web app
-          rarely share one standard). <strong>Planning is optional</strong> — after set-up the user
-          chooses to plan now or finish and plan later; <strong>Plan with AI</strong>
-          is always in the top bar. This card designs the SHELL + index step and COMPOSES the
-          already-designed surfaces (7.7.1 / 7.14.1 / 7.2.1 / 7.3.1). Toggle the theme →
+          rarely share one standard). Then an <strong>optional</strong> tier:
+          <strong>import your existing backlog</strong> (Jira / Linear / GitHub / Plane / CSV —
+          composes <code>design/import</code>) and/or a code-aware plan that reconciles with it.
+          Nothing is forced — after set-up the user imports / plans now or finishes and does it
+          later; <strong>Plan with AI</strong> is always in the top bar. This card designs the SHELL
+          + index step and COMPOSES the already-designed surfaces (7.7.1 / 7.14.1 / 7.2.1 / 7.3.1 +
+          design/import). Toggle the theme →
         </p>
       </div>
       <button
@@ -1344,7 +1431,26 @@
               >
             </div>
 
-            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3v13" />
+                  <path d="m7 12 5 4 5-4" />
+                  <path d="M5 21h14" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">Optional · Jira / Linear / CSV</span></span
+              >
+            </div>
             <div class="step optional">
               <span class="marker">4</span>
               <span
@@ -1375,11 +1481,12 @@
             </div>
 
             <div class="decision">
-              <h3>Plan your project now?</h3>
+              <h3>Bring in your work or plan now?</h3>
               <p>
-                Motir can propose a plan grounded in your code and the audit — reminders that reuse
-                your API's notification service, work that honours each repo's convention. Or finish
-                here; nothing is lost.
+                Optionally <strong>import your existing backlog</strong> (Jira / Linear / GitHub /
+                Plane / CSV), then let Motir propose a code-aware plan that
+                <strong>reconciles</strong> with it — no duplicates, grounded in your code and the
+                audit. Each step is skippable. Or finish here; nothing is lost.
               </p>
               <div class="d-actions">
                 <button class="btn primary" type="button">
@@ -1393,9 +1500,9 @@
                   >
                     <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
                   </svg>
-                  Plan my project now
+                  Continue
                 </button>
-                <button class="btn secondary" type="button">Finish — I'll plan later</button>
+                <button class="btn secondary" type="button">Finish — I'll do it later</button>
               </div>
               <p class="d-note">
                 <span class="ai-pill" aria-hidden="true"
@@ -1516,7 +1623,26 @@
               <span class="marker">3</span
               ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
-            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3v13" />
+                  <path d="m7 12 5 4 5-4" />
+                  <path d="M5 21h14" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">Optional</span></span
+              >
+            </div>
             <div class="step optional">
               <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
             </div>
@@ -1824,7 +1950,26 @@
               <span class="marker">3</span
               ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
-            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3v13" />
+                  <path d="m7 12 5 4 5-4" />
+                  <path d="M5 21h14" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">Optional</span></span
+              >
+            </div>
             <div class="step optional">
               <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
             </div>
@@ -2119,7 +2264,26 @@
                 ><span class="s-meta">One convention per repo</span></span
               >
             </div>
-            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step optional">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3v13" />
+                  <path d="m7 12 5 4 5-4" />
+                  <path d="M5 21h14" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">Optional</span></span
+              >
+            </div>
             <div class="step optional">
               <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
             </div>
@@ -2237,10 +2401,12 @@
             </div>
 
             <div class="decision">
-              <h3>You're set up — plan your project now?</h3>
+              <h3>You're set up — bring in your work or plan now?</h3>
               <p>
-                Connect, index and per-repo conventions are done. Plan a code-aware project now, or
-                finish and come back whenever.
+                Connect, index and per-repo conventions are done. Optionally
+                <strong>import your existing backlog</strong> (Jira / Linear / GitHub / Plane / CSV)
+                and/or generate a code-aware plan that <strong>reconciles</strong> with it (no
+                duplicates). Each step is skippable — or finish and come back whenever.
               </p>
               <div class="d-actions">
                 <button class="btn primary" type="button">
@@ -2254,9 +2420,9 @@
                   >
                     <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
                   </svg>
-                  Plan my project now
+                  Continue
                 </button>
-                <button class="btn secondary" type="button">Finish — I'll plan later</button>
+                <button class="btn secondary" type="button">Finish — I'll do it later</button>
               </div>
               <p class="d-note">
                 <span class="ai-pill" aria-hidden="true"
@@ -2289,10 +2455,303 @@
     </div>
 
     <!-- ==========================================================
-         PANEL 4 — Discovery (OPTIONAL, skippable) · 7.2.1
+         PANEL 4 — Import work items (OPTIONAL) — composes design/import (937)
     =========================================================== -->
     <div class="panel-label">
-      Panel 4 · Step 4 — Light discovery
+      Panel 4 · Optional — Import work items
+      <b>(composes design/import · 7.16.1 / MOTIR-937 — embedded, not redrawn)</b>
+    </div>
+    <div class="panel">
+      <div class="wz">
+        <div class="wz-bar">
+          <span class="brand"
+            ><span class="logo" aria-hidden="true"
+              ><svg
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg
+            ></span>
+            Motir</span
+          >
+          <span class="flow-name">Import an existing project</span>
+          <span class="right">
+            <button class="plan-ai" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+              </svg>
+              Plan with AI
+            </button>
+            <button class="save-exit" type="button">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 3v5h5" />
+                <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+                <path d="M12 7v5l4 2" />
+              </svg>
+              Save &amp; exit
+            </button>
+            <span class="avatar">YZ</span>
+          </span>
+        </div>
+        <div class="wz-body">
+          <nav class="rail" aria-label="Migration steps">
+            <div class="rail-title">Your migration</div>
+            <div class="rail-sub">
+              Optional — bring in your backlog, or skip and just plan / finish.
+            </div>
+            <div class="rail-group">Set up your codebase</div>
+            <div class="step done">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg></span
+              ><span><span class="s-name">Connect</span></span>
+            </div>
+            <div class="step done">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg></span
+              ><span><span class="s-name">Index</span></span>
+            </div>
+            <div class="step done">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg></span
+              ><span><span class="s-name">Audit &amp; conventions</span></span>
+            </div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step current" aria-current="step">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 3v13" />
+                  <path d="m7 12 5 4 5-4" />
+                  <path d="M5 21h14" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">Jira / Linear / CSV …</span></span
+              >
+            </div>
+            <div class="step optional">
+              <span class="marker">4</span><span><span class="s-name">Discovery</span></span>
+            </div>
+            <div class="step optional">
+              <span class="marker">5</span><span><span class="s-name">Generate</span></span>
+            </div>
+            <div class="step optional">
+              <span class="marker">6</span
+              ><span><span class="s-name">Review &amp; approve</span></span>
+            </div>
+          </nav>
+          <div class="content">
+            <div class="step-head">
+              <div class="step-eyebrow">Optional · Import &amp; plan</div>
+              <h2>Bring in your existing backlog</h2>
+              <p>
+                Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Import it into this
+                project — you'll review a dry-run preview before anything is written. Skip this if
+                you have no backlog to bring in. When you then generate a plan, Motir
+                <strong>reconciles</strong> the two so nothing is duplicated.
+              </p>
+              <span class="cite" aria-hidden="true"
+                >Composes design/import · 7.16.1 / MOTIR-937 — the Connect · Map · Preview · Import
+                wizard, embedded here</span
+              >
+            </div>
+
+            <div class="card">
+              <div class="seclabel">Import wizard · Connect → Map → Preview → Import</div>
+              <div class="substeps">
+                <span class="substep current"><span class="n">1</span> Connect</span
+                ><span class="sep"></span> <span class="substep"><span class="n">2</span> Map</span
+                ><span class="sep"></span>
+                <span class="substep"><span class="n">3</span> Preview</span
+                ><span class="sep"></span>
+                <span class="substep"><span class="n">4</span> Import</span>
+              </div>
+              <p class="muted-note" style="margin: 2px 0 12px">
+                The full flow runs here —
+                <strong>nothing is written until you confirm the dry-run preview</strong>. Drawn in
+                full in <code>design/import</code>; embedded, not redrawn.
+              </p>
+              <div style="font-size: 12.5px; font-weight: 600; margin-bottom: 4px">
+                Where are your issues coming from?
+              </div>
+              <div class="src-grid">
+                <div class="src sel">
+                  <span class="ic" style="background: var(--el-tint-sky)" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m12 3 9 9-9 9-9-9z" /></svg
+                  ></span>
+                  <div class="nm">Jira</div>
+                  <div class="mt">Cloud · REST</div>
+                </div>
+                <div class="src">
+                  <span class="ic" style="background: var(--el-tint-lavender)" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 12h16M12 4v16" /></svg
+                  ></span>
+                  <div class="nm">Linear</div>
+                  <div class="mt">API key</div>
+                </div>
+                <div class="src">
+                  <span class="ic" style="background: var(--el-tint-mint)" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path
+                        d="M12 2A10 10 0 0 0 8.84 21.5c.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.68.92.68 1.85V21c0 .27.16.59.67.5A10 10 0 0 0 12 2z"
+                      /></svg
+                  ></span>
+                  <div class="nm">GitHub</div>
+                  <div class="mt">OAuth · repo</div>
+                </div>
+                <div class="src">
+                  <span class="ic" style="background: var(--el-tint-rose)" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m22 2-7 20-4-9-9-4Z" />
+                      <path d="M22 2 11 13" /></svg
+                  ></span>
+                  <div class="nm">Plane</div>
+                  <div class="mt">API key · self-host</div>
+                </div>
+                <div class="src">
+                  <span class="ic" style="background: var(--el-tint-peach)" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                      <path d="M8 13h8M8 17h8" /></svg
+                  ></span>
+                  <div class="nm">CSV</div>
+                  <div class="mt">Upload · no creds</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="callout info-accent">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" /></svg
+              ></span>
+              <span
+                ><strong>Imported items reconcile with your plan.</strong> When you generate a
+                code-aware plan next, Motir de-dupes against the imported backlog — an imported
+                ticket wins, and generation only adds the gaps your code implies.</span
+              >
+            </div>
+
+            <div class="wz-foot">
+              <button class="btn secondary" type="button">Back</button>
+              <button class="btn ghost" type="button">Skip — no backlog to import</button>
+              <span class="spacer"></span>
+              <button class="btn ghost" type="button">Finish — plan later</button>
+              <button class="btn primary" type="button">
+                Next: discovery
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================
+         PANEL 5 — Discovery (OPTIONAL, skippable) · 7.2.1
+    =========================================================== -->
+    <div class="panel-label">
+      Panel 5 · Step 4 — Light discovery
       <b>(OPTIONAL · skippable · composes 7.2.1)</b>
     </div>
     <div class="panel">
@@ -2392,7 +2851,24 @@
                   <path d="M20 6 9 17l-5-5" /></svg></span
               ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
-            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step done">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">imported</span></span
+              >
+            </div>
             <div class="step current" aria-current="step">
               <span class="marker">4</span
               ><span
@@ -2483,7 +2959,7 @@
          PANEL 5 — Code-aware generate + review (OPTIONAL) · 7.3.1
     =========================================================== -->
     <div class="panel-label">
-      Panel 5 · Steps 5–6 — Code-aware generate + review
+      Panel 6 · Steps 5–6 — Code-aware generate + review
       <b>(OPTIONAL · repo-tagged nodes · composes 7.3.1)</b>
     </div>
     <div class="panel">
@@ -2585,7 +3061,24 @@
                   <path d="M20 6 9 17l-5-5" /></svg></span
               ><span><span class="s-name">Audit &amp; conventions</span></span>
             </div>
-            <div class="rail-group">Plan your project <span class="opt">optional</span></div>
+            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="step done">
+              <span class="marker" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+              ></span>
+              <span
+                ><span class="s-name">Import work items</span
+                ><span class="s-meta">imported</span></span
+              >
+            </div>
             <div class="step done">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -2718,7 +3211,7 @@
          PANEL 6 — finished-early / error / resume states
     =========================================================== -->
     <div class="panel-label">
-      Panel 6 · Finish-early &amp; error / resume states
+      Panel 7 · Finish-early &amp; error / resume states
       <b>(link-only exit · per-repo index failure · resume to saved step)</b>
     </div>
     <div class="panel">
