@@ -3,9 +3,10 @@
 **Subtask:** MOTIR-930 · 7.15.1 (`type: design`) · **Story:** MOTIR-815 (Migrate-existing-codebase
 onboarding, Workflow B) · **Epic 7 · AI Planning Layer.**
 
-The guided, gated **wizard** for onboarding an EXISTING codebase into Motir: connect the repo → index
-it → review the code-health audit and **approve a coding convention** → a short discovery pass →
-a **code-aware** plan generate + review. It is the layout source of truth for the wizard UI code
+The **wizard** for onboarding an EXISTING codebase into Motir. **Required core = Connect + Index** (link
+the repos, Motir reads the code + silently derives per-repo conventions + a code-health check, auto-used,
+nothing to approve). Everything after — **optional**: import your existing backlog, a light discovery
+pass, a **code-aware** plan generate + review. It is the layout source of truth for the wizard UI code
 subtask **7.15.5 / MOTIR-934** and the orchestration wiring **7.15.2 / MOTIR-931** (both `blocked_by`
 this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 
@@ -15,12 +16,14 @@ this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 > sub-surface's shipped asset and say so — or it gets built twice) and **#31** (the multi-panel /
 > design-reference rule), this doc **cites** each embedded surface's owner and reproduces its language;
 > it does **not** re-design connect / audit / convention / discovery / generate / import. The genuinely
-> new pixels here are (a) the **wizard chrome + the two-tier grouped rail** (Set up **required** · Import
-> & plan **optional**), (b) the **index-progress step** (§Panel 2), and (c) the **import/plan-or-later
-> decision** that makes import + planning optional (§The spine). Three product truths this revision bakes
-> in (Yue, 2026-07-05): **conventions are PER REPO** (not one per project — §Multi-repo); **import +
-> planning are OPTIONAL** (§The spine); and the **optional import step composes `design/import`** (§Panel
-> 4), embedded not redrawn.
+> new pixels here are (a) the **wizard chrome + the two-tier grouped rail** (Set up = **Connect + Index
+> required** · Import & plan **optional**), (b) the **index-progress step** (§Panel 2), and (c) the
+> **import/plan-or-later decision** that makes everything after set-up optional (§The spine). Product
+> truths this revision bakes in (Yue, 2026-07-05): the **required core is just Connect + Index**;
+> **conventions + code-health are derived SILENTLY, auto-used, with NO approval and NOT surfaced in
+> onboarding** — they live on the Code-health page (§The spine, and the removed-Panel-3 §); conventions
+> are **PER REPO** (§Multi-repo); **import + planning are OPTIONAL**; and the **optional import step
+> composes `design/import`** (§Panel 3), embedded not redrawn.
 
 **Asset files (three, shared basename):** `design-notes.md` (this file) ·
 `onboarding-migrate.mock.html` (source of truth, standalone — re-states the real
@@ -55,7 +58,7 @@ implemented app, it does not invent a host:
   shipped primitives (the same way `design/ai-chat`'s canvas roadmap and `design/coding-convention`'s
   onboarding step-strip are new arrangements). The precedent for a wizard step-strip is
   `design/coding-convention` Panel 5 ("Discovery ✓ → Design system ✓ → **Establish convention**
-  (current) → Review plan") — this rail generalises it to the six migrate steps.
+  (current) → Review plan") — this rail generalises it to the migrate steps (Connect · Index + the optional tier).
 
 ---
 
@@ -78,28 +81,26 @@ read on disk this session, not assumed):
   indexes into the projects it belongs to — is a **future refinement, deliberately not built yet**; the
   wizard's per-project repo selection is exactly where that association gets captured.)
 - **The coding convention is PER REPO — one standard per repository, NOT one per project (Yue,
-  2026-07-05).** A legacy API and a modern web app in the same company rarely share a coding standard,
-  so step 3 reviews + approves a convention **for each repository** (acme/web · acme/api · acme/shared,
-  each its own draft + Approve + grade). Each repo's approved convention is the standard Motir injects
-  when it generates work **for that repo**. ⚠️ **This CORRECTS the 7.14 model.**
-  `design/coding-convention` currently states "exactly ONE `standard` per project" and the 7.14.3 store
-  scopes `CodingConvention` to the project — that must become **per-repo** (scope the convention +
-  audit to a `(project, repo)` pair; the audit already carries a `codeGraphRef`, so per-repo is a
-  natural extension). **This is an upstream design change for the 7.14 story owner** (7.14.1 design +
-  7.14.2 decision + 7.14.3 store: MOTIR-922 / 923 / 924, and the review/approve UI MOTIR-926) — the
-  migrate wizard only **composes** 7.14's convention surface, once per repo, so it flags the model
-  change rather than owning it.
+  2026-07-05).** A legacy API and a modern web app in the same company rarely share a coding standard, so
+  Motir derives a convention **per repository** (acme/web · acme/api · acme/shared, each its own grade).
+  Each repo's convention is the standard Motir injects when it generates work **for that repo**.
+  **⚠️ Two 7.14 corrections (see the removed-Panel-3 §): (i) per-repo, not one per project; (ii) derived +
+  auto-used, NO approval, view/chat on the Code-health page — not an onboarding step.** On the 7.14 side,
+  per-repo means scoping `CodingConvention` + `CodeAudit` to a `(project, repo)` pair (the audit already
+  carries a `codeGraphRef`), and no-gate means dropping the approve + free-edit from the shipped MOTIR-926
+  UI. The migrate wizard only **CONSUMES** the derived conventions (they never surface here), so it flags
+  the model change rather than owning it.
 
 **How each step becomes multi-repo (what the mock now draws):**
 
-| Step                              | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connect** (Panel 1)             | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                                                                                                                                                   |
-| **Index** (Panel 2)               | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols".                                                                                                                                    |
-| **Audit + conventions** (Panel 3) | The audit is **measured across all 3 repositories** (a per-repo grade line — acme/web B · acme/api A− · acme/shared A), and conventions are **PER REPO** — a `.conv-repo` list, each repo its own grade + **View** + **Approve** (acme/web Approved · acme/api & acme/shared proposed) + one expanded **read-only** example. Conventions are **read-only + chat-to-revise** (tell Motir what's wrong, it revises), NOT free-edited. Each approved convention is the standard for work Motir plans in that repo. |
-| **Discovery** (Panel 4)           | "I've read your **3 repositories** — a Next.js web app, a Node API and a shared package…" — the AI's code context is the whole project.                                                                                                                                                                                                                                                                                                                                                                         |
-| **Generate** (Panel 5)            | The plan is grounded in the **whole-project code graph**; each proposed node carries a **repo tag** (`acme/api` / `acme/web`) so it's clear which repo the work lands in, and a cross-repo proposal (reminders reuse the API's notification service) reads naturally.                                                                                                                                                                                                                                           |
-| **States** (Panel 6)              | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("Your import (3 repositories) is paused at step 3").                                                                                                                                                                                                                                                                                           |
+| Step                                                   | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connect** (Panel 1)                                  | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                |
+| **Index** (Panel 2)                                    | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols". |
+| **Conventions + code-health** (NOT an onboarding step) | Derived **PER REPO** from the code + a code-health check, **auto-used, NO approval, NOT surfaced in onboarding** — the Index-complete state just notes "conventions + code-health derived, nothing to approve; on the Code health page". The audit + read-only View + chat-to-revise all live on the **Code-health page (7.14)**, post-onboarding.                           |
+| **Discovery** (Panel 4)                                | "I've read your **3 repositories** — a Next.js web app, a Node API and a shared package…" — the AI's code context is the whole project.                                                                                                                                                                                                                                      |
+| **Generate** (Panel 5)                                 | The plan is grounded in the **whole-project code graph**; each proposed node carries a **repo tag** (`acme/api` / `acme/web`) so it's clear which repo the work lands in, and a cross-repo proposal (reminders reuse the API's notification service) reads naturally.                                                                                                        |
+| **States** (Panel 6)                                   | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("set up — paused before the optional import / plan steps").                                                                                                                                                 |
 
 **Implications for the downstream build cards (flagged, not built here):**
 
@@ -111,18 +112,19 @@ read on disk this session, not assumed):
 - **MOTIR-934 (wizard UI)** renders the per-repo index list + the multi-select connect list; the repo↔
   project association captured at Connect is what a future refinement uses to stop indexing a repo into
   unrelated projects.
-- **Set-up (Connect · Index · Audit & conventions) is the REQUIRED core; Plan (Discovery · Generate ·
-  Review) is OPTIONAL.** The state machine (MOTIR-1499) must let a user **complete onboarding at the end
-  of set-up** and leave planning un-run — onboarding is "done" once the codebase is set up, independent
-  of whether a plan was generated. The wizard UI (MOTIR-934) wires the **decision** after step 3 and the
-  **skip / finish-later** outs on 4–6; the finish-early exit lands the user in the project where the
-  **always-present `PlanWithAILauncher`** (`design/ai-chat` / MOTIR-1299) is the door to plan later — so
-  the migrate wizard does NOT need its own "plan now" gate beyond the decision.
-- **Conventions are PER REPO** — the 7.14 model change (§Multi-repo) is a **prerequisite** for step 3 to
-  approve per-repo: scope `CodingConvention` + `CodeAudit` to `(project, repo)` in 7.14.3 (MOTIR-924),
-  update the 7.14.2 decision (MOTIR-923) + the 7.14.1 design + review/approve UI (MOTIR-926). Until that
-  lands, the migrate wizard's step 3 is `blocked_by` the per-repo convention model. **Surface this as a
-  finding/comment on the 7.14 story** (out of this card's scope to re-plan).
+- **Set-up = Connect + Index (REQUIRED); everything after is OPTIONAL.** The state machine (MOTIR-1499)
+  must let a user **complete onboarding at the end of Index** and leave import/planning un-run — onboarding
+  is "done" once the codebase is linked + read, independent of whether a plan was generated. On
+  Index-complete Motir **derives per-repo conventions + a code-health check silently** (no step, no
+  approval). The wizard UI (MOTIR-934) wires the **decision** after Index and the **skip / finish-later**
+  outs on the optional steps; the finish-early exit lands the user in the project where the
+  **always-present `PlanWithAILauncher`** (`design/ai-chat` / MOTIR-1299) is the door to plan later.
+- **Conventions + code-health: derive + auto-use, NO gate, on the Code-health page — a 7.14 re-scope.**
+  The migrate wizard CONSUMES the derived per-repo conventions; it never surfaces or approves them. The
+  7.14 story owner must: scope `CodingConvention` + `CodeAudit` to `(project, repo)` (7.14.3 / MOTIR-924);
+  **drop the approval gate + free-edit** and move the audit + read-only View + chat-to-revise onto the
+  Code-health page (7.14.1 design + 7.14.2 decision + the shipped MOTIR-926 UI). **Recommend a 7.14
+  re-plan** (out of this card's scope to execute).
 
 ---
 
@@ -151,37 +153,44 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 ## The spine — a two-tier, resumable wizard (the model this draws)
 
 1. **Two tiers, one grouped rail.** The rail is split into **"Set up your codebase"
-   (required)** — `Connect · Index · Audit & conventions` — and **"Import & plan · optional"** —
+   (required)** — **just `Connect · Index`** — and **"Import & plan · optional"** —
    **`Import work items · Discovery · Generate · Review`**. Each step's state: **done** (mint check),
    **current** (accent marker + an `--el-accent-on-surface` ring row), **upcoming** (quiet outline
    marker), **optional** (a **dashed** marker — reachable, not forced). A `.rail-group` header carries the
    tier name; the optional tier's header carries an `optional` chip. The **Import work items** step uses an
-   **icon marker** (a download glyph), not a number, so the numbered steps stay `Discovery 4 · Generate 5 ·
-Review 6` — import is an extra optional step, not a renumber.
-2. **★ Import + planning are OPTIONAL — the import/plan-or-later DECISION (Yue, 2026-07-05).** Linking +
-   reading the code must NOT force a commitment. The required core ends at **Audit & conventions**; after
-   it the user hits a **`.decision`** block — **"Bring in your work or plan now?"** with **"Continue"**
-   (primary, into the optional tier) and **"Finish — I'll do it later"** (secondary). The optional tier:
-   **Import work items** (skippable — "Skip — no backlog to import" + "Finish — plan later"), Discovery
-   ("Skip discovery" + "Finish — plan later"), Generate ("Finish — plan later"). **"Plan with AI" is drawn
-   in the top bar on every panel** (the always-present launcher, `design/ai-chat` — composed, cited), so
-   finishing at set-up loses nothing: the user imports / plans anytime later. The finish-early exit is
-   drawn in Panel 7 ("Your codebase is in Motir · Plan with AI"). This REPLACES the earlier "Generate is
-   LOCKED until convention approved" framing: conventions are approved in the required set-up tier, so by
-   the time (optional) generation runs they're already the standard — no locked-then-forced step; the
-   optional steps are dashed, not padlocked.
-3. **The index gate (Cursor mirror) — aggregate across repos.** `Next` on step 2 is **disabled** (a
-   `.btn.disabled`) until the code graph is built for **every** repo — the audit and any plan need the
-   whole project indexed. Drawn in an **in-flight** state (per-repo `.idx-repo` rows + an aggregate
-   `.idx-meter` at 78% + "2 of 3 repositories done" + Next disabled) and a **complete** state ("3 of 3
-   indexed" pill + Next enabled).
-4. **Resumable — Save & exit / resume.** The brand bar carries a **Save & exit** control (lucide
+   **icon marker** (a download glyph), not a number; the numbered steps are `Connect 1 · Index 2` then the
+   optional `Discovery 3 · Generate 4 · Review 5`.
+2. **★ The required core is just Connect + Index; conventions + code-health are derived SILENTLY, not an
+   onboarding step (Yue, 2026-07-05).** Linking + reading the code must NOT force any commitment or
+   "worry". Once the code is indexed, Motir **derives per-repo coding conventions + a code-health check
+   from the code and uses them automatically** — **nothing to approve, nothing surfaced in onboarding**.
+   (A user shouldn't have to evaluate a Node-layering rule; the conventions are grounded in the _real
+   code_, which is the curation the ETH-Zurich "no blind auto-gen" caveat actually wanted — a non-expert
+   rubber-stamp is not.) The Index-complete state carries a one-line pointer ("conventions + a code-health
+   check derived — nothing to approve; on the _Code health_ page"); the audit report + the read-only
+   **View** + **chat-to-revise** all live on the **Code-health page (7.14), post-onboarding** — reachable
+   by whoever wants them, never a wizard step.
+3. **★ Import + planning are OPTIONAL — the import/plan-or-later DECISION.** After set-up (Connect +
+   Index) the user hits a **`.decision`** — **"Bring in your work or plan now?"** with **"Continue"**
+   (into the optional tier) and **"Finish — I'll do it later"**. The optional tier: **Import work items**
+   (skippable), Discovery, Generate, Review (each with skip / finish-later outs). **"Plan with AI" is in
+   the top bar on every panel** (the always-present launcher, `design/ai-chat` — composed, cited), so
+   finishing at set-up loses nothing. The finish-early exit is drawn in the states panel ("Your codebase
+   is in Motir · Plan with AI"). (This REPLACES the earlier locked-Generate gate AND the per-repo
+   convention approve-step — both are gone.)
+4. **The index gate (Cursor mirror) — aggregate across repos.** `Next` on step 2 is **disabled** (a
+   `.btn.disabled`) until the code graph is built for **every** repo — Motir derives conventions + a
+   code-health check (and any plan) from the whole project. Drawn in an **in-flight** state (per-repo
+   `.idx-repo` rows + an aggregate `.idx-meter` at 78% + "2 of 3 repositories done" + Next disabled) and a
+   **complete** state ("3 of 3 indexed" pill + "conventions + code-health derived, nothing to approve" +
+   Next enabled).
+5. **Resumable — Save & exit / resume.** The brand bar carries a **Save & exit** control (lucide
    `History`, the exit half of the save→resume loop, MOTIR-1488 vocabulary). Every step persists its
    result (MOTIR-1499's `MigrateOnboarding` state machine + MOTIR-931's resumable routes), so a drop or
-   a deliberate exit **returns the user to the exact saved step** — drawn as the **Resume** state in
-   Panel 6 ("Welcome back — pick up where you left off · paused at Audit & convention, step 3 of 6").
-5. **A Back / Next footer** on every step (`--el-border` top hairline; Back secondary, the forward CTA
-   primary — named per step, e.g. "Next: index the code", "Approve & set as standard", "Add 4 items to
+   a deliberate exit **returns the user to the exact saved step** — drawn as the **Resume** state in the
+   states panel ("Welcome back … set up — paused before the optional import / plan steps").
+6. **A Back / Next footer** on every step (`--el-border` top hairline; Back secondary, the forward CTA
+   primary — named per step, e.g. "Next: index the code", "You're set up", "Add 4 items to
    your backlog").
 
 ---
@@ -192,14 +201,15 @@ Review 6` — import is an extra optional step, not a renumber.
 
 The whole frame: **brand bar** (Motir wordmark · "Import an existing project" flow label · **"Plan with
 AI"** launcher · **Save & exit** · avatar) over the `[260px rail | content]` grid. The rail is
-**grouped into two tiers** with `.rail-group` headers: **"Set up your codebase"** (`Connect ✓ · Index ✓ ·
-Audit & conventions ●`) and **"Plan your project"** + an `optional` chip (`Discovery · Generate ·
-Review`, each a **dashed** `.step.optional` marker — reachable, not padlocked). Drawn at the **decision
-moment**: eyebrow **"Step 3 of 3 · Set up · the decision point"**, H1 **"Your codebase is set up — plan
-now, or finish and plan later"**, then the **`.decision`** block — **"Plan your project now?"** with
-**"Plan my project now"** (primary) + **"Finish — I'll plan later"** (secondary) and a note that **Plan
-with AI is always in the top bar**. Footer: "Required set-up is complete · steps 4–6 are optional". This
-panel answers "what is this / where am I / what's required vs optional / how do I plan later".
+**grouped into two tiers** with `.rail-group` headers: **"Set up your codebase"** (`Connect ✓ · Index ✓`
+— **just those two**) and **"Import & plan"** + an `optional` chip (`Import work items · Discovery ·
+Generate · Review`, each a **dashed** `.step.optional` marker — reachable, not padlocked). Drawn at the
+**decision moment**: eyebrow **"Set up · the decision point"**, H1 **"Your codebase is in Motir — bring in
+your work, plan, or finish"**, a lead that Motir **silently set up per-repo conventions + a code-health
+check — nothing to approve, on the _Code health_ page**, then the **`.decision`** block — **"Bring in your
+work or plan now?"** with **"Continue"** + **"Finish — I'll do it later"** and the Plan-with-AI note.
+Footer: "Set-up (Connect + Index) is complete · import & plan are optional". This panel answers "what is
+this / where am I / what's required vs optional / how do I plan later".
 
 ### Panel 1 — Connect GitHub (step 1) — **composes 7.7.1 (`design/github/`)**
 
@@ -228,47 +238,34 @@ list** — each repo a row with its own mini progress bar + state `Pill`: **acme
 (neutral, 0%). An info `.callout`: **"Next stays disabled until every repository finishes"** and the
 forward CTA drawn as `.btn.disabled` (the **aggregate** gate). Then a **complete** state (mint "**3 of 3
 indexed**" pill · "Code graph built · 3 repositories · 5,412 files · 31,208 symbols" · Next enabled). The
-index feeds the whole-project code graph the 7.14 audit + the plan read (the `codeGraphRef`).
+index feeds the whole-project code graph that the silent conventions + code-health derivation, and any plan, read (the `codeGraphRef`).
 
-### Panel 3 — Audit + PER-REPO conventions → the plan-now-or-later decision — **composes 7.14.1 (`design/coding-convention/`)**
+### Conventions + code-health are NOT an onboarding step — derived silently (the removed "Panel 3")
 
-The last **required** set-up step. Eyebrow "Step 3 of 3 · Set up", H1 **"Your code health & a coding
-convention per repository"**, lead "Motir drafted a convention **for each repository** — conventions
-differ per repo (a legacy API and a modern web app rarely share a standard)." The **Code health** card
-(grade **B** tile on `--el-success-surface` · "78% of your code already meets its repo's convention" · a
-**per-repo grade line** acme/web B · acme/api A− · acme/shared A, "across 3 repositories"). Then the
-**Coding conventions** card — **PER REPO** (§Multi-repo above): a `.conv-repo` list, each repo a row with
-its own grade tile + name + one-line convention summary (Next.js/React · Node service · TS library) +
-**View** + **Approve** — drawn as **acme/web Approved** (mint) and **acme/api / acme/shared v1 ·
-proposed** (approve each), plus **one expanded, read-only** acme/api convention (Adopted/Proposed rules).
+An earlier draft made "Audit & conventions" a **required** onboarding step (per-repo review + **approve**).
+**Removed (Yue, 2026-07-05): the user shouldn't have to worry about, approve, or even see the coding
+convention during onboarding.** Once the code is indexed, Motir **derives per-repo conventions + a
+code-health check from the code and uses them automatically** — **no approve, no view, no chat in
+onboarding**. The Index-complete state (§Panel 2) carries only a one-line pointer ("conventions + a
+code-health check derived — nothing to approve; on the _Code health_ page"). The audit report + the
+read-only **View** + **chat-to-revise** all live on the **Code-health page (7.14), post-onboarding** —
+discoverable by whoever wants them, never a wizard step. This is grounded in the _real code_, which is the
+curation the ETH-Zurich "no-blind-auto-gen" caveat actually wanted (a non-expert rubber-stamp is not); it
+also matches how chat-first builders (Lovable / Bolt / Replit) treat code style — invisibly.
 
-**★ Conventions are READ-ONLY + chat-to-revise, NOT free-edited (Yue, 2026-07-05).** The user does NOT
-hand-edit a convention (no Textarea free-edit). They **View** it (read-only), and if something is wrong
-they **tell Motir in chat** — Motir revises the convention, then the user reviews + **approves**. This is
-the SAME read-only-doc + react-in-chat + conductor-revises model the onboarding write-ups use
-(`design/ai-chat`: "docs are READ-ONLY, chat is the sole input, no inline editing anywhere"; the
-"never a pencil" rule). Drawn as: the per-repo **View** (not Edit) affordance, the expanded convention
-headed "Viewing … read-only", a **message-glyph `.callout`** ("Something not right? Tell Motir and it
-revises — you don't hand-edit"), and a **`.composer`** ("Tell Motir what to change about acme/api's
-convention…"). The **Approve** human gate stays (the ETH-Zurich curate-don't-auto-gen justification).
+⚠️ **This substantially re-scopes the 7.14 coding-convention story (flagged, not owned here — the migrate
+wizard only CONSUMES the derived conventions).** The 7.14.5 review/approve UI (MOTIR-926, the
+`/code-health` page) **ships today** with a **free-edit Textarea + an Approve gate**
+(`design/coding-convention`). The new model is: **derive + auto-use (NO approval gate); read-only VIEW +
+chat-to-revise, on the Code-health page only.** On the 7.14 side that needs: **(1)** drop the approval
+gate (the convention is used automatically); **(2)** a **decision** — chat-to-revise a convention is a NEW
+conversational capability (the convention-revision seam, like the onboarding conductor scoped to a
+convention); **(3)** a **design amendment** to `design/coding-convention`; **(4)** a **code change** to
+MOTIR-926's shipped UI (remove the approve + Textarea-edit; add read-only View + the convention-chat).
+Also still open from §Multi-repo: conventions are **per repo**, not one per project. **Recommend a 7.14
+re-plan.**
 
-Then the **`.decision`** block ("You're set up — bring in your work or plan now?" · Continue / Finish —
-I'll do it later · Plan-with-AI note); footer note "Approving each convention is optional now — you can
-approve when you plan". **The convention SURFACE is owned by 7.14.1** — this panel composes it once per
-repo.
-
-⚠️ **TWO upstream corrections for the 7.14 story this panel surfaces** (flagged, not owned here — the
-migrate wizard only composes 7.14's surface): **(1)** conventions are **per repo**, not one per project
-(§Multi-repo); **(2)** conventions are **read-only + chat-to-revise**, not free-edited. Correction (2)
-changes a **SHIPPED** surface — the 7.14.5 review/approve UI (MOTIR-926, the `/code-health` page) ships
-today with a **free-edit Textarea** (`design/coding-convention` Panel 3). Bringing it to
-read-only-view + chat-to-revise needs: a **decision** (chat-to-revise a convention is a NEW conversational
-capability — the convention-revision seam, like the onboarding conductor but scoped to a convention), a
-**design amendment** to `design/coding-convention`, and a **code change** to MOTIR-926's shipped UI (remove
-the Textarea edit, add the View + the convention-chat). Recommend a 7.14 re-plan; drawn here to the
-intended model so the migrate wizard's composition is forward-consistent.
-
-### Panel 4 — Import work items (**OPTIONAL**) — **composes `design/import` (7.16.1 / MOTIR-937), embedded not redrawn**
+### Panel 3 — Import work items (**OPTIONAL**) — **composes `design/import` (7.16.1 / MOTIR-937), embedded not redrawn**
 
 The **optional import step** — bring an existing backlog (Jira / Linear / GitHub / Plane / CSV) into the
 project. Eyebrow "Optional · Import & plan", H1 **"Bring in your existing backlog"**, lead frames it as
@@ -288,7 +285,7 @@ imported backlog; an imported ticket wins, generation only adds the gaps your co
 its standalone wizard are [MOTIR-816] / [MOTIR-942]. **The importer's Connect/Map/Preview/Import internals
 are OWNED by `design/import` — cited, not re-specified here.**
 
-### Panel 5 — Light discovery (step 4, **OPTIONAL · skippable**) — **composes 7.2.1 (`design/ai-chat/`)**
+### Panel 4 — Light discovery (optional, **OPTIONAL · skippable**) — **composes 7.2.1 (`design/ai-chat/`)**
 
 A SHORT, **optional** discovery pass, migrate-framed. Eyebrow "Step 4 of 6 · Plan (optional)", H1 **"We
 read your code — now tell us your goals"**, lead "A short, optional conversation … Skip it and Motir
@@ -298,7 +295,7 @@ repositories** and points work at the right repo (reminders → `acme/api`, repo
 carries the **skip outs**: **"Finish — plan later"** + **"Skip discovery"** alongside "Next: generate".
 **Owned by 7.2.1** — cited, not re-designed.
 
-### Panel 6 — Code-aware generate + review (steps 5–6, **OPTIONAL**) — **composes 7.3.1 (`design/ai-planning/`)**
+### Panel 5 — Code-aware generate + review (optional, **OPTIONAL**) — **composes 7.3.1 (`design/ai-planning/`)**
 
 The 7.3/7.4 generate → review → approve surface embedded, **migrate-specific** and **optional**. Eyebrow
 "Steps 5–6 of 6 · Plan (optional)", H1 **"A plan grounded in your code"**. A **success-tinted** callout:
@@ -310,7 +307,7 @@ repo tag** (`acme/api` / `acme/web`) so cross-repo work is legible — over the 
 — plan later"** (a plan left unconfirmed is just a draft). **Owned by 7.3.1 / 7.4** — cited, not
 re-designed.
 
-### Panel 7 — finished-early / error / resume states
+### Panel 6 — finished-early / error / resume states
 
 Four states in a `.states-grid`: the ★ **finish-at-set-up exit** — a mint `EmptyState` **"Your codebase
 is in Motir"** ("3 repositories connected, indexed and conventions reviewed. You didn't have to plan
@@ -318,7 +315,7 @@ anything — start whenever with **Plan with AI**") with a **"Plan with AI"** + 
 concrete payoff of optional planning; **Index failed — one repo, per-repo retry** ("acme/api failed; the
 other 2 stay indexed · Re-run acme/api" — a scoped retry via `.callout.danger`); **Connect failed**
 ("Couldn't reach GitHub · your place is saved · Retry connect"); and **Resume** ("Welcome back … Your
-import (3 repositories) is paused at Audit & conventions (step 3) · Resume at step 3 / Start over"). A
+import (3 repositories) is set up — paused before the optional import / plan · Resume — import or plan / Go to project"). A
 footer note ties resume + per-repo index status + per-repo convention approval to MOTIR-1499's
 `MigrateOnboarding` state machine + MOTIR-931's resumable routes, and states the finish-early-plan-later
 contract.
@@ -327,16 +324,16 @@ contract.
 
 ## Which Story owns each embedded surface (compose + cite, don't duplicate)
 
-| Step / surface                       | Owner (design → build)                                                                 | This card |
-| ------------------------------------ | -------------------------------------------------------------------------------------- | --------- |
-| **Wizard chrome + step rail + gate** | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)** | designs   |
-| **Index-progress step**              | **MOTIR-930 (this design)** — the NEW step it owns                                     | designs   |
-| Connect GitHub (step 1)              | **7.7.1** — `design/github/` (build MOTIR-895)                                         | composes  |
-| Audit + convention (step 3, ★ gate)  | **7.14.1** — `design/coding-convention/` (build MOTIR-926)                             | composes  |
-| **Import work items (optional)**     | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)       | composes  |
-| Light discovery (step 4)             | **7.2.1** — `design/ai-chat/` (build MOTIR-804)                                        | composes  |
-| Code-aware generate + review (5–6)   | **7.3.1** — `design/ai-planning/` + `design/ai-chat/planning-workspace` (7.4)          | composes  |
-| The `/onboarding/import` host route  | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                     | replaces  |
+| Step / surface                                  | Owner (design → build)                                                                                                 | This card |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- |
+| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                 | designs   |
+| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                     | designs   |
+| Connect GitHub (step 1)                         | **7.7.1** — `design/github/` (build MOTIR-895)                                                                         | composes  |
+| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding) | consumes  |
+| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                       | composes  |
+| Light discovery (step 4)                        | **7.2.1** — `design/ai-chat/` (build MOTIR-804)                                                                        | composes  |
+| Code-aware generate + review (5–6)              | **7.3.1** — `design/ai-planning/` + `design/ai-chat/planning-workspace` (7.4)                                          | composes  |
+| The `/onboarding/import` host route             | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                                                     | replaces  |
 
 If a step needs a design-system entry none of the above owns, that is a **NEW `design/` subtask**, not
 a code workaround (the AC). None is introduced here — the rail, the chrome, and the index step compose
