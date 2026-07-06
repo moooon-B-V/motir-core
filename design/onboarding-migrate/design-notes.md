@@ -92,14 +92,14 @@ read on disk this session, not assumed):
 
 **How each step becomes multi-repo (what the mock now draws):**
 
-| Step                              | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                         |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connect** (Panel 1)             | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                |
-| **Index** (Panel 2)               | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols". |
-| **Audit + conventions** (Panel 3) | The audit is **measured across all 3 repositories** (a per-repo grade line — acme/web B · acme/api A− · acme/shared A), and conventions are **PER REPO** — a `.conv-repo` list, each repo its own draft + grade + Edit/Approve (acme/web Approved · acme/api & acme/shared proposed) + one expanded example. Each is the standard for work Motir plans in that repo.         |
-| **Discovery** (Panel 4)           | "I've read your **3 repositories** — a Next.js web app, a Node API and a shared package…" — the AI's code context is the whole project.                                                                                                                                                                                                                                      |
-| **Generate** (Panel 5)            | The plan is grounded in the **whole-project code graph**; each proposed node carries a **repo tag** (`acme/api` / `acme/web`) so it's clear which repo the work lands in, and a cross-repo proposal (reminders reuse the API's notification service) reads naturally.                                                                                                        |
-| **States** (Panel 6)              | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("Your import (3 repositories) is paused at step 3").                                                                                                                                                        |
+| Step                              | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connect** (Panel 1)             | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                                                                                                                                                   |
+| **Index** (Panel 2)               | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols".                                                                                                                                    |
+| **Audit + conventions** (Panel 3) | The audit is **measured across all 3 repositories** (a per-repo grade line — acme/web B · acme/api A− · acme/shared A), and conventions are **PER REPO** — a `.conv-repo` list, each repo its own grade + **View** + **Approve** (acme/web Approved · acme/api & acme/shared proposed) + one expanded **read-only** example. Conventions are **read-only + chat-to-revise** (tell Motir what's wrong, it revises), NOT free-edited. Each approved convention is the standard for work Motir plans in that repo. |
+| **Discovery** (Panel 4)           | "I've read your **3 repositories** — a Next.js web app, a Node API and a shared package…" — the AI's code context is the whole project.                                                                                                                                                                                                                                                                                                                                                                         |
+| **Generate** (Panel 5)            | The plan is grounded in the **whole-project code graph**; each proposed node carries a **repo tag** (`acme/api` / `acme/web`) so it's clear which repo the work lands in, and a cross-repo proposal (reminders reuse the API's notification service) reads naturally.                                                                                                                                                                                                                                           |
+| **States** (Panel 6)              | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("Your import (3 repositories) is paused at step 3").                                                                                                                                                                                                                                                                                           |
 
 **Implications for the downstream build cards (flagged, not built here):**
 
@@ -239,13 +239,34 @@ differ per repo (a legacy API and a modern web app rarely share a standard)." Th
 **per-repo grade line** acme/web B · acme/api A− · acme/shared A, "across 3 repositories"). Then the
 **Coding conventions** card — **PER REPO** (§Multi-repo above): a `.conv-repo` list, each repo a row with
 its own grade tile + name + one-line convention summary (Next.js/React · Node service · TS library) +
-**Edit** + **Approve** — drawn as **acme/web Approved** (mint) and **acme/api / acme/shared v1 ·
-proposed** (approve each), plus **one expanded** acme/api convention (Adopted/Proposed rules) to show the
-detail. Then the **`.decision`** block ("You're set up — plan your project now?" · Plan my project now /
-Finish — I'll plan later · Plan-with-AI note); footer note "Approving each convention is optional now —
-you can approve when you plan". **The convention SURFACE (audit + per-repo review/approve) is owned by
-7.14.1** — this panel composes it once per repo. ⚠️ The **per-repo model** (one standard per repo, not
-per project) is an **upstream correction for the 7.14 story** (§Multi-repo) — flagged, not owned here.
+**View** + **Approve** — drawn as **acme/web Approved** (mint) and **acme/api / acme/shared v1 ·
+proposed** (approve each), plus **one expanded, read-only** acme/api convention (Adopted/Proposed rules).
+
+**★ Conventions are READ-ONLY + chat-to-revise, NOT free-edited (Yue, 2026-07-05).** The user does NOT
+hand-edit a convention (no Textarea free-edit). They **View** it (read-only), and if something is wrong
+they **tell Motir in chat** — Motir revises the convention, then the user reviews + **approves**. This is
+the SAME read-only-doc + react-in-chat + conductor-revises model the onboarding write-ups use
+(`design/ai-chat`: "docs are READ-ONLY, chat is the sole input, no inline editing anywhere"; the
+"never a pencil" rule). Drawn as: the per-repo **View** (not Edit) affordance, the expanded convention
+headed "Viewing … read-only", a **message-glyph `.callout`** ("Something not right? Tell Motir and it
+revises — you don't hand-edit"), and a **`.composer`** ("Tell Motir what to change about acme/api's
+convention…"). The **Approve** human gate stays (the ETH-Zurich curate-don't-auto-gen justification).
+
+Then the **`.decision`** block ("You're set up — bring in your work or plan now?" · Continue / Finish —
+I'll do it later · Plan-with-AI note); footer note "Approving each convention is optional now — you can
+approve when you plan". **The convention SURFACE is owned by 7.14.1** — this panel composes it once per
+repo.
+
+⚠️ **TWO upstream corrections for the 7.14 story this panel surfaces** (flagged, not owned here — the
+migrate wizard only composes 7.14's surface): **(1)** conventions are **per repo**, not one per project
+(§Multi-repo); **(2)** conventions are **read-only + chat-to-revise**, not free-edited. Correction (2)
+changes a **SHIPPED** surface — the 7.14.5 review/approve UI (MOTIR-926, the `/code-health` page) ships
+today with a **free-edit Textarea** (`design/coding-convention` Panel 3). Bringing it to
+read-only-view + chat-to-revise needs: a **decision** (chat-to-revise a convention is a NEW conversational
+capability — the convention-revision seam, like the onboarding conductor but scoped to a convention), a
+**design amendment** to `design/coding-convention`, and a **code change** to MOTIR-926's shipped UI (remove
+the Textarea edit, add the View + the convention-chat). Recommend a 7.14 re-plan; drawn here to the
+intended model so the migrate wizard's composition is forward-consistent.
 
 ### Panel 4 — Import work items (**OPTIONAL**) — **composes `design/import` (7.16.1 / MOTIR-937), embedded not redrawn**
 
@@ -381,7 +402,7 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
 - [x] **Card** (`components/ui/Card.tsx`) — every step's content cards, the connect/repo/index/audit/
       convention cards, the EmptyState roots, the chat card, the confirm bar container.
 - [x] **Button** (`components/ui/Button.tsx`) — primary (Connect / Approve & set as standard / Add N to
-      backlog / Next), secondary (Back / Set from defaults), ghost (Cancel / Save draft / Edit), and the
+      backlog / Next), secondary (Back / Set from defaults), ghost (Cancel / Skip / View), and the
       **disabled** state (the index gate's Next); sizes md + sm.
 - [x] **Pill** (`components/ui/Pill.tsx`) — provenance (Adopted `success` / Proposed `status=planned`),
       sync/selection/progress (`Selected` mint, `61%` sky, `Not selected` neutral), and the `N proposed`
@@ -389,8 +410,10 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
 - [x] **Switch** (`components/ui/Switch.tsx`, `role="switch"`) — the per-repo sync toggle (Panel 1).
 - [x] **EmptyState** (`components/ui/EmptyState.tsx`) — the connect-failed + resume states (Panel 6):
       Card root, centred icon tile + serif title + `--el-text-subtitle` desc + action.
-- [x] **Textarea / Input** grammar — the chat composer field + the convention editor door (`Edit` opens
-      the 7.14.1 `Textarea` edit mode, owned there).
+- [x] **Input / composer** grammar — the discovery chat composer AND the **convention chat-to-revise**
+      composer ("Tell Motir what to change…"). The convention is **read-only** (a **View**, not a Textarea
+      free-edit) — revised via chat, mirroring the onboarding read-only-doc + react-in-chat model (the
+      `design/ai-chat` "no inline editing" rule). Approve is the only write the user performs.
 - [x] **Spinner** (`components/ui/Spinner.tsx`) — the index `.spin` ring + the "Reading your codebase…"
       generating state (annotated, not re-implemented).
 - [x] **The two-tier step rail** — a NEW ARRANGEMENT of `Card`/list-row grammar + tint marker tiles +

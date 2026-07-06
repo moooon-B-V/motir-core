@@ -2333,8 +2333,11 @@
                 <span class="pill neutral">one per repository</span>
               </div>
               <p class="muted-note" style="margin: -4px 0 12px">
-                Conventions are per repository — approve each. Each becomes the standard Motir
-                injects into prompts when it generates work for THAT repo.
+                One convention per repository. Motir maintains them — they're
+                <strong>read-only</strong>, you never hand-edit. <strong>View</strong> any repo's
+                convention; if something's off, <strong>tell Motir in chat</strong> and it revises —
+                then <strong>approve</strong>. Each approved convention is the standard Motir
+                injects when it generates work for THAT repo.
               </p>
               <div class="conv-repo">
                 <span class="cr-grade">B</span>
@@ -2355,7 +2358,7 @@
                       <path d="M20 6 9 17l-5-5" />
                     </svg>
                     Approved</span
-                  ><button class="btn ghost sm" type="button">Edit</button></span
+                  ><button class="btn ghost sm" type="button">View</button></span
                 >
               </div>
               <div class="conv-repo">
@@ -2368,7 +2371,7 @@
                 >
                 <span class="cr-actions"
                   ><span class="pill lavender">v1 · proposed</span
-                  ><button class="btn ghost sm" type="button">Edit</button
+                  ><button class="btn ghost sm" type="button">View</button
                   ><button class="btn primary sm" type="button">Approve</button></span
                 >
               </div>
@@ -2382,13 +2385,13 @@
                 >
                 <span class="cr-actions"
                   ><span class="pill lavender">v1 · proposed</span
-                  ><button class="btn ghost sm" type="button">Edit</button
+                  ><button class="btn ghost sm" type="button">View</button
                   ><button class="btn primary sm" type="button">Approve</button></span
                 >
               </div>
 
               <div class="doc-section">
-                <h5>acme/api · convention (v1 · proposed) — expanded</h5>
+                <h5>Viewing acme/api · convention v1 · proposed — read-only</h5>
                 <div class="rule">
                   <span class="pill mint">Adopted</span> Routes call one service method; data access
                   lives in repositories (your code already does this).
@@ -2397,6 +2400,44 @@
                   <span class="pill lavender">Proposed</span> Every new service branch ships a test
                   against a real Postgres — a clean-code default this repo is inconsistent on.
                 </div>
+              </div>
+
+              <div class="callout" style="margin-top: 12px">
+                <span class="ic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg
+                ></span>
+                <span
+                  ><strong>Something not right?</strong> You don't hand-edit conventions — tell
+                  Motir what to change and it revises this one, then you review + approve. (Same
+                  read-only-doc + chat-to-revise model as the onboarding write-ups.)</span
+                >
+              </div>
+              <div class="composer">
+                <span class="field"
+                  >Tell Motir what to change about acme/api's convention… (e.g. "scripts don't need
+                  tests")</span
+                >
+                <button class="btn primary sm" type="button">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m22 2-7 20-4-9-9-4Z" />
+                    <path d="M22 2 11 13" />
+                  </svg>
+                </button>
               </div>
             </div>
 
