@@ -37,6 +37,16 @@ const INNGEST_CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
 process.env['INNGEST_DEV'] ??= '1';
 process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 
+// CLOUD-ON, like playwright.billing.config.ts: acceptance video branches on the
+// paid-AI-plan gate (MOTIR-1630), which is inert off-cloud — so the E2E must run
+// cloud-on to exercise the toggle-off / no-plan panel states. The motir-ai side
+// is the E2E_TEST_BILLING boundary mock (no live Stripe / motir-ai). Set on the
+// runner too so seed-side reads (setOrgBillingState) match the server.
+const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
+const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-billing-fixture.json');
+process.env['MOTIR_CLOUD'] ??= 'true';
+process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
+
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance-video.spec.ts'],
@@ -80,6 +90,12 @@ export default defineConfig({
         // real store (mirrors the main lane; CI has no real token).
         E2E_TEST_BLOB: '1',
         BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
+        // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
+        MOTIR_CLOUD: 'true',
+        E2E_TEST_BILLING: '1',
+        MOTIR_AI_URL,
+        MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
+        MOTIR_AI_BILLING_FIXTURE_PATH,
       },
     },
     {
