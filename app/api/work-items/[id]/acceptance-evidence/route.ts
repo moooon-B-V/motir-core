@@ -11,7 +11,7 @@ import { AttachmentError } from '@/lib/blob/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { AcceptanceEvidenceChapterDTO } from '@/lib/dto/acceptanceEvidence';
 
-// POST /api/work-items/[key]/acceptance-evidence (Story MOTIR-1627 · Subtask
+// POST /api/work-items/[id]/acceptance-evidence (Story MOTIR-1627 · Subtask
 // MOTIR-1631) — the CI/BYOK publish seam: a green E2E's video is attached to the
 // STORY as PENDING acceptance evidence. UNLIKE the session-gated attachment
 // route, this is authed by an `integration`-scoped API token (the ADR's choice),
@@ -49,7 +49,7 @@ const strField = (raw: FormDataEntryValue | null): string | null =>
 
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ key: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   // Auth: keyless GitHub OIDC first (MOTIR-1650) when the caller opts in via the
   // `X-Motir-Auth: github-oidc` marker; otherwise the `integration` PAT
@@ -77,8 +77,8 @@ export async function POST(
     ctx = { userId: auth.userId, workspaceId: auth.workspaceId };
   }
 
-  const { key } = await params;
-  const identifier = key.trim().toUpperCase();
+  const { id } = await params;
+  const identifier = id.trim().toUpperCase();
 
   let form: FormData;
   try {

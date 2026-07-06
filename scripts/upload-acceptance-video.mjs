@@ -70,11 +70,19 @@ export async function requestGithubOidcToken(audience = DEFAULT_OIDC_AUDIENCE) {
  * POST the artifacts to the publish endpoint; throws on a non-2xx response.
  * Auth is keyless GitHub OIDC when `oidcToken` is given (the `X-Motir-Auth:
  * github-oidc` marker + the OIDC bearer), else the `integration` PAT `token`.
+ *
+ * @param {object} opts
+ * @param {string} opts.baseUrl
+ * @param {string | null} [opts.token] - the `integration` PAT (fallback auth)
+ * @param {string | null} [opts.oidcToken] - a GitHub OIDC token (keyless auth)
+ * @param {string} opts.storyKey
+ * @param {{ video: string, trace: string | null, chapters: string | null }} opts.artifacts
+ * @param {{ commitSha?: string | null, ciRunUrl?: string | null, producedByKey?: string | null }} [opts.provenance]
  */
 export async function uploadAcceptanceVideo({
   baseUrl,
-  token,
-  oidcToken,
+  token = null,
+  oidcToken = null,
   storyKey,
   artifacts,
   provenance = {},

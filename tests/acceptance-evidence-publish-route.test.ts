@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
 import { truncateAuthTables } from './helpers/db';
 
-// POST /api/work-items/[key]/acceptance-evidence (Story MOTIR-1627 · Subtask
+// POST /api/work-items/[id]/acceptance-evidence (Story MOTIR-1627 · Subtask
 // MOTIR-1631) — the token-authed CI publish route, against a REAL Postgres. The
 // blob adapter is mocked (no network); billingService is mocked at the
 // getAiAccessForContext seam so the ineligibility branches are reachable
@@ -26,7 +26,7 @@ vi.mock('@/lib/services/billingService', () => ({
   billingService: { getAiAccessForContext: vi.fn(async () => aiAccess.current) },
 }));
 
-const { POST } = await import('@/app/api/work-items/[key]/acceptance-evidence/route');
+const { POST } = await import('@/app/api/work-items/[id]/acceptance-evidence/route');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 
 function access(partial: Partial<AiAccessDTO>): AiAccessDTO {
@@ -71,7 +71,7 @@ async function integrationToken(fx: WorkItemFixture, scopes: string[] = ['integr
   return token;
 }
 
-const paramsFor = (story: WorkItem) => ({ params: Promise.resolve({ key: story.identifier }) });
+const paramsFor = (story: WorkItem) => ({ params: Promise.resolve({ id: story.identifier }) });
 
 let fx: WorkItemFixture;
 let story: WorkItem;
@@ -137,7 +137,7 @@ describe('POST acceptance-evidence', () => {
         return f;
       })(),
     });
-    const res = await POST(req, { params: Promise.resolve({ key: 'PROD-999' }) });
+    const res = await POST(req, { params: Promise.resolve({ id: 'PROD-999' }) });
     expect(res.status).toBe(404);
   });
 
