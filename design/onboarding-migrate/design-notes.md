@@ -14,12 +14,13 @@ this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 > mistake **#82** (a design that composes an already-designed sub-surface must GROUND in that
 > sub-surface's shipped asset and say so — or it gets built twice) and **#31** (the multi-panel /
 > design-reference rule), this doc **cites** each embedded surface's owner and reproduces its language;
-> it does **not** re-design connect / audit / convention / discovery / generate. The genuinely new
-> pixels here are (a) the **wizard chrome + the two-tier grouped rail** (Set up 1–3 **required** · Plan
-> 4–6 **optional**), (b) the **index-progress step** (§Panel 2), and (c) the **plan-now-or-later
-> decision** that makes planning optional (§The spine). Two product truths this revision bakes in
-> (Yue, 2026-07-05): **conventions are PER REPO** (not one per project — §Multi-repo) and **planning is
-> OPTIONAL** (§The spine).
+> it does **not** re-design connect / audit / convention / discovery / generate / import. The genuinely
+> new pixels here are (a) the **wizard chrome + the two-tier grouped rail** (Set up **required** · Import
+> & plan **optional**), (b) the **index-progress step** (§Panel 2), and (c) the **import/plan-or-later
+> decision** that makes import + planning optional (§The spine). Three product truths this revision bakes
+> in (Yue, 2026-07-05): **conventions are PER REPO** (not one per project — §Multi-repo); **import +
+> planning are OPTIONAL** (§The spine); and the **optional import step composes `design/import`** (§Panel
+> 4), embedded not redrawn.
 
 **Asset files (three, shared basename):** `design-notes.md` (this file) ·
 `onboarding-migrate.mock.html` (source of truth, standalone — re-states the real
