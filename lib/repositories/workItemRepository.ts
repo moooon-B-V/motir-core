@@ -1,6 +1,7 @@
 import {
   Prisma,
   type EstimationStatistic,
+  type Executor,
   type WorkItem,
   type WorkItemKind,
   type WorkItemPriority,
@@ -128,6 +129,11 @@ export interface WorkItemListRow {
 export interface WorkItemTreeRow extends WorkItemListRow {
   parentId: string | null;
   hasChildren: boolean;
+  /** WHO executes the leaf (Story 2.7) — `coding_agent` / `human` / `null`. Carried
+   *  alongside `type` (on `WorkItemListRow`) so the roadmap node can flag a
+   *  human-gated item (`executor === 'human' || type === 'manual'`, the shipped
+   *  `isManualReadyItem` predicate; MOTIR-1642 / 8.8.36). `null` on a container. */
+  executor: Executor | null;
   /** The item's active-sprint membership column (MOTIR-1379 follow-up). `null`
    *  for a never-committed item. The sprint-scoped roadmap service compares it to
    *  the resolved active sprint so a drilled-in node that is NOT a sprint member
@@ -2244,6 +2250,7 @@ export const workItemRepository = {
              w."parentId",
              w."kind"::text       AS "kind",
              w."type"::text       AS "type",
+             w."executor"::text   AS "executor",
              w."key",
              w."identifier",
              w."title",

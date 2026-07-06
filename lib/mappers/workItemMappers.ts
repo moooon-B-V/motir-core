@@ -198,6 +198,7 @@ export function toRoadmapNodeDto(
     parentId: row.parentId,
     kind: row.kind,
     type: row.type,
+    executor: row.executor,
     key: row.key,
     identifier: row.identifier,
     title: row.title,

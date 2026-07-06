@@ -483,6 +483,11 @@ export interface RoadmapNodeDto {
   parentId: string | null;
   kind: WorkItemKindDto;
   type: WorkItemTypeDto | null;
+  /** WHO executes the work (Story 2.7) — `coding_agent` / `human` / `null`.
+   *  Carried alongside `type` so the canvas node can flag a human-gated item
+   *  (`executor === 'human' || type === 'manual'`, the shipped `isManualReadyItem`
+   *  predicate; MOTIR-1642 / 8.8.36). `null` on a container kind or untyped leaf. */
+  executor: ExecutorDto | null;
   key: number;
   identifier: string;
   title: string;

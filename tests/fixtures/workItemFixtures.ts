@@ -1,10 +1,12 @@
 import type {
+  Executor,
   User,
   Workspace,
   WorkItem,
   WorkItemKind,
   WorkItemLink,
   WorkItemLinkKind,
+  WorkItemType,
 } from '@prisma/client';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -86,6 +88,11 @@ export interface CreateTestWorkItemInput {
   kind: WorkItemKind;
   title: string;
   parentId?: string | null;
+  /** Optional leaf work TYPE (Story 2.7) — seed it to exercise type-aware reads
+   *  (e.g. the roadmap manual/human chip, MOTIR-1642). */
+  type?: WorkItemType | null;
+  /** Optional executor — pair with `type` to seed a human-gated leaf. */
+  executor?: Executor | null;
 }
 
 /**
@@ -109,6 +116,8 @@ export async function createTestWorkItem(
         projectId: fx.projectId,
         parentId: input.parentId ?? null,
         kind: input.kind,
+        type: input.type ?? null,
+        executor: input.executor ?? null,
         key,
         identifier: `${fx.projectIdentifier}-${key}`,
         title: input.title,

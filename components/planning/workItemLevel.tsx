@@ -153,6 +153,8 @@ export function buildWorkItemLevel(
             title: item.title,
             kind: item.kind,
             status: item.status,
+            type: item.type ?? null,
+            executor: item.executor ?? null,
           }}
           drillable={item.hasChildren}
           crossBlocked={crossBlocked.has(item.id)}
