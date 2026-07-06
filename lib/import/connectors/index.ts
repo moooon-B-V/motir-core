@@ -39,3 +39,4 @@ export { CsvConnector, type CsvConnectorConfig, type CsvColumnMap } from './csvC
 export { GithubConnector, type GithubConnectorConfig } from './githubConnector';
 export { JiraConnector, type JiraConnectorConfig, adfToText } from './jiraConnector';
 export { LinearConnector, type LinearConnectorConfig } from './linearConnector';
+export { PlaneConnector, type PlaneConnectorConfig } from './planeConnector';
