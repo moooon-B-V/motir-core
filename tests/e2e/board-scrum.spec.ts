@@ -140,11 +140,18 @@ test.describe('board-scrum @smoke', () => {
     // from the SprintSummaryDto aggregates (A 3 + B 2 + C 5 committed; B done).
     // The aria-label pins the exact figures; the visible tiles carry the
     // labelled numbers (text+number, never colour alone — finding #35).
-    await expect(
-      header.locator('[aria-label="Story points: 10 committed, 2 completed, 8 remaining"]'),
-    ).toBeVisible();
+    // Scope the label assertions to the points-summary tile group — the compact
+    // SprintHeaderBurndown mounted beside it ALSO carries "Committed"/"Completed"/
+    // "Remaining" (its data-table column headers), so a header-wide getByText
+    // matches two elements. That only passed under `next dev` because the async
+    // burndown table rendered after this assertion ran; a production build (the
+    // MOTIR-1679 E2E harness) renders it immediately, tripping strict mode.
+    const pointsSummary = header.locator(
+      '[aria-label="Story points: 10 committed, 2 completed, 8 remaining"]',
+    );
+    await expect(pointsSummary).toBeVisible();
     for (const label of ['Committed', 'Completed', 'Remaining']) {
-      await expect(header.getByText(label, { exact: true })).toBeVisible();
+      await expect(pointsSummary.getByText(label, { exact: true })).toBeVisible();
     }
 
     // Per-column point totals (the Jira "sprint health" pill): todo holds
