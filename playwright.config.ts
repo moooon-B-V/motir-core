@@ -159,47 +159,41 @@ export default defineConfig({
   // discovers the app via the serve route and invokes the job on each event.
   webServer: [
     {
-      // The webServer command is the same locally and in CI. Setting
-      // EMAIL_PROVIDER=file + EMAIL_OUTBOX_PATH here ensures both
-      // environments write reset emails to a file the specs can read.
-      // NODE_ENV is left unset (Next dev sets it to 'development') so the
-      // 'file' provider's production-guard doesn't fire.
-      command: `pnpm dev --port ${PORT}`,
+      // MOTIR-1679: run the E2E suite against a PRODUCTION build (`next build`
+      // then `next start`), NOT `next dev`. `next dev` holds a resident on-demand
+      // compiler that stalled and dropped connections under bulk-shard load
+      // (`net::ERR_CONNECTION_RESET` on a random `page.goto` each run); a
+      // production server has everything pre-compiled and is stable under load.
+      // The build runs inside this command so the flow is identical locally and
+      // in CI (prisma generate guards a fresh worktree that never generated the
+      // client). `next start` forces NODE_ENV=production, which would trip the
+      // Secure-cookie / `/api/_test` 404 / 'file'-email guards meant for a REAL
+      // deploy — E2E_PROD_HARNESS=1 (below) re-relaxes ONLY those test seams,
+      // exactly as the sibling E2E_* flags already do (see lib/e2eProdHarness.ts).
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       // Reuse a running dev server locally for fast iteration — but NEVER when a
       // custom origin was requested (a worktree run), since the only server that
       // could be reused on that port is a sibling's, running different code.
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
-      timeout: 120_000,
+      // Generous: this window now covers a full `next build` (minutes) before the
+      // server binds, not just a `next dev` boot.
+      timeout: 600_000,
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
-        // MOTIR-1679: give the `next dev` webServer explicit V8 old-space
-        // headroom. The CI bulk shards (bulk-1..5) were flaking on a RANDOM,
-        // diff-unrelated test each run — `net::ERR_CONNECTION_RESET` /
-        // `page.goto` timeouts / `socket hang up` — because this dev server
-        // (a resident webpack compiler that compiles routes on demand and
-        // accumulates the compiled module graph across a long shard) GC-thrashes
-        // and/or OOMs under a heavy shard's memory pressure and drops the
-        // connection MID-TEST. Whichever spec is navigating when the server dies
-        // fails, so a different test fails each run — the tell that it's the
-        // HARNESS dying, not the code under test. Nothing set NODE_OPTIONS
-        // before, so the server ran on Node's default old-space, which is
-        // demonstrably too small here. 6 GB is well above that default while
-        // staying safely inside the 16 GB `ubuntu-latest` runner budget shared
-        // with Postgres (service container), the Inngest Go binary, the
-        // Playwright runner, and Chromium — so raising this ceiling cannot itself
-        // trigger a system OOM-kill. Set here (not at the ci.yml job level) so it
-        // is scoped precisely to the server that OOMs and also benefits local +
-        // worktree `pnpm test:e2e` runs, matching how every other E2E knob in
-        // this block is wired.
-        //
-        // NOT switched to a production build (`next start`, the lightest option)
-        // because the E2E harness depends on dev-mode: lib/email.ts's 'file'
-        // provider AND the EMAIL_FAULT_PATH injector both HARD-THROW when
-        // NODE_ENV=production (deliberate prod-safety guards), so `next start`
-        // would need those guards weakened — a larger, security-sensitive change
-        // tracked separately if this headroom proves insufficient.
+        // MOTIR-1679: run the suite against a production build; this flag
+        // re-relaxes the NODE_ENV=production test seams (Secure cookies /
+        // /api/_test 404 gate / 'file' email sink) that the production server
+        // would otherwise trip. Only ever set here, never in a real deploy.
+        E2E_PROD_HARNESS: '1',
+        // Give `next build` V8 old-space headroom (it is memory-heavy); harmless
+        // for the lightweight `next start` that follows. 6 GB is safely inside
+        // the 16 GB `ubuntu-latest` budget shared with Postgres, the Inngest Go
+        // binary, the Playwright runner, and Chromium. (An earlier fix bumped
+        // this to stop the `next dev` webServer GC-thrashing/OOMing under load;
+        // moving to a production build removes that failure mode entirely, but
+        // the headroom still helps the build.)
         NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
