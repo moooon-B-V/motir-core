@@ -60,16 +60,17 @@
       (connect -> configure -> review + Confirm).
 
       Panels (review EACH — mistake #31):
-        0  wizard chrome + the grouped rail (Set up = Connect+Index required · Import & plan optional),
-           drawn at the decision moment (set-up done -> import / plan now or later).
-           Conventions + code-health are derived SILENTLY from the code, auto-used, NOT surfaced in
-           onboarding (they live on the Code-health page, 7.14) — nothing to approve.
+        0  THE LANDING — the full-screen universal plan screen (NO left nav) you reach AFTER import:
+           finished-step CARDS (connected · indexed · imported) + the code-aware plan (canvas + chat).
+           Composes the EXISTING PlanningWorkspace (MOTIR-1193/1299); the migrate-NEW bits are the
+           done-cards + the reconcile framing. Conventions + code-health are derived SILENTLY (they
+           live on the Code-health page, 7.14) — nothing to approve.
         1  Connect (multi-select the project's repos) — composes 7.7.1.
         2  Index (per-repo progress + aggregate gate) — the NEW step; on complete, conventions +
-           code-health are derived silently, then the decision.
+           code-health are derived silently.
         3  Import work items (OPTIONAL) — composes design/import (937), embedded not redrawn.
-           (PLANNING — discovery / generate / review — is NOT a wizard panel: after import the
-           flow opens the EXISTING universal plan screen, MOTIR-1193/1299. Not designed here.)
+           After import (or skip) -> LAND on Panel 0 (the full-screen plan screen). Planning is NOT
+           a wizard panel — it is the existing universal plan screen.
         4  finished-early / error / resume states.
       Toggle dark mode (top-right) to confirm token parity.
     -->
@@ -1191,6 +1192,64 @@
         margin-left: auto;
       }
 
+      /* ---- THE LANDING: full-screen universal plan screen (NO left nav) ---- */
+      .plan-screen {
+        padding: 24px 28px 28px;
+      }
+      .done-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .done-card {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+      }
+      .done-card .dc-ic {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        flex: none;
+      }
+      .done-card .dc-ic svg {
+        width: 13px;
+        height: 13px;
+      }
+      .done-card .dc-name {
+        font-size: 12.5px;
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .done-card .dc-meta {
+        display: block;
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .plan-lead {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+      }
+      .plan-lead strong {
+        color: var(--el-text-strong);
+      }
+      .plan-body {
+        display: grid;
+        grid-template-columns: 1fr 322px;
+        gap: 18px;
+        align-items: start;
+      }
+
       /* ---- Panel 6 states ---- */
       .states-grid {
         display: grid;
@@ -1308,15 +1367,16 @@
           <strong>nothing to approve, nothing surfaced in onboarding</strong> (they live on the
           <em>Code health</em> page for whoever wants them, 7.14). Then an
           <strong>optional</strong> tier: <strong>import your existing backlog</strong> (Jira /
-          Linear / GitHub / Plane / CSV — composes <code>design/import</code>), then
-          <strong>plan in the EXISTING universal plan screen</strong> — the
-          <code>PlanWithAILauncher</code> → <code>PlanningWorkspace</code> (MOTIR-1193/1299), which
-          is already implemented, so <strong>planning is NOT designed here</strong>; after the
-          import step the wizard just opens it. Nothing is forced — after set-up the user imports /
-          plans now or finishes and does it later; <strong>Plan with AI</strong> is always in the
-          top bar. This card designs the SHELL + index + import-embed and COMPOSES the already-built
-          surfaces (7.7.1 connect · <code>design/import</code> · the universal plan screen). Toggle
-          the theme →
+          Linear / GitHub / Plane / CSV — composes <code>design/import</code>). After import the
+          user <strong>lands on the full-screen universal plan screen</strong> (NO left nav) — the
+          EXISTING <code>PlanningWorkspace</code> (MOTIR-1193/1299), already built — where the
+          finished set-up steps show as <strong>cards</strong> and Motir proposes a code-aware plan
+          reconciled with the import. <strong>The plan screen is NOT designed here</strong>; this
+          card draws the set-up wizard + the migrate-specific landing (the done-cards + reconcile
+          framing). Nothing is forced — the user can finish and plan later;
+          <strong>Plan with AI</strong> is always in the top bar. This card designs the SET-UP SHELL
+          + index + import-embed + the landing, and COMPOSES the already-built surfaces (7.7.1
+          connect · <code>design/import</code> · the universal plan screen). Toggle the theme →
         </p>
       </div>
       <button
@@ -1331,11 +1391,15 @@
     </div>
 
     <!-- ==========================================================
-         PANEL 0 — wizard chrome + grouped rail (Set up · Plan optional)
+         PANEL 0 — THE LANDING: full-screen universal plan screen (NO left nav).
+         You land here after the (optional) import step. Finished-step CARDS
+         (connected · indexed · imported) + the code-aware plan. This COMPOSES the
+         EXISTING PlanningWorkspace (MOTIR-1193/1299) — the migrate-new bits are the
+         done-cards + the reconcile framing; the canvas/chat is the shipped surface.
     =========================================================== -->
     <div class="panel-label">
-      Panel 0 · Wizard chrome + the grouped rail —
-      <b>Set up (Connect + Index, required) · Import & plan (OPTIONAL)</b>
+      Panel 0 · You LAND here after import — the full-screen universal plan screen (NO left nav)
+      <b>(finished-step cards + the code-aware plan · composes the EXISTING PlanningWorkspace)</b>
     </div>
     <div class="panel">
       <div class="wz">
@@ -1358,22 +1422,8 @@
             </span>
             Motir
           </span>
-          <span class="flow-name">Import an existing project</span>
+          <span class="flow-name">acme — planning your project</span>
           <span class="right">
-            <button class="plan-ai" type="button" title="Always available">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
-                <path d="M18 4v3M19.5 5.5h-3" />
-              </svg>
-              Plan with AI
-            </button>
             <button class="save-exit" type="button">
               <svg
                 viewBox="0 0 24 24"
@@ -1393,14 +1443,10 @@
           </span>
         </div>
 
-        <div class="wz-body">
-          <nav class="rail" aria-label="Migration steps">
-            <div class="rail-title">Your migration</div>
-            <div class="rail-sub">Leave any time — we save your place and bring you back.</div>
-
-            <div class="rail-group">Set up your codebase</div>
-            <div class="step done">
-              <span class="marker" aria-hidden="true"
+        <div class="plan-screen">
+          <div class="done-cards">
+            <div class="done-card">
+              <span class="dc-ic" aria-hidden="true"
                 ><svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -1412,12 +1458,12 @@
                   <path d="M20 6 9 17l-5-5" /></svg
               ></span>
               <span
-                ><span class="s-name">Connect</span
-                ><span class="s-meta">3 repos · connected</span></span
+                ><span class="dc-name">Connected</span
+                ><span class="dc-meta">3 repositories</span></span
               >
             </div>
-            <div class="step done">
-              <span class="marker" aria-hidden="true"
+            <div class="done-card">
+              <span class="dc-ic" aria-hidden="true"
                 ><svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -1429,75 +1475,90 @@
                   <path d="M20 6 9 17l-5-5" /></svg
               ></span>
               <span
-                ><span class="s-name">Index</span
-                ><span class="s-meta">3 repos · code graph ready</span></span
+                ><span class="dc-name">Indexed</span
+                ><span class="dc-meta">5,412 files · 31,208 symbols</span></span
               >
             </div>
-            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
-            <div class="step optional">
-              <span class="marker" aria-hidden="true"
+            <div class="done-card">
+              <span class="dc-ic" aria-hidden="true"
                 ><svg
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="3"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="M12 3v13" />
-                  <path d="m7 12 5 4 5-4" />
-                  <path d="M5 21h14" /></svg
+                  <path d="M20 6 9 17l-5-5" /></svg
               ></span>
               <span
-                ><span class="s-name">Import work items</span
-                ><span class="s-meta">Optional · Jira / Linear / CSV</span></span
+                ><span class="dc-name">Imported</span
+                ><span class="dc-meta">142 work items · Jira</span></span
               >
             </div>
-            <div class="step optional">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" /></svg
-              ></span>
-              <span
-                ><span class="s-name">Plan your project</span
-                ><span class="s-meta">Opens your planning workspace (Plan with AI)</span></span
-              >
-            </div>
-          </nav>
+          </div>
 
-          <div class="content">
-            <div class="step-head">
-              <div class="step-eyebrow">Set up · the decision point</div>
-              <h2>Your codebase is in Motir — bring in your work, plan, or finish</h2>
-              <p>
-                Connect + index are done: Motir has read your code and
-                <strong>silently set up per-repo coding conventions + a code-health check</strong>
-                from it — nothing to approve, all available on the <em>Code health</em> page. What's
-                next is <strong>optional</strong>: import your existing backlog, then plan in your
-                <strong>planning workspace</strong> — or finish and come back whenever.
-                <strong>Plan with AI</strong> is always in the top bar.
-              </p>
+          <p class="plan-lead">
+            <strong>Your codebase is in Motir.</strong> Here's a plan grounded in your code —
+            reconciled with the 142 imported items (no duplicates), each proposed item tagged with
+            the repo it lands in. Chat to adjust it, or add it to your backlog.
+          </p>
+
+          <div class="plan-body">
+            <div>
+              <div class="canvas">
+                <div class="node">
+                  <span class="n-kind"
+                    ><span class="k-dot" style="background: var(--el-type-story)"></span>Story</span
+                  >
+                  <div class="n-title">Notification digests</div>
+                  <div class="n-repo"><span class="pill sky">acme/api</span></div>
+                </div>
+                <div class="node proposed">
+                  <span class="n-kind"
+                    ><span class="k-dot" style="background: var(--el-type-subtask)"></span>Subtask ·
+                    add</span
+                  >
+                  <div class="n-title">Batch reminders in the digest worker</div>
+                  <div class="n-repo"><span class="pill sky">acme/api</span></div>
+                </div>
+                <div class="node proposed">
+                  <span class="n-kind"
+                    ><span class="k-dot" style="background: var(--el-type-subtask)"></span>Subtask ·
+                    add</span
+                  >
+                  <div class="n-title">Digest preferences panel</div>
+                  <div class="n-repo"><span class="pill mint">acme/web</span></div>
+                </div>
+                <div class="node proposed">
+                  <span class="n-kind"
+                    ><span class="k-dot" style="background: var(--el-type-subtask)"></span>Subtask ·
+                    add</span
+                  >
+                  <div class="n-title">Shared email template types</div>
+                  <div class="n-repo"><span class="pill">acme/shared</span></div>
+                </div>
+              </div>
+              <div class="confirm-bar">
+                <span class="cb-txt"><strong>6 proposed</strong> · nothing saved yet</span>
+                <span class="spacer"></span>
+                <button class="btn ghost sm" type="button">Discard</button>
+                <button class="btn primary sm" type="button">Add 6 items to your backlog</button>
+              </div>
             </div>
 
-            <div class="decision">
-              <h3>Bring in your work or plan now?</h3>
-              <p>
-                Optionally <strong>import your existing backlog</strong> (Jira / Linear / GitHub /
-                Plane / CSV), then <strong>Continue</strong> opens your
-                <strong>planning workspace</strong> — the same one Plan-with-AI opens — where Motir
-                proposes a code-aware plan that <strong>reconciles</strong> with the import (no
-                duplicates, grounded in your code). Both are skippable. Or finish here; nothing is
-                lost.
-              </p>
-              <div class="d-actions">
-                <button class="btn primary" type="button">
+            <div class="chat">
+              <div class="bubble ai">
+                I read your <strong>3 repositories</strong> and the <strong>142 items</strong> you
+                imported. Your <code>acme/api</code> digest worker sends one email per event — your
+                backlog doesn't cover batching yet, so I've proposed it. I skipped anything your
+                imported tickets already track.
+              </div>
+              <div class="bubble user">Group the two API subtasks under the digest story.</div>
+              <div class="bubble ai">Done — regrouped. Anything else before you add them?</div>
+              <div class="composer">
+                <span class="field">Tell Motir what to change…</span>
+                <button class="btn primary sm" type="button" aria-label="Send">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -1506,48 +1567,11 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
+                    <path d="M22 2 11 13" />
+                    <path d="M22 2 15 22l-4-9-9-4z" />
                   </svg>
-                  Continue
                 </button>
-                <button class="btn secondary" type="button">Finish — I'll do it later</button>
               </div>
-              <p class="d-note">
-                <span class="ai-pill" aria-hidden="true"
-                  ><svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" />
-                  </svg>
-                  Plan with AI</span
-                >
-                is always in the top bar — start planning your project any time after onboarding.
-              </p>
-            </div>
-
-            <div class="wz-foot">
-              <button class="btn secondary" type="button">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="m12 19-7-7 7-7" />
-                  <path d="M19 12H5" />
-                </svg>
-                Back
-              </button>
-              <span class="foot-note"
-                >Set-up (Connect + Index) is complete · import &amp; plan are optional</span
-              >
             </div>
           </div>
         </div>
@@ -1629,7 +1653,7 @@
             <div class="step upcoming">
               <span class="marker">2</span><span><span class="s-name">Index</span></span>
             </div>
-            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="rail-group">Import your work <span class="opt">optional</span></div>
             <div class="step optional">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -1647,23 +1671,6 @@
               <span
                 ><span class="s-name">Import work items</span
                 ><span class="s-meta">Optional</span></span
-              >
-            </div>
-            <div class="step optional">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" /></svg
-              ></span>
-              <span
-                ><span class="s-name">Plan your project</span
-                ><span class="s-meta">Opens your planning workspace</span></span
               >
             </div>
           </nav>
@@ -1959,7 +1966,7 @@
                 ><span class="s-meta">Reading your code…</span></span
               >
             </div>
-            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="rail-group">Import your work <span class="opt">optional</span></div>
             <div class="step optional">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -1977,23 +1984,6 @@
               <span
                 ><span class="s-name">Import work items</span
                 ><span class="s-meta">Optional</span></span
-              >
-            </div>
-            <div class="step optional">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" /></svg
-              ></span>
-              <span
-                ><span class="s-name">Plan your project</span
-                ><span class="s-meta">Opens your planning workspace</span></span
               >
             </div>
           </nav>
@@ -2122,7 +2112,7 @@
               <button class="btn secondary" type="button">Back</button>
               <span class="spacer"></span>
               <button class="btn disabled" type="button" aria-disabled="true">
-                Next: finish set-up
+                Next: import your work
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -2165,7 +2155,7 @@
                   </div>
                   <span class="spacer"></span>
                   <button class="btn primary sm" type="button">
-                    You're set up
+                    Next: import your work
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -2279,7 +2269,7 @@
                   <path d="M20 6 9 17l-5-5" /></svg></span
               ><span><span class="s-name">Index</span></span>
             </div>
-            <div class="rail-group">Import &amp; plan <span class="opt">optional</span></div>
+            <div class="rail-group">Import your work <span class="opt">optional</span></div>
             <div class="step current" aria-current="step">
               <span class="marker" aria-hidden="true"
                 ><svg
@@ -2297,23 +2287,6 @@
               <span
                 ><span class="s-name">Import work items</span
                 ><span class="s-meta">Jira / Linear / CSV …</span></span
-              >
-            </div>
-            <div class="step optional">
-              <span class="marker" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M9.5 3 11 8l5 1.5-5 1.5L9.5 16 8 11l-5-1.5L8 8z" /></svg
-              ></span>
-              <span
-                ><span class="s-name">Plan your project</span
-                ><span class="s-meta">Opens your planning workspace</span></span
               >
             </div>
           </nav>

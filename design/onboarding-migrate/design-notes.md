@@ -16,11 +16,12 @@ this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 > mistake **#82** (a design that composes an already-designed sub-surface must GROUND in that
 > sub-surface's shipped asset and say so — or it gets built twice) and **#31** (the multi-panel /
 > design-reference rule), this doc **cites** each embedded surface's owner and reproduces its language;
-> it does **not** re-design connect / audit / convention / discovery / generate / import. The genuinely
-> new pixels here are (a) the **wizard chrome + the two-tier grouped rail** (Set up = **Connect + Index
-> required** · Import & plan **optional**), (b) the **index-progress step** (§Panel 2), and (c) the
-> **import/plan-or-later decision** that makes everything after set-up optional (§The spine). Product
-> truths this revision bakes in (Yue, 2026-07-05): the **required core is just Connect + Index**;
+> it does **not** re-design connect / import / the plan screen. The genuinely new pixels here are (a) the
+> **set-up wizard chrome + rail** (Connect · Index required · Import optional), (b) the **index-progress
+> step** (§Panel 2), and (c) **THE LANDING** (§Panel 0) — the **full-screen plan screen (NO left nav)** the
+> user reaches after import, with the finished set-up steps shown as **done-cards** + the reconcile framing
+> (the plan screen itself is the shipped `PlanningWorkspace`, composed). Product truths this revision bakes
+> in (Yue, 2026-07): the **required core is just Connect + Index**;
 > **conventions + code-health are derived SILENTLY, auto-used, with NO approval and NOT surfaced in
 > onboarding** — they live on the Code-health page (§The spine, and the removed-Panel-3 §); conventions
 > are **PER REPO** (§Multi-repo); **import + planning are OPTIONAL**; and the **optional import step
@@ -158,17 +159,17 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 
 ---
 
-## The spine — a two-tier, resumable wizard (the model this draws)
+## The spine — a set-up wizard, then a full-screen plan screen (the model this draws)
 
-1. **Two tiers, one grouped rail.** The rail is split into **"Set up your codebase"
-   (required)** — **just `Connect · Index`** — and **"Import & plan · optional"** —
-   **`Import work items · Plan your project`**. Each step's state: **done** (mint check),
-   **current** (accent marker + an `--el-accent-on-surface` ring row), **upcoming** (quiet outline
-   marker), **optional** (a **dashed** marker — reachable, not forced). A `.rail-group` header carries the
-   tier name; the optional tier's header carries an `optional` chip. Only the required steps are numbered
-   (`Connect 1 · Index 2`); the optional tier uses **icon markers** — a download glyph for **Import work
-   items** and a **sparkle** for **Plan your project**, which is a **handoff** (meta "Opens your planning
-   workspace"), NOT a wizard step (see §Planning-is-the-universal-screen).
+1. **A grouped rail during SET-UP; then a full-screen plan screen with NO left nav.** The set-up wizard's
+   rail is split into **"Set up your codebase" (required)** — **`Connect · Index`** — and **"Import your
+   work · optional"** — **`Import work items`**. Each step's state: **done** (mint check), **current**
+   (accent marker + an `--el-accent-on-surface` ring row), **upcoming** (quiet outline marker), **optional**
+   (a **dashed** marker). A `.rail-group` header carries the tier name; the optional tier's header carries
+   an `optional` chip. The required steps are numbered (`Connect 1 · Index 2`); **Import work items** uses a
+   **download-icon** marker. **★ After the (optional) import step the user LEAVES the rail entirely** — they
+   land on the **full-screen universal plan screen** (§Panel 0), which has **NO left nav**; the finished
+   set-up steps re-appear there as **done-cards** (Yue, 2026-07-07).
 2. **★ The required core is just Connect + Index; conventions + code-health are derived SILENTLY, not an
    onboarding step (Yue, 2026-07-05).** Linking + reading the code must NOT force any commitment or
    "worry". Once the code is indexed, Motir **derives per-repo coding conventions + a code-health check
@@ -179,15 +180,15 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
    check derived — nothing to approve; on the _Code health_ page"); the audit report + the read-only
    **View** + **chat-to-revise** all live on the **Code-health page (7.14), post-onboarding** — reachable
    by whoever wants them, never a wizard step.
-3. **★ Import + planning are OPTIONAL — the import/plan-or-later DECISION.** After set-up (Connect +
-   Index) the user hits a **`.decision`** — **"Bring in your work or plan now?"** with **"Continue"**
-   (into the optional tier) and **"Finish — I'll do it later"**. The optional tier is just **Import work
-   items** (skippable) then **Plan your project** — and "Plan your project" **opens the EXISTING universal
-   plan screen** (not a wizard panel; see §Planning-is-the-universal-screen). **"Plan with AI" is in the
-   top bar on every panel** (the always-present launcher, `design/ai-chat` — composed, cited), so finishing
-   at set-up loses nothing. The finish-early exit is drawn in the states panel ("Your codebase
-   is in Motir · Plan with AI"). (This REPLACES the earlier locked-Generate gate AND the per-repo
-   convention approve-step — both are gone.)
+3. **★ Import is optional; then you LAND on the full-screen plan screen (Yue, 2026-07-07).** After Connect
+   - Index, the **Import work items** step is skippable ("Skip — no backlog to import"). Whether the user
+     imports or skips, the forward CTA (**"Open planning workspace"**) drops them onto the **full-screen
+     universal plan screen** (§Panel 0) — the EXISTING `PlanningWorkspace` (MOTIR-1193/1299), **no left nav**
+     — where the finished steps show as **done-cards** (Connected · Indexed · Imported) and Motir proposes a
+     code-aware plan **reconciled with the import**. Finishing without planning ("Finish — plan later" /
+     Save & exit) drops the user into the project instead; **"Plan with AI"** in the top bar reopens the plan
+     screen any time. (This REPLACES the earlier locked-Generate gate, the convention approve-step, AND the
+     bespoke discovery/generate panels — all gone; planning is the one existing plan screen.)
 4. **The index gate (Cursor mirror) — aggregate across repos.** `Next` on step 2 is **disabled** (a
    `.btn.disabled`) until the code graph is built for **every** repo — Motir derives conventions + a
    code-health check (and any plan) from the whole project. Drawn in an **in-flight** state (per-repo
@@ -207,20 +208,23 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 
 ## Panels (inspect EVERY panel — the multi-panel rule, mistake #31)
 
-### Panel 0 — the wizard chrome + the grouped rail (Set up vs Plan · optional)
+### Panel 0 — THE LANDING: the full-screen universal plan screen (NO left nav) — **composes the EXISTING `PlanningWorkspace` (MOTIR-1193 / 1299)**
 
-The whole frame: **brand bar** (Motir wordmark · "Import an existing project" flow label · **"Plan with
-AI"** launcher · **Save & exit** · avatar) over the `[260px rail | content]` grid. The rail is
-**grouped into two tiers** with `.rail-group` headers: **"Set up your codebase"** (`Connect ✓ · Index ✓`
-— **just those two**) and **"Import & plan"** + an `optional` chip (`Import work items · Plan your
-project`, each a **dashed** `.step.optional` marker — reachable, not padlocked; "Plan your project" is a
-sparkle-marked **handoff** that opens the existing plan screen, not a wizard step). Drawn at the
-**decision moment**: eyebrow **"Set up · the decision point"**, H1 **"Your codebase is in Motir — bring in
-your work, plan, or finish"**, a lead that Motir **silently set up per-repo conventions + a code-health
-check — nothing to approve, on the _Code health_ page**, then the **`.decision`** block — **"Bring in your
-work or plan now?"** with **"Continue"** + **"Finish — I'll do it later"** and the Plan-with-AI note.
-Footer: "Set-up (Connect + Index) is complete · import & plan are optional". This panel answers "what is
-this / where am I / what's required vs optional / how do I plan later".
+**Where the user lands after the (optional) import step.** This is NOT the set-up wizard — it is the
+**existing** universal plan screen, **full-screen with NO left nav**. The migrate-NEW pixels are only the
+**finished-step done-cards** + the **reconcile framing**; the canvas + chat below them are the shipped
+`PlanningWorkspace` (composed, cited — not re-designed). Structure: the **brand bar** (Motir · "acme —
+planning your project" · Save & exit · avatar), then a full-width `.plan-screen` (no rail): a **`.done-cards`
+row** — three `.done-card`s (mint-check tile + name + meta): **Connected · 3 repositories**, **Indexed ·
+5,412 files · 31,208 symbols**, **Imported · 142 work items · Jira** — so the finished set-up steps are
+visible as cards, not a rail. Below, a `.plan-lead` ("**Your codebase is in Motir.** Here's a plan grounded
+in your code — reconciled with the 142 imported items…"), then the `.plan-body` grid **`[canvas | chat]`**:
+the `.canvas` (dot-grid) with a firm Story node + dashed-accent **proposed** `Subtask · add` nodes, **each
+carrying a `.n-repo` repo tag** (`acme/api` / `acme/web` / `acme/shared`) over the **confirm-to-persist**
+bar ("6 proposed · nothing saved yet" · Discard · **"Add 6 items to your backlog"**); and the `.chat`
+(AI/user `.bubble`s + `.composer`) — the AI opens with what it read across the 3 repos + 142 imported items
+and what it **skipped** as already-tracked. This panel answers "you're set up — here's your code-aware
+plan, reconciled with what you imported."
 
 ### Panel 1 — Connect GitHub (step 1) — **composes 7.7.1 (`design/github/`)**
 
@@ -300,27 +304,27 @@ Footer: Back · **"Skip — no backlog to import"** · **"Finish — plan later"
 its standalone wizard are [MOTIR-816] / [MOTIR-942]. **The importer's Connect/Map/Preview/Import internals
 are OWNED by `design/import` — cited, not re-specified here.**
 
-### Planning is the EXISTING universal plan screen — NOT a wizard panel (Yue, 2026-07-07)
+### Planning is the EXISTING full-screen plan screen — you LAND on it, no left nav (Yue, 2026-07-07)
 
-The migrate wizard designs **no discovery / generate / review panels**. Planning is the **universal plan
+The migrate flow designs **no discovery / generate / review panels**. Planning is the **universal plan
 screen that is already implemented** — the `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 /
-MOTIR-1299, `design/ai-chat/planning-workspace`), the ONE surface every AI-planning flow (generation
-review, re-plan, contextual planning) already uses. So this card does **not** draw or re-draw it
-(compose-don't-redraw, #82). ⚠️ The earlier draft drew a bespoke "chat"/generate panel here — **wrong:
-that is NOT the universal plan screen, and the screen is already built, so there is nothing to design.**
+MOTIR-1299, `design/ai-chat/planning-workspace`), the ONE surface every AI-planning flow already uses. It
+is **full-screen with NO left nav**. So this card does **not** re-draw the plan screen (compose-don't-redraw,
+#82); it draws **the LANDING on it** (§Panel 0) — which is where the migrate-NEW work lives: the
+**finished-step done-cards** (Connected · Indexed · Imported, so progress shows as cards, not a rail) + the
+**reconcile framing** (the plan de-dupes against the imported backlog). ⚠️ Two earlier drafts were wrong
+here — (a) a rail-handoff "Plan your project" step, and (b) a bespoke "chat"/generate panel; **neither is
+the universal plan screen. You LAND on the real full-screen screen (no left nav), with the finished steps
+as cards.**
 
-**How it's reached.** After the (optional) **Import work items** step, the wizard's forward CTA is **"Open
-planning workspace"** — it opens that existing screen (where Motir proposes a code-aware plan that
-reconciles with the import: no duplicates, grounded in the whole-project code graph, each proposed item
-tagged with the repo it lands in, honouring that repo's derived convention). It is ALSO reachable any time
-from the always-present **Plan with AI** in the top bar. In the rail, the optional tier is
-**`Import work items · Plan your project`**, where "Plan your project" is a **handoff** (a sparkle marker,
-meta "Opens your planning workspace") — not a numbered wizard step.
+**How it's reached.** After the (optional) **Import work items** step (import OR skip), the forward CTA
+**"Open planning workspace"** drops the user onto Panel 0 — the full-screen plan screen. It is also
+reachable any time from **Plan with AI** in the top bar. There is **no "Plan your project" rail step** — the
+set-up rail ends at Import; the plan screen is a separate full-screen surface you transition to.
 
-**Nothing to design/build here for planning** beyond that handoff: the import-step CTA + the rail entry
-open the shipped `PlanningWorkspace`. The wizard UI subtask (MOTIR-934) wires that open; it does not build
-a planning surface. (The unused `discovery` / `generate` CSS blocks in the mock are dead and may be pruned
-by the build.)
+**Nothing to design/build here for the plan screen itself** — the wizard UI subtask (MOTIR-934) transitions
+the user onto the shipped `PlanningWorkspace` after import and renders the migrate-specific done-cards on
+it; it does not build a planning surface.
 
 ### Panel 4 — finished-early / error / resume states
 
@@ -427,23 +431,25 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
       `design/ai-chat` "no inline editing" rule). Approve is the only write the user performs.
 - [x] **Spinner** (`components/ui/Spinner.tsx`) — the index `.spin` ring + the "Reading your codebase…"
       generating state (annotated, not re-implemented).
-- [x] **The two-tier step rail** — a NEW ARRANGEMENT of `Card`/list-row grammar + tint marker tiles +
-      `.rail-group` tier headers + lucide `check`, generalising the `design/coding-convention` Panel 5
-      wizard step-strip. Done/current/upcoming/**optional** states pair a glyph or a dashed marker + a
-      label + a tint (never colour-alone — finding #35).
+- [x] **The set-up step rail** (Connect · Index required · Import optional) — a NEW ARRANGEMENT of
+      `Card`/list-row grammar + tint marker tiles + `.rail-group` tier headers + lucide `check`,
+      generalising the `design/coding-convention` Panel 5 wizard step-strip. Done/current/upcoming/**optional**
+      states pair a glyph or a dashed marker + a label + a tint (never colour-alone — finding #35). The rail
+      exists ONLY during set-up; the landing (§Panel 0) has no rail.
 - [x] **The per-repo index list** (`.idx-repo`) + **the per-repo convention list** (`.conv-repo`) — NEW
       ARRANGEMENTS of list-row grammar + a progress bar / grade tile + shipped `Pill` tones, so a
       **multi-repo** project indexes with per-repo status (aggregate gate) and reviews **one convention
       per repo**. No new primitive.
-- [x] **The decision block** (`.decision`) + the **"Plan with AI" launcher** (`.plan-ai`) — a `Card`-grammar
-      accent-bordered panel with `Button`s, and the always-present top-bar launcher (composes
+- [x] **The landing done-cards** (`.done-cards` / `.done-card`) — the finished set-up steps (Connected ·
+      Indexed · Imported) shown as `Card`-grammar cards with a mint-check tile, on the full-screen plan
+      screen (§Panel 0); + the always-present top-bar **"Plan with AI"** launcher (`.plan-ai`, composes
       `design/ai-chat` / MOTIR-1299). No new primitive.
 - [x] **The optional import step composes `design/import`, embedded not redrawn** (#82) — the `.substeps`
       sub-rail (Connect → Map → Preview → Import) + the `.src-grid` source picker (5 `.src` tiles on the
       exact `--el-tint-*` slots `design/import` assigns) are a compact EMBED that cites the importer's own
       asset; its Connect/Map/Preview/Import internals are NOT re-specified here. New arrangement of `Card` +
       tile grammar; no new primitive.
-- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Import = `design/import`'s wizard (embedded); Planning = NOT embedded — the "Plan your project" rail entry + the import-step CTA **open** the existing `PlanningWorkspace` (MOTIR-1193/1299), which is not reproduced here. Reproduced from their
+- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Import = `design/import`'s wizard (embedded); Planning = the LANDING (§Panel 0) — after import the user transitions onto the existing full-screen `PlanningWorkspace` (MOTIR-1193/1299, NO left nav), where this card adds the migrate-specific **done-cards**; the canvas/chat is the shipped surface, not re-designed. Reproduced from their
       shipped assets, **not re-designed**.
 - [x] Icons are **lucide** (`Sparkles`, `History`, `check`, `github`, `badge-check`, `layout-grid`,
       `database`, `info`, `send`, `circle-check`, `triangle-alert`, `refresh-cw`, `arrow-left`,
