@@ -1,3 +1,4 @@
+import { request as apiRequest } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, db } from './_helpers/db-reset';
 import {
@@ -66,6 +67,41 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(persisted.status).toBe('done');
   });
+});
+
+// MOTIR-1665 / MOTIR-1670 — the story's OWN acceptance: the video is served
+// through the AUTHENTICATED content route (access-controlled), not a
+// world-readable blob URL. Seeing it is the acceptance; seeing it because it's
+// public is a FAILURE.
+test('the acceptance video is served through the authenticated content route — not world-readable', async ({
+  page,
+  baseURL,
+}) => {
+  const seed = await seedBillingOwner(page, 'access@example.com');
+  setOrgBillingState(seed.organizationId, paidOrgState());
+  await setOrgAcceptanceVideo(seed.organizationId, true);
+  const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
+  const story = await seedInReviewStory(ctx, seed.projectId, 'Access controlled');
+  await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
+
+  await page.goto(`/items/${story.identifier}`);
+
+  // The player's <video> src is the APP content path — never a raw blob URL.
+  const video = page.locator('video');
+  await expect(video).toBeVisible({ timeout: 20_000 });
+  const src = await video.getAttribute('src');
+  expect(src).toMatch(/^\/api\/attachments\/[^/]+\/content$/);
+
+  // The authorized reviewer's own session resolves that route (302 → signed URL,
+  // or 200) — arm on the route response, don't follow the redirect to the blob.
+  const authed = await page.request.get(src!, { maxRedirects: 0 });
+  expect([200, 302]).toContain(authed.status());
+
+  // A logged-OUT client is REFUSED — the private blob is not world-readable.
+  const anon = await apiRequest.newContext({ baseURL: baseURL ?? undefined });
+  const anonRes = await anon.get(src!, { maxRedirects: 0 });
+  expect([401, 403]).toContain(anonRes.status());
+  await anon.dispose();
 });
 
 test('paid + on → Request changes sends the story back to In Progress', async ({ page }) => {
