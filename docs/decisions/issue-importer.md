@@ -1,9 +1,9 @@
 # ADR: The issue importer — sources, field mapping, idempotent re-run, and dry-run
 
-- **Status:** Accepted (2026-07-05) — drafted by the planner from the decision-authority ladder (mirror products → shipped code → card) and the verified mirrors below; ratified on PR merge.
-- **Story / Subtask:** 7.16 · Issue importer (MOTIR-816) · Subtask 7.16.2 (MOTIR-938)
+- **Status:** Accepted (2026-07-05) — drafted by the planner from the decision-authority ladder (mirror products → shipped code → card) and the verified mirrors below; ratified on PR merge. **Amended (2026-07-06, MOTIR-1657): live-source auth is now OAuth "Connect" ONLY — the paste-a-token / PAT alternative is removed for live sources (see §1 · Live-source authentication).**
+- **Story / Subtask:** 7.16 · Issue importer (MOTIR-816) · Subtask 7.16.2 (MOTIR-938); auth amendment 7.16.14 (MOTIR-1657)
 - **Supersedes / superseded by:** none. (Supersedes the archived exploratory Story 7.17 / MOTIR-627, which this journey-ordered 7.16 tree replaced.)
-- **Consumed by:** MOTIR-937 (7.16.1 wizard design), MOTIR-939 (7.16.3 `Import` model + external-id map + migration), MOTIR-1501 (7.16.4a connector interface + `SourceIssue` + CSV + GitHub), MOTIR-940 (7.16.4 Jira + Linear connectors), MOTIR-1639 (7.16.4b Plane connector), MOTIR-1504 (7.16.5a mapping resolver + idempotency lookup + dry-run classify), MOTIR-941 (7.16.5 persist engine + import routes), MOTIR-942 (7.16.6 wizard UI), MOTIR-943 (7.16.7 source OAuth apps / API tokens), MOTIR-944 (7.16.8 vitest), MOTIR-945 (7.16.9 Playwright E2E).
+- **Consumed by:** MOTIR-937 (7.16.1 wizard design), MOTIR-939 (7.16.3 `Import` model + external-id map + migration), MOTIR-1501 (7.16.4a connector interface + `SourceIssue` + CSV + GitHub), MOTIR-940 (7.16.4 Jira + Linear connectors), MOTIR-1639 (7.16.4b Plane connector), MOTIR-1504 (7.16.5a mapping resolver + idempotency lookup + dry-run classify), MOTIR-941 (7.16.5 persist engine + import routes), MOTIR-942 (7.16.6 wizard UI), MOTIR-943 (7.16.7 Jira OAuth app registration; per-vendor siblings 7.16.7a/7.16.7b for Linear / Plane), MOTIR-1653 (7.16.10 `ImportSourceIdentity` token store), MOTIR-1654 (7.16.11 Jira OAuth connect flow), MOTIR-1655 (7.16.12 Linear OAuth connect flow), MOTIR-1656 (7.16.13 Plane OAuth connect flow), MOTIR-944 (7.16.8 vitest), MOTIR-945 (7.16.9 Playwright E2E).
 
 > This record follows the house ADR convention set by `docs/decisions/work-item-type-taxonomy.md`: a markdown file under `docs/decisions/`, named for the thing it fixes, structured **Status → Context → Decision → Consequences → References**, with the load-bearing facts pinned in explicit tables. It is the durable SHAPE of the importer, fixed BEFORE the code cards build it (the no-shortcuts rule — pick the durable shape, not the demoable happy path).
 
@@ -36,6 +36,7 @@ This ADR is grounded against **shipped reality** (rung 2 of the decision-authori
 | Comments                          | `lib/services/commentsService.ts` — `addComment`                                                                                                | `authorId` = `ctx.userId`, `createdAt` = `now()` — **author + timestamp are NOT overridable** as shipped.                                |
 | Attachments                       | `lib/services/attachmentsService.ts` — `uploadAttachment(file)` → `attachToWorkItem`                                                            | Uploader is the current user; needs the source bytes fetched then uploaded.                                                              |
 | GitHub token substrate            | `GithubIdentity.accessTokenEncrypted` (AES-256-GCM, `lib/github/tokenCrypto.ts`); `lib/git/` provider seam                                      | Reusable per-user OAuth token for the GitHub Issues connector — no new token store for GitHub.                                           |
+| Import-source token substrate     | `ImportSourceIdentity` (per-user, per-vendor encrypted OAuth token — MOTIR-1653, shipped; mirrors the `GithubIdentity` crypto)                  | The OAuth-connect token store for Jira / Linear / Plane — the SOLE source of a live-source token (no paste-a-token path). See §1 auth.   |
 
 There is **no existing importer, `Import` model, or external-id map** in the repo today (only the `app/(onboarding)/onboarding/import` "coming soon" placeholder) — the importer is greenfield, so this decision is unconstrained by legacy import code.
 
@@ -57,27 +58,53 @@ interface IssueSourceConnector {
 
 Every connector normalises its source into ONE internal shape — the **normalised `SourceIssue`** (MOTIR-1501 owns the type) — before any mapping runs. The mapping/dry-run/persist stages are **source-agnostic**: they see only `SourceIssue`, never a Jira/Linear/GitHub/Plane payload. This is the **verified Linear precedent** (`packages/import`): a single `Importer` interface + a shared `ImportResult` normalised model, with one implementation per source (`jiraCsv`, `github`, `trelloJson`, …).
 
-| Source            | Access shape          | Pagination (VERIFIED — a paging loop is mandatory)                                          | Credentials                                                                          |
-| ----------------- | --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Jira**          | REST issue search     | `startAt` + `maxResults` offset paging (default page 50) — loop incrementing `startAt`      | OAuth / API token (MOTIR-943)                                                        |
-| **Linear**        | GraphQL               | Relay cursor paging: `first` + `after`; page until `pageInfo.hasNextPage` is false (def 50) | OAuth / API key (MOTIR-943)                                                          |
-| **GitHub Issues** | REST list-repo-issues | `per_page` (max 100) + `page`, Link headers                                                 | Reuse `GithubIdentity.accessTokenEncrypted` (per-user OAuth) where present; else 943 |
-| **Plane**         | REST work-items       | Cursor paging: `per_page` (≤100) + `cursor`; loop while `next_page_results`                 | `X-API-Key` PAT + base URL (Cloud / self-hosted) (MOTIR-943)                         |
-| **CSV**           | Uploaded-file parse   | n/a (whole file, streamed rows)                                                             | **none** — the universal fallback                                                    |
+| Source            | Access shape          | Pagination (VERIFIED — a paging loop is mandatory)                                          | Credentials                                                                                  |
+| ----------------- | --------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Jira**          | REST issue search     | `startAt` + `maxResults` offset paging (default page 50) — loop incrementing `startAt`      | **OAuth "Connect" ONLY** — per-user token via `ImportSourceIdentity` (MOTIR-1654)            |
+| **Linear**        | GraphQL               | Relay cursor paging: `first` + `after`; page until `pageInfo.hasNextPage` is false (def 50) | **OAuth "Connect" ONLY** — per-user token via `ImportSourceIdentity` (MOTIR-1655)            |
+| **GitHub Issues** | REST list-repo-issues | `per_page` (max 100) + `page`, Link headers                                                 | **OAuth ONLY** — reuse `GithubIdentity.accessTokenEncrypted` (per-user, 7.10 App)            |
+| **Plane**         | REST work-items       | Cursor paging: `per_page` (≤100) + `cursor`; loop while `next_page_results`                 | **OAuth "Connect" ONLY** — per-user token via `ImportSourceIdentity` + base URL (MOTIR-1656) |
+| **CSV**           | Uploaded-file parse   | n/a (whole file, streamed rows)                                                             | **none** — the universal, credential-free fallback                                           |
 
 Connectors carry paginate + retry scaffolding (MOTIR-1501); Jira + Linear live-field-mapping into `SourceIssue` is MOTIR-940; the **Plane** connector is MOTIR-1639; the interface + `SourceIssue` + CSV + GitHub connector is MOTIR-1501.
 
 **How the data actually leaves each source — a LIVE API is the primary path, a FILE EXPORT is the credential-free alternative.** Every live source has a first-class read API we connect to directly; every source that can produce a file export routes that export through the ONE CSV/file connector — so a user who can't or won't grant API access can still import. The two paths converge on the same `SourceIssue` and the same mapping/dry-run/persist pipeline.
 
-| Source     | Live API (primary connector)                        | Auth                                               | File export → CSV connector                                                 |
-| ---------- | --------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Jira**   | REST issue-search (JQL), offset-paginated           | OAuth 2.0 (3LO) or API token (MOTIR-943)           | ✅ Jira's native CSV export (Issues → Export → CSV)                         |
-| **Linear** | GraphQL `issues` query, cursor-paginated            | OAuth 2.0 or personal API key (MOTIR-943)          | ✅ Linear's CSV export                                                      |
-| **GitHub** | REST list-repo-issues (`state=all`), page-paginated | Reuse `GithubIdentity` OAuth token; else MOTIR-943 | ⚠️ no first-party issues CSV export — API is the path (or a hand-built CSV) |
-| **Plane**  | REST work-items API, cursor-paginated               | `X-API-Key` PAT + base URL (Cloud/self-hosted)     | ✅ Plane's CSV/Excel export (Workspace Settings → Exports, admin)           |
-| **CSV**    | — (this IS the file path)                           | **none**                                           | ✅ the universal target: any of the above exports, or a hand-made sheet     |
+| Source     | Live API (primary connector)                        | Auth                                                            | File export → CSV connector                                                 |
+| ---------- | --------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Jira**   | REST issue-search (JQL), offset-paginated           | OAuth 2.0 (3LO) "Connect" ONLY (MOTIR-1654)                     | ✅ Jira's native CSV export (Issues → Export → CSV)                         |
+| **Linear** | GraphQL `issues` query, cursor-paginated            | OAuth 2.0 "Connect" ONLY (MOTIR-1655)                           | ✅ Linear's CSV export                                                      |
+| **GitHub** | REST list-repo-issues (`state=all`), page-paginated | OAuth ONLY — reuse `GithubIdentity` (7.10 App)                  | ⚠️ no first-party issues CSV export — API is the path (or a hand-built CSV) |
+| **Plane**  | REST work-items API, cursor-paginated               | OAuth "Connect" ONLY + base URL (Cloud/self-hosted, MOTIR-1656) | ✅ Plane's CSV/Excel export (Workspace Settings → Exports, admin)           |
+| **CSV**    | — (this IS the file path)                           | **none**                                                        | ✅ the universal target: any of the above exports, or a hand-made sheet     |
 
-**Deliberate altitude:** this ADR fixes the access _model_ per source (API type, auth model, pagination, the export alternative) — it does NOT pin exact endpoint URLs, OAuth scopes, or the JQL string. Those are connector-implementation detail owned by **MOTIR-940** (Jira + Linear), **MOTIR-1639** (Plane), **MOTIR-1501** (GitHub + CSV), and **MOTIR-943** (OAuth-app / token provisioning), which read the vendor's _current_ API docs at build time — deliberately, because vendor endpoints move (e.g. Jira Cloud is mid-migration from `/rest/api/3/search` to a token-paginated `/search/jql`, and Plane has deprecated `/issues/` in favour of `/work-items/`), and a durable decision doc must not hard-code a moving endpoint.
+**Deliberate altitude:** this ADR fixes the access _model_ per source (API type, auth model, pagination, the export alternative) — it does NOT pin exact endpoint URLs, OAuth scopes, or the JQL string. Those are connector-implementation detail owned by **MOTIR-940** (Jira + Linear), **MOTIR-1639** (Plane), **MOTIR-1501** (GitHub + CSV), **MOTIR-1654 / MOTIR-1655 / MOTIR-1656** (the per-vendor OAuth connect flows), and **MOTIR-943** + siblings (per-vendor OAuth-app registration), which read the vendor's _current_ API docs at build time — deliberately, because vendor endpoints move (e.g. Jira Cloud is mid-migration from `/rest/api/3/search` to a token-paginated `/search/jql`, and Plane has deprecated `/issues/` in favour of `/work-items/`), and a durable decision doc must not hard-code a moving endpoint.
+
+#### Live-source authentication — OAuth "Connect" is the SOLE path (amended 2026-07-06, MOTIR-1657)
+
+**Every LIVE source authenticates through an OAuth "Connect" flow, and ONLY that. There is NO "paste an API token / personal access token into the wizard" alternative for a live source.** The connectors stay **auth-agnostic** — a connector consumes a bearer/token string and does not care where it came from — but that string now originates from exactly ONE place: the per-user OAuth token store. CSV is unchanged: a file upload, credential-free.
+
+| Live source | Connect mechanism                                                               | Token store                                   | Owning card          |
+| ----------- | ------------------------------------------------------------------------------- | --------------------------------------------- | -------------------- |
+| **GitHub**  | Reuse the shipped **7.10 GitHub App** + per-user OAuth grant (`GithubIdentity`) | `GithubIdentity.accessTokenEncrypted`         | 7.10 / existing      |
+| **Jira**    | Per-vendor OAuth 2.0 (3LO) "Connect" flow                                       | `ImportSourceIdentity` (per-user, per-vendor) | 7.16.11 (MOTIR-1654) |
+| **Linear**  | Per-vendor OAuth "Connect" flow                                                 | `ImportSourceIdentity`                        | 7.16.12 (MOTIR-1655) |
+| **Plane**   | Per-vendor OAuth "Connect" flow (+ self-hosted base URL captured alongside)     | `ImportSourceIdentity`                        | 7.16.13 (MOTIR-1656) |
+| **CSV**     | — (file upload, no auth)                                                        | —                                             | —                    |
+
+The per-vendor token substrate is **`ImportSourceIdentity`** (MOTIR-1653, shipped) — a per-user, per-vendor encrypted token row mirroring the `GithubIdentity` crypto. Each vendor's connect flow (`start` → vendor consent → `callback`) writes the granted token there; the connector reads it at run time. GitHub is the one live source that does NOT use `ImportSourceIdentity` — it reuses the already-shipped `GithubIdentity` grant from the 7.10 GitHub App, so a project that already connected GitHub needs no second connect.
+
+**Provisioning (env vars + redirect URLs).** Each vendor OAuth app is registered per-vendor (7.16.7 / 7.16.7a / 7.16.7b — `manual`/human provisioning cards) and its client credentials live in the secret store / env, NEVER the repo:
+
+| Vendor | Client-id env var        | Client-secret env var        | OAuth redirect / callback URL                        |
+| ------ | ------------------------ | ---------------------------- | ---------------------------------------------------- |
+| Jira   | `JIRA_OAUTH_CLIENT_ID`   | `JIRA_OAUTH_CLIENT_SECRET`   | `{BETTER_AUTH_URL}/api/import/jira/oauth/callback`   |
+| Linear | `LINEAR_OAUTH_CLIENT_ID` | `LINEAR_OAUTH_CLIENT_SECRET` | `{BETTER_AUTH_URL}/api/import/linear/oauth/callback` |
+| Plane  | `PLANE_OAUTH_CLIENT_ID`  | `PLANE_OAUTH_CLIENT_SECRET`  | `{BETTER_AUTH_URL}/api/import/plane/oauth/callback`  |
+
+The connect-flow start route is the symmetric `/api/import/<vendor>/oauth/start`. (GitHub reuses the 7.10 App's existing OAuth app + callback — no new env var / redirect for import.)
+
+**Rationale — why no paste-a-token path (Yue, 2026-07-06).** Asking a non-technical user to find, scope, and paste a personal access token is bad UX: it pushes vendor-console spelunking onto the user, invites over-broad or mis-scoped tokens, and stores a long-lived secret the user has to rotate by hand. A "Connect" button is the shape every mirror product uses (and the shape Motir already ships for GitHub) — one click, vendor-hosted consent, a scoped token Motir holds and can refresh. Keeping a paste-a-token fallback would mean maintaining, testing, and securing two auth paths per vendor for the worse one, and would leak a raw-token input field into a wizard aimed at non-technical users. So the paste-a-token path is removed, not merely de-emphasised — one auth path per live source, and it is OAuth "Connect".
 
 **Every connector fetches ALL states (open + closed/done), per the whole-history scope above.** No connector applies an open-only filter. Concretely: **GitHub** must pass `state=all` (its list-issues API defaults to `state=open` — omitting this silently drops closed issues); **Jira** uses a JQL with no `status`/`resolution` clause (an unfiltered JQL returns every state, resolved and unresolved); **Linear** fetches without a state filter (all workflow states, including completed/cancelled); **Plane** fetches every state GROUP (`backlog`/`unstarted`/`started`/`completed`/`cancelled`) — `completed`/`cancelled` are done-category; **CSV** carries whatever rows the export contains. A closed source issue therefore reaches the resolver with its real closed status, which maps to a done-category `workflow_status` (§2, status).
 
@@ -166,11 +193,13 @@ None of these introduce a write path around `workItemsService` / its sibling ent
 - **MOTIR-939** — the `Import` row (source, config, mapping, status) + the `(import_source, external_id) → work_item_id` map; schema + migration.
 - **MOTIR-1501** — `IssueSourceConnector` interface + normalised `SourceIssue` + CSV parse + GitHub Issues connector (paginate + retry scaffolding).
 - **MOTIR-940** — Jira + Linear connectors: paginated fetch + field-mapping into `SourceIssue`.
-- **MOTIR-1639** — Plane connector: paginated `work-items` REST fetch (`X-API-Key` PAT + base URL) + field-mapping into `SourceIssue`.
+- **MOTIR-1639** — Plane connector: paginated `work-items` REST fetch (reads its per-user token from `ImportSourceIdentity` + the captured base URL) + field-mapping into `SourceIssue`.
 - **MOTIR-1504** — mapping resolver + idempotency lookup + dry-run classify (no writes).
 - **MOTIR-941** — persist engine (batched tx, parent 2nd pass, the three extensions above) + import API routes.
-- **MOTIR-942** — the wizard UI (connect → map → dry-run preview → run → progress); **MOTIR-937** is its design.
-- **MOTIR-943** — provisions the Jira / Linear / GitHub OAuth apps / tokens + the Plane API key & base URL.
+- **MOTIR-942** — the wizard UI (connect → map → dry-run preview → run → progress); the Connect step launches the per-vendor OAuth flow and shows connected/not-connected — NO token/PAT input field. **MOTIR-937** is its design.
+- **MOTIR-1653** — `ImportSourceIdentity` (per-user, per-vendor encrypted OAuth token store) + migration — the SOLE token substrate for Jira / Linear / Plane. (Shipped.)
+- **MOTIR-1654 / MOTIR-1655 / MOTIR-1656** — the Jira / Linear / Plane OAuth "Connect" flows (`/api/import/<vendor>/oauth/start` + `/callback`) that grant + store the token in `ImportSourceIdentity`.
+- **MOTIR-943** (+ per-vendor siblings 7.16.7a / 7.16.7b) — registers the Jira / Linear / Plane OAuth apps and records `{JIRA,LINEAR,PLANE}_OAUTH_CLIENT_ID` / `_SECRET` + the `/api/import/<vendor>/oauth/callback` redirect in the secret store. GitHub reuses the 7.10 App. **No API-token / PAT provisioning** — OAuth apps only.
 - **MOTIR-944 / MOTIR-945** — vitest (mapping correctness + idempotency no-dupe + dry-run) and Playwright E2E (import a Jira export + a CSV → mapped work items; re-run doesn't dupe).
 
 ### Assumptions to verify (flagged per the "cite verified or flag" rule)
@@ -197,5 +226,6 @@ None of these introduce a write path around `workItemsService` / its sibling ent
 - `lib/workflows/defaultWorkflow.ts`, `lib/services/workflowsService.ts`, `WorkflowStatus` (`prisma/schema.prisma`) — per-project statuses, gated transitions.
 - `lib/services/commentsService.ts` (`addComment` author/timestamp), `lib/services/labelsService.ts` (`setLabels`), `lib/services/attachmentsService.ts` (`uploadAttachment`).
 - `GithubIdentity.accessTokenEncrypted` + `lib/github/tokenCrypto.ts` — reusable GitHub OAuth token substrate.
+- `ImportSourceIdentity` (per-user, per-vendor encrypted OAuth token store — MOTIR-1653, shipped) — the SOLE live-source token substrate for Jira / Linear / Plane (mirrors the `GithubIdentity` crypto).
 
 **Authority ladder** — `motir-meta/prompts/plan-rules.md` (mirror → shipped code → card). Card-vs-code contradictions resolved here: priority `none` → `medium`; reporter/status/comment-author preservation via in-authority extensions.
