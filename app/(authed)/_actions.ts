@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { getSession } from '@/lib/auth';
+import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -20,7 +21,7 @@ import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 const COOKIE_OPTIONS = {
   httpOnly: false,
   sameSite: 'lax',
-  secure: process.env['NODE_ENV'] === 'production',
+  secure: shouldUseSecureCookies(),
   path: '/',
 } as const;
 

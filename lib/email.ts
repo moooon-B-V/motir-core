@@ -26,6 +26,7 @@
 // first email two days into a deploy.
 
 import { appendFile, readFile } from 'node:fs/promises';
+import { isE2EProdHarness } from '@/lib/e2eProdHarness';
 
 export interface EmailMessage {
   to: string;
@@ -107,7 +108,12 @@ function unimplementedProvider(name: string): SendEmail {
 // provider in production keeps the contract obvious: 'file' is a test
 // harness, not a deliverability path.
 function fileProvider(): SendEmail {
-  if (process.env['NODE_ENV'] === 'production') {
+  // Refused in real production, but ALLOWED under the E2E production harness
+  // (MOTIR-1679): that runs a `next start` build, which forces
+  // NODE_ENV=production even though it is the test suite writing to the file
+  // outbox the specs poll. isE2EProdHarness() is only ever true for the E2E
+  // webServer, never a real deploy.
+  if (process.env['NODE_ENV'] === 'production' && !isE2EProdHarness()) {
     throw new Error(
       `Email provider 'file' is not allowed in production. ` +
         `It is a test-only sink that writes emails to a local file. ` +
@@ -155,7 +161,9 @@ function fileProvider(): SendEmail {
 function withFaultInjection(provider: SendEmail): SendEmail {
   const faultPath = process.env['EMAIL_FAULT_PATH'];
   if (faultPath === undefined || faultPath === '') return provider;
-  if (process.env['NODE_ENV'] === 'production') {
+  // Refused in real production, allowed under the E2E production harness — same
+  // rationale as fileProvider() above (MOTIR-1679).
+  if (process.env['NODE_ENV'] === 'production' && !isE2EProdHarness()) {
     throw new Error(
       `EMAIL_FAULT_PATH is set in production. It is a test-only deterministic ` +
         `email-fault injector and must never be enabled in production. Unset it.`,

@@ -1,5 +1,6 @@
 import 'server-only';
 import { cookies } from 'next/headers';
+import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 
 // ── The "preserved idea" seam (Subtask 7.3.14 → 7.3.5; rehomed by 7.22.1) ─────
 //
@@ -58,7 +59,7 @@ export async function setPendingIdea(idea: string): Promise<void> {
   store.set(PENDING_IDEA_COOKIE, value, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     path: '/',
     maxAge: PENDING_IDEA_TTL_SECONDS,
   });
