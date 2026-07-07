@@ -376,14 +376,28 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
-      # MOTIR-1679: retry the browser / OS-deps install (up to 3× with backoff).
-      # `playwright install-deps` shells out to `apt-get` (and the cache-miss
-      # `--with-deps` path also downloads the browser binary), so a transient
-      # mirror 503 / apt hash-mismatch / dpkg-lock / network blip makes the step
-      # exit 1 and kills the WHOLE leg at setup — `Run E2E` is then skipped, 0
-      # tests run (~1m runtime is the tell), and the red is indistinguishable
-      # from a real regression. A transient apt/network failure self-heals on a
-      # retry, so retry instead of red-lighting the PR.
+      # MOTIR-1679 (the actual root cause): the GitHub ubuntu-24.04 runner image
+      # preconfigures packages.microsoft.com apt sources (azure-cli + MS prod).
+      # Those repos intermittently serve a BROKEN InRelease signature
+      # ("Clearsigned file isn't valid, got 'NOSPLIT' ... is no longer signed"),
+      # which fails the `apt-get update` that `playwright install(-deps)` runs
+      # internally → exit code 100, killing the leg at SETUP (Run E2E skipped, 0
+      # tests run). It lands on a DIFFERENT leg each run (whichever job's apt
+      # re-fetch catches MS mid-glitch) — the flake tell. We do NOT need those
+      # repos to install Chromium's OS deps (they come from the Ubuntu archive),
+      # so drop any apt source referencing packages.microsoft.com before apt runs.
+      # This removes the external dependency entirely; the per-install retry below
+      # stays only as a backstop for genuinely transient Ubuntu-archive blips.
+      - name: Remove broken third-party apt sources (Microsoft)
+        run: |
+          for f in $(grep -rl packages.microsoft.com /etc/apt/sources.list.d/ 2>/dev/null || true); do
+            echo "Removing broken apt source: $f"
+            sudo rm -f "$f"
+          done
+      # Retry the browser / OS-deps install (up to 3× with backoff) as a backstop:
+      # the cache-miss `--with-deps` path also downloads the browser binary, and a
+      # transient Ubuntu-archive 503 / network blip would otherwise red-light the
+      # leg at setup. A transient failure self-heals on retry.
       - name: Install Playwright browser + OS deps (cache miss)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: |
