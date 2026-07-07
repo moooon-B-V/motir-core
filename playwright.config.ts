@@ -174,6 +174,33 @@ export default defineConfig({
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
+        // MOTIR-1679: give the `next dev` webServer explicit V8 old-space
+        // headroom. The CI bulk shards (bulk-1..5) were flaking on a RANDOM,
+        // diff-unrelated test each run — `net::ERR_CONNECTION_RESET` /
+        // `page.goto` timeouts / `socket hang up` — because this dev server
+        // (a resident webpack compiler that compiles routes on demand and
+        // accumulates the compiled module graph across a long shard) GC-thrashes
+        // and/or OOMs under a heavy shard's memory pressure and drops the
+        // connection MID-TEST. Whichever spec is navigating when the server dies
+        // fails, so a different test fails each run — the tell that it's the
+        // HARNESS dying, not the code under test. Nothing set NODE_OPTIONS
+        // before, so the server ran on Node's default old-space, which is
+        // demonstrably too small here. 6 GB is well above that default while
+        // staying safely inside the 16 GB `ubuntu-latest` runner budget shared
+        // with Postgres (service container), the Inngest Go binary, the
+        // Playwright runner, and Chromium — so raising this ceiling cannot itself
+        // trigger a system OOM-kill. Set here (not at the ci.yml job level) so it
+        // is scoped precisely to the server that OOMs and also benefits local +
+        // worktree `pnpm test:e2e` runs, matching how every other E2E knob in
+        // this block is wired.
+        //
+        // NOT switched to a production build (`next start`, the lightest option)
+        // because the E2E harness depends on dev-mode: lib/email.ts's 'file'
+        // provider AND the EMAIL_FAULT_PATH injector both HARD-THROW when
+        // NODE_ENV=production (deliberate prod-safety guards), so `next start`
+        // would need those guards weakened — a larger, security-sensitive change
+        // tracked separately if this headroom proves insufficient.
+        NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
