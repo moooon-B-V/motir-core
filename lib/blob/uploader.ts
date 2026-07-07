@@ -105,6 +105,14 @@ export async function putPrivateAttachment(
  * result, so the TTL only needs to cover that immediate fetch.
  */
 export async function signedDownloadUrl(pathname: string, ttlSeconds = 300): Promise<string> {
+  // E2E: the undici blob mock (E2E_TEST_BLOB) intercepts HTTP calls, but
+  // `presignUrl` derives the signed URL CLIENT-SIDE from real delegation
+  // material the mock can't forge — so short-circuit to a deterministic
+  // stand-in. The content route only 302-redirects to this; the E2E asserts the
+  // redirect, not the (mocked) blob bytes.
+  if (process.env.E2E_TEST_BLOB === '1') {
+    return `https://blob.example/signed/${pathname}`;
+  }
   const validUntil = Date.now() + ttlSeconds * 1000;
   const token = await issueSignedToken({ pathname, operations: ['get'], validUntil });
   const { presignedUrl } = await presignUrl(token, {
