@@ -28,7 +28,7 @@ async function makeAttachment(
   fx: WorkItemFixture,
   overrides: Partial<{
     workItemId: string | null;
-    blobUrl: string;
+    blobPathname: string;
     createdAt: Date;
     source: 'editor' | 'panel';
   }> = {},
@@ -37,7 +37,8 @@ async function makeAttachment(
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,
-      blobUrl: overrides.blobUrl ?? `https://blob.example/attachments/${fx.workspaceId}/f.png`,
+      blobPathname:
+        overrides.blobPathname ?? `https://blob.example/attachments/${fx.workspaceId}/f.png`,
       mimeType: 'image/png',
       sizeBytes: 4,
       originalFilename: 'f.png',
@@ -96,18 +97,18 @@ describe('attachmentRepository.listByWorkItem / countByWorkItem', () => {
   });
 });
 
-describe('attachmentRepository.findManyByBlobUrls', () => {
-  it('resolves only OWN-workspace rows — a foreign workspace’s URL never resolves', async () => {
+describe('attachmentRepository.findManyByIds', () => {
+  it('resolves only OWN-workspace rows — a foreign workspace’s id never resolves', async () => {
     const fx = await makeWorkItemFixture();
     const foreign = await makeWorkItemFixture({ name: 'Rival', identifier: 'RVL' });
 
-    const mine = await makeAttachment(fx, { blobUrl: 'https://blob.example/a/mine.png' });
-    await makeAttachment(foreign, { blobUrl: 'https://blob.example/a/theirs.png' });
+    const mine = await makeAttachment(fx, { blobPathname: 'attachments/a/mine.png' });
+    const theirs = await makeAttachment(foreign, { blobPathname: 'attachments/a/theirs.png' });
 
-    const found = await attachmentRepository.findManyByBlobUrls(fx.workspaceId, [
-      'https://blob.example/a/mine.png',
-      'https://blob.example/a/theirs.png', // foreign — must not resolve
-      'https://blob.example/a/nonexistent.png',
+    const found = await attachmentRepository.findManyByIds(fx.workspaceId, [
+      mine.id,
+      theirs.id, // foreign workspace — must not resolve
+      'nonexistent000000000000000',
     ]);
     expect(found.map((a) => a.id)).toEqual([mine.id]);
   });
@@ -115,7 +116,7 @@ describe('attachmentRepository.findManyByBlobUrls', () => {
   it('empty-input guard: [] short-circuits to [] without a query', async () => {
     const fx = await makeWorkItemFixture();
     await makeAttachment(fx);
-    expect(await attachmentRepository.findManyByBlobUrls(fx.workspaceId, [])).toEqual([]);
+    expect(await attachmentRepository.findManyByIds(fx.workspaceId, [])).toEqual([]);
   });
 });
 
@@ -124,7 +125,7 @@ describe('attachmentRepository.linkToWorkItem / unlinkFromWorkItem', () => {
     const fx = await makeWorkItemFixture();
     const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Target' });
     const a = await makeAttachment(fx);
-    const b = await makeAttachment(fx, { blobUrl: 'https://blob.example/a/b.png' });
+    const b = await makeAttachment(fx, { blobPathname: 'https://blob.example/a/b.png' });
 
     const linked = await db.$transaction((tx) =>
       attachmentRepository.linkToWorkItem([a.id, b.id], issue.id, 'panel', tx),
@@ -220,7 +221,7 @@ describe('attachment RLS — the 5.2.1 policy swap', () => {
     const fx = await makeWorkItemFixture();
     const foreign = await makeWorkItemFixture({ name: 'Rival', identifier: 'RVL' });
     const mine = await makeAttachment(fx);
-    await makeAttachment(foreign, { blobUrl: 'https://blob.example/a/theirs.png' });
+    await makeAttachment(foreign, { blobPathname: 'https://blob.example/a/theirs.png' });
 
     const blind = await asAppRole({}, (tx) => tx.attachment.findMany());
     expect(blind).toEqual([]);
@@ -236,7 +237,7 @@ describe('attachment RLS — the 5.2.1 policy swap', () => {
     const foreign = await makeWorkItemFixture({ name: 'Rival', identifier: 'RVL' });
     const orphanA = await makeAttachment(fx, { createdAt: daysAgo(30) });
     const orphanB = await makeAttachment(foreign, {
-      blobUrl: 'https://blob.example/a/theirs.png',
+      blobPathname: 'https://blob.example/a/theirs.png',
       createdAt: daysAgo(30),
     });
 
@@ -260,7 +261,7 @@ describe('2.3.7 upload path is untouched', () => {
         {
           workspaceId: fx.workspaceId,
           uploaderUserId: fx.ownerId,
-          blobUrl: 'https://blob.example/attachments/x/y.png',
+          blobPathname: 'https://blob.example/attachments/x/y.png',
           mimeType: 'image/png',
           sizeBytes: 9,
           originalFilename: 'y.png',

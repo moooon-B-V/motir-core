@@ -1,5 +1,6 @@
 import type { Attachment, User } from '@prisma/client';
 import { isImageType, isPdfType } from '@/lib/blob/allowlist';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import type { AttachmentDTO, AttachmentUploaderDTO } from '@/lib/dto/attachments';
 
 // Prisma → DTO converter for the attachment management surface (Story 5.2 ·
@@ -45,7 +46,9 @@ export function toAttachmentDto(row: Attachment, uploadersById: Map<string, User
     // acceptance_video rows are excluded from the panel read (MOTIR-1629), so a
     // row reaching this mapper is always editor|panel.
     source: row.source as 'editor' | 'panel',
-    blobUrl: row.blobUrl,
+    // The authenticated content path (private blob served via the auth'd route),
+    // NOT a raw blob URL. The DTO field keeps its name; its value is the path.
+    blobUrl: attachmentContentPath(row.id),
     isImage: isImageType(row.mimeType),
     isPdf: isPdfType(row.mimeType),
     uploader: uploaderFor(row, uploadersById),

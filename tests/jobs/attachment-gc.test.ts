@@ -52,14 +52,14 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 /** Insert an attachment row directly (test setup — the legitimate cross-layer reach). */
 async function makeAttachment(
   fx: WorkItemFixture,
-  overrides: Partial<{ workItemId: string | null; blobUrl: string; createdAt: Date }> = {},
+  overrides: Partial<{ workItemId: string | null; blobPathname: string; createdAt: Date }> = {},
 ): Promise<Attachment> {
   return db.attachment.create({
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,
-      blobUrl:
-        overrides.blobUrl ??
+      blobPathname:
+        overrides.blobPathname ??
         `https://blob.example/attachments/${fx.workspaceId}/${crypto.randomUUID()}.png`,
       mimeType: 'image/png',
       sizeBytes: 4,
@@ -88,7 +88,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
     expect(await exists(young.id)).toBe(true);
     expect(await exists(linked.id)).toBe(true);
     // Exactly the old orphan's blob was deleted — nothing else's.
-    expect(blobDelete.mock.calls).toEqual([[old.blobUrl]]);
+    expect(blobDelete.mock.calls).toEqual([[old.blobPathname]]);
 
     // The ledger: one succeeded, untenanted, scheduled-named run carrying the
     // summary in `output` (the 5.2.7 column).
@@ -107,7 +107,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
     const failing = await makeAttachment(fx, { createdAt: daysAgo(9) });
     const fine = await makeAttachment(fx, { createdAt: daysAgo(8) });
     blobDelete.mockImplementation(async (url: string) => {
-      if (url === failing.blobUrl) throw new Error('blob store down');
+      if (url === failing.blobPathname) throw new Error('blob store down');
     });
 
     const engine = new InngestTestEngine({ function: attachmentGc });
@@ -116,7 +116,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
     expect(await exists(failing.id)).toBe(true); // row survives = the retry marker
     expect(await exists(fine.id)).toBe(false);
     // Attempted ONCE this run — the `attempted` guard, not batch-loop hammering.
-    expect(blobDelete.mock.calls.filter(([url]) => url === failing.blobUrl)).toHaveLength(1);
+    expect(blobDelete.mock.calls.filter(([url]) => url === failing.blobPathname)).toHaveLength(1);
 
     // The store recovers → the next run converges (idempotent re-run).
     blobDelete.mockReset();
@@ -160,7 +160,7 @@ describe('attachmentsService.sweepOrphanAttachments — paging bounds', () => {
     const r2 = await makeAttachment(fx, { createdAt: daysAgo(11) });
     const r3 = await makeAttachment(fx, { createdAt: daysAgo(10) });
     blobDelete.mockImplementation(async (url: string) => {
-      if (url === r1.blobUrl) throw new Error('still down');
+      if (url === r1.blobPathname) throw new Error('still down');
     });
 
     const summary = await attachmentsService.sweepOrphanAttachments({ batchSize: 1 });

@@ -6,7 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { putAttachment } from '@/lib/blob/uploader';
+import { putPrivateAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedAcceptanceVideoType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
@@ -99,8 +99,10 @@ export const acceptanceEvidenceService = {
       await entitlementsService.assertWithinStorageCap(organizationId, input.video.size);
     }
 
-    // 4. Blob puts OUTSIDE the transaction.
-    const { url: videoUrl } = await putAttachment(
+    // 4. Blob puts OUTSIDE the transaction — PRIVATE store (MOTIR-1667); the
+    // video is served via the auth'd content route. `traceUrl` holds the blob
+    // pathname for now (MOTIR-1674 gives the trace its own content path).
+    const { pathname: videoPathname } = await putPrivateAttachment(
       `acceptance/${ctx.workspaceId}/${story.id}/${input.video.name}`,
       input.video,
       input.video.type,
@@ -108,12 +110,12 @@ export const acceptanceEvidenceService = {
     let traceUrl: string | null = null;
     if (input.trace) {
       traceUrl = (
-        await putAttachment(
+        await putPrivateAttachment(
           `acceptance/${ctx.workspaceId}/${story.id}/trace-${input.trace.name}`,
           input.trace,
           input.trace.type,
         )
-      ).url;
+      ).pathname;
     }
 
     // 5. Supersede + insert, atomically.
@@ -135,7 +137,7 @@ export const acceptanceEvidenceService = {
             uploaderUserId: ctx.userId,
             workItemId: story.id,
             source: 'acceptance_video',
-            blobUrl: videoUrl,
+            blobPathname: videoPathname,
             mimeType: input.video.type,
             sizeBytes: input.video.size,
             originalFilename: input.video.name,

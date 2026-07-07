@@ -213,7 +213,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
       uploaderUserId: tenant.owner.id,
       workItemId: null,
       source: 'editor',
-      blobUrl: embedBlobUrl(tenant.workspaceId),
+      blobPathname: embedBlobUrl(tenant.workspaceId),
       mimeType: 'image/png',
       sizeBytes: 128,
       originalFilename: 'embed-collab.png',

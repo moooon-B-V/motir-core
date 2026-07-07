@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import type { User } from '@prisma/client';
 import { db } from '@/lib/db';
 import { commentsService } from '@/lib/services/commentsService';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { watchersService } from '@/lib/services/watchersService';
@@ -58,6 +59,8 @@ interface Journey {
   bo: User;
   /** Watching the issue, NOT mentioned — watcher email only. */
   odie: User;
+  /** The UNLINKED editor upload the comment body embeds (by its content path). */
+  embedAttachmentId: string;
 }
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;
@@ -96,20 +99,27 @@ async function buildJourney(): Promise<Journey> {
   // The waiting editor upload — UNLINKED (workItemId null), referenced by no
   // body yet. The same shape attachmentsService.uploadAttachment writes for a
   // create-modal/editor upload before linkage resolves at body-write time.
-  await db.attachment.create({
+  const embed = await db.attachment.create({
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,
       workItemId: null,
       source: 'editor',
-      blobUrl: embedBlobUrl(fx.workspaceId),
+      blobPathname: embedBlobUrl(fx.workspaceId),
       mimeType: 'image/png',
       sizeBytes: 128,
       originalFilename: 'embed-collab.png',
     },
   });
 
-  return { fx, issueId: issue.id, issueIdentifier: issue.identifier, bo, odie };
+  return {
+    fx,
+    issueId: issue.id,
+    issueIdentifier: issue.identifier,
+    bo,
+    odie,
+    embedAttachmentId: embed.id,
+  };
 }
 
 /** The comment that ties the whole journey together: embeds the upload AND
@@ -117,7 +127,7 @@ async function buildJourney(): Promise<Journey> {
 async function postEmbeddingMentioningComment(j: Journey) {
   const bodyMd =
     `Heads up ${mentionToken(j.bo)} — see the shot ` +
-    `![embed](${embedBlobUrl(j.fx.workspaceId)}) and **review**.`;
+    `![embed](${attachmentContentPath(j.embedAttachmentId)}) and **review**.`;
   return commentsService.addComment(j.issueId, { bodyMd }, j.fx.ctx);
 }
 
@@ -131,7 +141,7 @@ describe('the combined comment write — embed link + mention persist in one tra
     // Seam 5.2.3 × 5.1.2: the body's referenced upload linked to THIS issue as
     // editor-sourced, inside the comment write tx.
     const attachment = await db.attachment.findFirstOrThrow({
-      where: { blobUrl: embedBlobUrl(j.fx.workspaceId) },
+      where: { blobPathname: embedBlobUrl(j.fx.workspaceId) },
     });
     expect(attachment.workItemId).toBe(j.issueId);
     expect(attachment.source).toBe('editor');
@@ -258,7 +268,7 @@ describe('the unwind — deleting the comment leaves no orphan and fires no stal
     // The embed UNLINKED — the row survives (GC removes it later) but no longer
     // belongs to the issue (workItemId null), so the panel census drops it.
     const attachment = await db.attachment.findFirstOrThrow({
-      where: { blobUrl: embedBlobUrl(j.fx.workspaceId) },
+      where: { blobPathname: embedBlobUrl(j.fx.workspaceId) },
     });
     expect(attachment.workItemId).toBeNull();
     expect(await db.attachment.count({ where: { workItemId: j.issueId, source: 'editor' } })).toBe(

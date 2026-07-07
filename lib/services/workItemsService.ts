@@ -32,7 +32,7 @@ import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
 import { autoRelateWorkItemMentions, writeWorkItemLink } from '@/lib/workItems/autoRelateMentions';
 import { attachmentsService } from '@/lib/services/attachmentsService';
-import { extractReferencedBlobUrlsFromBodies } from '@/lib/blob/referencedUrls';
+import { extractReferencedAttachmentIdsFromBodies } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
@@ -875,13 +875,13 @@ export const workItemsService = {
         );
       }
 
-      const birthUrls = extractReferencedBlobUrlsFromBodies(
-        [row.descriptionMd, row.explanationMd],
-        workspaceId,
-      );
-      if (birthUrls.length > 0) {
+      const birthIds = extractReferencedAttachmentIdsFromBodies([
+        row.descriptionMd,
+        row.explanationMd,
+      ]);
+      if (birthIds.length > 0) {
         await attachmentsService.syncEditorLinks(
-          { workItem: row, previousUrls: [], nextUrls: birthUrls },
+          { workItem: row, previousIds: [], nextIds: birthIds },
           tx,
         );
       }
@@ -1307,14 +1307,14 @@ export const workItemsService = {
         ? await attachmentsService.syncEditorLinks(
             {
               workItem: row,
-              previousUrls: extractReferencedBlobUrlsFromBodies(
-                [current.descriptionMd, current.explanationMd],
-                current.workspaceId,
-              ),
-              nextUrls: extractReferencedBlobUrlsFromBodies(
-                [row.descriptionMd, row.explanationMd],
-                current.workspaceId,
-              ),
+              previousIds: extractReferencedAttachmentIdsFromBodies([
+                current.descriptionMd,
+                current.explanationMd,
+              ]),
+              nextIds: extractReferencedAttachmentIdsFromBodies([
+                row.descriptionMd,
+                row.explanationMd,
+              ]),
             },
             tx,
           )

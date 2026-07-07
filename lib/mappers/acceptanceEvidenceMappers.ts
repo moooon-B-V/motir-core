@@ -1,4 +1,5 @@
 import type { AcceptanceEvidence, Attachment } from '@prisma/client';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import type {
   AcceptanceEvidenceChapterDTO,
   AcceptanceEvidenceDTO,
@@ -40,7 +41,7 @@ export function toAcceptanceEvidenceDto(
     id: row.id,
     workItemId: row.workItemId,
     status: row.status,
-    videoUrl: row.attachment?.blobUrl ?? null,
+    videoUrl: row.attachment ? attachmentContentPath(row.attachment.id) : null,
     mimeType: row.attachment?.mimeType ?? null,
     sizeBytes: row.attachment?.sizeBytes ?? null,
     traceUrl: row.traceUrl,

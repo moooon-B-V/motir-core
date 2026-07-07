@@ -22,12 +22,16 @@ import { truncateAuthTables } from '../helpers/db';
 
 vi.mock('@/lib/blob/uploader', () => {
   // Unique URL per put — mirrors `addRandomSuffix` (two same-named uploads
-  // must not collide on blobUrl).
+  // must not collide on blobPathname).
   let urlSeq = 0;
   return {
     putAttachment: vi.fn(async (pathname: string) => ({
       url: `https://blob.example/${pathname}-${++urlSeq}`,
     })),
+    putPrivateAttachment: vi.fn(async (pathname: string) => ({
+      pathname: `${pathname}-${++urlSeq}`,
+    })),
+    signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
     deleteAttachmentBlob: vi.fn(async () => {}),
   };
 });
@@ -119,7 +123,12 @@ async function linkAsEditor(s: Scenario, row: Attachment): Promise<void> {
   );
 }
 
-const rowByUrl = (blobUrl: string) => db.attachment.findFirst({ where: { blobUrl } });
+// Resolve either a content path (/api/attachments/<id>/content, the DTO value)
+// or a raw blob pathname to its row.
+const rowByUrl = (ref: string) => {
+  const m = ref.match(/\/api\/attachments\/([a-z0-9]+)\/content/i);
+  return db.attachment.findFirst({ where: m ? { id: m[1]! } : { blobPathname: ref } });
+};
 
 const revisionsOf = (workItemId: string) =>
   db.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
@@ -213,7 +222,7 @@ describe('attachmentsService.listForWorkItem', () => {
               uploaderUserId: s.member.id,
               workItemId: s.issue.id,
               source: 'panel',
-              blobUrl: `https://blob.example/seed-${i}`,
+              blobPathname: `https://blob.example/seed-${i}`,
               mimeType: 'text/plain',
               sizeBytes: 1,
               originalFilename: `seed-${i}.txt`,
@@ -304,12 +313,12 @@ describe('attachmentsService.deleteAttachment', () => {
   it('the uploader deletes their OWN: row + blob gone, revision attachment-removed recorded', async () => {
     const s = await buildScenario();
     const id = await attachAsMember(s);
-    const blobUrl = (await db.attachment.findUnique({ where: { id } }))!.blobUrl;
+    const blobPathname = (await db.attachment.findUnique({ where: { id } }))!.blobPathname;
 
     await attachmentsService.deleteAttachment(id, s.memberCtx);
 
     expect(await db.attachment.findUnique({ where: { id } })).toBeNull();
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(blobUrl);
+    expect(deleteAttachmentBlob).toHaveBeenCalledWith(blobPathname);
 
     const revisions = await revisionsOf(s.issue.id);
     expect(revisions).toHaveLength(2); // added + removed
@@ -428,7 +437,7 @@ describe('attachmentMappers.toAttachmentDto (the loud-failure contracts)', () =>
     uploaderUserId: 'user_1',
     workItemId: 'wi_1',
     source: 'panel',
-    blobUrl: 'https://blob.example/x',
+    blobPathname: 'https://blob.example/x',
     mimeType: 'image/png',
     sizeBytes: 1,
     originalFilename: 'x.png',

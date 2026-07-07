@@ -1955,7 +1955,7 @@ model Attachment {
   // Default `editor`: every pre-5.2 row came through the editor upload path,
   // so the migration's ADD COLUMN backfills existing rows correctly.
   source           AttachmentSource @default(editor)
-  blobUrl          String           @map("blob_url")
+  blobPathname     String           @map("blob_pathname")
   mimeType         String           @map("mime_type")
   sizeBytes        Int              @map("size_bytes")
   originalFilename String           @map("original_filename")

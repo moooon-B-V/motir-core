@@ -64,20 +64,20 @@ export const attachmentRepository = {
   },
 
   /**
-   * The link-on-write lookup (5.2.3): resolve the blob URLs a Markdown body
-   * references to attachment rows. WORKSPACE-SCOPED so a foreign URL pasted
-   * into a body never resolves a foreign workspace's row (defence in depth
-   * with the RLS gate — finding #26). Empty input short-circuits to [] without
-   * touching the DB.
+   * The link-on-write lookup (5.2.3; id-based since MOTIR-1668): resolve the
+   * attachment IDS a Markdown body references (via their content path) to rows.
+   * WORKSPACE-SCOPED so a foreign id pasted into a body never resolves a foreign
+   * workspace's row (defence in depth with the RLS gate — finding #26). Empty
+   * input short-circuits to [] without touching the DB.
    */
-  async findManyByBlobUrls(
+  async findManyByIds(
     workspaceId: string,
-    urls: string[],
+    ids: string[],
     tx?: Prisma.TransactionClient,
   ): Promise<Attachment[]> {
-    if (urls.length === 0) return [];
+    if (ids.length === 0) return [];
     const client = tx ?? db;
-    return client.attachment.findMany({ where: { workspaceId, blobUrl: { in: urls } } });
+    return client.attachment.findMany({ where: { workspaceId, id: { in: ids } } });
   },
 
   /**

@@ -26,7 +26,12 @@ export interface AttachmentDTO {
    * its source instead.
    */
   source: 'editor' | 'panel';
-  /** The direct blob URL (public-but-unguessable — the recorded Story 5.2 serving decision). */
+  /**
+   * The AUTHENTICATED content path (`/api/attachments/<id>/content`, MOTIR-1667),
+   * usable directly as `<img src>` / a download href — the route authorizes the
+   * viewer and 302-redirects to a short-lived signed URL. NOT a raw/public blob
+   * URL. (Field name retained for consumers; the value is the content path.)
+   */
   blobUrl: string;
   /** True for image MIME types — the card thumbnails it and the 5.2.6 lightbox previews it. */
   isImage: boolean;

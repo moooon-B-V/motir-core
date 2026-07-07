@@ -6,7 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
-import { BLOB_PUBLIC_HOST_SUFFIX } from '@/lib/blob/referencedUrls';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -34,19 +34,20 @@ afterAll(async () => {
 
 let uploadSeq = 0;
 
-/** An editor upload as 2.3.7 writes it: an UNLINKED row + its blob URL. */
+/** An editor upload as 2.3.7 writes it: an UNLINKED private row (a pathname; no
+ *  public URL). Embeds reference it by its content path `attachmentContentPath(id)`. */
 async function createUpload(
   fx: Pick<WorkItemFixture, 'workspaceId' | 'ownerId'>,
   filename: string,
 ): Promise<Attachment> {
   uploadSeq += 1;
-  const blobUrl = `https://store1${BLOB_PUBLIC_HOST_SUFFIX}/attachments/${fx.workspaceId}/${filename}-${uploadSeq}`;
+  const blobPathname = `attachments/${fx.workspaceId}/${filename}-${uploadSeq}`;
   return db.$transaction((tx: Prisma.TransactionClient) =>
     attachmentRepository.create(
       {
         workspaceId: fx.workspaceId,
         uploaderUserId: fx.ownerId,
-        blobUrl,
+        blobPathname,
         mimeType: 'image/png',
         sizeBytes: 4,
         originalFilename: filename,
@@ -79,7 +80,9 @@ describe('createWorkItem — link-on-write', () => {
     const fx = await makeWorkItemFixture();
     const upload = await createUpload(fx, 'shot.png');
 
-    const dto = await createIssue(fx, { descriptionMd: `Look: ![shot](${upload.blobUrl})` });
+    const dto = await createIssue(fx, {
+      descriptionMd: `Look: ![shot](${attachmentContentPath(upload.id)})`,
+    });
 
     const row = await reloaded(upload.id);
     expect(row.workItemId).toBe(dto.id);
@@ -101,7 +104,7 @@ describe('createWorkItem — link-on-write', () => {
     const foreignRow = await createUpload(other, 'foreign.png');
 
     const dto = await createIssue(fx, {
-      descriptionMd: `![leak](${foreignRow.blobUrl}) and [site](https://example.com/a.png)`,
+      descriptionMd: `![leak](${attachmentContentPath(foreignRow.id)}) and [site](https://example.com/a.png)`,
     });
 
     expect((await reloaded(foreignRow.id)).workItemId).toBeNull();
@@ -117,7 +120,7 @@ describe('updateWorkItem — link-on-write', () => {
 
     await workItemsService.updateWorkItem(
       dto.id,
-      { descriptionMd: `now ![added](${upload.blobUrl})` },
+      { descriptionMd: `now ![added](${attachmentContentPath(upload.id)})` },
       fx.ctx,
     );
 
@@ -139,7 +142,7 @@ describe('updateWorkItem — link-on-write', () => {
 
     await workItemsService.updateWorkItem(
       dto.id,
-      { explanationMd: `why: ![expl](${upload.blobUrl})` },
+      { explanationMd: `why: ![expl](${attachmentContentPath(upload.id)})` },
       fx.ctx,
     );
 
@@ -149,7 +152,9 @@ describe('updateWorkItem — link-on-write', () => {
   it('unlinks a de-referenced editor row (GC-eligible) and records the removal', async () => {
     const fx = await makeWorkItemFixture();
     const upload = await createUpload(fx, 'gone.png');
-    const dto = await createIssue(fx, { descriptionMd: `![gone](${upload.blobUrl})` });
+    const dto = await createIssue(fx, {
+      descriptionMd: `![gone](${attachmentContentPath(upload.id)})`,
+    });
 
     await workItemsService.updateWorkItem(dto.id, { descriptionMd: 'embed removed' }, fx.ctx);
 
@@ -164,10 +169,12 @@ describe('updateWorkItem — link-on-write', () => {
   it('keeps a row linked while the OTHER body still references it', async () => {
     const fx = await makeWorkItemFixture();
     const upload = await createUpload(fx, 'both.png');
-    const dto = await createIssue(fx, { descriptionMd: `![x](${upload.blobUrl})` });
+    const dto = await createIssue(fx, {
+      descriptionMd: `![x](${attachmentContentPath(upload.id)})`,
+    });
     await workItemsService.updateWorkItem(
       dto.id,
-      { explanationMd: `also ![x](${upload.blobUrl})` },
+      { explanationMd: `also ![x](${attachmentContentPath(upload.id)})` },
       fx.ctx,
     );
 
@@ -179,7 +186,7 @@ describe('updateWorkItem — link-on-write', () => {
   it('re-saving an unchanged body is a full no-op (no write, no revision)', async () => {
     const fx = await makeWorkItemFixture();
     const upload = await createUpload(fx, 'same.png');
-    const body = `![same](${upload.blobUrl})`;
+    const body = `![same](${attachmentContentPath(upload.id)})`;
     const dto = await createIssue(fx, { descriptionMd: body });
 
     await workItemsService.updateWorkItem(dto.id, { descriptionMd: body }, fx.ctx);
@@ -191,12 +198,14 @@ describe('updateWorkItem — link-on-write', () => {
   it('never steals a row already linked to ANOTHER issue', async () => {
     const fx = await makeWorkItemFixture();
     const upload = await createUpload(fx, 'owned.png');
-    const first = await createIssue(fx, { descriptionMd: `![x](${upload.blobUrl})` });
+    const first = await createIssue(fx, {
+      descriptionMd: `![x](${attachmentContentPath(upload.id)})`,
+    });
     const second = await createIssue(fx);
 
     await workItemsService.updateWorkItem(
       second.id,
-      { descriptionMd: `pasted ![x](${upload.blobUrl})` },
+      { descriptionMd: `pasted ![x](${attachmentContentPath(upload.id)})` },
       fx.ctx,
     );
 
@@ -213,7 +222,7 @@ describe('updateWorkItem — link-on-write', () => {
     );
     await workItemsService.updateWorkItem(
       dto.id,
-      { descriptionMd: `shows ![p](${upload.blobUrl})` },
+      { descriptionMd: `shows ![p](${attachmentContentPath(upload.id)})` },
       fx.ctx,
     );
 
@@ -231,7 +240,11 @@ describe('comment write paths — link-on-write', () => {
     const dto = await createIssue(fx);
     const upload = await createUpload(fx, 'note.png');
 
-    await commentsService.addComment(dto.id, { bodyMd: `see ![note](${upload.blobUrl})` }, fx.ctx);
+    await commentsService.addComment(
+      dto.id,
+      { bodyMd: `see ![note](${attachmentContentPath(upload.id)})` },
+      fx.ctx,
+    );
 
     const row = await reloaded(upload.id);
     expect(row.workItemId).toBe(dto.id);
@@ -247,7 +260,7 @@ describe('comment write paths — link-on-write', () => {
     const fx = await makeWorkItemFixture();
     const dto = await createIssue(fx);
     const upload = await createUpload(fx, 'shared.png');
-    const embed = `![s](${upload.blobUrl})`;
+    const embed = `![s](${attachmentContentPath(upload.id)})`;
 
     const first = await commentsService.addComment(dto.id, { bodyMd: `a ${embed}` }, fx.ctx);
     await commentsService.addComment(dto.id, { bodyMd: `b ${embed}` }, fx.ctx);
@@ -262,16 +275,23 @@ describe('comment write paths — link-on-write', () => {
     const rootUpload = await createUpload(fx, 'root.png');
     const replyUpload = await createUpload(fx, 'reply.png');
     const keptUpload = await createUpload(fx, 'kept.png');
-    const dto = await createIssue(fx, { descriptionMd: `desc keeps ![k](${keptUpload.blobUrl})` });
+    const dto = await createIssue(fx, {
+      descriptionMd: `desc keeps ![k](${attachmentContentPath(keptUpload.id)})`,
+    });
 
     const root = await commentsService.addComment(
       dto.id,
-      { bodyMd: `root ![r](${rootUpload.blobUrl}) and ![k](${keptUpload.blobUrl})` },
+      {
+        bodyMd: `root ![r](${attachmentContentPath(rootUpload.id)}) and ![k](${attachmentContentPath(keptUpload.id)})`,
+      },
       fx.ctx,
     );
     await commentsService.addComment(
       dto.id,
-      { bodyMd: `reply ![rep](${replyUpload.blobUrl})`, parentCommentId: root.id },
+      {
+        bodyMd: `reply ![rep](${attachmentContentPath(replyUpload.id)})`,
+        parentCommentId: root.id,
+      },
       fx.ctx,
     );
 

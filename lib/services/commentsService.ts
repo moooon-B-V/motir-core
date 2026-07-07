@@ -15,8 +15,8 @@ import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
-  extractReferencedBlobUrls,
-  extractReferencedBlobUrlsFromBodies,
+  extractReferencedAttachmentIds,
+  extractReferencedAttachmentIdsFromBodies,
 } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { toCommentDto, toCommentThreadDto } from '@/lib/mappers/commentMappers';
@@ -144,13 +144,13 @@ function requireBody(bodyMd: string): string {
  */
 async function syncCommentAttachmentLinks(
   workItem: WorkItem,
-  previousUrls: readonly string[],
-  nextUrls: readonly string[],
+  previousIds: readonly string[],
+  nextIds: readonly string[],
   actorId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  if (previousUrls.length === 0 && nextUrls.length === 0) return;
-  const cell = await attachmentsService.syncEditorLinks({ workItem, previousUrls, nextUrls }, tx);
+  if (previousIds.length === 0 && nextIds.length === 0) return;
+  const cell = await attachmentsService.syncEditorLinks({ workItem, previousIds, nextIds }, tx);
   if (!cell) return;
   await workItemRevisionsService.recordRevision(
     {
@@ -266,7 +266,7 @@ export const commentsService = {
       await syncCommentAttachmentLinks(
         gate.item,
         [],
-        extractReferencedBlobUrls(bodyMd, ctx.workspaceId),
+        extractReferencedAttachmentIds(bodyMd),
         ctx.userId,
         tx,
       );
@@ -374,8 +374,8 @@ export const commentsService = {
         // comment, and a URL kept elsewhere on the issue stays linked.
         await syncCommentAttachmentLinks(
           gate.item,
-          extractReferencedBlobUrls(current.bodyMd, ctx.workspaceId),
-          extractReferencedBlobUrls(bodyMd, ctx.workspaceId),
+          extractReferencedAttachmentIds(current.bodyMd),
+          extractReferencedAttachmentIds(bodyMd),
           ctx.userId,
           tx,
         );
@@ -450,10 +450,10 @@ export const commentsService = {
       // description or a surviving comment still references stays linked.
       await syncCommentAttachmentLinks(
         gate.item,
-        extractReferencedBlobUrlsFromBodies(
-          [current.bodyMd, ...replies.map((reply) => reply.bodyMd)],
-          ctx.workspaceId,
-        ),
+        extractReferencedAttachmentIdsFromBodies([
+          current.bodyMd,
+          ...replies.map((reply) => reply.bodyMd),
+        ]),
         [],
         ctx.userId,
         tx,
