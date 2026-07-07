@@ -15,6 +15,30 @@
 - **Supersedes / superseded by:** supersedes the "make the Blob store public"
   option floated in the incident triage (MOTIR-1665 was born a bug) — explicitly
   rejected here on security grounds.
+- **Amendment (2026-07-07, MOTIR-1665 re-decomposition) — TWO stores (public
+  avatars / private content), the real 2.4.0 signing flow, and id-based editor
+  embeds.** Tracing the true blast radius refined three things this ADR's first
+  draft under-specified:
+  - **Two stores, not one.** **Avatars are PUBLIC** — a profile picture renders
+    everywhere (member lists, mentions, assignee chips) with **no per-item auth
+    context** and wants CDN-cacheable URLs; putting it behind a per-item signed
+    redirect is both wrong and expensive. So avatars go to a dedicated **public**
+    Blob store (`putPublicAsset`; `User.image` stays a public URL). Only
+    **content** (comment/description embeds, panel files, acceptance video +
+    trace) is **private** (`putPrivateAttachment` + the content route). The single
+    `putAttachment` splits into `putPublicAsset` / `putPrivateAttachment`.
+  - **Signing flow.** A private download URL uses the `@vercel/blob` 2.4.0
+    **`issueSignedToken` → `presignUrl`** delegation flow — NOT
+    `head().downloadUrl` (which doesn't accept `access`).
+  - **Editor embeds go ID-BASED.** The editor-embed / link-on-write pipeline
+    (`uploadClient` / `referencedUrls` / `syncEditorLinks`) matched rows by the
+    public URL string; with no public URL it now inserts + matches the **content
+    path `/api/attachments/<id>/content`** and links by attachment id.
+    This grew the story to: adapter (MOTIR-1672), avatars→public (MOTIR-1673) +
+    public-store provisioning (MOTIR-1671), content-private (MOTIR-1667), editor-
+    embed id (MOTIR-1668), acceptance video+trace (MOTIR-1674), tests
+    (MOTIR-1669/1670). §1–§2 below read against the private (content) store; the
+    public-avatar store is the parallel path.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md`): a decision record is a markdown
