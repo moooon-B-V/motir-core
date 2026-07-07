@@ -47,7 +47,12 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
 
   await chapter('Open the story in review', async () => {
     await page.goto(`/items/${story.identifier}`);
-    await expect(page.getByRole('heading', { name: 'Acceptance', exact: true })).toBeVisible();
+    // First test in the file → first hit of /items/[id]; `next dev` compiles the
+    // route on demand, so give this initial assertion cold-compile headroom
+    // (the default 20s can be tight under CI load). Later tests hit it warm.
+    await expect(page.getByRole('heading', { name: 'Acceptance', exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
     // The chaptered player + the gate buttons are present (State A).
     await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
     await expect(page.getByText('Open the story')).toBeVisible(); // a chapter marker
