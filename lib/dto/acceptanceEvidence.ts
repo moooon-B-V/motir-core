@@ -25,11 +25,11 @@ export interface AcceptanceEvidenceDTO {
   /** The story this evidence accepts. */
   workItemId: string;
   status: AcceptanceEvidenceStatusDTO;
-  /** The direct blob URL of the recorded video (public-but-unguessable). */
+  /** The authenticated content path for the recorded video (`/api/attachments/[id]/content`). */
   videoUrl: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
-  /** The Playwright trace blob URL (dev diagnostic), when captured. */
+  /** The authenticated content path for the Playwright trace (dev diagnostic), when captured. */
   traceUrl: string | null;
   chapters: AcceptanceEvidenceChapterDTO[];
   /** Provenance from the CI run that produced the video. */

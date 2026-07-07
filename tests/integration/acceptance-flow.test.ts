@@ -17,6 +17,8 @@ vi.mock('@/lib/blob/uploader', () => {
     putAttachment: vi.fn(async (p: string) => ({
       url: `https://store1.public.blob.vercel-storage.com/${p}-${++seq}`,
     })),
+    putPrivateAttachment: vi.fn(async (p: string) => ({ pathname: `${p}-${++seq}` })),
+    signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
     deleteAttachmentBlob: vi.fn(async () => {}),
   };
 });
@@ -93,7 +95,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     const panel = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
     expect(panel).not.toBeNull();
     expect(panel!.status).toBe('pending');
-    expect(panel!.videoUrl).toContain('vercel-storage.com');
+    expect(panel!.videoUrl).toMatch(/^\/api\/attachments\/.+\/content$/);
     expect(panel!.chapters).toEqual([{ label: 'Open the story', tSeconds: 2 }]);
     expect(panel!.commitSha).toBe('deadbeefcafe');
     expect(panel!.producedByKey).toBe('MOTIR-1638');

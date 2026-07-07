@@ -107,9 +107,9 @@ export const acceptanceEvidenceService = {
       input.video,
       input.video.type,
     );
-    let traceUrl: string | null = null;
+    let tracePathname: string | null = null;
     if (input.trace) {
-      traceUrl = (
+      tracePathname = (
         await putPrivateAttachment(
           `acceptance/${ctx.workspaceId}/${story.id}/trace-${input.trace.name}`,
           input.trace,
@@ -125,10 +125,13 @@ export const acceptanceEvidenceService = {
         const prior = await acceptanceEvidenceRepository.findCurrentByWorkItem(story.id, tx);
         if (prior) {
           await acceptanceEvidenceRepository.markSupersededByWorkItem(story.id, tx);
-          // Unlink the superseded video so the orphan-GC reclaims its blob after
-          // the safety window (retention: one current video per story).
-          if (prior.attachmentId) {
-            await attachmentRepository.unlinkFromWorkItem([prior.attachmentId], tx);
+          // Unlink the superseded video + trace so the orphan-GC reclaims their
+          // blobs after the safety window (one current receipt per story).
+          const priorAttachmentIds = [prior.attachmentId, prior.traceAttachmentId].filter(
+            (id): id is string => id !== null,
+          );
+          if (priorAttachmentIds.length > 0) {
+            await attachmentRepository.unlinkFromWorkItem(priorAttachmentIds, tx);
           }
         }
         const attachment = await attachmentRepository.create(
@@ -144,12 +147,29 @@ export const acceptanceEvidenceService = {
           },
           tx,
         );
+        let traceAttachmentId: string | null = null;
+        if (tracePathname && input.trace) {
+          const traceAttachment = await attachmentRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              uploaderUserId: ctx.userId,
+              workItemId: story.id,
+              source: 'acceptance_trace',
+              blobPathname: tracePathname,
+              mimeType: input.trace.type,
+              sizeBytes: input.trace.size,
+              originalFilename: input.trace.name,
+            },
+            tx,
+          );
+          traceAttachmentId = traceAttachment.id;
+        }
         return acceptanceEvidenceRepository.create(
           {
             workspaceId: ctx.workspaceId,
             workItemId: story.id,
             attachmentId: attachment.id,
-            traceUrl,
+            traceAttachmentId,
             chapters: (input.chapters ?? []) as unknown as Prisma.InputJsonValue,
             status: 'pending',
             commitSha: input.commitSha ?? null,

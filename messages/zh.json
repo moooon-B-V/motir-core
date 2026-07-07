@@ -21,7 +21,8 @@
     },
     "approvedBy": "由 {name} 批准",
     "provenance": {
-      "ciRun": "CI 运行"
+      "ciRun": "CI 运行",
+      "trace": "追踪"
     },
     "status": {
       "approved": "已批准",

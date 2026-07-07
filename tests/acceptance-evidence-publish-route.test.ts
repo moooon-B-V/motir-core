@@ -17,6 +17,8 @@ vi.mock('@/lib/blob/uploader', () => {
     putAttachment: vi.fn(async (p: string) => ({
       url: `https://store1.public.blob.vercel-storage.com/${p}-${++seq}`,
     })),
+    putPrivateAttachment: vi.fn(async (p: string) => ({ pathname: `${p}-${++seq}` })),
+    signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
     deleteAttachmentBlob: vi.fn(async () => {}),
   };
 });

@@ -258,6 +258,15 @@ export function AcceptancePanel({
             {t('provenance.ciRun')}
           </a>
         ) : null}
+        {evidence.traceUrl ? (
+          <a
+            href={evidence.traceUrl}
+            className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden />
+            {t('provenance.trace')}
+          </a>
+        ) : null}
         {evidence.producedByKey ? (
           <span className="inline-flex items-center rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
             {evidence.producedByKey}

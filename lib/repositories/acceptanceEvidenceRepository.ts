@@ -11,7 +11,10 @@ export const acceptanceEvidenceRepository = {
     data: Prisma.AcceptanceEvidenceUncheckedCreateInput,
     tx: Prisma.TransactionClient,
   ): Promise<AcceptanceEvidenceWithAttachment> {
-    return tx.acceptanceEvidence.create({ data, include: { attachment: true } });
+    return tx.acceptanceEvidence.create({
+      data,
+      include: { attachment: true, traceAttachment: true },
+    });
   },
 
   /**
@@ -27,7 +30,7 @@ export const acceptanceEvidenceRepository = {
     const client = tx ?? db;
     return client.acceptanceEvidence.findFirst({
       where: { workItemId, isCurrent: true },
-      include: { attachment: true },
+      include: { attachment: true, traceAttachment: true },
     });
   },
 
@@ -39,7 +42,7 @@ export const acceptanceEvidenceRepository = {
     const client = tx ?? db;
     return client.acceptanceEvidence.findUnique({
       where: { id },
-      include: { attachment: true },
+      include: { attachment: true, traceAttachment: true },
     });
   },
 
@@ -92,7 +95,7 @@ export const acceptanceEvidenceRepository = {
     return tx.acceptanceEvidence.update({
       where: { id },
       data,
-      include: { attachment: true },
+      include: { attachment: true, traceAttachment: true },
     });
   },
 };

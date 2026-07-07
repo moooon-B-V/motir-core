@@ -5,9 +5,10 @@ import type {
   AcceptanceEvidenceDTO,
 } from '@/lib/dto/acceptanceEvidence';
 
-/** An evidence row with its (optional) joined video Attachment. */
+/** An evidence row with its (optional) joined video + trace Attachments. */
 export type AcceptanceEvidenceWithAttachment = AcceptanceEvidence & {
   attachment: Attachment | null;
+  traceAttachment: Attachment | null;
 };
 
 /**
@@ -44,7 +45,7 @@ export function toAcceptanceEvidenceDto(
     videoUrl: row.attachment ? attachmentContentPath(row.attachment.id) : null,
     mimeType: row.attachment?.mimeType ?? null,
     sizeBytes: row.attachment?.sizeBytes ?? null,
-    traceUrl: row.traceUrl,
+    traceUrl: row.traceAttachment ? attachmentContentPath(row.traceAttachment.id) : null,
     chapters: toChapters(row.chapters),
     commitSha: row.commitSha,
     ciRunUrl: row.ciRunUrl,
