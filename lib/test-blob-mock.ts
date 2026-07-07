@@ -72,4 +72,23 @@ export function installBlobStoreMock(agent: MockAgent): void {
     .intercept({ path: (path) => path.startsWith('/api/blob/delete'), method: 'POST' })
     .reply(200, {}, { headers: { 'content-type': 'application/json' } })
     .persist();
+
+  // Private-attachment signing (MOTIR-1665): `signedDownloadUrl` calls
+  // `issueSignedToken` (POST /api/blob/signed-token) then builds the presigned
+  // URL locally. Reply with synthetic delegation material so the server-side
+  // signing flow completes off-network; the E2E's own `page.route` fulfils the
+  // resulting object-host fetch. (The acceptance E2E — MOTIR-1670 — exercises
+  // this end-to-end and refines it if the delegation shape needs more.)
+  pool
+    .intercept({ path: (path) => path.startsWith('/api/blob/signed-token'), method: 'POST' })
+    .reply(
+      200,
+      {
+        clientSigningToken: 'e2e-client-signing-token',
+        delegationToken: 'e2e-delegation-token',
+        validUntil: 4102444800000, // 2100-01-01, comfortably in the future
+      },
+      { headers: { 'content-type': 'application/json' } },
+    )
+    .persist();
 }
