@@ -194,6 +194,13 @@ model User {
   // (the apiTokens pattern). Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   githubIdentity            GithubIdentity?
+  // The user's per-source import OAuth identities (Story 7.16 · MOTIR-1653) —
+  // the encrypted token store the per-vendor connect flows (7.16.11–13) and the
+  // import routes read/write through (0..N, one per source × workspace).
+  // Cascade: personal auth substrate carrying only encrypted vendor tokens, it
+  // dies with the user (the githubIdentity pattern). Modelled on both sides per
+  // the FK-`@relation` rule so `migrate dev` reports no drift.
+  importSourceIdentities    ImportSourceIdentity[]
   // Per-user canvas node arrangements (Story 7.3 · Subtask 7.3.77) — where the
   // user dragged each node on a project's planning canvas, persisted so a drag
   // survives reload. Cascade: personal layout substrate, it dies with the user
@@ -499,6 +506,9 @@ model Workspace {
   // Workspace-scoped tenant data — cascade with the workspace.
   imports                  Import[]
   importedIssues           ImportedIssue[]
+  // Per-user import OAuth identities scoped to this workspace (Story 7.16 ·
+  // MOTIR-1653) — the encrypted vendor-token store. Cascade with the workspace.
+  importSourceIdentities   ImportSourceIdentity[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -3223,6 +3233,52 @@ model GithubIdentity {
 
   @@index([userId])
   @@map("github_identity")
+}
+
+/// A per-user OAuth identity for an EXTERNAL import source (Story 7.16 ·
+/// MOTIR-1653) — the "Model A" substrate that replaces the paste-a-token path.
+/// It mirrors GithubIdentity: the OAuth connect flows (7.16.11–13) and the
+/// import routes (MOTIR-941) read/write through it so the live connectors
+/// (Jira / Linear / Plane) authenticate with a STORED, ENCRYPTED token, never a
+/// credential pasted into the wizard.
+///
+/// One identity per (`userId`, `source`, `workspaceId`) — a member can connect
+/// each vendor once per workspace. Both tokens are stored ENCRYPTED at rest
+/// (AES-256-GCM via lib/crypto/tokenCrypto.ts), never plaintext, and never leave
+/// the service layer (no DTO exposes them; the fetch-and-decrypt read is
+/// server-to-server, for the connectors). `metadata` carries the vendor's
+/// per-connection context (the Jira cloud id / site URL, the Plane base URL +
+/// workspace slug). RLS keys on `app.user_id` (the GithubIdentity precedent):
+/// the connect callback + the connector read persist/read under
+/// `withUserContext`, so a member only ever touches their own identity.
+model ImportSourceIdentity {
+  id                    String       @id @default(cuid())
+  source                ImportSource
+  userId                String       @map("user_id")
+  workspaceId           String       @map("workspace_id")
+  /// The vendor access token, encrypted at rest (never plaintext). Only
+  /// lib/crypto/tokenCrypto.ts + importSourceIdentityService ever read/write it.
+  accessTokenEncrypted  String       @map("access_token_encrypted")
+  /// The vendor refresh token (OAuth flows that issue one — e.g. Jira 3LO),
+  /// encrypted at rest; null for sources that return no refresh token.
+  refreshTokenEncrypted String?      @map("refresh_token_encrypted")
+  /// When the access token expires (null when the vendor issues a
+  /// non-expiring token); the refresh flow reads it to decide when to refresh.
+  expiresAt             DateTime?    @map("expires_at")
+  /// Per-connection vendor context (Json): the Jira cloud id / site URL, the
+  /// Plane base URL + workspace slug — whatever the connector needs to address
+  /// the right instance. Carries NO secret (the tokens are the encrypted cols).
+  metadata              Json?
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("import_source_identity")
 }
 
 /// A GitHub App installation on a workspace (Story 7.10 · MOTIR-891) — "Grant 2"
