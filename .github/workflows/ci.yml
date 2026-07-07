@@ -376,10 +376,34 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # MOTIR-1679: retry the browser / OS-deps install (up to 3× with backoff).
+      # `playwright install-deps` shells out to `apt-get` (and the cache-miss
+      # `--with-deps` path also downloads the browser binary), so a transient
+      # mirror 503 / apt hash-mismatch / dpkg-lock / network blip makes the step
+      # exit 1 and kills the WHOLE leg at setup — `Run E2E` is then skipped, 0
+      # tests run (~1m runtime is the tell), and the red is indistinguishable
+      # from a real regression. A transient apt/network failure self-heals on a
+      # retry, so retry instead of red-lighting the PR.
+      - name: Install Playwright browser + OS deps (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec playwright install --with-deps chromium; then exit 0; fi
+            echo "::warning::playwright install --with-deps attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::playwright install --with-deps failed after 3 attempts"
+          exit 1
+      - name: Install Playwright OS deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec playwright install-deps chromium; then exit 0; fi
+            echo "::warning::playwright install-deps attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::playwright install-deps failed after 3 attempts"
+          exit 1
       # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
       # pinned `inngest-cli` devDependency — `pnpm install` above runs its
       # postinstall (allowlisted in pnpm-workspace.yaml `allowBuilds`) to fetch
