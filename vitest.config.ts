@@ -27,6 +27,12 @@ process.env['GITHUB_APP_CLIENT_ID'] ??= 'test-github-client-id';
 process.env['GITHUB_APP_CLIENT_SECRET'] ??= 'test-github-client-secret';
 process.env['GITHUB_TOKEN_ENCRYPTION_KEY'] ??=
   '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
+// Linear import "Connect" OAuth app (Story 7.16 · MOTIR-1655). Client id/secret
+// let linearImportOAuthService resolve config without a real Linear app (the
+// token exchange is stubbed per-test); import-token encryption falls back to
+// GITHUB_TOKEN_ENCRYPTION_KEY above. Never reach Linear.
+process.env['LINEAR_OAUTH_CLIENT_ID'] ??= 'test-linear-client-id';
+process.env['LINEAR_OAUTH_CLIENT_SECRET'] ??= 'test-linear-client-secret';
 
 // Vitest defaults to the Node environment for integration tests against a
 // real Postgres. The first browser-style component test arrived in Story 1.4
