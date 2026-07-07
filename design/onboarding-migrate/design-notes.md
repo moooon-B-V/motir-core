@@ -5,8 +5,9 @@ onboarding, Workflow B) · **Epic 7 · AI Planning Layer.**
 
 The **wizard** for onboarding an EXISTING codebase into Motir. **Required core = Connect + Index** (link
 the repos, Motir reads the code + silently derives per-repo conventions + a code-health check, auto-used,
-nothing to approve). Everything after — **optional**: import your existing backlog, a light discovery
-pass, a **code-aware** plan generate + review. It is the layout source of truth for the wizard UI code
+nothing to approve). Everything after — **optional**: import your existing backlog, then plan in the
+**existing universal plan screen** (`PlanningWorkspace`, MOTIR-1193/1299 — already built, NOT designed
+here; the wizard just opens it after import). It is the layout source of truth for the wizard UI code
 subtask **7.15.5 / MOTIR-934** and the orchestration wiring **7.15.2 / MOTIR-931** (both `blocked_by`
 this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 
@@ -93,14 +94,13 @@ read on disk this session, not assumed):
 
 **How each step becomes multi-repo (what the mock now draws):**
 
-| Step                                                   | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connect** (Panel 1)                                  | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                |
-| **Index** (Panel 2)                                    | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols". |
-| **Conventions + code-health** (NOT an onboarding step) | Derived **PER REPO** from the code + a code-health check, **auto-used, NO approval, NOT surfaced in onboarding** — the Index-complete state just notes "conventions + code-health derived, nothing to approve; on the Code health page". The audit + read-only View + chat-to-revise all live on the **Code-health page (7.14)**, post-onboarding.                           |
-| **Discovery** (Panel 4)                                | "I've read your **3 repositories** — a Next.js web app, a Node API and a shared package…" — the AI's code context is the whole project.                                                                                                                                                                                                                                      |
-| **Generate** (Panel 5)                                 | The plan is grounded in the **whole-project code graph**; each proposed node carries a **repo tag** (`acme/api` / `acme/web`) so it's clear which repo the work lands in, and a cross-repo proposal (reminders reuse the API's notification service) reads naturally.                                                                                                        |
-| **States** (Panel 6)                                   | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("set up — paused before the optional import / plan steps").                                                                                                                                                 |
+| Step                                                          | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connect** (Panel 1)                                         | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                |
+| **Index** (Panel 2)                                           | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols". |
+| **Conventions + code-health** (NOT an onboarding step)        | Derived **PER REPO** from the code + a code-health check, **auto-used, NO approval, NOT surfaced in onboarding** — the Index-complete state just notes "conventions + code-health derived, nothing to approve; on the Code health page". The audit + read-only View + chat-to-revise all live on the **Code-health page (7.14)**, post-onboarding.                           |
+| **Planning** (the universal plan screen — not a wizard panel) | Reached after the optional import step; grounded in the **whole-project code graph** across all repos — each proposed item carries a **repo tag** (`acme/api` / `acme/web`) and honours that repo's convention; cross-repo proposals (reminders reuse the API's service) read naturally. NOT designed here — the existing `PlanningWorkspace` (MOTIR-1193/1299).             |
+| **States** (Panel 4)                                          | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("set up — paused before the optional import / plan steps").                                                                                                                                                 |
 
 **Implications for the downstream build cards (flagged, not built here):**
 
@@ -130,8 +130,9 @@ read on disk this session, not assumed):
 - **All AI conversation rides ONE surface (Yue).** Planning (the migrate wizard's Generate/Review composes
   it via 7.3.1), the convention refine, project Q&A, task help — every AI chat is the **universal
   `PlanningWorkspace` / "Plan with AI" launcher** (the always-present top-bar pill + floating-"M" callout,
-  "the home of ALL AI"). This card invents NO bespoke chat: the migrate wizard's discovery + generate
-  compose the shared surfaces, and the top-bar Plan-with-AI is that one universal entrance.
+  "the home of ALL AI"). This card invents NO bespoke chat and NO planning panel: the migrate wizard
+  **opens** the shared planning screen (after the import step, and via the top-bar Plan-with-AI) — it does
+  not re-draw it.
 
 ---
 
@@ -161,12 +162,13 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 
 1. **Two tiers, one grouped rail.** The rail is split into **"Set up your codebase"
    (required)** — **just `Connect · Index`** — and **"Import & plan · optional"** —
-   **`Import work items · Discovery · Generate · Review`**. Each step's state: **done** (mint check),
+   **`Import work items · Plan your project`**. Each step's state: **done** (mint check),
    **current** (accent marker + an `--el-accent-on-surface` ring row), **upcoming** (quiet outline
    marker), **optional** (a **dashed** marker — reachable, not forced). A `.rail-group` header carries the
-   tier name; the optional tier's header carries an `optional` chip. The **Import work items** step uses an
-   **icon marker** (a download glyph), not a number; the numbered steps are `Connect 1 · Index 2` then the
-   optional `Discovery 3 · Generate 4 · Review 5`.
+   tier name; the optional tier's header carries an `optional` chip. Only the required steps are numbered
+   (`Connect 1 · Index 2`); the optional tier uses **icon markers** — a download glyph for **Import work
+   items** and a **sparkle** for **Plan your project**, which is a **handoff** (meta "Opens your planning
+   workspace"), NOT a wizard step (see §Planning-is-the-universal-screen).
 2. **★ The required core is just Connect + Index; conventions + code-health are derived SILENTLY, not an
    onboarding step (Yue, 2026-07-05).** Linking + reading the code must NOT force any commitment or
    "worry". Once the code is indexed, Motir **derives per-repo coding conventions + a code-health check
@@ -179,10 +181,11 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
    by whoever wants them, never a wizard step.
 3. **★ Import + planning are OPTIONAL — the import/plan-or-later DECISION.** After set-up (Connect +
    Index) the user hits a **`.decision`** — **"Bring in your work or plan now?"** with **"Continue"**
-   (into the optional tier) and **"Finish — I'll do it later"**. The optional tier: **Import work items**
-   (skippable), Discovery, Generate, Review (each with skip / finish-later outs). **"Plan with AI" is in
-   the top bar on every panel** (the always-present launcher, `design/ai-chat` — composed, cited), so
-   finishing at set-up loses nothing. The finish-early exit is drawn in the states panel ("Your codebase
+   (into the optional tier) and **"Finish — I'll do it later"**. The optional tier is just **Import work
+   items** (skippable) then **Plan your project** — and "Plan your project" **opens the EXISTING universal
+   plan screen** (not a wizard panel; see §Planning-is-the-universal-screen). **"Plan with AI" is in the
+   top bar on every panel** (the always-present launcher, `design/ai-chat` — composed, cited), so finishing
+   at set-up loses nothing. The finish-early exit is drawn in the states panel ("Your codebase
    is in Motir · Plan with AI"). (This REPLACES the earlier locked-Generate gate AND the per-repo
    convention approve-step — both are gone.)
 4. **The index gate (Cursor mirror) — aggregate across repos.** `Next` on step 2 is **disabled** (a
@@ -209,8 +212,9 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 The whole frame: **brand bar** (Motir wordmark · "Import an existing project" flow label · **"Plan with
 AI"** launcher · **Save & exit** · avatar) over the `[260px rail | content]` grid. The rail is
 **grouped into two tiers** with `.rail-group` headers: **"Set up your codebase"** (`Connect ✓ · Index ✓`
-— **just those two**) and **"Import & plan"** + an `optional` chip (`Import work items · Discovery ·
-Generate · Review`, each a **dashed** `.step.optional` marker — reachable, not padlocked). Drawn at the
+— **just those two**) and **"Import & plan"** + an `optional` chip (`Import work items · Plan your
+project`, each a **dashed** `.step.optional` marker — reachable, not padlocked; "Plan your project" is a
+sparkle-marked **handoff** that opens the existing plan screen, not a wizard step). Drawn at the
 **decision moment**: eyebrow **"Set up · the decision point"**, H1 **"Your codebase is in Motir — bring in
 your work, plan, or finish"**, a lead that Motir **silently set up per-repo conventions + a code-health
 check — nothing to approve, on the _Code health_ page**, then the **`.decision`** block — **"Bring in your
@@ -288,36 +292,37 @@ note "the full flow runs here — **nothing is written until you confirm the dry
 `.src-grid` source picker (five `.src` tiles — Jira `--el-tint-sky` · Linear `--el-tint-lavender` ·
 GitHub `--el-tint-mint` · Plane `--el-tint-rose` · CSV `--el-tint-peach`, the exact tint slots
 `design/import` assigns, Jira selected); and an accent **`.callout.info-accent` reconcile** note:
-"**Imported items reconcile with your plan** — when you generate next, Motir de-dupes against the
-imported backlog; an imported ticket wins, generation only adds the gaps your code implies." Footer: Back
-· **"Skip — no backlog to import"** · **"Finish — plan later"** · "Next: discovery". The step is wired by
+"**Imported items reconcile with your plan** — when you plan next in your workspace, Motir de-dupes
+against the imported backlog; an imported ticket wins, generation only adds the gaps your code implies."
+Footer: Back · **"Skip — no backlog to import"** · **"Finish — plan later"** · the primary
+**"Open planning workspace"** (sparkle) — which opens the existing plan screen. The step is wired by
 [MOTIR-1643] (the import-step state machine + reconcile) and built by [MOTIR-934]; the importer engine +
 its standalone wizard are [MOTIR-816] / [MOTIR-942]. **The importer's Connect/Map/Preview/Import internals
 are OWNED by `design/import` — cited, not re-specified here.**
 
-### Panel 4 — Light discovery (optional, **OPTIONAL · skippable**) — **composes 7.2.1 (`design/ai-chat/`)**
+### Planning is the EXISTING universal plan screen — NOT a wizard panel (Yue, 2026-07-07)
 
-A SHORT, **optional** discovery pass, migrate-framed. Eyebrow "Step 4 of 6 · Plan (optional)", H1 **"We
-read your code — now tell us your goals"**, lead "A short, optional conversation … Skip it and Motir
-plans from the code alone — or finish here and plan later." The 7.2 chat surface embedded as a compact
-`Card` (AI / user `.bubble`s + a `.composer`) — the AI opens with what it learned across the **3
-repositories** and points work at the right repo (reminders → `acme/api`, report → `acme/web`). Footer
-carries the **skip outs**: **"Finish — plan later"** + **"Skip discovery"** alongside "Next: generate".
-**Owned by 7.2.1** — cited, not re-designed.
+The migrate wizard designs **no discovery / generate / review panels**. Planning is the **universal plan
+screen that is already implemented** — the `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 /
+MOTIR-1299, `design/ai-chat/planning-workspace`), the ONE surface every AI-planning flow (generation
+review, re-plan, contextual planning) already uses. So this card does **not** draw or re-draw it
+(compose-don't-redraw, #82). ⚠️ The earlier draft drew a bespoke "chat"/generate panel here — **wrong:
+that is NOT the universal plan screen, and the screen is already built, so there is nothing to design.**
 
-### Panel 5 — Code-aware generate + review (optional, **OPTIONAL**) — **composes 7.3.1 (`design/ai-planning/`)**
+**How it's reached.** After the (optional) **Import work items** step, the wizard's forward CTA is **"Open
+planning workspace"** — it opens that existing screen (where Motir proposes a code-aware plan that
+reconciles with the import: no duplicates, grounded in the whole-project code graph, each proposed item
+tagged with the repo it lands in, honouring that repo's derived convention). It is ALSO reachable any time
+from the always-present **Plan with AI** in the top bar. In the rail, the optional tier is
+**`Import work items · Plan your project`**, where "Plan your project" is a **handoff** (a sparkle marker,
+meta "Opens your planning workspace") — not a numbered wizard step.
 
-The 7.3/7.4 generate → review → approve surface embedded, **migrate-specific** and **optional**. Eyebrow
-"Steps 5–6 of 6 · Plan (optional)", H1 **"A plan grounded in your code"**. A **success-tinted** callout:
-**"This plan reflects your existing code — across all 3 repositories. Each proposed item is tagged with
-the repo it lands in and honours that repo's approved convention …"**. The canvas (`--el-canvas` dot-grid)
-shows a firm Story node + dashed-accent **`Subtask · add`** proposed nodes, **each carrying a `.n-repo`
-repo tag** (`acme/api` / `acme/web`) so cross-repo work is legible — over the **confirm-to-persist** bar
-("4 proposed · Nothing saved yet" · Discard · **"Add 4 items to your backlog"**). Footer carries **"Finish
-— plan later"** (a plan left unconfirmed is just a draft). **Owned by 7.3.1 / 7.4** — cited, not
-re-designed.
+**Nothing to design/build here for planning** beyond that handoff: the import-step CTA + the rail entry
+open the shipped `PlanningWorkspace`. The wizard UI subtask (MOTIR-934) wires that open; it does not build
+a planning surface. (The unused `discovery` / `generate` CSS blocks in the mock are dead and may be pruned
+by the build.)
 
-### Panel 6 — finished-early / error / resume states
+### Panel 4 — finished-early / error / resume states
 
 Four states in a `.states-grid`: the ★ **finish-at-set-up exit** — a mint `EmptyState` **"Your codebase
 is in Motir"** ("3 repositories connected, indexed and conventions reviewed. You didn't have to plan
@@ -334,16 +339,15 @@ contract.
 
 ## Which Story owns each embedded surface (compose + cite, don't duplicate)
 
-| Step / surface                                  | Owner (design → build)                                                                                                 | This card |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------- |
-| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                 | designs   |
-| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                     | designs   |
-| Connect GitHub (step 1)                         | **7.7.1** — `design/github/` (build MOTIR-895)                                                                         | composes  |
-| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding) | consumes  |
-| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                       | composes  |
-| Light discovery (step 4)                        | **7.2.1** — `design/ai-chat/` (build MOTIR-804)                                                                        | composes  |
-| Code-aware generate + review (5–6)              | **7.3.1** — `design/ai-planning/` + `design/ai-chat/planning-workspace` (7.4)                                          | composes  |
-| The `/onboarding/import` host route             | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                                                     | replaces  |
+| Step / surface                                  | Owner (design → build)                                                                                                 | This card                 |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                 | designs                   |
+| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                     | designs                   |
+| Connect GitHub (step 1)                         | **7.7.1** — `design/github/` (build MOTIR-895)                                                                         | composes                  |
+| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding) | consumes                  |
+| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                       | composes                  |
+| Planning (discovery / generate / review)        | **The EXISTING universal plan screen** — `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 / 1299), already built | opens (not designed here) |
+| The `/onboarding/import` host route             | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                                                     | replaces                  |
 
 If a step needs a design-system entry none of the above owns, that is a **NEW `design/` subtask**, not
 a code workaround (the AC). None is introduced here — the rail, the chrome, and the index step compose
@@ -439,8 +443,7 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
       exact `--el-tint-*` slots `design/import` assigns) are a compact EMBED that cites the importer's own
       asset; its Connect/Map/Preview/Import internals are NOT re-specified here. New arrangement of `Card` +
       tile grammar; no new primitive.
-- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Audit/conventions = 7.14.1's grade tile + provenance pills, composed **once per repo**; Import = `design/import`'s wizard (embedded); Discovery = 7.2.1's
-      chat bubbles + composer; Generate = 7.3.1's canvas node + confirm-to-persist. Reproduced from their
+- [x] **The embedded surfaces compose their OWN primitives** — Connect = 7.7.1's grant-rows + repo-rows (a **multi-select** repo set) + Switch; Import = `design/import`'s wizard (embedded); Planning = NOT embedded — the "Plan your project" rail entry + the import-step CTA **open** the existing `PlanningWorkspace` (MOTIR-1193/1299), which is not reproduced here. Reproduced from their
       shipped assets, **not re-designed**.
 - [x] Icons are **lucide** (`Sparkles`, `History`, `check`, `github`, `badge-check`, `layout-grid`,
       `database`, `info`, `send`, `circle-check`, `triangle-alert`, `refresh-cw`, `arrow-left`,
