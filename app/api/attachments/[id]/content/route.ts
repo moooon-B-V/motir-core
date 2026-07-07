@@ -17,15 +17,18 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // service call → redirect.
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const ctx = await getWorkspaceContext();
   if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 
   const { id } = await params;
+  // `?download=1` forces content-disposition on the presigned URL (the download
+  // action); its absence serves the blob inline (image/video embeds).
+  const download = new URL(req.url).searchParams.get('download') === '1';
   try {
-    const url = await attachmentsService.getContentRedirect(id, ctx);
+    const url = await attachmentsService.getContentRedirect(id, ctx, { download });
     return NextResponse.redirect(url, 302);
   } catch (err) {
     // The owning item isn't visible / doesn't exist → 404 (never 403).

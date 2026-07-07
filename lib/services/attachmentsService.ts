@@ -234,7 +234,11 @@ export const attachmentsService = {
    * can't browse, reads as {@link AttachmentNotFoundError} (404 — finding #44,
    * never "exists but forbidden").
    */
-  async getContentRedirect(attachmentId: string, ctx: ServiceContext): Promise<string> {
+  async getContentRedirect(
+    attachmentId: string,
+    ctx: ServiceContext,
+    opts: { download?: boolean } = {},
+  ): Promise<string> {
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
@@ -246,7 +250,7 @@ export const attachmentsService = {
         // item to gate against → not addressable (404).
         if (row.workItemId === null) throw new AttachmentNotFoundError(attachmentId);
         await resolveGatedWorkItem(row.workItemId, ctx, tx);
-        return signedDownloadUrl(row.blobPathname);
+        return signedDownloadUrl(row.blobPathname, { download: opts.download });
       },
     );
   },

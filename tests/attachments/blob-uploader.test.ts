@@ -79,7 +79,7 @@ describe('signedDownloadUrl', () => {
       presignedUrl: 'https://priv.example/signed?sig=1',
     } as never);
 
-    const url = await signedDownloadUrl('acceptance/w/s/v-x.webm', 300);
+    const url = await signedDownloadUrl('acceptance/w/s/v-x.webm', { ttlSeconds: 300 });
 
     expect(url).toBe('https://priv.example/signed?sig=1');
     expect(issueSignedTokenMock).toHaveBeenCalledWith(
@@ -93,5 +93,20 @@ describe('signedDownloadUrl', () => {
         access: 'private',
       }),
     );
+  });
+
+  it('appends the ?download=1 content-disposition switch when downloading', async () => {
+    issueSignedTokenMock.mockResolvedValue({
+      clientSigningToken: 'c',
+      delegationToken: 'd',
+      validUntil: 1,
+    } as never);
+    presignUrlMock.mockResolvedValue({
+      presignedUrl: 'https://priv.example/signed?sig=1',
+    } as never);
+
+    const url = await signedDownloadUrl('attachments/w/archive.zip', { download: true });
+
+    expect(url).toBe('https://priv.example/signed?sig=1&download=1');
   });
 });

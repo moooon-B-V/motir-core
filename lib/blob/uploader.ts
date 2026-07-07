@@ -104,14 +104,19 @@ export async function putPrivateAttachment(
  * (whose options take no `access`). The content route 302-redirects to the
  * result, so the TTL only needs to cover that immediate fetch.
  */
-export async function signedDownloadUrl(pathname: string, ttlSeconds = 300): Promise<string> {
-  // E2E: the undici blob mock (E2E_TEST_BLOB) intercepts HTTP calls, but
+export async function signedDownloadUrl(
+  pathname: string,
+  opts: { ttlSeconds?: number; download?: boolean } = {},
+): Promise<string> {
+  const { ttlSeconds = 300, download = false } = opts;
+  // E2E: the undici blob mock (E2E_TEST_BLOB) intercepts server-side HTTP, but
   // `presignUrl` derives the signed URL CLIENT-SIDE from real delegation
-  // material the mock can't forge — so short-circuit to a deterministic
-  // stand-in. The content route only 302-redirects to this; the E2E asserts the
-  // redirect, not the (mocked) blob bytes.
+  // material the mock can't forge — so short-circuit to a URL on the mock blob
+  // host the E2E's own `page.route` serves (the `.public.blob.vercel-storage.com`
+  // glob). `?download=1` is the store's content-disposition switch the fulfiller
+  // honours, so a download fires instead of an inline navigation.
   if (process.env.E2E_TEST_BLOB === '1') {
-    return `https://blob.example/signed/${pathname}`;
+    return `https://e2etest.public.blob.vercel-storage.com/${pathname}${download ? '?download=1' : ''}`;
   }
   const validUntil = Date.now() + ttlSeconds * 1000;
   const token = await issueSignedToken({ pathname, operations: ['get'], validUntil });
@@ -121,5 +126,8 @@ export async function signedDownloadUrl(pathname: string, ttlSeconds = 300): Pro
     access: 'private',
     validUntil,
   });
-  return presignedUrl;
+  // A download forces the store's content-disposition via the `?download=1`
+  // switch (the same one the public-store `downloadUrl` carried pre-1665).
+  if (!download) return presignedUrl;
+  return `${presignedUrl}${presignedUrl.includes('?') ? '&' : '?'}download=1`;
 }
