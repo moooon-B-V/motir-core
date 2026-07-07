@@ -36,6 +36,15 @@ export async function deleteAttachmentBlob(url: string): Promise<void> {
   await del(url);
 }
 
+/**
+ * Delete a PUBLIC-store asset (an avatar) by its URL (MOTIR-1673). Avatars live
+ * in the dedicated public store, so their GC must authorize with the public
+ * store's token — the default `del` targets the private store. Idempotent.
+ */
+export async function deletePublicAsset(url: string): Promise<void> {
+  await del(url, { token: process.env.BLOB_PUBLIC_READ_WRITE_TOKEN });
+}
+
 // ── Access-controlled attachments (MOTIR-1665) — the two-store split ──────────
 // Avatars / public assets go to a dedicated PUBLIC store (a profile picture
 // renders everywhere with no per-item auth context → a directly-fetchable URL).
