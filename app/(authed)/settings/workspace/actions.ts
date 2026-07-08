@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
+import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { LastMemberError } from '@/lib/workspaces/errors';
 
@@ -57,7 +58,7 @@ async function switchToRemainingOrClear(userId: string): Promise<void> {
     cookieStore.set(WORKSPACE_COOKIE_NAME, remaining[0]!.id, {
       httpOnly: false,
       sameSite: 'lax',
-      secure: process.env['NODE_ENV'] === 'production',
+      secure: shouldUseSecureCookies(),
       path: '/',
     });
   } else {

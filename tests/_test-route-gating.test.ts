@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // route files' header + PRODECT_FINDINGS for the gory details.
 import * as workItemsRoute from '@/app/api/%5Ftest/work-items/route';
 import * as workItemLinksRoute from '@/app/api/%5Ftest/work-item-links/route';
+import { productionGate } from '@/app/api/%5Ftest/_helpers';
 
 // Production-build gating for the throwaway `_test/*` route handlers (Subtask
 // 1.4.8). Every handler returns 404 (NOT 403/501) when NODE_ENV === 'production'
@@ -57,5 +58,24 @@ describe('_test/work-item-links route — production gating', () => {
     await assertGated(workItemLinksRoute.GET, url);
     await assertGated(workItemLinksRoute.POST, url);
     await assertGated(workItemLinksRoute.DELETE, url);
+  });
+});
+
+describe('productionGate — E2E production harness (MOTIR-1679)', () => {
+  it('gates (404) in production when the harness flag is NOT set', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_PROD_HARNESS', '');
+    expect(productionGate()?.status).toBe(404);
+  });
+
+  it('does NOT gate (null) in production UNDER the E2E harness — the suite seeds through these routes', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_PROD_HARNESS', '1');
+    expect(productionGate()).toBeNull();
+  });
+
+  it('does NOT gate (null) in development', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(productionGate()).toBeNull();
   });
 });

@@ -376,10 +376,48 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # MOTIR-1679 (the actual root cause): the GitHub ubuntu-24.04 runner image
+      # preconfigures packages.microsoft.com apt sources (azure-cli + MS prod).
+      # Those repos intermittently serve a BROKEN InRelease signature
+      # ("Clearsigned file isn't valid, got 'NOSPLIT' ... is no longer signed"),
+      # which fails the `apt-get update` that `playwright install(-deps)` runs
+      # internally → exit code 100, killing the leg at SETUP (Run E2E skipped, 0
+      # tests run). It lands on a DIFFERENT leg each run (whichever job's apt
+      # re-fetch catches MS mid-glitch) — the flake tell. We do NOT need those
+      # repos to install Chromium's OS deps (they come from the Ubuntu archive),
+      # so drop any apt source referencing packages.microsoft.com before apt runs.
+      # This removes the external dependency entirely; the per-install retry below
+      # stays only as a backstop for genuinely transient Ubuntu-archive blips.
+      - name: Remove broken third-party apt sources (Microsoft)
+        run: |
+          for f in $(grep -rl packages.microsoft.com /etc/apt/sources.list.d/ 2>/dev/null || true); do
+            echo "Removing broken apt source: $f"
+            sudo rm -f "$f"
+          done
+      # Retry the browser / OS-deps install (up to 3× with backoff) as a backstop:
+      # the cache-miss `--with-deps` path also downloads the browser binary, and a
+      # transient Ubuntu-archive 503 / network blip would otherwise red-light the
+      # leg at setup. A transient failure self-heals on retry.
+      - name: Install Playwright browser + OS deps (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec playwright install --with-deps chromium; then exit 0; fi
+            echo "::warning::playwright install --with-deps attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::playwright install --with-deps failed after 3 attempts"
+          exit 1
+      - name: Install Playwright OS deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec playwright install-deps chromium; then exit 0; fi
+            echo "::warning::playwright install-deps attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::playwright install-deps failed after 3 attempts"
+          exit 1
       # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
       # pinned `inngest-cli` devDependency — `pnpm install` above runs its
       # postinstall (allowlisted in pnpm-workspace.yaml `allowBuilds`) to fetch

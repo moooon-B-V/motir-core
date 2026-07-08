@@ -1441,6 +1441,34 @@ export const workItemsService = {
   },
 
   /**
+   * Set a work item's workflow status under a SYSTEM/import context (Story 7.16
+   * · MOTIR-941, the ADR §Consequences #1 "status on import" extension). Unlike
+   * {@link updateStatus}, this reaches ANY valid project status DIRECTLY —
+   * including a done-category one — without walking the interactive
+   * `restricted`-policy legal edges, because an import is an authoritative bulk
+   * operation that places each imported issue in its mapped status (a closed
+   * source issue lands closed). It is NOT a write path around the authority:
+   * it runs the SAME locked, tenant-gated, access-gated `applyStatusTransition`
+   * core (with `system: true`), the target key is still validated against the
+   * project's real statuses (`UnknownStatusError` on an unknown key), and the
+   * status change is still recorded as a revision. A no-op move (already in the
+   * target status — the common case when the mapped status IS the initial one)
+   * returns without a revision. Deliberately emits NO `work-item/transitioned`
+   * event: a bulk import would otherwise fan out one notification per imported
+   * issue (a storm), and the item is freshly created/re-synced by the same run.
+   */
+  async setImportedStatus(
+    workItemId: string,
+    toStatusKey: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const { dto } = await db.$transaction((tx) =>
+      workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx, { system: true }),
+    );
+    return dto;
+  },
+
+  /**
    * Set the CI / verification signal on a work item (Subtask 7.10.6 / MOTIR-894)
    * — the "ready/blocked" signal the CI feedback loop flips, DISTINCT from the
    * workflow `status`: `'passing'` ⇔ the linked PR's latest checks succeeded (the
@@ -1491,7 +1519,7 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
-    opts: { sessionBranch?: string } = {},
+    opts: { sessionBranch?: string; system?: boolean } = {},
   ): Promise<{
     dto: WorkItemDto;
     transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
@@ -1541,13 +1569,26 @@ export const workItemsService = {
     );
     if (!target) throw new UnknownStatusError(toStatusKey);
 
-    const legal = await workflowsService.canTransition(
-      current.projectId,
-      fromKey,
-      toStatusKey,
-      ctx.workspaceId,
-    );
-    if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    // Legal-edge validation, EXCEPT under a system context (`opts.system`). An
+    // AUTHORITATIVE bulk/system operation — the issue importer (MOTIR-941),
+    // whose ADR (docs/decisions/issue-importer.md §Consequences #1) requires
+    // reaching ANY project status directly, INCLUDING a done-category one (a
+    // closed/resolved source issue is imported closed, never re-opened) — sets
+    // the mapped status without walking the interactive `restricted`-policy
+    // legal edges from `isInitial`. The target-status VALIDITY check above
+    // (`getStatusByKey` → `UnknownStatusError`) still holds, so a system set can
+    // only ever reach a REAL project status key; it never bypasses the tenant or
+    // project-access gates. Ordinary user/board moves (no `system`) run the full
+    // legal-transition check unchanged.
+    if (!opts.system) {
+      const legal = await workflowsService.canTransition(
+        current.projectId,
+        fromKey,
+        toStatusKey,
+        ctx.workspaceId,
+      );
+      if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    }
 
     // Build the row write. Reaching a `done`-category status CLEARS the
     // integration branch (Subtask 7.8.11 invariant: done ⇒ sessionBranch null,

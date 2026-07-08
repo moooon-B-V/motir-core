@@ -61,6 +61,7 @@ describe('fileProvider', () => {
   const originalProvider = process.env['EMAIL_PROVIDER'];
   const originalPath = process.env['EMAIL_OUTBOX_PATH'];
   const originalNodeEnv = process.env['NODE_ENV'];
+  const originalHarness = process.env['E2E_PROD_HARNESS'];
   let tmpDir: string;
 
   beforeEach(() => {
@@ -77,6 +78,8 @@ describe('fileProvider', () => {
     else process.env['EMAIL_OUTBOX_PATH'] = originalPath;
     if (originalNodeEnv === undefined) delete process.env['NODE_ENV' as keyof typeof process.env];
     else (process.env as Record<string, string>)['NODE_ENV'] = originalNodeEnv;
+    if (originalHarness === undefined) delete process.env['E2E_PROD_HARNESS'];
+    else process.env['E2E_PROD_HARNESS'] = originalHarness;
   });
 
   it('appends one JSON line per email with the expected shape', async () => {
@@ -127,6 +130,15 @@ describe('fileProvider', () => {
   it('refuses to load in production', () => {
     (process.env as Record<string, string>)['NODE_ENV'] = 'production';
     expect(() => getEmailProvider()).toThrowError(/not allowed in production/);
+  });
+
+  it('loads under the E2E production harness even when NODE_ENV=production (MOTIR-1679)', () => {
+    // The prod-build E2E server forces NODE_ENV=production but IS the test
+    // suite; E2E_PROD_HARNESS=1 lets the file outbox the specs poll still work.
+    (process.env as Record<string, string>)['NODE_ENV'] = 'production';
+    process.env['E2E_PROD_HARNESS'] = '1';
+    expect(() => getEmailProvider()).not.toThrow();
+    expect(typeof getEmailProvider()).toBe('function');
   });
 });
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import { isE2EProdHarness } from '@/lib/e2eProdHarness';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Shared plumbing for the throwaway `_test/*` route handlers (Subtask 1.4.8).
@@ -52,7 +53,12 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
  * return for an unknown/cross-tenant id.
  */
 export function productionGate(): NextResponse | null {
-  if (process.env['NODE_ENV'] === 'production') {
+  // 404 in a real production build, but NOT under the E2E production harness
+  // (MOTIR-1679): that runs a `next start` build (NODE_ENV=production) purely to
+  // avoid the `next dev` compiler flake, and 21 specs seed through these routes.
+  // The routes stay auth-gated + service-only + RLS-backed regardless, and
+  // isE2EProdHarness() is only ever true for the E2E webServer, never a deploy.
+  if (process.env['NODE_ENV'] === 'production' && !isE2EProdHarness()) {
     return NextResponse.json({ code: 'NOT_FOUND' }, { status: 404 });
   }
   return null;

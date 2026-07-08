@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
+import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -217,7 +218,12 @@ export const auth = betterAuth({
         attributes: {
           httpOnly: true,
           sameSite: 'lax',
-          secure: process.env['NODE_ENV'] === 'production',
+          // Secure in real production; NOT under the E2E production harness,
+          // which drives a `next start` build over plain http://localhost — a
+          // Secure cookie would never be returned there, breaking every
+          // signed-in spec (MOTIR-1679). This is the "env-specific override"
+          // the comment above anticipated.
+          secure: shouldUseSecureCookies(),
         },
       },
     },
