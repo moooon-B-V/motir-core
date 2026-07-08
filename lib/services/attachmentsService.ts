@@ -8,7 +8,8 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
+import { deleteAttachmentBlob, putPrivateAttachment, signedDownloadUrl } from '@/lib/blob/uploader';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isAllowedUploadType, isImageType } from '@/lib/blob/allowlist';
 import {
   AttachmentEditorSourcedError,
@@ -39,6 +40,9 @@ export interface UploadContext {
 }
 
 export interface UploadAttachmentResult {
+  /** The created attachment's id — the content-path key AND the link-on-write id. */
+  id: string;
+  /** The authenticated content path the editor embeds: `/api/attachments/<id>/content`. */
   url: string;
   mime: string;
   /** Whether the file embeds inline (`![]`) vs inserts as a link (`[]`). */
@@ -79,10 +83,10 @@ export interface SyncEditorLinksArgs {
     descriptionMd: string | null;
     explanationMd: string | null;
   };
-  /** Blob URLs the OLD version of the just-written body/bodies referenced. */
-  previousUrls: readonly string[];
-  /** Blob URLs the NEW version references ([] on a delete). */
-  nextUrls: readonly string[];
+  /** Attachment ids the OLD version of the just-written body/bodies referenced. */
+  previousIds: readonly string[];
+  /** Attachment ids the NEW version references ([] on a delete). */
+  nextIds: readonly string[];
 }
 
 /**
@@ -193,24 +197,62 @@ export const attachmentsService = {
     if (organizationId) await entitlementsService.assertWithinStorageCap(organizationId, file.size);
 
     const pathname = `attachments/${ctx.workspaceId}/${file.name}`;
-    const { url } = await putAttachment(pathname, file, file.type);
+    const { pathname: blobPathname } = await putPrivateAttachment(pathname, file, file.type);
 
-    // Audit row under the active-workspace RLS context.
-    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      attachmentRepository.create(
-        {
-          workspaceId: ctx.workspaceId,
-          uploaderUserId: ctx.userId,
-          blobUrl: url,
-          mimeType: file.type,
-          sizeBytes: file.size,
-          originalFilename: file.name,
-        },
-        tx,
-      ),
+    // Audit row under the active-workspace RLS context. Capture the row so we can
+    // return its id — the content-path key the editor embeds + the link-on-write
+    // lookup uses (no public URL exists on the private store).
+    const created = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) =>
+        attachmentRepository.create(
+          {
+            workspaceId: ctx.workspaceId,
+            uploaderUserId: ctx.userId,
+            blobPathname,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            originalFilename: file.name,
+          },
+          tx,
+        ),
     );
 
-    return { url, mime: file.type, isImage: isImageType(file.type) };
+    return {
+      id: created.id,
+      url: attachmentContentPath(created.id),
+      mime: file.type,
+      isImage: isImageType(file.type),
+    };
+  },
+
+  /**
+   * The authenticated content read (MOTIR-1667): resolve an attachment id to a
+   * short-lived signed download URL, but ONLY for a viewer who can see the
+   * owning work item. The route 302-redirects to the returned URL. A missing /
+   * cross-workspace / unlinked (orphan) row, or one whose owning item the caller
+   * can't browse, reads as {@link AttachmentNotFoundError} (404 — finding #44,
+   * never "exists but forbidden").
+   */
+  async getContentRedirect(
+    attachmentId: string,
+    ctx: ServiceContext,
+    opts: { download?: boolean } = {},
+  ): Promise<string> {
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const row = await attachmentRepository.findById(attachmentId, tx);
+        if (!row || row.workspaceId !== ctx.workspaceId) {
+          throw new AttachmentNotFoundError(attachmentId);
+        }
+        // Authorize against the owning item; an orphan (null workItemId) is on no
+        // item to gate against → not addressable (404).
+        if (row.workItemId === null) throw new AttachmentNotFoundError(attachmentId);
+        await resolveGatedWorkItem(row.workItemId, ctx, tx);
+        return signedDownloadUrl(row.blobPathname, { download: opts.download });
+      },
+    );
   },
 
   /**
@@ -247,10 +289,8 @@ export const attachmentsService = {
         // throw here strands the just-written row unlinked (GC-eligible).
         await resolveGatedWorkItem(workItemId, ctx, tx);
         // Present by construction: uploadAttachment just inserted this row in
-        // THIS workspace, and addRandomSuffix makes the URL unique.
-        const created = (
-          await attachmentRepository.findManyByBlobUrls(ctx.workspaceId, [uploaded.url], tx)
-        )[0]!;
+        // THIS workspace and returned its id.
+        const created = (await attachmentRepository.findById(uploaded.id, tx))!;
         const linked: Attachment = { ...created, workItemId, source: 'panel' };
         await attachmentRepository.linkToWorkItem([created.id], workItemId, 'panel', tx);
         await workItemRevisionsService.recordRevision(
@@ -359,7 +399,7 @@ export const attachmentsService = {
     // Post-commit, best-effort — a blob-store failure must not undo the
     // delete; the surviving unlinked row is the GC's retry marker (5.2.7).
     try {
-      await deleteAttachmentBlob(row.blobUrl);
+      await deleteAttachmentBlob(row.blobPathname);
     } catch {
       return;
     }
@@ -407,11 +447,11 @@ export const attachmentsService = {
     args: SyncEditorLinksArgs,
     tx: Prisma.TransactionClient,
   ): Promise<AttachmentsDiffCell | null> {
-    const prev = new Set(args.previousUrls);
-    const next = new Set(args.nextUrls);
-    const addedUrls = [...next].filter((url) => !prev.has(url));
-    const removedUrls = [...prev].filter((url) => !next.has(url));
-    if (addedUrls.length === 0 && removedUrls.length === 0) return null;
+    const prev = new Set(args.previousIds);
+    const next = new Set(args.nextIds);
+    const addedIds = [...next].filter((id) => !prev.has(id));
+    const removedIds = [...prev].filter((id) => !next.has(id));
+    if (addedIds.length === 0 && removedIds.length === 0) return null;
 
     const { workItem } = args;
     const toItem = (row: Attachment): AttachmentDiffItem => ({
@@ -421,12 +461,8 @@ export const attachmentsService = {
     });
     const cell: AttachmentsDiffCell = {};
 
-    if (addedUrls.length > 0) {
-      const rows = await attachmentRepository.findManyByBlobUrls(
-        workItem.workspaceId,
-        addedUrls,
-        tx,
-      );
+    if (addedIds.length > 0) {
+      const rows = await attachmentRepository.findManyByIds(workItem.workspaceId, addedIds, tx);
       const linkable = rows.filter((row) => row.workItemId === null);
       if (linkable.length > 0) {
         await attachmentRepository.linkToWorkItem(
@@ -439,22 +475,21 @@ export const attachmentsService = {
       }
     }
 
-    if (removedUrls.length > 0) {
-      const rows = await attachmentRepository.findManyByBlobUrls(
-        workItem.workspaceId,
-        removedUrls,
-        tx,
-      );
+    if (removedIds.length > 0) {
+      const rows = await attachmentRepository.findManyByIds(workItem.workspaceId, removedIds, tx);
       const candidates = rows.filter(
         (row) => row.workItemId === workItem.id && row.source === 'editor',
       );
       const toUnlink: Attachment[] = [];
       for (const row of candidates) {
+        // Keep-linked probe: the content path (not a blob URL) is what a body
+        // now carries — extraction and this check must agree on "referenced".
+        const contentPath = attachmentContentPath(row.id);
         const inIssueBodies =
-          (workItem.descriptionMd?.includes(row.blobUrl) ?? false) ||
-          (workItem.explanationMd?.includes(row.blobUrl) ?? false);
+          (workItem.descriptionMd?.includes(contentPath) ?? false) ||
+          (workItem.explanationMd?.includes(contentPath) ?? false);
         if (inIssueBodies) continue;
-        if (await commentRepository.someBodyReferences(workItem.id, row.blobUrl, tx)) continue;
+        if (await commentRepository.someBodyReferences(workItem.id, contentPath, tx)) continue;
         toUnlink.push(row);
       }
       if (toUnlink.length > 0) {
@@ -525,7 +560,7 @@ export const attachmentsService = {
         attempted.add(row.id);
         summary.scanned += 1;
         try {
-          await deleteAttachmentBlob(row.blobUrl);
+          await deleteAttachmentBlob(row.blobPathname);
         } catch {
           // Blob first, row second: the surviving row IS the retry marker —
           // the next RUN picks it up again (the `attempted` set keeps this

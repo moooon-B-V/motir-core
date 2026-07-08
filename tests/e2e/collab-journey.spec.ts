@@ -41,6 +41,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { signIn } from './_helpers/shell-session';
 import { waitForEmail, emailsTo } from './_helpers/email-capture';
 import { usersService } from '@/lib/services/usersService';
@@ -84,8 +85,8 @@ interface Tenant {
  *  host suffix + `/attachments/<workspaceId>/` prefix). The browser never
  *  uploads — a real editor row carrying this URL is seeded UNLINKED, and the
  *  comment body referencing it is what link-on-write attaches. */
-function embedBlobUrl(workspaceId: string): string {
-  return `https://teststore.public.blob.vercel-storage.com/attachments/${workspaceId}/embed-collab.png`;
+function embedPathname(workspaceId: string): string {
+  return `attachments/${workspaceId}/embed-collab.png`;
 }
 
 const PNG_BYTES = Buffer.from(
@@ -207,13 +208,13 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
 
   // The waiting editor upload — UNLINKED (workItemId null), referenced by no
   // body yet. The comment below is what links it (5.2.3).
-  await db.attachment.create({
+  const embedAttachment = await db.attachment.create({
     data: {
       workspaceId: tenant.workspaceId,
       uploaderUserId: tenant.owner.id,
       workItemId: null,
       source: 'editor',
-      blobUrl: embedBlobUrl(tenant.workspaceId),
+      blobPathname: embedPathname(tenant.workspaceId),
       mimeType: 'image/png',
       sizeBytes: 128,
       originalFilename: 'embed-collab.png',
@@ -262,7 +263,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   // extractor links the matching editor row (embed / link / bare paste all
   // count). insertText drops the literal URL without retriggering the picker.
   await page.keyboard.type(' ');
-  await page.keyboard.insertText(embedBlobUrl(tenant.workspaceId));
+  await page.keyboard.insertText(attachmentContentPath(embedAttachment.id));
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Add a comment…' })).toBeVisible();
 

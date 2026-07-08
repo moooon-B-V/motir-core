@@ -361,7 +361,7 @@ describe('entitlementsService — upload caps (§4.3)', () => {
         data: {
           workspaceId: fx.workspaceId,
           uploaderUserId: fx.ownerId,
-          blobUrl: `https://blob.test/${i}`,
+          blobPathname: `https://blob.test/${i}`,
           mimeType: 'application/pdf',
           sizeBytes: big,
           originalFilename: `f${i}.pdf`,
@@ -380,7 +380,7 @@ describe('entitlementsService — upload caps (§4.3)', () => {
       data: {
         workspaceId: fx.workspaceId,
         uploaderUserId: fx.ownerId,
-        blobUrl: 'https://blob.test/small',
+        blobPathname: 'https://blob.test/small',
         mimeType: 'application/pdf',
         sizeBytes: big,
         originalFilename: 'small.pdf',

@@ -1,12 +1,14 @@
 import type { AcceptanceEvidence, Attachment } from '@prisma/client';
+import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import type {
   AcceptanceEvidenceChapterDTO,
   AcceptanceEvidenceDTO,
 } from '@/lib/dto/acceptanceEvidence';
 
-/** An evidence row with its (optional) joined video Attachment. */
+/** An evidence row with its (optional) joined video + trace Attachments. */
 export type AcceptanceEvidenceWithAttachment = AcceptanceEvidence & {
   attachment: Attachment | null;
+  traceAttachment: Attachment | null;
 };
 
 /**
@@ -40,10 +42,10 @@ export function toAcceptanceEvidenceDto(
     id: row.id,
     workItemId: row.workItemId,
     status: row.status,
-    videoUrl: row.attachment?.blobUrl ?? null,
+    videoUrl: row.attachment ? attachmentContentPath(row.attachment.id) : null,
     mimeType: row.attachment?.mimeType ?? null,
     sizeBytes: row.attachment?.sizeBytes ?? null,
-    traceUrl: row.traceUrl,
+    traceUrl: row.traceAttachment ? attachmentContentPath(row.traceAttachment.id) : null,
     chapters: toChapters(row.chapters),
     commitSha: row.commitSha,
     ciRunUrl: row.ciRunUrl,

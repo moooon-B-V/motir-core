@@ -21,7 +21,8 @@
     },
     "approvedBy": "Approved by {name}",
     "provenance": {
-      "ciRun": "CI run"
+      "ciRun": "CI run",
+      "trace": "Trace"
     },
     "status": {
       "approved": "Approved",

@@ -24,7 +24,7 @@ import {
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { currentLocale } from '@/lib/i18n/serverLocale';
-import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
+import { deletePublicAsset, putPublicAsset } from '@/lib/blob/uploader';
 import { avatarBlobPrefix, isOwnAvatarBlobUrl } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
@@ -219,7 +219,7 @@ export const usersService = {
     // side-effects live outside the transaction), so a rolled-back update can
     // never orphan a still-referenced avatar.
     if (oldAvatarToDelete) {
-      await deleteAttachmentBlob(oldAvatarToDelete);
+      await deletePublicAsset(oldAvatarToDelete);
     }
 
     return toUserProfileDto(updated);
@@ -240,7 +240,7 @@ export const usersService = {
     if (!isImageType(file.type)) throw new UnsupportedFileTypeError(file.type);
 
     const pathname = `${avatarBlobPrefix(userId)}${file.name}`;
-    const { url } = await putAttachment(pathname, file, file.type);
+    const { url } = await putPublicAsset(pathname, file, file.type);
     return { url };
   },
 

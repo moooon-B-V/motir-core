@@ -2,19 +2,15 @@ import type { AttachmentDTO } from '@/lib/dto/attachments';
 
 // Client-side download trigger shared by the AttachmentsPanel's card/row
 // actions (5.2.5) and the AttachmentPreview lightbox's Download button
-// (5.2.6). Attachments are served straight from the blob store (the recorded
-// public-unguessable-URL decision), so "download" is the store URL with its
-// forced content-disposition switch on a transient anchor click.
+// (5.2.6). Content attachments are served through the authenticated content
+// path (MOTIR-1665); "download" adds the `?download=1` switch the content route
+// honours (it presigns with the store's content-disposition), on a transient
+// anchor click.
 
-/** The blob URL with the store's forced content-disposition switch. */
-export function downloadHref(blobUrl: string): string {
-  try {
-    const url = new URL(blobUrl);
-    url.searchParams.set('download', '1');
-    return url.toString();
-  } catch {
-    return blobUrl;
-  }
+/** The content path with the `?download=1` content-disposition switch. */
+export function downloadHref(contentUrl: string): string {
+  const sep = contentUrl.includes('?') ? '&' : '?';
+  return `${contentUrl}${sep}download=1`;
 }
 
 export function triggerDownload(attachment: AttachmentDTO): void {

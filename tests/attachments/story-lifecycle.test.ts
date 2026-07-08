@@ -31,6 +31,10 @@ vi.mock('@/lib/blob/uploader', () => {
     putAttachment: vi.fn(async (pathname: string) => ({
       url: `https://store1.public.blob.vercel-storage.com/${pathname}-${++urlSeq}`,
     })),
+    putPrivateAttachment: vi.fn(async (pathname: string) => ({
+      pathname: `${pathname}-${++urlSeq}`,
+    })),
+    signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
     deleteAttachmentBlob: vi.fn(async () => {}),
   };
 });
@@ -42,7 +46,12 @@ const { attachmentsService, ORPHAN_SAFETY_WINDOW_MS } =
 const fileOf = (name: string, type: string, bytes = 4) =>
   new File([new Uint8Array(bytes)], name, { type });
 
-const rowByUrl = (blobUrl: string) => db.attachment.findFirstOrThrow({ where: { blobUrl } });
+// Resolve either a content path (/api/attachments/<id>/content, the DTO value)
+// or a raw blob pathname to its row.
+const rowByUrl = (ref: string) => {
+  const m = ref.match(/\/api\/attachments\/([a-z0-9]+)\/content/i);
+  return db.attachment.findFirstOrThrow({ where: m ? { id: m[1]! } : { blobPathname: ref } });
+};
 
 const revisionsOf = (workItemId: string) =>
   db.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
@@ -231,8 +240,8 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
 
     const summary = await attachmentsService.sweepOrphanAttachments();
     expect(summary).toEqual({ scanned: 2, deleted: 2, failed: 0 });
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(stray.blobUrl);
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(failed.blobUrl);
+    expect(deleteAttachmentBlob).toHaveBeenCalledWith(stray.blobPathname);
+    expect(deleteAttachmentBlob).toHaveBeenCalledWith(failed.blobPathname);
     expect(await db.attachment.count()).toBe(1); // only the young orphan
     await expect(rowByUrl(young.url)).resolves.toMatchObject({ workItemId: null });
 
@@ -273,7 +282,8 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
       { projectId: fx.projectId, kind: 'task', title: 'Doomed' },
       fx.ctx,
     );
-    const panel = await attachmentsService.attachToWorkItem(
+    // A panel row + an editor embed → two links that become two orphans on delete.
+    await attachmentsService.attachToWorkItem(
       issue.id,
       fileOf('doomed.png', 'image/png'),
       memberCtx,
@@ -304,8 +314,8 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     const summary = await attachmentsService.sweepOrphanAttachments();
     expect(summary).toEqual({ scanned: 2, deleted: 2, failed: 0 });
     expect(await db.attachment.count()).toBe(0);
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(panel.blobUrl);
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(editorUpload.url);
+    // The GC deletes each orphan's blob by its stored private pathname.
+    for (const row of orphans) expect(deleteAttachmentBlob).toHaveBeenCalledWith(row.blobPathname);
   });
 });
 

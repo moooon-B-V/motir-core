@@ -28,7 +28,7 @@ export async function seedInReviewStory(
 /**
  * Attach a PENDING acceptance video to a story — the "evidence present" panel
  * state. Direct inserts (an `acceptance_video` Attachment linked to the story +
- * the current AcceptanceEvidence). `blobUrl` is a data: URL so the panel's
+ * the current AcceptanceEvidence). `blobPathname` is a data: URL so the panel's
  * native `<video>` has a real (tiny) source in the browser.
  */
 export async function seedPendingEvidence(
@@ -44,7 +44,7 @@ export async function seedPendingEvidence(
       source: 'acceptance_video',
       // A 1-frame black webm is overkill for the seed; an empty data: URL keeps
       // the <video> element valid without a network fetch.
-      blobUrl: 'data:video/webm;base64,',
+      blobPathname: 'data:video/webm;base64,',
       mimeType: 'video/webm',
       sizeBytes: 1024,
       originalFilename: 'acceptance.webm',

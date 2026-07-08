@@ -14,6 +14,8 @@ vi.mock('@/lib/blob/uploader', () => {
     putAttachment: vi.fn(async (pathname: string) => ({
       url: `https://store1.public.blob.vercel-storage.com/${pathname}-${++seq}`,
     })),
+    putPrivateAttachment: vi.fn(async (pathname: string) => ({ pathname: `${pathname}-${++seq}` })),
+    signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
     deleteAttachmentBlob: vi.fn(async () => {}),
   };
 });
@@ -59,7 +61,7 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
 
     expect(dto.status).toBe('pending');
     expect(dto.workItemId).toBe(story.id);
-    expect(dto.videoUrl).toContain('vercel-storage.com');
+    expect(dto.videoUrl).toContain('/api/attachments/');
     expect(dto.mimeType).toBe('video/webm');
     expect(dto.sizeBytes).toBe(1024);
     expect(dto.chapters).toEqual([{ label: 'Open the story', tSeconds: 2 }]);
@@ -178,7 +180,7 @@ describe('acceptanceEvidenceService.getCurrentForStory / setStatus', () => {
     );
     const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
     expect(current).not.toBeNull();
-    expect(current!.videoUrl).toContain('vercel-storage.com');
+    expect(current!.videoUrl).toContain('/api/attachments/');
   });
 
   it('setStatus approved stamps approver + timestamp; changes_requested clears them', async () => {

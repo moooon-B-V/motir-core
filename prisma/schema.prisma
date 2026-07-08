@@ -74,42 +74,42 @@ model User {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  accounts                  Account[]
-  sessions                  Session[]
+  accounts                    Account[]
+  sessions                    Session[]
   // Back-relation for EmailChangeRequest (Subtask 8.8.22). A user may have
   // pending verified-email-change requests (Cascade on the FK: deleting a user
   // removes their pending change tokens — they are short-lived auth substrate,
   // not audit, mirroring the session/account lifecycle).
-  emailChangeRequests       EmailChangeRequest[]
-  workspaceMemberships      WorkspaceMembership[]
+  emailChangeRequests         EmailChangeRequest[]
+  workspaceMemberships        WorkspaceMembership[]
   // Back-relation for OrganizationMembership (Story 6.10). A user belongs to
   // many organizations (the root tenancy tier) — Cascade on the FK: deleting a
   // user removes their org-membership rows, mirroring workspaceMemberships.
-  organizationMemberships   OrganizationMembership[]
+  organizationMemberships     OrganizationMembership[]
   // Back-relations for WorkItem (Story 1.4). A user reports many work items
   // (reporter — Restrict on the FK: a user with reported issues on record
   // cannot be hard-deleted) and can be assigned many (assignee — SetNull on
   // the FK: deleting an assignee leaves the issue unassigned, never removes
   // it). Named relations because there are two distinct User↔WorkItem edges.
-  reportedWorkItems         WorkItem[]                @relation("WorkItemReporter")
-  assignedWorkItems         WorkItem[]                @relation("WorkItemAssignee")
+  reportedWorkItems           WorkItem[]                @relation("WorkItemReporter")
+  assignedWorkItems           WorkItem[]                @relation("WorkItemAssignee")
   // Back-relation for the triage submitter (Subtask 6.11.4). A user may have
   // submitted many triage items (in-app, or — via 6.12 — as a signed-in
   // non-member). SetNull on the FK: a deleted submitter just loses attribution.
-  submittedTriageItems      WorkItem[]                @relation("WorkItemTriageSubmitter")
+  submittedTriageItems        WorkItem[]                @relation("WorkItemTriageSubmitter")
   // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
-  createdWorkItemLinks      WorkItemLink[]            @relation("WorkItemLinkCreatedBy")
+  createdWorkItemLinks        WorkItemLink[]            @relation("WorkItemLinkCreatedBy")
   // Back-relation for WorkItemRevision (Subtask 1.4.6). A user authors many
   // revisions (changedBy — Restrict on the FK: a user with audit history on
   // record cannot be hard-deleted, mirroring the reporter pattern).
-  authoredWorkItemRevisions WorkItemRevision[]        @relation("WorkItemRevisionAuthor")
+  authoredWorkItemRevisions   WorkItemRevision[]        @relation("WorkItemRevisionAuthor")
   // Back-relation for Attachment (Subtask 2.3.7). A user uploads many
   // attachments (uploader — Cascade on the FK: deleting a user removes their
   // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
   // with the migration-built FK (bug-attachment-fk-migration-drift).
-  uploadedAttachments       Attachment[]
+  uploadedAttachments         Attachment[]
   // Back-relation for AcceptanceEvidence (Story MOTIR-1627 · MOTIR-1629). A user
   // approves many story-acceptance videos; SetNull on the FK (the approval stamp
   // survives the approver's deletion — it's audit, not ownership).
@@ -117,46 +117,46 @@ model User {
   // Back-relation for ProjectMembership (Subtask 6.4.2). A user holds explicit
   // membership in many projects (Cascade on the FK: deleting a user removes
   // their project-membership rows, mirroring workspaceMemberships).
-  projectMemberships        ProjectMembership[]
+  projectMemberships          ProjectMembership[]
   // Back-relations for Comment + CommentMention (Subtask 5.1.1). A user
   // authors many comments (author — Restrict on the FK: a user with comments
   // on record cannot be hard-deleted silently, mirroring the reporter
   // pattern) and is mentioned in many (Cascade: a mention row is notification
   // substrate, not audit — it goes with the user, mirroring
   // projectMemberships).
-  authoredComments          Comment[]                 @relation("CommentAuthor")
-  commentMentions           CommentMention[]
+  authoredComments            Comment[]                 @relation("CommentAuthor")
+  commentMentions             CommentMention[]
   // Back-relations for Component + Watcher (Subtask 5.4.1). A user is the
   // default assignee of many components (SetNull: a departed user clears the
   // default, never blocks) and watches many issues (Cascade: a watcher row
   // is notification substrate, not audit — it goes with the user, mirroring
   // commentMentions).
-  defaultAssigneeComponents Component[]               @relation("ComponentDefaultAssignee")
-  watchers                  Watcher[]
+  defaultAssigneeComponents   Component[]               @relation("ComponentDefaultAssignee")
+  watchers                    Watcher[]
   // Back-relation for CustomFieldValue (Subtask 5.3.1). A user can be the
   // VALUE of a `user`-type custom field on many issues (SetNull on the FK:
   // deleting the user clears the field value, never blocks the delete —
   // the assignee semantics, not the reporter ones).
-  customFieldValues         CustomFieldValue[]
+  customFieldValues           CustomFieldValue[]
   // Back-relations for SavedFilter + SavedFilterStar (Subtask 6.2.1). A user
   // owns many saved filters (Cascade — the uploadedAttachments semantics;
   // admins change owner first when a shared filter must survive a departure)
   // and stars many (Cascade: preference substrate, not audit — the watchers
   // pattern).
-  savedFilters              SavedFilter[]             @relation("SavedFilterOwner")
-  savedFilterStars          SavedFilterStar[]         @relation("SavedFilterStarUser")
+  savedFilters                SavedFilter[]             @relation("SavedFilterOwner")
+  savedFilterStars            SavedFilterStar[]         @relation("SavedFilterStarUser")
   // Per-user filter subscriptions (Subtask 6.2.5) — emailed-results loop.
   // Cascade: a subscription is preference substrate (the star semantics),
   // not audit, so it dies with the user.
-  savedFilterSubscriptions  SavedFilterSubscription[] @relation("SavedFilterSubscriptionUser")
+  savedFilterSubscriptions    SavedFilterSubscription[] @relation("SavedFilterSubscriptionUser")
   // Automation rules this user owns (Subtask 6.6.1) — the rule actor (the
   // recorded 6.6 deviation: rule actions run as the owner). Cascade with the
   // user, the savedFilters semantics: a departing admin's rules go with them
   // (an admin reassigns the owner first if a rule must survive).
-  automationRules           AutomationRule[]          @relation("AutomationRuleOwner")
+  automationRules             AutomationRule[]          @relation("AutomationRuleOwner")
   // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
   // semantics (Cascade; change-owner is the recorded extension).
-  dashboards                Dashboard[]               @relation("DashboardOwner")
+  dashboards                  Dashboard[]               @relation("DashboardOwner")
   // In-app notifications (Story 5.7 · Subtask 5.7.2). Two distinct User↔
   // Notification edges, so named relations. As the RECIPIENT a user owns many
   // notifications (Cascade: a notification row is per-user notification
@@ -164,61 +164,61 @@ model User {
   // As the ACTOR (who caused it — rendered as the row avatar) a user appears
   // on many (SetNull on the FK: a departed actor leaves the row intact and
   // unattributed, never blocks a delete — the assignee semantics).
-  notifications             Notification[]            @relation("NotificationRecipient")
-  actedNotifications        Notification[]            @relation("NotificationActor")
+  notifications               Notification[]            @relation("NotificationRecipient")
+  actedNotifications          Notification[]            @relation("NotificationActor")
   // Per-user notification preferences (Story 5.7 · Subtask 5.7.6) — the
   // per-user × event-type × channel toggle matrix that gates BOTH the in-app
   // fan-in (5.7.3) and the DONE email job (5.1.6). Cascade: preferences are
   // personal substrate, they die with the user (the notifications pattern).
-  notificationPreferences   NotificationPreference[]  @relation("UserNotificationPreferences")
+  notificationPreferences     NotificationPreference[]  @relation("UserNotificationPreferences")
   // Personal access tokens (Story 7.8 · Subtask 7.8.1) — the per-user bearer
   // credentials AI agents present to the MCP server. Cascade: a token is
   // personal auth substrate, it dies with the user (the notifications /
   // notificationPreferences pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  apiTokens                 ApiToken[]
+  apiTokens                   ApiToken[]
   // Upvotes the user cast on public requests (Story 6.12 · Subtask 6.12.3) —
   // the demand signal the triage queue sorts by (6.12.6). Cascade: a vote is
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
   // on both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
-  publicRequestVotes        PublicRequestVote[]
+  publicRequestVotes          PublicRequestVote[]
   // Cross-device appearance preference (Story 7.3 · Subtask 7.3.59) — the 1:1
   // row backing the 3-axis design system's per-user sync. Cascade: it's
   // personal appearance substrate, it dies with the user (the
   // notificationPreferences / apiTokens pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
-  appearancePreference      UserAppearancePreference? @relation("UserAppearancePreference")
+  appearancePreference        UserAppearancePreference? @relation("UserAppearancePreference")
   // The user's GitHub OAuth identity binding (Story 7.10 · MOTIR-1498) — the
   // identity-only grant (0 or 1 per user). Cascade: it's personal auth
   // substrate carrying only an encrypted user token, it dies with the user
   // (the apiTokens pattern). Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
-  githubIdentity            GithubIdentity?
+  githubIdentity              GithubIdentity?
   // The user's per-source import OAuth identities (Story 7.16 · MOTIR-1653) —
   // the encrypted token store the per-vendor connect flows (7.16.11–13) and the
   // import routes read/write through (0..N, one per source × workspace).
   // Cascade: personal auth substrate carrying only encrypted vendor tokens, it
   // dies with the user (the githubIdentity pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
-  importSourceIdentities    ImportSourceIdentity[]
+  importSourceIdentities      ImportSourceIdentity[]
   // Per-user canvas node arrangements (Story 7.3 · Subtask 7.3.77) — where the
   // user dragged each node on a project's planning canvas, persisted so a drag
   // survives reload. Cascade: personal layout substrate, it dies with the user
   // (the appearancePreference pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  canvasNodePositions       CanvasNodePosition[]
+  canvasNodePositions         CanvasNodePosition[]
   // Forward relation for the GLOBAL last-active project pointer (Subtask
   // 8.8.27). SetNull on the FK: archiving/deleting the named project clears the
   // pointer, never blocks the delete (the `WorkspaceMembership.activeProject`
   // semantics). Modelled on both sides per the FK-`@relation` rule so
   // `migrate dev` reports no drift.
-  lastActiveProject         Project?                  @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
+  lastActiveProject           Project?                  @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
-  decidedPlans              Plan[]                    @relation("PlanDecidedBy")
+  decidedPlans                Plan[]                    @relation("PlanDecidedBy")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
-  createdImports            Import[]                  @relation("ImportCreatedBy")
+  createdImports              Import[]                  @relation("ImportCreatedBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1920,6 +1920,10 @@ enum AttachmentSource {
   // owned by the AcceptanceEvidence lifecycle, so the attachments panel excludes
   // this source from its listing.
   acceptance_video
+  // Story-acceptance Playwright trace (MOTIR-1674) — a private diagnostic served
+  // through the content route like the video; owned by the AcceptanceEvidence
+  // lifecycle, excluded from the attachments panel listing.
+  acceptance_trace
 
   @@map("attachment_source")
 }
@@ -1965,19 +1969,21 @@ model Attachment {
   // Default `editor`: every pre-5.2 row came through the editor upload path,
   // so the migration's ADD COLUMN backfills existing rows correctly.
   source           AttachmentSource @default(editor)
-  blobUrl          String           @map("blob_url")
+  blobPathname     String           @map("blob_pathname")
   mimeType         String           @map("mime_type")
   sizeBytes        Int              @map("size_bytes")
   originalFilename String           @map("original_filename")
   createdAt        DateTime         @default(now()) @map("created_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  uploader  User      @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
-  workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
-  // Back-relation for AcceptanceEvidence (MOTIR-1629). An `acceptance_video`
-  // Attachment is wrapped by at most one evidence row; SetNull on that FK, so
-  // the orphan-GC deleting this blob leaves the evidence history row intact.
-  acceptanceEvidence AcceptanceEvidence?
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploader           User                @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
+  workItem           WorkItem?           @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  // Back-relations for AcceptanceEvidence: an `acceptance_video` Attachment is
+  // the video of one evidence row (MOTIR-1629); an `acceptance_trace` Attachment
+  // is its trace (MOTIR-1674). Both FKs SetNull, so the orphan-GC deleting a blob
+  // leaves the evidence history row intact.
+  acceptanceEvidence AcceptanceEvidence? @relation("AcceptanceVideo")
+  traceEvidence      AcceptanceEvidence? @relation("AcceptanceTrace")
 
   @@index([workspaceId, createdAt(sort: Desc)])
   // The paged panel read (5.2.2): an issue's attachments, newest first.
@@ -2005,36 +2011,38 @@ model Attachment {
 /// the blob leaves the history row), `approvedBy` (SetNull — the approval stamp
 /// outlives the approver).
 model AcceptanceEvidence {
-  id            String                   @id @default(cuid())
-  workspaceId   String                   @map("workspace_id")
+  id                String                   @id @default(cuid())
+  workspaceId       String                   @map("workspace_id")
   // The STORY this evidence accepts.
-  workItemId    String                   @map("work_item_id")
+  workItemId        String                   @map("work_item_id")
   // The stored video (source `acceptance_video`). Nullable + SetNull so the
   // orphan-GC removing a superseded blob leaves the history row intact.
-  attachmentId  String?                  @unique @map("attachment_id")
-  // The Playwright trace blob URL (dev-only diagnostic; not gated storage).
-  traceUrl      String?                  @map("trace_url")
+  attachmentId      String?                  @unique @map("attachment_id")
+  // The Playwright trace, stored as a private `acceptance_trace` Attachment
+  // (MOTIR-1674) — served through the auth'd content route, never a raw URL.
+  traceAttachmentId String?                  @unique @map("trace_attachment_id")
   // `[{ label, tSeconds }]` chapter markers the player renders as scrubbable
   // jumps. Defaults to an empty array so a video with no chapters is well-formed.
-  chapters      Json                     @default("[]")
-  status        AcceptanceEvidenceStatus @default(pending)
+  chapters          Json                     @default("[]")
+  status            AcceptanceEvidenceStatus @default(pending)
   // Provenance from the CI run that produced the video (the BYOK publish path).
-  commitSha     String?                  @map("commit_sha")
-  ciRunUrl      String?                  @map("ci_run_url")
+  commitSha         String?                  @map("commit_sha")
+  ciRunUrl          String?                  @map("ci_run_url")
   // The E2E subtask key that produced this receipt (e.g. "MOTIR-1638").
-  producedByKey String?                  @map("produced_by_key")
+  producedByKey     String?                  @map("produced_by_key")
   // True for exactly one row per story (the partial unique index enforces it);
   // a superseded row is false.
-  isCurrent     Boolean                  @default(true) @map("is_current")
-  approvedById  String?                  @map("approved_by_id")
-  approvedAt    DateTime?                @map("approved_at")
-  createdAt     DateTime                 @default(now()) @map("created_at")
-  updatedAt     DateTime                 @updatedAt @map("updated_at")
+  isCurrent         Boolean                  @default(true) @map("is_current")
+  approvedById      String?                  @map("approved_by_id")
+  approvedAt        DateTime?                @map("approved_at")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
 
-  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workItem   WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  attachment Attachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
-  approvedBy User?       @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem        WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  attachment      Attachment? @relation("AcceptanceVideo", fields: [attachmentId], references: [id], onDelete: SetNull)
+  traceAttachment Attachment? @relation("AcceptanceTrace", fields: [traceAttachmentId], references: [id], onDelete: SetNull)
+  approvedBy      User?       @relation(fields: [approvedById], references: [id], onDelete: SetNull)
 
   // The panel read: a story's evidence, newest first (the current is the head).
   @@index([workItemId, createdAt(sort: Desc)])

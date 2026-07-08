@@ -6,7 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { putAttachment } from '@/lib/blob/uploader';
+import { putPrivateAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedAcceptanceVideoType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
@@ -99,21 +99,23 @@ export const acceptanceEvidenceService = {
       await entitlementsService.assertWithinStorageCap(organizationId, input.video.size);
     }
 
-    // 4. Blob puts OUTSIDE the transaction.
-    const { url: videoUrl } = await putAttachment(
+    // 4. Blob puts OUTSIDE the transaction — PRIVATE store (MOTIR-1667); the
+    // video is served via the auth'd content route. `traceUrl` holds the blob
+    // pathname for now (MOTIR-1674 gives the trace its own content path).
+    const { pathname: videoPathname } = await putPrivateAttachment(
       `acceptance/${ctx.workspaceId}/${story.id}/${input.video.name}`,
       input.video,
       input.video.type,
     );
-    let traceUrl: string | null = null;
+    let tracePathname: string | null = null;
     if (input.trace) {
-      traceUrl = (
-        await putAttachment(
+      tracePathname = (
+        await putPrivateAttachment(
           `acceptance/${ctx.workspaceId}/${story.id}/trace-${input.trace.name}`,
           input.trace,
           input.trace.type,
         )
-      ).url;
+      ).pathname;
     }
 
     // 5. Supersede + insert, atomically.
@@ -123,10 +125,13 @@ export const acceptanceEvidenceService = {
         const prior = await acceptanceEvidenceRepository.findCurrentByWorkItem(story.id, tx);
         if (prior) {
           await acceptanceEvidenceRepository.markSupersededByWorkItem(story.id, tx);
-          // Unlink the superseded video so the orphan-GC reclaims its blob after
-          // the safety window (retention: one current video per story).
-          if (prior.attachmentId) {
-            await attachmentRepository.unlinkFromWorkItem([prior.attachmentId], tx);
+          // Unlink the superseded video + trace so the orphan-GC reclaims their
+          // blobs after the safety window (one current receipt per story).
+          const priorAttachmentIds = [prior.attachmentId, prior.traceAttachmentId].filter(
+            (id): id is string => id !== null,
+          );
+          if (priorAttachmentIds.length > 0) {
+            await attachmentRepository.unlinkFromWorkItem(priorAttachmentIds, tx);
           }
         }
         const attachment = await attachmentRepository.create(
@@ -135,19 +140,36 @@ export const acceptanceEvidenceService = {
             uploaderUserId: ctx.userId,
             workItemId: story.id,
             source: 'acceptance_video',
-            blobUrl: videoUrl,
+            blobPathname: videoPathname,
             mimeType: input.video.type,
             sizeBytes: input.video.size,
             originalFilename: input.video.name,
           },
           tx,
         );
+        let traceAttachmentId: string | null = null;
+        if (tracePathname && input.trace) {
+          const traceAttachment = await attachmentRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              uploaderUserId: ctx.userId,
+              workItemId: story.id,
+              source: 'acceptance_trace',
+              blobPathname: tracePathname,
+              mimeType: input.trace.type,
+              sizeBytes: input.trace.size,
+              originalFilename: input.trace.name,
+            },
+            tx,
+          );
+          traceAttachmentId = traceAttachment.id;
+        }
         return acceptanceEvidenceRepository.create(
           {
             workspaceId: ctx.workspaceId,
             workItemId: story.id,
             attachmentId: attachment.id,
-            traceUrl,
+            traceAttachmentId,
             chapters: (input.chapters ?? []) as unknown as Prisma.InputJsonValue,
             status: 'pending',
             commitSha: input.commitSha ?? null,

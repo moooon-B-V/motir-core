@@ -171,7 +171,7 @@ describe('triageService.markDuplicateTriageItem', () => {
         uploaderUserId: fx.ctx.userId,
         workItemId: duplicate.id,
         source: 'panel',
-        blobUrl: 'https://blob.example/dup.png',
+        blobPathname: 'https://blob.example/dup.png',
         mimeType: 'image/png',
         sizeBytes: 123,
         originalFilename: 'dup.png',

@@ -9,9 +9,15 @@ import { truncateAuthTables } from '../helpers/db';
 // audit-row write go through the real path. The card's MIME/size/rate-limit
 // gates + the workspace-scoping invariant are the surface under test.
 
-vi.mock('@/lib/blob/uploader', () => ({
-  putAttachment: vi.fn(async (pathname: string) => ({ url: `https://blob.example/${pathname}` })),
-}));
+vi.mock('@/lib/blob/uploader', () => {
+  let seq = 0;
+  return {
+    putAttachment: vi.fn(async (pathname: string) => ({ url: `https://blob.example/${pathname}` })),
+    putPrivateAttachment: vi.fn(async (pathname: string) => ({ pathname: `${pathname}-${++seq}` })),
+    signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
+    deleteAttachmentBlob: vi.fn(async () => {}),
+  };
+});
 
 const { attachmentsService } = await import('@/lib/services/attachmentsService');
 
@@ -40,7 +46,8 @@ describe('attachmentsService.uploadAttachment', () => {
 
     expect(res.isImage).toBe(true);
     expect(res.mime).toBe('image/png');
-    expect(res.url).toContain('https://blob.example/');
+    // The private content path (not a public blob URL), keyed by the row id.
+    expect(res.url).toBe(`/api/attachments/${res.id}/content`);
 
     const row = await db.attachment.findFirst({ where: { workspaceId: fx.workspaceId } });
     expect(row).not.toBeNull();
@@ -48,7 +55,8 @@ describe('attachmentsService.uploadAttachment', () => {
     expect(row!.mimeType).toBe('image/png');
     expect(row!.sizeBytes).toBe(10);
     expect(row!.originalFilename).toBe('shot.png');
-    expect(row!.blobUrl).toBe(res.url);
+    expect(row!.id).toBe(res.id);
+    expect(row!.blobPathname).toContain('attachments/');
   });
 
   it('a non-image allowed file (pdf) → isImage:false (inserts as a link)', async () => {

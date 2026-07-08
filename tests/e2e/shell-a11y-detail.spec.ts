@@ -388,7 +388,7 @@ test.describe('@a11y populated issue surfaces', () => {
         workspaceId: ws.id,
         workItemId: issue.id,
         uploaderUserId: user.id,
-        blobUrl: `${blobHost}/a11y/${row.originalFilename}`,
+        blobPathname: `${blobHost}/a11y/${row.originalFilename}`,
         sizeBytes: 64,
         createdAt: new Date(Date.now() - (3 - i) * 1000),
       })),

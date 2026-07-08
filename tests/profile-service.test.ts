@@ -18,15 +18,15 @@ import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 const TEST_BLOB_HOST = 'teststore.public.blob.vercel-storage.com';
 
 vi.mock('@/lib/blob/uploader', () => ({
-  putAttachment: vi.fn(async (pathname: string) => ({
+  putPublicAsset: vi.fn(async (pathname: string) => ({
     url: `https://${TEST_BLOB_HOST}/${pathname}`,
   })),
-  deleteAttachmentBlob: vi.fn(async () => {}),
+  deletePublicAsset: vi.fn(async () => {}),
 }));
 
 const { usersService } = await import('@/lib/services/usersService');
 const { MAX_PROFILE_NAME_LENGTH } = await import('@/lib/services/usersService');
-const { putAttachment, deleteAttachmentBlob } = await import('@/lib/blob/uploader');
+const { putPublicAsset, deletePublicAsset } = await import('@/lib/blob/uploader');
 
 /** An own-avatar URL the gate accepts: our blob host + `/avatars/<userId>/`. */
 const ownAvatarUrl = (userId: string, name: string) =>
@@ -61,7 +61,7 @@ describe('usersService.updateProfile — name', () => {
     expect(read?.name).toBe('New Name');
     expect(read?.email).toBe('p1@example.com');
     expect(read?.image).toBeNull();
-    expect(deleteAttachmentBlob).not.toHaveBeenCalled();
+    expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 
   it('rejects an empty / whitespace-only name and writes nothing', async () => {
@@ -92,7 +92,7 @@ describe('usersService.updateProfile — name', () => {
 
     const dto = await usersService.updateProfile(user.id, { name: 'Renamed' });
     expect(dto.image).toBe(avatar);
-    expect(deleteAttachmentBlob).not.toHaveBeenCalled();
+    expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 
   it('throws UserNotFoundError for an unknown user id', async () => {
@@ -124,7 +124,7 @@ describe('usersService.updateProfile — avatar', () => {
     ).rejects.toBeInstanceOf(InvalidAvatarUrlError);
 
     expect((await usersService.getProfile(user.id))?.image).toBeNull();
-    expect(deleteAttachmentBlob).not.toHaveBeenCalled();
+    expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 
   it('replacing an avatar deletes the prior blob', async () => {
@@ -137,8 +137,8 @@ describe('usersService.updateProfile — avatar', () => {
 
     const dto = await usersService.updateProfile(user.id, { image: second });
     expect(dto.image).toBe(second);
-    expect(deleteAttachmentBlob).toHaveBeenCalledTimes(1);
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(first);
+    expect(deletePublicAsset).toHaveBeenCalledTimes(1);
+    expect(deletePublicAsset).toHaveBeenCalledWith(first);
   });
 
   it('removing an avatar (image: null) deletes the prior blob and nulls the column', async () => {
@@ -150,7 +150,7 @@ describe('usersService.updateProfile — avatar', () => {
     const dto = await usersService.updateProfile(user.id, { image: null });
     expect(dto.image).toBeNull();
     expect((await usersService.getProfile(user.id))?.image).toBeNull();
-    expect(deleteAttachmentBlob).toHaveBeenCalledWith(avatar);
+    expect(deletePublicAsset).toHaveBeenCalledWith(avatar);
   });
 
   it('never deletes a foreign / OAuth provider avatar when it is replaced', async () => {
@@ -164,7 +164,7 @@ describe('usersService.updateProfile — avatar', () => {
     });
     expect(dto.image).toBe(ownAvatarUrl(user.id, 'now-ours.png'));
     // The Google URL is not one of our blobs → must NOT be sent to `del`.
-    expect(deleteAttachmentBlob).not.toHaveBeenCalled();
+    expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 });
 
@@ -174,7 +174,7 @@ describe('usersService.uploadAvatar', () => {
 
     const { url } = await usersService.uploadAvatar(fileOf('pic.png', 'image/png'), user.id);
 
-    expect(putAttachment).toHaveBeenCalledWith(
+    expect(putPublicAsset).toHaveBeenCalledWith(
       `avatars/${user.id}/pic.png`,
       expect.anything(),
       'image/png',
@@ -191,7 +191,7 @@ describe('usersService.uploadAvatar', () => {
     await expect(
       usersService.uploadAvatar(fileOf('doc.pdf', 'application/pdf'), user.id),
     ).rejects.toBeInstanceOf(UnsupportedFileTypeError);
-    expect(putAttachment).not.toHaveBeenCalled();
+    expect(putPublicAsset).not.toHaveBeenCalled();
   });
 
   it('rejects an oversized file before touching storage', async () => {
@@ -200,6 +200,6 @@ describe('usersService.uploadAvatar', () => {
     await expect(usersService.uploadAvatar(huge, user.id)).rejects.toBeInstanceOf(
       FileTooLargeError,
     );
-    expect(putAttachment).not.toHaveBeenCalled();
+    expect(putPublicAsset).not.toHaveBeenCalled();
   });
 });
