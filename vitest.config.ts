@@ -33,6 +33,12 @@ process.env['GITHUB_TOKEN_ENCRYPTION_KEY'] ??=
 // GITHUB_TOKEN_ENCRYPTION_KEY above. Never reach Linear.
 process.env['LINEAR_OAUTH_CLIENT_ID'] ??= 'test-linear-client-id';
 process.env['LINEAR_OAUTH_CLIENT_SECRET'] ??= 'test-linear-client-secret';
+// Plane import "Connect" OAuth app (Story 7.16 · MOTIR-1656). Client id/secret
+// let planeImportOAuthService resolve Cloud config without a real Plane app (the
+// token exchange is stubbed per-test); import-token encryption falls back to
+// GITHUB_TOKEN_ENCRYPTION_KEY above. Never reach Plane.
+process.env['PLANE_OAUTH_CLIENT_ID'] ??= 'test-plane-client-id';
+process.env['PLANE_OAUTH_CLIENT_SECRET'] ??= 'test-plane-client-secret';
 
 // Vitest defaults to the Node environment for integration tests against a
 // real Postgres. The first browser-style component test arrived in Story 1.4
