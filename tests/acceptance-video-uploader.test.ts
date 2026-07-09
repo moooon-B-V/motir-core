@@ -25,6 +25,56 @@ describe('findArtifacts', () => {
     expect(findArtifacts(dir)).toBeNull();
   });
 
+  it('pins video + trace to the chapters.json directory even when a sibling recording is walked FIRST (MOTIR-1680)', () => {
+    const dir = tmpDir();
+    // A multi-test E2E run: the sibling (a non-dogfood test) records a .webm
+    // but NO chapters; only the chaptered dogfood writes chapters.json.
+    const sibling = path.join(dir, 'aaa-another-test-chromium');
+    const dogfood = path.join(dir, 'zzz-dogfood-happy-path-chromium');
+    fs.mkdirSync(sibling);
+    fs.mkdirSync(dogfood);
+    fs.writeFileSync(path.join(sibling, 'video.webm'), 'other-clip');
+    fs.writeFileSync(path.join(sibling, 'trace.zip'), 'other-trace');
+    fs.writeFileSync(path.join(dogfood, 'video.webm'), 'dogfood-clip');
+    fs.writeFileSync(path.join(dogfood, 'trace.zip'), 'dogfood-trace');
+    fs.writeFileSync(path.join(dogfood, 'chapters.json'), '[{"label":"Open the story"}]');
+
+    // Force a DETERMINISTIC walk order (name-sorted → the sibling FIRST), so a
+    // naive "first .webm across the whole tree" would pick the sibling's clip.
+    // The regression this guards against is non-determinism, so the test must
+    // not itself depend on the OS's native readdir ordering (restored by the
+    // afterEach vi.restoreAllMocks).
+    const realReaddir = fs.readdirSync;
+    vi.spyOn(fs, 'readdirSync').mockImplementation(((dirPath, options) => {
+      const entries = (realReaddir as (p: unknown, o: unknown) => Array<{ name: string }>)(
+        dirPath,
+        options,
+      );
+      return [...entries].sort((a, b) => a.name.localeCompare(b.name));
+    }) as typeof fs.readdirSync);
+
+    const found = findArtifacts(dir);
+    if (!found) throw new Error('expected artifacts to be found');
+    // The invariant the fix guarantees, independent of walk order: the
+    // published video + trace live in the SAME directory as the chapters
+    // sidecar — the dogfood's, never the sibling's.
+    expect(path.dirname(found.video)).toBe(dogfood);
+    expect(path.dirname(found.trace as string)).toBe(dogfood);
+    expect(path.dirname(found.chapters as string)).toBe(dogfood);
+    expect(fs.readFileSync(found.video, 'utf8')).toBe('dogfood-clip');
+  });
+
+  it('falls back to any .webm when no chapters.json exists (non-chaptered suite)', () => {
+    const dir = tmpDir();
+    const nested = path.join(dir, 'some-test-chromium');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, 'video.webm'), 'v');
+    fs.writeFileSync(path.join(nested, 'trace.zip'), 't');
+    const found = findArtifacts(dir);
+    expect(found?.video.endsWith('.webm')).toBe(true);
+    expect(found?.chapters).toBeNull();
+  });
+
   it('finds the video + trace + chapters (nested), when present', () => {
     const dir = tmpDir();
     const nested = path.join(dir, 'story-acceptance-flow-chromium');
