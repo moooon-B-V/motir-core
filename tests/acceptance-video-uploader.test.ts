@@ -25,6 +25,36 @@ describe('findArtifacts', () => {
     expect(findArtifacts(dir)).toBeNull();
   });
 
+  it('pins the published video + trace to the directory containing chapters.json (dogfood first-walk, not a random .webm)', () => {
+    const dir = tmpDir();
+    // Simulate a multi-test E2E run: dogfood test 1 writes chapters.json +
+    // its .webm; test N writes its own .webm in a sibling directory.
+    const dogfood = path.join(dir, 'dogfood-happy-path-chromium');
+    const sibling = path.join(dir, 'another-test-chromium');
+    fs.mkdirSync(dogfood);
+    fs.mkdirSync(sibling);
+    fs.writeFileSync(path.join(dogfood, 'video.webm'), 'dogfood-clip');
+    fs.writeFileSync(path.join(dogfood, 'trace.zip'), 'dogfood-trace');
+    fs.writeFileSync(path.join(dogfood, 'chapters.json'), '[]');
+    fs.writeFileSync(path.join(sibling, 'video.webm'), 'other-clip');
+    fs.writeFileSync(path.join(sibling, 'trace.zip'), 'other-trace');
+    const found = findArtifacts(dir);
+    expect(found?.video).toContain('dogfood-happy-path-chromium');
+    expect(found?.trace).toContain('dogfood-happy-path-chromium');
+    expect(found?.chapters).toContain('dogfood-happy-path-chromium');
+  });
+
+  it('falls back to any .webm when no chapters.json exists (non-chaptered suite)', () => {
+    const dir = tmpDir();
+    const nested = path.join(dir, 'some-test-chromium');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, 'video.webm'), 'v');
+    fs.writeFileSync(path.join(nested, 'trace.zip'), 't');
+    const found = findArtifacts(dir);
+    expect(found?.video.endsWith('.webm')).toBe(true);
+    expect(found?.chapters).toBeNull();
+  });
+
   it('finds the video + trace + chapters (nested), when present', () => {
     const dir = tmpDir();
     const nested = path.join(dir, 'story-acceptance-flow-chromium');

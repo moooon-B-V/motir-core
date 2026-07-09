@@ -38,12 +38,21 @@ export function findArtifacts(outputDir) {
       return entry.isDirectory() ? walk(full) : [full];
     });
   const files = walk(outputDir);
-  const video = files.find((f) => f.endsWith('.webm'));
+  const chapters = files.find((f) => f.endsWith('chapters.json'));
+  // Pin the published video + trace to the dogfood test's own directory —
+  // the one containing chapters.json. Only the chaptered happy-path test
+  // writes chapters, so the published artifacts are deterministically the
+  // dogfood clip, not a random first-find across all test runs. If no
+  // chapters.json exists (the happy-path didn't run / a red run / a
+  // non-chaptered suite), fall back to any .webm / trace.zip.
+  const inDog = (f, ext) =>
+    f.endsWith(ext) && (!chapters || path.dirname(f) === path.dirname(chapters));
+  const video = files.find((f) => inDog(f, '.webm'));
   if (!video) return null;
   return {
     video,
-    trace: files.find((f) => f.endsWith('trace.zip')) ?? null,
-    chapters: files.find((f) => f.endsWith('chapters.json')) ?? null,
+    trace: files.find((f) => inDog(f, 'trace.zip')) ?? null,
+    chapters: chapters ?? null,
   };
 }
 
