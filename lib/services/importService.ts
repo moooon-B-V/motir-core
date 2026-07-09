@@ -15,7 +15,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { ImportConnectionConfig, ImportDto } from '@/lib/dto/import';
+import type { ImportConnectionConfig, ImportDiscoverResult, ImportDto } from '@/lib/dto/import';
 import { toImportDto } from '@/lib/mappers/importMappers';
 import type { ImportMapping, ImportPlanRow } from '@/lib/import/engine/types';
 import { importEngineService } from '@/lib/import/engine/importEngineService';
@@ -79,6 +79,35 @@ export const importService = {
   async getImport(importId: string, ctx: ServiceContext): Promise<ImportDto> {
     const row = await this.requireImport(importId, ctx);
     return toImportDto(row);
+  },
+
+  /**
+   * CONNECT-step probe (POST /api/import/:id/discover) — build the per-source
+   * connector from the wizard's connection config (+ the acting member's stored
+   * credential for a live source) and return BOTH the reachability/issue-count
+   * probe AND the source field vocabulary the mapping step maps from. Read-only:
+   * no writes, no `Import` mutation (unlike `preview`, which persists the mapping).
+   * This is the thin route over 7.16.4's connector `connect()` + `discoverFields()`
+   * that 7.16.5's API set (MOTIR-941) did not expose.
+   */
+  async discoverFields(
+    importId: string,
+    args: { connection: ImportConnectionConfig },
+    ctx: ServiceContext,
+  ): Promise<ImportDiscoverResult> {
+    const imp = await this.requireImport(importId, ctx);
+    await projectAccessService.assertCanEdit(imp.projectId, ctx);
+
+    const connector = await this.buildConnector(imp.source, args.connection, ctx);
+    // Sequential (not Promise.all): `connect()` validates reachability + auth, so
+    // a bad token / unreachable source surfaces as its typed error BEFORE we page
+    // for the field vocabulary.
+    const connect = await connector.connect();
+    const vocabulary = await connector.discoverFields();
+    return {
+      connect: { sourceRef: connect.sourceRef, issueCount: connect.issueCount },
+      vocabulary,
+    };
   },
 
   /**

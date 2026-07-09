@@ -27,6 +27,7 @@ const {
   JIRA_OAUTH_VERIFIER_COOKIE,
 } = await import('@/app/api/import/jira/oauth/start/route');
 const { GET: callbackGET } = await import('@/app/api/import/jira/oauth/callback/route');
+const { IMPORT_OAUTH_RETURN_COOKIE } = await import('@/lib/import/oauthReturn');
 
 const PASSWORD = 'hunter2hunter2';
 const REDIRECT_STATUSES = [301, 302, 303, 307, 308];
@@ -159,6 +160,35 @@ describe('GET /api/import/jira/oauth/start', () => {
     expect(res.headers.get('location')).toContain('jira=not_configured');
     process.env['JIRA_OAUTH_CLIENT_ID'] = 'test-jira-client';
   });
+
+  it('stashes a valid returnTo (a Settings door) in the return cookie (MOTIR-942)', async () => {
+    const { userId } = await createUserWithWorkspace('return-ok@example.com');
+    session.current = { user: { id: userId, name: 'Jira Tester' } };
+
+    const res = await startGET(
+      new NextRequest(
+        'http://localhost:3000/api/import/jira/oauth/start?returnTo=%2Fsettings%2Fproject%2Fimport',
+      ),
+    );
+    expect(REDIRECT_STATUSES).toContain(res.status);
+    expect((res as NextResponse).cookies.get(IMPORT_OAUTH_RETURN_COOKIE)?.value).toBe(
+      '/settings/project/import',
+    );
+  });
+
+  it('falls the return cookie back to the wizard home for an open-redirect returnTo', async () => {
+    const { userId } = await createUserWithWorkspace('return-evil@example.com');
+    session.current = { user: { id: userId, name: 'Jira Tester' } };
+
+    const res = await startGET(
+      new NextRequest(
+        'http://localhost:3000/api/import/jira/oauth/start?returnTo=%2F%2Fevil.example.com',
+      ),
+    );
+    expect((res as NextResponse).cookies.get(IMPORT_OAUTH_RETURN_COOKIE)?.value).toBe(
+      '/onboarding/import',
+    );
+  });
 });
 
 describe('GET /api/import/jira/oauth/callback', () => {
@@ -198,6 +228,22 @@ describe('GET /api/import/jira/oauth/callback', () => {
       callbackReq('?error=access_denied&state=s', 'jira_oauth_state=s; jira_oauth_verifier=v'),
     );
     expect(res.headers.get('location')).toContain('jira=denied');
+  });
+
+  it('returns the member to the stashed door from the return cookie (MOTIR-942)', async () => {
+    const { userId } = await createUserWithWorkspace('return-callback@example.com');
+    session.current = { user: { id: userId, name: 'Jira Tester' } };
+    const res = await callbackGET(
+      callbackReq(
+        '?error=access_denied&state=s',
+        `jira_oauth_state=s; jira_oauth_verifier=v; ${IMPORT_OAUTH_RETURN_COOKIE}=/settings/project/import`,
+      ),
+    );
+    const location = res.headers.get('location')!;
+    expect(location).toContain('/settings/project/import');
+    expect(location).toContain('jira=denied');
+    // The return cookie is single-use — cleared on the terminal outcome.
+    expect((res as NextResponse).cookies.get(IMPORT_OAUTH_RETURN_COOKIE)?.value).toBeFalsy();
   });
 
   it('completes the grant, stores the token ENCRYPTED with the resolved cloud site, and redirects connected', async () => {

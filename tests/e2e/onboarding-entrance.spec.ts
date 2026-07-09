@@ -52,16 +52,22 @@ test('Start planning routes the entrance into the discovery chat', async ({ page
   await expect(page.getByRole('textbox', { name: 'Reply, or ask a question…' })).toBeVisible();
 });
 
-test('Import routes the entrance to the downstream import hand-off', async ({ page }) => {
+test('Import routes the entrance to the import wizard', async ({ page }) => {
   await signUp(page, `entrance-import-${Date.now()}@example.com`);
   await createFirstProject(page, 'Invoicer');
 
   await page.goto('/onboarding');
   await page.getByRole('link', { name: /i have an existing project/i }).click();
 
+  // The entrance now opens the real import wizard (MOTIR-942, replacing the
+  // 7.22.4 "coming soon" stub in place), scoped to the active project.
   await page.waitForURL('**/onboarding/import');
-  await expect(page.getByRole('heading', { name: 'Import an existing project' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Back to start' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Import work items · into Invoicer' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Where are your issues coming from?' }),
+  ).toBeVisible();
 });
 
 test('the "See how Motir works" link routes to the explainer hand-off', async ({ page }) => {

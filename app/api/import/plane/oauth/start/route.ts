@@ -4,6 +4,11 @@ import { resolveWorkspaceContext } from '@/lib/workspaces/middleware';
 import { planeImportOAuthService } from '@/lib/services/planeImportOAuthService';
 import { PlaneInvalidBaseUrlError, PlaneOAuthNotConfiguredError } from '@/lib/import/plane/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import {
+  IMPORT_OAUTH_RETURN_COOKIE,
+  appendStatus,
+  safeImportReturnPath,
+} from '@/lib/import/oauthReturn';
 
 // GET /api/import/plane/oauth/start (Story 7.16 · MOTIR-1656) — step 1 of the
 // Plane "Connect" grant the import wizard uses. The signed-in member is
@@ -24,7 +29,6 @@ import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 export const PLANE_OAUTH_STATE_COOKIE = 'plane_import_oauth_state';
 export const PLANE_OAUTH_BASE_COOKIE = 'plane_import_oauth_base';
 export const PLANE_OAUTH_SLUG_COOKIE = 'plane_import_oauth_slug';
-export const IMPORT_PATH = '/onboarding/import';
 
 const COOKIE_BASE = {
   httpOnly: true,
@@ -37,8 +41,10 @@ const COOKIE_BASE = {
   maxAge: 600, // 10 minutes — the OAuth round-trip is near-immediate
 } as const;
 
-function importRedirect(status: string): NextResponse {
-  return NextResponse.redirect(`${resolveBaseUrlTrimmed()}${IMPORT_PATH}?import=${status}`);
+function importRedirect(returnTo: string, status: string): NextResponse {
+  return NextResponse.redirect(
+    `${resolveBaseUrlTrimmed()}${appendStatus(returnTo, 'import', status)}`,
+  );
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -48,19 +54,24 @@ export async function GET(req: NextRequest): Promise<Response> {
   const params = req.nextUrl.searchParams;
   const baseUrl = params.get('baseUrl');
   const workspaceSlug = params.get('workspaceSlug');
+  // The wizard door to return to after the round-trip, open-redirect-validated.
+  const returnTo = safeImportReturnPath(params.get('returnTo'));
   const state = randomBytes(32).toString('base64url');
 
   let authorizeUrl: string;
   try {
     authorizeUrl = planeImportOAuthService.buildAuthorizeUrl({ state, baseUrl });
   } catch (err) {
-    if (err instanceof PlaneInvalidBaseUrlError) return importRedirect('plane_invalid_url');
-    if (err instanceof PlaneOAuthNotConfiguredError) return importRedirect('plane_not_configured');
+    if (err instanceof PlaneInvalidBaseUrlError)
+      return importRedirect(returnTo, 'plane_invalid_url');
+    if (err instanceof PlaneOAuthNotConfiguredError)
+      return importRedirect(returnTo, 'plane_not_configured');
     throw err;
   }
 
   const res = NextResponse.redirect(authorizeUrl);
   res.cookies.set(PLANE_OAUTH_STATE_COOKIE, state, COOKIE_BASE);
+  res.cookies.set(IMPORT_OAUTH_RETURN_COOKIE, returnTo, COOKIE_BASE);
   // The connect context (which instance + slug) must survive the round-trip: the
   // callback exchanges the code against the SAME host and persists the slug.
   // Only set what was supplied — an absent cookie reads as "use the default".

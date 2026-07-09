@@ -8,7 +8,11 @@ import {
 } from '@/lib/import/plane/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import {
-  IMPORT_PATH,
+  IMPORT_OAUTH_RETURN_COOKIE,
+  appendStatus,
+  safeImportReturnPath,
+} from '@/lib/import/oauthReturn';
+import {
   PLANE_OAUTH_BASE_COOKIE,
   PLANE_OAUTH_SLUG_COOKIE,
   PLANE_OAUTH_STATE_COOKIE,
@@ -27,13 +31,16 @@ import {
 // owns encryption + the transaction, and this maps the typed errors to redirect
 // statuses.
 
-function importRedirect(status: string): NextResponse {
-  const res = NextResponse.redirect(`${resolveBaseUrlTrimmed()}${IMPORT_PATH}?import=${status}`);
-  // The state nonce + connect context are single-use — clear them on every
-  // terminal outcome.
+function importRedirect(returnTo: string, status: string): NextResponse {
+  const res = NextResponse.redirect(
+    `${resolveBaseUrlTrimmed()}${appendStatus(returnTo, 'import', status)}`,
+  );
+  // The state nonce + connect context + the stashed return path are single-use —
+  // clear them on every terminal outcome.
   res.cookies.delete(PLANE_OAUTH_STATE_COOKIE);
   res.cookies.delete(PLANE_OAUTH_BASE_COOKIE);
   res.cookies.delete(PLANE_OAUTH_SLUG_COOKIE);
+  res.cookies.delete(IMPORT_OAUTH_RETURN_COOKIE);
   return res;
 }
 
@@ -41,16 +48,17 @@ export async function GET(req: NextRequest): Promise<Response> {
   const ctx = await resolveWorkspaceContext(req);
   if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 
+  const returnTo = safeImportReturnPath(req.cookies.get(IMPORT_OAUTH_RETURN_COOKIE)?.value);
   const params = req.nextUrl.searchParams;
 
   // Plane bounces back with ?error=access_denied when the member declines.
-  if (params.get('error')) return importRedirect('plane_denied');
+  if (params.get('error')) return importRedirect(returnTo, 'plane_denied');
 
   const code = params.get('code');
   const state = params.get('state');
   const cookieState = req.cookies.get(PLANE_OAUTH_STATE_COOKIE)?.value ?? null;
   if (!code || !state || !cookieState || state !== cookieState) {
-    return importRedirect('plane_state_error');
+    return importRedirect(returnTo, 'plane_state_error');
   }
 
   const baseUrl = req.cookies.get(PLANE_OAUTH_BASE_COOKIE)?.value ?? null;
@@ -64,11 +72,13 @@ export async function GET(req: NextRequest): Promise<Response> {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
-    return importRedirect('plane_connected');
+    return importRedirect(returnTo, 'plane_connected');
   } catch (err) {
-    if (err instanceof PlaneInvalidBaseUrlError) return importRedirect('plane_invalid_url');
-    if (err instanceof PlaneOAuthNotConfiguredError) return importRedirect('plane_not_configured');
-    if (err instanceof PlaneOAuthExchangeError) return importRedirect('plane_error');
+    if (err instanceof PlaneInvalidBaseUrlError)
+      return importRedirect(returnTo, 'plane_invalid_url');
+    if (err instanceof PlaneOAuthNotConfiguredError)
+      return importRedirect(returnTo, 'plane_not_configured');
+    if (err instanceof PlaneOAuthExchangeError) return importRedirect(returnTo, 'plane_error');
     throw err;
   }
 }
