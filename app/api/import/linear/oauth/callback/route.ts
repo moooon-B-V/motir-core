@@ -6,6 +6,11 @@ import {
   LinearOAuthNotConfiguredError,
 } from '@/lib/import/linear/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import {
+  IMPORT_OAUTH_RETURN_COOKIE,
+  appendStatus,
+  safeImportReturnPath,
+} from '@/lib/import/oauthReturn';
 import { LINEAR_OAUTH_STATE_COOKIE } from '../start/route';
 
 // GET /api/import/linear/oauth/callback (Story 7.16 · MOTIR-1655) — step 2 of
@@ -19,12 +24,14 @@ import { LINEAR_OAUTH_STATE_COOKIE } from '../start/route';
 // owns encryption + the transaction, and this maps the typed errors to redirect
 // statuses.
 
-const IMPORT_PATH = '/onboarding/import';
-
-function importRedirect(status: string): NextResponse {
-  const res = NextResponse.redirect(`${resolveBaseUrlTrimmed()}${IMPORT_PATH}?import=${status}`);
-  // The state nonce is single-use — clear it on every terminal outcome.
+function importRedirect(returnTo: string, status: string): NextResponse {
+  const res = NextResponse.redirect(
+    `${resolveBaseUrlTrimmed()}${appendStatus(returnTo, 'import', status)}`,
+  );
+  // The state nonce + the stashed return path are single-use — clear them on
+  // every terminal outcome.
   res.cookies.delete(LINEAR_OAUTH_STATE_COOKIE);
+  res.cookies.delete(IMPORT_OAUTH_RETURN_COOKIE);
   return res;
 }
 
@@ -32,16 +39,17 @@ export async function GET(req: NextRequest): Promise<Response> {
   const ctx = await getWorkspaceContext();
   if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 
+  const returnTo = safeImportReturnPath(req.cookies.get(IMPORT_OAUTH_RETURN_COOKIE)?.value);
   const params = req.nextUrl.searchParams;
 
   // Linear bounces back with ?error=access_denied when the member declines.
-  if (params.get('error')) return importRedirect('linear_denied');
+  if (params.get('error')) return importRedirect(returnTo, 'linear_denied');
 
   const code = params.get('code');
   const state = params.get('state');
   const cookieState = req.cookies.get(LINEAR_OAUTH_STATE_COOKIE)?.value ?? null;
   if (!code || !state || !cookieState || state !== cookieState) {
-    return importRedirect('linear_state_error');
+    return importRedirect(returnTo, 'linear_state_error');
   }
 
   try {
@@ -50,11 +58,11 @@ export async function GET(req: NextRequest): Promise<Response> {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
-    return importRedirect('linear_connected');
+    return importRedirect(returnTo, 'linear_connected');
   } catch (err) {
     if (err instanceof LinearOAuthNotConfiguredError)
-      return importRedirect('linear_not_configured');
-    if (err instanceof LinearOAuthExchangeError) return importRedirect('linear_error');
+      return importRedirect(returnTo, 'linear_not_configured');
+    if (err instanceof LinearOAuthExchangeError) return importRedirect(returnTo, 'linear_error');
     throw err;
   }
 }

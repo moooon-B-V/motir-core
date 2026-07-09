@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Check, CircleDot, FileUp, GitBranch, SquareKanban, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -105,23 +106,35 @@ const SOURCE_TINT: Record<ImportSourceId, string> = {
   csv: 'bg-(--el-tint-peach)',
 };
 
-/** The OAuth "Connect" launch URL for a live source. GitHub reuses the existing
- *  7.10 connection; Plane carries its instance base URL + workspace slug. */
-function connectHref(source: Exclude<ImportSourceId, 'csv'>, draft: ConnectionDraft): string {
+/** The OAuth "Connect" launch URL for a live source. `returnTo` is the wizard
+ *  door the round-trip returns to, so the wizard works from BOTH the /onboarding
+ *  entrance and the Settings home rather than a single hardcoded path (the start
+ *  route validates it against the open-redirect class). GitHub reuses the
+ *  existing 7.10 connection, which owns its own return target; Plane also carries
+ *  its instance base URL + workspace slug. */
+function connectHref(
+  source: Exclude<ImportSourceId, 'csv'>,
+  draft: ConnectionDraft,
+  returnTo: string,
+): string {
+  const params = new URLSearchParams();
   switch (source) {
     case 'jira':
-      return '/api/import/jira/oauth/start';
+      params.set('returnTo', returnTo);
+      return `/api/import/jira/oauth/start?${params.toString()}`;
     case 'linear':
-      return '/api/import/linear/oauth/start';
+      params.set('returnTo', returnTo);
+      return `/api/import/linear/oauth/start?${params.toString()}`;
     case 'github':
+      // GitHub's 7.10 flow owns its own return target (Settings › GitHub); the
+      // wizard just reads the resulting connected state. No returnTo to pass.
       return '/api/github/oauth/start';
     case 'plane': {
-      const params = new URLSearchParams();
       if (draft.plane.baseUrl.trim()) params.set('baseUrl', draft.plane.baseUrl.trim());
       if (draft.plane.workspaceSlug.trim())
         params.set('workspaceSlug', draft.plane.workspaceSlug.trim());
-      const qs = params.toString();
-      return `/api/import/plane/oauth/start${qs ? `?${qs}` : ''}`;
+      params.set('returnTo', returnTo);
+      return `/api/import/plane/oauth/start?${params.toString()}`;
     }
   }
 }
@@ -305,6 +318,12 @@ function LiveConnect({
 }) {
   const t = useTranslations('import');
   const name = t(`connect.sources.${source}.name`);
+  // Return to THIS door after the connect round-trip, preserving the resume
+  // params (the active project) so a re-open lands where the user was.
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('projectId');
+  const returnTo = projectId ? `${pathname}?projectId=${encodeURIComponent(projectId)}` : pathname;
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -321,7 +340,7 @@ function LiveConnect({
             <span className="text-xs text-(--el-text-muted)">{t('connect.githubReuse')}</span>
           ) : null}
         </div>
-        <a href={connectHref(source, draft)}>
+        <a href={connectHref(source, draft, returnTo)}>
           <Button variant={connected.connected ? 'secondary' : 'primary'} size="sm">
             {connected.connected
               ? t('connect.reconnectButton')

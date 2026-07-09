@@ -4,6 +4,11 @@ import { resolveWorkspaceContext } from '@/lib/workspaces/middleware';
 import { jiraOAuthService } from '@/lib/services/jiraOAuthService';
 import { JiraOAuthNotConfiguredError } from '@/lib/import/jira/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import {
+  IMPORT_OAUTH_RETURN_COOKIE,
+  appendStatus,
+  safeImportReturnPath,
+} from '@/lib/import/oauthReturn';
 
 // GET /api/import/jira/oauth/start (Story 7.16 · MOTIR-1654) — step 1 of the
 // Jira 3LO connect flow the import wizard uses. The signed-in member is
@@ -17,7 +22,6 @@ import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
 export const JIRA_OAUTH_STATE_COOKIE = 'jira_oauth_state';
 export const JIRA_OAUTH_VERIFIER_COOKIE = 'jira_oauth_verifier';
-export const IMPORT_PATH = '/onboarding/import';
 
 const COOKIE_BASE = {
   httpOnly: true,
@@ -34,6 +38,11 @@ export async function GET(req: NextRequest): Promise<Response> {
   const ctx = await resolveWorkspaceContext(req);
   if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 
+  // Where to send the member after the round-trip (the wizard's door — either
+  // /onboarding/import or the Settings home), validated against the open-redirect
+  // class before it is ever redirected to.
+  const returnTo = safeImportReturnPath(req.nextUrl.searchParams.get('returnTo'));
+
   const state = randomBytes(32).toString('base64url');
   const codeVerifier = randomBytes(32).toString('base64url');
 
@@ -42,7 +51,9 @@ export async function GET(req: NextRequest): Promise<Response> {
     authorizeUrl = jiraOAuthService.buildAuthorizeUrl(state, codeVerifier);
   } catch (err) {
     if (err instanceof JiraOAuthNotConfiguredError) {
-      return NextResponse.redirect(`${resolveBaseUrlTrimmed()}${IMPORT_PATH}?jira=not_configured`);
+      return NextResponse.redirect(
+        `${resolveBaseUrlTrimmed()}${appendStatus(returnTo, 'jira', 'not_configured')}`,
+      );
     }
     throw err;
   }
@@ -50,5 +61,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   const res = NextResponse.redirect(authorizeUrl);
   res.cookies.set(JIRA_OAUTH_STATE_COOKIE, state, COOKIE_BASE);
   res.cookies.set(JIRA_OAUTH_VERIFIER_COOKIE, codeVerifier, COOKIE_BASE);
+  res.cookies.set(IMPORT_OAUTH_RETURN_COOKIE, returnTo, COOKIE_BASE);
   return res;
 }
