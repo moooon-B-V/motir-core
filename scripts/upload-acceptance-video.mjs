@@ -20,6 +20,7 @@
 /* eslint-disable no-console -- this is a CLI script; stdout is its interface. */
 import fs from 'node:fs';
 import path from 'node:path';
+import { put as putBlob } from '@vercel/blob/client';
 
 const DEFAULT_BASE_URL = 'https://app.motir.co';
 const DEFAULT_OUTPUT_DIR = 'out/playwright-output-acceptance';
@@ -75,10 +76,33 @@ export async function requestGithubOidcToken(audience = DEFAULT_OIDC_AUDIENCE) {
   return body && typeof body.value === 'string' ? body.value : null;
 }
 
+/** The auth headers for the publish (keyless OIDC marker + bearer, else PAT). */
+function authHeadersFor(oidcToken, token) {
+  return oidcToken
+    ? { authorization: `Bearer ${oidcToken}`, 'x-motir-auth': 'github-oidc' }
+    : { authorization: `Bearer ${token}` };
+}
+
+/** Parse the chapters sidecar into an array; a malformed file → no markers. */
+function readChapters(file) {
+  if (!file) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
- * POST the artifacts to the publish endpoint; throws on a non-2xx response.
- * Auth is keyless GitHub OIDC when `oidcToken` is given (the `X-Motir-Auth:
- * github-oidc` marker + the OIDC bearer), else the `integration` PAT `token`.
+ * Publish the artifacts DIRECT-TO-BLOB (MOTIR-1681), so a large video never
+ * streams through the ~4.5MB serverless request-body cap the old multipart POST
+ * hit. Three steps: (1) mint scoped client upload tokens from the endpoint;
+ * (2) `put` the video (+ trace) STRAIGHT to the private Blob store with them;
+ * (3) POST only the pathnames + chapters as JSON to register the evidence.
+ * Throws on any non-2xx. Auth is keyless GitHub OIDC when `oidcToken` is given
+ * (the `X-Motir-Auth: github-oidc` marker + the OIDC bearer), else the
+ * `integration` PAT `token`.
  *
  * @param {object} opts
  * @param {string} opts.baseUrl
@@ -96,31 +120,50 @@ export async function uploadAcceptanceVideo({
   artifacts,
   provenance = {},
 }) {
-  const form = new FormData();
-  form.set(
-    'video',
-    new Blob([fs.readFileSync(artifacts.video)], { type: 'video/webm' }),
-    'acceptance.webm',
-  );
-  if (artifacts.trace) {
-    form.set(
-      'trace',
-      new Blob([fs.readFileSync(artifacts.trace)], { type: 'application/zip' }),
-      'trace.zip',
+  const base = baseUrl.replace(/\/$/, '');
+  const headers = authHeadersFor(oidcToken, token);
+  const evidenceUrl = `${base}/api/work-items/${encodeURIComponent(storyKey)}/acceptance-evidence`;
+
+  // 1. Mint scoped client upload tokens (one per artifact).
+  const tokenRes = await fetch(`${evidenceUrl}/upload-token`, {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ hasTrace: Boolean(artifacts.trace) }),
+  });
+  if (!tokenRes.ok) {
+    throw new Error(
+      `Acceptance-video token mint failed: ${tokenRes.status} ${await tokenRes.text()}`,
     );
   }
-  if (artifacts.chapters) form.set('chapters', fs.readFileSync(artifacts.chapters, 'utf8'));
-  if (provenance.commitSha) form.set('commitSha', provenance.commitSha);
-  if (provenance.ciRunUrl) form.set('ciRunUrl', provenance.ciRunUrl);
-  if (provenance.producedByKey) form.set('producedByKey', provenance.producedByKey);
+  const targets = await tokenRes.json();
 
-  const headers = oidcToken
-    ? { authorization: `Bearer ${oidcToken}`, 'x-motir-auth': 'github-oidc' }
-    : { authorization: `Bearer ${token}` };
-  const res = await fetch(
-    `${baseUrl.replace(/\/$/, '')}/api/work-items/${encodeURIComponent(storyKey)}/acceptance-evidence`,
-    { method: 'POST', headers, body: form },
-  );
+  // 2. Upload the artifacts DIRECTLY to the private Blob store with the tokens.
+  await putBlob(targets.video.pathname, fs.readFileSync(artifacts.video), {
+    access: 'private',
+    token: targets.video.token,
+    contentType: targets.video.contentType,
+  });
+  if (artifacts.trace && targets.trace) {
+    await putBlob(targets.trace.pathname, fs.readFileSync(artifacts.trace), {
+      access: 'private',
+      token: targets.trace.token,
+      contentType: targets.trace.contentType,
+    });
+  }
+
+  // 3. Register the pathnames (small JSON — the bytes are already in Blob).
+  const res = await fetch(evidenceUrl, {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      videoPathname: targets.video.pathname,
+      tracePathname: targets.trace ? targets.trace.pathname : null,
+      chapters: readChapters(artifacts.chapters),
+      commitSha: provenance.commitSha ?? null,
+      ciRunUrl: provenance.ciRunUrl ?? null,
+      producedByKey: provenance.producedByKey ?? null,
+    }),
+  });
   if (!res.ok) {
     throw new Error(`Acceptance-video publish failed: ${res.status} ${await res.text()}`);
   }

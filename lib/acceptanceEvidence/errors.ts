@@ -37,3 +37,31 @@ export class AcceptanceEvidenceNotAStoryError extends AcceptanceEvidenceError {
     this.name = 'AcceptanceEvidenceNotAStoryError';
   }
 }
+
+/**
+ * A register-mode publish (MOTIR-1681) reported a blob pathname OUTSIDE this
+ * story's `acceptance/<workspaceId>/<storyId>/` prefix — a caller trying to
+ * register an arbitrary / cross-tenant blob. Rejected before any DB write. → 400.
+ */
+export class AcceptanceEvidencePathnameError extends AcceptanceEvidenceError {
+  readonly code = 'ACCEPTANCE_EVIDENCE_INVALID_PATHNAME' as const;
+  readonly status = 400;
+  constructor(pathname: string) {
+    super(`The blob pathname "${pathname}" is not within this story's acceptance prefix.`);
+    this.name = 'AcceptanceEvidencePathnameError';
+  }
+}
+
+/**
+ * A register-mode publish (MOTIR-1681) reported a pathname whose blob does not
+ * exist in the store — the client upload never completed (or the pathname is
+ * fabricated). The server `head`s every artifact before recording it. → 400.
+ */
+export class AcceptanceEvidenceBlobMissingError extends AcceptanceEvidenceError {
+  readonly code = 'ACCEPTANCE_EVIDENCE_BLOB_MISSING' as const;
+  readonly status = 400;
+  constructor(pathname: string) {
+    super(`No uploaded blob was found at "${pathname}".`);
+    this.name = 'AcceptanceEvidenceBlobMissingError';
+  }
+}
