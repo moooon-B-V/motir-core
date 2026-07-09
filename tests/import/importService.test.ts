@@ -123,6 +123,31 @@ describe('importService', () => {
     ).rejects.toBeInstanceOf(ImportConnectionConfigError);
   });
 
+  it('discoverFields — probes reachability and returns the field vocabulary (CSV, no writes)', async () => {
+    const fx = await makeWorkItemFixture();
+    const draft = await importService.createDraft(
+      { projectId: fx.projectId, source: 'csv' },
+      fx.ctx,
+    );
+    const conn = csvConnection(
+      'ACME-1,First,Task,Open,Medium,,,',
+      'ACME-2,Second,Bug,Done,High,alice,,',
+    );
+
+    const result = await importService.discoverFields(draft.id, { connection: conn }, fx.ctx);
+
+    expect(result.connect.sourceRef).toBe('export.csv');
+    expect(result.connect.issueCount).toBe(2);
+    expect(result.vocabulary.types).toContain('Task');
+    expect(result.vocabulary.types).toContain('Bug');
+    expect(result.vocabulary.statuses).toContain('Open');
+    expect(result.vocabulary.statuses).toContain('Done');
+    expect(result.vocabulary.priorities).toContain('Medium');
+    expect(result.vocabulary.priorities).toContain('High');
+    // No writes happened (read-only probe).
+    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+  });
+
   it('a live source with no connected identity is rejected (ImportSourceNotConnectedError)', async () => {
     const fx = await makeWorkItemFixture();
     await expect(
