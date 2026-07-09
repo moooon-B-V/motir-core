@@ -42,3 +42,21 @@ export interface AcceptanceEvidenceDTO {
   approvedAt: string | null;
   createdAt: string;
 }
+
+/**
+ * One artifact's client-upload grant (MOTIR-1681) — a `pathname` the CI must
+ * upload to and a scoped `token` (bound to that pathname + contentType + size)
+ * it uploads with, straight to the private Blob store. Then CI POSTs the
+ * pathname back to `POST …/acceptance-evidence` (register mode).
+ */
+export interface AcceptanceUploadTargetDTO {
+  pathname: string;
+  token: string;
+  contentType: string;
+}
+
+/** The mint-token response: a target for the video and (optionally) the trace. */
+export interface AcceptanceUploadTokensDTO {
+  video: AcceptanceUploadTargetDTO;
+  trace: AcceptanceUploadTargetDTO | null;
+}

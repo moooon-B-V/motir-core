@@ -11,6 +11,9 @@ import { truncateAuthTables } from '../helpers/db';
 // (MOTIR-1634) → retention supersedes. Off-cloud (ungated) is the faithful
 // integration path; the blob adapter is the one mocked external.
 
+// The direct-to-Blob publish (MOTIR-1681): the video is already client-uploaded,
+// so the register route takes pathnames + `headPrivateBlob` supplies the
+// authoritative size/contentType. No bytes flow through the route.
 vi.mock('@/lib/blob/uploader', () => {
   let seq = 0;
   return {
@@ -20,6 +23,8 @@ vi.mock('@/lib/blob/uploader', () => {
     putPrivateAttachment: vi.fn(async (p: string) => ({ pathname: `${p}-${++seq}` })),
     signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
     deleteAttachmentBlob: vi.fn(async () => {}),
+    mintPrivateUploadToken: vi.fn(async () => 'client-token'),
+    headPrivateBlob: vi.fn(async () => ({ size: 2048, contentType: 'video/webm' })),
   };
 });
 
@@ -27,8 +32,6 @@ const { POST } = await import('@/app/api/work-items/[id]/acceptance-evidence/rou
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { acceptanceEvidenceService } = await import('@/lib/services/acceptanceEvidenceService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
-
-const video = (name = 'run.webm') => new File([new Uint8Array(2048)], name, { type: 'video/webm' });
 
 async function inReviewStory(fx: WorkItemFixture) {
   const story = await workItemsService.createWorkItem(
@@ -40,22 +43,32 @@ async function inReviewStory(fx: WorkItemFixture) {
   return story;
 }
 
+/** Register a (mock-uploaded) video by a pathname within the story's prefix. */
 async function publishVia(
   token: string,
-  identifier: string,
-  parts: { video: File; chapters?: unknown; commitSha?: string; producedByKey?: string },
+  story: { id: string; identifier: string },
+  parts: {
+    videoName?: string;
+    chapters?: unknown;
+    commitSha?: string;
+    producedByKey?: string;
+  } = {},
 ) {
-  const form = new FormData();
-  form.set('video', parts.video);
-  if (parts.chapters) form.set('chapters', JSON.stringify(parts.chapters));
-  if (parts.commitSha) form.set('commitSha', parts.commitSha);
-  if (parts.producedByKey) form.set('producedByKey', parts.producedByKey);
-  const req = new Request(`http://localhost/api/work-items/${identifier}/acceptance-evidence`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}` },
-    body: form,
-  });
-  return POST(req, { params: Promise.resolve({ id: identifier }) });
+  const body = {
+    videoPathname: `acceptance/${fx.workspaceId}/${story.id}/${parts.videoName ?? 'run.webm'}`,
+    chapters: parts.chapters,
+    commitSha: parts.commitSha,
+    producedByKey: parts.producedByKey,
+  };
+  const req = new Request(
+    `http://localhost/api/work-items/${story.identifier}/acceptance-evidence`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  );
+  return POST(req, { params: Promise.resolve({ id: story.identifier }) });
 }
 
 let fx: WorkItemFixture;
@@ -82,8 +95,7 @@ afterAll(async () => {
 describe('story-acceptance flow (publish → read → board flag → gate → retention)', () => {
   it('CI publish → the panel reads the same evidence back through its DTO', async () => {
     const story = await inReviewStory(fx);
-    const res = await publishVia(token, story.identifier, {
-      video: video(),
+    const res = await publishVia(token, story, {
       chapters: [{ label: 'Open the story', tSeconds: 2 }],
       commitSha: 'deadbeefcafe',
       producedByKey: 'MOTIR-1638',
@@ -107,7 +119,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
 
   it('Approve moves the story to done + stamps the evidence + clears the board flag', async () => {
     const story = await inReviewStory(fx);
-    await publishVia(token, story.identifier, { video: video() });
+    await publishVia(token, story, {});
 
     const { storyStatus, evidence } = await acceptanceEvidenceService.decide(
       { workItemId: story.id, decision: 'approve' },
@@ -125,8 +137,8 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
 
   it('a second publish SUPERSEDES — one current, the old video unlinked (retention)', async () => {
     const story = await inReviewStory(fx);
-    await publishVia(token, story.identifier, { video: video('first.webm'), commitSha: 'aaa' });
-    await publishVia(token, story.identifier, { video: video('second.webm'), commitSha: 'bbb' });
+    await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaa' });
+    await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbb' });
 
     const currents = await db.acceptanceEvidence.count({
       where: { workItemId: story.id, isCurrent: true },
@@ -149,7 +161,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     const readOnly = (
       await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'ro', scopes: ['read'] })
     ).token;
-    const res = await publishVia(readOnly, story.identifier, { video: video() });
+    const res = await publishVia(readOnly, story, {});
     expect(res.status).toBe(403);
     expect(await db.acceptanceEvidence.count()).toBe(0);
   });

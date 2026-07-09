@@ -1,4 +1,5 @@
-import { del, issueSignedToken, presignUrl, put } from '@vercel/blob';
+import { del, head, issueSignedToken, presignUrl, put } from '@vercel/blob';
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
 
 // The blob-storage adapter (Subtask 2.3.7; delete added in 5.2.7) — the ONE
 // place that talks to Vercel Blob, so swapping to S3/GCS for an enterprise
@@ -130,4 +131,52 @@ export async function signedDownloadUrl(
   // switch (the same one the public-store `downloadUrl` carried pre-1665).
   if (!download) return presignedUrl;
   return `${presignedUrl}${presignedUrl.includes('?') ? '&' : '?'}download=1`;
+}
+
+// ── CLIENT-DIRECT upload for large private artifacts (MOTIR-1681) ─────────────
+// A server-proxied `putPrivateAttachment` streams the bytes THROUGH the
+// serverless function, whose request body is capped at ~4.5MB on Vercel — too
+// small for a full acceptance video (the allowlist permits up to 100MB). The
+// acceptance publish instead mints a scoped client token here, a trusted CI job
+// uploads the blob DIRECTLY to the private store with it, then reports the
+// pathname back (re-validated via `headPrivateBlob`). No `onUploadCompleted`
+// webhook (the ADR MOTIR-1628 avoided its localhost/preview fragility).
+
+/**
+ * Mint a short-lived CLIENT upload token bound to EXACTLY `pathname`, a single
+ * `contentType`, and `maxBytes`. A holder can only `put` that one private blob.
+ * Delegated from the private store's `BLOB_READ_WRITE_TOKEN` (read from env).
+ */
+export async function mintPrivateUploadToken(
+  pathname: string,
+  opts: { contentType: string; maxBytes: number; ttlSeconds?: number },
+): Promise<string> {
+  return generateClientTokenFromReadWriteToken({
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+    pathname,
+    addRandomSuffix: false,
+    allowedContentTypes: [opts.contentType],
+    maximumSizeInBytes: opts.maxBytes,
+    validUntil: Date.now() + (opts.ttlSeconds ?? 300) * 1000,
+  });
+}
+
+export interface BlobHead {
+  size: number;
+  contentType: string;
+}
+
+/**
+ * Read the AUTHORITATIVE size + contentType of a private blob by its pathname —
+ * the register step `head`s each client-uploaded artifact to confirm it exists
+ * (the upload actually happened) and to read its real metadata, never trusting
+ * the values a caller reports. Returns null when the blob is absent.
+ */
+export async function headPrivateBlob(pathname: string): Promise<BlobHead | null> {
+  try {
+    const result = await head(pathname);
+    return { size: result.size, contentType: result.contentType };
+  } catch {
+    return null;
+  }
 }

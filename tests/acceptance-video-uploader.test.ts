@@ -2,9 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-// The BYOK uploader (Subtask MOTIR-1632) — pure logic, no DB. Tests the no-op
-// (red-run) path + a successful POST via a mocked fetch.
+
+// The client-direct blob upload (MOTIR-1681) is mocked so the uploader never
+// hits the network — the test asserts the mint → put → register orchestration.
+vi.mock('@vercel/blob/client', () => ({
+  put: vi.fn(async (pathname: string) => ({ pathname })),
+}));
+
+// The BYOK uploader (Subtask MOTIR-1632; direct-to-Blob MOTIR-1681) — pure
+// logic, no DB. Tests the no-op (red-run) path + the mint/upload/register flow.
 import { findArtifacts, uploadAcceptanceVideo } from '../scripts/upload-acceptance-video.mjs';
+import { put as putBlobMock } from '@vercel/blob/client';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'acc-video-'));
@@ -12,6 +20,7 @@ function tmpDir(): string {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.clearAllMocks(); // module-mocked `put` accumulates calls across tests otherwise
 });
 
 describe('findArtifacts', () => {
@@ -90,15 +99,40 @@ describe('findArtifacts', () => {
 });
 
 describe('uploadAcceptanceVideo', () => {
-  it('POSTs multipart to the publish endpoint with a bearer token', async () => {
+  interface FetchInit {
+    method?: string;
+    headers: Record<string, string>;
+    body: string;
+  }
+
+  /** A fetch mock that answers the mint-token call then the register call. */
+  function stubPublishFetch(evidenceId = 'ev1', tokens?: unknown) {
+    const fetchMock = vi.fn(async (url: string, _init: FetchInit) => {
+      if (url.endsWith('/upload-token')) {
+        return {
+          ok: true,
+          json: async () =>
+            tokens ?? {
+              video: {
+                pathname: 'acceptance/w/s/uuid-acceptance.webm',
+                token: 'client-token-video',
+                contentType: 'video/webm',
+              },
+              trace: null,
+            },
+        };
+      }
+      return { ok: true, json: async () => ({ evidence: { id: evidenceId } }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('mints a token, PUTs the video direct to Blob, then registers the pathname as JSON', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
     fs.writeFileSync(video, 'bytes');
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ evidence: { id: 'ev1' } }) });
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubPublishFetch('ev1');
 
     const result = await uploadAcceptanceVideo({
       baseUrl: 'https://app.motir.co/',
@@ -109,23 +143,39 @@ describe('uploadAcceptanceVideo', () => {
     });
 
     expect(result).toEqual({ evidence: { id: 'ev1' } });
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('https://app.motir.co/api/work-items/MOTIR-1627/acceptance-evidence');
-    expect(init.method).toBe('POST');
-    expect(init.headers.authorization).toBe('Bearer motir_pat_abc');
-    expect(init.body).toBeInstanceOf(FormData);
-    expect(init.body.get('commitSha')).toBe('abc');
+
+    // 1. Mint-token call.
+    const [tokenUrl, tokenInit] = fetchMock.mock.calls[0]!;
+    expect(tokenUrl).toBe(
+      'https://app.motir.co/api/work-items/MOTIR-1627/acceptance-evidence/upload-token',
+    );
+    expect(tokenInit.headers.authorization).toBe('Bearer motir_pat_abc');
+    expect(JSON.parse(tokenInit.body)).toEqual({ hasTrace: false });
+
+    // 2. Direct client `put` to Blob with the minted token — NOT through the API.
+    expect(putBlobMock).toHaveBeenCalledWith(
+      'acceptance/w/s/uuid-acceptance.webm',
+      expect.anything(),
+      expect.objectContaining({ access: 'private', token: 'client-token-video' }),
+    );
+
+    // 3. Register call — JSON pathnames, never the bytes.
+    const [registerUrl, registerInit] = fetchMock.mock.calls[1]!;
+    expect(registerUrl).toBe('https://app.motir.co/api/work-items/MOTIR-1627/acceptance-evidence');
+    expect(registerInit.headers['content-type']).toBe('application/json');
+    expect(JSON.parse(registerInit.body)).toMatchObject({
+      videoPathname: 'acceptance/w/s/uuid-acceptance.webm',
+      tracePathname: null,
+      commitSha: 'abc',
+      producedByKey: 'MOTIR-1638',
+    });
   });
 
-  it('uses keyless OIDC headers (marker + OIDC bearer) when an oidcToken is given', async () => {
+  it('uses keyless OIDC headers (marker + OIDC bearer) on both calls', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
     fs.writeFileSync(video, 'bytes');
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({ evidence: { id: 'ev2' } }) });
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = stubPublishFetch('ev2');
 
     await uploadAcceptanceVideo({
       baseUrl: 'https://app.motir.co',
@@ -134,12 +184,79 @@ describe('uploadAcceptanceVideo', () => {
       artifacts: { video, trace: null, chapters: null },
     });
 
-    const [, init] = fetchMock.mock.calls[0]!;
-    expect(init.headers.authorization).toBe('Bearer oidc.jwt.token');
-    expect(init.headers['x-motir-auth']).toBe('github-oidc');
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.headers.authorization).toBe('Bearer oidc.jwt.token');
+      expect(init.headers['x-motir-auth']).toBe('github-oidc');
+    }
   });
 
-  it('throws on a non-2xx response', async () => {
+  it('uploads the trace too and registers both pathnames when a trace is present', async () => {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    const trace = path.join(dir, 't.zip');
+    fs.writeFileSync(video, 'bytes');
+    fs.writeFileSync(trace, 'trace-bytes');
+    const fetchMock = stubPublishFetch('ev3', {
+      video: {
+        pathname: 'acceptance/w/s/uuid-acceptance.webm',
+        token: 'ct-v',
+        contentType: 'video/webm',
+      },
+      trace: {
+        pathname: 'acceptance/w/s/uuid-trace.zip',
+        token: 'ct-t',
+        contentType: 'application/zip',
+      },
+    });
+
+    await uploadAcceptanceVideo({
+      baseUrl: 'https://app.motir.co',
+      token: 't',
+      storyKey: 'MOTIR-1627',
+      artifacts: { video, trace, chapters: null },
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({ hasTrace: true });
+    expect(putBlobMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body)).toMatchObject({
+      videoPathname: 'acceptance/w/s/uuid-acceptance.webm',
+      tracePathname: 'acceptance/w/s/uuid-trace.zip',
+    });
+  });
+
+  it('throws when the register call returns a non-2xx response', async () => {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    fs.writeFileSync(video, 'bytes');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/upload-token')
+          ? {
+              ok: true,
+              json: async () => ({
+                video: {
+                  pathname: 'acceptance/w/s/v.webm',
+                  token: 'ct',
+                  contentType: 'video/webm',
+                },
+                trace: null,
+              }),
+            }
+          : { ok: false, status: 400, text: async () => 'ACCEPTANCE_EVIDENCE_BLOB_MISSING' },
+      ),
+    );
+    await expect(
+      uploadAcceptanceVideo({
+        baseUrl: 'https://app.motir.co',
+        token: 't',
+        storyKey: 'MOTIR-1627',
+        artifacts: { video, trace: null, chapters: null },
+      }),
+    ).rejects.toThrow(/400/);
+  });
+
+  it('throws when the token mint returns a non-2xx response (before any upload)', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
     fs.writeFileSync(video, 'bytes');
