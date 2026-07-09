@@ -51,11 +51,10 @@ export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance-video.spec.ts'],
   timeout: 90_000,
-  // Generous assertion timeout: this lane runs `next dev` (below), which compiles
-  // routes ON-DEMAND, so the FIRST test to hit `/items/[id]` pays a cold-compile
-  // cost that can exceed the 5s default under CI load (only the first — the route
-  // is warm for the rest). With retries:0, one cold-compile overrun would red the
-  // whole leg, so give the panel-load assertions headroom (MOTIR-1648).
+  // Assertion headroom for CI load. This lane now runs a PRODUCTION build (see
+  // webServer below, MOTIR-1682), so there is NO on-demand cold-compile cost on
+  // the first `/items/[id]` hit — the source of the old test-1 flake. A generous
+  // 20s is kept anyway as a margin under heavy CI contention (retries:0).
   expect: { timeout: 20_000 },
   fullyParallel: false,
   forbidOnly: Boolean(process.env['CI']),
@@ -77,13 +76,31 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: `pnpm dev --port ${PORT}`,
+      // MOTIR-1682: run the acceptance lane against a PRODUCTION build (`next
+      // build` + `next start`), NOT `next dev` — mirroring the main lane
+      // (playwright.config.ts, MOTIR-1679). `next dev`'s resident on-demand
+      // compiler made the FIRST test to hit `/items/[id]` pay a cold-compile
+      // cost that, under CI load, blew even the 60s assertion timeout (the
+      // test-1 flake). A production server is fully pre-compiled and stable.
+      // `next start` forces NODE_ENV=production; E2E_PROD_HARNESS=1 re-relaxes
+      // ONLY the test seams (Secure cookies / `/api/_test` 404 gate / 'file'
+      // email — see lib/e2eProdHarness.ts). This lane seeds via `/api/_test`, so
+      // it MUST set the flag. `prisma generate` guards a fresh worktree.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
-      timeout: 120_000,
+      // Generous: now covers a full `next build` (minutes) before the server binds.
+      timeout: 600_000,
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
+        // MOTIR-1682: production-harness flag — re-relaxes the NODE_ENV=production
+        // test seams the prod server trips (see lib/e2eProdHarness.ts). Test-only,
+        // never a real deploy.
+        E2E_PROD_HARNESS: '1',
+        // `next build` is memory-heavy; give V8 old-space headroom (harmless for
+        // the lightweight `next start` that follows). Inside the CI 16 GB budget.
+        NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         BETTER_AUTH_URL: BASE_URL,
