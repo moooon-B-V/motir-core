@@ -1,10 +1,20 @@
 import { Prisma, type MigrateOnboarding, type MigrateOnboardingStep } from '@prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { ProjectContext } from '@/lib/projects';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectsService } from '@/lib/services/projectsService';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
+import { toProjectDTO } from '@/lib/mappers/projectMappers';
+import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { aiChatService } from '@/lib/services/aiChatService';
+import { aiConventionService } from '@/lib/services/aiConventionService';
+import { aiGenerationService } from '@/lib/services/aiGenerationService';
+import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import type {
   MigrateOnboardingDto,
   StartMigrateOnboardingInput,
@@ -17,66 +27,265 @@ import {
 } from '@/lib/migrateOnboarding/errors';
 
 // The migrate-existing-codebase onboarding state machine ("Workflow B", Story
-// 7.15 · MOTIR-1499) — the SCAFFOLDING slice. It stands up the durable,
-// resumable substrate that the wiring slice (MOTIR-931) drives: the persisted
-// run, the read paths, and one transition method PER step with the canonical
-// verify → advance → kick shape. Two seams are STUBS here for 931 to fill: the
-// per-step EXIT-CHECK (each `verifyExit` below gates on the persisted per-step
-// output — the resumable minimum; 931 deepens it to the real signal, e.g.
-// polling the index/discovery/generation job's terminal state) and the KICK that
-// starts the next step's action (`kickStepAction`, a no-op here). No `motir-ai`
-// import; every DB op goes through the repository; the service owns the
-// transaction (the 4-layer rule, CLAUDE.md).
+// 7.15) — the WIRING slice (MOTIR-931) that drives the SLICE-A scaffold
+// (MOTIR-1499). SLICE-A stood up the persisted run, the read paths, the row-lock
+// step guard, and one transition method PER step with the verify → advance shape;
+// this slice fills the two seams it left: the per-step KICK (start the action
+// that drives a step toward its exit) and the deepened EXIT CHECK (poll the REAL
+// signal each owning story produces), plus the resumable API (its routes).
 //
-// RESUMABLE by shape: `step` is persisted and re-read on every transition (under
-// a row lock), so there is no restart-from-`connect` path — a resumed run picks
-// up at its saved step, and a double-advance / concurrent loser is rejected by
-// the step guard.
+// EACH STEP CALLS THE OWNING STORY'S SHIPPED SURFACE — re-implementing none:
+//   connect  → the GitHub grant (7.10) — a connected repo set (resolveCodeContext)
+//   index    → the code-graph index job (7.5) — its terminal state in the job_run
+//              ledger (jobRunRepository); the wizard WAITS, it does not index
+//              (the grant flow enqueues the index — `enqueueCodeGraphIndex`)
+//   audit_convention → the audit + propose_convention derivation (7.14 ·
+//              aiConventionService.reaudit); DERIVED + AUTO-USED, no approval gate
+//              and never a wizard gate (decision MOTIR-1660) — kicked silently,
+//              advances immediately
+//   discovery → a short discovery job (7.3 · aiChatService.submitDiscoveryTurn);
+//              exit: direction docs exist (aiPreplanService.getPreplanState)
+//   generate → code-aware generation (7.4 · aiGenerationService.startGeneration,
+//              which reads the code graph via resolveCodeContext); exit: the plan
+//              is `planned`
+//   review   → the standard plan review/approve (7.21) — exit: the plan is
+//              `approved`; on approve the run completes
+//
+// SIDE-EFFECTS-OUTSIDE-TX (CLAUDE.md): the kicks (submit motir-ai jobs, read the
+// grant/graph over the network) and the real-signal polls run BEFORE the short
+// advance transaction — a run row is never locked across a motir-ai / DB
+// round-trip. The transaction only locks the row, re-reads + re-asserts the step
+// (the resumability / lost-race guard), persists the observed signal, and moves
+// the step. No `motir-ai` import — every AI call goes through a motir-core service
+// / the 7.1 client (`lib/ai/*`); every DB op goes through a repository.
+//
+// RESUMABLE by shape: `step` is persisted and re-read (under a row lock) on every
+// transition; the kicks are IDEMPOTENT (skip when the step's output already
+// exists) so a resumed run — or one whose kick was dropped — re-checks and
+// re-kicks rather than restarting from `connect` or double-submitting.
 
-/**
- * The exit-condition SEAM for a step (MOTIR-931 deepens each). Throws
- * `MigrateOnboardingExitConditionError` when the current step's output has not
- * landed yet, so the run cannot advance. `undefined` = the step has no local
- * gate in the scaffold (the `review` approval is a 931-wired user action).
- */
-type ExitCheck = (run: MigrateOnboarding) => void;
+/** A migrate-variant discovery turn: one short, code-first framing of the
+ *  existing project. motir-ai owns the interview + the direction docs it yields;
+ *  motir-core only forwards the turn. */
+const MIGRATE_DISCOVERY_PROMPT =
+  'This is an existing codebase being onboarded to Motir. Using the connected ' +
+  "repository's code graph as the ground truth, summarize the project's purpose, " +
+  'the current state of the code, and the most valuable directions to plan next.';
 
-/**
- * KICK SEAM (MOTIR-931): start the action that drives the step just ENTERED
- * toward its exit condition — begin code-graph indexing, submit the discovery /
- * generation job, open the plan review, etc. A no-op in this scaffolding slice;
- * 931 replaces the body with the real per-step orchestration. Isolated in one
- * place so the transition methods keep their stable verify→advance→kick shape
- * while 931 fills only this seam.
- */
-async function kickStepAction(
-  step: MigrateOnboardingStep,
-  run: MigrateOnboarding,
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  // Intentionally empty until MOTIR-931 wires each step's orchestration.
-  void step;
-  void run;
-  void tx;
+/** The per-step reason surfaced on a 409 when a step cannot yet advance. */
+const EXIT_REASON: Record<MigrateOnboardingStep, string> = {
+  connect: 'no repository has been connected yet.',
+  index: 'the code graph is still indexing.',
+  audit_convention: 'the coding convention has not been derived yet.',
+  discovery: 'the discovery step has not produced direction docs yet.',
+  generate: 'the plan has not finished generating yet.',
+  review: 'the plan has not been approved yet.',
+  done: 'the run is already complete.',
+};
+
+/** What a step's exit poll observes: whether it may advance, and any signal to
+ *  persist as part of the advance (e.g. the resolved repo ref, `codeGraphReady`,
+ *  the auto-accept timestamp). */
+interface ExitResult {
+  ready: boolean;
+  patch?: Prisma.MigrateOnboardingUncheckedUpdateInput;
 }
 
+interface StepInput {
+  run: MigrateOnboarding;
+  pctx: ProjectContext;
+  ctx: ServiceContext;
+}
+
+/** One step's wiring: the hop, the (idempotent, best-effort where the story is
+ *  fire-and-forget) KICK of the step's driving action, and the real-signal EXIT
+ *  poll. Both hooks run OUTSIDE the advance transaction. */
+interface StepWiring {
+  from: MigrateOnboardingStep;
+  to: MigrateOnboardingStep;
+  ensureKicked?: (input: StepInput) => Promise<void>;
+  checkExit: (input: StepInput) => Promise<ExitResult>;
+}
+
+/** Build the run's project context (the `projectKey`/identifier the AI services
+ *  need) from the persisted run — the transitions are keyed by run id, not by the
+ *  actor's active project, so the project is resolved from the row. */
+async function resolveProjectContext(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<ProjectContext> {
+  const project = await projectsService.assertProjectInWorkspace(projectId, ctx.workspaceId);
+  return {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    projectId,
+    project: toProjectDTO(project),
+  };
+}
+
+/** connect → index. Exit: a connected repository exists for the workspace (the
+ *  GitHub grant mirror). No kick — the user connects the repo in GitHub settings;
+ *  the wizard only observes it. */
+const CONNECT: StepWiring = {
+  from: 'connect',
+  to: 'index',
+  async checkExit({ run, ctx }) {
+    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const firstRepo = code?.repos[0];
+    if (!firstRepo) return { ready: false };
+    // Record WHICH repo backs the run (the connect-time ref, else the first
+    // connected repo) so the `index` step can match its code-graph index job.
+    const repoRef = run.connectedRepoRef ?? firstRepo.repoRef;
+    return { ready: true, patch: { connectedRepoRef: repoRef } };
+  },
+};
+
+/** index → audit_convention. Waits on the code-graph index job's terminal state
+ *  (the job_run ledger) — does NOT index (the grant flow enqueued it). */
+const INDEX: StepWiring = {
+  from: 'index',
+  to: 'audit_convention',
+  async checkExit({ run, ctx }) {
+    if (run.codeGraphReady) return { ready: true };
+    if (!run.connectedRepoRef) return { ready: false };
+    const succeeded = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) =>
+        jobRunRepository.findSucceededCodeGraphIndex(ctx.workspaceId, run.connectedRepoRef!, tx),
+    );
+    if (!succeeded) return { ready: false };
+    return { ready: true, patch: { codeGraphReady: true } };
+  },
+};
+
+/** audit_convention → discovery. DERIVED + AUTO-USED, never a gate (MOTIR-1660):
+ *  kick the audit + propose_convention derivation SILENTLY (best-effort) and
+ *  advance immediately — the convention is used automatically; the audit +
+ *  read-only view live on the post-onboarding Code-health page, not here. */
+const AUDIT_CONVENTION: StepWiring = {
+  from: 'audit_convention',
+  to: 'discovery',
+  async ensureKicked({ run, pctx, ctx }) {
+    if (run.conventionApprovedAt) return; // already derived on a prior pass
+    // Best-effort + silent: a convention-derivation blip must never gate
+    // onboarding (MOTIR-1660). Fire the audit + propose_convention job and move
+    // on; its result surfaces later on the Code-health page.
+    try {
+      await aiConventionService.reaudit(
+        run.projectId,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        pctx.project.identifier,
+      );
+    } catch (err) {
+      console.error(
+        `migrate-onboarding ${run.id}: audit_convention derivation kick failed (non-blocking):`,
+        err,
+      );
+    }
+  },
+  async checkExit({ run }) {
+    // Non-blocking auto-use: reaching audit_convention is enough to advance.
+    // Stamp the auto-accept time (repurposing the SLICE-A field as "derived +
+    // auto-accepted at", since there is no human approval per MOTIR-1660).
+    return { ready: true, patch: { conventionApprovedAt: run.conventionApprovedAt ?? new Date() } };
+  },
+};
+
+/** discovery → generate. Kick a short migrate-variant discovery job; exit when
+ *  direction docs exist. */
+const DISCOVERY: StepWiring = {
+  from: 'discovery',
+  to: 'generate',
+  async ensureKicked({ run, pctx }) {
+    if (run.discoveryJobId) return; // idempotent — one discovery job per run
+    const { jobId } = await aiChatService.submitDiscoveryTurn(MIGRATE_DISCOVERY_PROMPT, pctx);
+    await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: run.projectId },
+      (tx) => migrateOnboardingRepository.update(run.id, { discoveryJobId: jobId }, tx),
+    );
+  },
+  async checkExit({ pctx }) {
+    const preplan = await aiPreplanService.getPreplanState(pctx);
+    return { ready: preplan.docs.length > 0 };
+  },
+};
+
+/** generate → review. Kick the code-aware generation (its Plan binds via the
+ *  job's sourceJobId); exit when the plan is `planned`. */
+const GENERATE: StepWiring = {
+  from: 'generate',
+  to: 'review',
+  async ensureKicked({ run, pctx }) {
+    if (run.generateJobId) return; // idempotent — one generation per run
+    const { jobId } = await aiGenerationService.startGeneration(pctx, {});
+    await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: run.projectId },
+      (tx) => migrateOnboardingRepository.update(run.id, { generateJobId: jobId }, tx),
+    );
+  },
+  async checkExit({ run, ctx }) {
+    if (!run.generateJobId) return { ready: false };
+    const plan = await planRepository.findBySourceJobId(run.generateJobId, ctx.workspaceId);
+    return { ready: plan?.status === 'planned' || plan?.status === 'approved' };
+  },
+};
+
+/** review → done. No kick — the user approves the plan via the standard plan
+ *  review/approve surface; this step gates on that approval, then completes. */
+const REVIEW: StepWiring = {
+  from: 'review',
+  to: 'done',
+  async checkExit({ run, ctx }) {
+    if (!run.generateJobId) return { ready: false };
+    const plan = await planRepository.findBySourceJobId(run.generateJobId, ctx.workspaceId);
+    return { ready: plan?.status === 'approved' };
+  },
+};
+
 /**
- * The shared transition mechanic every `advanceFrom*` method runs through:
- * resolve + access-gate the run, then in ONE workspace-scoped transaction lock
- * the row, re-read it fresh, assert it is at the `from` step (the resumability /
- * lost-race guard), run the step's exit-check seam (a), advance the saved step —
- * completing the run on the terminal `done` hop (b), and kick the entered step's
- * action seam (c). Returns the updated run as a DTO.
+ * The shared transition mechanic. Resolve + access-gate the run and its project,
+ * then OUTSIDE any transaction: (1) idempotently KICK the current step's driving
+ * action (a motir-ai job submit / grant read — never inside a lock), (2) POLL the
+ * step's real exit signal. Only if ready, open ONE short workspace-scoped
+ * transaction to lock the row, re-read + re-assert the step (the resumability /
+ * lost-race guard), persist the observed signal, and advance the saved step —
+ * completing the run on the terminal `done` hop. Returns the updated run as a DTO.
  */
 async function advance(
   id: string,
   ctx: ServiceContext,
-  spec: { from: MigrateOnboardingStep; to: MigrateOnboardingStep; verifyExit: ExitCheck },
+  wiring: StepWiring,
 ): Promise<MigrateOnboardingDto> {
   const existing = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
   if (!existing) throw new MigrateOnboardingNotFoundError(id);
   await projectAccessService.assertCanEdit(existing.projectId, ctx);
+  // Early step check (re-asserted under the lock below) so a wrong-step call
+  // fails fast without kicking a step's side effect.
+  if (existing.step !== wiring.from) {
+    throw new MigrateOnboardingStepError(id, existing.step, wiring.from);
+  }
 
+  const pctx = await resolveProjectContext(existing.projectId, ctx);
+  let run = existing;
+
+  // (1) Kick the current step's driving action (idempotent). A kick that submits
+  // a metered motir-ai job lets its typed error (out-of-credits / transport)
+  // propagate so the route maps it (402/502); a best-effort kick swallows its own.
+  if (wiring.ensureKicked) {
+    await wiring.ensureKicked({ run, pctx, ctx });
+    // A kick may have persisted a job id — re-read so the exit poll sees it.
+    const refreshed = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    if (refreshed) run = refreshed;
+  }
+
+  // (2) Poll the real exit signal (network / ledger reads) OUTSIDE the tx.
+  const { ready, patch } = await wiring.checkExit({ run, pctx, ctx });
+  if (!ready) {
+    throw new MigrateOnboardingExitConditionError(wiring.from, EXIT_REASON[wiring.from]);
+  }
+
+  // (3) Commit the advance under a row lock — re-read + re-assert the step so a
+  // concurrent advance (or a double click) lands on the wrong-step guard.
   const row = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
     async (tx) => {
@@ -84,29 +293,15 @@ async function advance(
       if (!locked) throw new MigrateOnboardingNotFoundError(id);
       const fresh = await migrateOnboardingRepository.findById(id, ctx.workspaceId, tx);
       if (!fresh) throw new MigrateOnboardingNotFoundError(id);
-
-      // The step guard: this transition is legal ONLY from its `from` step. A
-      // resumed run re-reads its saved step here, so a double-advance or a
-      // concurrent loser (which observes the already-advanced step under the
-      // lock) is rejected rather than skipping a step.
-      if (fresh.step !== spec.from) {
-        throw new MigrateOnboardingStepError(id, fresh.step, spec.from);
+      if (fresh.step !== wiring.from) {
+        throw new MigrateOnboardingStepError(id, fresh.step, wiring.from);
       }
-
-      // (a) verify the current step's exit condition — SEAM (MOTIR-931).
-      spec.verifyExit(fresh);
-
-      // (b) advance the saved step; the terminal `done` hop completes the run.
-      const isTerminal = spec.to === 'done';
-      const updated = await migrateOnboardingRepository.update(
+      const isTerminal = wiring.to === 'done';
+      return migrateOnboardingRepository.update(
         id,
-        { step: spec.to, ...(isTerminal ? { status: 'completed' } : {}) },
+        { ...(patch ?? {}), step: wiring.to, ...(isTerminal ? { status: 'completed' } : {}) },
         tx,
       );
-
-      // (c) kick the entered step's action — SEAM (MOTIR-931).
-      await kickStepAction(spec.to, updated, tx);
-      return updated;
     },
   );
   return toMigrateOnboardingDto(row);
@@ -167,7 +362,8 @@ export const migrateOnboardingService = {
   },
 
   /** One run by id (browse-gated). Throws `MigrateOnboardingNotFoundError` when
-   *  it does not resolve in this workspace. */
+   *  it does not resolve in this workspace. Re-opening resumes at the saved
+   *  `step` — the resumable head read the wizard reloads from. */
   async getById(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
     const row = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
     if (!row) throw new MigrateOnboardingNotFoundError(id);
@@ -175,101 +371,64 @@ export const migrateOnboardingService = {
     return toMigrateOnboardingDto(row);
   },
 
-  // ── Step transitions — one per step, each verify → advance → kick ───────────
+  // ── Step transitions — one per step, each kick (current) → poll → advance ────
 
   /** connect → index. Exit: a repo has been connected. */
-  async advanceFromConnect(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    return advance(id, ctx, {
-      from: 'connect',
-      to: 'index',
-      verifyExit: (run) => {
-        if (!run.connectedRepoRef) {
-          throw new MigrateOnboardingExitConditionError(
-            'connect',
-            'no repo has been connected yet.',
-          );
-        }
-      },
-    });
+  advanceFromConnect(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, CONNECT);
   },
 
   /** index → audit_convention. Exit: the repo is indexed into the code graph. */
-  async advanceFromIndex(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    return advance(id, ctx, {
-      from: 'index',
-      to: 'audit_convention',
-      verifyExit: (run) => {
-        if (!run.codeGraphReady) {
-          throw new MigrateOnboardingExitConditionError(
-            'index',
-            'the code graph is not ready yet.',
-          );
-        }
-      },
-    });
+  advanceFromIndex(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, INDEX);
   },
 
-  /** audit_convention → discovery. Exit: the coding convention was approved. */
-  async advanceFromAuditConvention(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    return advance(id, ctx, {
-      from: 'audit_convention',
-      to: 'discovery',
-      verifyExit: (run) => {
-        if (!run.conventionApprovedAt) {
-          throw new MigrateOnboardingExitConditionError(
-            'audit_convention',
-            'the coding convention has not been approved yet.',
-          );
-        }
-      },
-    });
+  /** audit_convention → discovery. Exit: the coding convention was derived
+   *  (auto-used, no gate — MOTIR-1660). */
+  advanceFromAuditConvention(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, AUDIT_CONVENTION);
   },
 
-  /** discovery → generate. Exit: a discovery job has been recorded. */
-  async advanceFromDiscovery(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    return advance(id, ctx, {
-      from: 'discovery',
-      to: 'generate',
-      verifyExit: (run) => {
-        if (!run.discoveryJobId) {
-          throw new MigrateOnboardingExitConditionError(
-            'discovery',
-            'no discovery job has been recorded yet.',
-          );
-        }
-      },
-    });
+  /** discovery → generate. Exit: direction docs exist. */
+  advanceFromDiscovery(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, DISCOVERY);
   },
 
-  /** generate → review. Exit: a code-aware generation job has been recorded. */
-  async advanceFromGenerate(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    return advance(id, ctx, {
-      from: 'generate',
-      to: 'review',
-      verifyExit: (run) => {
-        if (!run.generateJobId) {
-          throw new MigrateOnboardingExitConditionError(
-            'generate',
-            'no generation job has been recorded yet.',
-          );
-        }
-      },
-    });
+  /** generate → review. Exit: a code-aware plan has been generated. */
+  advanceFromGenerate(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, GENERATE);
+  },
+
+  /** review → done (completes the run). Exit: the plan was approved. */
+  advanceFromReview(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, REVIEW);
   },
 
   /**
-   * review → done (completes the run). The review approval is a user action the
-   * wiring slice (MOTIR-931) gates; the scaffold treats reaching `review` as
-   * sufficient to complete, so the exit-check is an empty 931 seam.
+   * Attempt the NEXT transition from wherever the run currently sits — the single
+   * entry point the resumable `…/advance` route calls (it holds a run id, not a
+   * step). Dispatches to the step-specific transition; a `done` run has nothing
+   * to advance. Rejects (via the step's exit check) when the current exit
+   * condition is unmet — the generic guard.
    */
-  async advanceFromReview(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    return advance(id, ctx, {
-      from: 'review',
-      to: 'done',
-      verifyExit: () => {
-        // SEAM (MOTIR-931): the plan-review approval gate. No local field gates
-        // it in the scaffold — reaching `review` is enough to complete.
-      },
-    });
+  async advanceNext(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    const run = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    if (!run) throw new MigrateOnboardingNotFoundError(id);
+    switch (run.step) {
+      case 'connect':
+        return advance(id, ctx, CONNECT);
+      case 'index':
+        return advance(id, ctx, INDEX);
+      case 'audit_convention':
+        return advance(id, ctx, AUDIT_CONVENTION);
+      case 'discovery':
+        return advance(id, ctx, DISCOVERY);
+      case 'generate':
+        return advance(id, ctx, GENERATE);
+      case 'review':
+        return advance(id, ctx, REVIEW);
+      case 'done':
+        throw new MigrateOnboardingExitConditionError('done', EXIT_REASON.done);
+    }
   },
 };
