@@ -6,6 +6,7 @@
 // `@/lib/git/registry` directly) so the registration side-effects run.
 
 import './providers/github'; // side-effect: registers the GitHub provider
+import './providers/gitlab'; // side-effect: registers the GitLab provider (7.23)
 
 export {
   getGitProvider,

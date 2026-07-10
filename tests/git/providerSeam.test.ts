@@ -18,10 +18,14 @@ describe('git provider registry', () => {
     expect(getGitProvider('github').id).toBe('github');
   });
 
-  it('throws UnknownGitProviderError for a provider not yet registered', () => {
-    // GitLab (7.23) implements the SAME interface + registers itself; until then
-    // resolving it is an explicit typed error, not a silent undefined.
-    expect(() => getGitProvider('gitlab' as GitProviderId)).toThrow(UnknownGitProviderError);
+  it('registers GitLab as a resolvable provider (7.23 · MOTIR-1474)', () => {
+    // GitLab implements the SAME interface + registers itself — additivity proven.
+    expect(registeredGitProviderIds()).toContain('gitlab');
+    expect(getGitProvider('gitlab').id).toBe('gitlab');
+  });
+
+  it('throws UnknownGitProviderError for a provider that is not registered', () => {
+    expect(() => getGitProvider('bitbucket' as GitProviderId)).toThrow(UnknownGitProviderError);
   });
 });
 
