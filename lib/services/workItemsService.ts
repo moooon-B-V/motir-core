@@ -136,6 +136,7 @@ import type {
   TreeLevelDto,
   ProjectRoadmapDto,
   WorkItemValidityDto,
+  WorkItemImplementationProvenanceInput,
 } from '@/lib/dto/workItems';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
@@ -1619,8 +1620,24 @@ export const workItemsService = {
     // bookkeeping, not a content edit, so it never lands in the activity feed (and
     // keeping it out avoids the activity totality guard).
     const update: Prisma.WorkItemUncheckedUpdateInput = { status: toStatusKey };
-    if (target.category === 'done') update.sessionBranch = null;
-    else if (branchDirective !== undefined) update.sessionBranch = branchDirective;
+    if (target.category === 'done') {
+      update.sessionBranch = null;
+      // Manual implementation lane (MOTIR-1685, docs/decisions/work-item-provenance.md):
+      // a human-executed / manual-type item reaching a done status with no
+      // implementation provenance yet was implemented MANUALLY (no agent report) →
+      // stamp `manual`. Guarded three ways: NEVER overwrites an existing stamp (a
+      // BYOK agent's `mark_integrated` report at in_review wins), NEVER under a
+      // `system` bulk set (the importer — those items were implemented in the source
+      // tool, provenance stays null/unknown), and ONLY for human/manual work (a
+      // coding_agent item dragged to done without a report keeps null, not manual).
+      if (
+        !opts.system &&
+        current.implementationSource === null &&
+        (current.executor === 'human' || current.type === 'manual')
+      ) {
+        update.implementationSource = 'manual';
+      }
+    } else if (branchDirective !== undefined) update.sessionBranch = branchDirective;
 
     const row = await workItemRepository.update(workItemId, update, tx);
     const revisionId = await workItemRevisionsService.recordRevision(
@@ -1651,16 +1668,66 @@ export const workItemsService = {
    * the field with no spurious revision (the no-op-status branch-write path).
    * Emits `work-item/transitioned` post-commit like `updateStatus`.
    */
+  /**
+   * Record IMPLEMENTATION provenance (Story MOTIR-1685) on an item — the single
+   * reusable entry point that persists the `implementation{Source,Harness,Model}`
+   * triple inside a caller-supplied transaction. Callable independently of the
+   * session tools: the BYOK/manual session report-back rides it now
+   * (`markIntegrated` / `completeSession`), and Epic 9's HOSTED runner will call
+   * the SAME method with trusted, gateway-metered values — so the recording seam
+   * lives here, not welded to the MCP tools. Assumes the caller has already gated
+   * the item (the session flows lock + tenant/access-check it via
+   * `applyStatusTransition` in the same `tx`). `harness`/`model` are recorded
+   * as-is (self-reported; no verification implied for byok/manual). Required `tx`.
+   */
+  async recordImplementationProvenance(
+    workItemId: string,
+    provenance: WorkItemImplementationProvenanceInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItem> {
+    return workItemRepository.update(
+      workItemId,
+      {
+        implementationSource: provenance.source,
+        implementationHarness: provenance.harness ?? null,
+        implementationModel: provenance.model ?? null,
+      },
+      tx,
+    );
+  },
+
   async markIntegrated(
     workItemId: string,
     sessionBranch: string,
     ctx: ServiceContext,
+    implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
-    const { dto, transition } = await db.$transaction((tx) =>
-      workItemsService.applyStatusTransition(workItemId, IN_REVIEW_STATUS_KEY, ctx, tx, {
-        sessionBranch,
-      }),
-    );
+    const { dto, transition } = await db.$transaction(async (tx) => {
+      const res = await workItemsService.applyStatusTransition(
+        workItemId,
+        IN_REVIEW_STATUS_KEY,
+        ctx,
+        tx,
+        { sessionBranch },
+      );
+      // BYOK/manual self-report (MOTIR-1685): the external agent reports the
+      // harness + model it ran with AT integration time; `source` defaults to
+      // `byok` (a self-reported machine — `hosted` is never accepted on this
+      // self-reported seam). Omitted → the implementation triple is untouched.
+      if (implementation) {
+        const row = await workItemsService.recordImplementationProvenance(
+          workItemId,
+          {
+            source: implementation.source ?? 'byok',
+            harness: implementation.harness,
+            model: implementation.model,
+          },
+          tx,
+        );
+        return { dto: toWorkItemDto(row), transition: res.transition };
+      }
+      return res;
+    });
     if (transition) {
       await sendEvent('work-item/transitioned', {
         workspaceId: ctx.workspaceId,
@@ -1691,6 +1758,7 @@ export const workItemsService = {
   async completeSession(
     sessionBranch: string,
     ctx: ServiceContext,
+    implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<CompleteSessionResultDto> {
     const items = await workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId);
     if (items.length === 0) return { sessionBranch, results: [] };
@@ -1722,6 +1790,23 @@ export const workItemsService = {
               await workItemRepository.update(item.id, { sessionBranch: null }, tx);
             }
             results.push({ key: item.identifier, outcome: 'already_done' });
+          }
+          // BYOK/manual self-report at merge (MOTIR-1685): when the close-out run
+          // reports the harness + model it used, stamp implementation provenance
+          // on every item it closes on the branch (completed AND already-done).
+          // `source` defaults to `byok`; a failed item threw before here, so it is
+          // never stamped. Omitted → the manual-lane stamp (for human/manual items)
+          // and any prior `mark_integrated` report stand untouched.
+          if (implementation) {
+            await workItemsService.recordImplementationProvenance(
+              item.id,
+              {
+                source: implementation.source ?? 'byok',
+                harness: implementation.harness,
+                model: implementation.model,
+              },
+              tx,
+            );
           }
         } catch (err) {
           // A per-item rejection (illegal transition / unknown done status /

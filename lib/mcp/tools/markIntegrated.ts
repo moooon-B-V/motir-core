@@ -7,6 +7,8 @@ import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import {
+  buildImplementationProvenance,
+  implementationProvenanceFields,
   normalizeIdentifier,
   projectKeyOf,
   sessionBranchField,
@@ -28,11 +30,20 @@ export const MARK_INTEGRATED_TOOL_NAME = 'mark_integrated';
 const inputSchema = {
   key: workItemKeyField,
   sessionBranch: sessionBranchField,
+  // Optional self-reported implementation provenance (MOTIR-1685) — the harness +
+  // model the agent ran with; `source` defaults to `byok`. Omitted → untouched.
+  ...implementationProvenanceFields,
 };
 
 /** The adapter: resolve project + item by key, then mark it integrated. */
 export async function runMarkIntegrated(
-  args: { key: string; sessionBranch: string },
+  args: {
+    key: string;
+    sessionBranch: string;
+    implementationSource?: 'byok' | 'manual';
+    implementationHarness?: string;
+    implementationModel?: string;
+  },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
@@ -43,6 +54,7 @@ export async function runMarkIntegrated(
       item.id,
       args.sessionBranch,
       ctx,
+      buildImplementationProvenance(args),
     );
     return toolOk(
       `${dto.identifier}: integrated on "${dto.sessionBranch}" (status ${dto.status})`,
@@ -64,8 +76,9 @@ export function registerMarkIntegrated(
       description:
         'Record that a work item (by identifier, e.g. "PROD-7") has been integrated onto a ' +
         'session branch: it moves to "In review" and records the branch, which unblocks its ' +
-        'dependents while the session PR awaits a human merge. Honors the workflow rules and ' +
-        'the same access checks as the UI.',
+        'dependents while the session PR awaits a human merge. Optionally self-report the ' +
+        'implementation harness + model (source defaults to "byok") to record how it was built. ' +
+        'Honors the workflow rules and the same access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runMarkIntegrated(args, resolveContext(extra)),

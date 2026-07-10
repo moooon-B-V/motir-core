@@ -27,6 +27,60 @@ export const sessionBranchField = z
   .min(1)
   .describe('The session/integration branch name, e.g. "session/PROD-42-run".');
 
+/**
+ * IMPLEMENTATION-provenance input the self-reported session tools share
+ * (`mark_integrated` / `complete_session`, Story MOTIR-1685). The external agent
+ * self-reports how it executed the work; `source` is a self-reported lane only —
+ * `hosted` is deliberately NOT accepted here (trusted, gateway-metered hosted
+ * provenance is Epic 9's job, over a different seam). `source` defaults to `byok`
+ * at the service when omitted. `harness`/`model` are open free-text, recorded
+ * as-is (no verification implied). See docs/decisions/work-item-provenance.md.
+ */
+export const implementationSourceField = z
+  .enum(['byok', 'manual'])
+  .optional()
+  .describe(
+    'Optional self-reported implementation source: "byok" (an agent on your own ' +
+      'machine) or "manual" (a human, no agent). Defaults to "byok" when a harness/' +
+      'model is reported. "hosted" is not accepted here (that is trusted/metered).',
+  );
+export const implementationHarnessField = z
+  .string()
+  .optional()
+  .describe('Optional self-reported implementation harness (e.g. "opencode", "Claude Code").');
+export const implementationModelField = z
+  .string()
+  .optional()
+  .describe('Optional self-reported implementation model (e.g. "claude", "deepseek").');
+
+/** The shape the session tools' `inputSchema` mixes in for implementation provenance. */
+export const implementationProvenanceFields = {
+  implementationSource: implementationSourceField,
+  implementationHarness: implementationHarnessField,
+  implementationModel: implementationModelField,
+};
+
+/** Build the service `implementation` arg from the reported fields, or `undefined`
+ *  when the caller reported nothing (so the columns are left untouched). */
+export function buildImplementationProvenance(args: {
+  implementationSource?: 'byok' | 'manual';
+  implementationHarness?: string;
+  implementationModel?: string;
+}): { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null } | undefined {
+  if (
+    args.implementationSource === undefined &&
+    args.implementationHarness === undefined &&
+    args.implementationModel === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    source: args.implementationSource,
+    harness: args.implementationHarness ?? null,
+    model: args.implementationModel ?? null,
+  };
+}
+
 /** Normalize a user-supplied identifier to its canonical upper-case form. */
 export function normalizeIdentifier(raw: string): string {
   return raw.trim().toUpperCase();

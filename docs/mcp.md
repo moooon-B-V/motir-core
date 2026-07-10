@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **27 tools**.
+`initialize` handshake and registers **29 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -724,6 +724,50 @@ cross-user exposure.
 **Output** — `structuredContent`: `{ user, workspace }` (the actor's user
 profile and active-workspace summary; `workspace` may be null only in the race
 where the membership was removed mid-request).
+
+#### `mark_integrated`
+
+Record that a work item's work has been integrated onto a session branch (the
+write the CLI loop calls on agent success): the item moves to **In review** and
+its `sessionBranch` is recorded — in ONE transaction — which unblocks its
+dependents while the session PR awaits a human merge. Optionally self-report the
+**implementation provenance** — how the item was built (Story MOTIR-1685).
+
+**Input**
+
+| Field                   | Type                 | Required | Notes                                                                                                             |
+| ----------------------- | -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `key`                   | string               | yes      | The work item identifier, e.g. `PROD-7`.                                                                          |
+| `sessionBranch`         | string               | yes      | The integration branch the work was merged onto.                                                                  |
+| `implementationSource`  | `"byok" \| "manual"` | no       | Self-reported execution lane; defaults to `byok` when a harness/model is reported. `hosted` is not accepted here. |
+| `implementationHarness` | string               | no       | Self-reported harness (e.g. `opencode`, `Claude Code`). Recorded as-is (no verification implied).                 |
+| `implementationModel`   | string               | no       | Self-reported model (e.g. `claude`, `deepseek`).                                                                  |
+
+**Output** — `structuredContent`: the updated `WorkItemDto` (now `in_review`,
+carrying `sessionBranch` and any recorded implementation provenance). Omitting
+the provenance fields leaves the implementation triple untouched. See
+`docs/decisions/work-item-provenance.md`.
+
+#### `complete_session`
+
+Close out a session branch after its PR is merged: every work item recorded on
+the branch moves to **Done** and its branch is cleared, in one transaction.
+Returns a per-item outcome (`completed` / `already_done` / `failed`). Optionally
+self-report implementation provenance applied to **every item it closes**.
+
+**Input**
+
+| Field                   | Type                 | Required | Notes                                                                  |
+| ----------------------- | -------------------- | -------- | ---------------------------------------------------------------------- |
+| `sessionBranch`         | string               | yes      | The branch whose recorded items are being closed out.                  |
+| `implementationSource`  | `"byok" \| "manual"` | no       | Self-reported lane; defaults to `byok`. `hosted` is not accepted here. |
+| `implementationHarness` | string               | no       | Self-reported harness, stamped on every closed item.                   |
+| `implementationModel`   | string               | no       | Self-reported model, stamped on every closed item.                     |
+
+**Output** — `structuredContent`:
+`{ sessionBranch, results: [{ key, outcome, reason? }] }`. Omitting the
+provenance fields leaves each item's provenance as its `mark_integrated` report
+or the manual-lane stamp.
 
 ## Permission model
 
