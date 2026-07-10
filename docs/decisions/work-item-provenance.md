@@ -300,15 +300,16 @@ planningModel = row.planningSource === 'native' ? null : row.planningModel
 
 ---
 
-## Decision 7 — Display: provenance is COLLAPSED by default (Yue, 2026-07-10)
+## Decision 7 — Display: provenance is COLLAPSED by default, at the BOTTOM of the rail (Yue, 2026-07-10)
 
 Provenance is **secondary metadata**, not a primary field like Status/Assignee. On the
 work-item detail it is **collapsed by default** behind a disclosure ("Provenance", expandable)
-rather than shown inline in the rail — the user **expands to see** the two triples. The
-common case is the `—`/unknown state anyway (most items are never executed), so defaulting to
-collapsed keeps the rail uncluttered. The design (MOTIR-1688) draws the collapsed +
-expanded states; the display (MOTIR-1693) implements the disclosure (a `<details>`-style
-expander or the shipped collapsible primitive), defaulting closed.
+placed at the **very bottom of the rail — after every other field** (Reporter · Created ·
+Updated), not inline among them. The user **expands to see** the two triples. The common case
+is the `—`/unknown state anyway (most items are never executed), so defaulting to collapsed at
+the bottom keeps the rail's primary fields uncluttered. The design (MOTIR-1688) draws the
+collapsed + expanded states; the display (MOTIR-1693) implements the disclosure (the shipped
+"Show all custom fields" toggle grammar), defaulting closed, appended after the last rail field.
 
 ---
 
