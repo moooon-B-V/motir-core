@@ -465,6 +465,7 @@
       "codeHealth": "代码健康度",
       "settings": "设置",
       "jobRuns": "任务运行",
+      "git": "Git",
       "github": "GitHub",
       "docs": "文档",
       "backlog": "待办列表",
@@ -4766,6 +4767,71 @@
       "generic": "出了点问题，请重试。",
       "notConnected": "该来源尚未连接。请先连接。",
       "invalid": "无法开始导入——请检查连接信息。"
+    }
+  },
+  "git": {
+    "title": "Git",
+    "subtitle": "将此工作区连接到 GitHub 或 GitLab，把合并请求和 CI 状态同步到工作项、为代码图提供数据，并驱动评审闭环。",
+    "provider": {
+      "label": "Git 提供方",
+      "github": "GitHub",
+      "gitlab": "GitLab"
+    }
+  },
+  "gitlab": {
+    "noWorkspace": {
+      "title": "尚无工作区",
+      "description": "从左上角的切换器创建一个工作区，即可连接 GitLab。"
+    },
+    "banner": {
+      "connected": "已连接 GitLab。在下方选择要同步合并请求和流水线的项目。",
+      "denied": "已取消 GitLab 授权，未连接任何内容。",
+      "state_error": "无法验证此次 GitLab 登录，请重新尝试连接。",
+      "error": "连接 GitLab 时出错，请重试。",
+      "not_configured": "此部署尚未配置 GitLab。",
+      "no_workspace": "请先创建工作区，然后再连接 GitLab。"
+    },
+    "connect": {
+      "title": "连接 GitLab",
+      "subtitle": "在 GitLab 上完成一次授权，即涵盖身份与项目访问权限。",
+      "step1": {
+        "eyebrow": "第 1 步 · 授权",
+        "title": "连接你的 GitLab 账户",
+        "body": "一步授权 Motir 访问 GitLab。这会确认你的身份，并授予对你所属项目的 API 访问权限——Motir 会读取合并请求和流水线，并仅在你随后连接的项目上添加 Webhook。一次授权即涵盖身份与访问权限，无需另外安装应用。"
+      },
+      "step2": {
+        "eyebrow": "第 2 步 · 项目",
+        "title": "在 Motir 中选择项目",
+        "body": "授权之后，在 Motir 中直接选择要同步的 GitLab 项目，而非在另一个页面上操作。Motir 只会访问你连接的项目，你可以随时断开其中任何一个。"
+      },
+      "cta": "连接 GitLab",
+      "foot": "你将被带到 GitLab 进行授权，然后在此处选择项目。"
+    },
+    "identity": {
+      "connectedAs": "GitLab 身份 · 已连接为 {name}",
+      "connectedTo": "已连接到 {host}",
+      "verified": "已验证",
+      "openGitlab": "在 GitLab 中打开",
+      "disconnect": "断开连接"
+    },
+    "projects": {
+      "title": "项目",
+      "caption": "Motir 正在同步的 GitLab 项目。连接一个项目后，Motir 即可读取其合并请求和流水线。",
+      "empty": "尚未连接任何项目。连接一个项目即可开始同步合并请求和流水线。",
+      "foot": "连接项目会为合并请求和流水线事件添加一个 Webhook。",
+      "synced": "同步中",
+      "syncLabel": "同步 {project}",
+      "connectProject": "连接项目",
+      "pickerLabel": "添加 GitLab 项目",
+      "searchPlaceholder": "搜索你的 GitLab 项目……",
+      "noProjects": "没有可连接的项目——你所属的每个项目都已连接。",
+      "memberOnly": "此处仅显示你在 GitLab 上所属的项目——Motir 看不到其他任何项目。",
+      "connectAction": "连接",
+      "error": {
+        "not_connected": "GitLab 尚未连接。请重新连接以选择项目。",
+        "not_found": "该项目已不在你的 GitLab 成员项目中。",
+        "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。"
+      }
     }
   }
 }

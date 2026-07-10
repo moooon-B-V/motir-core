@@ -56,3 +56,19 @@ export class GitlabConnectionNotFoundError extends Error {
     this.name = 'GitlabConnectionNotFoundError';
   }
 }
+
+/**
+ * A project the connect-a-project action was asked to connect isn't among the
+ * authenticated user's GitLab memberships (MOTIR-1478) — a stale picker row, or a
+ * repo id the user has no access to. The service resolves the project's
+ * owner/name/default-branch from GitLab's authoritative membership list (never
+ * the client's payload), so a project it can't find there is rejected rather than
+ * persisted as an unreachable `github_repo` row.
+ */
+export class GitlabProjectNotFoundError extends Error {
+  readonly code = 'GITLAB_PROJECT_NOT_FOUND' as const;
+  constructor() {
+    super('GitLab project not found among your memberships.');
+    this.name = 'GitlabProjectNotFoundError';
+  }
+}

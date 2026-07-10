@@ -465,6 +465,7 @@
       "codeHealth": "Code health",
       "settings": "Settings",
       "jobRuns": "Job runs",
+      "git": "Git",
       "github": "GitHub",
       "docs": "Docs",
       "backlog": "Backlog",
@@ -4770,6 +4771,71 @@
       "generic": "Something went wrong. Please try again.",
       "notConnected": "That source isn’t connected. Connect it first.",
       "invalid": "The import couldn’t be started — check the connection details."
+    }
+  },
+  "git": {
+    "title": "Git",
+    "subtitle": "Connect this workspace to GitHub or GitLab to sync merge-request and CI status onto your work items, feed the code graph, and drive the review loop.",
+    "provider": {
+      "label": "Git provider",
+      "github": "GitHub",
+      "gitlab": "GitLab"
+    }
+  },
+  "gitlab": {
+    "noWorkspace": {
+      "title": "No workspace yet",
+      "description": "Create a workspace from the switcher in the top-left to connect GitLab."
+    },
+    "banner": {
+      "connected": "GitLab connected. Choose projects below to sync merge requests and pipelines.",
+      "denied": "GitLab authorization was cancelled. Nothing was connected.",
+      "state_error": "The GitLab sign-in couldn't be verified. Please try connecting again.",
+      "error": "Something went wrong connecting to GitLab. Please try again.",
+      "not_configured": "GitLab isn't configured on this deployment yet.",
+      "no_workspace": "Create a workspace first, then connect GitLab."
+    },
+    "connect": {
+      "title": "Connect GitLab",
+      "subtitle": "One authorization on GitLab covers your identity and project access.",
+      "step1": {
+        "eyebrow": "Step 1 · Authorize",
+        "title": "Connect your GitLab account",
+        "body": "Authorize Motir on GitLab in one step. This confirms who you are and grants API access to the projects you're a member of — Motir reads merge requests and pipelines and adds webhooks only on the projects you connect next. One grant covers identity and access — there's no separate app to install."
+      },
+      "step2": {
+        "eyebrow": "Step 2 · Projects",
+        "title": "Choose projects in Motir",
+        "body": "After you authorize, pick which of your GitLab projects to sync — right here in Motir, not on a separate screen. Motir only touches the projects you connect, and you can disconnect any of them any time."
+      },
+      "cta": "Connect GitLab",
+      "foot": "You'll be sent to GitLab to authorize, then choose projects here."
+    },
+    "identity": {
+      "connectedAs": "GitLab identity · connected as {name}",
+      "connectedTo": "Connected to {host}",
+      "verified": "Verified",
+      "openGitlab": "Open GitLab",
+      "disconnect": "Disconnect"
+    },
+    "projects": {
+      "title": "Projects",
+      "caption": "The GitLab projects Motir syncs. Connecting a project lets Motir read its merge requests and pipelines.",
+      "empty": "No projects connected yet. Connect a project to start syncing merge requests and pipelines.",
+      "foot": "Connecting a project adds a webhook for merge-request and pipeline events.",
+      "synced": "Synced",
+      "syncLabel": "Sync {project}",
+      "connectProject": "Connect a project",
+      "pickerLabel": "Add a GitLab project",
+      "searchPlaceholder": "Search your GitLab projects…",
+      "noProjects": "No projects to connect — every project you're a member of is already connected.",
+      "memberOnly": "Only projects you're a member of on GitLab appear here — Motir can't see any others.",
+      "connectAction": "Connect",
+      "error": {
+        "not_connected": "GitLab isn't connected. Reconnect to choose projects.",
+        "not_found": "That project isn't among your GitLab memberships anymore.",
+        "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again."
+      }
     }
   }
 }
