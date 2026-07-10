@@ -72,3 +72,36 @@ export class GitlabProjectNotFoundError extends Error {
     this.name = 'GitlabProjectNotFoundError';
   }
 }
+
+/**
+ * The inbound-webhook shared secret (`GITLAB_WEBHOOK_SECRET`) is not configured on
+ * this deployment (Story 7.23 · MOTIR-1475). Read at call time, so a self-hosted
+ * instance that never wires GitLab can't reach the webhook path rather than
+ * crashing on boot. A server MISCONFIG (→ 500), distinct from a bad token (→ 401):
+ * without a secret we can neither trust nor reject a delivery. Mirrors
+ * `GithubWebhookNotConfiguredError`.
+ */
+export class GitlabWebhookNotConfiguredError extends Error {
+  readonly code = 'GITLAB_WEBHOOK_NOT_CONFIGURED' as const;
+  constructor() {
+    super('GitLab webhooks are not configured. Set GITLAB_WEBHOOK_SECRET.');
+    this.name = 'GitlabWebhookNotConfiguredError';
+  }
+}
+
+/**
+ * A webhook delivery's `X-Gitlab-Token` is missing or does not match the
+ * configured `GITLAB_WEBHOOK_SECRET` (Story 7.23 · MOTIR-1475). GitLab signs a
+ * project webhook with a per-hook SECRET TOKEN it echoes verbatim in this header
+ * (there is no body HMAC, unlike GitHub), so verification is a constant-time
+ * compare of the header against the shared secret. The route rejects a mismatch
+ * 401 BEFORE parsing the body — an unauthentic delivery is never processed.
+ * Carries no detail (nothing to leak to an attacker probing the endpoint).
+ */
+export class GitlabWebhookSignatureError extends Error {
+  readonly code = 'GITLAB_WEBHOOK_INVALID_SIGNATURE' as const;
+  constructor() {
+    super('GitLab webhook token verification failed.');
+    this.name = 'GitlabWebhookSignatureError';
+  }
+}

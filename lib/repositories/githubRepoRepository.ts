@@ -119,6 +119,29 @@ export const githubRepoRepository = {
     });
   },
 
+  /** Resolve a connected repo by its host repo id under a given PROVIDER (Story
+   *  7.23 · MOTIR-1475) — the GitLab webhook's key. A GitLab MR/pipeline delivery
+   *  carries the project id but NO Motir connection id (unlike GitHub's App
+   *  delivery, which carries its global installation id), so the webhook resolves
+   *  the connection through the repo: match `(repo_id, installation.provider)` and
+   *  include the parent installation (its workspace + provider drive the sync).
+   *  Runs OUTSIDE any workspace context (the webhook has no active workspace, like
+   *  the GitHub path keying on the global installation id), inside the sync's
+   *  system-context transaction, so it takes `tx`. A host project id is unique per
+   *  GitLab instance; the oldest-connected row wins if the same project is somehow
+   *  connected twice. Null when the project isn't connected. */
+  async findByRepoIdAndProvider(
+    repoId: string,
+    provider: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(GithubRepo & { installation: GithubInstallation }) | null> {
+    return tx.githubRepo.findFirst({
+      where: { repoId, installation: { is: { provider } } },
+      include: { installation: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
   /** Reconcile the selected set: delete every repo on this installation whose
    *  `repo_id` is NOT in `keepRepoIds` (a de-selected repo). An empty keep set
    *  deletes them all (`NOT IN ()` is always true). Returns the delete count. */
