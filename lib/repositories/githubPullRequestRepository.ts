@@ -13,6 +13,11 @@ import { db } from '@/lib/db';
 // (MOTIR-892) + CI loop (MOTIR-894) drive; `workItemId` is nullable.
 
 export interface UpsertGithubPullRequestInput {
+  /** The host discriminator — 'github' | 'gitlab' (Story 7.23 · MOTIR-1475). The
+   *  shared status sync stamps it from the connection's provider so the
+   *  Development surface renders the right host mark; GitHub rows carry the
+   *  column default. */
+  provider: string;
   repoId: string;
   number: number;
   state: string;
