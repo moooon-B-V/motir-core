@@ -29,11 +29,12 @@
       is a neutral --el-surface chip (human is not a model). No raw hex, no raw
       rounded-*/p-*: shape via --radius-badge / --spacing-chip-*.
 
-      COLLAPSED BY DEFAULT (Yue, 2026-07-10). Provenance is secondary metadata, so
-      the rail shows a single CLOSED "Provenance" disclosure — the shipped
-      "Show all custom fields" toggle grammar (a full-width button + a chevron that
-      rotates 180° on open, --el-text-secondary, --radius-control). The user
-      EXPANDS to reveal the two read-only triple cards.
+      COLLAPSED BY DEFAULT, AT THE BOTTOM (Yue, 2026-07-10). Provenance is secondary
+      metadata, so it sits at the VERY BOTTOM of the rail — after every other field
+      (Reporter · Created · Updated) — as a single CLOSED "Provenance" disclosure —
+      the shipped "Show all custom fields" toggle grammar (a full-width button + a
+      chevron that rotates 180° on open, --el-text-secondary, --radius-control). The
+      user EXPANDS to reveal the two read-only triple cards.
 
       NATIVE SHOWS NO MODEL (Yue, 2026-07-10). A natively-planned item reads ONLY
       "Native · Motir" — no model line. Motir abstracts its own planning LLM; the
@@ -824,14 +825,15 @@
           the display code subtask <strong>MOTIR-1693</strong>. Built from the shipped
           <code>CoreFieldsPanel</code> <code>FieldCard</code> grammar + the live
           <code>--el-*</code> / shape tokens — this asset COMPOSES the existing detail rail (it does
-          not redraw it). <strong>Collapsed by default</strong>: provenance is secondary metadata,
-          so the rail shows a single closed <em>Provenance</em> disclosure (the shipped "Show all
-          custom fields" toggle grammar) that the user EXPANDS to reveal the two read-only triples —
-          it is set by the create seams + the session tools, never edited by hand, so its placement
-          in the rail IS its access path. <strong>Native shows no model</strong>: a natively-planned
-          item reads only “Native · Motir” — Motir abstracts its own planning LLM (the model is
-          recorded server-side for analysis, never exposed). MCP / BYOK show their model (the user
-          reported their own).
+          not redraw it). <strong>Collapsed by default, at the BOTTOM of the rail</strong>:
+          provenance is secondary metadata, so it sits AFTER every other field (Reporter · Created ·
+          Updated) as a single closed <em>Provenance</em> disclosure (the shipped "Show all custom
+          fields" toggle grammar) that the user EXPANDS to reveal the two read-only triples — it is
+          set by the create seams + the session tools, never edited by hand, so its placement in the
+          rail IS its access path. <strong>Native shows no model</strong>: a natively-planned item
+          reads only “Native · Motir” — Motir abstracts its own planning LLM (the model is recorded
+          server-side for analysis, never exposed). MCP / BYOK show their model (the user reported
+          their own).
         </p>
       </div>
       <button
@@ -931,14 +933,22 @@
     <!-- ═══ PANEL 1 — COLLAPSED (the DEFAULT) in rail context ══════════════ -->
     <div class="specimen">
       <div class="cap">
-        DEFAULT STATE — collapsed. Provenance is secondary metadata, so it sits in the rail AFTER
-        Estimate / custom fields, before Reporter (ghosted), as a single closed disclosure (chevron
-        down = closed, mirrors the shipped "Show all custom fields" toggle). The user expands to see
-        it.
+        DEFAULT STATE — collapsed. Provenance is secondary metadata, so it sits at the VERY BOTTOM
+        of the rail — AFTER every other field (Reporter · Created · Updated ghosted) — as a single
+        closed disclosure (chevron down = closed, mirrors the shipped "Show all custom fields"
+        toggle). The user expands to see it.
       </div>
       <div class="rail">
         <div class="fcard">
-          <div class="head"><span class="flabel">Estimate</span></div>
+          <div class="head"><span class="flabel">Reporter</span></div>
+          <div class="fvalue"><div class="ghost-bar short"></div></div>
+        </div>
+        <div class="fcard">
+          <div class="head"><span class="flabel">Created</span></div>
+          <div class="fvalue"><div class="ghost-bar short"></div></div>
+        </div>
+        <div class="fcard">
+          <div class="head"><span class="flabel">Updated</span></div>
           <div class="fvalue"><div class="ghost-bar short"></div></div>
         </div>
         <button class="disc-toggle is-new" aria-expanded="false">
@@ -947,10 +957,6 @@
           ></span>
           <span class="dlabel">Provenance</span>
         </button>
-        <div class="fcard">
-          <div class="head"><span class="flabel">Reporter</span></div>
-          <div class="fvalue"><div class="ghost-bar short"></div></div>
-        </div>
       </div>
     </div>
 

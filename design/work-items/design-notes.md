@@ -3755,11 +3755,12 @@ Draws the field set decided in the provenance ADR
 (`docs/decisions/work-item-provenance.md`): the two `source` enums + the
 `harness`/`model` free-text.
 
-### Placement + access path — COLLAPSED by default
+### Placement + access path — COLLAPSED by default, at the BOTTOM
 
 Provenance is **secondary metadata**, so it is **collapsed by default** behind a
-single **"Provenance" disclosure** in the rail, **after Estimate / the
-custom-field cards, before Reporter**. The disclosure reuses the **shipped
+single **"Provenance" disclosure** placed at the **very bottom of the rail —
+after every other field** (Reporter · Created · Updated are the last built-in
+fields; the disclosure follows them). The disclosure reuses the **shipped
 "Show all custom fields" toggle grammar** (`CustomFieldsSection.tsx`): a
 full-width `button` (`aria-expanded`), a leading chevron (`ChevronDown` that
 **rotates 180° when open**), `text-[13px] text-(--el-text-secondary)`, padding
@@ -3819,8 +3820,8 @@ shipped component.
 
 ### Panels in the asset
 
-1. **Collapsed (the default)** — in rail context (Estimate / Reporter ghosted):
-   the closed `Provenance` disclosure sits between them.
+1. **Collapsed (the default)** — in rail context: the closed `Provenance`
+   disclosure sits at the **bottom**, after Reporter · Created · Updated (ghosted).
 2. **Expanded, both triples populated** — MCP-planned
    (`Claude Code · claude-opus-4-8`) + BYOK-implemented (`opencode · deepseek`),
    revealed under the open disclosure.
