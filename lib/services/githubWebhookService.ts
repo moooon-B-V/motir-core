@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { getGitProvider } from '@/lib/git';
 import type {
-  ChangeRequestLifecycle,
   GitProviderId,
   NormalizedChangeRequest,
   NormalizedStatusEvent,
@@ -13,16 +12,16 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { commentsService } from './commentsService';
 import { enqueueCodeGraphRefresh, enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
-import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  syncChangeRequestStatus,
+  type ChangeRequestContextResolution,
+  type ChangeRequestSyncResult,
+} from './changeRequestStatusSync';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -56,24 +55,6 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 
 const PROVIDER: GitProviderId = 'github';
 
-/** The concrete workflow target a canonical change-request lifecycle maps to.
- *  `key` is the CANONICAL status key we prefer; `category` is the fallback bucket
- *  when a custom workflow renamed the key — so we resolve BY category, never a
- *  hard-coded status id (the card's rule). Note the seam's canonical `todo`
- *  (closed-unmerged) maps to Motir's `in_progress`: the card's "back to
- *  in-progress — the work was abandoned, not finished", AND the only LEGAL move
- *  from `in_review` (the default workflow has an `in_review → in_progress` edge
- *  but no `in_review → todo`). The seam emits the provider-agnostic signal; the
- *  consumer (us) picks the concrete status — exactly as `lib/git/types.ts` says. */
-const LIFECYCLE_TARGET: Record<
-  ChangeRequestLifecycle,
-  { key: string; category: StatusCategoryDto }
-> = {
-  in_review: { key: 'in_review', category: 'in_progress' },
-  done: { key: 'done', category: 'done' },
-  todo: { key: 'in_progress', category: 'in_progress' },
-};
-
 /** PR actions that drive the status machine. Other actions (`synchronize`,
  *  `edited`, `labeled`, …) are ignored — they carry no lifecycle change the card
  *  syncs. */
@@ -91,23 +72,7 @@ export type GithubWebhookResult =
         | 'unknown_installation'
         | 'unknown_repo';
     }
-  | {
-      event: 'pull_request';
-      outcome:
-        | 'transitioned'
-        | 'noop'
-        | 'deferred_open_pr' // a merge that is NOT the item's last open linked PR — item stays In Review (MOTIR-1604)
-        | 'no_work_item'
-        | 'no_matching_status'
-        | 'illegal_transition'
-        | 'access_denied'
-        | 'unknown_installation'
-        | 'unknown_repo'
-        | 'ignored_action'
-        | 'malformed';
-      workItemId?: string;
-      toStatus?: string;
-    }
+  | ChangeRequestSyncResult
   | {
       event: 'ci';
       outcome:
@@ -249,199 +214,16 @@ export const githubWebhookService = {
     const cr = provider.parseChangeRequestEvent(body);
     if (!cr) return { event: 'pull_request', outcome: 'malformed' };
     // The canonical lifecycle this delivery maps to (opened → in_review, merged →
-    // done, closed-unmerged → todo). Computed up front — phase 1 needs it to gate
-    // the multi-PR completion guard (MOTIR-1604), phase 2 to resolve the target.
+    // done, closed-unmerged → todo).
     const lifecycle = provider.changeRequestLifecycle(cr);
 
-    const installationId = readInstallationId(body);
-    if (!installationId) return { event: 'pull_request', outcome: 'unknown_installation' };
-    const authorGithubUserId = readAuthorGithubUserId(body);
-
-    // Phase 1 — resolve + persist under system context (one transaction): the
-    // installation, its repo, the linked work item (from the head ref / title),
-    // the PR row upsert, and the actor. Returns the data phase 2 needs.
-    const resolved = await withSystemContext(async (tx) => {
-      const installation = await githubInstallationRepository.findByInstallationId(
-        installationId,
-        tx,
-      );
-      if (!installation) return { kind: 'unknown_installation' as const };
-
-      const repo = await githubRepoRepository.findByInstallationAndRepoId(
-        installation.id,
-        cr.providerRepoId,
-        tx,
-      );
-      if (!repo) return { kind: 'unknown_repo' as const };
-
-      // Resolve the PR's linked work item. A MANUAL link (MOTIR-1596, the
-      // explicit item→PR affordance) is the STICKY override of this branch/title
-      // auto-resolver: lock the row, and if it is already manually linked, keep
-      // that work item — this delivery does NOT re-derive the link (so a PR whose
-      // branch never named the key stays linked and still drives the status sync
-      // below, e.g. merged → Done). Otherwise resolve from the head ref / title
-      // as before. The lock closes the clobber race with a concurrent manual link.
-      await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
-      const existingPr = await githubPullRequestRepository.findByRepoAndNumber(
-        repo.id,
-        cr.number,
-        tx,
-      );
-      let workItem: { id: string; projectId: string; status: string } | null;
-      let linkedManually: boolean;
-      if (existingPr?.linkedManually && existingPr.workItemId) {
-        const manual = await workItemRepository.findById(existingPr.workItemId, tx);
-        // A manual link whose target was hard-deleted falls back to unlinked.
-        workItem = manual
-          ? { id: manual.id, projectId: manual.projectId, status: manual.status }
-          : null;
-        linkedManually = manual !== null;
-      } else {
-        workItem = await resolveWorkItem(installation.workspaceId, cr, tx);
-        linkedManually = false;
-      }
-
-      // Upsert the PR row — the PR→work-item link entity. Idempotent under
-      // concurrent redelivery: a lost unique-`(repo,number)` race throws P2002;
-      // catch it and re-write (the row the winner wrote is the same state).
-      const prRow = {
-        repoId: repo.id,
-        number: cr.number,
-        state: cr.state,
-        merged: cr.merged,
-        headRef: cr.headRef,
-        title: cr.title,
-        workItemId: workItem?.id ?? null,
-        linkedManually,
-      };
-      let prId: string;
-      try {
-        prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
-      } catch (err) {
-        if (!isUniqueViolation(err)) throw err;
-        // Converge: the concurrent winner wrote the same (repo, number); update
-        // to reflect this delivery's state so the row is never left stale.
-        prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
-      }
-
-      if (!workItem) return { kind: 'no_work_item' as const };
-
-      // MOTIR-1604 — a merge only COMPLETES the item when it is the item's LAST
-      // open linked PR. A cross-repo (two-PR) card has >1 linked PR; the first
-      // merge must NOT flip Done while a sibling PR is still open. This PR's row
-      // was just upserted (closed, on a merge), so we count the item's OTHER open
-      // linked PRs — non-zero means DEFER (leave the item where it is). Only a
-      // `done` delivery can complete, so skip the read for any other lifecycle.
-      const hasOtherOpenLinkedPr =
-        lifecycle === 'done'
-          ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
-          : false;
-
-      const boundUserId = await resolveBoundMember(
-        authorGithubUserId,
-        installation.workspaceId,
-        tx,
-      );
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
-        installation.workspaceId,
-        tx,
-      );
-      return {
-        kind: 'resolved' as const,
-        workspaceId: installation.workspaceId,
-        projectId: workItem.projectId,
-        workItemId: workItem.id,
-        currentStatus: workItem.status,
-        hasOtherOpenLinkedPr,
-        actorUserId: boundUserId ?? owner?.userId ?? null,
-        ownerUserId: owner?.userId ?? null,
-      };
-    });
-
-    if (resolved.kind === 'unknown_installation')
-      return { event: 'pull_request', outcome: 'unknown_installation' };
-    if (resolved.kind === 'unknown_repo') return { event: 'pull_request', outcome: 'unknown_repo' };
-    if (resolved.kind === 'no_work_item') return { event: 'pull_request', outcome: 'no_work_item' };
-    if (!resolved.actorUserId)
-      // No workspace owner and no bound author — nothing can author the move.
-      return { event: 'pull_request', outcome: 'access_denied', workItemId: resolved.workItemId };
-
-    // A merged PR that is NOT the item's last open linked PR leaves the item In
-    // Review — a cross-repo (two-PR) card completes only when its LAST linked PR
-    // merges (MOTIR-1604). Decided on the committed PR rows read in phase 1; a
-    // later delivery for the sibling's own merge completes the item.
-    if (lifecycle === 'done' && resolved.hasOtherOpenLinkedPr) {
-      return {
-        event: 'pull_request',
-        outcome: 'deferred_open_pr',
-        workItemId: resolved.workItemId,
-      };
-    }
-
-    // Phase 2 — the status transition through the SHIPPED authority. Resolve the
-    // concrete target status key by category against the project's live workflow.
-    const targetKey = await resolveTargetStatusKey(
-      resolved.projectId,
-      resolved.workspaceId,
-      lifecycle,
+    // Drive the linked work item through THE shared status-sync state machine
+    // (`changeRequestStatusSync`) — the same path GitLab uses (MOTIR-1475). The
+    // only GitHub-specific part is resolving the connection + repo + author from
+    // the App delivery's payload, which this provider supplies via the resolver.
+    return syncChangeRequestStatus(cr, lifecycle, (tx) =>
+      resolveGithubChangeRequestContext(body, cr, tx),
     );
-    if (!targetKey)
-      // A custom workflow with no status in the target category — a logged no-op,
-      // never a crash (the card's rule).
-      return {
-        event: 'pull_request',
-        outcome: 'no_matching_status',
-        workItemId: resolved.workItemId,
-      };
-
-    // Idempotent: already in the target (a redelivery) — updateStatus no-ops, but
-    // short-circuit so the outcome reads `noop` rather than `transitioned`.
-    if (resolved.currentStatus === targetKey)
-      return {
-        event: 'pull_request',
-        outcome: 'noop',
-        workItemId: resolved.workItemId,
-        toStatus: targetKey,
-      };
-
-    try {
-      await applyTransition(resolved.workItemId, targetKey, {
-        userId: resolved.actorUserId,
-        workspaceId: resolved.workspaceId,
-      });
-    } catch (err) {
-      // The bound author lacked edit rights (e.g. a viewer) — retry once as the
-      // owner (a manager, always edit-capable). This keeps the sync working while
-      // still PREFERRING the author for the activity-log attribution.
-      if (
-        err instanceof ProjectAccessDeniedError &&
-        resolved.ownerUserId &&
-        resolved.ownerUserId !== resolved.actorUserId
-      ) {
-        try {
-          await applyTransition(resolved.workItemId, targetKey, {
-            userId: resolved.ownerUserId,
-            workspaceId: resolved.workspaceId,
-          });
-        } catch (retryErr) {
-          return classifyTransitionError(retryErr, resolved.workItemId, targetKey);
-        }
-        return {
-          event: 'pull_request',
-          outcome: 'transitioned',
-          workItemId: resolved.workItemId,
-          toStatus: targetKey,
-        };
-      }
-      return classifyTransitionError(err, resolved.workItemId, targetKey);
-    }
-
-    return {
-      event: 'pull_request',
-      outcome: 'transitioned',
-      workItemId: resolved.workItemId,
-      toStatus: targetKey,
-    };
   },
 
   /**
@@ -715,28 +497,33 @@ async function reconcileInstallation(
   return true;
 }
 
-/** Resolve the PR's linked work item from its head ref + title (the `MOTIR-<n>`
- *  hint the seam leaves for the consumer). Extracts every `<PREFIX>-<number>`
- *  candidate, resolves the project by prefix WITHIN the installation's workspace,
- *  then the work item by its full identifier. First resolved match wins; null
- *  when the PR references no work item in this workspace. */
-async function resolveWorkItem(
-  workspaceId: string,
+/** Resolve the GitHub connection + repo + bound author for a change-request event
+ *  — the provider-specific half the shared status sync (`changeRequestStatusSync`)
+ *  needs. GitHub's App delivery carries its installation id at `installation.id`;
+ *  the repo is that installation's selected repo for the payload's numeric repo
+ *  id; the author is the PR user's bound Motir member (only when they belong to
+ *  the workspace, so the edit gate passes — else null → the owner fallback). */
+async function resolveGithubChangeRequestContext(
+  body: Record<string, unknown>,
   cr: NormalizedChangeRequest,
   tx: Prisma.TransactionClient,
-): Promise<{ id: string; projectId: string; status: string } | null> {
-  const seen = new Set<string>();
-  for (const { prefix, number } of parseKeyCandidates(`${cr.headRef} ${cr.title ?? ''}`)) {
-    const dedupeKey = `${prefix}-${number}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-    const project = await projectRepository.findByIdentifier(workspaceId, prefix, tx);
-    if (!project) continue;
-    const workItem = await workItemRepository.findByIdentifier(project.id, dedupeKey, tx);
-    if (workItem)
-      return { id: workItem.id, projectId: workItem.projectId, status: workItem.status };
-  }
-  return null;
+): Promise<ChangeRequestContextResolution> {
+  const installationId = readInstallationId(body);
+  if (!installationId) return { kind: 'unknown_installation' };
+  const installation = await githubInstallationRepository.findByInstallationId(installationId, tx);
+  if (!installation) return { kind: 'unknown_installation' };
+  const repo = await githubRepoRepository.findByInstallationAndRepoId(
+    installation.id,
+    cr.providerRepoId,
+    tx,
+  );
+  if (!repo) return { kind: 'unknown_repo' };
+  const authorBoundUserId = await resolveBoundMember(
+    readAuthorGithubUserId(body),
+    installation.workspaceId,
+    tx,
+  );
+  return { kind: 'resolved', installation, repo, authorBoundUserId };
 }
 
 /** The bound Motir user for a GitHub author, ONLY when they are a member of the
@@ -758,49 +545,6 @@ async function resolveBoundMember(
   return membership ? identity.userId : null;
 }
 
-/** Resolve the canonical lifecycle to a concrete status key in the project's live
- *  workflow — the preferred key if present, else the first status of the target
- *  CATEGORY (never a hard-coded id), else null (a custom workflow with no match →
- *  the caller logs a no-op). */
-async function resolveTargetStatusKey(
-  projectId: string,
-  workspaceId: string,
-  lifecycle: ChangeRequestLifecycle,
-): Promise<string | null> {
-  const target = LIFECYCLE_TARGET[lifecycle];
-  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
-  const byKey = statuses.find((s) => s.key === target.key);
-  if (byKey) return byKey.key;
-  const byCategory = statuses.find((s) => s.category === target.category);
-  return byCategory?.key ?? null;
-}
-
-/** The status write — through the shipped authority, never a raw update. */
-async function applyTransition(
-  workItemId: string,
-  toStatusKey: string,
-  ctx: { userId: string; workspaceId: string },
-): Promise<void> {
-  await workItemsService.updateStatus(workItemId, toStatusKey, ctx);
-}
-
-/** Map a transition failure to a logged no-op outcome — the webhook never
- *  crashes on a workflow that can't legally take the move (the card's rule). A
- *  truly unexpected error re-throws (a 500 GitHub retries). */
-function classifyTransitionError(
-  err: unknown,
-  workItemId: string,
-  toStatus: string,
-): GithubWebhookResult {
-  if (err instanceof IllegalTransitionError)
-    return { event: 'pull_request', outcome: 'illegal_transition', workItemId, toStatus };
-  if (err instanceof UnknownStatusError)
-    return { event: 'pull_request', outcome: 'no_matching_status', workItemId };
-  if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError)
-    return { event: 'pull_request', outcome: 'access_denied', workItemId };
-  throw err;
-}
-
 // --- payload helpers (defensive reads over the untyped JSON) ---
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -820,21 +564,4 @@ function readInstallationId(body: Record<string, unknown>): string | null {
 function readAuthorGithubUserId(body: Record<string, unknown>): string | null {
   const id = asRecord(asRecord(body['pull_request'])?.['user'])?.['id'];
   return typeof id === 'number' || typeof id === 'string' ? String(id) : null;
-}
-
-const KEY_CANDIDATE_RE = /\b([A-Za-z][A-Za-z0-9]*)-(\d+)\b/g;
-
-/** Extract `<PREFIX>-<number>` work-item-key candidates from free text (head ref
- *  + title), prefix upper-cased to match the stored project identifier. A prefix
- *  that resolves to no project is simply skipped by the caller. */
-function parseKeyCandidates(text: string): Array<{ prefix: string; number: number }> {
-  const out: Array<{ prefix: string; number: number }> = [];
-  for (const match of text.matchAll(KEY_CANDIDATE_RE)) {
-    out.push({ prefix: match[1]!.toUpperCase(), number: Number(match[2]) });
-  }
-  return out;
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
