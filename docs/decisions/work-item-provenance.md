@@ -243,36 +243,72 @@ DB; (b) provenance is a field _of the proposed work item_, 1:1 with it, exactly 
 proposal carries `planningProvenance`:
 
 ```
-planningSource  = 'native'                                   // it IS the native seam, by definition — pinned, never trusted from the proposal
-planningHarness = pf.planningProvenance?.harness ?? 'Motir'
-planningModel   = pf.planningProvenance?.model   ?? null
+planningSource  = 'native'                                 // pinned — it IS the native seam by construction, never read from the proposal
+planningHarness = 'Motir'                                  // pinned — likewise
+planningModel   = pf.planningProvenance?.model   ?? null   // RECORDED from the producer (for analysis) — see Decision 6
 ```
 
 So the core consumer (MOTIR-1691) is correct **before** the motir-ai producer (MOTIR-1690)
-ships — it just stamps `native · Motir · null` until proposals start carrying a model.
-When 1690 lands, `planningModel` starts populating. This is the two-PRs-one-contract
+ships — it just stamps `native · Motir` with a null model until proposals carry one. When
+1690 lands, `planningModel` starts populating on the row. This is the two-PRs-one-contract
 pattern (a `motir-core` consumer + a `motir-ai` producer), NOT a straddle: the field is
 **optional by contract**, so an older core that predates it ignores it and a newer core
 without the producer still stamps a valid native triple. `motir-ai/docs/contract.md` +
 the frozen proposal-contract guard test are updated in 1690 (adding to the proposal
 contract trips the drift guard, exactly like adding a JobKind).
 
-Note: `source` is **pinned to `native` at materialize**, not read from the proposal — a
-forged non-native `source` on `proposedFields.planningProvenance` can never downgrade the
-stamp (the internal seam is trusted as native by construction; the value is belt-and-braces
-only for `harness`/`model`).
+Note: `source` AND `harness` are **pinned to `native`/`Motir` at materialize**, not read
+from the proposal — a forged non-native `source`/`harness` on
+`proposedFields.planningProvenance` can never change the stamp (the internal seam is trusted
+as native by construction). Only the **model** is carried through from the producer, and
+purely so it can be RECORDED for analysis (Decision 6) — it is never displayed.
+
+**Why the producer still exists even though native never shows its model (Yue, 2026-07-10).**
+Motir abstracts its own planning LLM — a natively-planned item reads **"Native · Motir"**, and
+the underlying model is DELIBERATELY not exposed to the user (frontend or API). But we still
+want the model RECORDED on the row for internal analysis (which models plan best, cost/quality
+tracking). So the producer carries the model, materialize records it on the column, and the
+read boundary strips it (Decision 6). Recorded ≠ exposed.
 
 ---
 
-## Decision 6 — Read DTO
+## Decision 6 — Read DTO + the native-model strip (recorded ≠ exposed)
 
 The work-item detail read DTO (`WorkItemDto`, the shape `app/(authed)/items/[key]` reads)
 carries **both triples** — `planningSource`/`planningHarness`/`planningModel` and
 `implementationSource`/`implementationHarness`/`implementationModel` — mapped through the
-work-item mapper (all six fields; enum values passed through as their DTO string). This is
+work-item mapper (`toWorkItemDto`; enum values passed through as their DTO string). This is
 what the display subtask (MOTIR-1693) renders. Adding fields to the read DTO is a
 **shared-shape change**: the consumer sweep (MOTIR-1687) must update the exact-shape
 route/DTO `.toEqual` tests across the whole affected test dirs, not grep-hits.
+
+**The native-model strip (Yue, 2026-07-10).** `toWorkItemDto` is the single detail-read
+choke-point, and it is where the native model is stripped:
+
+```
+planningModel = row.planningSource === 'native' ? null : row.planningModel
+```
+
+- For **`native`** planning, the underlying LLM is **recorded on the row** (for analysis)
+  but **null in the DTO** — never exposed to the frontend or the API. A native item reads
+  **"Native · Motir"**, model hidden.
+- For **`mcp`** and **BYOK/manual** implementation, the model IS exposed — the user reported
+  their OWN harness/model, so there is nothing to abstract.
+- The strip lives at the mapper (read boundary), NOT at the write — so the column keeps the
+  value for analytics queries while every user-facing read hides it. A future analytics
+  surface reads the column directly (bypassing `toWorkItemDto`), which is the intended seam.
+
+---
+
+## Decision 7 — Display: provenance is COLLAPSED by default (Yue, 2026-07-10)
+
+Provenance is **secondary metadata**, not a primary field like Status/Assignee. On the
+work-item detail it is **collapsed by default** behind a disclosure ("Provenance", expandable)
+rather than shown inline in the rail — the user **expands to see** the two triples. The
+common case is the `—`/unknown state anyway (most items are never executed), so defaulting to
+collapsed keeps the rail uncluttered. The design (MOTIR-1688) draws the collapsed +
+expanded states; the display (MOTIR-1693) implements the disclosure (a `<details>`-style
+expander or the shipped collapsible primitive), defaulting closed.
 
 ---
 
@@ -281,7 +317,11 @@ route/DTO `.toEqual` tests across the whole affected test dirs, not grep-hits.
 - **One migration, additive, null-defaulted** — no backfill; every existing row reads
   `—` on both triples until re-touched. No behaviour change for any existing caller.
 - **Total display switch** over the two `source` enums (closed sets) + free-text
-  harness/model + the null/`—` state (MOTIR-1688/1693).
+  harness/model + the null/`—` state (MOTIR-1688/1693), rendered **collapsed by default**
+  (Decision 7).
+- **Native model recorded ≠ exposed** (Decision 6): the row keeps the native planning model
+  for analysis; the read DTO strips it, so the API/UI show `Native · Motir` only. The
+  motir-ai producer (MOTIR-1690) stays — it feeds the recorded (not displayed) model.
 - **Epic-9 hand-off is explicit:** (1) the **hosted** implementation lane calls this
   story's recording seam with trusted, gateway-metered `model` + provider; (2) a
   self-reported-vs-metered display distinction is a hosted-only, later concern; (3) a

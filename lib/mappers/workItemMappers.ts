@@ -65,11 +65,18 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     // item is integrated-awaiting-review; null once it reaches done. Pass through.
     sessionBranch: row.sessionBranch,
     // Work-item provenance (Story MOTIR-1685) — the planning + implementation
-    // triples; nullable enums + free-text pass straight through. A null triple is
-    // the "unknown / —" state the detail (MOTIR-1693) renders.
+    // triples; nullable enums + free-text. A null triple is the "unknown / —"
+    // state the detail (MOTIR-1693) renders.
+    //
+    // NATIVE model is RECORDED-but-NOT-EXPOSED (Yue, 2026-07-10): for
+    // `planningSource = native` the underlying LLM is stored on the row (for
+    // internal analysis) but STRIPPED here so it never reaches the frontend/API —
+    // Motir abstracts its own model; a native item reads "Native · Motir", never
+    // the specific model. MCP/BYOK expose their model (the user reported their
+    // OWN). This is the single detail-read choke-point, so the strip is total.
     planningSource: row.planningSource,
     planningHarness: row.planningHarness,
-    planningModel: row.planningModel,
+    planningModel: row.planningSource === 'native' ? null : row.planningModel,
     implementationSource: row.implementationSource,
     implementationHarness: row.implementationHarness,
     implementationModel: row.implementationModel,

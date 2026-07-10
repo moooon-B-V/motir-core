@@ -300,15 +300,15 @@ async function materialize(
       reporterId: ctx.userId,
       // Native PLANNING provenance (Story MOTIR-1685, docs/decisions/work-item-provenance.md
       // Decision 5): every item materialized from an approved plan was planned
-      // NATIVELY by motir-ai. `source` is PINNED to `native` here (never read from
-      // the proposal — this IS the native seam by construction, so a forged
-      // `planningProvenance.source` can't downgrade the stamp); `harness` defaults
-      // to `Motir` and `model` to null. DEFENSIVE: works before the motir-ai
-      // producer (MOTIR-1690) ships — until proposals carry a model, items read
-      // `native · Motir · null`; once they do, `model` starts populating. Merge
-      // order between the producer and this consumer is therefore free.
+      // NATIVELY by Motir → `source: native` (PINNED — never read from the
+      // proposal), `harness: Motir`. The underlying LLM IS RECORDED here (from the
+      // motir-ai producer, MOTIR-1690 — core doesn't otherwise know it) so it is
+      // available for internal ANALYSIS; but the read DTO STRIPS it for native
+      // (`toWorkItemDto`), so it is never EXPOSED to the frontend/API — Motir
+      // abstracts its own model. MCP/BYOK keep + expose their model (the user
+      // reported their OWN).
       planningSource: 'native',
-      planningHarness: pf.planningProvenance?.harness ?? 'Motir',
+      planningHarness: 'Motir',
       planningModel: pf.planningProvenance?.model ?? null,
       type: (pf.type as Prisma.WorkItemUncheckedCreateInput['type']) ?? null,
       executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null,

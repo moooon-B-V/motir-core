@@ -510,7 +510,7 @@ describe('plansService.approvePlan — native planning provenance', () => {
     expect(created.planningModel).toBeNull();
   });
 
-  it('carries the model from the proposal provenance when the motir-ai producer supplied it', async () => {
+  it('RECORDS the model from the proposal on the row (for analysis) but STRIPS it from the read DTO', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx, [
       {
@@ -523,13 +523,23 @@ describe('plansService.approvePlan — native planning provenance', () => {
       },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Producer card' } });
-    expect(created.planningSource).toBe('native');
-    expect(created.planningHarness).toBe('Motir');
-    expect(created.planningModel).toBe('deepseek-chat');
+    // The raw ROW records the model (available for internal analysis).
+    const row = await db.workItem.findFirstOrThrow({ where: { title: 'Producer card' } });
+    expect(row.planningSource).toBe('native');
+    expect(row.planningHarness).toBe('Motir');
+    expect(row.planningModel).toBe('deepseek-chat');
+    // But the read DTO STRIPS the native model — it is never exposed to the API/UI.
+    const dto = await workItemsService.getWorkItemByIdentifier(
+      fx.projectId,
+      row.identifier,
+      fx.ctx,
+    );
+    expect(dto.planningSource).toBe('native');
+    expect(dto.planningHarness).toBe('Motir');
+    expect(dto.planningModel).toBeNull();
   });
 
-  it('PINS source to native — a forged non-native source on the proposal cannot downgrade the stamp', async () => {
+  it('PINS source AND harness to native/Motir — a forged source/harness on the proposal is ignored', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx, [
       {
@@ -537,16 +547,17 @@ describe('plansService.approvePlan — native planning provenance', () => {
         proposedFields: {
           title: 'Forged source card',
           kind: 'task',
-          planningProvenance: { source: 'manual', harness: 'evil', model: 'evil' },
+          planningProvenance: { source: 'manual', harness: 'evil', model: 'the-model' },
         },
       },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
     const created = await db.workItem.findFirstOrThrow({ where: { title: 'Forged source card' } });
-    // source is pinned to native; only harness/model are read from the proposal.
+    // source + harness are pinned (native / Motir); only the model is carried
+    // through from the trusted internal seam (recorded for analysis).
     expect(created.planningSource).toBe('native');
-    expect(created.planningHarness).toBe('evil');
-    expect(created.planningModel).toBe('evil');
+    expect(created.planningHarness).toBe('Motir');
+    expect(created.planningModel).toBe('the-model');
   });
 });
 
