@@ -99,9 +99,52 @@ function mrPayload(opts: {
   };
 }
 
+/** A GitLab `pipeline` webhook body — the CI analog of GitHub's check event. Carries
+ *  the associated MR iid on `merge_request.iid` (the strongest link) and the branch
+ *  on `object_attributes.ref` (the fallback). `status` is a GitLab pipeline status
+ *  (`success` / `failed` / `running` / `skipped` / …). */
+function pipelinePayload(opts: {
+  status: string;
+  sha?: string;
+  mrIid?: number | null;
+  ref?: string;
+  projectId?: string;
+}) {
+  return {
+    object_kind: 'pipeline',
+    project: { id: Number(opts.projectId ?? PROJECT_ID) },
+    object_attributes: {
+      id: 555,
+      sha: opts.sha ?? 'sha1',
+      ref: opts.ref ?? 'main',
+      status: opts.status,
+    },
+    merge_request: opts.mrIid === null ? undefined : { iid: opts.mrIid ?? 7 },
+  };
+}
+
 async function statusOf(workItemId: string): Promise<string> {
   const row = await db.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
+}
+
+async function commentsOn(workItemId: string) {
+  return db.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
+}
+async function ciStateOf(workItemId: string): Promise<string | null> {
+  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  return row!.ciState;
+}
+
+/** Open the MR (through the status-sync hook) so its change-request row is stored
+ *  and linked to the work item by the source branch — mirrors reality: the MR opens
+ *  (link) → then its pipeline runs against it. Returns the MR iid. */
+async function openMr(identifier: string, iid = 7): Promise<number> {
+  await gitlabWebhookService.handleEvent(
+    'Merge Request Hook',
+    mrPayload({ action: 'open', identifier, iid }),
+  );
+  return iid;
 }
 
 async function latestRevision(workItemId: string) {
@@ -246,19 +289,171 @@ describe('gitlabWebhookService — non-MR events are ignored (owned by sibling c
     expect(res).toEqual({ event: 'ignored', reason: 'unhandled_event:push' });
   });
 
-  it('a pipeline hook is ignored here (CI feedback is MOTIR-1477)', async () => {
-    const res = await gitlabWebhookService.handleEvent('Pipeline Hook', {
-      object_kind: 'pipeline',
-      project: { id: 42 },
-      object_attributes: { id: 1, sha: 'abc', ref: 'main', status: 'success' },
-    });
-    expect(res).toEqual({ event: 'ignored', reason: 'unhandled_event:pipeline' });
-  });
-
   it('a non-object body is a clean ignored no-op', async () => {
     expect(await gitlabWebhookService.handleEvent('Note Hook', null)).toEqual({
       event: 'ignored',
       reason: 'malformed_body',
     });
+  });
+});
+
+// Story 7.23 · MOTIR-1477 — a GitLab `pipeline` hook drives the SAME shared
+// CI-feedback consumer (`applyCiStatusFeedback`) GitHub's check events drive:
+// a terminal pipeline status → a passing note / failure summary on the linked
+// work item + its `ciState` verification signal; idempotent redelivery; the
+// pending-recorded + neutral + no-op paths; attribution to the workspace owner
+// (GitLab has no bound identity). Mirrors `tests/github/githubCiFeedback.test.ts`.
+describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () => {
+  it('a successful pipeline posts a passing note and marks the item verified', async () => {
+    const s = await makeScenario('pl-pass@example.com');
+    const iid = await openMr(s.item.identifier);
+
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'success', sha: 'sha1', mrIid: iid }),
+    );
+    expect(res).toMatchObject({
+      event: 'ci',
+      outcome: 'verified',
+      workItemId: s.item.id,
+      ciState: 'passing',
+    });
+    expect(await ciStateOf(s.item.id)).toBe('passing');
+
+    const comments = await commentsOn(s.item.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.bodyMd).toContain('CI passing');
+    expect(comments[0]!.bodyMd).toContain('merge request'); // host-appropriate noun
+
+    const checkRows = await db.githubCheckRun.findMany();
+    expect(checkRows).toHaveLength(1);
+    expect(checkRows[0]).toMatchObject({
+      conclusion: 'success',
+      commitSha: 'sha1',
+      checkName: 'pipeline',
+    });
+    expect(checkRows[0]!.feedbackCommentId).toBe(comments[0]!.id);
+  });
+
+  it('a failed pipeline posts the failure summary + MR pipelines link and flips to not-ready', async () => {
+    const s = await makeScenario('pl-fail@example.com');
+    const iid = await openMr(s.item.identifier);
+
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'failed', sha: 'sha1', mrIid: iid }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'failed', ciState: 'failing' });
+    expect(await ciStateOf(s.item.id)).toBe('failing');
+
+    const comments = await commentsOn(s.item.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.bodyMd).toContain('CI failed');
+    expect(comments[0]!.bodyMd).toContain('/-/merge_requests/7/pipelines'); // the "view checks" link
+  });
+
+  it('is idempotent under REDELIVERY — the same pipeline status never duplicates the comment', async () => {
+    const s = await makeScenario('pl-idem@example.com');
+    const iid = await openMr(s.item.identifier);
+    const payload = pipelinePayload({ status: 'success', sha: 'sha1', mrIid: iid });
+
+    expect(await gitlabWebhookService.handleEvent('Pipeline Hook', payload)).toMatchObject({
+      outcome: 'verified',
+    });
+    expect(await gitlabWebhookService.handleEvent('Pipeline Hook', payload)).toMatchObject({
+      outcome: 'noop',
+    });
+    expect(await commentsOn(s.item.id)).toHaveLength(1);
+    expect(await db.githubCheckRun.count()).toBe(1);
+  });
+
+  it('resolves the MR by BRANCH when the pipeline carries no merge_request', async () => {
+    const s = await makeScenario('pl-branch@example.com');
+    // The MR opened on this source branch; the pipeline omits merge_request but
+    // carries the ref, so the branch fallback links it.
+    await openMr(s.item.identifier);
+    const branch = `subtask/${s.item.identifier}-a-change`;
+
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'success', sha: 'sha1', mrIid: null, ref: branch }),
+    );
+    expect(res).toMatchObject({ outcome: 'verified', workItemId: s.item.id });
+    expect(await ciStateOf(s.item.id)).toBe('passing');
+  });
+
+  it('an in-flight (running) pipeline is RECORDED as pending — no comment, no signal', async () => {
+    const s = await makeScenario('pl-pending@example.com');
+    const iid = await openMr(s.item.identifier);
+
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'running', sha: 'sha1', mrIid: iid }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
+    const rows = await db.githubCheckRun.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!).toMatchObject({ conclusion: 'pending', feedbackCommentId: null });
+    expect(await commentsOn(s.item.id)).toHaveLength(0);
+    expect(await ciStateOf(s.item.id)).toBeNull();
+  });
+
+  it('a skipped/manual pipeline (neutral) stays a full no-op — nothing recorded', async () => {
+    const s = await makeScenario('pl-neutral@example.com');
+    const iid = await openMr(s.item.identifier);
+
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'skipped', sha: 'sha1', mrIid: iid }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'ignored_pending' });
+    expect(await db.githubCheckRun.count()).toBe(0);
+    expect(await commentsOn(s.item.id)).toHaveLength(0);
+    expect(await ciStateOf(s.item.id)).toBeNull();
+  });
+
+  it('a pipeline for an MR with NO linked work item is a clean no-op', async () => {
+    const s = await makeScenario('pl-nowi@example.com');
+    // An MR whose branch names no work item opens (row stored, unlinked) as iid 9.
+    await gitlabWebhookService.handleEvent(
+      'Merge Request Hook',
+      mrPayload({
+        action: 'open',
+        identifier: s.item.identifier,
+        iid: 9,
+        sourceBranch: 'chore/no-key',
+        title: 'no key here',
+      }),
+    );
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'success', sha: 'shaX', mrIid: 9 }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'no_work_item' });
+    expect(await db.githubCheckRun.count()).toBe(0);
+    expect(await ciStateOf(s.item.id)).toBeNull();
+  });
+
+  it('a pipeline for an UNCONNECTED project is unknown_repo (no crash, no write)', async () => {
+    const s = await makeScenario('pl-unconn@example.com');
+    await openMr(s.item.identifier);
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'success', sha: 'sha1', mrIid: 7, projectId: '999' }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'unknown_repo' });
+    expect(await db.githubCheckRun.count()).toBe(0);
+  });
+
+  it('a pipeline before any MR is stored is a clean no_pull_request no-op', async () => {
+    const s = await makeScenario('pl-nopr@example.com');
+    // No MR opened → no change-request row to resolve the pipeline against.
+    const res = await gitlabWebhookService.handleEvent(
+      'Pipeline Hook',
+      pipelinePayload({ status: 'success', sha: 'sha1', mrIid: 7 }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'no_pull_request' });
+    expect(await db.githubCheckRun.count()).toBe(0);
+    expect(await ciStateOf(s.item.id)).toBeNull();
   });
 });

@@ -1,12 +1,22 @@
 import type { Prisma } from '@prisma/client';
 import { getGitProvider } from '@/lib/git';
-import type { GitProviderId, NormalizedChangeRequest } from '@/lib/git/types';
+import type {
+  GitProviderId,
+  NormalizedChangeRequest,
+  NormalizedStatusEvent,
+} from '@/lib/git/types';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
 import {
   syncChangeRequestStatus,
   type ChangeRequestContextResolution,
   type ChangeRequestSyncResult,
 } from './changeRequestStatusSync';
+import {
+  applyCiStatusFeedback,
+  type CiFeedbackContextResolution,
+  type CiFeedbackResult,
+} from './changeRequestCiFeedback';
 
 // gitlabWebhookService (Story 7.23 · MOTIR-1475) — the inbound GitLab webhook
 // logic layer, the GitLab mirror of `githubWebhookService`'s status sync. The HTTP
@@ -19,10 +29,12 @@ import {
 // hook carries no Motir connection id) and in having no bound-identity table (the
 // author is always the workspace owner).
 //
-// Scope: this card is MR → work-item status sync. GitLab's other hooks ride the
-// SAME endpoint but belong to sibling cards — `push` to the code-graph feed
-// (MOTIR-1476) and `pipeline` to the CI feedback loop (MOTIR-1477) — so they are
-// IGNORED here (a fast 2xx no-op) and those cards extend the dispatch additively.
+// Scope: this service dispatches GitLab's MERGE-REQUEST hook to the shared status
+// sync (MOTIR-1475) and its PIPELINE hook to the shared CI-feedback consumer
+// (`applyCiStatusFeedback`, MOTIR-1477) — the SAME two consumers GitHub drives, not
+// GitLab-specific copies. GitLab's `push` hook (the code-graph feed, MOTIR-1476)
+// still rides the SAME endpoint but is IGNORED here (a fast 2xx no-op), owned by
+// its own sibling card that extends the dispatch additively.
 
 const PROVIDER: GitProviderId = 'gitlab';
 
@@ -32,20 +44,25 @@ const PROVIDER: GitProviderId = 'gitlab';
  *  analogue of GitHub's ignored `synchronize`. */
 const HANDLED_MR_ACTIONS = new Set(['open', 'reopen', 'close', 'merge']);
 
-export type GitlabWebhookResult = { event: 'ignored'; reason: string } | ChangeRequestSyncResult;
+export type GitlabWebhookResult =
+  | { event: 'ignored'; reason: string }
+  | ChangeRequestSyncResult
+  | CiFeedbackResult;
 
 export const gitlabWebhookService = {
   /**
    * Handle one verified delivery. `eventType` is the `X-Gitlab-Event` header; the
    * body's `object_kind` is the authoritative event discriminator GitLab always
-   * carries. Only a `merge_request` hook drives the status sync; every other kind
-   * (push / pipeline / note / …) is a fast 2xx no-op here (owned by sibling cards).
-   * Idempotent under redelivery via the shared sync.
+   * carries. A `merge_request` hook drives the status sync and a `pipeline` hook
+   * the CI-feedback loop; every other kind (push / note / …) is a fast 2xx no-op
+   * here (owned by sibling cards). Idempotent under redelivery via the shared
+   * consumers.
    */
   async handleEvent(eventType: string, payload: unknown): Promise<GitlabWebhookResult> {
     const body = asRecord(payload);
     if (!body) return { event: 'ignored', reason: 'malformed_body' };
     if (body['object_kind'] === 'merge_request') return this.handleMergeRequest(body);
+    if (body['object_kind'] === 'pipeline') return this.handlePipeline(body);
     const kind = typeof body['object_kind'] === 'string' ? body['object_kind'] : eventType;
     return { event: 'ignored', reason: `unhandled_event:${kind || 'unknown'}` };
   },
@@ -70,6 +87,22 @@ export const gitlabWebhookService = {
       resolveGitlabChangeRequestContext(cr, tx),
     );
   },
+
+  /**
+   * Handle a `pipeline` hook — the CI feedback half of the loop (MOTIR-1477).
+   * Normalize it through the seam (a GitLab pipeline `status` → our CI conclusion;
+   * the associated MR iid + branch are the resolver keys) and drive the linked
+   * work item's verification feedback through THE shared consumer
+   * (`applyCiStatusFeedback`) — the SAME path GitHub's `check_suite`/`check_run`
+   * uses. A pipeline for an unconnected project resolves to `unknown_repo` (a clean
+   * no-op); a pipeline with no linked MR / work item is a clean no-op too.
+   */
+  async handlePipeline(body: Record<string, unknown>): Promise<GitlabWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const event = provider.parseCiStatusEvent(body);
+    if (!event) return { event: 'ci', outcome: 'malformed' };
+    return applyCiStatusFeedback(event, (tx) => resolveGitlabCiContext(event, tx));
+  },
 };
 
 /** Resolve the GitLab connection + repo for a merge-request event — the
@@ -85,6 +118,30 @@ async function resolveGitlabChangeRequestContext(
   const repo = await githubRepoRepository.findByRepoIdAndProvider(cr.providerRepoId, PROVIDER, tx);
   if (!repo) return { kind: 'unknown_repo' };
   return { kind: 'resolved', installation: repo.installation, repo, authorBoundUserId: null };
+}
+
+/** Resolve the GitLab connection + repo + checks-URL builder for a pipeline event —
+ *  the provider-specific half the shared CI-feedback consumer needs. Keys on the
+ *  project id (a GitLab hook carries no Motir connection id, exactly as the MR
+ *  resolver does); the checks link points at the MR's pipelines tab on the GitLab
+ *  host. `unknown_repo` when the project isn't connected in any workspace. */
+async function resolveGitlabCiContext(
+  event: NormalizedStatusEvent,
+  tx: Prisma.TransactionClient,
+): Promise<CiFeedbackContextResolution> {
+  const repo = await githubRepoRepository.findByRepoIdAndProvider(
+    event.providerRepoId,
+    PROVIDER,
+    tx,
+  );
+  if (!repo) return { kind: 'unknown_repo' };
+  return {
+    kind: 'resolved',
+    installation: repo.installation,
+    repo,
+    buildChecksUrl: (number) =>
+      `${gitlabBaseUrl()}/${repo.owner}/${repo.name}/-/merge_requests/${number}/pipelines`,
+  };
 }
 
 /** Narrow an `unknown` webhook body to a plain object (defensive read over the
