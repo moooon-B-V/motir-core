@@ -3300,20 +3300,40 @@ model ImportSourceIdentity {
 ///
 /// `provider` is the PROVIDER DISCRIMINATOR — every downstream read goes through
 /// the GitProvider seam (`lib/git`), so GitLab/Bitbucket is purely additive
-/// (7.23 implements the same seam under `provider: 'gitlab'`). The installation
-/// access token is NEVER stored here: it is minted on demand from the App
-/// private key (`lib/github/appAuth.ts`) and cached in-memory only.
+/// (7.23 implements the same seam under `provider: 'gitlab'`). This is the SHARED
+/// connection entity every provider plugs into (the card's "no new parallel
+/// model"): a GitLab connection is a row here with `provider: 'gitlab'`.
+///
+/// TOKEN STORAGE differs by the provider's auth model. GitHub (Grant 2) NEVER
+/// stores a token here — its installation token is minted on demand from the App
+/// private key (`lib/github/appAuth.ts`) and cached in-memory only, so the three
+/// `*_encrypted` / `token_expires_at` columns stay NULL for GitHub rows. GitLab
+/// (7.23 · MOTIR-1474) has no App-installation model: its OAuth grant issues an
+/// access + refresh token per connection that MUST be persisted (encrypted) and
+/// refreshed, so a GitLab row populates them. The columns are nullable + provider-
+/// neutral in name precisely so the shared entity serves both models.
 model GithubInstallation {
   id             String   @id @default(cuid())
-  /// Provider discriminator — always "github" for these rows; the seam keys on it.
+  /// Provider discriminator — "github" (default) or "gitlab"; the seam keys on it.
   provider       String   @default("github")
-  /// GitHub's numeric installation id (as a string — never do math on it), used
-  /// by the webhook + the token-mint endpoint. UNIQUE (one row per GitHub
-  /// installation). DISTINCT from `id`, the internal cuid PK.
+  /// The host's own installation/connection id (as a string — never do math on
+  /// it): GitHub's numeric installation id, or the GitLab connection id minted at
+  /// connect. UNIQUE (one row per connection); the webhook + token paths key on
+  /// it. DISTINCT from `id`, the internal cuid PK.
   installationId String   @unique @map("installation_id")
   workspaceId    String   @map("workspace_id")
   accountLogin   String   @map("account_login")
   accountType    String   @map("account_type")
+  /// The connection's access token, encrypted at rest — NULL for GitHub (minted
+  /// on demand). Populated for GitLab (OAuth issues a stored token). Only
+  /// `lib/gitlab/tokenCrypto.ts` + `gitlabConnectionService` read/write it.
+  accessTokenEncrypted  String?   @map("access_token_encrypted")
+  /// The connection's refresh token, encrypted at rest — NULL unless the provider
+  /// issues one (GitLab does; GitHub does not). GitLab rotates it on each refresh.
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
+  /// When the stored access token expires — the refresh path reads it to decide
+  /// when to refresh. NULL for GitHub (no stored token).
+  tokenExpiresAt        DateTime? @map("token_expires_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
