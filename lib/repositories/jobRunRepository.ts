@@ -55,6 +55,33 @@ export const jobRunRepository = {
   },
 
   /**
+   * The migrate-onboarding INDEX-readiness poll (Story 7.15 · MOTIR-931): the
+   * newest SUCCEEDED `system.code-graph-index` run for this workspace whose
+   * ledger `output.repoRef` is the connected repo. The code-graph index job is
+   * fire-and-forget (enqueued by the GitHub grant flow, `enqueueCodeGraphIndex`)
+   * and is NOT a motir-ai JobKind, so its terminal state is read HERE from the
+   * job_run ledger — the durable completion signal the migrate wizard's `index`
+   * step waits on (it "waits, does not index"). Matching `output.repoRef` keeps a
+   * stale index of a DIFFERENT repo from counting. Takes `tx` so it runs under
+   * the caller's `withWorkspaceContext` (the job_run RLS policy scopes it).
+   */
+  async findSucceededCodeGraphIndex(
+    workspaceId: string,
+    repoRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun | null> {
+    return tx.jobRun.findFirst({
+      where: {
+        workspaceId,
+        functionId: 'system.code-graph-index',
+        status: 'succeeded',
+        output: { path: ['repoRef'], equals: repoRef },
+      },
+      orderBy: { finishedAt: 'desc' },
+    });
+  },
+
+  /**
    * Dashboard read (1.6.5): a workspace's runs, newest-first, optionally
    * filtered by status, with limit/offset paging. Takes `tx` because the read
    * runs inside withWorkspaceContext so the job_run RLS policy scopes it; the
