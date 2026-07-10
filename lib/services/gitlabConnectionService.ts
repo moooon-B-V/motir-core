@@ -1,5 +1,6 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { encryptToken, decryptToken } from '@/lib/gitlab/tokenCrypto';
 import {
@@ -8,8 +9,10 @@ import {
   fetchGitlabUser,
   refreshAccessToken,
 } from '@/lib/gitlab/gitlabOAuth';
-import { GitlabConnectionNotFoundError } from '@/lib/gitlab/errors';
+import { getGitProvider } from '@/lib/git';
+import { GitlabConnectionNotFoundError, GitlabProjectNotFoundError } from '@/lib/gitlab/errors';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
+import type { GitlabSelectableProjectDTO } from '@/lib/dto/gitlab';
 import type { InstallationToken } from '@/lib/git/types';
 
 // GitLab connection service (Story 7.23 · MOTIR-1474) — the GitLab half of the
@@ -131,19 +134,131 @@ export const gitlabConnectionService = {
   },
 
   /**
-   * The workspace's GitLab connection (token-free DTO), or null when unconnected —
-   * the read a settings surface (7.23.7) uses. Workspace context.
+   * The workspace's GitLab connection (token-free DTO) WITH its connected projects
+   * (`github_repo` rows under the connection), or null when unconnected — the read
+   * the settings surface (7.23.7 / MOTIR-1478) renders. Workspace context; the
+   * connection row + its repos are read in ONE transaction so the settings page
+   * shows a consistent snapshot.
    */
   async getConnectionForWorkspace(ctx: {
     userId: string;
     workspaceId: string;
   }): Promise<GithubInstallationDTO | null> {
-    const row = await withWorkspaceContext(
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const row = await githubInstallationRepository.findByWorkspaceAndProvider(
+          ctx.workspaceId,
+          'gitlab',
+          tx,
+        );
+        if (!row) return null;
+        const repos = await githubRepoRepository.listByInstallation(row.id, tx);
+        return toGithubInstallationDTO(row, repos);
+      },
+    );
+  },
+
+  /**
+   * List the authenticated user's GitLab projects for the in-app picker (Panel 2b,
+   * MOTIR-1478) — the honest inverse of GitHub's out-of-app install screen. Reads
+   * the connection + its already-connected repo ids (workspace context), then
+   * live-enumerates the user's projects through the GitProvider seam (the stored
+   * token, refreshed as needed) and marks which are already connected. Throws
+   * GitlabConnectionNotFoundError when the workspace has no GitLab connection; a
+   * live-enumeration failure (a revoked authorization) propagates as the seam's
+   * error for the caller to surface as "reconnect".
+   */
+  async listSelectableProjects(ctx: {
+    userId: string;
+    workspaceId: string;
+  }): Promise<GitlabSelectableProjectDTO[]> {
+    const conn = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const row = await githubInstallationRepository.findByWorkspaceAndProvider(
+          ctx.workspaceId,
+          'gitlab',
+          tx,
+        );
+        if (!row) throw new GitlabConnectionNotFoundError();
+        const repos = await githubRepoRepository.listByInstallation(row.id, tx);
+        return {
+          installationId: row.installationId,
+          connectedIds: new Set(repos.map((r) => r.repoId)),
+        };
+      },
+    );
+
+    const projects = await getGitProvider('gitlab').fetchInstallationRepos(conn.installationId);
+    return projects.map((p) => ({
+      repoId: p.providerRepoId,
+      owner: p.owner,
+      name: p.name,
+      defaultBranch: p.defaultBranch,
+      connected: conn.connectedIds.has(p.providerRepoId),
+    }));
+  },
+
+  /**
+   * Connect a GitLab project to the workspace (MOTIR-1478) — persist the selection
+   * as a `github_repo` row under the GitLab connection. The project's owner / name
+   * / default branch are resolved from GitLab's AUTHORITATIVE membership list (not
+   * the client's payload), so a stale picker row or an id the user has no access
+   * to is rejected (GitlabProjectNotFoundError) rather than stored as an
+   * unreachable row. Idempotent (upsert). Throws GitlabConnectionNotFoundError
+   * when the workspace is unconnected. (The MR/pipeline webhook that makes the
+   * project's events flow is registered by MOTIR-1475; this card owns the
+   * selection.)
+   */
+  async connectProject(
+    ctx: { userId: string; workspaceId: string },
+    repoId: string,
+  ): Promise<void> {
+    const conn = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       (tx) =>
         githubInstallationRepository.findByWorkspaceAndProvider(ctx.workspaceId, 'gitlab', tx),
     );
-    return row ? toGithubInstallationDTO(row, []) : null;
+    if (!conn) throw new GitlabConnectionNotFoundError();
+
+    const projects = await getGitProvider('gitlab').fetchInstallationRepos(conn.installationId);
+    const match = projects.find((p) => p.providerRepoId === repoId);
+    if (!match) throw new GitlabProjectNotFoundError();
+
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      githubRepoRepository.upsert(
+        {
+          installationId: conn.id,
+          repoId: match.providerRepoId,
+          owner: match.owner,
+          name: match.name,
+          defaultBranch: match.defaultBranch,
+          provider: 'gitlab',
+        },
+        tx,
+      ),
+    );
+  },
+
+  /**
+   * Disconnect a GitLab project from the workspace (MOTIR-1478) — remove its
+   * `github_repo` row. Idempotent (a no-op when the project or connection is
+   * already gone). Workspace context; the row's `github_pull_request` rows cascade.
+   */
+  async disconnectProject(
+    ctx: { userId: string; workspaceId: string },
+    repoId: string,
+  ): Promise<void> {
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
+        ctx.workspaceId,
+        'gitlab',
+        tx,
+      );
+      if (!conn) return;
+      await githubRepoRepository.deleteByInstallationAndRepoId(conn.id, repoId, tx);
+    });
   },
 
   /**

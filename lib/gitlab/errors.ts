@@ -58,6 +58,22 @@ export class GitlabConnectionNotFoundError extends Error {
 }
 
 /**
+ * A project the connect-a-project action was asked to connect isn't among the
+ * authenticated user's GitLab memberships (MOTIR-1478) — a stale picker row, or a
+ * repo id the user has no access to. The service resolves the project's
+ * owner/name/default-branch from GitLab's authoritative membership list (never
+ * the client's payload), so a project it can't find there is rejected rather than
+ * persisted as an unreachable `github_repo` row.
+ */
+export class GitlabProjectNotFoundError extends Error {
+  readonly code = 'GITLAB_PROJECT_NOT_FOUND' as const;
+  constructor() {
+    super('GitLab project not found among your memberships.');
+    this.name = 'GitlabProjectNotFoundError';
+  }
+}
+
+/**
  * The inbound-webhook shared secret (`GITLAB_WEBHOOK_SECRET`) is not configured on
  * this deployment (Story 7.23 · MOTIR-1475). Read at call time, so a self-hosted
  * instance that never wires GitLab can't reach the webhook path rather than
