@@ -23,17 +23,26 @@
 
       COMPOSES, does not redraw. Every token below is copied 1:1 from
       app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens); the two
-      provenance cards are CoreFieldsPanel.tsx FieldCard VERBATIM (Card + corner
-      grammar), read-only (editable={false} — no chevron), reusing the session-
-      branch read-only precedent. The source chip puts the hue in a --el-tint-*
-      BACKGROUND with --el-text-strong text (colour rule / finding #35); the
-      HUMAN "Manual" source is a neutral --el-surface chip (human is not a model).
-      No raw hex, no raw rounded-*/p-*: shape via --radius-badge / --spacing-chip-*.
+      provenance cards are CoreFieldsPanel.tsx FieldCard VERBATIM (Card grammar);
+      the source chip puts the hue in a --el-tint-* BACKGROUND with
+      --el-text-strong text (colour rule / finding #35); the HUMAN "Manual" source
+      is a neutral --el-surface chip (human is not a model). No raw hex, no raw
+      rounded-*/p-*: shape via --radius-badge / --spacing-chip-*.
 
-      PANELS: (1) both triples populated in rail context; (2) the unknown "—"
-      state (the common case: never executed / pre-feature); (3) native planning
-      + manual implementation; (4) the six-source legend. Placement: the two
-      cards sit in the rail after Estimate / custom fields, before Reporter.
+      COLLAPSED BY DEFAULT (Yue, 2026-07-10). Provenance is secondary metadata, so
+      the rail shows a single CLOSED "Provenance" disclosure — the shipped
+      "Show all custom fields" toggle grammar (a full-width button + a chevron that
+      rotates 180° on open, --el-text-secondary, --radius-control). The user
+      EXPANDS to reveal the two read-only triple cards.
+
+      NATIVE SHOWS NO MODEL (Yue, 2026-07-10). A natively-planned item reads ONLY
+      "Native · Motir" — no model line. Motir abstracts its own planning LLM; the
+      model is recorded server-side for analysis but never exposed. MCP / BYOK DO
+      show their model (the user reported their own).
+
+      PANELS: (1) COLLAPSED (default) in rail context; (2) EXPANDED, both triples
+      populated (MCP + BYOK, models shown); (3) EXPANDED, native planning (NO model
+      line) + the "—" unknown implementation; (4) the six-source legend.
     -->
     <style>
       /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
@@ -726,6 +735,59 @@
       .prov-unknown {
         color: var(--el-text-muted);
       }
+      /* ── Provenance DISCLOSURE — collapsed by default (MOTIR-1688) ─────────
+         Mirrors the shipped "Show all custom fields" toggle in
+         CustomFieldsSection.tsx: a full-width button, a leading chevron that
+         rotates 180° when open, --el-text-secondary, --radius-control, hover
+         surface. Collapsed is the DEFAULT — provenance is secondary metadata. */
+      .disc-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .disc-toggle:hover {
+        background: var(--el-surface);
+      }
+      .disc-toggle .dchev {
+        display: inline-flex;
+        flex: none;
+        transition: transform 0.12s ease;
+      }
+      .disc-toggle .dchev svg {
+        width: 16px;
+        height: 16px;
+      }
+      .disc-toggle.is-open .dchev {
+        transform: rotate(180deg);
+      }
+      .disc-toggle .dlabel {
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        font-size: 11px;
+      }
+      .disc-toggle .dhint {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* the expanded body — the two provenance FieldCards, nested under the toggle */
+      .disc-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 8px;
+      }
       /* Source legend — all six values in one reference block */
       .legend {
         display: grid;
@@ -762,9 +824,14 @@
           the display code subtask <strong>MOTIR-1693</strong>. Built from the shipped
           <code>CoreFieldsPanel</code> <code>FieldCard</code> grammar + the live
           <code>--el-*</code> / shape tokens — this asset COMPOSES the existing detail rail (it does
-          not redraw it). Read-only: provenance is set by the create seams + the session tools,
-          never edited by hand, so there is no chevron and no separate entry affordance — the
-          section's placement in the rail IS its access path.
+          not redraw it). <strong>Collapsed by default</strong>: provenance is secondary metadata,
+          so the rail shows a single closed <em>Provenance</em> disclosure (the shipped "Show all
+          custom fields" toggle grammar) that the user EXPANDS to reveal the two read-only triples —
+          it is set by the create seams + the session tools, never edited by hand, so its placement
+          in the rail IS its access path. <strong>Native shows no model</strong>: a natively-planned
+          item reads only “Native · Motir” — Motir abstracts its own planning LLM (the model is
+          recorded server-side for analysis, never exposed). MCP / BYOK show their model (the user
+          reported their own).
         </p>
       </div>
       <button
@@ -861,49 +928,25 @@
       </defs>
     </svg>
 
-    <!-- ═══ PANEL 1 — both triples populated, in rail context ═══════════════ -->
+    <!-- ═══ PANEL 1 — COLLAPSED (the DEFAULT) in rail context ══════════════ -->
     <div class="specimen">
       <div class="cap">
-        Both triples populated — the Provenance cards sit in the rail AFTER Estimate / custom
-        fields, before Reporter (neighbours ghosted). BYOK-executed item planned via the MCP.
+        DEFAULT STATE — collapsed. Provenance is secondary metadata, so it sits in the rail AFTER
+        Estimate / custom fields, before Reporter (ghosted), as a single closed disclosure (chevron
+        down = closed, mirrors the shipped "Show all custom fields" toggle). The user expands to see
+        it.
       </div>
       <div class="rail">
         <div class="fcard">
           <div class="head"><span class="flabel">Estimate</span></div>
           <div class="fvalue"><div class="ghost-bar short"></div></div>
         </div>
-        <div class="fcard is-new">
-          <div class="head"><span class="flabel">Planning</span></div>
-          <div class="fvalue">
-            <div class="prov-lines">
-              <span class="pchip t-mcp">
-                <span class="pdot"
-                  ><svg viewBox="0 0 24 24"><use href="#i-terminal" /></svg></span
-                >MCP
-              </span>
-              <div class="prov-meta">
-                <span class="harness">Claude Code</span>
-                <span class="model">claude-opus-4-8</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="fcard is-new">
-          <div class="head"><span class="flabel">Implementation</span></div>
-          <div class="fvalue">
-            <div class="prov-lines">
-              <span class="pchip t-byok">
-                <span class="pdot"
-                  ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
-                >BYOK
-              </span>
-              <div class="prov-meta">
-                <span class="harness">opencode</span>
-                <span class="model">deepseek</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <button class="disc-toggle is-new" aria-expanded="false">
+          <span class="dchev"
+            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+          ></span>
+          <span class="dlabel">Provenance</span>
+        </button>
         <div class="fcard">
           <div class="head"><span class="flabel">Reporter</span></div>
           <div class="fvalue"><div class="ghost-bar short"></div></div>
@@ -911,61 +954,92 @@
       </div>
     </div>
 
-    <!-- ═══ PANEL 2 — the unknown / "—" state (the COMMON case) ═════════════ -->
+    <!-- ═══ PANEL 2 — EXPANDED, both triples populated ══════════════════════ -->
     <div class="specimen">
       <div class="cap">
-        The unknown / “—” state — the common case: an item never executed (no implementation), and
-        pre-feature items with no recorded planning provenance. A null triple renders a plain
-        em-dash, never an empty card.
+        Expanded — both triples populated. A BYOK-executed item planned via the MCP: the two
+        FieldCards reveal below the open disclosure (chevron rotated). MCP + BYOK expose their model
+        (the user reported their OWN).
       </div>
       <div class="rail">
-        <div class="fcard is-new">
-          <div class="head"><span class="flabel">Planning</span></div>
-          <div class="fvalue"><span class="prov-unknown">—</span></div>
-        </div>
-        <div class="fcard is-new">
-          <div class="head"><span class="flabel">Implementation</span></div>
-          <div class="fvalue"><span class="prov-unknown">—</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ PANEL 3 — native planning + manual implementation (variety) ═════ -->
-    <div class="specimen">
-      <div class="cap">
-        Native planning (materialized from an AI plan — harness Motir) + a MANUAL implementation (a
-        human did the work, no agent, so harness/model are absent under the neutral chip).
-      </div>
-      <div class="rail">
-        <div class="fcard is-new">
-          <div class="head"><span class="flabel">Planning</span></div>
-          <div class="fvalue">
-            <div class="prov-lines">
-              <span class="pchip t-native">
-                <span class="pdot"
-                  ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg></span
-                >Native
-              </span>
-              <div class="prov-meta">
-                <span class="harness">Motir</span>
-                <span class="model">deepseek-chat</span>
+        <button class="disc-toggle is-open is-new" aria-expanded="true">
+          <span class="dchev"
+            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+          ></span>
+          <span class="dlabel">Provenance</span>
+        </button>
+        <div class="disc-body">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Planning</span></div>
+            <div class="fvalue">
+              <div class="prov-lines">
+                <span class="pchip t-mcp">
+                  <span class="pdot"
+                    ><svg viewBox="0 0 24 24"><use href="#i-terminal" /></svg></span
+                  >MCP
+                </span>
+                <div class="prov-meta">
+                  <span class="harness">Claude Code</span>
+                  <span class="model">claude-opus-4-8</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Implementation</span></div>
+            <div class="fvalue">
+              <div class="prov-lines">
+                <span class="pchip t-byok">
+                  <span class="pdot"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  >BYOK
+                </span>
+                <div class="prov-meta">
+                  <span class="harness">opencode</span>
+                  <span class="model">deepseek</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <div class="fcard is-new">
-          <div class="head"><span class="flabel">Implementation</span></div>
-          <div class="fvalue">
-            <div class="prov-lines">
-              <span class="pchip t-manual">
-                <span class="pdot"
-                  ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
-                >Manual
-              </span>
-              <div class="prov-meta">
-                <span class="prov-unknown">—</span>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 3 — EXPANDED: native (NO model) + unknown implementation ═══ -->
+    <div class="specimen">
+      <div class="cap">
+        Expanded — NATIVE planning + no execution yet. Native shows ONLY “Native · Motir”: Motir
+        abstracts its own planning model, so the underlying LLM is NEVER exposed (it is recorded
+        server-side for analysis only). The implementation triple is the “—” unknown state — the
+        common case for an item not yet executed.
+      </div>
+      <div class="rail">
+        <button class="disc-toggle is-open is-new" aria-expanded="true">
+          <span class="dchev"
+            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+          ></span>
+          <span class="dlabel">Provenance</span>
+        </button>
+        <div class="disc-body">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Planning</span></div>
+            <div class="fvalue">
+              <div class="prov-lines">
+                <span class="pchip t-native">
+                  <span class="pdot"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg></span
+                  >Native
+                </span>
+                <div class="prov-meta">
+                  <span class="harness">Motir</span>
+                  <!-- NO model line — native model is recorded-not-exposed -->
+                </div>
               </div>
             </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Implementation</span></div>
+            <div class="fvalue"><span class="prov-unknown">—</span></div>
           </div>
         </div>
       </div>

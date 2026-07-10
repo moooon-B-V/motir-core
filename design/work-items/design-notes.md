@@ -3755,17 +3755,24 @@ Draws the field set decided in the provenance ADR
 (`docs/decisions/work-item-provenance.md`): the two `source` enums + the
 `harness`/`model` free-text.
 
-### Placement + access path
+### Placement + access path — COLLAPSED by default
 
-**Two read-only `FieldCard`s** — **Planning** then **Implementation** — added to
-the existing rail **after Estimate / the custom-field cards, before Reporter**.
-They are a sibling of the other rail fields, NOT a new section card. Provenance
-is **read-only**: it is set by the create seams (manual / MCP / native) and the
-session tools (`mark_integrated` / `complete_session`), never edited by hand — so
-there is **no chevron** (`FieldCard editable={false}`, reusing the session-branch
-read-only precedent) and **no separate entry affordance**. The cards' placement
-in the rail **IS** the access path — a reader opening the detail sees them where
-the other metadata lives.
+Provenance is **secondary metadata**, so it is **collapsed by default** behind a
+single **"Provenance" disclosure** in the rail, **after Estimate / the
+custom-field cards, before Reporter**. The disclosure reuses the **shipped
+"Show all custom fields" toggle grammar** (`CustomFieldsSection.tsx`): a
+full-width `button` (`aria-expanded`), a leading chevron (`ChevronDown` that
+**rotates 180° when open**), `text-[13px] text-(--el-text-secondary)`, padding
+`--spacing-control-*`, radius `--radius-control`, hover `bg-(--el-surface)`.
+Defaults **closed** — the common case is the `—`/unknown state anyway, so
+collapsing keeps the rail uncluttered. The user **expands to see** the two
+read-only triple `FieldCard`s (**Planning** then **Implementation**).
+
+Provenance is **read-only**: it is set by the create seams (manual / MCP /
+native) and the session tools (`mark_integrated` / `complete_session`), never
+edited by hand — the inner cards carry no chevron and there is no separate entry
+affordance. The disclosure's placement in the rail **IS** the access path. The
+display code subtask (**MOTIR-1693**) implements the disclosure defaulting closed.
 
 ### Anatomy (per card)
 
@@ -3789,7 +3796,12 @@ the other metadata lives.
 - **Harness** (`.harness`): 14px `--el-text` — the tool name (`Motir`,
   `Claude Code`, `opencode`, `Codex`).
 - **Model** (`.model`): 12px **`--font-mono`** `--el-text-muted` — the LLM id
-  (`claude-opus-4-8`, `deepseek`); mono because it is an identifier.
+  (`claude-opus-4-8`, `deepseek`); mono because it is an identifier. **NATIVE
+  shows NO model** — a natively-planned card renders only the chip + harness
+  (`Native · Motir`), no model line. Motir abstracts its own planning LLM: the
+  model is recorded server-side for analysis but stripped from the read DTO
+  (ADR Decision 6), so it is never displayed. MCP / BYOK DO show their model
+  (the user reported their own).
 - **Unknown / "—"** (`.prov-unknown`, `--el-text-muted`): a plain em-dash. The
   **common case** — an item never executed (no implementation) and pre-feature
   items with no recorded planning provenance. A null triple renders `—`, never an
@@ -3807,12 +3819,13 @@ shipped component.
 
 ### Panels in the asset
 
-1. **Both triples populated** — in rail context (Estimate / Reporter ghosted):
-   MCP-planned (`Claude Code · claude-opus-4-8`) + BYOK-implemented
-   (`opencode · deepseek`).
-2. **The unknown "—" state** — both triples null (the common case).
-3. **Native planning + manual implementation** — `Native · Motir · deepseek-chat`
-   - `Manual · —`.
+1. **Collapsed (the default)** — in rail context (Estimate / Reporter ghosted):
+   the closed `Provenance` disclosure sits between them.
+2. **Expanded, both triples populated** — MCP-planned
+   (`Claude Code · claude-opus-4-8`) + BYOK-implemented (`opencode · deepseek`),
+   revealed under the open disclosure.
+3. **Expanded, native + unknown** — `Native · Motir` (**no model line**) +
+   the `—` unknown implementation (an item not yet executed).
 4. **Source legend** — all six `source` values with glyph, tint, and gloss.
 
 ### Deliverable
