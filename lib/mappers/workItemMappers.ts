@@ -64,6 +64,15 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     // The integration branch (Story 7.8 · Subtask 7.8.11) — non-null while the
     // item is integrated-awaiting-review; null once it reaches done. Pass through.
     sessionBranch: row.sessionBranch,
+    // Work-item provenance (Story MOTIR-1685) — the planning + implementation
+    // triples; nullable enums + free-text pass straight through. A null triple is
+    // the "unknown / —" state the detail (MOTIR-1693) renders.
+    planningSource: row.planningSource,
+    planningHarness: row.planningHarness,
+    planningModel: row.planningModel,
+    implementationSource: row.implementationSource,
+    implementationHarness: row.implementationHarness,
+    implementationModel: row.implementationModel,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

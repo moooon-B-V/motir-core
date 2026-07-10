@@ -19,6 +19,14 @@ import type { CustomFieldWithValueDto } from './customFieldValues';
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
 export type WorkItemPriorityDto = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 export type WorkItemExplanationSourceDto = 'user_authored' | 'ai_draft' | 'user_edited';
+
+/**
+ * Work-item PROVENANCE source enums (Story MOTIR-1685,
+ * docs/decisions/work-item-provenance.md) — the closed AUTHOR-CATEGORY sets. The
+ * accompanying `harness`/`model` are open free-text strings, not enums.
+ */
+export type WorkItemPlanningSourceDto = 'native' | 'mcp' | 'manual';
+export type WorkItemImplementationSourceDto = 'hosted' | 'byok' | 'manual';
 /**
  * The work-item TYPE — the NATURE of executable work (Story 2.7). A FIXED
  * ten-member set, in the canonical order the 2.7.2 ADR
@@ -121,6 +129,20 @@ export interface WorkItemDto {
    * + the MCP tool results render the authoritative value.
    */
   sessionBranch: string | null;
+  /**
+   * Work-item PROVENANCE (Story MOTIR-1685) — how the item was PLANNED and how it
+   * was IMPLEMENTED, each a `source · harness · model` triple. All six nullable:
+   * a null triple is the "unknown / —" state (pre-feature rows; items never
+   * executed). `source` is one of the closed enum members; `harness`/`model` are
+   * free-text (recorded as self-reported, no verification implied). Carried on the
+   * detail DTO so the work-item detail (MOTIR-1693) renders both triples.
+   */
+  planningSource: WorkItemPlanningSourceDto | null;
+  planningHarness: string | null;
+  planningModel: string | null;
+  implementationSource: WorkItemImplementationSourceDto | null;
+  implementationHarness: string | null;
+  implementationModel: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -697,6 +719,28 @@ export interface TreeLevelDto {
  * explanationSource='user_authored'). `dueDate` is an ISO-8601 string on the
  * wire; the service converts it to a Date.
  */
+/**
+ * Work-item PROVENANCE write input (Story MOTIR-1685) — the structured param the
+ * create service accepts to stamp how the item was planned / implemented. Each
+ * triple's `source` is server-set at the write-seam (never taken from untrusted
+ * client input); `harness`/`model` are the self-reported free-text values.
+ * Omitting a sub-object leaves those columns null (the no-op default).
+ */
+export interface WorkItemPlanningProvenanceInput {
+  source: WorkItemPlanningSourceDto;
+  harness?: string | null;
+  model?: string | null;
+}
+export interface WorkItemImplementationProvenanceInput {
+  source: WorkItemImplementationSourceDto;
+  harness?: string | null;
+  model?: string | null;
+}
+export interface WorkItemProvenanceInput {
+  planning?: WorkItemPlanningProvenanceInput;
+  implementation?: WorkItemImplementationProvenanceInput;
+}
+
 export interface CreateWorkItemInput {
   projectId: string;
   parentId?: string | null;
@@ -733,6 +777,14 @@ export interface CreateWorkItemInput {
    * no type) follows the same leaf-only rule as `type`.
    */
   executor?: ExecutorDto | null;
+  /**
+   * Work-item PROVENANCE (Story MOTIR-1685) — stamp how the item was planned
+   * and/or implemented at create time. The stamper subtasks (MOTIR-1689/1691)
+   * supply `planning` with a server-set `source`; omitting it leaves all six
+   * provenance columns null (a no-op for every existing caller). See
+   * docs/decisions/work-item-provenance.md.
+   */
+  provenance?: WorkItemProvenanceInput;
   /**
    * Create the issue directly INTO a sprint (Subtask 4.2.2 — the backlog /
    * sprint-planning "+ Create issue" row that targets a sprint container). When

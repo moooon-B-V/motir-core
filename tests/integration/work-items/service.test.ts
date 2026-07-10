@@ -184,6 +184,77 @@ describe('updateWorkItem — no-op patches', () => {
   });
 });
 
+// ── Provenance write API (Story MOTIR-1685 · MOTIR-1687) ────────────────────
+// The schema + service/repository plumbing: a supplied `provenance` round-trips
+// onto the created row + DTO; an omitted one is a no-op (all six columns null),
+// proving no behaviour change for existing callers.
+describe('createWorkItem — provenance write API', () => {
+  it('round-trips both planning + implementation triples when supplied', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, {
+        title: 'Fully provenanced',
+        provenance: {
+          planning: { source: 'mcp', harness: 'Claude Code', model: 'claude-opus-4-8' },
+          implementation: { source: 'byok', harness: 'opencode', model: 'deepseek' },
+        },
+      }),
+      fx.ctx,
+    );
+
+    // The returned DTO is mapped from the persisted row.
+    expect(created.planningSource).toBe('mcp');
+    expect(created.planningHarness).toBe('Claude Code');
+    expect(created.planningModel).toBe('claude-opus-4-8');
+    expect(created.implementationSource).toBe('byok');
+    expect(created.implementationHarness).toBe('opencode');
+    expect(created.implementationModel).toBe('deepseek');
+
+    // Re-read through the detail path to prove persistence (not just echo).
+    const reread = await workItemsService.getWorkItemByIdentifier(
+      fx.projectId,
+      created.identifier,
+      fx.ctx,
+    );
+    expect(reread.planningSource).toBe('mcp');
+    expect(reread.planningModel).toBe('claude-opus-4-8');
+    expect(reread.implementationSource).toBe('byok');
+    expect(reread.implementationHarness).toBe('opencode');
+  });
+
+  it('leaves all six provenance columns null when provenance is omitted (no-op default)', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, { title: 'No provenance' }),
+      fx.ctx,
+    );
+    expect(created.planningSource).toBeNull();
+    expect(created.planningHarness).toBeNull();
+    expect(created.planningModel).toBeNull();
+    expect(created.implementationSource).toBeNull();
+    expect(created.implementationHarness).toBeNull();
+    expect(created.implementationModel).toBeNull();
+  });
+
+  it('stamps only the planning triple when implementation is absent, with null harness/model', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, {
+        title: 'Manual planning only',
+        provenance: { planning: { source: 'manual' } },
+      }),
+      fx.ctx,
+    );
+    expect(created.planningSource).toBe('manual');
+    expect(created.planningHarness).toBeNull();
+    expect(created.planningModel).toBeNull();
+    // Implementation triple untouched.
+    expect(created.implementationSource).toBeNull();
+    expect(created.implementationHarness).toBeNull();
+    expect(created.implementationModel).toBeNull();
+  });
+});
+
 describe('updateWorkItem — explanation-source state machine', () => {
   it('auto-flips ai_draft → user_edited when explanationMd is edited without an explicit source', async () => {
     const fx = await makeFixture();

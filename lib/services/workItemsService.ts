@@ -812,6 +812,26 @@ export const workItemsService = {
         explanationMd: normalizedExplanationMd ?? null,
         status: statusKey,
         ...(input.explanationSource ? { explanationSource: input.explanationSource } : {}),
+        // Work-item provenance (Story MOTIR-1685) — stamp the planning and/or
+        // implementation triple when the caller supplies it (the stamper subtasks
+        // set a server-side `source`). Omitted → all six columns stay null (the
+        // no-op default; no behaviour change for existing callers). Same
+        // optional-spread idiom as `explanationSource` above. See
+        // docs/decisions/work-item-provenance.md.
+        ...(input.provenance?.planning
+          ? {
+              planningSource: input.provenance.planning.source,
+              planningHarness: input.provenance.planning.harness ?? null,
+              planningModel: input.provenance.planning.model ?? null,
+            }
+          : {}),
+        ...(input.provenance?.implementation
+          ? {
+              implementationSource: input.provenance.implementation.source,
+              implementationHarness: input.provenance.implementation.harness ?? null,
+              implementationModel: input.provenance.implementation.model ?? null,
+            }
+          : {}),
         ...(input.priority ? { priority: input.priority } : {}),
         assigneeId,
         reporterId: ctx.userId,

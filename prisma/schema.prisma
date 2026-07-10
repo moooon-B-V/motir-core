@@ -961,23 +961,23 @@ enum PointScale {
 /// only via `archivedAt` — work-item history must survive (the Project
 /// pattern). RLS on this table lands in Subtask 1.4.5, not here.
 model WorkItem {
-  id                   String                    @id @default(cuid())
-  workspaceId          String
-  projectId            String
-  parentId             String?
-  kind                 WorkItemKind
-  key                  Int
-  identifier           String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
-  title                String
-  descriptionMd        String?                   @db.Text // "what to do" — Markdown source
-  explanationMd        String?                   @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
-  explanationSource    WorkItemExplanationSource @default(user_authored)
-  status               String                    @default("open")
-  priority             WorkItemPriority          @default(medium)
-  assigneeId           String?
-  reporterId           String
-  dueDate              DateTime?
-  estimateMinutes      Int?
+  id                    String                        @id @default(cuid())
+  workspaceId           String
+  projectId             String
+  parentId              String?
+  kind                  WorkItemKind
+  key                   Int
+  identifier            String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
+  title                 String
+  descriptionMd         String?                       @db.Text // "what to do" — Markdown source
+  explanationMd         String?                       @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
+  explanationSource     WorkItemExplanationSource     @default(user_authored)
+  status                String                        @default("open")
+  priority              WorkItemPriority              @default(medium)
+  assigneeId            String?
+  reporterId            String
+  dueDate               DateTime?
+  estimateMinutes       Int?
   // Work-item TYPE + EXECUTOR (Story 2.7 · Subtask 2.7.3) — the nature of the
   // executable work (`code` / `design` / `decision` / …) and WHO does it
   // (`coding_agent` | `human`). Both NULLABLE and DISTINCT from `kind`: only
@@ -990,8 +990,24 @@ model WorkItem {
   // overridable. The split exists for the Epic-7 AI dispatch layer (route by
   // `type` → prompt template; by `executor` → agent-dispatch vs human-assign);
   // see docs/decisions/work-item-type-taxonomy.md (the 2.7.2 ADR).
-  type                 WorkItemType?
-  executor             Executor?
+  type                  WorkItemType?
+  executor              Executor?
+  // Work-item PROVENANCE (Story MOTIR-1685, docs/decisions/work-item-provenance.md)
+  // — how the item was PLANNED and how it was IMPLEMENTED, each a
+  // `source · harness · model` triple. Denormalized latest-authoritative columns
+  // on the item (mirroring `explanationSource`), NOT a run-history table (that is
+  // deferred to Epic 9). ALL SIX nullable + leaf-agnostic: provenance may be
+  // unknown (pre-feature rows; items never executed) and is meaningful on any kind.
+  // `source` is a closed enum; `harness`/`model` are OPEN free-text (tool + LLM
+  // names are fast-moving — an enum would force a migration per new tool). camelCase
+  // with no `@map`, matching this table's existing columns. See the ADR for the
+  // per-seam stamping contract (manual/mcp/native planning; byok/manual/hosted impl).
+  planningSource        WorkItemPlanningSource?
+  planningHarness       String?
+  planningModel         String?
+  implementationSource  WorkItemImplementationSource?
+  implementationHarness String?
+  implementationModel   String?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.
@@ -1001,8 +1017,8 @@ model WorkItem {
   // NULL = unestimated (contributes 0 to a roll-up). camelCase with NO `@map`, matching
   // this table's existing columns (the same within-table-consistency call recorded for
   // `sprintId` / `backlogRank` — decision-authority rung 2 > the card's `@map` prose).
-  storyPoints          Decimal?                  @db.Decimal(6, 2)
-  position             String                    @db.Text
+  storyPoints           Decimal?                      @db.Decimal(6, 2)
+  position              String                        @db.Text
   // Agile association + backlog rank (Story 4.1). `sprintId` is the issue's
   // sprint (NULL = in the backlog); `onDelete: SetNull` so deleting/clearing a
   // sprint never deletes its issues (they fall back to the backlog). `backlogRank`
@@ -1013,9 +1029,9 @@ model WorkItem {
   // stay camelCase to match this table's existing columns (the `board` table is
   // snake_case-mapped, but `work_item`'s 20 existing columns are not — within-table
   // consistency wins, decision-authority rung 2 > the card's `@map` prose).
-  sprintId             String?
-  backlogRank          String?                   @db.Text
-  archivedAt           DateTime?
+  sprintId              String?
+  backlogRank           String?                       @db.Text
+  archivedAt            DateTime?
   // Triage marker (Story 6.11 · Subtask 6.11.3, per docs/decisions/triage-model.md
   // §1). NON-NULL ⇔ the item lives in the triage inbox and has NOT graduated to
   // the planned tree; NULL ⇔ a normal, graduated (or never-triage) item. Set at
@@ -1025,12 +1041,12 @@ model WorkItem {
   // `cancelled` once declined/merged) the whole time — the exclusion predicate is
   // the single, total `triagedAt IS NULL`. `DateTime?` (not a boolean) gives the
   // queue read newest-first ordering + an age display for free.
-  triagedAt            DateTime?
+  triagedAt             DateTime?
   // Snooze (6.11.5): a triage item drops out of the ACTIVE queue until this time
   // OR new activity, whichever first. Does NOT affect the normal-read exclusion —
   // a snoozed item is still `triagedAt`-marked, so still hidden from every tree /
   // board / list / ready / search read.
-  snoozedUntil         DateTime?
+  snoozedUntil          DateTime?
   // Triage submitter (Story 6.11 · Subtask 6.11.4, the 2026-06-14 signed-in-only
   // revision). The human who SUBMITTED a triage item — ALWAYS a real account: a
   // workspace member (the in-app "report a bug / request a feature" widget) OR a
@@ -1047,7 +1063,7 @@ model WorkItem {
   // submitter must never delete or block the work item — the `reporter`
   // (`Restrict`) is the durable owner; a departed submitter just loses
   // attribution.
-  submittedByUserId    String?
+  submittedByUserId     String?
   // Epic-level privacy on public projects (Story 6.14 · Subtask 6.14.3, per
   // docs/decisions/epic-privacy.md §1). When TRUE on an EPIC-kind item, the
   // epic's DESCENDANTS (stories / tasks / subtasks) and its aggregate TELLS
@@ -1065,7 +1081,7 @@ model WorkItem {
   // the locked model needs is binary (hiding the row is a named non-goal), so a
   // boolean is the complete state space — migrating to an enum later is a
   // contained change if a third visibility mode is ever added (ADR §1).
-  publicChildrenHidden Boolean                   @default(false)
+  publicChildrenHidden  Boolean                       @default(false)
   // Integration branch (Story 7.8 · Subtask 7.8.11) — the session branch this
   // item's work currently sits on after a run integrated it (status moved to
   // `in_review` via `mark_integrated`). NON-NULL ⇔ the item is integrated-
@@ -1078,7 +1094,7 @@ model WorkItem {
   // human merges the session PR). Indexed for the `complete_session` lookup
   // (every item recorded on a branch) — a plain `String?` matching this table's
   // camelCase, no-`@map` columns.
-  sessionBranch        String?
+  sessionBranch         String?
   // CI / verification signal (Story 7.10 · Subtask 7.10.6 / MOTIR-894) — the
   // result of a linked PR's CI, flowed back from the `check_suite` / `check_run`
   // webhook so "did the dispatched work actually pass?" lives in Motir, not only
@@ -1092,9 +1108,9 @@ model WorkItem {
   // still be `failing`. A plain `String?` matching this table's camelCase,
   // no-`@map` columns; not an enum (a third provider-neutral value would be a
   // contained change, and the roll-up filters on the literal).
-  ciState              String?
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
+  ciState               String?
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
 
   workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1395,6 +1411,35 @@ enum WorkItemExplanationSource {
   user_edited
 
   @@map("work_item_explanation_source")
+}
+
+/// How a work item was PLANNED (Story MOTIR-1685,
+/// docs/decisions/work-item-provenance.md). A closed set — the AUTHOR CATEGORY,
+/// mirroring `WorkItemExplanationSource`: `native` (materialized from a
+/// motir-ai-generated plan), `mcp` (created through the Motir MCP agent tool
+/// surface), `manual` (created by a human in the UI). The accompanying
+/// `harness`/`model` are open free-text columns, not this enum. Extensible only
+/// by an explicit enum addition + migration.
+enum WorkItemPlanningSource {
+  native
+  mcp
+  manual
+
+  @@map("work_item_planning_source")
+}
+
+/// How a work item was IMPLEMENTED (Story MOTIR-1685,
+/// docs/decisions/work-item-provenance.md). A closed set: `hosted` (the Motir
+/// hosted agent — trusted, gateway-metered; Epic 9), `byok` (a bring-your-own-key
+/// agent on the user's own machine — self-reported), `manual` (a human, no agent).
+/// `hosted` is NOT reachable from the self-reported session tools; only Epic 9's
+/// trusted seam stamps it. The accompanying `harness`/`model` are open free-text.
+enum WorkItemImplementationSource {
+  hosted
+  byok
+  manual
+
+  @@map("work_item_implementation_source")
 }
 
 /// The NATURE of a piece of executable work (Story 2.7 · Subtask 2.7.3) —
