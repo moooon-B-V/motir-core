@@ -8,20 +8,20 @@ import type {
 } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
-import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
-import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { githubInstallationService } from './githubInstallationService';
-import { commentsService } from './commentsService';
 import { enqueueCodeGraphRefresh, enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
-import { workItemsService } from './workItemsService';
 import {
   syncChangeRequestStatus,
   type ChangeRequestContextResolution,
   type ChangeRequestSyncResult,
 } from './changeRequestStatusSync';
+import {
+  applyCiStatusFeedback,
+  type CiFeedbackContextResolution,
+  type CiFeedbackResult,
+} from './changeRequestCiFeedback';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -73,22 +73,7 @@ export type GithubWebhookResult =
         | 'unknown_repo';
     }
   | ChangeRequestSyncResult
-  | {
-      event: 'ci';
-      outcome:
-        | 'verified' // a terminal SUCCESS → passing note + ciState 'passing'
-        | 'failed' // a terminal FAILURE → failure summary + ciState 'failing'
-        | 'noop' // a redelivery of an already-recorded conclusion
-        | 'pending_recorded' // an in-flight check RECORDED as a pending row (MOTIR-1579) — no comment, no ciState
-        | 'ignored_pending' // a neutral (skipped / stale) conclusion — a clean no-op
-        | 'no_pull_request' // no stored PR matches the check's PR list / branch
-        | 'no_work_item' // the PR carries no linked work item — a clean no-op
-        | 'unknown_installation'
-        | 'unknown_repo'
-        | 'malformed';
-      workItemId?: string;
-      ciState?: 'passing' | 'failing' | null;
-    };
+  | CiFeedbackResult;
 
 export const githubWebhookService = {
   /**
@@ -228,225 +213,48 @@ export const githubWebhookService = {
 
   /**
    * Handle a `check_suite` / `check_run` delivery — the CI feedback half of the
-   * closed loop (MOTIR-894). Resolve the check → its PR (by the payload's
-   * PR-number list, else the head branch) → the linked work item, then on a
-   * TERMINAL conclusion post (or, on a re-run, UPDATE in place) a single feedback
-   * comment and flip the item's `ciState` signal. The feedback is IDEMPOTENT on
-   * `(pr, headSha, checkName)`: a redelivery of an already-recorded conclusion is
-   * a no-op — no duplicate comment. A pending / neutral conclusion, a check for a
-   * PR we don't track, or a PR with NO linked work item are all clean no-ops
-   * (never a crash). Writes go through the shipped services — `commentsService`
-   * for the comment, `workItemsService.setCiState` for the signal — never a raw
-   * insert / update.
+   * closed loop (MOTIR-894). Normalize the payload through the `GitProvider` seam,
+   * then drive the linked work item's verification feedback through THE shared
+   * consumer (`applyCiStatusFeedback`) — the same path GitLab's `pipeline` hook
+   * uses (MOTIR-1477). The only GitHub-specific part is resolving the installation
+   * → repo from the App delivery + the PR-checks URL, which this service supplies
+   * via the resolver.
    */
   async handleCiStatus(body: Record<string, unknown>): Promise<GithubWebhookResult> {
     const provider = getGitProvider(PROVIDER);
     const event = provider.parseCiStatusEvent(body);
     if (!event) return { event: 'ci', outcome: 'malformed' };
 
-    // `neutral` (skipped / stale) carries no signal at all — a logged no-op.
-    // `pending` (still running) carries no VERIFICATION signal (no comment, no
-    // ciState flip — those stay terminal-only, MOTIR-894) but IS recorded as a
-    // check row below, so the Development surface can derive "Checks running"
-    // (MOTIR-1579).
-    if (event.conclusion === 'neutral') {
-      return { event: 'ci', outcome: 'ignored_pending' };
-    }
-
-    const installationId = readInstallationId(body);
-    if (!installationId) return { event: 'ci', outcome: 'unknown_installation' };
-
-    // Phase 1 — resolve under system context (one tx, no writes): installation →
-    // repo → PR (by PR-number list, else head branch) → linked work item, the
-    // prior check row (for idempotency), and the actor (workspace OWNER — a check
-    // event carries no author, so the CI feedback is attributed to the owner, the
-    // same fallback the status sync uses).
-    const resolved = await withSystemContext(async (tx) => {
-      const installation = await githubInstallationRepository.findByInstallationId(
-        installationId,
-        tx,
-      );
-      if (!installation) return { kind: 'unknown_installation' as const };
-
-      const repo = await githubRepoRepository.findByInstallationAndRepoId(
-        installation.id,
-        event.providerRepoId,
-        tx,
-      );
-      if (!repo) return { kind: 'unknown_repo' as const };
-
-      const pr = await resolvePullRequest(repo.id, event, tx);
-      if (!pr) return { kind: 'no_pull_request' as const };
-      if (!pr.workItemId) return { kind: 'no_work_item' as const };
-
-      const workItem = await workItemRepository.findById(pr.workItemId, tx);
-      if (!workItem) return { kind: 'no_work_item' as const };
-
-      const existing = await githubCheckRunRepository.findByKey(
-        pr.id,
-        event.commitSha,
-        event.context,
-        tx,
-      );
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
-        installation.workspaceId,
-        tx,
-      );
-      return {
-        kind: 'resolved' as const,
-        workspaceId: installation.workspaceId,
-        workItemId: workItem.id,
-        prId: pr.id,
-        checksUrl: `https://github.com/${repo.owner}/${repo.name}/pull/${pr.number}/checks`,
-        existing: existing
-          ? { conclusion: existing.conclusion, feedbackCommentId: existing.feedbackCommentId }
-          : null,
-        actorUserId: owner?.userId ?? null,
-      };
-    });
-
-    if (resolved.kind === 'unknown_installation')
-      return { event: 'ci', outcome: 'unknown_installation' };
-    if (resolved.kind === 'unknown_repo') return { event: 'ci', outcome: 'unknown_repo' };
-    if (resolved.kind === 'no_pull_request') return { event: 'ci', outcome: 'no_pull_request' };
-    if (resolved.kind === 'no_work_item') return { event: 'ci', outcome: 'no_work_item' };
-
-    // An in-flight check: RECORD the row (conclusion 'pending') so the per-PR
-    // "Checks running" state is derivable (MOTIR-1579), but with NONE of the
-    // terminal side-effects — no feedback comment, no `WorkItem.ciState` flip
-    // (both stay terminal-only, the MOTIR-894 contract). The upsert PRESERVES an
-    // existing feedback-comment link so a re-run's later terminal conclusion
-    // still updates the same comment in place.
-    if (event.conclusion === 'pending') {
-      await withSystemContext(async (tx) => {
-        await githubCheckRunRepository.upsert(
-          {
-            pullRequestId: resolved.prId,
-            commitSha: event.commitSha,
-            checkName: event.context,
-            conclusion: 'pending',
-            feedbackCommentId: resolved.existing?.feedbackCommentId ?? null,
-          },
-          tx,
-        );
-      });
-      return { event: 'ci', outcome: 'pending_recorded', workItemId: resolved.workItemId };
-    }
-
-    if (!resolved.actorUserId)
-      // No workspace owner to author the feedback comment — nothing to attribute.
-      return { event: 'ci', outcome: 'no_work_item', workItemId: resolved.workItemId };
-
-    // Idempotent: a redelivery of the SAME conclusion we already recorded (and
-    // commented) is a no-op — never a duplicate comment.
-    if (
-      resolved.existing &&
-      resolved.existing.conclusion === event.conclusion &&
-      resolved.existing.feedbackCommentId
-    ) {
-      return {
-        event: 'ci',
-        outcome: 'noop',
-        workItemId: resolved.workItemId,
-        ciState: event.conclusion === 'success' ? 'passing' : 'failing',
-      };
-    }
-
-    const actorCtx = { userId: resolved.actorUserId, workspaceId: resolved.workspaceId };
-
-    // Post the feedback (a NEW conclusion), or UPDATE the existing comment in
-    // place (a re-run whose conclusion changed) — through the shipped comment
-    // service, never a raw insert.
-    const bodyMd =
-      event.conclusion === 'success'
-        ? passingCommentBody(event.context)
-        : failingCommentBody(event.context, resolved.checksUrl);
-    let feedbackCommentId: string;
-    if (resolved.existing?.feedbackCommentId) {
-      const edited = await commentsService.editComment(
-        resolved.existing.feedbackCommentId,
-        { bodyMd },
-        actorCtx,
-      );
-      feedbackCommentId = edited.id;
-    } else {
-      const created = await commentsService.addComment(resolved.workItemId, { bodyMd }, actorCtx);
-      feedbackCommentId = created.id;
-    }
-
-    // Record the check row (idempotency key) + derive the item's aggregate
-    // `ciState` from ALL its terminal checks at this commit (any failure → failing).
-    const ciState = await withSystemContext(async (tx) => {
-      await githubCheckRunRepository.upsert(
-        {
-          pullRequestId: resolved.prId,
-          commitSha: event.commitSha,
-          checkName: event.context,
-          conclusion: event.conclusion,
-          feedbackCommentId,
-        },
-        tx,
-      );
-      const rows = await githubCheckRunRepository.listByPrAndSha(
-        resolved.prId,
-        event.commitSha,
-        tx,
-      );
-      return deriveCiState(rows.map((r) => r.conclusion));
-      // (deriveCiState ignores non-terminal conclusions — pending rows at this
-      // sha, recorded for the Development surface, never gate the verdict.)
-    });
-
-    // Flip the verification signal through the service (no raw work_item write).
-    await workItemsService.setCiState(resolved.workItemId, ciState, actorCtx);
-
-    return {
-      event: 'ci',
-      outcome: event.conclusion === 'success' ? 'verified' : 'failed',
-      workItemId: resolved.workItemId,
-      ciState,
-    };
+    return applyCiStatusFeedback(event, (tx) => resolveGithubCiContext(body, event, tx));
   },
 };
 
-/** Resolve the stored PR for a CI event — by the payload's PR-number list first
- *  (the strongest link), else the head branch (stable across a re-push). Null
- *  when neither resolves to a stored PR row. */
-async function resolvePullRequest(
-  repoId: string,
+/** Resolve the GitHub connection + repo + checks-URL builder for a CI event — the
+ *  provider-specific half the shared CI-feedback consumer needs. Keys on the App
+ *  delivery's installation id (as the status/push paths do); the checks link points
+ *  at the PR's checks tab on github.com. */
+async function resolveGithubCiContext(
+  body: Record<string, unknown>,
   event: NormalizedStatusEvent,
   tx: Prisma.TransactionClient,
-): Promise<{ id: string; number: number; workItemId: string | null } | null> {
-  for (const number of event.prNumbers) {
-    const pr = await githubPullRequestRepository.findByRepoAndNumber(repoId, number, tx);
-    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId };
-  }
-  if (event.headBranch) {
-    const pr = await githubPullRequestRepository.findByRepoAndHeadRef(repoId, event.headBranch, tx);
-    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId };
-  }
-  return null;
-}
-
-/** The work item's aggregate CI signal from its TERMINAL check conclusions at
- *  one commit: any failure → 'failing'; else at least one success → 'passing';
- *  else null. Non-terminal rows ('pending', recorded for the Development
- *  surface since MOTIR-1579) match neither predicate, so they never gate the
- *  verdict — a commit with only pending rows stays null. */
-function deriveCiState(conclusions: string[]): 'passing' | 'failing' | null {
-  if (conclusions.some((c) => c === 'failure')) return 'failing';
-  if (conclusions.some((c) => c === 'success')) return 'passing';
-  return null;
-}
-
-/** The passing-note body — a linked PR's checks succeeded (the work is verified). */
-function passingCommentBody(checkName: string): string {
-  return `✅ **CI passing** — checks (\`${checkName}\`) succeeded on the linked pull request. This work is verified.`;
-}
-
-/** The failure-summary body — which check failed + a link, and the not-ready flag. */
-function failingCommentBody(checkName: string, checksUrl: string): string {
-  return `❌ **CI failed** — \`${checkName}\` did not pass on the linked pull request ([view checks](${checksUrl})). This work item is marked **not-ready**; it needs another pass.`;
+): Promise<CiFeedbackContextResolution> {
+  const installationId = readInstallationId(body);
+  if (!installationId) return { kind: 'unknown_installation' };
+  const installation = await githubInstallationRepository.findByInstallationId(installationId, tx);
+  if (!installation) return { kind: 'unknown_installation' };
+  const repo = await githubRepoRepository.findByInstallationAndRepoId(
+    installation.id,
+    event.providerRepoId,
+    tx,
+  );
+  if (!repo) return { kind: 'unknown_repo' };
+  return {
+    kind: 'resolved',
+    installation,
+    repo,
+    buildChecksUrl: (number) =>
+      `https://github.com/${repo.owner}/${repo.name}/pull/${number}/checks`,
+  };
 }
 
 /** Reconcile an installation's selected repos from GitHub's authoritative set —
