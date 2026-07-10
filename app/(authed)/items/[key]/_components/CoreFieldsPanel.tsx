@@ -46,6 +46,7 @@ import { Avatar, FieldCard } from './FieldCard';
 import { CustomFieldsSection } from './CustomFieldsSection';
 import { LabelsCard } from './LabelsCard';
 import { ComponentsCard } from './ComponentsCard';
+import { ProvenanceSection } from './ProvenanceSection';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -616,6 +617,12 @@ export function CoreFieldsPanel({
           <dd className="text-(--el-text)">{formatDateTime(item.updatedAt, locale)}</dd>
         </div>
       </dl>
+
+      {/* Work-item provenance (Story MOTIR-1685 · MOTIR-1693) — a collapsed
+          disclosure at the VERY BOTTOM of the rail (after every other field), per
+          design/work-items/provenance.mock.html + the ADR's Decision 7. Read-only;
+          expands to show the Planning + Implementation triples. */}
+      <ProvenanceSection item={item} />
     </div>
   );
 }
