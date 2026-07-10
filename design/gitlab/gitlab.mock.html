@@ -1,0 +1,1702 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · GitLab connect / settings · project selection · MR&amp;pipeline status (Story
+      7.23 · MOTIR-1472)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — GITLAB INTEGRATION SURFACES. Story 7.23's
+      MOTIR-1472 design gate (Principle #13). Every UI-touching subtask in the
+      GitLab-integration Story (MOTIR-1478 connect/settings UI + project
+      selection) depends on this asset; without it those surfaces would be
+      improvised, which is forbidden (notes.html #31).
+
+      MIRROR OF 7.10 (GITHUB — design/github/, MOTIR-889): GitLab is the SECOND
+      provider behind the SAME `GitProvider` seam (lib/git/provider.ts + types.ts),
+      so the two providers render through ONE shared connect-settings surface —
+      "provider is a variant, not a separate look" (the card's requirement). The
+      chrome (settings-area shell, Card / Pill / Button / Switch / EmptyState /
+      Segmented primitives, the --el-* + shape tokens) is IDENTICAL to the GitHub
+      asset; only the provider content swaps. The provider picker is the shipped
+      `Segmented` control [GitHub | GitLab] at the top of the surface.
+
+      DESIGNED AGAINST SHIPPED REALITY — the HONEST GitHub→GitLab differences
+      (grounded in the 7.23 subtree: MOTIR-1473 registers the Motir GitLab OAuth
+      application; MOTIR-1474 implements the seam for GitLab as OAuth identity +
+      project/branch/MR + token store; MOTIR-1475 MR webhooks → status sync;
+      MOTIR-1477 pipeline feedback). These are NOT re-skins of GitHub copy — they
+      reflect how GitLab actually works:
+        · CONNECT MODEL — ONE OAuth authorization, not GitHub's TWO grants.
+          GitHub = OAuth identity + a separate GitHub-App INSTALLATION (repo
+          selection on GitHub's own screen). GitLab = a single OAuth authorize
+          whose `api` scope covers identity AND API access to the projects the
+          user is a member of AND webhook creation. So there is no second
+          "install an app" grant and no external repo-selection screen.
+        · PROJECT SELECTION IS IN-APP. Because the OAuth token can enumerate and
+          webhook the user's projects, Motir lists them and the user connects
+          them HERE (Panel 2b's picker) — the honest inverse of GitHub's "Manage
+          on GitHub" link-out. Connecting a project = Motir registers the MR +
+          pipeline webhook on it; disconnecting removes it.
+        · TERMINOLOGY. PR → Merge Request (MR), numbered `!123` (GitHub `#123`);
+          "CI checks" → "Pipeline" (passed / running / failed); repo → project;
+          org/user account → group / namespace. The provider-agnostic seam
+          (NormalizedChangeRequest, NormalizedStatusEvent) carries both; only the
+          LABELS swap by provider.
+        · REVOKE. GitLab's single grant means revoking the OAuth authorization
+          removes identity AND access together — there is no "identity still
+          bound" split (GitHub keeps identity when only the App is uninstalled).
+          The revoked state is a whole-connection Reconnect.
+        · SELF-MANAGED GitLab (a custom instance URL) is OUT OF SCOPE for this
+          pass — MOTIR-1473 registers ONE OAuth application (gitlab.com). No
+          instance-URL field is drawn (drawing one would invent architecture the
+          plan hasn't decided — mistake #31). Noted as a future extension in
+          design-notes.md, not improvised here.
+
+      Built FROM the real design system: the token block below (Tier-0 --color-*
+      + shape tokens + Tier-3 --el-*) is copied VERBATIM from the shipped GitHub
+      asset (packages/design-system/theme.css), so a data-palette / data-style
+      swap and dark mode re-skin this mock exactly as they re-skin the app. The
+      markup mirrors the SHIPPED primitives — Card, Pill, Button, EmptyState,
+      Switch (role="switch"), SectionLabel, Segmented, the initials/img avatar
+      patterns — and the helper CSS references ONLY --el-* colour tokens (finding
+      #54; tints carry the hue in the BACKGROUND with --el-text-strong text,
+      finding #35 / AA) and element-semantic shape tokens
+      (--radius-*/--spacing-*/--height-*), never Tier-0 --color-* or a raw
+      rounded-*/p-*/h-*. No new design-system entry is invented — Pill has no
+      built-in MR/pipeline tone, so those states map onto the shipped semantic
+      axes (identical tone table as the GitHub asset; see design-notes.md § Pill
+      mapping). The provider mark (GitLab tanuki) is rendered MONOCHROME via
+      `fill="currentColor"`, matching the shipped GithubMark treatment, so no
+      invented brand hex enters the mock.
+
+      PANELS (multi-panel board — review EACH, mistake #31):
+        (1) Settings → Workspace → Git, GitLab tab, NOT connected — the provider
+            Segmented picker [GitHub | GitLab] + the single-OAuth explainer +
+            primary "Connect GitLab" CTA (access path: the rail shows the "Git"
+            row active — the door is drawn).
+        (2) Connected — the bound GitLab identity + the connected-projects list,
+            each with a sync-state Pill + a per-project sync Switch, and the
+            in-app "+ Connect a project" affordance.
+        (2b) The in-app project picker OPEN — the query-driven Combobox over the
+            user's GitLab projects (the honest inverse of GitHub's external
+            install screen); an already-connected project is annotated.
+        (3) A work item's MR / pipeline status surface — the issue-detail
+            Development section listing linked MR(s): MR-state Pill
+            (Open/Merged/Closed) + pipeline-state Pill (passed/running/failed).
+        (4) CONSISTENCY — one work item with BOTH a GitHub PR and a GitLab MR
+            linked, in ONE Development section: the two providers render
+            consistently (the card's explicit requirement), distinguished by the
+            provider mark + `#`/`!` number grammar.
+        (5) Empty + error — the issue with NO linked MR (EmptyState, quiet copy)
+            and the settings REVOKED state (OAuth authorization revoked → danger
+            callout via --el-danger + Reconnect; single-grant, so no identity
+            survives).
+        (6) The provider picker is shared chrome — the SAME surface with the
+            GitHub tab active renders the GitHub variant (proof that provider is
+            a variant, not a separate look).
+      Toggle data-theme="dark" on <html> to confirm token parity. Full spec,
+      copy strings, and per-element --el-* roles in design-notes.md.
+    -->
+    <style>
+            /* ─── Tier-0 base (@theme → :root) — copied verbatim from the shipped GitHub asset / packages/design-system/theme.css ─── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+
+            /* ─── Tier-0 dark overrides ─── */
+      [data-theme='dark'] {
+        color-scheme: dark;
+
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+
+            /* ─── Tier-0 light explicit ─── */
+      [data-theme='light'] {
+        color-scheme: light;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+      }
+
+            /* ─── Tier-3 --el-* element tokens (light) — the subset this surface consumes, copied verbatim ─── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-avatar-fallback: var(--color-info);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-heading: var(--color-charcoal);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+            /* ─── Tier-3 --el-* element tokens (dark) ─── */
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+
+            /* ══════════════════════════════════════════════════════════════════
+               Mock chrome + helper classes — reference ONLY --el-*/shape tokens.
+               Each helper reproduces a SHIPPED primitive's token mapping (identical
+               to design/github/github.mock.html; a static mock hand-writes the same
+               var(--…) references the compiled Tailwind arbitrary-value utilities
+               emit — this is how every design/*/*.mock.html works).
+               ══════════════════════════════════════════════════════════════════ */
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              background: var(--el-page-bg);
+              color: var(--el-page-text);
+              font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+              -webkit-font-smoothing: antialiased;
+            }
+            h1, h2, h3 { margin: 0; font-weight: 600; }
+            p { margin: 0; }
+
+            /* review scaffold (matches design/settings/*.mock.html) */
+            .review-head { padding: 32px 40px 8px; max-width: 1100px; }
+            .review-head h1 { font-size: 22px; letter-spacing: -0.01em; }
+            .review-head p {
+              margin-top: 10px; font-size: 14px; line-height: 1.6;
+              color: var(--el-text-secondary); max-width: 900px;
+            }
+            .panel-board {
+              display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start;
+              padding: 24px 40px 72px;
+            }
+            .panel-label {
+              font-family: var(--font-mono, ui-monospace, monospace);
+              font-size: 11px; font-weight: 600; text-transform: uppercase;
+              letter-spacing: 0.06em; color: var(--el-text-eyebrow);
+              margin: 0 0 10px 2px; max-width: 640px; line-height: 1.5;
+            }
+            .panel-label b { color: var(--el-text); font-weight: 700; }
+            .panel {
+              background: var(--el-canvas, var(--el-page-bg));
+              border: 1px solid var(--el-border-soft);
+              border-radius: var(--radius-card);
+              box-shadow: var(--shadow-card);
+              overflow: hidden;
+            }
+
+            /* ── settings-area shell (the access-path chrome) ── */
+            .settings-shell { display: flex; width: 748px; min-height: 560px; }
+            .sidebar {
+              width: 232px; flex: none; padding: 16px 12px;
+              background: var(--el-sidebar-bg); border-right: 1px solid var(--el-sidebar-border);
+            }
+            .side-back {
+              display: flex; align-items: center; gap: 8px; font-size: 13px;
+              color: var(--el-text-secondary); padding: 6px 8px; margin-bottom: 6px;
+            }
+            .side-back svg { width: 15px; height: 15px; }
+            .breadcrumb {
+              font-size: 11px; color: var(--el-text-muted); padding: 0 8px 12px;
+              letter-spacing: 0.01em;
+            }
+            .nav-grp { margin-bottom: 14px; }
+            .grp-label {
+              font-family: var(--font-mono, monospace); font-size: 10px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.06em;
+              color: var(--el-text-eyebrow); padding: 0 8px; margin-bottom: 4px;
+            }
+            .nav-row {
+              display: flex; align-items: center; gap: 10px;
+              padding: var(--spacing-control-y) var(--spacing-control-x);
+              border-radius: var(--radius-control); font-size: 13.5px;
+              color: var(--el-text-secondary); cursor: default;
+            }
+            .nav-row svg { width: 16px; height: 16px; color: var(--el-icon-muted); flex: none; }
+            .nav-row.active {
+              background: var(--el-sidebar-item-bg-active);
+              color: var(--el-text); font-weight: 500;
+              box-shadow: inset 0 0 0 1px var(--el-sidebar-border);
+            }
+            .nav-row.active svg { color: var(--el-icon-active); }
+            .content { flex: 1; padding: 28px 28px 34px; min-width: 0; }
+            .page-head { margin-bottom: 18px; }
+            .page-head h2 { font-family: var(--font-serif, Georgia, serif); font-size: 20px; }
+            .page-head .sub {
+              margin-top: 6px; font-size: 13px; line-height: 1.55;
+              color: var(--el-text-subtitle); max-width: 46ch;
+            }
+            .stack { display: flex; flex-direction: column; gap: 18px; }
+
+            /* ── Segmented provider picker — mirrors the shipped Segmented.tsx
+                 (track: --el-tabnav-track + --radius-btn + 2px inset; segment:
+                 --height-control + calc(--radius-btn - 2px); active = --el-page-bg
+                 raised fill + --shadow-subtle + --el-tabnav-active glyph) ── */
+            .provider-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+            .seg {
+              display: inline-flex; align-items: center; gap: 2px;
+              border: 1px solid var(--el-border); background: var(--el-tabnav-track);
+              border-radius: var(--radius-btn); padding: 2px;
+            }
+            .seg-opt {
+              display: inline-flex; align-items: center; gap: 6px;
+              height: var(--height-control); padding: 0 var(--spacing-control-x);
+              border: 0; background: transparent; cursor: pointer; font-family: inherit;
+              font-size: 13px; font-weight: 500; color: var(--el-text-secondary);
+              border-radius: calc(var(--radius-btn) - 2px); white-space: nowrap;
+            }
+            .seg-opt svg { width: 14px; height: 14px; color: var(--el-text-faint); }
+            .seg-opt.active {
+              background: var(--el-page-bg); color: var(--el-text-strong);
+              box-shadow: var(--shadow-subtle);
+            }
+            .seg-opt.active svg { color: var(--el-tabnav-active); }
+            .provider-hint { font-size: 12px; color: var(--el-text-muted); }
+
+            /* ── Card primitive ── */
+            .card {
+              background: var(--el-card);
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              box-shadow: var(--shadow-subtle);
+            }
+            .card.pad { padding: var(--spacing-card-padding); }
+            .card-head {
+              display: flex; align-items: flex-start; justify-content: space-between;
+              gap: 12px; padding: 16px var(--spacing-card-padding);
+              border-bottom: 1px solid var(--el-border-soft);
+            }
+            .card-head h3 { font-size: 14.5px; }
+            .card-head .hsub { margin-top: 3px; font-size: 12.5px; color: var(--el-text-muted); }
+            .card-body { padding: var(--spacing-card-padding); }
+            .card-foot {
+              padding: 12px var(--spacing-card-padding);
+              border-top: 1px solid var(--el-border-soft);
+              display: flex; align-items: center; justify-content: space-between; gap: 12px;
+              font-size: 12.5px; color: var(--el-text-muted);
+            }
+
+            /* ── Button primitive (variants → --el- mapping from the shipped Button) ── */
+            .btn {
+              display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+              font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1;
+              height: var(--height-btn-md); padding: 0 var(--spacing-btn-x);
+              border-radius: var(--radius-btn); border: 1px solid transparent;
+              cursor: pointer; white-space: nowrap;
+            }
+            .btn svg { width: 16px; height: 16px; }
+            .btn-sm { height: var(--height-btn-sm); padding: 0 12px; font-size: 12.5px; }
+            .btn-primary { background: var(--el-accent); color: var(--el-accent-text); }
+            .btn-secondary { background: transparent; color: var(--el-text); border-color: var(--el-button-border); }
+            .btn-ghost { background: transparent; color: var(--el-text); }
+            .btn-danger { background: var(--el-danger); color: var(--el-danger-text); }
+            .btn-danger-ghost { background: transparent; color: var(--el-danger); border-color: var(--el-border); }
+
+            /* ── Pill primitive (base + tone modifiers; tint bg + --el-text-strong, AA) ── */
+            .pill {
+              display: inline-flex; align-items: center; gap: 4px;
+              border-radius: var(--radius-badge);
+              padding: var(--spacing-chip-y) var(--spacing-chip-x);
+              font-size: 12px; font-weight: 500; line-height: 1.3;
+              border: 1px solid transparent; white-space: nowrap;
+            }
+            .pill svg { width: 12px; height: 12px; }
+            .pill-sky { background: var(--el-tint-sky); color: var(--el-text-strong); }        /* severity=info / status=in-progress */
+            .pill-mint { background: var(--el-tint-mint); color: var(--el-text-strong); }      /* severity=success / status=done */
+            .pill-rose { background: var(--el-tint-rose); color: var(--el-text-strong); }      /* severity=danger */
+            .pill-peach { background: var(--el-tint-peach); color: var(--el-text-strong); }    /* severity=warning */
+            .pill-neutral { background: var(--el-chip-bg); color: var(--el-text-secondary); border-color: var(--el-chip-border); } /* tone=neutral */
+
+            /* ── Switch primitive (role="switch") ── */
+            .sw {
+              position: relative; width: 36px; height: 20px; flex: none;
+              border-radius: 9999px; border: 1px solid var(--el-border-strong);
+              background: var(--el-muted); cursor: pointer; transition: background 120ms;
+            }
+            .sw .kn {
+              position: absolute; top: 1px; left: 1px; width: 16px; height: 16px;
+              border-radius: 9999px; background: var(--el-switch-knob);
+              box-shadow: var(--shadow-subtle); transition: transform 120ms;
+            }
+            .sw.on { background: var(--el-switch-on); border-color: var(--el-switch-on); }
+            .sw.on .kn { transform: translateX(16px); }
+
+            /* ── Callout (danger=--el-danger-surface) ── */
+            .callout {
+              display: flex; gap: 10px; align-items: flex-start;
+              background: var(--el-callout-bg); color: var(--el-callout-text);
+              border-radius: var(--radius-card); padding: 12px 14px; font-size: 13px; line-height: 1.5;
+            }
+            .callout svg { width: 17px; height: 17px; flex: none; margin-top: 1px; }
+            .callout-danger {
+              background: var(--el-danger-surface); color: var(--el-danger-surface-text);
+              box-shadow: inset 3px 0 0 var(--el-danger);
+            }
+            .callout-danger svg { color: var(--el-danger); }
+            .callout b { font-weight: 600; }
+
+            /* ── Avatars: GitLab identity = real avatar image (mirrors AvatarField's
+                 plain <img object-cover>); the initials disc mirrors MemberAvatar. ── */
+            .gl-avatar {
+              width: 40px; height: 40px; border-radius: 9999px; object-fit: cover;
+              flex: none; background: var(--el-avatar-fallback);
+            }
+            .gl-avatar.sm { width: 26px; height: 26px; }
+
+            /* ── SectionLabel ── */
+            .section-label {
+              font-family: var(--font-mono, monospace); font-size: 11px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.06em;
+              color: var(--el-text-eyebrow); margin-bottom: 10px;
+            }
+            .muted { color: var(--el-text-muted); }
+            .mono { font-family: var(--font-mono, monospace); }
+
+            /* ── connect grant / scope rows (mirror the GitHub asset's grant-row) ── */
+            .grant-row {
+              display: flex; gap: 14px; align-items: flex-start;
+              padding: 16px 0; border-top: 1px solid var(--el-border-soft);
+            }
+            .grant-row:first-of-type { border-top: 0; }
+            .grant-ic {
+              width: 38px; height: 38px; flex: none; border-radius: var(--radius-control);
+              display: inline-flex; align-items: center; justify-content: center;
+              background: var(--el-card-icon-bg); color: var(--el-card-icon-fg);
+            }
+            .grant-ic svg { width: 19px; height: 19px; }
+            .grant-eyebrow {
+              font-family: var(--font-mono, monospace); font-size: 10px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.05em; color: var(--el-text-eyebrow);
+            }
+            .grant-row h4 { margin: 3px 0 4px; font-size: 14px; font-weight: 600; }
+            .grant-row p { font-size: 12.5px; line-height: 1.55; color: var(--el-text-secondary); }
+            .grant-row p b { color: var(--el-text-strong); font-weight: 600; }
+            /* the OAuth scope chips inside grant row 1 */
+            .scopes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+            .scope-chip {
+              font-family: var(--font-mono, monospace); font-size: 11px;
+              color: var(--el-code-text); background: var(--el-code-bg);
+              border-radius: var(--radius-control); padding: 2px 7px;
+            }
+
+            .identity-row { display: flex; align-items: center; gap: 12px; }
+            .identity-row .who { display: flex; flex-direction: column; gap: 1px; }
+            .identity-row .login { font-size: 14px; font-weight: 600; }
+            .identity-row .cap { font-size: 11.5px; color: var(--el-text-muted); }
+
+            .repo-list { display: flex; flex-direction: column; }
+            .repo-row {
+              display: flex; align-items: center; gap: 12px;
+              padding: 12px var(--spacing-card-padding);
+              border-top: 1px solid var(--el-border-soft);
+            }
+            .repo-row .r-ic { width: 17px; height: 17px; color: var(--el-icon-muted); flex: none; }
+            .repo-row .r-name { font-size: 13.5px; font-weight: 500; }
+            .repo-row .r-name .r-owner { color: var(--el-text-muted); font-weight: 400; }
+            .branch-chip {
+              display: inline-flex; align-items: center; gap: 4px;
+              font-family: var(--font-mono, monospace); font-size: 11px;
+              color: var(--el-code-text); background: var(--el-code-bg);
+              border-radius: var(--radius-control); padding: 1px 7px;
+            }
+            .repo-row .ext { color: var(--el-icon-muted); display: inline-flex; }
+            .repo-row .ext svg { width: 15px; height: 15px; }
+            .spacer { flex: 1; }
+
+            .dev-section { padding: 4px 2px; }
+            .pr-row {
+              display: flex; align-items: center; gap: 10px;
+              padding: 11px 12px; border: 1px solid var(--el-border);
+              border-radius: var(--radius-control); background: var(--el-surface);
+              margin-top: 8px;
+            }
+            .pr-row .pr-ic { width: 17px; height: 17px; flex: none; color: var(--el-icon-muted); }
+            .pr-title { font-size: 13.5px; font-weight: 500; }
+            .pr-meta { font-size: 12px; color: var(--el-text-identifier); display: flex; align-items: center; gap: 5px; }
+            .pr-meta .host-mk { width: 12px; height: 12px; color: var(--el-icon-muted); flex: none; }
+            .pr-states { display: inline-flex; gap: 6px; align-items: center; }
+            .ext { color: var(--el-icon-muted); }
+            .ext svg { width: 15px; height: 15px; }
+
+            /* peek header for the issue-detail context in Panels 3/4/5 */
+            .peek-head {
+              display: flex; align-items: center; gap: 10px;
+              padding: 14px var(--spacing-card-padding);
+              border-bottom: 1px solid var(--el-border-soft);
+            }
+            .type-pill {
+              display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+              color: var(--el-text-strong); background: color-mix(in srgb, var(--el-type-subtask) 16%, var(--el-surface));
+              border-radius: var(--radius-badge); padding: 2px 9px; font-weight: 500;
+            }
+            .type-pill .dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--el-type-subtask); }
+            .peek-id { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--el-text-identifier); }
+            .peek-title { font-size: 15px; font-weight: 600; }
+
+            /* EmptyState (Card root, centered — mirrors the shipped EmptyState) */
+            .empty {
+              display: flex; flex-direction: column; align-items: center; text-align: center;
+              padding: 34px 24px;
+            }
+            .empty .e-ic {
+              width: 46px; height: 46px; color: var(--el-icon-muted);
+              display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px;
+            }
+            .empty .e-ic svg { width: 40px; height: 40px; }
+            .empty h2 { font-family: var(--font-serif, Georgia, serif); font-size: 18px; color: var(--el-text); }
+            .empty p { margin-top: 8px; max-width: 42ch; font-size: 13px; color: var(--el-text-subtitle); }
+
+            .sub-grid { display: flex; gap: 18px; flex-wrap: wrap; }
+            .w360 { width: 360px; }
+            .w440 { width: 440px; }
+
+            /* ── the in-app project picker (Panel 2b) — mirrors the shipped
+                 relationships-panel grammar: a surface-soft LinkAddForm box + the
+                 shipped Combobox's search input / popover / option / active-row
+                 styles (identical classes to design/github Panel 5). ────────── */
+            .link-cta {
+              display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+              background: transparent; border: 0; cursor: pointer; font-family: inherit;
+              color: var(--el-link); font-size: 13px; font-weight: 600;
+              border-radius: var(--radius-control); padding: 3px 6px;
+            }
+            .link-cta svg { width: 15px; height: 15px; }
+            .link-form {
+              background: var(--el-surface-soft); border: 1px solid var(--el-border);
+              border-radius: var(--radius-card); padding: 12px;
+              display: flex; flex-direction: column; gap: 10px;
+            }
+            .link-form .f-label {
+              font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+              text-transform: uppercase; color: var(--el-text-eyebrow);
+            }
+            .combo-input {
+              display: flex; align-items: center; gap: 8px;
+              height: var(--height-control); padding: 0 var(--spacing-control-x);
+              background: var(--el-page-bg); border: 1px solid var(--el-border);
+              border-radius: var(--radius-input); font-size: 13.5px; color: var(--el-text);
+            }
+            .combo-input .ph { color: var(--el-text-muted); }
+            .combo-input .caret { width: 1px; height: 15px; background: var(--el-text); }
+            .combo-pop {
+              margin-top: 6px; padding: 4px;
+              background: var(--el-page-bg); border: 1px solid var(--el-border);
+              border-radius: var(--radius-card); box-shadow: var(--shadow-elevated);
+            }
+            .pr-opt {
+              display: flex; align-items: center; gap: 8px; min-width: 0;
+              padding: var(--spacing-control-y) var(--spacing-control-x);
+              border-radius: var(--radius-control); font-size: 13px; color: var(--el-text);
+            }
+            .pr-opt.active { background: var(--el-option-active-bg); }
+            .pr-opt > svg { width: 15px; height: 15px; flex: none; color: var(--el-icon-muted); }
+            .pr-opt .o-title { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .pr-opt .o-meta { flex: none; font-size: 12px; color: var(--el-text-identifier); }
+            .pr-opt .pill { flex: none; }
+            .combo-empty { padding: 14px 10px; text-align: center; font-size: 12.5px; color: var(--el-text-secondary); }
+            .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    </style>
+  </head>
+  <body>
+    <!-- ═══ shared SVG symbol defs (stroke/fill=currentColor — inherits the element's --el-* colour) ═══ -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </symbol>
+        <!-- GitLab "tanuki" mark — official single-path silhouette (simple-icons),
+             rendered MONOCHROME via fill=currentColor to match the shipped
+             GithubMark treatment (no invented brand hex — the colour rule). -->
+        <symbol viewBox="0 0 24 24" id="i-gitlab" fill="currentColor" stroke="none">
+          <path
+            d="m23.955 13.587-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.919 1.263a.455.455 0 0 0-.867 0L1.386 9.452.044 13.587a.924.924 0 0 0 .331 1.023L12 23.054l11.625-8.443a.92.92 0 0 0 .33-1.024"
+          />
+        </symbol>
+        <symbol viewBox="0 0 24 24" id="i-github" fill="currentColor" stroke="none">
+          <path
+            d="M12 1.5A10.5 10.5 0 0 0 8.68 22c.53.1.72-.23.72-.5v-1.9c-2.92.64-3.54-1.25-3.54-1.25-.48-1.22-1.17-1.54-1.17-1.54-.95-.65.07-.64.07-.64 1.06.07 1.61 1.09 1.61 1.09.94 1.6 2.46 1.14 3.06.87.1-.68.37-1.14.67-1.4-2.33-.27-4.78-1.16-4.78-5.18 0-1.15.41-2.08 1.08-2.82-.11-.27-.47-1.34.1-2.79 0 0 .88-.28 2.88 1.07a10 10 0 0 1 5.24 0c2-1.35 2.88-1.07 2.88-1.07.57 1.45.21 2.52.1 2.79.68.74 1.08 1.67 1.08 2.82 0 4.03-2.45 4.91-4.79 5.17.38.33.71.97.71 1.96v2.9c0 .28.19.61.72.5A10.5 10.5 0 0 0 12 1.5Z"
+          />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-mr"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6" />
+          <circle cx="18" cy="18" r="3" />
+          <path d="M18 15V9a3 3 0 0 0-3-3h-3" />
+          <path d="m12 9 3-3-3-3" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-merge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6" />
+          <circle cx="18" cy="7" r="3" />
+          <path d="M18 10a9 9 0 0 1-9 9" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-closed"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6" />
+          <path d="M15 4.5 20 9.5M20 4.5 15 9.5" />
+          <path d="M17.5 12v3a3 3 0 0 1-3 3H9" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="m8.5 12 2.3 2.3 4.7-4.7" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="m15 9-6 6M9 9l6 6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <!-- pipeline: a play-in-circle (a running/queued pipeline) for the running tone -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-pipe-run"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M10 8.5 15 12l-5 3.5z" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-repo"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-badge-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.78 4.78 4 4 0 0 1-6.74 0 4 4 0 0 1-4.78-4.78 4 4 0 0 1 0-6.75Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L21 5" />
+          <path d="m21 2-9.6 9.6" />
+          <circle cx="7.5" cy="15.5" r="5.5" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
+          <path d="M12 9v4M12 17h.01" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-briefcase"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="7" rx="2" />
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="4" x2="4" y1="21" y2="14" />
+          <line x1="4" x2="4" y1="10" y2="3" />
+          <line x1="12" x2="12" y1="21" y2="12" />
+          <line x1="12" x2="12" y1="8" y2="3" />
+          <line x1="20" x2="20" y1="21" y2="16" />
+          <line x1="20" x2="20" y1="12" y2="3" />
+          <line x1="2" x2="6" y1="14" y2="14" />
+          <line x1="10" x2="14" y1="8" y2="8" />
+          <line x1="18" x2="22" y1="16" y2="16" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-branch"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="6" x2="6" y1="3" y2="15" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-cog"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="review-head">
+      <h1>
+        GitLab integration — connect / settings · project selection · MR &amp; pipeline status
+      </h1>
+      <p>
+        Story 7.23 · MOTIR-1472 (design gate). The mirror of 7.10 (GitHub, MOTIR-889) for GitLab —
+        the <b>second provider behind the shared <span class="mono">GitProvider</span> seam</b>, so
+        both render through ONE connect-settings surface with a <b>provider picker</b> (the shipped
+        <span class="mono">Segmented</span> [GitHub | GitLab]). Designed against shipped reality —
+        the HONEST differences: GitLab is a <b>single OAuth authorization</b> (not GitHub's two
+        grants); <b>project selection is in-app</b> (the OAuth token can enumerate + webhook your
+        projects — the honest inverse of GitHub's external install screen); terminology is
+        <b>Merge Request (<span class="mono">!123</span>)</b> and <b>Pipeline</b>. Placement is the
+        same <b>Settings → Workspace → Git</b> shell. Composed only from shipped primitives — Card,
+        Pill, Button, EmptyState, Switch, Segmented, the settings-area shell — colour via
+        <span class="mono">--el-*</span>, shape via element-semantic tokens; the GitLab mark is
+        monochrome <span class="mono">currentColor</span> (no invented brand hex).
+      </p>
+    </div>
+
+    <div class="panel-board">
+      <!-- ══════════════════════ PANEL 1 — NOT CONNECTED (GitLab tab) ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 1 · <b>Settings → Workspace → Git</b> — GitLab tab, NOT connected (the provider
+          Segmented picker + the single-OAuth explainer + CTA; the rail shows the door)
+        </div>
+        <div class="panel">
+          <div class="settings-shell">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="breadcrumb">Settings › Workspace › Git</div>
+              <div class="nav-grp">
+                <div class="grp-label">Account</div>
+                <div class="nav-row">
+                  <svg><use href="#i-user" /></svg>Profile
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Appearance
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Workspace</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-briefcase" /></svg>Jobs
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <svg><use href="#i-git-branch" /></svg>Git
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Project</div>
+                <div class="nav-row">
+                  <svg><use href="#i-cog" /></svg>Details
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Workflow
+                </div>
+              </div>
+            </aside>
+
+            <div class="content">
+              <div class="page-head">
+                <h2>Git</h2>
+                <p class="sub">
+                  Connect a git host to sync merge-request and pipeline status onto your work items,
+                  feed the code graph, and drive the review loop.
+                </p>
+              </div>
+
+              <div class="provider-bar">
+                <div class="seg" role="group" aria-label="Git provider">
+                  <button class="seg-opt">
+                    <svg><use href="#i-github" /></svg>GitHub
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg><use href="#i-gitlab" /></svg>GitLab
+                  </button>
+                </div>
+                <span class="provider-hint">Same surface — pick a provider.</span>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Connect GitLab</h3>
+                    <p class="hsub">One authorization on GitLab — then pick your projects here.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="grant-row">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-key" /></svg
+                    ></span>
+                    <div>
+                      <span class="grant-eyebrow">Step 1 · Authorize</span>
+                      <h4>Connect your GitLab account</h4>
+                      <p>
+                        Authorize Motir on GitLab in one step. This confirms who you are and grants
+                        API access to the projects you’re a member of — Motir reads merge requests
+                        and pipelines and adds webhooks only on the projects you connect next.
+                        <b>One grant covers identity and access</b> — there’s no separate app to
+                        install.
+                      </p>
+                      <div class="scopes">
+                        <span class="scope-chip">read_user</span>
+                        <span class="scope-chip">read_api</span>
+                        <span class="scope-chip">api</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="grant-row">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-repo" /></svg
+                    ></span>
+                    <div>
+                      <span class="grant-eyebrow">Step 2 · Projects</span>
+                      <h4>Choose projects in Motir</h4>
+                      <p>
+                        After you authorize, pick which of your GitLab projects to sync — right here
+                        in Motir, not on a separate screen. Motir only touches the projects you
+                        connect, and you can disconnect any of them any time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <span>You’ll be sent to GitLab to authorize, then choose projects here.</span>
+                  <button class="btn btn-primary">
+                    <svg><use href="#i-gitlab" /></svg>Connect GitLab
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 2 — CONNECTED + PROJECTS ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 2 · connected — the bound GitLab identity + the connected-projects list (per-project
+          sync Switch), with the in-app “+ Connect a project” affordance
+        </div>
+        <div class="panel">
+          <div class="settings-shell">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="breadcrumb">Settings › Workspace › Git</div>
+              <div class="nav-grp">
+                <div class="grp-label">Account</div>
+                <div class="nav-row">
+                  <svg><use href="#i-user" /></svg>Profile
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Appearance
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Workspace</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-briefcase" /></svg>Jobs
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <svg><use href="#i-git-branch" /></svg>Git
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Project</div>
+                <div class="nav-row">
+                  <svg><use href="#i-cog" /></svg>Details
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Workflow
+                </div>
+              </div>
+            </aside>
+
+            <div class="content">
+              <div class="page-head">
+                <h2>Git</h2>
+                <p class="sub">
+                  Connected to GitLab. Motir reads the projects you connected and syncs their merge
+                  requests &amp; pipelines.
+                </p>
+              </div>
+
+              <div class="provider-bar">
+                <div class="seg" role="group" aria-label="Git provider">
+                  <button class="seg-opt">
+                    <svg><use href="#i-github" /></svg>GitHub
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg><use href="#i-gitlab" /></svg>GitLab
+                  </button>
+                </div>
+              </div>
+
+              <div class="stack">
+                <!-- identity card -->
+                <div class="card">
+                  <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                    <div class="identity-row" style="flex: 1">
+                      <!-- GitLab identity avatar: real avatar_url image (GitlabIdentity.avatarUrl) -->
+                      <img
+                        class="gl-avatar"
+                        alt="zhuyue on GitLab"
+                        src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
+                      />
+                      <div class="who">
+                        <span class="login"
+                          >@zhuyue
+                          <span class="pill pill-mint" style="margin-left: 4px"
+                            ><svg><use href="#i-badge-check" /></svg>Verified</span
+                          ></span
+                        >
+                        <span class="cap">GitLab identity · connected as Zhu Yue</span>
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
+                  </div>
+                  <div class="card-foot">
+                    <span
+                      >Connected to <b>gitlab.com</b> · group <span class="mono">moooon</span></span
+                    >
+                    <a
+                      class="ext"
+                      style="
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                        color: var(--el-link);
+                        font-size: 12.5px;
+                        font-weight: 500;
+                      "
+                      ><svg style="width: 14px; height: 14px"><use href="#i-external" /></svg>Open
+                      GitLab</a
+                    >
+                  </div>
+                </div>
+
+                <!-- connected-projects list -->
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Projects</h3>
+                      <p class="hsub">
+                        The GitLab projects you connected. Motir reads these and receives their
+                        merge-request and pipeline events.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="repo-list">
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"><span class="r-owner">moooon/</span>motir-core</span>
+                      <span class="branch-chip">main</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-mint"
+                        ><svg><use href="#i-check" /></svg>Synced</span
+                      >
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Sync motir-core"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"><span class="r-owner">moooon/</span>motir-ai</span>
+                      <span class="branch-chip">main</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-peach"
+                        ><svg><use href="#i-pipe-run" /></svg>Syncing…</span
+                      >
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Sync motir-ai"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"
+                        ><span class="r-owner">moooon/infra/</span>runner-config</span
+                      >
+                      <span class="branch-chip">trunk</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-neutral">Paused</span>
+                      <span
+                        class="sw"
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Sync runner-config"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <span
+                      >Connecting a project adds a webhook for merge-request and pipeline
+                      events.</span
+                    >
+                    <button class="link-cta">
+                      <svg><use href="#i-plus" /></svg>Connect a project
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 2b — IN-APP PROJECT PICKER ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 2b · the in-app project picker OPEN — the honest inverse of GitHub’s external
+          install screen: a query-driven Combobox over the user’s GitLab projects; an
+          already-connected project is annotated
+        </div>
+        <div class="panel" style="width: 480px">
+          <div class="card-body">
+            <div class="section-label">Connect a project</div>
+            <div class="link-form">
+              <span class="f-label">Add a GitLab project</span>
+              <div class="combo-input"><span>motir</span><span class="caret"></span></div>
+              <div class="combo-pop">
+                <div class="pr-opt active">
+                  <svg><use href="#i-repo" /></svg>
+                  <span class="o-title">moooon/motir-gateway</span>
+                  <span class="o-meta">Maintainer</span>
+                </div>
+                <div class="pr-opt">
+                  <svg><use href="#i-repo" /></svg>
+                  <span class="o-title">moooon/motir-docs</span>
+                  <span class="o-meta">Developer</span>
+                </div>
+                <div class="pr-opt">
+                  <svg><use href="#i-repo" /></svg>
+                  <span class="o-title">moooon/motir-core</span>
+                  <span class="pill pill-neutral">Connected</span>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary btn-sm">Connect</button>
+                <button class="btn btn-ghost btn-sm">Cancel</button>
+              </div>
+            </div>
+            <p class="muted" style="font-size: 12px; margin-top: 12px">
+              Only projects you’re a member of on GitLab appear here — Motir can’t see any others.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 3 — MR/PIPELINE ON THE WORK ITEM ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 3 · a work item’s <b>Development</b> section — linked MR(s) with MR-state + pipeline
+          pills (<span class="mono">!</span> numbers)
+        </div>
+        <div class="panel" style="width: 440px">
+          <div class="peek-head">
+            <span class="type-pill"><span class="dot"></span>Subtask</span>
+            <span class="peek-id">MOTIR-1474</span>
+          </div>
+          <div class="card-body">
+            <div class="peek-title" style="margin-bottom: 16px">
+              GitLab OAuth identity + project model
+            </div>
+            <div class="dev-section">
+              <div class="section-label">Development</div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-mr" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add GitLab OAuth identity model</div>
+                  <div class="pr-meta">
+                    <svg class="host-mk"><use href="#i-gitlab" /></svg>moooon/motir-core · !128
+                  </div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-sky"
+                    ><svg><use href="#i-git-mr" /></svg>Open</span
+                  >
+                  <span class="pill pill-peach"
+                    ><svg><use href="#i-pipe-run" /></svg>Pipeline running</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Normalize project/branch/MR shapes</div>
+                  <div class="pr-meta">
+                    <svg class="host-mk"><use href="#i-gitlab" /></svg>moooon/motir-core · !131
+                  </div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Pipeline passed</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-closed" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Spike: webhook secret rotation</div>
+                  <div class="pr-meta">
+                    <svg class="host-mk"><use href="#i-gitlab" /></svg>moooon/motir-core · !119
+                  </div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-rose"
+                    ><svg><use href="#i-git-closed" /></svg>Closed</span
+                  >
+                  <span class="pill pill-rose"
+                    ><svg><use href="#i-x" /></svg>Pipeline failed</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <p class="muted" style="font-size: 12px; margin-top: 12px">
+                Linked automatically when a branch or merge request mentions
+                <span class="mono">MOTIR-1474</span>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 4 — TWO PROVIDERS, ONE SECTION ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 4 · CONSISTENCY — one work item with BOTH a GitHub PR and a GitLab MR linked, in ONE
+          Development section: the two providers render consistently (the same row + pill grammar,
+          distinguished by the provider mark and <span class="mono">#</span>/<span class="mono"
+            >!</span
+          >)
+        </div>
+        <div class="panel" style="width: 460px">
+          <div class="peek-head">
+            <span class="type-pill"><span class="dot"></span>Subtask</span>
+            <span class="peek-id">MOTIR-1476</span>
+          </div>
+          <div class="card-body">
+            <div class="peek-title" style="margin-bottom: 16px">
+              Code-graph feed — fetch repo on connect / push
+            </div>
+            <div class="dev-section">
+              <div class="section-label">Development</div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Feed GitLab tarball into the indexer</div>
+                  <div class="pr-meta">
+                    <svg class="host-mk"><use href="#i-gitlab" /></svg>moooon/motir-core · !140
+                  </div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Pipeline passed</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-mr" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Shared indexer entrypoint</div>
+                  <div class="pr-meta">
+                    <svg class="host-mk"><use href="#i-github" /></svg>moooon/motir-ai · #212
+                  </div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-sky"
+                    ><svg><use href="#i-git-mr" /></svg>Open</span
+                  >
+                  <span class="pill pill-peach"
+                    ><svg><use href="#i-pipe-run" /></svg>Checks running</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <p class="muted" style="font-size: 12px; margin-top: 12px">
+                Linked automatically when a branch, PR, or MR mentions
+                <span class="mono">MOTIR-1476</span> — from any connected provider.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 5 — EMPTY + REVOKED ERROR ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 5 · empty (no linked MR) &amp; error (GitLab authorization revoked — single grant,
+          so the whole connection is lost)
+        </div>
+        <div class="sub-grid">
+          <!-- 5a: no linked MR — EmptyState -->
+          <div class="panel w360">
+            <div class="peek-head">
+              <span class="type-pill"><span class="dot"></span>Subtask</span>
+              <span class="peek-id">MOTIR-1475</span>
+            </div>
+            <div class="card-body">
+              <div class="peek-title" style="margin-bottom: 16px">
+                GitLab webhooks → status sync
+              </div>
+              <div class="dev-section">
+                <div class="section-label">Development</div>
+                <div class="card">
+                  <div class="empty">
+                    <span class="e-ic"
+                      ><svg><use href="#i-git-mr" /></svg
+                    ></span>
+                    <h2>No linked merge request</h2>
+                    <p>
+                      Open an MR from a branch that mentions
+                      <span class="mono">MOTIR-1475</span> and it’ll show up here with live
+                      merge-request and pipeline status.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5b: settings revoked-error state -->
+          <div class="panel w440">
+            <div class="card-head">
+              <div>
+                <h3>GitLab</h3>
+                <p class="hsub">Settings → Workspace → Git · connection needs attention</p>
+              </div>
+              <span class="pill pill-rose"
+                ><svg><use href="#i-alert" /></svg>Disconnected</span
+              >
+            </div>
+            <div class="card-body">
+              <div class="callout callout-danger" style="margin-bottom: 16px">
+                <svg><use href="#i-alert" /></svg>
+                <div>
+                  <b>Motir’s GitLab access was revoked.</b><br />
+                  The authorization was removed on GitLab, so Motir can no longer read your projects
+                  or receive merge-request and pipeline updates. Your synced work items keep their
+                  last-known status. Reconnect to restore sync.
+                </div>
+              </div>
+              <button class="btn btn-primary">
+                <svg><use href="#i-gitlab" /></svg>Reconnect GitLab
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 6 — PROVIDER IS A VARIANT (shared chrome) ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 6 · the picker is shared chrome — the SAME surface with the <b>GitHub tab active</b>
+          renders the GitHub variant (design/github, MOTIR-889): provider is a variant, not a
+          separate look
+        </div>
+        <div class="panel" style="width: 480px">
+          <div class="content" style="padding: 24px 24px 28px">
+            <div class="page-head">
+              <h2>Git</h2>
+              <p class="sub">
+                Connected to GitHub. Motir reads the repositories you selected and syncs their PR
+                &amp; CI status.
+              </p>
+            </div>
+            <div class="provider-bar">
+              <div class="seg" role="group" aria-label="Git provider">
+                <button class="seg-opt active" aria-pressed="true">
+                  <svg><use href="#i-github" /></svg>GitHub
+                </button>
+                <button class="seg-opt">
+                  <svg><use href="#i-gitlab" /></svg>GitLab
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                <div class="identity-row" style="flex: 1">
+                  <img
+                    class="gl-avatar"
+                    alt="zhuyue on GitHub"
+                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
+                  />
+                  <div class="who">
+                    <span class="login"
+                      >@zhuyue
+                      <span class="pill pill-mint" style="margin-left: 4px"
+                        ><svg><use href="#i-badge-check" /></svg>Verified</span
+                      ></span
+                    >
+                    <span class="cap">GitHub identity · connected as Zhu Yue</span>
+                  </div>
+                </div>
+                <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
+              </div>
+              <div class="card-foot">
+                <span>Motir App installed on <b>moooon</b> · organization</span>
+                <button class="btn btn-sm btn-secondary">
+                  <svg><use href="#i-external" /></svg>Manage on GitHub
+                </button>
+              </div>
+            </div>
+            <p class="muted" style="font-size: 12px; margin-top: 14px">
+              Same shell, same rail row, same primitives — only the provider content swaps. GitHub
+              keeps its two-grant / “Manage on GitHub” model; GitLab uses one OAuth grant + in-app
+              project selection.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
