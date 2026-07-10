@@ -14,6 +14,8 @@ import { buttonVariants } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { GithubIdentityDTO, GithubInstallationDTO } from '@/lib/dto/github';
+import { GitSettingsShell } from '../_components/GitSettingsShell';
+import { SettingsBanner, GrantRow, IdentityHeader } from '../_components/gitSettingsPrimitives';
 import { DisconnectButton } from './_components/DisconnectButton';
 
 // Settings → Workspace → GitHub (Story 7.10 · MOTIR-895) — Server Component. The
@@ -57,10 +59,9 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
   const ctx = await getWorkspaceContext();
   if (!ctx) {
     return (
-      <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
-        <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <GitSettingsShell provider="github">
         <EmptyState title={t('noWorkspace.title')} description={t('noWorkspace.description')} />
-      </div>
+      </GitSettingsShell>
     );
   }
 
@@ -83,10 +84,10 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
   );
 
   return (
-    <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
-      <PageHeader title={t('title')} subtitle={t('subtitle')} />
-
-      {bannerTone ? <Banner tone={bannerTone} message={t(`banner.${bannerStatus}`)} /> : null}
+    <GitSettingsShell provider="github">
+      {bannerTone ? (
+        <SettingsBanner tone={bannerTone} message={t(`banner.${bannerStatus}`)} />
+      ) : null}
 
       {!identity ? (
         <NotConnectedPanel
@@ -141,67 +142,7 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
           }}
         />
       )}
-    </div>
-  );
-}
-
-function PageHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <header className="flex flex-col gap-1">
-      <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{title}</h1>
-      <p className="font-sans text-sm text-(--el-text-muted)">{subtitle}</p>
-    </header>
-  );
-}
-
-function Banner({ tone, message }: { tone: 'success' | 'danger' | 'info'; message: string }) {
-  const toneClass =
-    tone === 'success'
-      ? 'bg-(--el-tint-mint) text-(--el-text-strong)'
-      : tone === 'danger'
-        ? 'bg-(--el-danger-surface) text-(--el-danger-surface-text)'
-        : 'bg-(--el-callout-bg) text-(--el-callout-text)';
-  return (
-    <div
-      role="status"
-      className={`rounded-(--radius-card) px-(--spacing-card-padding) py-3 font-sans text-sm ${toneClass}`}
-    >
-      {message}
-    </div>
-  );
-}
-
-/** A grant step (Panel 1): an icon badge + eyebrow + title + explanatory copy. */
-function GrantRow({
-  icon,
-  eyebrow,
-  title,
-  body,
-  extra,
-}: {
-  icon: React.ReactNode;
-  eyebrow: string;
-  title: string;
-  body: string;
-  extra?: React.ReactNode;
-}) {
-  return (
-    <div className="flex gap-3">
-      <span
-        aria-hidden
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg) [&_svg]:h-[18px] [&_svg]:w-[18px]"
-      >
-        {icon}
-      </span>
-      <div className="flex flex-col gap-1">
-        <span className="font-sans text-[11px] font-semibold uppercase tracking-wide text-(--el-text-eyebrow)">
-          {eyebrow}
-        </span>
-        <h4 className="font-sans text-sm font-semibold text-(--el-text)">{title}</h4>
-        <p className="font-sans text-sm text-(--el-text-secondary)">{body}</p>
-        {extra}
-      </div>
-    </div>
+    </GitSettingsShell>
   );
 }
 
@@ -276,57 +217,6 @@ function NotConnectedPanel({
   );
 }
 
-/** The bound-identity header block, shared by the connected + needs-access panels. */
-function IdentityHeader({
-  identity,
-  connectedName,
-  verified,
-  trailing,
-}: {
-  identity: GithubIdentityDTO;
-  connectedName: string;
-  verified: string;
-  trailing?: React.ReactNode;
-}) {
-  const initial = identity.githubLogin.charAt(0).toUpperCase() || '?';
-  return (
-    <div className="flex items-center gap-3">
-      {identity.avatarUrl ? (
-        // A remote GitHub avatar URL (the shipped AvatarField <img object-cover>
-        // pattern); not a bundled asset, so next/image adds no value here.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={identity.avatarUrl}
-          alt=""
-          width={40}
-          height={40}
-          className="h-10 w-10 shrink-0 rounded-full object-cover"
-        />
-      ) : (
-        <span
-          aria-hidden
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--el-avatar-fallback) font-sans text-sm font-semibold text-(--el-text-inverted)"
-        >
-          {initial}
-        </span>
-      )}
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-sans text-sm font-semibold text-(--el-text)">
-            @{identity.githubLogin}
-          </span>
-          <Pill severity="success">
-            <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
-            {verified}
-          </Pill>
-        </div>
-        <span className="truncate font-sans text-xs text-(--el-text-muted)">{connectedName}</span>
-      </div>
-      {trailing}
-    </div>
-  );
-}
-
 function ConnectedPanel({
   identity,
   installation,
@@ -361,8 +251,9 @@ function ConnectedPanel({
         }
       >
         <IdentityHeader
-          identity={identity}
-          connectedName={copy.connectedName}
+          login={identity.githubLogin}
+          avatarUrl={identity.avatarUrl}
+          caption={copy.connectedName}
           verified={copy.verified}
           trailing={<DisconnectButton />}
         />
@@ -452,8 +343,9 @@ function NeedsAccessPanel({
         </div>
 
         <IdentityHeader
-          identity={identity}
-          connectedName={copy.stillConnected}
+          login={identity.githubLogin}
+          avatarUrl={identity.avatarUrl}
+          caption={copy.stillConnected}
           verified={copy.verified}
         />
 

@@ -18,6 +18,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Work-item quick view (peek)**                  | **`quick-view.mock.html`** + `quick-view.png`       | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. **8.8.4 EXPANDS the rail to the full core-field set (gates 8.8.8) — overturns the curated subset.** See below.                                                                                                                                                                                           |
 | **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)              | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below.                                                                                                                                                                                                                                                                                          |
 | **Draft explanation with AI**                    | **`draft-with-ai.mock.html`** + `draft-with-ai.png` | The _Draft with AI_ INTERACTION for `explanationMd`, on BOTH the create modal and the detail page. Drawn against the SHIPPED components (`CreateIssueModal` disclosure + min `MarkdownEditor` + the existing disabled secondary "Draft with AI" button · `IssueExplanation` read-only card · `EditIssueForm`), NOT the legacy pens. Specifies streaming (SSE, 8.8.11), the draft landing in the editor (no accept/discard gate), `ai_draft` / `user_edited` source signalling, the cloud-gate, and the error state. Story 8.8 · 8.8.6 (MOTIR-1090). Gates 8.8.12 (MOTIR-1096). See below. |
+| **Work-item provenance on the detail rail**      | **`provenance.mock.html`** + `provenance.png`       | `detail.pen`/`CoreFieldsPanel` draw no provenance surface — two new READ-ONLY rail `FieldCard`s (Planning · Implementation), each a `source · harness · model` triple + the "—" unknown state. Composes the shipped rail (does not redraw); source = a tinted `Pill`-chip (six values). Story MOTIR-1685 · MOTIR-1688 (design). Gates MOTIR-1693. See below.                                                                                                                                                                                                                              |
 
 ---
 
@@ -3739,3 +3740,98 @@ The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `acceptance-panel.mock.html` (source of truth) · `acceptance-panel.png`
 (full-page export). Rendered with Playwright chromium (full-page, light,
 `deviceScaleFactor: 2`, ~1200px wide); `prettier --check` clean.
+
+---
+
+## Work-item provenance on the detail rail (Story MOTIR-1685 · MOTIR-1688)
+
+`detail.pen` / `CoreFieldsPanel.tsx` draw the core-fields rail — Status · Type ·
+Work type · Executor · Priority · Assignee · Reporter · Parent · Sprint · Due ·
+Story points · Estimate · (session branch) — but there is **no provenance
+surface**. This HTML mockup (`provenance.mock.html`, built from the live
+`--el-*` + shape tokens and the shipped `FieldCard` grammar) is the design asset
+for it. The display code subtask (**MOTIR-1693**) composes the same primitives.
+Draws the field set decided in the provenance ADR
+(`docs/decisions/work-item-provenance.md`): the two `source` enums + the
+`harness`/`model` free-text.
+
+### Placement + access path — COLLAPSED by default, at the BOTTOM
+
+Provenance is **secondary metadata**, so it is **collapsed by default** behind a
+single **"Provenance" disclosure** placed at the **very bottom of the rail —
+after every other field** (Reporter · Created · Updated are the last built-in
+fields; the disclosure follows them). The disclosure reuses the **shipped
+"Show all custom fields" toggle grammar** (`CustomFieldsSection.tsx`): a
+full-width `button` (`aria-expanded`), a leading chevron (`ChevronDown` that
+**rotates 180° when open**), `text-[13px] text-(--el-text-secondary)`, padding
+`--spacing-control-*`, radius `--radius-control`, hover `bg-(--el-surface)`.
+Defaults **closed** — the common case is the `—`/unknown state anyway, so
+collapsing keeps the rail uncluttered. The user **expands to see** the two
+read-only triple `FieldCard`s (**Planning** then **Implementation**).
+
+Provenance is **read-only**: it is set by the create seams (manual / MCP /
+native) and the session tools (`mark_integrated` / `complete_session`), never
+edited by hand — the inner cards carry no chevron and there is no separate entry
+affordance. The disclosure's placement in the rail **IS** the access path. The
+display code subtask (**MOTIR-1693**) implements the disclosure defaulting closed.
+
+### Anatomy (per card)
+
+- **Label** (`FieldCard` `.flabel`): `PLANNING` / `IMPLEMENTATION`, uppercase —
+  `text-[11px] font-semibold tracking-wide uppercase`, colour `--el-text-secondary`.
+- **Source chip** (a `Pill`-grammar chip): the `source` value as a tinted chip —
+  the hue in the **tint background** with `--el-text-strong` text (the colour
+  rule / finding #35), radius `--radius-badge`, padding `--spacing-chip-*`, a
+  13px leading glyph. Six values, each a distinct slot:
+
+  | source (planning) | tint                                          | glyph    |     | source (impl) | tint                     | glyph  |
+  | ----------------- | --------------------------------------------- | -------- | --- | ------------- | ------------------------ | ------ |
+  | Native            | `--el-tint-lavender`                          | Bot      |     | Hosted        | `--el-tint-peach`        | Server |
+  | MCP               | `--el-tint-sky`                               | Terminal |     | BYOK          | `--el-tint-mint`         | Key    |
+  | Manual            | `--el-surface` (neutral + `--el-border-soft`) | User     |     | Manual        | `--el-surface` (neutral) | User   |
+
+  **Manual is a NEUTRAL surface chip, not a tint** — a human is not a model, so
+  it reads as the absence of a machine source (deliberate colour story, distinct
+  from the AI/agent tints).
+
+- **Harness** (`.harness`): 14px `--el-text` — the tool name (`Motir`,
+  `Claude Code`, `opencode`, `Codex`).
+- **Model** (`.model`): 12px **`--font-mono`** `--el-text-muted` — the LLM id
+  (`claude-opus-4-8`, `deepseek`); mono because it is an identifier. **NATIVE
+  shows NO model** — a natively-planned card renders only the chip + harness
+  (`Native · Motir`), no model line. Motir abstracts its own planning LLM: the
+  model is recorded server-side for analysis but stripped from the read DTO
+  (ADR Decision 6), so it is never displayed. MCP / BYOK DO show their model
+  (the user reported their own).
+- **Unknown / "—"** (`.prov-unknown`, `--el-text-muted`): a plain em-dash. The
+  **common case** — an item never executed (no implementation) and pre-feature
+  items with no recorded planning provenance. A null triple renders `—`, never an
+  empty card. On the Manual-implementation case the harness/model line is `—`
+  (a human, no agent → no harness/model).
+
+### Shape / colour tokens (no raw values)
+
+Radius `--radius-card` (the card) + `--radius-badge` (the chip); padding via the
+`FieldCard` box (`10px 14px` verbatim) + `--spacing-chip-*` (chip); elevation
+`--shadow-card`. Colour is **only** `--el-*` (text) + `--el-tint-*` / `--el-surface`
+(chips) — no raw hex, no `rounded-*`/`p-*`. The design-asset dashed outline
+(`.is-new`, `--el-accent`) marks the NEW cards for review and is not part of the
+shipped component.
+
+### Panels in the asset
+
+1. **Collapsed (the default)** — in rail context: the closed `Provenance`
+   disclosure sits at the **bottom**, after Reporter · Created · Updated (ghosted).
+2. **Expanded, both triples populated** — MCP-planned
+   (`Claude Code · claude-opus-4-8`) + BYOK-implemented (`opencode · deepseek`),
+   revealed under the open disclosure.
+3. **Expanded, native + unknown** — `Native · Motir` (**no model line**) +
+   the `—` unknown implementation (an item not yet executed).
+4. **Source legend** — all six `source` values with glyph, tint, and gloss.
+
+### Deliverable
+
+The three-file set under `design/work-items/`: this `design-notes.md` section ·
+`provenance.mock.html` (source of truth) · `provenance.png` (full-page export).
+Rendered with Playwright chromium (full-page, light, `deviceScaleFactor: 2`,
+~1200px wide); `prettier --check` clean.

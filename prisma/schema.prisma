@@ -509,6 +509,9 @@ model Workspace {
   // Per-user import OAuth identities scoped to this workspace (Story 7.16 ·
   // MOTIR-1653) — the encrypted vendor-token store. Cascade with the workspace.
   importSourceIdentities   ImportSourceIdentity[]
+  // Migrate-existing-codebase onboarding runs (Workflow B, Story 7.15 ·
+  // MOTIR-1499). Cascade with the workspace.
+  migrateOnboardings       MigrateOnboarding[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -694,6 +697,10 @@ model Project {
   // MOTIR-939). Cascade: a deleted project takes its import history + map rows.
   imports                Import[]
   importedIssues         ImportedIssue[]
+  // The migrate-existing-codebase onboarding run for this project (Workflow B,
+  // Story 7.15 · MOTIR-1499). One per project (the state machine is resumable
+  // by re-reading the saved step), so a `?` one-to-one. Cascade.
+  migrateOnboarding      MigrateOnboarding?
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3345,20 +3352,40 @@ model ImportSourceIdentity {
 ///
 /// `provider` is the PROVIDER DISCRIMINATOR — every downstream read goes through
 /// the GitProvider seam (`lib/git`), so GitLab/Bitbucket is purely additive
-/// (7.23 implements the same seam under `provider: 'gitlab'`). The installation
-/// access token is NEVER stored here: it is minted on demand from the App
-/// private key (`lib/github/appAuth.ts`) and cached in-memory only.
+/// (7.23 implements the same seam under `provider: 'gitlab'`). This is the SHARED
+/// connection entity every provider plugs into (the card's "no new parallel
+/// model"): a GitLab connection is a row here with `provider: 'gitlab'`.
+///
+/// TOKEN STORAGE differs by the provider's auth model. GitHub (Grant 2) NEVER
+/// stores a token here — its installation token is minted on demand from the App
+/// private key (`lib/github/appAuth.ts`) and cached in-memory only, so the three
+/// `*_encrypted` / `token_expires_at` columns stay NULL for GitHub rows. GitLab
+/// (7.23 · MOTIR-1474) has no App-installation model: its OAuth grant issues an
+/// access + refresh token per connection that MUST be persisted (encrypted) and
+/// refreshed, so a GitLab row populates them. The columns are nullable + provider-
+/// neutral in name precisely so the shared entity serves both models.
 model GithubInstallation {
   id             String   @id @default(cuid())
-  /// Provider discriminator — always "github" for these rows; the seam keys on it.
+  /// Provider discriminator — "github" (default) or "gitlab"; the seam keys on it.
   provider       String   @default("github")
-  /// GitHub's numeric installation id (as a string — never do math on it), used
-  /// by the webhook + the token-mint endpoint. UNIQUE (one row per GitHub
-  /// installation). DISTINCT from `id`, the internal cuid PK.
+  /// The host's own installation/connection id (as a string — never do math on
+  /// it): GitHub's numeric installation id, or the GitLab connection id minted at
+  /// connect. UNIQUE (one row per connection); the webhook + token paths key on
+  /// it. DISTINCT from `id`, the internal cuid PK.
   installationId String   @unique @map("installation_id")
   workspaceId    String   @map("workspace_id")
   accountLogin   String   @map("account_login")
   accountType    String   @map("account_type")
+  /// The connection's access token, encrypted at rest — NULL for GitHub (minted
+  /// on demand). Populated for GitLab (OAuth issues a stored token). Only
+  /// `lib/gitlab/tokenCrypto.ts` + `gitlabConnectionService` read/write it.
+  accessTokenEncrypted  String?   @map("access_token_encrypted")
+  /// The connection's refresh token, encrypted at rest — NULL unless the provider
+  /// issues one (GitLab does; GitHub does not). GitLab rotates it on each refresh.
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
+  /// When the stored access token expires — the refresh path reads it to decide
+  /// when to refresh. NULL for GitHub (no stored token).
+  tokenExpiresAt        DateTime? @map("token_expires_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -3604,4 +3631,95 @@ model ImportedIssue {
   @@index([importId])
   @@index([workItemId])
   @@map("imported_issue")
+}
+
+/// Migrate-existing-codebase onboarding — the "Workflow B" state machine (Story
+/// 7.15 · MOTIR-1499). One durable, RESUMABLE record per project drives a user
+/// through connecting a repo, indexing it into the code graph, auditing +
+/// approving its coding conventions, running discovery, generating a code-aware
+/// plan, and reviewing it. This card is the SCAFFOLDING: the persisted model +
+/// repository + the per-step transition service (verify → advance → kick), whose
+/// exit-check + kick bodies are stubbed seams the wiring slice (MOTIR-931) fills.
+///
+/// RESUMABLE by shape: `step` is the saved position, re-read on load — there is
+/// no restart-from-`connect` path. The per-step OUTPUTS the transitions gate on
+/// are persisted columns (`connectedRepoRef`, `codeGraphReady`,
+/// `conventionApprovedAt`, `discoveryJobId`, `generateJobId`), so a resumed run
+/// picks up exactly where it stopped.
+///
+/// Project-scoped tenant data, so the RLS policy (a pure active-workspace gate —
+/// the `import` / `plan` precedent) lands in the SAME migration. `discoveryJobId`
+/// / `generateJobId` are OPAQUE motir-ai job tokens (no `@relation`, the
+/// `plan.sourceJobId` precedent); `connectedRepoRef` is an opaque connected-repo
+/// ref. Both FKs are both-sides `@relation`s with the SAME actions the SQL uses
+/// (workspace/project CASCADE) so `migrate dev` reports no drift (the
+/// FK-`@relation` rule).
+model MigrateOnboarding {
+  id                   String                  @id @default(cuid())
+  workspaceId          String                  @map("workspace_id")
+  projectId            String                  @map("project_id")
+  /// The onboarding flavour. Always `migrate` here — a single-value discriminator
+  /// carried explicitly (per the card's `kind: 'migrate'` field) so a future
+  /// shared onboarding model could add a `fresh` sibling without a data migration.
+  kind                 MigrateOnboardingKind   @default(migrate)
+  /// The saved position in the six-step sequence — the RESUMABILITY anchor.
+  step                 MigrateOnboardingStep   @default(connect)
+  /// The run-level lifecycle: `active` until the `review → done` transition marks
+  /// it `completed`; `failed` is the terminal error state a kicked action sets.
+  status               MigrateOnboardingStatus @default(active)
+  /// The connected source-repo ref (opaque — a GitHub `owner/repo`, etc.). The
+  /// `connect` step's output + its exit condition. Null until a repo is connected.
+  connectedRepoRef     String?                 @map("connected_repo_ref")
+  /// True once the `index` step has indexed the repo into the code graph — the
+  /// `index` step's output + the `audit_convention` step's precondition.
+  codeGraphReady       Boolean                 @default(false) @map("code_graph_ready")
+  /// When the coding-convention audit was approved — the `audit_convention` step's
+  /// output + the `discovery` step's precondition. Null until approved.
+  conventionApprovedAt DateTime?               @map("convention_approved_at")
+  /// The opaque motir-ai discovery job token (no `@relation` — the
+  /// `plan.sourceJobId` precedent). The `discovery` step's output.
+  discoveryJobId       String?                 @map("discovery_job_id")
+  /// The opaque motir-ai code-aware-generation job token. The `generate` step's output.
+  generateJobId        String?                 @map("generate_job_id")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // One migrate-onboarding run per project (the resumable single run); the
+  // unique also makes the Project ↔ MigrateOnboarding relation a clean one-to-one.
+  @@unique([projectId])
+  @@index([workspaceId])
+  @@map("migrate_onboarding")
+}
+
+enum MigrateOnboardingKind {
+  migrate
+
+  @@map("migrate_onboarding_kind")
+}
+
+/// The explicit migrate-onboarding sequence: six working steps
+/// (connect → index → audit_convention → discovery → generate → review) plus the
+/// terminal `done`. Snake_case member (`audit_convention`) mirrors the schema's
+/// `partially_failed` / `coding_agent` convention.
+enum MigrateOnboardingStep {
+  connect
+  index
+  audit_convention
+  discovery
+  generate
+  review
+  done
+
+  @@map("migrate_onboarding_step")
+}
+
+enum MigrateOnboardingStatus {
+  active
+  completed
+  failed
+
+  @@map("migrate_onboarding_status")
 }

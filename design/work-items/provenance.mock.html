@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Work-item provenance on the detail rail — planning + implementation (MOTIR-1685
+      · MOTIR-1688)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for WORK-ITEM PROVENANCE ON THE DETAIL —
+      Story MOTIR-1685, subtask MOTIR-1688 (design). Gates the display code
+      subtask MOTIR-1693.
+
+      WHY THIS ASSET EXISTS (the design gate, notes.html mistake #31).
+      detail.pen / CoreFieldsPanel.tsx draw Status · Type · Work type · Executor
+      · Priority · Assignee · Reporter · Parent · Sprint · Due · Story points ·
+      Estimate · (session branch) — there is NO provenance surface. Two new
+      read-only rail cards (Planning + Implementation), each a source·harness·
+      model triple, are undesigned elements — the same case Sprint (2.4.15) hit:
+      FieldCard grammar reused VERBATIM but placement + value rendering + the
+      source labels were unspecified, so they need a design asset.
+
+      COMPOSES, does not redraw. Every token below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens); the two
+      provenance cards are CoreFieldsPanel.tsx FieldCard VERBATIM (Card grammar);
+      the source chip puts the hue in a --el-tint-* BACKGROUND with
+      --el-text-strong text (colour rule / finding #35); the HUMAN "Manual" source
+      is a neutral --el-surface chip (human is not a model). No raw hex, no raw
+      rounded-*/p-*: shape via --radius-badge / --spacing-chip-*.
+
+      COLLAPSED BY DEFAULT, AT THE BOTTOM (Yue, 2026-07-10). Provenance is secondary
+      metadata, so it sits at the VERY BOTTOM of the rail — after every other field
+      (Reporter · Created · Updated) — as a single CLOSED "Provenance" disclosure —
+      the shipped "Show all custom fields" toggle grammar (a full-width button + a
+      chevron that rotates 180° on open, --el-text-secondary, --radius-control). The
+      user EXPANDS to reveal the two read-only triple cards.
+
+      NATIVE SHOWS NO MODEL (Yue, 2026-07-10). A natively-planned item reads ONLY
+      "Native · Motir" — no model line. Motir abstracts its own planning LLM; the
+      model is recorded server-side for analysis but never exposed. MCP / BYOK DO
+      show their model (the user reported their own).
+
+      PANELS: (1) COLLAPSED (default) in rail context; (2) EXPANDED, both triples
+      populated (MCP + BYOK, models shown); (3) EXPANDED, native planning (NO model
+      line) + the "—" unknown implementation; (4) the six-source legend.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 80px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 32px auto 10px;
+        max-width: 1100px;
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin: 0 auto 14px;
+        max-width: 760px;
+        line-height: 1.55;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+      }
+      .panel-note strong {
+        color: var(--el-text-strong);
+      }
+      .stage {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 28px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px;
+        align-items: flex-start;
+      }
+      .specimen {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 40px;
+      }
+      .specimen > .cap {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+        max-width: 300px;
+        line-height: 1.5;
+      }
+
+      /* ── The rail column (the detail page's right rail) ─────────────────── */
+      .rail {
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px; /* the rail's gap-3 between FieldCards */
+      }
+
+      /* ── FieldCard — CoreFieldsPanel.tsx's card VERBATIM ──────────────────── */
+      .fcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 10px 14px;
+      }
+      .fcard.is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+      }
+      .fcard .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .fcard .flabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .fcard .chev {
+        margin-top: -2px;
+        padding: 2px;
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+      }
+      .fcard .chev:hover {
+        color: var(--el-text);
+      }
+      .fcard .chev svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.12s ease;
+      }
+      .fcard.is-editing .chev svg {
+        transform: rotate(180deg);
+      }
+      .fcard .fvalue {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fvalue .vrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .fvalue .vtext {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fvalue .glyph {
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        flex: none;
+      }
+      .fvalue .glyph svg {
+        width: 16px;
+        height: 16px;
+      }
+      .muted-italic {
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+      .completed-mark {
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* ghosted neighbour value (placement panel only — not a design element) */
+      .ghost-bar {
+        height: 20px;
+        margin-top: 6px;
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+      }
+      .ghost-bar.short {
+        width: 60%;
+      }
+
+      /* ── Combobox (components/ui/Combobox) — the inline sprint picker ─────── */
+      .cbx {
+        position: relative;
+        width: 100%;
+      }
+      .cbx-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .cbx-trigger .tval {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-trigger .tval.placeholder {
+        color: var(--el-text-muted);
+      }
+      .cbx-trigger .updown {
+        margin-left: auto;
+        flex: none;
+        color: var(--el-text-muted);
+        display: inline-flex;
+      }
+      .cbx-trigger .updown svg {
+        width: 16px;
+        height: 16px;
+      }
+      .cbx-trigger.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .cbx-menu {
+        margin-top: 4px;
+        width: 100%;
+        max-width: 18rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .cbx-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 4px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .cbx-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .cbx-opt.is-active {
+        background: var(--el-surface);
+      }
+      .cbx-opt .oglyph {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .cbx-opt .oglyph svg {
+        width: 16px;
+        height: 16px;
+      }
+      .cbx-opt .olabel {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-opt .olabel.italic {
+        font-style: italic;
+        color: var(--el-text-secondary);
+      }
+      .cbx-opt .sec {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-opt .check {
+        margin-left: 4px;
+        flex: none;
+        display: inline-flex;
+        color: var(--el-accent);
+      }
+      .cbx-opt .check svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Detail header slice (the access path — where the ⋯ lives) ───────── */
+      .detail-head {
+        width: 420px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px 18px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        position: relative;
+      }
+      .detail-head .dh-type {
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-type-story, #2a9d99);
+        display: inline-flex;
+      }
+      .detail-head .dh-type svg {
+        width: 20px;
+        height: 20px;
+      }
+      .detail-head .dh-main {
+        min-width: 0;
+        flex: 1;
+      }
+      .detail-head .dh-key {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .detail-head .dh-title {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        line-height: 1.3;
+        margin-top: 2px;
+        color: var(--el-text);
+      }
+      .icon-btn {
+        flex: none;
+        width: var(--height-control);
+        height: var(--height-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover,
+      .icon-btn.active {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .icon-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ── ⋯ WorkItemActionsMenu — the shipped Popover (232px) VERBATIM ─────── */
+      .menu {
+        width: 232px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu.anchored {
+        position: absolute;
+        z-index: 25;
+      }
+      .menu .msep {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 4px 0;
+      }
+      .opt {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover {
+        background: var(--el-surface);
+      }
+      .opt .og {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .opt .lbl {
+        flex: 1;
+      }
+      .opt.danger {
+        color: var(--el-danger);
+      }
+      .opt.danger .og {
+        color: var(--el-danger);
+      }
+      .opt.danger:hover {
+        background: var(--el-tint-rose);
+      }
+      .opt.is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: -1px;
+      }
+      /* the STATE-gate treatment: a disabled row (opacity-50, no hover) that
+         still shows + carries a Tooltip — the justified deviation */
+      .opt.is-disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .opt.is-disabled:hover {
+        background: transparent;
+      }
+
+      /* ── Tooltip — the shipped Tooltip primitive (ink bubble) ────────────── */
+      .tip {
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        line-height: 1.3;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-subtle);
+        z-index: 40;
+      }
+      .tip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: var(--el-text);
+      }
+
+      /* ── Toast — the shipped success Toast (assignment confirmation) ─────── */
+      .toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 360px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .toast .tg {
+        flex: none;
+        color: var(--el-success);
+        display: inline-flex;
+      }
+      .toast .tg svg {
+        width: 18px;
+        height: 18px;
+      }
+    </style>
+    <style>
+      /* ── Provenance section additions (MOTIR-1688) — composes the rail ───── */
+      .prov-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+      }
+      /* Source chip — the tinted label (colour rule: hue in the tint BACKGROUND
+         with --el-text-strong text). Machine sources get a distinct tint slot;
+         the HUMAN "Manual" source is a neutral surface chip (human ≠ a model). */
+      .pchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        align-self: flex-start;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--el-text-strong);
+      }
+      .pchip .pdot {
+        display: inline-flex;
+      }
+      .pchip .pdot svg {
+        width: 13px;
+        height: 13px;
+      }
+      .pchip.t-native {
+        background: var(--el-tint-lavender);
+      }
+      .pchip.t-mcp {
+        background: var(--el-tint-sky);
+      }
+      .pchip.t-hosted {
+        background: var(--el-tint-peach);
+      }
+      .pchip.t-byok {
+        background: var(--el-tint-mint);
+      }
+      .pchip.t-manual {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border-soft);
+      }
+      .prov-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+      .prov-meta .harness {
+        font-size: 13px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .prov-meta .model {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* the unknown / not-recorded state — the common case (no execution yet) */
+      .prov-unknown {
+        color: var(--el-text-muted);
+      }
+      /* ── Provenance DISCLOSURE — collapsed by default (MOTIR-1688) ─────────
+         Mirrors the shipped "Show all custom fields" toggle in
+         CustomFieldsSection.tsx: a full-width button, a leading chevron that
+         rotates 180° when open, --el-text-secondary, --radius-control, hover
+         surface. Collapsed is the DEFAULT — provenance is secondary metadata. */
+      .disc-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .disc-toggle:hover {
+        background: var(--el-surface);
+      }
+      .disc-toggle .dchev {
+        display: inline-flex;
+        flex: none;
+        transition: transform 0.12s ease;
+      }
+      .disc-toggle .dchev svg {
+        width: 16px;
+        height: 16px;
+      }
+      .disc-toggle.is-open .dchev {
+        transform: rotate(180deg);
+      }
+      .disc-toggle .dlabel {
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        font-size: 11px;
+      }
+      .disc-toggle .dhint {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* the expanded body — the two provenance FieldCards, nested under the toggle */
+      .disc-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      /* Source legend — all six values in one reference block */
+      .legend {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 20px;
+        max-width: 620px;
+      }
+      .legend .lgroup > .lhead {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .legend .lrow {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+      .legend .lrow .desc {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Provenance on the work-item detail — planning + implementation triples</h1>
+        <p>
+          Story <strong>MOTIR-1685</strong> · subtask <strong>MOTIR-1688</strong> (design) · gates
+          the display code subtask <strong>MOTIR-1693</strong>. Built from the shipped
+          <code>CoreFieldsPanel</code> <code>FieldCard</code> grammar + the live
+          <code>--el-*</code> / shape tokens — this asset COMPOSES the existing detail rail (it does
+          not redraw it). <strong>Collapsed by default, at the BOTTOM of the rail</strong>:
+          provenance is secondary metadata, so it sits AFTER every other field (Reporter · Created ·
+          Updated) as a single closed <em>Provenance</em> disclosure (the shipped "Show all custom
+          fields" toggle grammar) that the user EXPANDS to reveal the two read-only triples — it is
+          set by the create seams + the session tools, never edited by hand, so its placement in the
+          rail IS its access path. <strong>Native shows no model</strong>: a natively-planned item
+          reads only “Native · Motir” — Motir abstracts its own planning LLM (the model is recorded
+          server-side for analysis, never exposed). MCP / BYOK show their model (the user reported
+          their own).
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- ── icon sprite — lucide path data (viewBox 0 0 24 24) ─────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <!-- Bot — the NATIVE (Motir AI) source glyph -->
+        <g
+          id="i-bot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </g>
+        <!-- Terminal — the MCP (agent tool surface) source glyph -->
+        <g
+          id="i-terminal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m4 17 6-6-6-6" />
+          <path d="M12 19h8" />
+        </g>
+        <!-- User — the MANUAL (human) source glyph -->
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21a7 7 0 0 0-14 0" />
+          <circle cx="12" cy="8" r="4" />
+        </g>
+        <!-- Server — the HOSTED (Motir agent) source glyph -->
+        <g
+          id="i-server"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="8" x="3" y="3" rx="2" />
+          <rect width="18" height="8" x="3" y="13" rx="2" />
+          <path d="M7 7h.01" />
+          <path d="M7 17h.01" />
+        </g>
+        <!-- Key — the BYOK (bring-your-own-key) source glyph -->
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="7.5" cy="15.5" r="4.5" />
+          <path d="m21 2-9.6 9.6" />
+          <path d="m15.5 7.5 3 3L22 7l-3-3" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ═══ PANEL 1 — COLLAPSED (the DEFAULT) in rail context ══════════════ -->
+    <div class="specimen">
+      <div class="cap">
+        DEFAULT STATE — collapsed. Provenance is secondary metadata, so it sits at the VERY BOTTOM
+        of the rail — AFTER every other field (Reporter · Created · Updated ghosted) — as a single
+        closed disclosure (chevron down = closed, mirrors the shipped "Show all custom fields"
+        toggle). The user expands to see it.
+      </div>
+      <div class="rail">
+        <div class="fcard">
+          <div class="head"><span class="flabel">Reporter</span></div>
+          <div class="fvalue"><div class="ghost-bar short"></div></div>
+        </div>
+        <div class="fcard">
+          <div class="head"><span class="flabel">Created</span></div>
+          <div class="fvalue"><div class="ghost-bar short"></div></div>
+        </div>
+        <div class="fcard">
+          <div class="head"><span class="flabel">Updated</span></div>
+          <div class="fvalue"><div class="ghost-bar short"></div></div>
+        </div>
+        <button class="disc-toggle is-new" aria-expanded="false">
+          <span class="dchev"
+            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+          ></span>
+          <span class="dlabel">Provenance</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 2 — EXPANDED, both triples populated ══════════════════════ -->
+    <div class="specimen">
+      <div class="cap">
+        Expanded — both triples populated. A BYOK-executed item planned via the MCP: the two
+        FieldCards reveal below the open disclosure (chevron rotated). MCP + BYOK expose their model
+        (the user reported their OWN).
+      </div>
+      <div class="rail">
+        <button class="disc-toggle is-open is-new" aria-expanded="true">
+          <span class="dchev"
+            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+          ></span>
+          <span class="dlabel">Provenance</span>
+        </button>
+        <div class="disc-body">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Planning</span></div>
+            <div class="fvalue">
+              <div class="prov-lines">
+                <span class="pchip t-mcp">
+                  <span class="pdot"
+                    ><svg viewBox="0 0 24 24"><use href="#i-terminal" /></svg></span
+                  >MCP
+                </span>
+                <div class="prov-meta">
+                  <span class="harness">Claude Code</span>
+                  <span class="model">claude-opus-4-8</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Implementation</span></div>
+            <div class="fvalue">
+              <div class="prov-lines">
+                <span class="pchip t-byok">
+                  <span class="pdot"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  >BYOK
+                </span>
+                <div class="prov-meta">
+                  <span class="harness">opencode</span>
+                  <span class="model">deepseek</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PANEL 3 — EXPANDED: native (NO model) + unknown implementation ═══ -->
+    <div class="specimen">
+      <div class="cap">
+        Expanded — NATIVE planning + no execution yet. Native shows ONLY “Native · Motir”: Motir
+        abstracts its own planning model, so the underlying LLM is NEVER exposed (it is recorded
+        server-side for analysis only). The implementation triple is the “—” unknown state — the
+        common case for an item not yet executed.
+      </div>
+      <div class="rail">
+        <button class="disc-toggle is-open is-new" aria-expanded="true">
+          <span class="dchev"
+            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+          ></span>
+          <span class="dlabel">Provenance</span>
+        </button>
+        <div class="disc-body">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Planning</span></div>
+            <div class="fvalue">
+              <div class="prov-lines">
+                <span class="pchip t-native">
+                  <span class="pdot"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg></span
+                  >Native
+                </span>
+                <div class="prov-meta">
+                  <span class="harness">Motir</span>
+                  <!-- NO model line — native model is recorded-not-exposed -->
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Implementation</span></div>
+            <div class="fvalue"><span class="prov-unknown">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Source legend — all SIX source values + their glyph + tint ══════ -->
+    <div class="specimen">
+      <div class="cap">
+        Source labels — all six values (planning + implementation), each a tinted chip
+      </div>
+      <div class="legend">
+        <div class="lgroup">
+          <div class="lhead">Planning source</div>
+          <div class="lrow">
+            <span class="pchip t-native"
+              ><span class="pdot"
+                ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg></span
+              >Native</span
+            >
+            <span class="desc">materialized from a Motir-AI plan</span>
+          </div>
+          <div class="lrow">
+            <span class="pchip t-mcp"
+              ><span class="pdot"
+                ><svg viewBox="0 0 24 24"><use href="#i-terminal" /></svg></span
+              >MCP</span
+            >
+            <span class="desc">created via the agent tool surface</span>
+          </div>
+          <div class="lrow">
+            <span class="pchip t-manual"
+              ><span class="pdot"
+                ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+              >Manual</span
+            >
+            <span class="desc">a human, in the UI</span>
+          </div>
+        </div>
+        <div class="lgroup">
+          <div class="lhead">Implementation source</div>
+          <div class="lrow">
+            <span class="pchip t-hosted"
+              ><span class="pdot"
+                ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg></span
+              >Hosted</span
+            >
+            <span class="desc">the Motir hosted agent (Epic 9)</span>
+          </div>
+          <div class="lrow">
+            <span class="pchip t-byok"
+              ><span class="pdot"
+                ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+              >BYOK</span
+            >
+            <span class="desc">your own agent + key</span>
+          </div>
+          <div class="lrow">
+            <span class="pchip t-manual"
+              ><span class="pdot"
+                ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+              >Manual</span
+            >
+            <span class="desc">a human, no agent</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

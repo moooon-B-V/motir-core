@@ -11,6 +11,9 @@ export interface UpsertGithubRepoInput {
   owner: string;
   name: string;
   defaultBranch: string;
+  /** Provider discriminator for the row — omit for GitHub (the column default),
+   *  pass `'gitlab'` when persisting a GitLab project selection (MOTIR-1478). */
+  provider?: string;
 }
 
 export const githubRepoRepository = {
@@ -41,7 +44,10 @@ export const githubRepoRepository = {
   },
 
   /** Create-or-refresh one selected repo, keyed on the unique
-   *  `(installation_id, repo_id)` pair. */
+   *  `(installation_id, repo_id)` pair. `provider` defaults to the column default
+   *  (`'github'`) when omitted; a GitLab project selection passes `'gitlab'`
+   *  (MOTIR-1478). A `provider: undefined` is a Prisma no-op on both create (the
+   *  `@default` applies) and update (the field is left untouched). */
   async upsert(input: UpsertGithubRepoInput, tx: Prisma.TransactionClient): Promise<GithubRepo> {
     const { installationId, repoId, ...rest } = input;
     return tx.githubRepo.upsert({
@@ -49,6 +55,20 @@ export const githubRepoRepository = {
       create: { installationId, repoId, ...rest },
       update: rest,
     });
+  },
+
+  /** Remove ONE selected repo by its `(installation_id, repo_id)` pair — the
+   *  in-app "disconnect this project" write (MOTIR-1478, the GitLab settings
+   *  surface). `deleteMany` (not `delete`) so a double-submit / redelivery after
+   *  the row is gone is an idempotent no-op (count 0) rather than a `P2025`
+   *  throw. Its `github_pull_request` rows cascade with it. Returns the count. */
+  async deleteByInstallationAndRepoId(
+    installationId: string,
+    repoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.deleteMany({ where: { installationId, repoId } });
+    return result.count;
   },
 
   /** One connected repo by `(owner, name)` within a WORKSPACE — the code-scanning
@@ -96,6 +116,29 @@ export const githubRepoRepository = {
         name: { equals: name, mode: 'insensitive' },
       },
       include: { installation: true },
+    });
+  },
+
+  /** Resolve a connected repo by its host repo id under a given PROVIDER (Story
+   *  7.23 · MOTIR-1475) — the GitLab webhook's key. A GitLab MR/pipeline delivery
+   *  carries the project id but NO Motir connection id (unlike GitHub's App
+   *  delivery, which carries its global installation id), so the webhook resolves
+   *  the connection through the repo: match `(repo_id, installation.provider)` and
+   *  include the parent installation (its workspace + provider drive the sync).
+   *  Runs OUTSIDE any workspace context (the webhook has no active workspace, like
+   *  the GitHub path keying on the global installation id), inside the sync's
+   *  system-context transaction, so it takes `tx`. A host project id is unique per
+   *  GitLab instance; the oldest-connected row wins if the same project is somehow
+   *  connected twice. Null when the project isn't connected. */
+  async findByRepoIdAndProvider(
+    repoId: string,
+    provider: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(GithubRepo & { installation: GithubInstallation }) | null> {
+    return tx.githubRepo.findFirst({
+      where: { repoId, installation: { is: { provider } } },
+      include: { installation: true },
+      orderBy: { createdAt: 'asc' },
     });
   },
 

@@ -17,14 +17,39 @@ export interface UpsertGithubInstallationInput {
   accountType: string;
 }
 
+/** A GitLab connection upsert (Story 7.23 · MOTIR-1474) — the SAME table under
+ *  `provider: 'gitlab'`, plus the encrypted token set GitLab's OAuth model stores
+ *  (GitHub leaves these null). */
+export interface UpsertGitlabConnectionInput {
+  installationId: string;
+  workspaceId: string;
+  accountLogin: string;
+  accountType: string;
+  accessTokenEncrypted: string;
+  refreshTokenEncrypted: string;
+  tokenExpiresAt: Date;
+}
+
 export const githubInstallationRepository = {
-  /** The workspace's installation, or null when it has none (a valid
-   *  "not connected" state — the two grants are independent). */
+  /** The workspace's GitHub installation, or null when it has none (a valid
+   *  "not connected" state — the two grants are independent). Filtered to
+   *  `provider: 'github'` so a GitLab connection on the same workspace (same
+   *  table, MOTIR-1474) never leaks into a GitHub read. */
   async findByWorkspaceId(
     workspaceId: string,
     tx: Prisma.TransactionClient,
   ): Promise<GithubInstallation | null> {
-    return tx.githubInstallation.findFirst({ where: { workspaceId } });
+    return tx.githubInstallation.findFirst({ where: { workspaceId, provider: 'github' } });
+  },
+
+  /** The workspace's connection for a specific provider (`github` | `gitlab`), or
+   *  null. The provider-aware read a GitLab caller uses. */
+  async findByWorkspaceAndProvider(
+    workspaceId: string,
+    provider: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation | null> {
+    return tx.githubInstallation.findFirst({ where: { workspaceId, provider } });
   },
 
   /** Look up by GitHub's numeric installation id (the webhook's key). */
@@ -60,5 +85,40 @@ export const githubInstallationRepository = {
   ): Promise<number> {
     const result = await tx.githubInstallation.deleteMany({ where: { installationId } });
     return result.count;
+  },
+
+  /** Create-or-refresh a GitLab connection (Story 7.23 · MOTIR-1474), keyed on the
+   *  unique `installation_id` (the minted connection id). Re-connecting the same
+   *  connection refreshes the account + token set in place. `provider` is pinned
+   *  to `'gitlab'`; the encrypted token columns GitHub leaves null are populated. */
+  async upsertGitlabConnection(
+    input: UpsertGitlabConnectionInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation> {
+    const { installationId, ...rest } = input;
+    return tx.githubInstallation.upsert({
+      where: { installationId },
+      create: { installationId, provider: 'gitlab', ...rest },
+      update: { provider: 'gitlab', ...rest },
+    });
+  },
+
+  /** Lock a connection row FOR UPDATE by its `installation_id` (Story 7.23 ·
+   *  MOTIR-1474) — the read that guards the token refresh. GitLab rotates the
+   *  refresh token on every refresh, so concurrent mint calls MUST serialize on
+   *  this lock or a double-refresh invalidates the newer token. The caller
+   *  re-reads via `findByInstallationId` inside the SAME transaction. */
+  async lockByInstallationId(installationId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM github_installation WHERE installation_id = ${installationId} FOR UPDATE`;
+  },
+
+  /** Persist a rotated token set on a connection (Story 7.23 · MOTIR-1474), after
+   *  a refresh under the FOR UPDATE lock above. */
+  async updateTokens(
+    id: string,
+    tokens: { accessTokenEncrypted: string; refreshTokenEncrypted: string; tokenExpiresAt: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation> {
+    return tx.githubInstallation.update({ where: { id }, data: tokens });
   },
 };

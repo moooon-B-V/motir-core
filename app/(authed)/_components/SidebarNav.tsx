@@ -9,6 +9,7 @@ import {
   CircleDot,
   CirclePlay,
   Columns3,
+  GitBranch,
   History,
   Inbox,
   LayoutDashboard,
@@ -18,7 +19,6 @@ import {
   Settings,
   Sparkles,
 } from 'lucide-react';
-import { GithubMark } from '@/components/icons/GithubMark';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
 import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
 import { useOnboardingResume } from './OnboardingResumeProvider';
@@ -326,7 +326,8 @@ export function SidebarNav({
         active:
           isActive(pathname, '/settings') &&
           !isActive(pathname, '/settings/workspace/jobs') &&
-          !isActive(pathname, '/settings/workspace/github'),
+          !isActive(pathname, '/settings/workspace/github') &&
+          !isActive(pathname, '/settings/workspace/gitlab'),
       },
       {
         // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
@@ -337,14 +338,20 @@ export function SidebarNav({
         active: isActive(pathname, '/settings/workspace/jobs'),
       },
       {
-        // GitHub integration settings (Story 7.10 · MOTIR-895) — connect the
-        // workspace's GitHub App + identity, and see the selected repos. A
-        // workspace-scoped settings sub-page reached the same way Job runs is (a
-        // bottom-nav deep link — there is no separate workspace-settings rail).
-        icon: <GithubMark />,
-        label: t('nav.github'),
+        // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
+        // — the SHARED connect-settings surface: connect the workspace to GitHub
+        // or GitLab (a provider Segmented swaps the variant) and see the connected
+        // repos/projects. ONE "Git" row (git-branch glyph) — GitLab does NOT get a
+        // second row; the row lands on the GitHub variant by default, and is
+        // active on both provider routes. A workspace-scoped settings sub-page
+        // reached the same way Job runs is (a bottom-nav deep link — there is no
+        // separate workspace-settings rail).
+        icon: <GitBranch />,
+        label: t('nav.git'),
         href: '/settings/workspace/github',
-        active: isActive(pathname, '/settings/workspace/github'),
+        active:
+          isActive(pathname, '/settings/workspace/github') ||
+          isActive(pathname, '/settings/workspace/gitlab'),
       },
       {
         icon: <BookOpen />,
