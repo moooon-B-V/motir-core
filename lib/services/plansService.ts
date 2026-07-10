@@ -298,6 +298,18 @@ async function materialize(
         ? { priority: pf.priority as Prisma.WorkItemUncheckedCreateInput['priority'] }
         : {}),
       reporterId: ctx.userId,
+      // Native PLANNING provenance (Story MOTIR-1685, docs/decisions/work-item-provenance.md
+      // Decision 5): every item materialized from an approved plan was planned
+      // NATIVELY by motir-ai. `source` is PINNED to `native` here (never read from
+      // the proposal — this IS the native seam by construction, so a forged
+      // `planningProvenance.source` can't downgrade the stamp); `harness` defaults
+      // to `Motir` and `model` to null. DEFENSIVE: works before the motir-ai
+      // producer (MOTIR-1690) ships — until proposals carry a model, items read
+      // `native · Motir · null`; once they do, `model` starts populating. Merge
+      // order between the producer and this consumer is therefore free.
+      planningSource: 'native',
+      planningHarness: pf.planningProvenance?.harness ?? 'Motir',
+      planningModel: pf.planningProvenance?.model ?? null,
       type: (pf.type as Prisma.WorkItemUncheckedCreateInput['type']) ?? null,
       executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
