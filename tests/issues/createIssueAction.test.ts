@@ -113,6 +113,35 @@ describe('createIssueAction', () => {
     expect(row!.reporterId).not.toBe(intruder.id);
   });
 
+  it('stamps planning provenance source = manual (harness/model null)', async () => {
+    await makeFixture();
+    const result = await createIssueAction({ kind: 'task', title: 'Human-made' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    expect(row!.planningSource).toBe('manual');
+    expect(row!.planningHarness).toBeNull();
+    expect(row!.planningModel).toBeNull();
+    // No implementation provenance at create.
+    expect(row!.implementationSource).toBeNull();
+  });
+
+  it('IGNORES a client-forged planningSource — the source is always server-set manual', async () => {
+    await makeFixture();
+    // `planningSource` is deliberately NOT a field on CreateIssueInput; a forged
+    // one must never reach the DB (the same discipline as `reporterId`).
+    const result = await createIssueAction({
+      kind: 'task',
+      title: 'Forged source',
+      planningSource: 'native',
+      provenance: { planning: { source: 'native' } },
+    } as never);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    expect(row!.planningSource).toBe('manual');
+  });
+
   it('trims the title and rejects an empty one without calling the service', async () => {
     await makeFixture();
     const empty = await createIssueAction({ kind: 'task', title: '   ' });

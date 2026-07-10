@@ -258,6 +258,51 @@ describe('create_work_item', () => {
     expect(dto.executor).toBe('coding_agent');
   });
 
+  // Planning provenance (MOTIR-1685) — an MCP-created item is stamped
+  // `source = mcp` server-side, carrying the agent's self-reported harness+model.
+  it('stamps planning provenance mcp + self-reported harness/model', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      {
+        projectKey: 'PROD',
+        kind: 'task',
+        title: 'Agent-planned',
+        plannedWithHarness: 'Claude Code',
+        plannedWithModel: 'claude-opus-4-8',
+      },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    const dto = res.structuredContent as {
+      planningSource: string | null;
+      planningHarness: string | null;
+      planningModel: string | null;
+      implementationSource: string | null;
+    };
+    expect(dto.planningSource).toBe('mcp');
+    expect(dto.planningHarness).toBe('Claude Code');
+    expect(dto.planningModel).toBe('claude-opus-4-8');
+    // No implementation provenance from a create.
+    expect(dto.implementationSource).toBeNull();
+  });
+
+  it('stamps planning provenance mcp with null harness/model when not supplied', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'task', title: 'Agent, no harness reported' },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    const dto = res.structuredContent as {
+      planningSource: string | null;
+      planningHarness: string | null;
+      planningModel: string | null;
+    };
+    expect(dto.planningSource).toBe('mcp');
+    expect(dto.planningHarness).toBeNull();
+    expect(dto.planningModel).toBeNull();
+  });
+
   it('rejects a type on a non-leaf kind (story) with the typed leaf-only error', async () => {
     const fx = await makeWorkItemFixture();
     const res = await runCreateWorkItem(
