@@ -67,7 +67,7 @@
            live on the Code-health page, 7.14) — nothing to approve.
         1  Connect (multi-select the project's repos) — composes 7.7.1. MULTI-PROVIDER: GitHub App
            + GitLab OAuth, each repo tagged with its host; reads through the GitProvider seam
-           (lib/git, MOTIR-891); GitLab provider = 7.23.
+           (lib/git, MOTIR-891); GitLab provider = MOTIR-1470.
         2  Index (per-repo progress + aggregate gate) — the NEW step; on complete, conventions +
            code-health are derived silently.
         3  Import work items (OPTIONAL) — composes design/import (937), embedded not redrawn.
@@ -1364,7 +1364,7 @@
           EXISTING codebase. A project usually spans <strong>several repositories</strong> — which
           can live on <strong>GitHub or GitLab</strong> (a project may span both) — so the flow is
           multi-repo + multi-provider, reading through the shipped <code>GitProvider</code> seam
-          (<code>lib/git</code>; GitLab is provider 7.23). The
+          (<code>lib/git</code>; GitLab is provider MOTIR-1470). The
           <strong>required core is just Connect + Index</strong> — link your repos, Motir reads the
           code. From the code it
           <strong>silently derives per-repo coding conventions + a code-health check</strong> and
@@ -1691,7 +1691,7 @@
               </p>
               <span class="cite" aria-hidden="true"
                 >Composes 7.7.1 · design/github/ · reads through the GitProvider seam (lib/git) —
-                GitLab is provider 7.23</span
+                GitLab is provider MOTIR-1470</span
               >
             </div>
 
