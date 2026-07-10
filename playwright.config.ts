@@ -8,6 +8,12 @@ import {
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
   E2E_GITHUB_WEBHOOK_SECRET,
 } from './tests/e2e/_helpers/github-const';
+import {
+  E2E_GITLAB_CLIENT_ID,
+  E2E_GITLAB_CLIENT_SECRET,
+  E2E_GITLAB_TOKEN_ENCRYPTION_KEY,
+  E2E_GITLAB_WEBHOOK_SECRET,
+} from './tests/e2e/_helpers/gitlab-const';
 
 // Playwright doesn't pick up .env automatically the way Next.js does. The
 // spec files import @/lib/db (via _helpers/db-reset) for DB assertions,
@@ -260,6 +266,19 @@ export default defineConfig({
         GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
         GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
+        // Story 7.23 · MOTIR-1480: the GitLab-integration E2E lane. The webhook
+        // secret is the SAME token the spec sends in X-Gitlab-Token (shared via
+        // tests/e2e/_helpers/gitlab-const.ts), so the real MOTIR-1475 token gate
+        // runs against the spec's deliveries. The OAuth creds are synthetic — the
+        // code→token exchange + /api/v4/user read never leave the process
+        // (E2E_TEST_OAUTH's MockAgent above intercepts gitlab.com too). GitLab
+        // PERSISTS its OAuth tokens, so the connect callback needs the encryption
+        // key. GITLAB_BASE_URL is left at its gitlab.com default so the mock host
+        // matches.
+        GITLAB_WEBHOOK_SECRET: E2E_GITLAB_WEBHOOK_SECRET,
+        GITLAB_APP_CLIENT_ID: E2E_GITLAB_CLIENT_ID,
+        GITLAB_APP_CLIENT_SECRET: E2E_GITLAB_CLIENT_SECRET,
+        GITLAB_TOKEN_ENCRYPTION_KEY: E2E_GITLAB_TOKEN_ENCRYPTION_KEY,
       },
     },
     {
