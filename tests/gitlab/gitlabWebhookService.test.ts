@@ -278,15 +278,19 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
   });
 });
 
-describe('gitlabWebhookService — non-MR events are ignored (owned by sibling cards)', () => {
-  it('a push hook is ignored here (code-graph feed is MOTIR-1476)', async () => {
+describe('gitlabWebhookService — push no-ops + malformed input', () => {
+  it('a push for an UNCONNECTED project is a clean no-op (code-graph feed is MOTIR-1476)', async () => {
+    // Push is now DISPATCHED (the code-graph feed, MOTIR-1476); a push for a project
+    // not connected in any workspace resolves to a clean `unknown_repo` no-op — the
+    // graceful degradation for a missing repo. The default-branch → refresh-enqueue
+    // happy path + the ignored-ref paths live in `gitlabCodeGraphFeed.test.ts`.
     const res = await gitlabWebhookService.handleEvent('Push Hook', {
       object_kind: 'push',
       project: { id: 42 },
       ref: 'refs/heads/main',
-      after: 'abc',
+      after: 'a'.repeat(40),
     });
-    expect(res).toEqual({ event: 'ignored', reason: 'unhandled_event:push' });
+    expect(res).toEqual({ event: 'push', outcome: 'unknown_repo' });
   });
 
   it('a non-object body is a clean ignored no-op', async () => {
