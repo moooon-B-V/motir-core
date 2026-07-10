@@ -119,6 +119,46 @@ describe('POST acceptance-evidence (register)', () => {
     expect(row.status).not.toBe('done');
   });
 
+  it('a SUBTASK key resolves to its parent story — the video attaches to the story (MOTIR-1684)', async () => {
+    // The PR-derived target is the subtask's own MOTIR-<id> (the status-sync
+    // convention); acceptance is story-level (Principle #18), so the endpoint
+    // resolves UP to the parent story. The pathname is within the STORY's prefix.
+    const subtask = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'acceptance E2E subtask',
+      parentId: story.id,
+    });
+    const token = await integrationToken(fx);
+    const res = await POST(
+      publishReq(token, { videoPathname: videoPathname(), commitSha: 'c2' }, subtask.identifier),
+      { params: Promise.resolve({ id: subtask.identifier }) },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { evidence: { workItemId: string } };
+    expect(body.evidence.workItemId).toBe(story.id);
+  });
+
+  it('a subtask whose parent is NOT a story stays unresolved → 422 not-a-story', async () => {
+    // A leaf whose parent is not a story (here: a subtask under a bug) is left
+    // as-is; the service rejects a non-story acceptance target.
+    const bug = await createTestWorkItem(fx, { kind: 'bug', title: 'a bug', parentId: story.id });
+    const sub = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'subtask under a bug',
+      parentId: bug.id,
+    });
+    const token = await integrationToken(fx);
+    const res = await POST(
+      publishReq(
+        token,
+        { videoPathname: `acceptance/${fx.workspaceId}/${sub.id}/x.webm` },
+        sub.identifier,
+      ),
+      { params: Promise.resolve({ id: sub.identifier }) },
+    );
+    expect(res.status).toBe(422);
+  });
+
   it('no token → 401', async () => {
     const res = await POST(publishReq(null, { videoPathname: videoPathname() }), paramsFor(story));
     expect(res.status).toBe(401);

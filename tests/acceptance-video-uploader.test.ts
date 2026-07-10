@@ -11,7 +11,12 @@ vi.mock('@vercel/blob/client', () => ({
 
 // The BYOK uploader (Subtask MOTIR-1632; direct-to-Blob MOTIR-1681) — pure
 // logic, no DB. Tests the no-op (red-run) path + the mint/upload/register flow.
-import { findArtifacts, uploadAcceptanceVideo } from '../scripts/upload-acceptance-video.mjs';
+import {
+  findArtifacts,
+  parseWorkItemKey,
+  resolveStoryKey,
+  uploadAcceptanceVideo,
+} from '../scripts/upload-acceptance-video.mjs';
 import { put as putBlobMock } from '@vercel/blob/client';
 
 function tmpDir(): string {
@@ -95,6 +100,117 @@ describe('findArtifacts', () => {
     expect(found?.video.endsWith('.webm')).toBe(true);
     expect(found?.trace?.endsWith('trace.zip')).toBe(true);
     expect(found?.chapters?.endsWith('chapters.json')).toBe(true);
+  });
+
+  it('reads the recording self-declared story from acceptance-story.json (MOTIR-1684)', () => {
+    const dir = tmpDir();
+    const nested = path.join(dir, 'dogfood-chromium');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, 'video.webm'), 'v');
+    fs.writeFileSync(path.join(nested, 'chapters.json'), '[]');
+    fs.writeFileSync(
+      path.join(nested, 'acceptance-story.json'),
+      JSON.stringify({ storyKey: 'MOTIR-1627' }),
+    );
+    expect(findArtifacts(dir)?.storyKey).toBe('MOTIR-1627');
+  });
+
+  it('storyKey is null when no acceptance-story.json sidecar exists', () => {
+    const dir = tmpDir();
+    const nested = path.join(dir, 'dogfood-chromium');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, 'video.webm'), 'v');
+    fs.writeFileSync(path.join(nested, 'chapters.json'), '[]');
+    expect(findArtifacts(dir)?.storyKey).toBeNull();
+  });
+
+  it('pins the story sidecar to the chaptered dogfood dir, not a sibling recording', () => {
+    const dir = tmpDir();
+    const sibling = path.join(dir, 'aaa-sibling-chromium');
+    const dogfood = path.join(dir, 'zzz-dogfood-chromium');
+    fs.mkdirSync(sibling);
+    fs.mkdirSync(dogfood);
+    fs.writeFileSync(path.join(sibling, 'video.webm'), 'other');
+    fs.writeFileSync(
+      path.join(sibling, 'acceptance-story.json'),
+      JSON.stringify({ storyKey: 'MOTIR-9999' }),
+    );
+    fs.writeFileSync(path.join(dogfood, 'video.webm'), 'dogfood');
+    fs.writeFileSync(path.join(dogfood, 'chapters.json'), '[]');
+    fs.writeFileSync(
+      path.join(dogfood, 'acceptance-story.json'),
+      JSON.stringify({ storyKey: 'MOTIR-1627' }),
+    );
+    expect(findArtifacts(dir)?.storyKey).toBe('MOTIR-1627');
+  });
+});
+
+describe('parseWorkItemKey', () => {
+  it('extracts the key from a subtask branch ref', () => {
+    expect(parseWorkItemKey('subtask/MOTIR-1684-acceptance-publish')).toBe('MOTIR-1684');
+  });
+
+  it('extracts the key from a story-level PR title', () => {
+    expect(parseWorkItemKey('feat(acceptance): story gate (MOTIR-1627)')).toBe('MOTIR-1627');
+  });
+
+  it('upper-cases a lower-case ref and takes the FIRST key', () => {
+    expect(parseWorkItemKey('story/motir-1644-and-motir-9')).toBe('MOTIR-1644');
+  });
+
+  it('returns null for empty / keyless text', () => {
+    expect(parseWorkItemKey('')).toBeNull();
+    expect(parseWorkItemKey(undefined)).toBeNull();
+    expect(parseWorkItemKey('main')).toBeNull();
+  });
+});
+
+describe('resolveStoryKey (MOTIR-1684 precedence)', () => {
+  it('1. explicit ACCEPTANCE_STORY_KEY outranks everything', () => {
+    const r = resolveStoryKey('MOTIR-1627', {
+      ACCEPTANCE_STORY_KEY: 'MOTIR-42',
+      ACCEPTANCE_PR_REF: 'subtask/MOTIR-100-x',
+      ACCEPTANCE_FALLBACK_STORY_KEY: 'MOTIR-1627',
+    });
+    expect(r).toEqual({ storyKey: 'MOTIR-42', source: 'explicit' });
+  });
+
+  it('2. the recording self-declared story outranks the PR-derived key', () => {
+    const r = resolveStoryKey('MOTIR-1627', {
+      ACCEPTANCE_PR_REF: 'subtask/MOTIR-100-unrelated',
+      ACCEPTANCE_FALLBACK_STORY_KEY: 'MOTIR-1627',
+    });
+    expect(r).toEqual({ storyKey: 'MOTIR-1627', source: 'recording' });
+  });
+
+  it('3. no self-declared story → the PR ref MOTIR-<id> (subtask → parent server-side)', () => {
+    const r = resolveStoryKey(null, {
+      ACCEPTANCE_PR_REF: 'subtask/MOTIR-816-importer',
+      ACCEPTANCE_FALLBACK_STORY_KEY: 'MOTIR-1627',
+    });
+    expect(r).toEqual({ storyKey: 'MOTIR-816', source: 'pr' });
+  });
+
+  it('3b. PR title is parsed when the ref carries no key', () => {
+    const r = resolveStoryKey(null, {
+      ACCEPTANCE_PR_REF: 'main',
+      ACCEPTANCE_PR_TITLE: 'feat: importer (MOTIR-816)',
+      ACCEPTANCE_FALLBACK_STORY_KEY: 'MOTIR-1627',
+    });
+    expect(r).toEqual({ storyKey: 'MOTIR-816', source: 'pr' });
+  });
+
+  it('4. nothing declared and no PR id (push-to-main) → the dogfood fallback', () => {
+    const r = resolveStoryKey(null, {
+      ACCEPTANCE_PR_REF: '',
+      ACCEPTANCE_PR_TITLE: '',
+      ACCEPTANCE_FALLBACK_STORY_KEY: 'MOTIR-1627',
+    });
+    expect(r).toEqual({ storyKey: 'MOTIR-1627', source: 'fallback' });
+  });
+
+  it('nothing resolves → null (a misconfiguration the caller errors on)', () => {
+    expect(resolveStoryKey(null, {})).toEqual({ storyKey: null, source: 'none' });
   });
 });
 

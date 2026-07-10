@@ -9,8 +9,32 @@ description: >
 
 inputs:
   story-key:
-    description: The story key to attach the evidence to (e.g. MOTIR-1627).
-    required: true
+    description: >
+      (Override) An explicit story key to attach the evidence to (e.g.
+      MOTIR-1627). Leave empty to RESOLVE the target (MOTIR-1684): the recording's
+      self-declared story → the PR's `MOTIR-<id>` (pr-ref / pr-title, resolved to
+      its parent story server-side) → `fallback-story-key`.
+    required: false
+    default: ''
+  pr-ref:
+    description: >
+      The PR head ref (branch) carrying the `MOTIR-<id>` — pass
+      `${{ github.head_ref }}`. Used only when `story-key` is empty and the
+      recording did not self-declare a story.
+    required: false
+    default: ''
+  pr-title:
+    description: >
+      The PR title carrying the `MOTIR-<id>` (the status-sync convention) — pass
+      `${{ github.event.pull_request.title }}`. Parsed when `pr-ref` has no key.
+    required: false
+    default: ''
+  fallback-story-key:
+    description: >
+      The story key used when nothing else resolves (e.g. push-to-main with no
+      PR, and no self-declared recording story). The MOTIR-1627 dogfood.
+    required: false
+    default: ''
   token:
     description: >
       (Fallback) A Motir API token with the `integration` scope, for a repo NOT
@@ -47,6 +71,9 @@ runs:
         MOTIR_OIDC_AUDIENCE: ${{ inputs.audience }}
         MOTIR_BASE_URL: ${{ inputs.base-url }}
         ACCEPTANCE_STORY_KEY: ${{ inputs.story-key }}
+        ACCEPTANCE_PR_REF: ${{ inputs.pr-ref }}
+        ACCEPTANCE_PR_TITLE: ${{ inputs.pr-title }}
+        ACCEPTANCE_FALLBACK_STORY_KEY: ${{ inputs.fallback-story-key }}
         ACCEPTANCE_OUTPUT_DIR: ${{ inputs.output-dir }}
         ACCEPTANCE_PRODUCED_BY: ${{ inputs.produced-by }}
       run: node scripts/upload-acceptance-video.mjs
