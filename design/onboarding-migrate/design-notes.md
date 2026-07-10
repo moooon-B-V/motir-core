@@ -32,7 +32,9 @@ this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 `packages/design-system/theme.css` Tier-0 `--color-*` + shape scale, the Tier-3 `--el-*` layer, and
 the `[data-theme='dark']` overrides 1:1 so it paints without the Tailwind build, exactly as
 `design/coding-convention/convention.mock.html` does) · `onboarding-migrate.png` (full-page export,
-light theme, Playwright chromium, `deviceScaleFactor: 2`, 1200px wide). Dark parity was verified by
+light theme, Playwright chromium, `deviceScaleFactor: 1` (dropped from 2 only to keep the pack
+pushable over a slow link — re-render at 2 when connectivity is healthy), 1200px wide). Dark parity was
+verified by
 toggling `data-theme="dark"` in the mock header.
 
 ---
@@ -64,13 +66,24 @@ implemented app, it does not invent a host:
 
 ---
 
-## ⭐ Multi-repo — a project spans several repositories (Yue, 2026-07-05)
+## ⭐ Multi-repo + multi-provider — a project spans several repositories, on GitHub OR GitLab (Yue)
 
 **A real existing codebase usually spans more than one repository** (a web app + an API + a shared
-package). The first draft collapsed the flow to a single repo (`acme/web@a1b9f30`, one code graph, one
-plan); this is corrected so the WHOLE wizard is multi-repo. Grounded in **shipped reality** (rung 2 —
-read on disk this session, not assumed):
+package) — **and those repos can live on GitHub OR GitLab** (a project may span both, Yue 2026-07-09).
+The first draft collapsed the flow to a single GitHub repo (`acme/web@a1b9f30`, one code graph, one plan);
+this is corrected so the WHOLE wizard is **multi-repo and multi-provider**. Grounded in **shipped reality**
+(rung 2 — read on disk this session, not assumed):
 
+- **Multi-provider is ARCHITECTED, not invented — the `GitProvider` seam (`lib/git`, MOTIR-891 / 7.10).**
+  Both `GithubInstallation` and `GithubRepo` carry a **`provider` discriminator** (`@default("github")`),
+  and the schema comment is explicit: _"every downstream read goes through the GitProvider seam (`lib/git`),
+  so GitLab/Bitbucket is purely additive (7.23 implements the same seam under `provider: 'gitlab'`)."_
+  `lib/git/` ships `provider.ts` (the ONE `GitProvider` interface), `registry.ts` (dispatch by the stored
+  discriminator), and `providers/github.ts` (the first impl). So the Connect step offers **GitHub App +
+  GitLab OAuth**, persists each repo with its `provider`, and every consumer (index, audit, plan) reads a
+  provider-agnostic `NormalizedRepo` through the seam. **The GitLab provider itself is Story 7.23** — this
+  design draws the multi-provider Connect surface + flags 7.23 as the runtime dependency (it does not build
+  the GitLab client). Each Connect repo-row + the landing done-card are **provider-tagged**.
 - **`GithubInstallation` is WORKSPACE-scoped and owns many `GithubRepo`s** (`prisma/schema.prisma`:
   `GithubInstallation { workspaceId } → repos GithubRepo[]`). Repo selection is a set, per workspace —
   a project is not "one repo."
@@ -95,13 +108,13 @@ read on disk this session, not assumed):
 
 **How each step becomes multi-repo (what the mock now draws):**
 
-| Step                                                          | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connect** (Panel 1)                                         | "Connect the repositories in this project" — a **multi-select** repo list (web · api · shared, all Selected switches) + a "**3 repositories** selected" summary. The selection is the set of repos that make up this project.                                                                                                                                                |
-| **Index** (Panel 2)                                           | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols". |
-| **Conventions + code-health** (NOT an onboarding step)        | Derived **PER REPO** from the code + a code-health check, **auto-used, NO approval, NOT surfaced in onboarding** — the Index-complete state just notes "conventions + code-health derived, nothing to approve; on the Code health page". The audit + read-only View + chat-to-revise all live on the **Code-health page (7.14)**, post-onboarding.                           |
-| **Planning** (the universal plan screen — not a wizard panel) | Reached after the optional import step; grounded in the **whole-project code graph** across all repos — each proposed item carries a **repo tag** (`acme/api` / `acme/web`) and honours that repo's convention; cross-repo proposals (reminders reuse the API's service) read naturally. NOT designed here — the existing `PlanningWorkspace` (MOTIR-1193/1299).             |
-| **States** (Panel 4)                                          | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("set up — paused before the optional import / plan steps").                                                                                                                                                 |
+| Step                                                          | Multi-repo treatment                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Connect** (Panel 1)                                         | "Connect the repositories in this project" — **multi-provider**: a **GitHub** card (Motir App) + a **GitLab** card (OAuth), then a **multi-select** repo list (acme/web · GitHub, acme/api · GitLab, acme/shared · GitHub — each provider-tagged) + a "**3 repositories** selected (2 GitHub · 1 GitLab)" summary. Reads through the `GitProvider` seam; GitLab client = 7.23. |
+| **Index** (Panel 2)                                           | **One code graph across all repos**, built **per repo**: a `.idx-repo` list — each repo its own progress bar + state (`Indexed` / `Indexing…` / `Queued`) — under an **aggregate meter** ("2 of 3 repositories done · 78%"). The **gate is aggregate**: Next stays disabled until **every** repo finishes. Complete state = "3 of 3 indexed · 5,412 files · 31,208 symbols".   |
+| **Conventions + code-health** (NOT an onboarding step)        | Derived **PER REPO** from the code + a code-health check, **auto-used, NO approval, NOT surfaced in onboarding** — the Index-complete state just notes "conventions + code-health derived, nothing to approve; on the Code health page". The audit + read-only View + chat-to-revise all live on the **Code-health page (7.14)**, post-onboarding.                             |
+| **Planning** (the universal plan screen — not a wizard panel) | Reached after the optional import step; grounded in the **whole-project code graph** across all repos — each proposed item carries a **repo tag** (`acme/api` / `acme/web`) and honours that repo's convention; cross-repo proposals (reminders reuse the API's service) read naturally. NOT designed here — the existing `PlanningWorkspace` (MOTIR-1193/1299).               |
+| **States** (Panel 4)                                          | Index failure is **per-repo** — "acme/api failed; the other 2 stay indexed · Re-run acme/api" (a scoped retry, not a full re-index). Resume names the whole set ("set up — paused before the optional import / plan steps").                                                                                                                                                   |
 
 **Implications for the downstream build cards (flagged, not built here):**
 
@@ -226,20 +239,29 @@ bar ("6 proposed · nothing saved yet" · Discard · **"Add 6 items to your back
 and what it **skipped** as already-tracked. This panel answers "you're set up — here's your code-aware
 plan, reconciled with what you imported."
 
-### Panel 1 — Connect GitHub (step 1) — **composes 7.7.1 (`design/github/`)**
+### Panel 1 — Connect repos (step 1) — MULTI-PROVIDER (GitHub + GitLab) — **composes 7.7.1 (`design/github/`) via the `GitProvider` seam**
 
-The 7.7 connect surface as step 1, drawn as a COMPOSITION of 7.7.1, not a new connect screen — and
-framed as **multi-repo** (§Multi-repo above). H1 **"Connect the repositories in this project"**, lead
-"A project usually spans more than one repository — a web app, an API, a shared package. Select every
-repo that makes up this project…". Two independent `.grant-row`s — **Step 1 · Identity** ("Verify your
-GitHub identity" · reads public profile only, grants no code access) and **Step 2 · Repository access**
-("Install the Motir GitHub App" · you pick the exact repos on GitHub) — the **"Connect GitHub"** primary
-`Button` (github-mark), and the **multi-select repo list** (`repo-row`s: repo icon + `owner/name` + a
-`main` branch `code` chip + a **Selected** `Pill` + a `Switch` — **acme/web · acme/api · acme/shared**
-all on) with a "**3 repositories** selected for this project" summary. Copy honesty: "you pick the exact
-repos on GitHub" + "To add or remove repositories, update the Motir App's access on GitHub" (the "Manage
-on GitHub" out lives in the 7.7.1 settings surface; here it's the first-run selection). **Owned by 7.7.1
-— cited, not re-designed.**
+The connect surface as step 1, framed as **multi-repo + multi-provider** (§Multi-repo above). H1
+**"Connect the repositories in this project"**, lead "A project usually spans more than one repository —
+and they can live on **GitHub or GitLab** (a project may span both). Connect the host(s) your repos are
+on…". The cite reads "Composes 7.7.1 · design/github/ · reads through the **GitProvider seam (`lib/git`)**
+— GitLab is provider 7.23". **Two provider cards:**
+
+- **GitHub — the Motir App** (`seclabel` "GitHub"): the composed 7.7.1 two-step grant — two `.grant-row`s
+  (**Step 1 · Identity** "Verify your GitHub identity" · public profile only, no code access; **Step 2 ·
+  Repository access** "Install the Motir GitHub App" · you pick the exact repos) + the **"Connect GitHub"**
+  primary `Button` (github-mark). Owned by 7.7.1 — cited, not re-designed.
+- **GitLab** (`seclabel` "GitLab"): a parallel provider card — one `.grant-row` (**OAuth · you pick the
+  projects** "Authorize Motir on GitLab" · gitlab.com or self-managed; "same provider seam as GitHub —
+  repos from both hosts join one project") + a **"Connect GitLab"** secondary `Button` (gitlab tanuki
+  mark). This is the NEW multi-provider affordance; the runtime GitLab client is **Story 7.23**.
+
+Then the **multi-select repo list** (`repo-row`s: repo icon + `owner/name` + a `main` branch `code` chip +
+a **provider `Pill`** (`GitHub` / `GitLab`) + a **Selected** `Pill` + a `Switch`) — **acme/web (GitHub) ·
+acme/api (GitLab) · acme/shared (GitHub)**, showing a project that spans BOTH hosts — with a "**3
+repositories** selected (2 GitHub · 1 GitLab)" summary + the honest out ("update the Motir App's access on
+GitHub, or your GitLab project authorization"). Each repo persists with its `provider` discriminator;
+index / audit / plan read it provider-agnostically through the seam.
 
 ### Panel 2 — Index progress (step 2) — **NEW (the step this card owns)**
 
@@ -343,15 +365,15 @@ contract.
 
 ## Which Story owns each embedded surface (compose + cite, don't duplicate)
 
-| Step / surface                                  | Owner (design → build)                                                                                                 | This card                 |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                 | designs                   |
-| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                     | designs                   |
-| Connect GitHub (step 1)                         | **7.7.1** — `design/github/` (build MOTIR-895)                                                                         | composes                  |
-| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding) | consumes                  |
-| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                       | composes                  |
-| Planning (discovery / generate / review)        | **The EXISTING universal plan screen** — `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 / 1299), already built | opens (not designed here) |
-| The `/onboarding/import` host route             | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                                                     | replaces                  |
+| Step / surface                                  | Owner (design → build)                                                                                                           | This card                                                     |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                           | designs                                                       |
+| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                               | designs                                                       |
+| Connect repos (step 1, GitHub + GitLab)         | **7.7.1** — `design/github/` (GitHub, build MOTIR-895) · **GitProvider seam** `lib/git` (MOTIR-891) · **GitLab provider = 7.23** | composes GitHub; draws the multi-provider surface, flags 7.23 |
+| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding)           | consumes                                                      |
+| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                                 | composes                                                      |
+| Planning (discovery / generate / review)        | **The EXISTING universal plan screen** — `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 / 1299), already built           | opens (not designed here)                                     |
+| The `/onboarding/import` host route             | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                                                               | replaces                                                      |
 
 If a step needs a design-system entry none of the above owns, that is a **NEW `design/` subtask**, not
 a code workaround (the AC). None is introduced here — the rail, the chrome, and the index step compose

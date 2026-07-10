@@ -65,7 +65,9 @@
            Composes the EXISTING PlanningWorkspace (MOTIR-1193/1299); the migrate-NEW bits are the
            done-cards + the reconcile framing. Conventions + code-health are derived SILENTLY (they
            live on the Code-health page, 7.14) — nothing to approve.
-        1  Connect (multi-select the project's repos) — composes 7.7.1.
+        1  Connect (multi-select the project's repos) — composes 7.7.1. MULTI-PROVIDER: GitHub App
+           + GitLab OAuth, each repo tagged with its host; reads through the GitProvider seam
+           (lib/git, MOTIR-891); GitLab provider = 7.23.
         2  Index (per-repo progress + aggregate gate) — the NEW step; on complete, conventions +
            code-health are derived silently.
         3  Import work items (OPTIONAL) — composes design/import (937), embedded not redrawn.
@@ -1359,9 +1361,12 @@
         <h1>Migrate-onboarding wizard — link your codebase; everything else is optional</h1>
         <p>
           Story 7.15 (MOTIR-815, Workflow&nbsp;B) · design gate 7.15.1 (MOTIR-930). Onboard an
-          EXISTING codebase. A project usually spans <strong>several repositories</strong>, so the
-          flow is multi-repo. The <strong>required core is just Connect + Index</strong> — link your
-          repos, Motir reads the code. From the code it
+          EXISTING codebase. A project usually spans <strong>several repositories</strong> — which
+          can live on <strong>GitHub or GitLab</strong> (a project may span both) — so the flow is
+          multi-repo + multi-provider, reading through the shipped <code>GitProvider</code> seam
+          (<code>lib/git</code>; GitLab is provider 7.23). The
+          <strong>required core is just Connect + Index</strong> — link your repos, Motir reads the
+          code. From the code it
           <strong>silently derives per-repo coding conventions + a code-health check</strong> and
           uses them automatically —
           <strong>nothing to approve, nothing surfaced in onboarding</strong> (they live on the
@@ -1459,7 +1464,7 @@
               ></span>
               <span
                 ><span class="dc-name">Connected</span
-                ><span class="dc-meta">3 repositories</span></span
+                ><span class="dc-meta">3 repositories · GitHub + GitLab</span></span
               >
             </div>
             <div class="done-card">
@@ -1679,16 +1684,19 @@
               <div class="step-eyebrow">Step 1 of 2 · Set up</div>
               <h2>Connect the repositories in this project</h2>
               <p>
-                A project usually spans more than one repository — a web app, an API, a shared
-                package. Select every repo that makes up this project; Motir reads them all to build
-                one code graph and plan across them. Two grants — identity, then repository access.
+                A project usually spans more than one repository — and they can live on
+                <strong>GitHub or GitLab</strong> (a project may span both). Connect the host(s)
+                your repos are on, then select every repo that makes up this project; Motir reads
+                them all to build one code graph and plan across them.
               </p>
               <span class="cite" aria-hidden="true"
-                >Composes 7.7.1 · design/github/ — not a new connect screen</span
+                >Composes 7.7.1 · design/github/ · reads through the GitProvider seam (lib/git) —
+                GitLab is provider 7.23</span
               >
             </div>
 
             <div class="card">
+              <div class="seclabel">GitHub — the Motir App</div>
               <div class="grant-row">
                 <span class="grant-ic" aria-hidden="true"
                   ><svg
@@ -1751,10 +1759,51 @@
             </div>
 
             <div class="card">
+              <div class="seclabel">GitLab</div>
+              <div class="grant-row">
+                <span class="grant-ic" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+                    <path
+                      d="M12 21.5 8.9 12h6.2L12 21.5zm-9-9.5h3.8L12 21.5 3 12zm18 0-9 9.5 5.2-9.5H21zM6.8 12 8.9 5.4a.3.3 0 0 1 .57 0L11.6 12H6.8zm5.6 0 2.1-6.6a.3.3 0 0 1 .57 0L17.2 12h-4.8z"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <div class="grant-eyebrow">OAuth · you pick the projects</div>
+                  <h4>Authorize Motir on GitLab</h4>
+                  <p>
+                    Connect your GitLab account (gitlab.com or self-managed) and choose which
+                    projects Motir may read. Same provider seam as GitHub — repos from both hosts
+                    join one project.
+                  </p>
+                </div>
+              </div>
+              <div style="margin-top: 16px; display: flex; align-items: center; gap: 12px">
+                <button class="btn secondary" type="button">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12 21.5 8.9 12h6.2L12 21.5zm-9-9.5h3.8L12 21.5 3 12zm18 0-9 9.5 5.2-9.5H21zM6.8 12 8.9 5.4a.3.3 0 0 1 .57 0L11.6 12H6.8zm5.6 0 2.1-6.6a.3.3 0 0 1 .57 0L17.2 12h-4.8z"
+                    />
+                  </svg>
+                  Connect GitLab
+                </button>
+                <span class="muted-note"
+                  >You'll be sent to GitLab to authorize, then to pick projects.</span
+                >
+              </div>
+            </div>
+
+            <div class="card">
               <div class="seclabel">Repositories in this project</div>
               <p class="muted-note" style="margin: -2px 0 12px">
-                Only the repositories you selected on GitHub. Toggle which repos belong to this
-                project.
+                Only the repositories you selected on GitHub or GitLab — a project can span both.
+                Toggle which repos belong to this project.
               </p>
               <div class="repo-row">
                 <span class="r-ic" aria-hidden="true"
@@ -1770,7 +1819,8 @@
                     <path d="M3 5v14a9 3 0 0 0 18 0V5" /></svg
                 ></span>
                 <span class="r-name"><span class="owner">acme/</span>web</span>
-                <span class="code">main</span><span class="spacer"></span>
+                <span class="code">main</span>
+                <span class="pill">GitHub</span><span class="spacer"></span>
                 <span class="r-right"
                   ><span class="pill mint"
                     ><svg
@@ -1801,7 +1851,8 @@
                     <path d="M3 5v14a9 3 0 0 0 18 0V5" /></svg
                 ></span>
                 <span class="r-name"><span class="owner">acme/</span>api</span>
-                <span class="code">main</span><span class="spacer"></span>
+                <span class="code">main</span>
+                <span class="pill">GitLab</span><span class="spacer"></span>
                 <span class="r-right"
                   ><span class="pill mint"
                     ><svg
@@ -1832,7 +1883,8 @@
                     <path d="M3 5v14a9 3 0 0 0 18 0V5" /></svg
                 ></span>
                 <span class="r-name"><span class="owner">acme/</span>shared</span>
-                <span class="code">main</span><span class="spacer"></span>
+                <span class="code">main</span>
+                <span class="pill">GitHub</span><span class="spacer"></span>
                 <span class="r-right"
                   ><span class="pill mint"
                     ><svg
@@ -1850,8 +1902,9 @@
                 ></span>
               </div>
               <p class="muted-note" style="margin-top: 12px">
-                <strong>3 repositories</strong> selected for this project. To add or remove
-                repositories, update the Motir App's access on GitHub.
+                <strong>3 repositories</strong> selected for this project (2 GitHub · 1 GitLab). To
+                add or remove repositories, update the Motir App's access on GitHub, or your GitLab
+                project authorization.
               </p>
             </div>
 
