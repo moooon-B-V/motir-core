@@ -77,6 +77,22 @@ export async function authorizeAcceptancePublish(
     );
   }
 
+  // Acceptance evidence is a STORY-level artifact (Principle #18 — review at the
+  // Story level). When the CI caller passes a non-story LEAF (a subtask / bug /
+  // task PR key — the PR-title status-sync convention leaves the subtask's own
+  // `MOTIR-<id>`, MOTIR-1684), resolve UP to its parent STORY so the video
+  // attaches to the story, not the leaf. A story key resolves to itself. This is
+  // the server-side, keyless-safe half of the PR-`MOTIR-<id>` → parent-story
+  // resolution (the CI job has no DB access); a non-story leaf with no story
+  // parent is left as-is → the service rejects it NOT_A_STORY (422).
+  if (story.kind !== 'story' && story.parentId) {
+    const parentId = story.parentId;
+    const parent = await withWorkspaceContext(ctx, (tx) =>
+      workItemRepository.findById(parentId, tx),
+    );
+    if (parent && parent.kind === 'story') story = parent;
+  }
+
   // Eligibility gate (MOTIR-1630) — reject with the reason BEFORE any blob spend.
   const eligibility = await acceptanceVideoEligibilityService.resolve({
     actorUserId: ctx.userId,

@@ -440,24 +440,36 @@ jobs:
           SEED_REPORTING_ITEMS: ${{ matrix.seed_reporting_items }}
           SEED_REPORTING_RICH_ITEMS: ${{ matrix.seed_reporting_rich_items }}
 
-      # MOTIR-1638 self-test dogfood: on a GREEN acceptance run, publish the
-      # recorded video to MOTIR-1627's OWN acceptance panel (BYOK). Auth is
-      # KEYLESS GitHub OIDC first (MOTIR-1650) — the moooon repo is App-connected,
-      # so no secret is needed; MOTIR_UPLOAD_TOKEN is the PAT fallback. The
-      # uploader no-ops when NEITHER is available (a fork PR gets no OIDC and no
-      # secret), so forks / unconfigured runs never fail here.
+      # On a GREEN acceptance run, publish the recorded video to its STORY's
+      # acceptance panel (BYOK). Auth is KEYLESS GitHub OIDC first (MOTIR-1650) —
+      # the moooon repo is App-connected, so no secret is needed;
+      # MOTIR_UPLOAD_TOKEN is the PAT fallback. The uploader no-ops when NEITHER
+      # is available (a fork PR gets no OIDC and no secret), so forks /
+      # unconfigured runs never fail here.
       #
-      # BEST-EFFORT — `continue-on-error` so this dogfood side-effect NEVER gates
-      # the merge. It publishes to production (app.motir.co); until THIS PR merges
-      # and deploys, production has no keyless endpoint, so the OIDC publish 401s
+      # TARGET STORY (MOTIR-1684): NO longer the hardcoded MOTIR-1627 constant.
+      # `resolveStoryKey` picks the target — the recording's self-declared story
+      # (the acceptance harness sidecar; the MOTIR-1638 dogfood pins itself to
+      # MOTIR-1627, so the self-test still publishes to its own panel and is never
+      # mis-attributed) → the PR's `MOTIR-<id>` (branch/title, the status-sync
+      # convention; the endpoint resolves a subtask key to its parent story) →
+      # the MOTIR-1627 dogfood FALLBACK. `github.head_ref` is empty on
+      # push-to-main, where the recording's self-declared story / the fallback
+      # applies.
+      #
+      # BEST-EFFORT — `continue-on-error` so this side-effect NEVER gates the
+      # merge. It publishes to production (app.motir.co); until THIS PR merges and
+      # deploys, production has no keyless endpoint, so the OIDC publish 401s
       # (chicken-and-egg). Post-merge, subsequent acceptance runs publish for real.
-      - name: Publish the acceptance video (self-test)
+      - name: Publish the acceptance video
         if: matrix.id == 'acceptance-video' && success()
         continue-on-error: true
         env:
           MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
           MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
-          ACCEPTANCE_STORY_KEY: MOTIR-1627
+          ACCEPTANCE_PR_REF: ${{ github.head_ref }}
+          ACCEPTANCE_PR_TITLE: ${{ github.event.pull_request.title }}
+          ACCEPTANCE_FALLBACK_STORY_KEY: MOTIR-1627
           ACCEPTANCE_PRODUCED_BY: MOTIR-1638
         run: node scripts/upload-acceptance-video.mjs
       # Always upload the report — pass-runs are useful for debugging flakes, and

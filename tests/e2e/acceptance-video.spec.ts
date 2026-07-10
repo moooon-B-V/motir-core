@@ -37,7 +37,13 @@ test.afterAll(async () => {
 test('paid + on → the reviewer plays the video and Approves → the story goes Done', async ({
   page,
   chapter,
+  acceptanceStory,
 }) => {
+  // This IS the MOTIR-1627 self-test dogfood — pin the recorded clip to MOTIR-1627
+  // (MOTIR-1684). The uploader reads this over the PR-derived key, so the dogfood
+  // always publishes to its own panel and is never mis-attributed to an unrelated
+  // PR's story.
+  acceptanceStory('MOTIR-1627');
   const seed = await seedBillingOwner(page, 'dogfood@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
   await setOrgAcceptanceVideo(seed.organizationId, true);

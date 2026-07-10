@@ -7,15 +7,29 @@
 // (`integration` scope) for an unconnected repo. A FAILING run leaves no video,
 // so this is a no-op — a red acceptance E2E publishes nothing.
 //
-// Env: ACCEPTANCE_STORY_KEY (required); auth is EITHER a GitHub OIDC token (auto
-//      via `id-token: write` — `ACTIONS_ID_TOKEN_REQUEST_URL`/`_TOKEN`) OR
-//      MOTIR_UPLOAD_TOKEN (the PAT fallback) — neither present → opt-in no-op;
+// Target STORY resolution (MOTIR-1684) — the publish is NO LONGER pinned to the
+// MOTIR-1627 dogfood constant. `resolveStoryKey` picks the target in precedence
+// order: (1) an explicit ACCEPTANCE_STORY_KEY (library / manual override); (2)
+// the RECORDING's self-declared story — the `acceptance-story.json` sidecar the
+// acceptance harness writes (authoritative for what the clip DEPICTS, so the
+// self-test dogfood is never mis-attributed to an unrelated PR's story); (3) the
+// PR's `MOTIR-<id>` parsed from ACCEPTANCE_PR_REF / ACCEPTANCE_PR_TITLE (the
+// status-sync convention) — the publish endpoint resolves a subtask key UP to
+// its parent story server-side; (4) ACCEPTANCE_FALLBACK_STORY_KEY (the MOTIR-1627
+// dogfood, retained as the first instance / fallback).
+//
+// Env: auth is EITHER a GitHub OIDC token (auto via `id-token: write` —
+//      `ACTIONS_ID_TOKEN_REQUEST_URL`/`_TOKEN`) OR MOTIR_UPLOAD_TOKEN (the PAT
+//      fallback) — neither present → opt-in no-op;
+//      story target: ACCEPTANCE_STORY_KEY (override) / ACCEPTANCE_PR_REF +
+//      ACCEPTANCE_PR_TITLE (PR-derived) / ACCEPTANCE_FALLBACK_STORY_KEY;
 //      MOTIR_OIDC_AUDIENCE (default motir-acceptance-video),
 //      MOTIR_BASE_URL (default https://app.motir.co),
 //      ACCEPTANCE_OUTPUT_DIR (default out/playwright-output-acceptance),
 //      ACCEPTANCE_PRODUCED_BY, plus GitHub's GITHUB_SHA / GITHUB_RUN_ID / … for
 //      provenance. Also usable as a library: import { findArtifacts,
-//      requestGithubOidcToken, uploadAcceptanceVideo }.
+//      parseWorkItemKey, resolveStoryKey, requestGithubOidcToken,
+//      uploadAcceptanceVideo }.
 
 /* eslint-disable no-console -- this is a CLI script; stdout is its interface. */
 import fs from 'node:fs';
@@ -50,11 +64,69 @@ export function findArtifacts(outputDir) {
     f.endsWith(ext) && (!chapters || path.dirname(f) === path.dirname(chapters));
   const video = files.find((f) => inDog(f, '.webm'));
   if (!video) return null;
+  // The recording's self-declared story (MOTIR-1684) — the `acceptance-story.json`
+  // sidecar the harness writes next to chapters.json, pinned to the same dogfood
+  // directory so a sibling recording can't shadow it. Null when the spec did not
+  // declare one (→ the uploader falls to the PR-derived / fallback story).
+  const storyMeta = files.find((f) => inDog(f, 'acceptance-story.json'));
   return {
     video,
     trace: files.find((f) => inDog(f, 'trace.zip')) ?? null,
     chapters: chapters ?? null,
+    storyKey: readStoryKey(storyMeta ?? null),
   };
+}
+
+/** Parse the story key from an `acceptance-story.json` sidecar; null if absent
+ *  or malformed. */
+function readStoryKey(file) {
+  if (!file) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return parsed && typeof parsed.storyKey === 'string' && parsed.storyKey.trim()
+      ? parsed.storyKey.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse the FIRST `<PREFIX>-<number>` work-item key from a string (a branch ref
+ * or PR title — the PR-title status-sync convention, mirroring
+ * githubWebhookService.resolveWorkItem's `headRef + title` parse). Null when the
+ * text carries no key. Case-insensitive; the key is upper-cased.
+ */
+export function parseWorkItemKey(text) {
+  if (!text) return null;
+  const m = /\b[A-Za-z][A-Za-z0-9]*-\d+\b/.exec(String(text));
+  return m ? m[0].toUpperCase() : null;
+}
+
+/**
+ * Resolve the target STORY key for the publish (MOTIR-1684), in precedence:
+ *   1. explicit ACCEPTANCE_STORY_KEY (override / library use);
+ *   2. `declaredKey` — the recording's self-declared story (the sidecar);
+ *   3. the PR's `MOTIR-<id>` (ACCEPTANCE_PR_REF, then ACCEPTANCE_PR_TITLE) — the
+ *      endpoint resolves a subtask key to its parent story server-side;
+ *   4. ACCEPTANCE_FALLBACK_STORY_KEY (the MOTIR-1627 dogfood fallback).
+ * Returns `{ storyKey, source }`; `storyKey` is null when nothing resolves.
+ *
+ * @param {string | null} [declaredKey]
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {{ storyKey: string | null, source: string }}
+ */
+export function resolveStoryKey(declaredKey = null, env = process.env) {
+  const explicit = (env['ACCEPTANCE_STORY_KEY'] ?? '').trim();
+  if (explicit) return { storyKey: explicit, source: 'explicit' };
+  if (declaredKey && String(declaredKey).trim())
+    return { storyKey: String(declaredKey).trim(), source: 'recording' };
+  const prKey =
+    parseWorkItemKey(env['ACCEPTANCE_PR_REF']) ?? parseWorkItemKey(env['ACCEPTANCE_PR_TITLE']);
+  if (prKey) return { storyKey: prKey, source: 'pr' };
+  const fallback = (env['ACCEPTANCE_FALLBACK_STORY_KEY'] ?? '').trim();
+  if (fallback) return { storyKey: fallback, source: 'fallback' };
+  return { storyKey: null, source: 'none' };
 }
 
 /**
@@ -178,16 +250,12 @@ function ciRunUrl() {
 }
 
 async function main() {
-  const storyKey = process.env['ACCEPTANCE_STORY_KEY'];
   const baseUrl = process.env['MOTIR_BASE_URL'] ?? DEFAULT_BASE_URL;
   const outputDir = process.env['ACCEPTANCE_OUTPUT_DIR'] ?? DEFAULT_OUTPUT_DIR;
   const audience = process.env['MOTIR_OIDC_AUDIENCE'] ?? DEFAULT_OIDC_AUDIENCE;
 
-  if (!storyKey) {
-    console.error('ACCEPTANCE_STORY_KEY is required.');
-    process.exit(1);
-  }
-
+  // Find the artifacts FIRST (a red run / recording-off publishes nothing) — the
+  // recording may self-declare its story, which outranks the PR-derived target.
   const artifacts = findArtifacts(outputDir);
   if (!artifacts) {
     console.log(
@@ -195,6 +263,18 @@ async function main() {
     );
     return;
   }
+
+  // Resolve the target story (MOTIR-1684): recording sidecar → PR `MOTIR-<id>` →
+  // dogfood fallback (explicit env outranks all). A run with a video but no
+  // resolvable story is a misconfiguration, not a silent skip.
+  const { storyKey, source } = resolveStoryKey(artifacts.storyKey);
+  if (!storyKey) {
+    console.error(
+      'No target story resolved — set ACCEPTANCE_STORY_KEY, a self-declared recording story, ACCEPTANCE_PR_REF/ACCEPTANCE_PR_TITLE, or ACCEPTANCE_FALLBACK_STORY_KEY.',
+    );
+    process.exit(1);
+  }
+  console.log(`Acceptance publish target: ${storyKey} (resolved via ${source}).`);
 
   // Keyless GitHub OIDC first (MOTIR-1650); fall back to the MOTIR_UPLOAD_TOKEN
   // PAT for a repo not connected via the App. Neither present → opt-in no-op

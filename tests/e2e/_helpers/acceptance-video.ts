@@ -21,6 +21,16 @@ export interface Chapter {
 interface AcceptanceFixtures {
   /** Run a phase as a chaptered step; marks its start on the video timeline. */
   chapter: (label: string, body: () => Promise<void>) => Promise<void>;
+  /**
+   * Declare which STORY this recording accepts (MOTIR-1684). The uploader
+   * publishes the clip to THIS story — so the self-test dogfood pins itself to
+   * MOTIR-1627 and a per-story acceptance spec pins itself to its own story,
+   * regardless of the PR that triggered the run. Writes an
+   * `acceptance-story.json` sidecar next to `chapters.json` in the test's
+   * outputDir; the uploader reads it as the top-precedence target (over the
+   * PR-derived key). Call once, in the recorded happy-path test.
+   */
+  acceptanceStory: (storyKey: string) => void;
 }
 
 export const test = base.extend<AcceptanceFixtures>({
@@ -45,6 +55,21 @@ export const test = base.extend<AcceptanceFixtures>({
     fs.mkdirSync(testInfo.outputDir, { recursive: true });
     fs.writeFileSync(file, JSON.stringify(chapters));
     await testInfo.attach('chapters', { path: file, contentType: 'application/json' });
+  },
+
+  acceptanceStory: async ({}, provide, testInfo) => {
+    let declared: string | null = null;
+    await provide((storyKey: string) => {
+      declared = storyKey;
+    });
+    // On teardown, persist the declared story next to the video (same dir as
+    // chapters.json) so the uploader publishes the clip to THIS story.
+    if (declared) {
+      const file = path.join(testInfo.outputDir, 'acceptance-story.json');
+      fs.mkdirSync(testInfo.outputDir, { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ storyKey: declared }));
+      await testInfo.attach('acceptance-story', { path: file, contentType: 'application/json' });
+    }
   },
 });
 
