@@ -130,3 +130,42 @@ export function installGithubOAuthMock(agent: MockAgent): void {
     )
     .persist();
 }
+
+// GitLab connect-grant mock (Story 7.23 · MOTIR-1480) — the GitLab mirror of the
+// GitHub seam. gitlabConnectionService.completeOAuthCallback POSTs the code→token
+// exchange to gitlab.com/oauth/token and reads the user from gitlab.com/api/v4/user;
+// intercepting both lets Playwright drive the REAL /api/gitlab/oauth/start →
+// authorize → callback round-trip (the browser leg is performed by the spec) without
+// leaving localhost. The identity is a fixed synthetic user — the spec asserts the
+// settings panel binds to this username (the values mirror
+// tests/e2e/_helpers/gitlab-const.ts's E2E_GITLAB_USER; kept literal here so the
+// lib/ seam never imports test helpers). GitLab addresses ONE host for both OAuth and
+// REST (unlike GitHub's github.com + api.github.com).
+export function installGitlabOAuthMock(agent: MockAgent): void {
+  const gitlab = agent.get('https://gitlab.com');
+
+  gitlab
+    .intercept({ path: '/oauth/token', method: 'POST' })
+    .reply(
+      200,
+      {
+        access_token: 'gl_e2e_access_token',
+        refresh_token: 'gl_e2e_refresh_token',
+        token_type: 'bearer',
+        // ~2h from server boot — comfortably future for the near-immediate E2E run.
+        expires_in: 7200,
+        created_at: Math.floor(Date.now() / 1000),
+      },
+      { headers: { 'content-type': 'application/json' } },
+    )
+    .persist();
+
+  gitlab
+    .intercept({ path: '/api/v4/user', method: 'GET' })
+    .reply(
+      200,
+      { id: 771234, username: 'e2e-glcat' },
+      { headers: { 'content-type': 'application/json' } },
+    )
+    .persist();
+}

@@ -43,15 +43,20 @@ export async function register() {
   const agent = installSharedMockAgent();
 
   if (wantOauthMock) {
-    const { installGoogleTokenMock, installGithubOAuthMock } =
+    const { installGoogleTokenMock, installGithubOAuthMock, installGitlabOAuthMock } =
       await import('@/lib/test-oauth-mock');
     installGoogleTokenMock(agent);
     // GitHub identity grant (Story 7.10 · MOTIR-897): the server-side
     // code→token exchange + /user read the OAuth callback performs — same
     // env gate, same shared agent.
     installGithubOAuthMock(agent);
+    // GitLab connect grant (Story 7.23 · MOTIR-1480): the server-side
+    // code→token exchange + /api/v4/user read — same env gate, same shared agent.
+    installGitlabOAuthMock(agent);
     // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log('[INSTRUMENT] E2E_TEST_OAUTH active — Google + GitHub OAuth endpoints mocked.');
+    console.log(
+      '[INSTRUMENT] E2E_TEST_OAUTH active — Google + GitHub + GitLab OAuth endpoints mocked.',
+    );
   }
   if (wantBlobMock) {
     const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
