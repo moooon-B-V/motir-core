@@ -456,6 +456,164 @@ describe('migrateOnboardingService — advanceNext dispatch + guards', () => {
   });
 });
 
+describe('migrateOnboardingService — index step null-safe guard', () => {
+  it('blocks when connectedRepoRef is null (no repo to poll)', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, { step: 'index', connectedRepoRef: null });
+
+    await expect(migrateOnboardingService.advanceFromIndex(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingExitConditionError,
+    );
+    expect((await migrateOnboardingService.getById(run.id, fx.ctx)).step).toBe('index');
+  });
+});
+
+describe('migrateOnboardingService — CONNECT uses pre-set ref', () => {
+  it('uses the stored connectedRepoRef when the step was started with one', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx, {
+      connectedRepoRef: 'acme/widgets',
+    });
+
+    // Seed a repo whose owner/name differ from the pre-set ref — the pre-set
+    // ref must win (it's the one the user chose, not just any connected repo).
+    await seedConnectedRepo(fx, 'other-org', 'other-repo');
+    const dto = await migrateOnboardingService.advanceFromConnect(run.id, fx.ctx);
+    expect(dto.step).toBe('index');
+    expect(dto.connectedRepoRef).toBe('acme/widgets');
+  });
+});
+
+describe('migrateOnboardingService — audit_convention kick throws (best-effort)', () => {
+  it('advances to discovery even when the audit kick throws (non-blocking)', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'audit_convention',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+    });
+
+    mocks.refreshCodeAudit.mockRejectedValueOnce(new Error('audit down'));
+
+    const dto = await migrateOnboardingService.advanceFromAuditConvention(run.id, fx.ctx);
+    expect(dto.step).toBe('discovery');
+    expect(dto.conventionApprovedAt).not.toBeNull();
+    expect(mocks.refreshCodeAudit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('migrateOnboardingService — advanceNext from intermediate steps', () => {
+  it('dispatches advanceNext from audit_convention → discovery (auto-use)', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'audit_convention',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+    });
+
+    const dto = await migrateOnboardingService.advanceNext(run.id, fx.ctx);
+    expect(dto.step).toBe('discovery');
+    expect(dto.conventionApprovedAt).not.toBeNull();
+  });
+
+  it('advanceNext from discovery kicks the job + blocks until docs exist', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, { step: 'discovery' });
+
+    // Blocks while no docs exist, but the job is recorded.
+    await expect(migrateOnboardingService.advanceNext(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingExitConditionError,
+    );
+    expect((await migrateOnboardingService.getById(run.id, fx.ctx)).discoveryJobId).toBe(
+      'job-discovery',
+    );
+
+    // Docs arrive → advances.
+    mocks.getPreplanState.mockResolvedValue({ session: null, docs: [preplanDoc()], catalog: null });
+    const dto = await migrateOnboardingService.advanceNext(run.id, fx.ctx);
+    expect(dto.step).toBe('generate');
+  });
+
+  it('advanceNext from generate with preconditions met → kicks, blocks, then advances to review', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+    });
+
+    // Kicks generation, blocks until planned.
+    await expect(migrateOnboardingService.advanceNext(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingExitConditionError,
+    );
+    expect((await migrateOnboardingService.getById(run.id, fx.ctx)).generateJobId).toBe(
+      'job-generate_tree',
+    );
+
+    await setPlanStatus('job-generate_tree', 'planned');
+    const dto = await migrateOnboardingService.advanceNext(run.id, fx.ctx);
+    expect(dto.step).toBe('review');
+  });
+});
+
+describe('migrateOnboardingService — mid-flow resumability', () => {
+  it('resumes from generate with the job already in progress → re-polls exit', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+      generateJobId: 'job-generate_tree',
+    });
+
+    // Job already kicked (a prior run submitted it); exit condition polls.
+    await setPlanStatus('job-generate_tree', 'planned');
+    const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
+    expect(dto.step).toBe('review');
+    expect(mocks.submitJob).not.toHaveBeenCalled(); // idempotent — not re-kicked
+  });
+
+  it('resumes from review with the plan awaiting approval', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'review',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+      generateJobId: 'job-generated',
+    });
+
+    // Not yet approved → blocks.
+    await setPlanStatus('job-generated', 'planned');
+    await expect(migrateOnboardingService.advanceFromReview(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingExitConditionError,
+    );
+
+    // Approved → run completes.
+    await setPlanStatus('job-generated', 'approved');
+    const dto = await migrateOnboardingService.advanceFromReview(run.id, fx.ctx);
+    expect(dto.step).toBe('done');
+    expect(dto.status).toBe('completed');
+  });
+});
+
 describe('migrateOnboardingService — tenant isolation', () => {
   it('another workspace cannot read or transition a run it does not own', async () => {
     const a = await makeWorkItemFixture({ name: 'Acme', identifier: 'ACME' });
