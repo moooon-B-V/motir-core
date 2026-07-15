@@ -23,7 +23,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-lint
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-lint.outputs.cache-hit != 'true'
       - run: pnpm lint
       - run: pnpm format:check
 
@@ -37,9 +44,25 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-typecheck
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-typecheck
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-typecheck.outputs.cache-hit != 'true'
       # Prisma client is generated, not committed — typecheck needs it.
       - run: pnpm prisma generate
+        if: steps.cache-prisma-typecheck.outputs.cache-hit != 'true'
       - run: pnpm typecheck
 
   design-system:
@@ -58,10 +81,17 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-ds
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
       # `pnpm install`'s postinstall builds the package; build again explicitly so
       # the barrel guard reads a dist built from THIS commit's source, not a cached
       # one. Skip the husky prepare hook — CI has no git hooks to wire.
       - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-ds.outputs.cache-hit != 'true'
         env:
           HUSKY: '0'
       - run: pnpm --filter @motir/design-system build
@@ -114,7 +144,22 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-build
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-build.outputs.cache-hit != 'true'
       # Prisma 7's `migrate deploy` does not auto-generate the client (unlike
       # `migrate dev`); next build's internal `tsc` then can't resolve
       # PrismaClient. Generate explicitly before build. The `migrate deploy`
@@ -124,6 +169,7 @@ jobs:
       # `pnpm build` here invokes that same script and migrates this job's
       # ephemeral Postgres service container.
       - run: pnpm prisma generate
+        if: steps.cache-prisma-build.outputs.cache-hit != 'true'
       - run: pnpm build
 
   test:
@@ -173,8 +219,24 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-test
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-test
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-test.outputs.cache-hit != 'true'
       - run: pnpm prisma generate
+        if: steps.cache-prisma-test.outputs.cache-hit != 'true'
       # The integration tests run against a REAL Postgres (no mocks): they need
       # the schema, the structural-integrity triggers, the RLS policies, AND
       # the non-bypass `prodect_app` role — all created by the migrations.
