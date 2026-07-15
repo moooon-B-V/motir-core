@@ -98,7 +98,10 @@ test('MOTIR-1685: provenance on the work-item detail — manual · mcp · native
     await expect(page.getByText('Planning', { exact: true })).toBeVisible();
     await expect(page.getByText('Manual', { exact: true })).toBeVisible();
     await expect(page.getByText('Implementation', { exact: true })).toBeVisible();
-    await expect(page.getByText('—')).toHaveCount(1); // implementation only
+    // "—" appears in many places on the detail page — scope to the
+    // Implementation FieldCard by navigating up from its label.
+    const implCard = page.getByText('Implementation', { exact: true }).locator('..').locator('..');
+    await expect(implCard.getByText('—')).toBeVisible();
   });
 
   await chapter('An MCP-created item shows MCP + the reported harness/model', async () => {
