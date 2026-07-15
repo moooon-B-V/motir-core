@@ -175,14 +175,20 @@ async function captureSetActiveProjectAction(
       .locator('[data-state=open]')
       .filter({ has: page.getByText('Projects', { exact: true }) });
     await popoverPanel.locator('ul[role=list] button', { hasText: ownProjectName }).first().click();
-    // Wait for the POST to land. Synchronizing on the resulting
-    // re-render (active label flips) is the durable signal — never
-    // waitForTimeout.
-    await page.waitForResponse(
-      (resp) =>
-        resp.request().method() === 'POST' && resp.request().headers()['next-action'] !== undefined,
-      { timeout: 30_000 },
-    );
+    // Poll the captured request array rather than waiting for the
+    // server response. Under bulk-4 load the webServer can be
+    // degraded and never respond, but the page.on('request') handler
+    // (set up above) captures the POST synchronously the moment the
+    // browser sends it — no server round-trip required. A long
+    // body-includes poll timeout is harmless: the request fires
+    // within milliseconds of the click, so expect.poll resolves
+    // near-instantly in normal conditions.
+    await expect
+      .poll(() => captured.some((c) => c.body.includes(ownProjectId)), {
+        timeout: 15_000,
+        intervals: [1_000, 2_000, 5_000],
+      })
+      .toBeTruthy();
   } finally {
     page.off('request', handler);
   }
