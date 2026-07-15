@@ -173,7 +173,12 @@ jobs:
       - run: pnpm build
 
   test:
-    name: Vitest (integration + coverage)
+    # Sharded matrix (MOTIR-1705): ~235 test files split across 3 runners,
+    # each with its own Postgres service container and per-worker DB isolation
+    # (MOTIR-754). Wall clock goes from the slowest file in the batch (~8–10 min)
+    # to the slowest shard (~2–3 min). Coverage runs separately in the `coverage`
+    # job below to avoid cross-shard merge complexity.
+    name: Vitest (${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
     # Skip the integration suite on plan-seed, design, and docs PRs, same as E2E
     # below. A `seed/*` PR only edits scripts/plan-seed/** and a `design/*` PR
@@ -184,6 +189,11 @@ jobs:
     # still run. github.head_ref is the PR source branch (empty on
     # push-to-main, where the suite runs normally).
     if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+        total: [3]
     services:
       postgres:
         image: postgres:16-alpine
@@ -237,13 +247,66 @@ jobs:
         if: steps.cache-node-modules-test.outputs.cache-hit != 'true'
       - run: pnpm prisma generate
         if: steps.cache-prisma-test.outputs.cache-hit != 'true'
-      # The integration tests run against a REAL Postgres (no mocks): they need
-      # the schema, the structural-integrity triggers, the RLS policies, AND
-      # the non-bypass `prodect_app` role — all created by the migrations.
-      # `migrate deploy` applies every migration to the service container.
       - run: pnpm prisma migrate deploy
-      # test:coverage enforces the ≥90% per-module thresholds for the four
-      # work-item modules (vitest.config.ts). A regression below 90% fails CI.
+      # Run the test suite sharded — coverage runs separately in the `coverage`
+      # job below so each shard's coverage data doesn't need cross-runner merging.
+      - run: pnpm vitest run --shard=${{ matrix.shard }}/${{ matrix.total }}
+
+  coverage:
+    name: Vitest coverage
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    needs: test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prodect
+          POSTGRES_PASSWORD: prodect
+          POSTGRES_DB: prodect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prodect -d prodect"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-coverage-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-coverage-placeholder
+      GOOGLE_CLIENT_SECRET: ci-coverage-placeholder
+      BLOB_READ_WRITE_TOKEN: vercel_blob_rw_ci_coverage_only_placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-coverage
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-coverage
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-coverage.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-coverage.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      # Enforce the ≥90% per-module thresholds for the work-item modules
+      # (vitest.config.ts). Runs AFTER all test shards pass. A regression
+      # below 90% fails CI.
       - run: pnpm test:coverage
 
   e2e:
