@@ -137,6 +137,7 @@ async function setPlanStatus(sourceJobId: string, status: 'planned' | 'approved'
 
 beforeEach(async () => {
   await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await db.$executeRawUnsafe('TRUNCATE TABLE "import" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
   mocks.submitJob.mockClear();
@@ -253,7 +254,7 @@ describe('migrateOnboardingService — index step (code-graph ledger poll)', () 
 
     await seedSucceededIndexJob(fx, 'acme/widgets');
     const dto = await migrateOnboardingService.advanceFromIndex(run.id, fx.ctx);
-    expect(dto.step).toBe('audit_convention');
+    expect(dto.step).toBe('import');
     expect(dto.codeGraphReady).toBe(true);
   });
 
@@ -265,6 +266,110 @@ describe('migrateOnboardingService — index step (code-graph ledger poll)', () 
     await expect(migrateOnboardingService.advanceFromIndex(run.id, fx.ctx)).rejects.toBeInstanceOf(
       MigrateOnboardingExitConditionError,
     );
+  });
+});
+
+describe('migrateOnboardingService — import step (optional; MOTIR-1643)', () => {
+  /** Seed a COMPLETED import run on the fixture's project so the import step's
+   *  exit check resolves via polling. */
+  async function seedCompletedImport(fx: WorkItemFixture, source = 'jira') {
+    return db.import.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        source: source as 'jira',
+        status: 'succeeded',
+        createdCount: 12,
+        updatedCount: 3,
+        skippedCount: 0,
+      },
+    });
+  }
+
+  it('blocks until an import is completed or skipped, then advances', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'import',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+    });
+
+    await expect(migrateOnboardingService.advanceFromImport(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingExitConditionError,
+    );
+
+    await seedCompletedImport(fx);
+    const dto = await migrateOnboardingService.advanceFromImport(run.id, fx.ctx);
+    expect(dto.step).toBe('audit_convention');
+    expect(dto.importCompleted).toBe(true);
+    expect(dto.importSkipped).toBe(false);
+  });
+
+  it('advances immediately when importCompleted is already set (idempotent poll)', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'import',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      importCompleted: true,
+    });
+
+    const dto = await migrateOnboardingService.advanceFromImport(run.id, fx.ctx);
+    expect(dto.step).toBe('audit_convention');
+  });
+
+  it('skipImport transitions import → audit_convention with importSkipped = true', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'import',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+    });
+
+    const dto = await migrateOnboardingService.skipImport(run.id, fx.ctx);
+    expect(dto.step).toBe('audit_convention');
+    expect(dto.importSkipped).toBe(true);
+    expect(dto.importCompleted).toBe(false);
+  });
+
+  it('skipImport from a non-import step rejects with a step error', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    // Still at connect.
+    await expect(migrateOnboardingService.skipImport(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingStepError,
+    );
+  });
+
+  it('skipImport is idempotent — already skipped is a no-op', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'import',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      importSkipped: true,
+    });
+
+    const dto = await migrateOnboardingService.skipImport(run.id, fx.ctx);
+    expect(dto.step).toBe('import'); // already past import shouldn't change
+  });
+
+  it('advanceFromImport sees the already-skipped flag and advances', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'import',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      importSkipped: true,
+    });
+
+    const dto = await migrateOnboardingService.advanceFromImport(run.id, fx.ctx);
+    expect(dto.step).toBe('audit_convention');
   });
 });
 
@@ -400,6 +505,49 @@ describe('migrateOnboardingService — generate step (code-aware precondition ·
     const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
     expect(dto.step).toBe('review');
   });
+
+  it('enriches the generation prompt when import was completed (MOTIR-1643 reconcile)', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    // Seed a completed import so the reconcile prompt is injected.
+    await db.import.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        source: 'jira',
+        status: 'succeeded',
+        createdCount: 10,
+        updatedCount: 2,
+        skippedCount: 1,
+      },
+    });
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+      importCompleted: true,
+    });
+
+    // Trigger the generation kick — the prompt should carry import context.
+    await expect(
+      migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
+    ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
+
+    // The generation was submitted with the reconcile prompt.
+    expect(mocks.submitJob).toHaveBeenCalledWith(
+      'generate_tree',
+      expect.objectContaining({
+        projectId: fx.projectId,
+      }),
+      expect.objectContaining({
+        prompt: expect.stringContaining('imported from jira'),
+      }),
+      expect.anything(),
+    );
+  });
 });
 
 describe('migrateOnboardingService — generate + review (plan status)', () => {
@@ -450,6 +598,25 @@ describe('migrateOnboardingService — advanceNext dispatch + guards', () => {
     await expect(migrateOnboardingService.advanceNext(run.id, fx.ctx)).rejects.toBeInstanceOf(
       MigrateOnboardingExitConditionError,
     );
+  });
+
+  it('advanceNext dispatches to the import step when the run is at import', async () => {
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    // import blocks → advanceNext rejects with exit condition.
+    await patchRun(fx, run.id, {
+      step: 'import',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+    });
+    await expect(migrateOnboardingService.advanceNext(run.id, fx.ctx)).rejects.toBeInstanceOf(
+      MigrateOnboardingExitConditionError,
+    );
+
+    // Set importSkipped → advanceNext succeeds.
+    await patchRun(fx, run.id, { importSkipped: true });
+    const dto = await migrateOnboardingService.advanceNext(run.id, fx.ctx);
+    expect(dto.step).toBe('audit_convention');
   });
 
   it('rejects a transition from the wrong step (no step-skipping / double-advance)', async () => {

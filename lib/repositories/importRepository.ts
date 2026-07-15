@@ -36,4 +36,18 @@ export const importRepository = {
     const client = tx ?? db;
     return client.import.findUnique({ where: { id } });
   },
+
+  /** Find the most recent SUCCEEDED or PARTIALLY_FAILED import RUN for a
+   *  project (the import step's completion exit check). Returns null when no
+   *  import has completed for this project yet. */
+  async findCompletedForProject(projectId: string, workspaceId: string): Promise<Import | null> {
+    return db.import.findFirst({
+      where: {
+        projectId,
+        workspaceId,
+        status: { in: ['succeeded', 'partially_failed'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  },
 };

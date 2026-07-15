@@ -13,6 +13,7 @@ export type MigrateOnboardingKindDto = 'migrate';
 export type MigrateOnboardingStepDto =
   | 'connect'
   | 'index'
+  | 'import'
   | 'audit_convention'
   | 'discovery'
   | 'generate'
@@ -41,6 +42,8 @@ export interface MigrateOnboardingDto {
   conventionApprovedAt: string | null;
   discoveryJobId: string | null;
   generateJobId: string | null;
+  importSkipped: boolean;
+  importCompleted: boolean;
   createdAt: string;
   updatedAt: string;
 }

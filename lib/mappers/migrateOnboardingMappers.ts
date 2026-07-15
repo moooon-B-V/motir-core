@@ -21,6 +21,8 @@ export function toMigrateOnboardingDto(row: MigrateOnboarding): MigrateOnboardin
     conventionApprovedAt: row.conventionApprovedAt ? row.conventionApprovedAt.toISOString() : null,
     discoveryJobId: row.discoveryJobId,
     generateJobId: row.generateJobId,
+    importSkipped: row.importSkipped,
+    importCompleted: row.importCompleted,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
