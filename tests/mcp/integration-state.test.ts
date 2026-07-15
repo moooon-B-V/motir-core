@@ -230,3 +230,123 @@ describe('done clears the session branch (7.8.11 invariant) on any transition', 
     expect((await workItemsService.getWorkItem(a.id, fx.ctx)).sessionBranch).toBeNull();
   });
 });
+
+// Implementation provenance (Story MOTIR-1685 · MOTIR-1692) — the self-reported
+// BYOK/manual recording seam over the session tools + the reusable service method
+// + the manual completion lane.
+describe('implementation provenance (MOTIR-1685) — the recording seam', () => {
+  /** A leaf whose executor is human (the manual lane) or a coding agent. */
+  async function typedTask(
+    fx: WorkItemFixture,
+    title: string,
+    over: { type?: 'manual' | 'code'; executor?: 'human' | 'coding_agent' } = {},
+  ) {
+    return workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title, ...over },
+      fx.ctx,
+    );
+  }
+
+  it('mark_integrated self-reports byok provenance (source defaults to byok)', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'BYOK built');
+    await start(fx, a.id);
+
+    const dto = await workItemsService.markIntegrated(a.id, 'session/byok', fx.ctx, {
+      harness: 'opencode',
+      model: 'deepseek',
+    });
+    expect(dto.implementationSource).toBe('byok');
+    expect(dto.implementationHarness).toBe('opencode');
+    expect(dto.implementationModel).toBe('deepseek');
+
+    // Persisted through the detail read.
+    const reread = await workItemsService.getWorkItem(a.id, fx.ctx);
+    expect(reread.implementationSource).toBe('byok');
+    expect(reread.implementationModel).toBe('deepseek');
+  });
+
+  it('mark_integrated without a report leaves the implementation triple null', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'No report');
+    await start(fx, a.id);
+    const dto = await workItemsService.markIntegrated(a.id, 'session/none', fx.ctx);
+    expect(dto.implementationSource).toBeNull();
+    expect(dto.implementationHarness).toBeNull();
+  });
+
+  it('a human/manual item reaching done records source = manual (the manual lane)', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await typedTask(fx, 'Human task', { executor: 'human' });
+    await start(fx, a.id);
+    await workItemsService.updateStatus(a.id, 'in_review', fx.ctx);
+    await workItemsService.updateStatus(a.id, 'done', fx.ctx);
+
+    const reread = await workItemsService.getWorkItem(a.id, fx.ctx);
+    expect(reread.implementationSource).toBe('manual');
+    expect(reread.implementationHarness).toBeNull();
+    expect(reread.implementationModel).toBeNull();
+  });
+
+  it('a coding-agent item reaching done WITHOUT a report stays null (never auto-manual)', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await typedTask(fx, 'Agent task', { type: 'code' }); // seeds executor coding_agent
+    await start(fx, a.id);
+    await workItemsService.updateStatus(a.id, 'in_review', fx.ctx);
+    await workItemsService.updateStatus(a.id, 'done', fx.ctx);
+    expect((await workItemsService.getWorkItem(a.id, fx.ctx)).implementationSource).toBeNull();
+  });
+
+  it('the manual lane NEVER overwrites a prior byok report at done', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await typedTask(fx, 'Human item, but agent-reported', { executor: 'human' });
+    await start(fx, a.id);
+    // A byok report arrives at integration...
+    await workItemsService.markIntegrated(a.id, 'session/keep', fx.ctx, {
+      harness: 'Claude Code',
+      model: 'claude',
+    });
+    // ...and the human merge closes it out; the byok stamp must survive.
+    await workItemsService.updateStatus(a.id, 'done', fx.ctx);
+    const reread = await workItemsService.getWorkItem(a.id, fx.ctx);
+    expect(reread.implementationSource).toBe('byok');
+    expect(reread.implementationModel).toBe('claude');
+  });
+
+  it('complete_session stamps the reported provenance on every closed item', async () => {
+    const fx = await makeWorkItemFixture();
+    const items = await Promise.all([task(fx, 'a'), task(fx, 'b')]);
+    for (const it of items) {
+      await start(fx, it.id);
+      await workItemsService.markIntegrated(it.id, 'session/close', fx.ctx);
+    }
+    const result = await workItemsService.completeSession('session/close', fx.ctx, {
+      harness: 'Codex',
+      model: 'openai',
+    });
+    expect(result.results.every((r) => r.outcome === 'completed')).toBe(true);
+    for (const it of items) {
+      const reread = await workItemsService.getWorkItem(it.id, fx.ctx);
+      expect(reread.status).toBe('done');
+      expect(reread.implementationSource).toBe('byok');
+      expect(reread.implementationHarness).toBe('Codex');
+      expect(reread.implementationModel).toBe('openai');
+    }
+  });
+
+  it('recordImplementationProvenance persists the triple in a caller tx, independent of the session tools', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'Direct stamp');
+    // The reusable seam Epic 9's hosted runner will call with metered values.
+    const row = await db.$transaction((tx) =>
+      workItemsService.recordImplementationProvenance(
+        a.id,
+        { source: 'hosted', harness: 'Motir', model: 'claude-opus-4-8' },
+        tx,
+      ),
+    );
+    expect(row.implementationSource).toBe('hosted');
+    expect(row.implementationHarness).toBe('Motir');
+    expect(row.implementationModel).toBe('claude-opus-4-8');
+  });
+});

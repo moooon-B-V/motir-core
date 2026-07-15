@@ -49,6 +49,20 @@ export interface PlanItemProposedFields {
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
+  /**
+   * Native PLANNING provenance (Story MOTIR-1685) — motir-ai attaches how it
+   * planned this item so `materialize` can stamp it (docs/decisions/work-item-provenance.md,
+   * Decision 5). `source`/`harness` are constants for the native seam
+   * (`native`/`Motir`); `model` is resolved from the run's `PlanningRun.model`.
+   * OPTIONAL by contract: an older/absent producer just omits it and materialize
+   * still stamps a valid native triple (`native · Motir · null`), so the
+   * motir-ai producer (MOTIR-1690) and this consumer merge in any order.
+   */
+  planningProvenance?: {
+    source?: string;
+    harness?: string | null;
+    model?: string | null;
+  } | null;
 }
 
 /**

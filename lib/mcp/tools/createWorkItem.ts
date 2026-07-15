@@ -112,6 +112,26 @@ const inputSchema = {
         'overrides the type default when supplied. Omit (or null) to take the ' +
         'type default (or leave it unset when no type is given).',
     ),
+  // Planning provenance (MOTIR-1685): an item created through this tool is
+  // stamped `planningSource = mcp` server-side; the agent MAY self-report the
+  // harness + model it planned with. Both open free-text (recorded as-is, no
+  // verification implied). Omitted → the harness/model columns stay null.
+  plannedWithHarness: z
+    .string()
+    .optional()
+    .describe(
+      'Optional: the harness/tool this item was planned with (e.g. "Claude Code", ' +
+        '"Codex"). Recorded as self-reported planning provenance alongside the ' +
+        'server-set source "mcp"; omit to leave it unrecorded.',
+    ),
+  plannedWithModel: z
+    .string()
+    .optional()
+    .describe(
+      'Optional: the LLM this item was planned with (e.g. "claude-opus-4-8", ' +
+        '"deepseek-chat"). Recorded as self-reported planning provenance; omit to ' +
+        'leave it unrecorded.',
+    ),
 };
 
 interface CreateWorkItemArgs {
@@ -125,6 +145,8 @@ interface CreateWorkItemArgs {
   estimateMinutes?: number | null;
   type?: WorkItemType | null;
   executor?: Executor | null;
+  plannedWithHarness?: string;
+  plannedWithModel?: string;
 }
 
 /** Compact human-readable summary of a freshly-created work item. */
@@ -176,6 +198,17 @@ export async function runCreateWorkItem(
       ...(args.estimateMinutes !== undefined ? { estimateMinutes: args.estimateMinutes } : {}),
       ...(args.type !== undefined ? { type: args.type as WorkItemTypeDto | null } : {}),
       ...(args.executor !== undefined ? { executor: args.executor as ExecutorDto | null } : {}),
+      // Planning provenance (MOTIR-1685): server-set `source: 'mcp'` for anything
+      // created through this agent tool surface; the harness/model are the agent's
+      // self-reported values (null when not supplied). The source is fixed here —
+      // never taken from a caller field — so an agent cannot claim `manual`/`native`.
+      provenance: {
+        planning: {
+          source: 'mcp',
+          harness: args.plannedWithHarness ?? null,
+          model: args.plannedWithModel ?? null,
+        },
+      },
     };
     const dto = await workItemsService.createWorkItem(input, ctx);
     return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);

@@ -134,6 +134,12 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
           : {}),
         ...(input.dueDate ? { dueDate: input.dueDate } : {}),
         ...(links.length ? { links } : {}),
+        // Planning provenance (MOTIR-1685): a human creating in the UI → source
+        // `manual` (harness/model null). SERVER-SET here — it is deliberately NOT
+        // a field on `CreateIssueInput`, so a client-forged `planningSource` never
+        // reaches the DB (the same discipline the whitelist applies to
+        // `reporterId`, which the ServiceContext below sets).
+        provenance: { planning: { source: 'manual' } },
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId }, // reporter = session user
     );

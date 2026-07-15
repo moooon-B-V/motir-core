@@ -176,6 +176,11 @@ export async function POST(req: Request): Promise<Response> {
         assigneeId: typeof b.assigneeId === 'string' ? b.assigneeId : null,
         parentId: typeof b.parentId === 'string' ? b.parentId : null,
         sprintId: typeof b.sprintId === 'string' ? b.sprintId : null,
+        // Planning provenance (MOTIR-1685): the backlog / sprint-planning
+        // "+ Create issue" row is a manual UI create → source `manual`. SERVER-SET
+        // — the whitelist above never reads provenance from the body, so a forged
+        // one can't reach the service (same discipline as the board create action).
+        provenance: { planning: { source: 'manual' } },
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );

@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **27 tools**.
+`initialize` handshake and registers **29 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -272,20 +272,28 @@ passing a `parentKey` alongside `kind: "epic"` is rejected with
 `ILLEGAL_PARENT_TYPE` (MOTIR-1345 — the AI planner generates the whole tree,
 epics included, so the agent surface can create one).
 
-| Input             | Type                                                | Required | Notes                                                                                                                                                                         |
-| ----------------- | --------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `projectKey`      | string                                              | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                            |
-| `kind`            | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                     |
-| `title`           | string                                              | yes      | The title (one line).                                                                                                                                                         |
-| `parentKey`       | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                |
-| `descriptionMd`   | string                                              | no       | Markdown description body.                                                                                                                                                    |
-| `priority`        | priority enum                                       | no       | Omit for the project default.                                                                                                                                                 |
-| `storyPoints`     | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                      |
-| `estimateMinutes` | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                   |
-| `type`            | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped. |
-| `executor`        | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                               |
+| Input                | Type                                                | Required | Notes                                                                                                                                                                         |
+| -------------------- | --------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                            |
+| `kind`               | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                     |
+| `title`              | string                                              | yes      | The title (one line).                                                                                                                                                         |
+| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                |
+| `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                    |
+| `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                 |
+| `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                      |
+| `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                   |
+| `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped. |
+| `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                               |
+| `plannedWithHarness` | string                                              | no       | Self-reported planning **harness** (e.g. `"Claude Code"`, `"Codex"`). Recorded as planning provenance alongside the server-set source `mcp`. Omit → unrecorded.               |
+| `plannedWithModel`   | string                                              | no       | Self-reported planning **model** (e.g. `"claude-opus-4-8"`, `"deepseek-chat"`). Recorded as planning provenance. Omit → unrecorded.                                           |
 
 **Output** — `structuredContent`: the created `WorkItemDto`.
+
+Every item created through this tool is stamped with planning provenance
+`source = mcp` (server-set — a caller cannot claim `manual`/`native`); the
+optional `plannedWithHarness` / `plannedWithModel` record the agent's
+self-reported harness + LLM (recorded as-is, no verification implied). See
+`docs/decisions/work-item-provenance.md`.
 
 The leaf-authoring fields (`estimateMinutes`, `type`, `executor`, `storyPoints`)
 mirror `update_work_item`, so a subtask can be created fully-specified in a
@@ -716,6 +724,50 @@ cross-user exposure.
 **Output** — `structuredContent`: `{ user, workspace }` (the actor's user
 profile and active-workspace summary; `workspace` may be null only in the race
 where the membership was removed mid-request).
+
+#### `mark_integrated`
+
+Record that a work item's work has been integrated onto a session branch (the
+write the CLI loop calls on agent success): the item moves to **In review** and
+its `sessionBranch` is recorded — in ONE transaction — which unblocks its
+dependents while the session PR awaits a human merge. Optionally self-report the
+**implementation provenance** — how the item was built (Story MOTIR-1685).
+
+**Input**
+
+| Field                   | Type                 | Required | Notes                                                                                                             |
+| ----------------------- | -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `key`                   | string               | yes      | The work item identifier, e.g. `PROD-7`.                                                                          |
+| `sessionBranch`         | string               | yes      | The integration branch the work was merged onto.                                                                  |
+| `implementationSource`  | `"byok" \| "manual"` | no       | Self-reported execution lane; defaults to `byok` when a harness/model is reported. `hosted` is not accepted here. |
+| `implementationHarness` | string               | no       | Self-reported harness (e.g. `opencode`, `Claude Code`). Recorded as-is (no verification implied).                 |
+| `implementationModel`   | string               | no       | Self-reported model (e.g. `claude`, `deepseek`).                                                                  |
+
+**Output** — `structuredContent`: the updated `WorkItemDto` (now `in_review`,
+carrying `sessionBranch` and any recorded implementation provenance). Omitting
+the provenance fields leaves the implementation triple untouched. See
+`docs/decisions/work-item-provenance.md`.
+
+#### `complete_session`
+
+Close out a session branch after its PR is merged: every work item recorded on
+the branch moves to **Done** and its branch is cleared, in one transaction.
+Returns a per-item outcome (`completed` / `already_done` / `failed`). Optionally
+self-report implementation provenance applied to **every item it closes**.
+
+**Input**
+
+| Field                   | Type                 | Required | Notes                                                                  |
+| ----------------------- | -------------------- | -------- | ---------------------------------------------------------------------- |
+| `sessionBranch`         | string               | yes      | The branch whose recorded items are being closed out.                  |
+| `implementationSource`  | `"byok" \| "manual"` | no       | Self-reported lane; defaults to `byok`. `hosted` is not accepted here. |
+| `implementationHarness` | string               | no       | Self-reported harness, stamped on every closed item.                   |
+| `implementationModel`   | string               | no       | Self-reported model, stamped on every closed item.                     |
+
+**Output** — `structuredContent`:
+`{ sessionBranch, results: [{ key, outcome, reason? }] }`. Omitting the
+provenance fields leaves each item's provenance as its `mark_integrated` report
+or the manual-lane stamp.
 
 ## Permission model
 

@@ -298,6 +298,18 @@ async function materialize(
         ? { priority: pf.priority as Prisma.WorkItemUncheckedCreateInput['priority'] }
         : {}),
       reporterId: ctx.userId,
+      // Native PLANNING provenance (Story MOTIR-1685, docs/decisions/work-item-provenance.md
+      // Decision 5): every item materialized from an approved plan was planned
+      // NATIVELY by Motir → `source: native` (PINNED — never read from the
+      // proposal), `harness: Motir`. The underlying LLM IS RECORDED here (from the
+      // motir-ai producer, MOTIR-1690 — core doesn't otherwise know it) so it is
+      // available for internal ANALYSIS; but the read DTO STRIPS it for native
+      // (`toWorkItemDto`), so it is never EXPOSED to the frontend/API — Motir
+      // abstracts its own model. MCP/BYOK keep + expose their model (the user
+      // reported their OWN).
+      planningSource: 'native',
+      planningHarness: 'Motir',
+      planningModel: pf.planningProvenance?.model ?? null,
       type: (pf.type as Prisma.WorkItemUncheckedCreateInput['type']) ?? null,
       executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null,
       // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
