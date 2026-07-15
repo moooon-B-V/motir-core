@@ -5,8 +5,10 @@ import type {
   NormalizedChangeRequest,
   NormalizedStatusEvent,
 } from '@/lib/git/types';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
+import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import {
   syncChangeRequestStatus,
   type ChangeRequestContextResolution,
@@ -30,11 +32,11 @@ import {
 // author is always the workspace owner).
 //
 // Scope: this service dispatches GitLab's MERGE-REQUEST hook to the shared status
-// sync (MOTIR-1475) and its PIPELINE hook to the shared CI-feedback consumer
-// (`applyCiStatusFeedback`, MOTIR-1477) — the SAME two consumers GitHub drives, not
-// GitLab-specific copies. GitLab's `push` hook (the code-graph feed, MOTIR-1476)
-// still rides the SAME endpoint but is IGNORED here (a fast 2xx no-op), owned by
-// its own sibling card that extends the dispatch additively.
+// sync (MOTIR-1475), its PIPELINE hook to the shared CI-feedback consumer
+// (`applyCiStatusFeedback`, MOTIR-1477), and its PUSH hook to the code-graph feed
+// (MOTIR-1476) — the SAME consumers GitHub drives, not GitLab-specific copies. Each
+// sibling card extended this one dispatcher additively; every other kind (note / … )
+// stays a fast 2xx no-op.
 
 const PROVIDER: GitProviderId = 'gitlab';
 
@@ -47,22 +49,30 @@ const HANDLED_MR_ACTIONS = new Set(['open', 'reopen', 'close', 'merge']);
 export type GitlabWebhookResult =
   | { event: 'ignored'; reason: string }
   | ChangeRequestSyncResult
-  | CiFeedbackResult;
+  | CiFeedbackResult
+  | {
+      event: 'push';
+      outcome:
+        | 'refresh_enqueued' // a default-branch push → the incremental refresh job is queued
+        | 'ignored_ref' // a non-branch push (tag / delete), or a non-default branch — no refresh
+        | 'unknown_repo'; // the pushed project isn't connected in any workspace
+    };
 
 export const gitlabWebhookService = {
   /**
    * Handle one verified delivery. `eventType` is the `X-Gitlab-Event` header; the
    * body's `object_kind` is the authoritative event discriminator GitLab always
-   * carries. A `merge_request` hook drives the status sync and a `pipeline` hook
-   * the CI-feedback loop; every other kind (push / note / …) is a fast 2xx no-op
-   * here (owned by sibling cards). Idempotent under redelivery via the shared
-   * consumers.
+   * carries. A `merge_request` hook drives the status sync, a `pipeline` hook the
+   * CI-feedback loop, and a `push` hook the code-graph feed; every other kind
+   * (note / … ) is a fast 2xx no-op here. Idempotent under redelivery via the
+   * shared consumers (the refresh job is idempotent + debounced).
    */
   async handleEvent(eventType: string, payload: unknown): Promise<GitlabWebhookResult> {
     const body = asRecord(payload);
     if (!body) return { event: 'ignored', reason: 'malformed_body' };
     if (body['object_kind'] === 'merge_request') return this.handleMergeRequest(body);
     if (body['object_kind'] === 'pipeline') return this.handlePipeline(body);
+    if (body['object_kind'] === 'push') return this.handlePush(body);
     const kind = typeof body['object_kind'] === 'string' ? body['object_kind'] : eventType;
     return { event: 'ignored', reason: `unhandled_event:${kind || 'unknown'}` };
   },
@@ -102,6 +112,54 @@ export const gitlabWebhookService = {
     const event = provider.parseCiStatusEvent(body);
     if (!event) return { event: 'ci', outcome: 'malformed' };
     return applyCiStatusFeedback(event, (tx) => resolveGitlabCiContext(event, tx));
+  },
+
+  /**
+   * Handle a `push` hook — the incremental code-graph feed trigger (MOTIR-1476),
+   * the GitLab mirror of `githubWebhookService.handlePush` (MOTIR-893). A push to a
+   * connected project's DEFAULT branch enqueues the debounced
+   * `system.code-graph-refresh` job (best-effort, POST-tx) and returns immediately
+   * — the fetch + re-index run in the background job through the SAME
+   * provider-agnostic indexer GitHub feeds (`codeGraphIndexService` dispatches by
+   * the stored `provider`), never inline in the delivery, so the 2xx stays fast.
+   * Any other ref (a feature branch, a tag, a branch deletion) is a clean no-op:
+   * the graph tracks what SHIPPED, and a merged MR lands on the default branch as a
+   * push, so this one trigger also covers "refresh on merge" (the card's
+   * "on push/MR") without a second, coalescing-duplicate hook — exactly as GitHub.
+   * A GitLab push hook carries the project id but no Motir connection id, so the
+   * connected repo (and its parent installation, whose `installationId` mints the
+   * GitLab token) resolves by `(providerRepoId, 'gitlab')`, the same key the MR /
+   * pipeline handlers use.
+   */
+  async handlePush(body: Record<string, unknown>): Promise<GitlabWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const push = provider.parsePushEvent(body);
+    // Not a branch push we refresh on (tag / delete / malformed) — a fast no-op.
+    if (!push) return { event: 'push', outcome: 'ignored_ref' };
+
+    // Resolve the connected repo + its installation under system context (the
+    // webhook has no active workspace, like the MR/pipeline resolvers; reads only).
+    const repo = await withSystemContext((tx) =>
+      githubRepoRepository.findByRepoIdAndProvider(push.providerRepoId, PROVIDER, tx),
+    );
+    if (!repo) return { event: 'push', outcome: 'unknown_repo' };
+
+    // Only the STORED default branch feeds the graph — the graph mirrors the repo's
+    // shipped mainline, per tenant, per repo (the N-repo cardinality). A push to any
+    // other branch is a clean no-op.
+    if (push.branch !== repo.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
+
+    // POST-tx, best-effort: the ack never hinges on the queue (the enqueue swallows
+    // + logs a transport failure). The job re-fetches the default branch's CURRENT
+    // head at run time, so debounced/coalesced pushes index the newest state once.
+    await enqueueCodeGraphRefresh({
+      installationId: repo.installation.installationId,
+      workspaceId: repo.installation.workspaceId,
+      repoOwner: repo.owner,
+      repoName: repo.name,
+      defaultBranch: repo.defaultBranch,
+    });
+    return { event: 'push', outcome: 'refresh_enqueued' };
   },
 };
 

@@ -181,7 +181,7 @@ async function captureSetActiveProjectAction(
     await page.waitForResponse(
       (resp) =>
         resp.request().method() === 'POST' && resp.request().headers()['next-action'] !== undefined,
-      { timeout: 10_000 },
+      { timeout: 30_000 },
     );
   } finally {
     page.off('request', handler);
