@@ -180,6 +180,7 @@ jobs:
           name: next-build
           path: .next
           retention-days: 1
+          include-hidden-files: true
 
   test:
     # Sharded matrix (MOTIR-1705): ~235 test files split across 3 runners,
