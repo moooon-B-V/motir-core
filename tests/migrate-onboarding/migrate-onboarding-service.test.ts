@@ -312,6 +312,78 @@ describe('migrateOnboardingService — discovery step (direction docs)', () => {
   });
 });
 
+describe('migrateOnboardingService — generate step (code-aware precondition · MOTIR-933)', () => {
+  it('blocks generation when the code graph is not yet ready', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    // codeGraphReady is false; convention is set — the FIRST gate fires.
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: false,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+    });
+
+    await expect(
+      migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
+    ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
+
+    const runAfter = await migrateOnboardingService.getById(run.id, fx.ctx);
+    expect(runAfter.generateJobId).toBeNull(); // never kicked
+    expect(runAfter.step).toBe('generate'); // not advanced
+  });
+
+  it('blocks generation when the coding convention has not been derived yet', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    // codeGraphReady is true; convention is null — the SECOND gate fires.
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: null,
+      discoveryJobId: 'job-discovery',
+    });
+
+    await expect(
+      migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
+    ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
+
+    const runAfter = await migrateOnboardingService.getById(run.id, fx.ctx);
+    expect(runAfter.generateJobId).toBeNull(); // never kicked
+    expect(runAfter.step).toBe('generate'); // not advanced
+  });
+
+  it('proceeds with code-aware generation only when BOTH preconditions are met', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedConnectedRepo(fx);
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    await patchRun(fx, run.id, {
+      step: 'generate',
+      connectedRepoRef: 'acme/widgets',
+      codeGraphReady: true,
+      conventionApprovedAt: new Date(),
+      discoveryJobId: 'job-discovery',
+    });
+
+    // With both preconditions met, ensureKicked fires the generation job.
+    // The exit check blocks until the plan is `planned`.
+    await expect(
+      migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx),
+    ).rejects.toBeInstanceOf(MigrateOnboardingExitConditionError);
+    const generated = await migrateOnboardingService.getById(run.id, fx.ctx);
+    expect(generated.generateJobId).toBe('job-generate_tree');
+    expect(generated.step).toBe('generate'); // exit condition unmet → not advanced yet
+
+    await setPlanStatus('job-generate_tree', 'planned');
+    const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
+    expect(dto.step).toBe('review');
+  });
+});
+
 describe('migrateOnboardingService — generate + review (plan status)', () => {
   it('kicks generation, blocks until the plan is planned, then approves through to done', async () => {
     const fx = await makeWorkItemFixture();
