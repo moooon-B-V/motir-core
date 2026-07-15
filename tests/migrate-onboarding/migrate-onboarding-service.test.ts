@@ -112,6 +112,24 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
   });
 }
 
+/** Seed a Plan row bound to `sourceJobId` for the fixture's project, so exit polls
+ *  can resolve it. */
+async function seedPlan(
+  fx: WorkItemFixture,
+  sourceJobId: string,
+  status: 'generating' | 'planned' | 'approved' = 'generating',
+) {
+  await db.plan.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      sourceJobId,
+      status,
+      plannedAt: status !== 'generating' ? new Date() : null,
+    },
+  });
+}
+
 /** Move the generation Plan bound to `sourceJobId` to a terminal review status. */
 async function setPlanStatus(sourceJobId: string, status: 'planned' | 'approved') {
   await db.plan.updateMany({ where: { sourceJobId }, data: { status, plannedAt: new Date() } });
@@ -580,8 +598,8 @@ describe('migrateOnboardingService — mid-flow resumability', () => {
       generateJobId: 'job-generate_tree',
     });
 
-    // Job already kicked (a prior run submitted it); exit condition polls.
-    await setPlanStatus('job-generate_tree', 'planned');
+    // Job was already kicked (a prior run submitted it) and the Plan was created.
+    await seedPlan(fx, 'job-generate_tree', 'planned');
     const dto = await migrateOnboardingService.advanceFromGenerate(run.id, fx.ctx);
     expect(dto.step).toBe('review');
     expect(mocks.submitJob).not.toHaveBeenCalled(); // idempotent — not re-kicked
@@ -600,8 +618,8 @@ describe('migrateOnboardingService — mid-flow resumability', () => {
       generateJobId: 'job-generated',
     });
 
-    // Not yet approved → blocks.
-    await setPlanStatus('job-generated', 'planned');
+    // Plan was created at generation time — not yet approved.
+    await seedPlan(fx, 'job-generated', 'planned');
     await expect(migrateOnboardingService.advanceFromReview(run.id, fx.ctx)).rejects.toBeInstanceOf(
       MigrateOnboardingExitConditionError,
     );
