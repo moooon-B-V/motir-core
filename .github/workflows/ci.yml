@@ -420,8 +420,24 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-e2e
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-e2e
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-e2e.outputs.cache-hit != 'true'
       - run: pnpm prisma generate
+        if: steps.cache-prisma-e2e.outputs.cache-hit != 'true'
       # The auth module reads BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, and
       # GOOGLE_CLIENT_SECRET at import time — the same reason `pnpm build`
       # needs them. `pnpm prisma migrate deploy` creates the auth tables
