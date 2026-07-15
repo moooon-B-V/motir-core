@@ -208,6 +208,73 @@ describe('gitlabConnectionService.getAccessToken', () => {
       /connection not found/i,
     );
   });
+
+  it('throws GitlabTokenRefreshError when the refresh endpoint returns 401 (token revoked)', async () => {
+    const { workspace } = await makeWorkspace('revoked@example.com');
+    const installationId = `gitlab-ws-${workspace.id}`;
+    await seedConnection({
+      workspaceId: workspace.id,
+      installationId,
+      accessToken: 'revoked-access',
+      refreshToken: 'revoked-refresh',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response('{"error":"invalid_grant"}', { status: 401 });
+      }),
+    );
+
+    await expect(gitlabConnectionService.getAccessToken(installationId)).rejects.toThrow(
+      /token refresh failed/i,
+    );
+  });
+
+  it('throws GitlabTokenRefreshError when the refresh request throws (network error)', async () => {
+    const { workspace } = await makeWorkspace('network@example.com');
+    const installationId = `gitlab-ws-${workspace.id}`;
+    await seedConnection({
+      workspaceId: workspace.id,
+      installationId,
+      accessToken: 'old-access',
+      refreshToken: 'net-refresh',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
+    );
+
+    await expect(gitlabConnectionService.getAccessToken(installationId)).rejects.toThrow(
+      /token refresh failed/i,
+    );
+  });
+
+  it('throws on corrupted encrypted access token (decrypt failure)', async () => {
+    const { workspace } = await makeWorkspace('corrupt@example.com');
+    const installationId = `gitlab-ws-${workspace.id}`;
+    // Seed a row whose accessTokenEncrypted is NOT a valid ciphertext writ by
+    // encryptToken — raw garbage that decryptToken will reject.
+    await withSystemContext((tx) =>
+      githubInstallationRepository.upsertGitlabConnection(
+        {
+          installationId,
+          workspaceId: workspace.id,
+          accountLogin: 'octocat',
+          accountType: 'User',
+          accessTokenEncrypted: 'not-a-valid-token',
+          refreshTokenEncrypted: encryptToken('still-good-refresh'),
+          tokenExpiresAt: new Date(Date.now() - 1000), // expired → forces decrypt
+        },
+        tx,
+      ),
+    );
+
+    await expect(gitlabConnectionService.getAccessToken(installationId)).rejects.toThrow();
+  });
 });
 
 describe('gitlab provider fetch methods (through the seam, real connection)', () => {
@@ -273,6 +340,16 @@ describe('gitlab provider fetch methods (through the seam, real connection)', ()
 });
 
 describe('gitlabConnectionService.getConnectionForWorkspace + disconnect', () => {
+  it('returns null when no connection exists for the workspace', async () => {
+    const { user, workspace } = await makeWorkspace('h@example.com');
+    // No seed — the workspace has never connected GitLab.
+    const result = await gitlabConnectionService.getConnectionForWorkspace({
+      userId: user.id,
+      workspaceId: workspace.id,
+    });
+    expect(result).toBeNull();
+  });
+
   it('reads the connection, then removes it (idempotent)', async () => {
     const { user, workspace } = await makeWorkspace('g@example.com');
     await seedConnection({
