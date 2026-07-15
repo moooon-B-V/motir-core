@@ -211,11 +211,28 @@ const DISCOVERY: StepWiring = {
 };
 
 /** generate → review. Kick the code-aware generation (its Plan binds via the
- *  job's sourceJobId); exit when the plan is `planned`. */
+ *  job's sourceJobId); exit when the plan is `planned`.
+ *
+ *  CODE-AWARE PRECONDITION (MOTIR-933): generation MUST NOT start unless the
+ *  code graph is indexed AND the coding convention has been derived. A missing
+ *  precondition fails cleanly with a typed error — no silent blank-slate
+ *  fallback (the exact failure migrate onboarding exists to prevent). */
 const GENERATE: StepWiring = {
   from: 'generate',
   to: 'review',
   async ensureKicked({ run, pctx }) {
+    if (!run.codeGraphReady) {
+      throw new MigrateOnboardingExitConditionError(
+        'generate',
+        'the code graph is not ready — the index step must complete first.',
+      );
+    }
+    if (!run.conventionApprovedAt) {
+      throw new MigrateOnboardingExitConditionError(
+        'generate',
+        'the coding convention has not been derived yet — the audit_convention step must complete first.',
+      );
+    }
     if (run.generateJobId) return; // idempotent — one generation per run
     const { jobId } = await aiGenerationService.startGeneration(pctx, {});
     await withWorkspaceContext(
