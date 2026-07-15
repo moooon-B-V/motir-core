@@ -171,6 +171,15 @@ jobs:
       - run: pnpm prisma generate
         if: steps.cache-prisma-build.outputs.cache-hit != 'true'
       - run: pnpm build
+      # Share the production build with the e2e job so each matrix leg's
+      # webServer boots from the pre-built .next/ instead of building
+      # independently (MOTIR-1706).
+      - name: Upload .next/ build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: next-build
+          path: .next
+          retention-days: 1
 
   test:
     # Sharded matrix (MOTIR-1705): ~235 test files split across 3 runners,
@@ -501,6 +510,13 @@ jobs:
         if: steps.cache-node-modules-e2e.outputs.cache-hit != 'true'
       - run: pnpm prisma generate
         if: steps.cache-prisma-e2e.outputs.cache-hit != 'true'
+      # Download the pre-built .next/ from the build job so the webServer
+      # boots via `next start` without building independently (MOTIR-1706).
+      - name: Download .next/ build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: next-build
+          path: .next
       # The auth module reads BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, and
       # GOOGLE_CLIENT_SECRET at import time — the same reason `pnpm build`
       # needs them. `pnpm prisma migrate deploy` creates the auth tables
