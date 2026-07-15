@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 
-// Dedicated ACCEPTANCE-VIDEO E2E lane (Story MOTIR-1627 · Subtask MOTIR-1632).
+// Dedicated ACCEPTANCE-VIDEO E2E lane (Story MOTIR-1627 · Subtask MOTIR-1632;
+// per-story support MOTIR-1700).
 //
 // The main suite records `video: 'retain-on-failure'` — it keeps a clip only
 // when a test FAILS. Story acceptance needs the opposite: a clip of the GREEN
@@ -11,10 +12,22 @@ import { config as loadEnv } from 'dotenv';
 // (≤ ~60s per the spec's own scope, 720p, a few MB), leaving the main lane
 // (playwright.config.ts) untouched at retain-on-failure.
 //
+// `testMatch` catches BOTH the MOTIR-1627 self-test dogfood
+// (`acceptance-video.spec.ts`) AND story-specific acceptance specs
+// (`acceptance-<story>.spec.ts`) — the planner rule (MOTIR-1644) creates an
+// acceptance-video E2E subtask for every user-facing story, and each writes its
+// spec using the `acceptance-<area>.spec.ts` naming convention so this lane
+// discovers it. The main config (playwright.config.ts) `testIgnore`s the same
+// `acceptance*.spec.ts` pattern so acceptance specs never run in the bulk
+// shards (video:'retain-on-failure' + no upload step).
+//
 // The uploader (`scripts/upload-acceptance-video.mjs`) reads this lane's
 // `outputDir` after a green run and POSTs the video + trace + chapters to the
-// publish endpoint (MOTIR-1631). A failing run leaves no video, so the uploader
-// is a no-op — a red acceptance E2E publishes nothing.
+// publish endpoint (MOTIR-1631). Each spec declares its target story via the
+// `acceptanceStory()` helper → `acceptance-story.json` sidecar; the uploader
+// resolves each recorded video's story from its sidecar (→ PR ref → fallback).
+// A failing run leaves no video, so the uploader is a no-op — a red acceptance
+// E2E publishes nothing.
 //
 // Runs OFF-CLOUD (no MOTIR_CLOUD): acceptance video is ungated off-cloud
 // (applicable:false ⇒ eligible), so the panel renders the player with no billing
@@ -49,7 +62,7 @@ process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  testMatch: ['**/acceptance-video.spec.ts'],
+  testMatch: ['**/acceptance*.spec.ts'],
   timeout: 90_000,
   // Assertion headroom for CI load. This lane now runs a PRODUCTION build (see
   // webServer below, MOTIR-1682), so there is NO on-demand cold-compile cost on
