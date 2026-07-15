@@ -10,6 +10,7 @@ import {
   refreshAccessToken,
 } from '@/lib/gitlab/gitlabOAuth';
 import { getGitProvider } from '@/lib/git';
+import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import { GitlabConnectionNotFoundError, GitlabProjectNotFoundError } from '@/lib/gitlab/errors';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitlabSelectableProjectDTO } from '@/lib/dto/gitlab';
@@ -210,6 +211,17 @@ export const gitlabConnectionService = {
    * when the workspace is unconnected. (The MR/pipeline webhook that makes the
    * project's events flow is registered by MOTIR-1475; this card owns the
    * selection.)
+   *
+   * CODE-GRAPH FEED — "full on first connect" (MOTIR-1476): a NEWLY-connected
+   * project (no `github_repo` row existed yet) kicks a full `system.code-graph-index`
+   * job — the GitLab analogue of GitHub's `enqueueNewlyAddedRepos`, driving the SAME
+   * provider-agnostic indexer (`codeGraphIndexService` fetches via the stored
+   * `provider`). Enqueued POST-COMMIT + best-effort (the enqueue swallows + logs a
+   * transport failure), so a GitLab/queue blip can never fail or roll back the
+   * selection write (the side-effects-outside-tx rule); the index job is idempotent,
+   * so a dropped enqueue self-heals on the next connect / manual replay. A
+   * RE-connect of an already-connected project does NOT re-index (only the newly
+   * added one), exactly as the GitHub reconcile diffs against the existing set.
    */
   async connectProject(
     ctx: { userId: string; workspaceId: string },
@@ -226,19 +238,44 @@ export const gitlabConnectionService = {
     const match = projects.find((p) => p.providerRepoId === repoId);
     if (!match) throw new GitlabProjectNotFoundError();
 
-    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      githubRepoRepository.upsert(
-        {
-          installationId: conn.id,
-          repoId: match.providerRepoId,
-          owner: match.owner,
-          name: match.name,
-          defaultBranch: match.defaultBranch,
-          provider: 'gitlab',
-        },
-        tx,
-      ),
+    // Persist the selection, reporting whether this was a NEWLY-added repo (no row
+    // before) so only a first connect — not a re-connect — triggers a full index.
+    const isNewlyConnected = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const existing = await githubRepoRepository.findByInstallationAndRepoId(
+          conn.id,
+          match.providerRepoId,
+          tx,
+        );
+        await githubRepoRepository.upsert(
+          {
+            installationId: conn.id,
+            repoId: match.providerRepoId,
+            owner: match.owner,
+            name: match.name,
+            defaultBranch: match.defaultBranch,
+            provider: 'gitlab',
+          },
+          tx,
+        );
+        return existing === null;
+      },
     );
+
+    // POST-COMMIT, best-effort full code-graph index for a first-time connect
+    // (MOTIR-1476). `conn.installationId` is the synthetic GitLab connection id the
+    // index job resolves back to this connection (provider `gitlab`) to mint the
+    // token + fetch the repo through the provider seam.
+    if (isNewlyConnected) {
+      await enqueueCodeGraphIndex({
+        installationId: conn.installationId,
+        workspaceId: ctx.workspaceId,
+        repoOwner: match.owner,
+        repoName: match.name,
+        defaultBranch: match.defaultBranch,
+      });
+    }
   },
 
   /**

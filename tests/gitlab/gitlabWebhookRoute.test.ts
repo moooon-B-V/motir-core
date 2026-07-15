@@ -69,8 +69,12 @@ describe('POST /api/gitlab/webhook — token gate', () => {
       }),
     );
     expect(res.status).toBe(200);
-    // A push hook is ignored by THIS card (code-graph is MOTIR-1476) — a clean ack.
-    expect(await res.json()).toMatchObject({ ok: true, result: { event: 'ignored' } });
+    // A push hook is DISPATCHED (the code-graph feed, MOTIR-1476); an unconnected
+    // project is a clean `unknown_repo` no-op — the route still acks 200.
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      result: { event: 'push', outcome: 'unknown_repo' },
+    });
   });
 
   it('returns 500 when the webhook secret is not configured', async () => {
