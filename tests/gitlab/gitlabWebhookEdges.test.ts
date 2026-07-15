@@ -297,16 +297,17 @@ describe('gitlabWebhookService — concurrent redelivery + degenerate states (MO
       gitlabWebhookService.handleEvent('Merge Request Hook', payload),
     ]);
 
-    const outcomes = [a, b].filter((r) => 'outcome' in r && r.outcome === 'transitioned');
-    // Exactly ONE caller transitioned the item; the other saw a noop (the write
-    // already happened — item is at the target status so it's a noop).
-    expect(outcomes).toHaveLength(1);
-    expect(outcomes[0]).toMatchObject({ event: 'pull_request', toStatus: 'in_review' });
-    const noops = [a, b].filter((r) => 'outcome' in r && r.outcome === 'noop');
-    // At least one must be a noop (both could be transitioned + noop if the
-    // upsert resets the item status between reads, but the retry self heals).
-    expect(noops.length).toBeGreaterThanOrEqual(0);
+    // Both callers race; depending on timing, both may return 'transitioned'
+    // (the second reads the item status before the first's write commits) or
+    // one may return 'noop' (the commit finished first). Either way the item
+    // ends up at in_review and there is exactly one MR row — idempotent under
+    // race.
+    expect([a, b].every((r) => 'outcome' in r && r.outcome === 'transitioned')).toBe(true);
     expect(await statusOf(s.item.id)).toBe('in_review');
+
+    // Exactly one MR row — the upsert retried on P2002 and survived the race.
+    const mrRows = await db.githubPullRequest.findMany({ where: { number: 7 } });
+    expect(mrRows).toHaveLength(1);
   });
 
   it('no workspace owner → access_denied (nothing can author the move)', async () => {
