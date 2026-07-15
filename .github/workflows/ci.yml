@@ -304,12 +304,16 @@ jobs:
           - id: billing-cloud
             args: '--config playwright.billing.config.ts'
           # Story MOTIR-1627 — the acceptance E2E + self-test dogfood (MOTIR-1638),
-          # CLOUD-ON + video:'on'. Its OWN lane (playwright.acceptance.config.ts:
-          # MOTIR_CLOUD + the E2E_TEST_BILLING mock, isolated ports 3200/8488) so
-          # the plan/toggle panel states are reachable and the green run is
-          # recorded. acceptance-video.spec.ts is testIgnore'd from the main config.
-          # A green run's video is published to MOTIR-1627's OWN panel by the step
-          # below (BYOK — only when the MOTIR_UPLOAD_TOKEN secret is set).
+          # per-story acceptance specs (MOTIR-1700), CLOUD-ON + video:'on'.
+          # Its OWN lane (playwright.acceptance.config.ts: MOTIR_CLOUD + the
+          # E2E_TEST_BILLING mock, isolated ports 3200/8488) so the plan/toggle
+          # panel states are reachable and each green run is recorded.
+          # testMatch: acceptance*.spec.ts catches the dogfood AND story-specific
+          # acceptance specs (planner rule MOTIR-1644); the main config testIgnore's
+          # the same pattern. Each spec declares its target story via
+          # acceptanceStory() → acceptance-story.json sidecar; the uploader resolves
+          # the target story from the sidecar (→ PR ref → MOTIR-1627 fallback)
+          # and publishes the video (BYOK — only when the token is set).
           - id: acceptance-video
             args: '--config playwright.acceptance.config.ts'
     services:
