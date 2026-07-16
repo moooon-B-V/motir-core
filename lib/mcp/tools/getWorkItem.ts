@@ -43,8 +43,7 @@ function summarize(detail: IssueDetailDto): string {
           .join(', ')}`,
   );
   if (it.descriptionMd) {
-    const excerpt = it.descriptionMd.slice(0, 500);
-    lines.push('', excerpt + (it.descriptionMd.length > 500 ? '…' : ''));
+    lines.push('', it.descriptionMd);
   }
   return lines.join('\n');
 }

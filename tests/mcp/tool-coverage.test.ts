@@ -87,7 +87,7 @@ describe('MCP tool branch coverage', () => {
     const text = JSON.stringify(res.content);
     expect(text).toContain('Parent:');
     expect(text).toContain('blocked by');
-    expect(text).toContain('…'); // description excerpt was truncated
+    expect(text).toContain(LONG); // full description, no truncation
 
     // A dashless key exercises projectKeyOf's no-dash branch (then not-found).
     const dashless = await call(client, 'get_work_item', { key: 'PROD' });
