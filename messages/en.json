@@ -49,6 +49,9 @@
       "body": "A paid Motir AI plan records your story E2Es and attaches the video here for one-click acceptance.",
       "upgrade": "Upgrade",
       "askOwner": "Ask your org owner to upgrade the Motir AI plan."
+    },
+    "player": {
+      "speed": "Speed"
     }
   },
   "markdownEditor": {

@@ -49,6 +49,9 @@
       "body": "付费的 Motir AI 方案会录制你的故事端到端测试，并将视频附于此处以便一键验收。",
       "upgrade": "升级",
       "askOwner": "请联系组织所有者升级 Motir AI 方案。"
+    },
+    "player": {
+      "speed": "倍速"
     }
   },
   "markdownEditor": {
