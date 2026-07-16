@@ -2224,8 +2224,10 @@
         </svg>
         Code health <span class="sep">›</span> <span class="here">Convention tab</span>
       </span>
-      <span>— the main content region of the screen above, Convention tab selected. Read-only; refine
-      via the universal AI chat.</span>
+      <span
+        >— the main content region of the screen above, Convention tab selected. Read-only; refine
+        via the universal AI chat.</span
+      >
     </div>
     <div class="panel">
       <!-- READ-ONLY convention per repo — no approve gate, no free-edit (MOTIR-1660) -->
@@ -2233,11 +2235,9 @@
         <div class="card-head">
           <h3>Coding convention</h3>
           <span class="count-pill">per repo · acme/web</span>
-          <span
-            class="conv-ref"
-            style="margin-left: 6px"
-            title="Derived from acme/web@a1b9f30"
-          >derived from your code</span>
+          <span class="conv-ref" style="margin-left: 6px" title="Derived from acme/web@a1b9f30"
+            >derived from your code</span
+          >
           <div class="spacer"></div>
           <!-- refine-with-Motir: composes the universal AI chat launcher (PlanWithAILauncher →
                PlanningWorkspace, per MOTIR-1193 / MOTIR-1299 / design/ai-chat).
@@ -2279,9 +2279,9 @@
             <div class="b-title">DERIVED FROM YOUR CODE · auto-used</div>
             <div class="b-sub">
               This convention is derived from the code in <code class="coderef">acme/web</code> and
-              <strong>applied automatically</strong> to every prompt for NEW code Motir generates for
-              this repo. There is no approve gate — the grounding in your real code IS the curation.
-              <strong>To change it, tell Motir in the universal AI chat</strong> with
+              <strong>applied automatically</strong> to every prompt for NEW code Motir generates
+              for this repo. There is no approve gate — the grounding in your real code IS the
+              curation. <strong>To change it, tell Motir in the universal AI chat</strong> with
               &ldquo;Refine with Motir&rdquo; ↑ — the convention stays read-only until you do.
             </div>
           </div>
@@ -2383,12 +2383,13 @@
               Refine with Motir
             </button>
             opens the same universal AI chat you use to plan your project. The canvas shows the
-            existing convention as read-only context; the chat is where you tell Motir what to change
-            and it revises. No free-form Textarea — the chat is the sole mutation surface. (See
+            existing convention as read-only context; the chat is where you tell Motir what to
+            change and it revises. No free-form Textarea — the chat is the sole mutation surface.
+            (See
             <code class="coderef">design/ai-chat</code> · the universal
             <code class="coderef">PlanWithAILauncher</code> →
-            <code class="coderef">PlanningWorkspace</code>, per
-            <a href="#">MOTIR-1193</a> / <a href="#">MOTIR-1299</a>.)
+            <code class="coderef">PlanningWorkspace</code>, per <a href="#">MOTIR-1193</a> /
+            <a href="#">MOTIR-1299</a>.)
           </p>
         </div>
       </div>
@@ -2474,8 +2475,8 @@
               <div class="b-title">DERIVED FROM YOUR STACK · auto-used</div>
               <div class="b-sub">
                 Next.js + Prisma + Postgres defaults. No audit — nothing to adopt yet, so every rule
-                is a clean-code default. Auto-applied to every prompt; &ldquo;refine with Motir&rdquo;
-                via the universal AI chat to change.
+                is a clean-code default. Auto-applied to every prompt; &ldquo;refine with
+                Motir&rdquo; via the universal AI chat to change.
               </div>
             </div>
           </div>
@@ -2528,10 +2529,9 @@
         <p class="subtle" style="margin: 2px 0 4px">
           An audit runs on three triggers: <strong>code changes</strong> (on demand or a repo
           webhook — proposes a new convention version if the code drifts), and
-          <strong>convention changes</strong> (a &ldquo;refine with Motir&rdquo; revision
-          via the universal AI chat re-audits existing code against the revised standard). The
-          convention is retained and never silently overwritten — changes are tracked in the
-          version history.
+          <strong>convention changes</strong> (a &ldquo;refine with Motir&rdquo; revision via the
+          universal AI chat re-audits existing code against the revised standard). The convention is
+          retained and never silently overwritten — changes are tracked in the version history.
         </p>
         <div class="versions">
           <div class="version">
@@ -2593,8 +2593,8 @@
           For a start-fresh project the surface opens IN the wizard as the
           <strong>Establish convention</strong> step — the stack-derived, read-only convention
           (Panel 2, derived + auto-used; &ldquo;refine with Motir&rdquo; via the universal AI chat),
-          with no audit. After onboarding it stays reachable at the &ldquo;Code health&rdquo; sidebar
-          entry above.
+          with no audit. After onboarding it stays reachable at the &ldquo;Code health&rdquo;
+          sidebar entry above.
         </p>
       </div>
     </div>
@@ -2661,8 +2661,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
         with: { languages: javascript-typescript }
-      - uses: github/codeql-action/analyze@v3</pre
-        >
+      - uses: github/codeql-action/analyze@v3</pre>
         <p class="setup-hint">
           Motir <strong>detects the upload automatically</strong> and re-audits — no “connect” step
           to remember. Or trigger it now once the first run finishes:
