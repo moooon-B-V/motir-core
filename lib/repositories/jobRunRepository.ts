@@ -82,6 +82,31 @@ export const jobRunRepository = {
   },
 
   /**
+   * The migrate-onboarding INDEX-progress read (Story 7.15 · MOTIR-934): is a
+   * `system.code-graph-index` run CURRENTLY indexing ANY repo for this workspace?
+   * The wizard's Index step shows an aggregate "indexing in progress" spinner when
+   * this returns a row. Unlike {@link findSucceededCodeGraphIndex} this is NOT
+   * keyed by `repoRef`: a `running` row has no `output.repoRef` (the index job
+   * writes `output` only on success), so the ledger cannot say WHICH repo a running
+   * row belongs to — only that one is in flight. Per-repo status is therefore
+   * `indexed` (a succeeded row matches) vs `pending` (not yet); the running flag is
+   * aggregate. Takes `tx` so it runs under the caller's `withWorkspaceContext`.
+   */
+  async findRunningCodeGraphIndexForWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobRun | null> {
+    return tx.jobRun.findFirst({
+      where: {
+        workspaceId,
+        functionId: 'system.code-graph-index',
+        status: 'running',
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+  },
+
+  /**
    * Dashboard read (1.6.5): a workspace's runs, newest-first, optionally
    * filtered by status, with limit/offset paging. Takes `tx` because the read
    * runs inside withWorkspaceContext so the job_run RLS policy scopes it; the

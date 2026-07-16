@@ -17,6 +17,7 @@ import { aiConventionService } from '@/lib/services/aiConventionService';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import type {
+  MigrateIndexStatusDto,
   MigrateOnboardingDto,
   StartMigrateOnboardingInput,
 } from '@/lib/dto/migrateOnboarding';
@@ -428,6 +429,66 @@ export const migrateOnboardingService = {
     if (!row) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toMigrateOnboardingDto(row);
+  },
+
+  /**
+   * The Index step's live per-repo progress (Story 7.15 · MOTIR-934) — what the
+   * wizard polls at `GET /api/onboarding/migrate/[id]/index-status`. Resolves the
+   * workspace's connected repo set (`resolveCodeContext`, the same set the CONNECT
+   * step observed) and maps each repo to `indexed` (a succeeded
+   * `system.code-graph-index` run matches its `output.repoRef`) or `pending`, plus
+   * the aggregate `hasRunning` flag (a running index row exists — the ledger cannot
+   * tie a running row to a specific repo, so the in-flight state is aggregate).
+   * `allIndexed` gates the wizard's Next button (stricter than the state machine's
+   * single-`connectedRepoRef` INDEX exit, which is fine — the wizard never enables
+   * Next before every repo is indexed). Browse-gated. Returns an empty `repos` list
+   * (not an error) when no repo is connected yet — the wizard's Connect step
+   * handles that state.
+   */
+  async getIndexStatus(id: string, ctx: ServiceContext): Promise<MigrateIndexStatusDto> {
+    const run = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    if (!run) throw new MigrateOnboardingNotFoundError(id);
+    await projectAccessService.assertCanBrowse(run.projectId, ctx);
+
+    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const repos = code?.repos ?? [];
+
+    // One workspace-scoped transaction for all the job_run reads (the job_run RLS
+    // policy scopes them; `resolveCodeContext` opens its own).
+    const { statuses, hasRunning } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const running = await jobRunRepository.findRunningCodeGraphIndexForWorkspace(
+          ctx.workspaceId,
+          tx,
+        );
+        const mapped = await Promise.all(
+          repos.map(async (repo) => {
+            const succeeded = await jobRunRepository.findSucceededCodeGraphIndex(
+              ctx.workspaceId,
+              repo.repoRef,
+              tx,
+            );
+            return {
+              provider: repo.provider,
+              repoRef: repo.repoRef,
+              status: succeeded ? ('indexed' as const) : ('pending' as const),
+            };
+          }),
+        );
+        return { statuses: mapped, hasRunning: running !== null };
+      },
+    );
+
+    const indexedCount = statuses.filter((s) => s.status === 'indexed').length;
+    const total = statuses.length;
+    return {
+      repos: statuses,
+      indexedCount,
+      total,
+      hasRunning,
+      allIndexed: total > 0 && indexedCount === total,
+    };
   },
 
   // ── Step transitions — one per step, each kick (current) → poll → advance ────

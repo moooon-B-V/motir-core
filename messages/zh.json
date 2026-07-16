@@ -4120,9 +4120,9 @@
       "hintDefault": "可以从一个粗略的想法开始——发现对话会追问后续问题。",
       "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
       "or": "或",
-      "importTitle": "我已有一个项目——导入它",
+      "importTitle": "我已有一个项目——迁移它",
       "importDesc": "连接你的代码仓库，Motir 会读取你的代码，然后在现有基础上进行规划。你也可以从 Jira、Linear 或 Plane 导入现有的工作项。",
-      "importCta": "导入"
+      "importCta": "迁移"
     },
     "import": {
       "title": "导入现有项目",
@@ -4840,6 +4840,81 @@
         "not_found": "该项目已不在你的 GitLab 成员项目中。",
         "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。"
       }
+    }
+  },
+  "onboardingMigrate": {
+    "brandBar": {
+      "flowName": "迁移现有项目",
+      "planAi": "用 AI 规划"
+    },
+    "rail": {
+      "title": "你的迁移",
+      "sub": "索引在后台进行——可以离开稍后回来。",
+      "setUp": "设置你的代码库",
+      "import": "导入你的工作项",
+      "importOptional": "可选",
+      "connect": "连接",
+      "index": "索引",
+      "importStep": "导入工作项"
+    },
+    "common": {
+      "back": "返回",
+      "saveExit": "保存并退出",
+      "error": "出错了，请重试。"
+    },
+    "start": {
+      "eyebrow": "现有代码库",
+      "heading": "迁移现有代码库",
+      "body": "连接你的仓库，让 Motir 读取代码并推导编码规范，然后可选地导入你的工作项并规划。",
+      "projectLine": "迁移向导将针对此项目运行。",
+      "cta": "开始"
+    },
+    "connect": {
+      "eyebrow": "第 1 步，共 2 步 · 设置",
+      "heading": "连接本项目中的仓库",
+      "body": "在工作区设置中连接你的 GitHub 仓库。Motir 通过 GitProvider 接口读取它们，为整个项目构建一个代码图谱。",
+      "cta": "打开 GitHub 设置",
+      "gitlabNote": "GitLab 连接即将推出。",
+      "next": "我已连接仓库"
+    },
+    "index": {
+      "eyebrow": "第 2 步，共 2 步 · 设置",
+      "heading": "正在索引你的代码库",
+      "body": "Motir 跨所有仓库为项目构建一个代码图谱——文件、符号及其相互引用。大型代码库可能需要几分钟。",
+      "building": "正在构建代码图谱……",
+      "aggregate": "已完成 {done} / {total} 个仓库",
+      "waiting": "等待仓库索引……",
+      "perRepo": "按仓库",
+      "state": {
+        "indexed": "已索引",
+        "queued": "排队中"
+      },
+      "callout": "Motir 从整个项目推导编码规范和代码健康检查（以及任何计划），因此需要每个仓库都完成索引——在所有仓库完成前，下一步将保持禁用。",
+      "completeTitle": "代码图谱已构建",
+      "completeNote": "已从你的代码推导各仓库编码规范和代码健康检查——无需审批（它们位于代码健康页面）。设置完成。",
+      "next": "下一步：导入你的工作项"
+    },
+    "import": {
+      "eyebrow": "可选 · 导入与规划",
+      "heading": "导入你现有的工作项",
+      "body": "已经在 Jira、Linear、GitHub、Plane 或 CSV 中跟踪工作项？将其导入此项目——写入前你会先预览试运行结果。没有工作项要导入则跳过。",
+      "cta": "打开导入器",
+      "reconcile": "随后生成计划时，Motir 会核对二者，避免重复。",
+      "skip": "跳过导入",
+      "next": "已导入——继续"
+    },
+    "decision": {
+      "eyebrow": "设置完成",
+      "heading": "你的代码库已进入 Motir",
+      "body": "现在用 AI 规划项目，或先完成稍后从项目中规划。",
+      "planNow": "现在用 AI 规划",
+      "finishLater": "完成——稍后规划"
+    },
+    "resume": {
+      "eyebrow": "规划进行中",
+      "heading": "继续规划",
+      "body": "你已开始规划此项目。在规划工作区中继续。",
+      "cta": "继续规划"
     }
   }
 }

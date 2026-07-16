@@ -11,7 +11,8 @@ import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 // (`design/onboarding-entrance/`). It replaces the old direct render of the
 // discovery chat here: the chat now lives at `/onboarding/discovery`, and this
 // screen ROUTES into it (Start planning → discovery, seeded with the idea) or
-// hands off to the import wizard (→ `/onboarding/import`, owned by 7.15/7.17).
+// hands off to the migrate wizard (→ `/onboarding/migrate`, owned by 7.15 /
+// MOTIR-934 — whose optional Import step reaches the importer at `/onboarding/import`).
 //
 // A Server Component that gates exactly like the discovery route (session →
 // active project → the onboarding-ran marker), then reads the preserved idea
