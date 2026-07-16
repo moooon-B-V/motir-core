@@ -47,7 +47,7 @@ export default async function CodeHealthPage() {
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   let initialAudit: CodeAuditSurfaceDTO | null = null;
   let initialConventions: ConventionSurfaceDTO[] = [];
-  let loadError = false;
+  let loadError: string | false = false;
 
   try {
     const [auditResult, conventionResult] = await Promise.all([
@@ -68,7 +68,7 @@ export default async function CodeHealthPage() {
       );
     }
     if (err instanceof MotirAiError) {
-      loadError = true;
+      loadError = `${err.code}: ${err.message}`;
     } else {
       throw err;
     }
