@@ -28,6 +28,8 @@ import {
   turnOnAcceptanceVideoAction,
 } from '@/app/(authed)/items/[key]/acceptanceActions';
 
+const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
+
 // The acceptance panel body (Story MOTIR-1627 · Subtask MOTIR-1634), built to
 // design/work-items/acceptance-panel.png. Rendered inside a ContentSectionCard
 // on a story detail page. Branches on the MOTIR-1630 eligibility into the three
@@ -64,6 +66,7 @@ export function AcceptancePanel({
   const [evidence, setEvidence] = useState(initialEvidence);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
 
   function decide(decision: 'approve' | 'request_changes') {
     setError(null);
@@ -206,8 +209,28 @@ export function AcceptancePanel({
             className="aspect-video w-full bg-black"
           />
         ) : null}
+        <div className="flex items-center gap-1.5 px-3.5 pt-3">
+          <span className="mr-0.5 text-[11px] leading-none text-(--el-text-faint)">
+            {t('player.speed')}
+          </span>
+          {PLAYBACK_SPEEDS.map((rate) => (
+            <button
+              key={rate}
+              type="button"
+              onClick={() => {
+                if (videoRef.current) videoRef.current.playbackRate = rate;
+                setPlaybackRate(rate);
+              }}
+              aria-pressed={playbackRate === rate}
+              aria-label={`${rate}×`}
+              className={`rounded-(--radius-control) px-1.5 py-0.5 text-[11px] font-semibold leading-tight transition-colors ${playbackRate === rate ? 'bg-(--el-accent) text-(--el-accent-text)' : 'text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)'}`}
+            >
+              {rate}×
+            </button>
+          ))}
+        </div>
         {evidence.chapters.length > 0 ? (
-          <ul className="flex flex-col gap-0.5 p-3.5">
+          <ul className="flex flex-col gap-0.5 p-3.5 pt-3">
             {evidence.chapters.map((c, i) => (
               <li key={`${c.tSeconds}-${i}`}>
                 <button
