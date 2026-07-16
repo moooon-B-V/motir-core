@@ -180,6 +180,7 @@ test('migrate wizard — finish early: set up → skip import → finish later',
     await signUp(page, `migrate-a-${Date.now()}@example.com`);
     await createFirstProject(page, 'Invoicer');
   });
+  await page.waitForTimeout(2000);
 
   const stubs = await stubMigrateRoutes(page);
   // The index data fixture uses all-indexed repos, so after the first poll tick
@@ -218,6 +219,7 @@ test('migrate wizard — finish early: set up → skip import → finish later',
       await expect(rail.getByText('Audit')).toHaveCount(0);
     },
   );
+  await page.waitForTimeout(2000);
 
   await chapter('Connect → advance to Index', async () => {
     const resp = page.waitForResponse(
@@ -228,6 +230,7 @@ test('migrate wizard — finish early: set up → skip import → finish later',
 
     await expect(page.getByRole('heading', { name: 'Indexing your codebase' })).toBeVisible();
   });
+  await page.waitForTimeout(2000);
 
   await chapter('Index — per-repo rows + aggregate meter + callout', async () => {
     const indexRegion = page.locator('[aria-live][aria-busy]');
@@ -246,6 +249,7 @@ test('migrate wizard — finish early: set up → skip import → finish later',
     // Complete note
     await expect(page.getByText(/nothing to approve/)).toBeVisible();
   });
+  await page.waitForTimeout(2000);
 
   await chapter('Index complete → advance to Import (optional)', async () => {
     const resp = page.waitForResponse(
@@ -261,6 +265,7 @@ test('migrate wizard — finish early: set up → skip import → finish later',
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Skip import' })).toBeVisible();
   });
+  await page.waitForTimeout(2000);
 
   await chapter('Skip import → land on the plan-now-or-later decision', async () => {
     const resp = page.waitForResponse(
@@ -273,11 +278,13 @@ test('migrate wizard — finish early: set up → skip import → finish later',
     await expect(page.getByRole('button', { name: 'Plan my project now' })).toBeVisible();
     await expect(page.getByRole('link', { name: "Finish — I'll plan later" })).toBeVisible();
   });
+  await page.waitForTimeout(2000);
 
   await chapter('Finish early — lands in the project', async () => {
     await page.getByRole('link', { name: "Finish — I'll plan later" }).click();
     await expect(page).toHaveURL(/\/roadmap/, { timeout: 10_000 });
   });
+  await page.waitForTimeout(2000);
 });
 
 // ── Branch B: continue to plan ──────────────────────────────────────────────
