@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { MotirAiError } from '@/lib/ai/errors';
+import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { CodeAuditSurfaceDTO, ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
@@ -49,28 +50,38 @@ export default async function CodeHealthPage() {
   let initialConventions: ConventionSurfaceDTO[] = [];
   let loadError: string | false = false;
 
-  try {
-    const [auditResult, conventionResult] = await Promise.all([
-      aiConventionService.getAudit(ctx.projectId, svcCtx),
-      aiConventionService.getConvention(ctx.projectId, svcCtx),
-    ]);
-    initialAudit = auditResult;
-    initialConventions = [conventionResult].filter(
-      (c) => c.proposed !== null || c.standard !== null,
-    );
-  } catch (err) {
-    if (err instanceof NotProjectAdminError || err instanceof ProjectNotFoundError) {
-      return (
-        <div className="flex flex-col gap-6">
-          <Header title={t('title')} subtitle={t('subtitle')} />
-          <EmptyState title={t('adminOnlyTitle')} description={t('adminOnlyDescription')} />
-        </div>
+  // Resolve connected repos for per-repo convention/audit scoping (MOTIR-1662).
+  const code = await resolveCodeContext({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const repos = code?.repos ?? [];
+
+  if (repos.length > 0) {
+    try {
+      const repoKey = repos[0]!.repoRef;
+      const [auditResult, conventionResult] = await Promise.all([
+        aiConventionService.getAudit(ctx.projectId, svcCtx, { repoKey }),
+        aiConventionService.getConvention(ctx.projectId, svcCtx, { repoKey }),
+      ]);
+      initialAudit = auditResult;
+      initialConventions = [conventionResult].filter(
+        (c) => c.proposed !== null || c.standard !== null,
       );
-    }
-    if (err instanceof MotirAiError) {
-      loadError = `${err.code}: ${err.message}`;
-    } else {
-      throw err;
+    } catch (err) {
+      if (err instanceof NotProjectAdminError || err instanceof ProjectNotFoundError) {
+        return (
+          <div className="flex flex-col gap-6">
+            <Header title={t('title')} subtitle={t('subtitle')} />
+            <EmptyState title={t('adminOnlyTitle')} description={t('adminOnlyDescription')} />
+          </div>
+        );
+      }
+      if (err instanceof MotirAiError) {
+        loadError = `${err.code}: ${err.message}`;
+      } else {
+        throw err;
+      }
     }
   }
 
