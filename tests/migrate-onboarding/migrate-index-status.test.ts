@@ -23,8 +23,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   getPreplanState: mocks.getPreplanState,
   streamJob: vi.fn(),
   getJob: vi.fn(),
-  approveConvention: vi.fn(),
-  editConvention: vi.fn(),
   getConvention: vi.fn(),
   getCodeAudit: vi.fn(),
   saveDesignChoice: vi.fn(),

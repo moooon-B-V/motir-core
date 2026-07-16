@@ -29,17 +29,17 @@ export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 
  * Where the launcher was invoked from — the originating context the workspace
  * needs to open in the right mode.
  *
- * - `project` — a project-level surface with no specific item. `hasPlan`
- *   resolves the generation-vs-re-plan split; OMIT it (the global header pill's
- *   case) to get the coarse `'project'` mode without a per-render plan lookup.
- * - `work-item` — a specific work item (its detail page / a row action) →
- *   contextual planning scoped to that item (the MOTIR-910 door reuses this).
- * - `roadmap` — the Board↔Roadmap surface (the MOTIR-1011 door reuses this).
+ * - `project` — a project-level surface with no specific item.
+ * - `work-item` — a specific work item (its detail page / a row action).
+ * - `roadmap` — the Board↔Roadmap surface.
+ * - `convention-refine` — refine a coding convention in the universal chat
+ *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
  */
 export type PlanningLaunchContext =
   | { kind: 'project'; hasPlan?: boolean }
   | { kind: 'work-item'; itemKey: string }
-  | { kind: 'roadmap' };
+  | { kind: 'roadmap' }
+  | { kind: 'convention-refine'; repoKey: string };
 
 /**
  * The shipped planning-workspace entry path. Today the workspace renders as the
@@ -59,6 +59,8 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
       return 'contextual';
     case 'roadmap':
       return 'roadmap';
+    case 'convention-refine':
+      return 'contextual';
     case 'project':
       if (context.hasPlan === undefined) return 'project';
       return context.hasPlan ? 'replan' : 'generation';
@@ -68,8 +70,7 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
 /**
  * Build the href that opens the planning workspace in the resolved mode,
  * carrying the originating context as query params so the workspace can seed
- * itself. Unknown params are harmless to the current route; they are the
- * forward-compatible seam the mode subtasks (7.4 / 7.11 / 7.12 / 7.19) read.
+ * itself.
  */
 export function planningWorkspaceHref(context: PlanningLaunchContext): string {
   const params = new URLSearchParams({
@@ -77,5 +78,6 @@ export function planningWorkspaceHref(context: PlanningLaunchContext): string {
     from: context.kind,
   });
   if (context.kind === 'work-item') params.set('item', context.itemKey);
+  if (context.kind === 'convention-refine') params.set('repo', context.repoKey);
   return `${PLANNING_WORKSPACE_PATH}?${params.toString()}`;
 }

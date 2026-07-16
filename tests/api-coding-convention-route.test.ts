@@ -7,18 +7,12 @@ import type {
   RawCodeAuditSurface,
 } from '@/lib/ai/motirAiClient';
 
-// Transport tests for the /api/ai/coding-convention/* routes (Subtask 7.14.5 /
-// MOTIR-926). The COMPANION service test (aiConventionService.test.ts) proves the
-// project-admin gate + the raw→DTO mapping at the SERVICE layer against real
-// Postgres; this file proves the things only the ROUTE owns:
-//   - the session/active-project gate (401 with no session),
-//   - the DTO serialized back through NextResponse.json (route → DTO),
-//   - the PATCH body validation (400 on a missing contentMd),
+// Transport tests for the /api/ai/coding-convention/* routes (MOTIR-926/1663).
+// The approve/PATCH routes are removed per MOTIR-1660/1663 (convention is
+// derived + auto-used, read-only). This proves route-layer concerns:
+//   - session/active-project gate (401 with no session),
+//   - the DTO serialized back through NextResponse.json,
 //   - the motir-ai outage → 502 mapping.
-// The three sanctioned mocks: getActiveProject (the context resolver the test env
-// can't supply — no cookies; same exception the board/ready suites take), getSession
-// (the 401 branch), and the motir-ai HTTP client leaf. The gate still runs for real
-// (aiConventionService.assertCanManage) against the seeded project.
 
 const ctxRef = { current: null as ProjectContext | null };
 const sessionRef = { current: null as { user: { id: string; email: string } } | null };
@@ -31,8 +25,6 @@ vi.mock('@/lib/auth', () => ({ getSession: async () => sessionRef.current }));
 
 const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
 const getConventionMock = vi.fn<(q: unknown) => Promise<RawConventionSurface>>();
-const editConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
-const approveConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
 const refreshCodeAuditMock =
   vi.fn<
     (t: unknown, c: unknown, a: unknown) => Promise<{ auditJobId: string; conventionJobId: string }>
@@ -40,20 +32,13 @@ const refreshCodeAuditMock =
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getCodeAudit: (q: unknown) => getCodeAuditMock(q),
   getConvention: (q: unknown) => getConventionMock(q),
-  editConvention: (i: unknown) => editConventionMock(i),
-  approveConvention: (i: unknown) => approveConventionMock(i),
   refreshCodeAudit: (t: unknown, c: unknown, a: unknown) => refreshCodeAuditMock(t, c, a),
 }));
 
 const { GET: auditGET } = await import('@/app/api/ai/coding-convention/audit/route');
 const { GET: conventionGET } = await import('@/app/api/ai/coding-convention/convention/route');
-const { PATCH: conventionPATCH } =
-  await import('@/app/api/ai/coding-convention/convention/[conventionId]/route');
-const { POST: approvePOST } =
-  await import('@/app/api/ai/coding-convention/convention/[conventionId]/approve/route');
 const { POST: refreshPOST } = await import('@/app/api/ai/coding-convention/refresh/route');
-const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
-const { workspacesService } = await import('@/lib/services/workspacesService');
+const { createTestWorkspace, createTestProject } = await import('./fixtures');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
@@ -87,22 +72,29 @@ function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
   };
 }
 
+function rawConventionSurface(over: Partial<RawConventionSurface> = {}): RawConventionSurface {
+  return {
+    repoKey: 'acme/web',
+    proposed: rawConvention(),
+    standard: null,
+    versions: [rawConvention()],
+    nextCursor: null,
+    ...over,
+  };
+}
+
 beforeEach(async () => {
   await truncateAuthTables();
   ctxRef.current = null;
   sessionRef.current = null;
   getCodeAuditMock.mockReset();
   getConventionMock.mockReset();
-  editConventionMock.mockReset();
-  approveConventionMock.mockReset();
   refreshCodeAuditMock.mockReset();
 });
 
 afterAll(async () => {
   await db.$disconnect();
 });
-
-const params = (conventionId: string) => ({ params: Promise.resolve({ conventionId }) });
 
 describe('GET /api/ai/coding-convention/audit', () => {
   it('401s with no session', async () => {
@@ -118,6 +110,7 @@ describe('GET /api/ai/coding-convention/audit', () => {
         aiProjectId: 'ai_1',
         healthSummary: { grade: 'B', conformancePct: 78 },
         codeGraphRef: null,
+        repoKey: 'acme/web',
         jobId: null,
         createdAt: '2026-07-04T00:00:00.000Z',
       },
@@ -128,8 +121,30 @@ describe('GET /api/ai/coding-convention/audit', () => {
     const res = await auditGET(new Request(`${BASE}/audit?findingsOffset=0`));
     expect(res.status).toBe(200);
     const body = await res.json();
+    expect(body.audit.repoKey).toBe('acme/web');
     expect(body.audit.healthSummary.grade).toBe('B');
     expect(body.findings[0].severity).toBe('high');
+  });
+
+  it('passes repoKey query param to the service', async () => {
+    await signInAtProject();
+    getCodeAuditMock.mockResolvedValue({
+      audit: {
+        id: 'audit_1',
+        aiProjectId: 'ai_1',
+        healthSummary: {},
+        codeGraphRef: null,
+        repoKey: 'acme/api',
+        jobId: null,
+        createdAt: '2026-07-04T00:00:00.000Z',
+      },
+      findings: [],
+      total: 0,
+      nextOffset: null,
+    });
+    const res = await auditGET(new Request(`${BASE}/audit?repoKey=acme%2Fapi`));
+    expect(res.status).toBe(200);
+    expect(getCodeAuditMock).toHaveBeenCalledWith(expect.objectContaining({ repoKey: 'acme/api' }));
   });
 
   it('maps a motir-ai outage to 502', async () => {
@@ -166,119 +181,26 @@ describe('POST /api/ai/coding-convention/refresh', () => {
 });
 
 describe('GET /api/ai/coding-convention/convention', () => {
-  it('returns the mapped convention surface for an admin', async () => {
+  it('returns the mapped per-repo convention surface for an admin', async () => {
     await signInAtProject();
-    getConventionMock.mockResolvedValue({
-      proposed: rawConvention(),
-      standard: null,
-      versions: [rawConvention()],
-      nextCursor: null,
-    });
+    getConventionMock.mockResolvedValue(rawConventionSurface());
+
     const res = await conventionGET(new Request(`${BASE}/convention`));
     expect(res.status).toBe(200);
     const body = await res.json();
+    expect(body.repoKey).toBe('acme/web');
     expect(body.proposed.id).toBe('conv_1');
     expect(body.versions).toHaveLength(1);
   });
-});
 
-describe('PATCH /api/ai/coding-convention/convention/:id', () => {
-  it('400s a missing contentMd without calling the boundary', async () => {
+  it('passes repoKey query param to the service', async () => {
     await signInAtProject();
-    const res = await conventionPATCH(
-      new Request(`${BASE}/convention/conv_1`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
-      }),
-      params('conv_1'),
-    );
-    expect(res.status).toBe(400);
-    expect(editConventionMock).not.toHaveBeenCalled();
-  });
+    getConventionMock.mockResolvedValue(rawConventionSurface({ repoKey: 'acme/api' }));
 
-  it('edits a proposed draft and returns the DTO', async () => {
-    await signInAtProject();
-    editConventionMock.mockResolvedValue(rawConvention({ contentMd: '# curated' }));
-    const res = await conventionPATCH(
-      new Request(`${BASE}/convention/conv_1`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ contentMd: '# curated' }),
-      }),
-      params('conv_1'),
-    );
+    const res = await conventionGET(new Request(`${BASE}/convention?repoKey=acme%2Fapi`));
     expect(res.status).toBe(200);
-    expect((await res.json()).contentMd).toBe('# curated');
-  });
-});
-
-describe('POST /api/ai/coding-convention/convention/:id/approve', () => {
-  it('approves and returns the standard DTO', async () => {
-    await signInAtProject();
-    approveConventionMock.mockResolvedValue(rawConvention({ status: 'standard' }));
-    const res = await approvePOST(
-      new Request(`${BASE}/convention/conv_1/approve`, { method: 'POST' }),
-      params('conv_1'),
+    expect(getConventionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repoKey: 'acme/api' }),
     );
-    expect(res.status).toBe(200);
-    expect((await res.json()).status).toBe('standard');
-  });
-
-  it('401s with no session', async () => {
-    const res = await approvePOST(
-      new Request(`${BASE}/convention/conv_1/approve`, { method: 'POST' }),
-      params('conv_1'),
-    );
-    expect(res.status).toBe(401);
-  });
-
-  // The project-admin gate runs for real at the route (MOTIR-1613): a signed-in
-  // non-admin is 403 and a cross-tenant project 404, and the motir-ai boundary is
-  // never reached. Companion service assertions live in aiConventionService.test.ts.
-  it('403s a signed-in non-admin member without calling the boundary', async () => {
-    const { workspace, owner } = await createTestWorkspace();
-    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    const member = await createTestUser();
-    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
-    sessionRef.current = { user: { id: member.id, email: `${member.id}@t.dev` } };
-    ctxRef.current = {
-      userId: member.id,
-      workspaceId: workspace.id,
-      projectId: project.id,
-      project,
-    };
-
-    const res = await approvePOST(
-      new Request(`${BASE}/convention/conv_1/approve`, { method: 'POST' }),
-      params('conv_1'),
-    );
-    expect(res.status).toBe(403);
-    expect(approveConventionMock).not.toHaveBeenCalled();
-  });
-
-  it('404s approving a cross-tenant project (never confirms it exists)', async () => {
-    const a = await createTestWorkspace();
-    const b = await createTestWorkspace();
-    const projectB = await createTestProject({
-      workspaceId: b.workspace.id,
-      actorUserId: b.owner.id,
-    });
-    // Actor A is signed in, but the active-project ctx points at project B in
-    // another workspace — the gate must 404, never 403.
-    sessionRef.current = { user: { id: a.owner.id, email: `${a.owner.id}@t.dev` } };
-    ctxRef.current = {
-      userId: a.owner.id,
-      workspaceId: a.workspace.id,
-      projectId: projectB.id,
-      project: projectB,
-    };
-
-    const res = await approvePOST(
-      new Request(`${BASE}/convention/conv_1/approve`, { method: 'POST' }),
-      params('conv_1'),
-    );
-    expect(res.status).toBe(404);
-    expect(approveConventionMock).not.toHaveBeenCalled();
   });
 });

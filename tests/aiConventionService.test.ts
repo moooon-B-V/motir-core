@@ -6,17 +6,12 @@ import type {
   RawCodeAuditSurface,
 } from '@/lib/ai/motirAiClient';
 
-// The Code-health surface service (Subtask 7.14.5 / MOTIR-926). The motir-ai HTTP
-// client is the one sanctioned boundary mock (an external network leaf); the rest —
-// workspace / project / membership — is seeded through the real services against the
-// real Postgres, so this proves the read-through service's PROJECT-ADMIN GATE
-// (404-not-403 cross-tenant, 403 non-admin), the raw→DTO mapping (provenance, the
-// defensive health-summary parse, findings), and that writes carry the actor's id —
-// independent of motir-ai. Mirrors aiUsageService.test.ts.
+// The Code-health surface service (MOTIR-926/1663). The motir-ai HTTP client is
+// the one sanctioned boundary mock; the rest — workspace / project / membership —
+// is seeded through the real services against real Postgres. The approve/edit
+// write path is removed per MOTIR-1660/1663 (derived + auto-used, read-only).
 const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
 const getConventionMock = vi.fn<(q: unknown) => Promise<RawConventionSurface>>();
-const editConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
-const approveConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
 const refreshCodeAuditMock =
   vi.fn<
     (t: unknown, c: unknown, a: unknown) => Promise<{ auditJobId: string; conventionJobId: string }>
@@ -24,8 +19,6 @@ const refreshCodeAuditMock =
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getCodeAudit: (q: unknown) => getCodeAuditMock(q),
   getConvention: (q: unknown) => getConventionMock(q),
-  editConvention: (i: unknown) => editConventionMock(i),
-  approveConvention: (i: unknown) => approveConventionMock(i),
   refreshCodeAudit: (t: unknown, c: unknown, a: unknown) => refreshCodeAuditMock(t, c, a),
 }));
 
@@ -61,6 +54,7 @@ function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
 
 function rawConventionSurface(over: Partial<RawConventionSurface> = {}): RawConventionSurface {
   return {
+    repoKey: 'acme/web',
     proposed: rawConvention(),
     standard: null,
     versions: [rawConvention()],
@@ -81,6 +75,7 @@ function rawAuditSurface(over: Partial<RawCodeAuditSurface> = {}): RawCodeAuditS
         byCategory: [{ category: 'layering', label: 'Layering', status: 'conforms' }],
       },
       codeGraphRef: 'acme/web@a1b9f30',
+      repoKey: 'acme/web',
       jobId: 'job_1',
       createdAt: '2026-07-04T00:00:00.000Z',
     },
@@ -105,8 +100,6 @@ beforeEach(async () => {
   await truncateAuthTables();
   getCodeAuditMock.mockReset();
   getConventionMock.mockReset();
-  editConventionMock.mockReset();
-  approveConventionMock.mockReset();
   refreshCodeAuditMock.mockReset();
 });
 
@@ -128,14 +121,34 @@ describe('aiConventionService — project-admin gate', () => {
     expect(getConventionMock).toHaveBeenCalledWith(
       expect.objectContaining({ coreWorkspaceId: workspace.id, coreProjectId: project.id }),
     );
+    expect(dto.repoKey).toBe('acme/web');
     expect(dto.proposed?.id).toBe('conv_1');
     expect(dto.proposed?.status).toBe('proposed');
     expect(dto.proposed?.provenance).toEqual([
       { ruleId: 'layering.no-upward-imports', category: 'layering', source: 'adopted' },
       { ruleId: 'error.typed-taxonomy', category: 'error-handling', source: 'proposed' },
     ]);
-    // The internal aiProjectId never crosses into the browser-facing DTO.
     expect(JSON.stringify(dto)).not.toContain('aiProjectId');
+  });
+
+  it('passes repoKey scope through to the boundary query', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getConventionMock.mockResolvedValue(rawConventionSurface({ repoKey: 'acme/api' }));
+
+    const dto = await aiConventionService.getConvention(
+      project.id,
+      {
+        userId: owner.id,
+        workspaceId: workspace.id,
+      },
+      { repoKey: 'acme/api' },
+    );
+
+    expect(getConventionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repoKey: 'acme/api' }),
+    );
+    expect(dto.repoKey).toBe('acme/api');
   });
 
   it('maps the audit health summary + findings defensively', async () => {
@@ -148,6 +161,7 @@ describe('aiConventionService — project-admin gate', () => {
       workspaceId: workspace.id,
     });
 
+    expect(dto.audit?.repoKey).toBe('acme/web');
     expect(dto.audit?.healthSummary.grade).toBe('B');
     expect(dto.audit?.healthSummary.conformancePct).toBe(78);
     expect(dto.audit?.healthSummary.byCategory?.[0]).toEqual({
@@ -162,7 +176,7 @@ describe('aiConventionService — project-admin gate', () => {
     expect(dto.nextOffset).toBe(1);
   });
 
-  it('maps the §10.3 scanner state onto the audit DTO (MOTIR-1592) when present', async () => {
+  it('maps the §10.3 scanner state onto the audit DTO when present', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
     getCodeAuditMock.mockResolvedValue(
@@ -193,7 +207,6 @@ describe('aiConventionService — project-admin gate', () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
 
-    // Absent scanner → null (an audit recorded before the column existed).
     getCodeAuditMock.mockResolvedValueOnce(rawAuditSurface());
     const noScanner = await aiConventionService.getAudit(project.id, {
       userId: owner.id,
@@ -201,7 +214,6 @@ describe('aiConventionService — project-admin gate', () => {
     });
     expect(noScanner.scanner).toBeNull();
 
-    // A detected+ingested state with an UNKNOWN source is dropped defensively.
     getCodeAuditMock.mockResolvedValueOnce(
       rawAuditSurface({
         scanner: {
@@ -226,7 +238,7 @@ describe('aiConventionService — project-admin gate', () => {
     expect(detected.scanner?.ingested?.tools).toEqual(['CodeQL']);
   });
 
-  it('reaudit triggers the refresh over the boundary with the project tenant + returns job ids', async () => {
+  it('reaudit triggers the refresh over the boundary', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
@@ -245,7 +257,6 @@ describe('aiConventionService — project-admin gate', () => {
       projectId: project.id,
       projectKey: project.identifier,
     });
-    // No connected repo in the fixture → the `code` hole is an empty object.
     expect(context).toEqual({ code: {} });
     expect(actor).toEqual({ userId: owner.id });
   });
@@ -289,7 +300,6 @@ describe('aiConventionService — project-admin gate', () => {
       actorUserId: b.owner.id,
     });
 
-    // Actor A asks about project B (another workspace) — resolveInputs must 404.
     await expect(
       aiConventionService.getConvention(projectB.id, {
         userId: a.owner.id,
@@ -297,95 +307,6 @@ describe('aiConventionService — project-admin gate', () => {
       }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
     expect(getConventionMock).not.toHaveBeenCalled();
-  });
-
-  // Same gate on the APPROVE write specifically (MOTIR-1613): approving the
-  // standard is a manager action, so a non-admin is 403 and a cross-tenant
-  // project 404 — and the motir-ai boundary is never reached. (The
-  // approve→standard happy path is proved by the "writes carry the actor" suite;
-  // do not re-assert it here.)
-  it('blocks a non-admin member from approving (403) without calling the boundary', async () => {
-    const { workspace, owner } = await createTestWorkspace();
-    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    const member = await createTestUser();
-    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
-
-    await expect(
-      aiConventionService.approveConvention(
-        project.id,
-        { userId: member.id, workspaceId: workspace.id },
-        'conv_1',
-      ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
-    expect(approveConventionMock).not.toHaveBeenCalled();
-  });
-
-  it('treats approving a cross-tenant convention as 404 (never confirms it exists)', async () => {
-    const a = await createTestWorkspace();
-    const b = await createTestWorkspace();
-    const projectB = await createTestProject({
-      workspaceId: b.workspace.id,
-      actorUserId: b.owner.id,
-    });
-
-    // Actor A tries to approve on project B (another workspace) — 404, not 403.
-    await expect(
-      aiConventionService.approveConvention(
-        projectB.id,
-        { userId: a.owner.id, workspaceId: a.workspace.id },
-        'conv_1',
-      ),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
-    expect(approveConventionMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('aiConventionService — writes carry the actor', () => {
-  it('editConvention passes the actor userId + convention id to the boundary', async () => {
-    const { workspace, owner } = await createTestWorkspace();
-    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    editConventionMock.mockResolvedValue(
-      rawConvention({ contentMd: '# curated', editedByUserId: owner.id }),
-    );
-
-    const dto = await aiConventionService.editConvention(
-      project.id,
-      { userId: owner.id, workspaceId: workspace.id },
-      'conv_1',
-      '# curated',
-    );
-
-    expect(editConventionMock).toHaveBeenCalledWith({
-      coreWorkspaceId: workspace.id,
-      coreProjectId: project.id,
-      conventionId: 'conv_1',
-      contentMd: '# curated',
-      userId: owner.id,
-    });
-    expect(dto.contentMd).toBe('# curated');
-  });
-
-  it('approveConvention passes the actor userId + returns the promoted DTO', async () => {
-    const { workspace, owner } = await createTestWorkspace();
-    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    approveConventionMock.mockResolvedValue(
-      rawConvention({ status: 'standard', approvedByUserId: owner.id }),
-    );
-
-    const dto = await aiConventionService.approveConvention(
-      project.id,
-      { userId: owner.id, workspaceId: workspace.id },
-      'conv_1',
-    );
-
-    expect(approveConventionMock).toHaveBeenCalledWith({
-      coreWorkspaceId: workspace.id,
-      coreProjectId: project.id,
-      conventionId: 'conv_1',
-      userId: owner.id,
-    });
-    expect(dto.status).toBe('standard');
-    expect(dto.approvedByUserId).toBe(owner.id);
   });
 
   it('propagates a motir-ai outage for the route to map to 502', async () => {

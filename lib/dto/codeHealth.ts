@@ -27,12 +27,19 @@ export interface CodingConventionDTO {
   createdAt: string;
 }
 
+// Per-repo convention surface (MOTIR-1662 / MOTIR-1663). The convention is now
+// scoped to a (project, repo) pair; the page shows one card per connected repo,
+// each with its derived convention document (read-only) and a "Refine with Motir"
+// entry that opens the universal AI chat launcher.
 export interface ConventionSurfaceDTO {
-  // The latest proposed draft awaiting approval (State A), or null.
+  // The repo this convention belongs to (e.g. "acme/web"). Null for a project
+  // with no connected repo (the empty/fresh state).
+  repoKey: string | null;
+  // The latest derived convention (always auto-used — no proposed→standard gate).
   proposed: CodingConventionDTO | null;
-  // The single active standard (State B), or null before the first approval.
+  // The current active version, or null before the first derivation.
   standard: CodingConventionDTO | null;
-  // Version history, newest first (drives the history list + "active standard" mark).
+  // Version history, newest first.
   versions: CodingConventionDTO[];
   nextCursor: string | null;
 }
@@ -103,6 +110,8 @@ export interface CodeAuditSurfaceDTO {
     id: string;
     healthSummary: CodeHealthSummaryDTO;
     codeGraphRef: string | null;
+    // The repo this audit belongs to (MOTIR-1662 per-repo scope).
+    repoKey: string | null;
     createdAt: string;
   } | null;
   findings: CodeAuditFindingDTO[];

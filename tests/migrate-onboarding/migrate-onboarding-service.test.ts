@@ -44,8 +44,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   // module's named imports resolve under the full-replace mock.
   streamJob: vi.fn(),
   getJob: vi.fn(),
-  approveConvention: vi.fn(),
-  editConvention: vi.fn(),
   getConvention: vi.fn(),
   getCodeAudit: vi.fn(),
   saveDesignChoice: vi.fn(),
