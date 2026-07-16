@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · @-mention work-item picker in the planning chat · MOTIR-1490
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the @-mention WORK-ITEM PICKER inside
+      the planning chat composer — MOTIR-1490, Subtask of MOTIR-812 (Contextual
+      planning from each work item). The design that blocks the UI code subtask
+      MOTIR-1491 (the picker implementation).
+
+      COMPOSES, DOES NOT REDRAW (design-compose rule, notes #82 + #95):
+        · The chat composer EXTENDS the shipped PlanningWorkspace chat rail
+          (planning-workspace.mock.html sheet 1, DiscoveryChatRail.tsx) — the
+          mock reproduces its real markup (rail head, bubble + avatar language,
+          composer). The one NEW element is the @-trigger + targets tray.
+        · The @ picker popup REUSES the shipped work-item-search row vocabulary
+          from internal-links.mock.html panel 3 (the .pop/.pop-row, type-icon ·
+          key · title · status Pill grammar), adapted for a chat-context
+          dropdown.
+        · The inserted chip IS the shipped WorkItemRefChip (WorkItemRefChip.tsx,
+          internal-links.mock.html panels 0-2: .wi-chip, live/archived/deleted
+          states). The targets tray COMPOSES it — never redesigns the chip.
+        · The map (canvas) highlight REUSES the canvas "active" node state
+          (.node.active) from planning-workspace.mock.html — the accent ring +
+          glow effect, scoped to the target item(s).
+        · The pre-scoped entrance state REFERENCES MOTIR-1489 (the work-item
+          Plan/Re-plan entrance design) — an item opened from detail/quick-view
+          arrives with that item pre-filled as the initial target.
+
+      WORKFLOW SPEC it draws (the design-content dependency rule — grounded in
+      the relates_to subtasks, NOT invented):
+        · MOTIR-909 (contextual session): the session accepts ONE OR MORE target
+          ids (a target SET) — drawn as the multi-target tray + chips.
+        · MOTIR-1489 (entrance design): the pre-scoped target from the entrance
+          shows as an initial target the user can add to — Panel 5.
+        · MOTIR-1399 (work-item-link chip, done): the chip vocabulary reused 1:1.
+
+      Panels:
+        1 · The @ trigger — typing @ in the chat composer opens a search dropdown
+            over the project's work items; type-to-filter; keyboard navigation.
+            Each result shows kind icon · key · title · status Pill.
+        2 · Multi-target tray — the composer above the input carries a "Targets"
+            tray of picked-item chips; user can add several and remove any (X).
+            States: empty tray, one target, multiple targets.
+        3 · Targets in the conversation — sent turn shows the target chips;
+            the map (canvas) highlights the target(s) with the active node ring.
+        4 · States — empty (no query), short query "keep typing", loading,
+            no-results.
+        5 · Pre-scoped entrance — opened from an item's Plan/Re-plan entrance,
+            that item is pre-filled as an initial target the user can extend.
+
+      COLOUR strictly via --el-* token values. SHAPE via element-semantic tokens.
+      No invented colours; no raw radius/spacing. AA holds.
+    -->
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css light-theme values.
+         Colour: --el-* only.  Shape: semantic tokens.  No raw hex/radius.
+      ---------------------------------------------------------------------- */
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --hair-strong: #d3cfc8;
+        --accent: #5645d4;
+        --accent-soft: #f4f2fd;
+        --accent-text: #ffffff;
+        --highlight: #ff64c8;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --info: #0075de;
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --yellow: #fef7d6;
+        --type-epic: #ff64c8;
+        --type-story: #1aae39;
+        --type-task: #0075de;
+        --type-bug: #e03131;
+        --type-subtask: #2a9d99;
+        --r-card: 12px;
+        --r-modal: 14px;
+        --r-btn: 8px;
+        --r-input: 9px;
+        --r-control: 6px;
+        --r-badge: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 8px 26px -10px #0000001f;
+        --sh-modal: 0 24px 60px -18px #00000033;
+        --focus: #5645d4;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
+        --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #f4f3f1;
+        color: var(--text);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+
+      /* ---- doc scaffold (annotations — NOT product UI) ---- */
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 28px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        box-shadow: var(--sh-subtle);
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        font: 700 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: var(--r-control);
+      }
+      .sheethead h2 { font-size: 14.5px; margin: 0; color: var(--strong); }
+      .sheethead .cap { font-size: 12px; color: var(--muted); margin-left: auto; }
+      .sheetbody { padding: 20px 18px 22px; }
+      .note {
+        font-size: 12px; line-height: 1.5; color: var(--secondary);
+        margin: 14px 18px 0; padding: 10px 12px;
+        background: var(--soft); border: 1px solid var(--hair);
+        border-radius: var(--r-control);
+      }
+      .note b { color: var(--strong); }
+      .note code {
+        font: 600 11.5px var(--mono); color: var(--accent);
+        background: var(--accent-soft); padding: 1px 5px; border-radius: 5px;
+      }
+      .doc-head {
+        max-width: 1150px; margin: 0 auto 22px;
+      }
+      .doc-head h1 {
+        font: 700 22px/1.2 var(--serif); margin: 0 0 8px; letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0; color: var(--secondary); font-size: 13.5px; line-height: 1.55; max-width: 82ch;
+      }
+      .doc-head .refs { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+      .ref {
+        font: 600 11px var(--mono); color: var(--accent);
+        background: var(--accent-soft); border-radius: var(--r-badge);
+        padding: 3px 9px;
+      }
+
+      /* ---- screen frame ---- */
+      .screen {
+        border: 1px solid var(--border); border-radius: var(--r-card);
+        overflow: hidden; box-shadow: var(--sh-card); background: var(--surface);
+      }
+
+      /* ═══════════════ SHIPPED RAIL (composed, not redrawn) ═══════════════ */
+      .rail {
+        display: flex; flex-direction: column; min-height: 0;
+        border-left: 1px solid var(--border); background: var(--surface);
+      }
+      .railhead {
+        display: flex; align-items: center; gap: 8px;
+        padding: 11px 16px; border-bottom: 1px solid var(--hair);
+      }
+      .railhead .dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        background: linear-gradient(135deg, #5645d4, #ff64c8);
+        box-shadow: 0 0 7px #ff64c885;
+      }
+      .railhead .lbl {
+        font: 600 11px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.04em; color: var(--secondary);
+      }
+      .railhead .lbl::before { content: '✦ '; color: var(--accent); }
+      .railhead .mode {
+        margin-left: auto; font: 600 10px var(--mono);
+        color: var(--accent); background: var(--accent-soft);
+        padding: 2px 7px; border-radius: 5px;
+      }
+      .log {
+        flex: 1; min-height: 0; overflow: hidden;
+        display: flex; flex-direction: column; gap: 11px;
+        padding: 14px 14px;
+      }
+      .turn { display: flex; align-items: flex-start; gap: 8px; }
+      .turn.user { flex-direction: row-reverse; }
+      .avatar {
+        width: 26px; height: 26px; border-radius: 50%;
+        display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none;
+      }
+      .avatar.ai { background: var(--accent); color: #fff; }
+      .avatar.user { background: var(--mutedfill); color: var(--secondary); }
+      .bubble {
+        border-radius: 13px; padding: 8px 11px; font-size: 12.5px;
+        line-height: 1.45; max-width: 232px;
+      }
+      .bubble.ai { background: var(--soft); color: var(--text); }
+      .bubble.user { background: var(--accent); color: #fff; }
+
+      /* ═══════════════ THE COMPOSER — the primary surface this design changes ═══════════════ */
+      .composer {
+        display: flex; flex-direction: column;
+        border-top: 1px solid var(--border);
+      }
+      /* the targets tray (above the input, visible when items are picked) */
+      .targets-tray {
+        display: flex; flex-wrap: wrap; align-items: center;
+        gap: 5px; padding: 8px 12px 4px; min-height: 0;
+      }
+      .targets-tray-label {
+        font: 600 10px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.05em; color: var(--faint);
+        padding: 2px 0; flex: none; margin-right: 2px;
+      }
+      /* the chip inside the tray — REUSES the shipped wi-chip vocabulary */
+      .wi-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        vertical-align: baseline;
+        padding: 1px 7px 1px 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        background: var(--surface);
+        font-size: 11.5px; line-height: 1.35;
+        white-space: nowrap; color: var(--text);
+        cursor: default; max-width: 180px;
+      }
+      .wi-chip .type-icon { width: 13px; height: 13px; flex: none; }
+      .wi-chip .type-icon svg { width: 13px; height: 13px; display: block; }
+      .wi-key {
+        font-family: var(--mono); font-size: 0.9em; font-weight: 500;
+        color: var(--accent); flex: none;
+      }
+      .wi-title {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .wi-remove {
+        width: 15px; height: 15px; flex: none;
+        display: grid; place-items: center;
+        border-radius: 3px; color: var(--muted); cursor: pointer;
+        margin-left: 1px;
+      }
+      .wi-remove:hover { background: var(--soft); color: var(--text); }
+      .wi-remove svg { width: 11px; height: 11px; }
+      .t-epic { color: var(--type-epic); }
+      .t-story { color: var(--type-story); }
+      .t-task { color: var(--type-task); }
+      .t-bug { color: var(--type-bug); }
+      .t-subtask { color: var(--type-subtask); }
+
+      /* the input row */
+      .composer-row {
+        display: flex; align-items: center; gap: 8px; padding: 9px 12px 11px;
+        position: relative;
+      }
+      .composer-row .inp {
+        flex: 1; min-width: 0; height: 34px;
+        border: 1px solid var(--border); border-radius: var(--r-input);
+        padding: 0 11px; font: inherit; font-size: 12px; color: var(--text);
+        display: flex; align-items: center;
+        background: var(--surface);
+      }
+      .composer-row .inp::placeholder { color: var(--faint); }
+      .composer-row .send {
+        width: 34px; height: 34px; border-radius: var(--r-btn);
+        background: var(--accent); color: #fff;
+        display: grid; place-items: center; flex: none; font-size: 14px;
+        cursor: pointer;
+      }
+
+      /* ═══════════════ THE @-PICKER DROPDOWN ═══════════════ */
+      .dropdown {
+        position: absolute; bottom: 48px; left: 12px; right: 12px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--r-card); box-shadow: var(--sh-elev);
+        padding: 4px 0; z-index: 50; overflow: hidden;
+        max-height: 240px;
+      }
+      .drop-head {
+        padding: 7px 12px 4px;
+        font: 600 10px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--faint);
+        display: flex; align-items: center; gap: 6px;
+      }
+      .drop-head .q {
+        font-weight: 500; color: var(--text); text-transform: none;
+        font-family: var(--sans); letter-spacing: 0;
+      }
+      .drop-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 7px 12px; font-size: 13px; color: var(--text);
+        cursor: pointer;
+      }
+      .drop-row.is-active {
+        background: var(--soft);
+      }
+      .drop-row .dr-type { width: 15px; height: 15px; flex: none; }
+      .drop-row .dr-type svg { width: 15px; height: 15px; display: block; }
+      .drop-row .dr-key {
+        font-family: var(--mono); font-size: 11px; color: var(--muted); flex: none; width: 72px;
+      }
+      .drop-row .dr-title {
+        flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .drop-row .dr-status { margin-left: auto; flex: none; }
+      .drop-hint {
+        padding: 14px 12px; font-size: 12px; color: var(--muted); text-align: center;
+      }
+      .drop-hint .spin {
+        display: inline-block; width: 14px; height: 14px; color: var(--faint);
+        vertical-align: -3px; margin-right: 6px;
+      }
+      .drop-hint .spin svg { width: 14px; height: 14px; display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* Pill (shipped) */
+      .pill {
+        display: inline-flex; align-items: center; gap: 4px;
+        border-radius: var(--r-badge); padding: 2px 9px;
+        font-size: 11px; font-weight: 500; white-space: nowrap;
+        color: var(--strong);
+      }
+      .p-planned { background: var(--lavender); }
+      .p-inprogress { background: var(--sky); }
+      .p-done { background: var(--mint); }
+      .p-blocked { background: var(--peach); }
+      .p-cancelled { background: var(--mutedfill); color: var(--muted); }
+
+      /* ═══════════════ THE MAP (CANVAS) HIGHLIGHT — Panel 3 ═══════════════ */
+      .frame {
+        display: grid; grid-template-columns: 1fr 320px; height: 460px;
+      }
+      .canvas {
+        position: relative; overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
+          var(--hub);
+      }
+      .canvas-label {
+        position: absolute; top: 10px; left: 14px;
+        font: 600 10px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--faint);
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--r-control); padding: 3px 7px;
+        box-shadow: var(--sh-subtle);
+      }
+      /* canvas node (composed from planning-workspace.mock.html) */
+      .node {
+        position: absolute; width: 200px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 14px; padding: 10px 11px;
+        box-shadow: var(--sh-card); z-index: 2;
+      }
+      .node.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px #5645d426, 0 4px 12px #5645d41f;
+      }
+      .node.upcoming { opacity: 0.5; }
+      .node.done { opacity: 0.85; }
+      .nhead { display: flex; align-items: center; gap: 8px; }
+      .tile {
+        width: 28px; height: 28px; border-radius: 7px;
+        display: grid; place-items: center; flex: none; font-size: 14px;
+      }
+      .ntitle { font-size: 12px; font-weight: 700; color: var(--text); line-height: 1.18; }
+      .nsub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+      .focus-ring {
+        position: absolute; inset: -2px; border-radius: 18px;
+        border: 2px solid var(--accent);
+        box-shadow: 0 0 14px #5645d43d, 0 0 28px -4px #ff64c84d;
+        pointer-events: none; z-index: 3;
+      }
+      .focus-pill {
+        position: absolute; top: -24px; right: -4px;
+        font: 600 10px var(--mono);
+        color: var(--accent); background: var(--accent-soft);
+        border: 1px solid var(--accent);
+        border-radius: var(--r-badge); padding: 2px 7px;
+        white-space: nowrap; z-index: 4;
+        box-shadow: 0 0 8px #5645d41f;
+      }
+
+      /* ═══════════════ STATES PANEL (4) ═══════════════ */
+      .states-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+      }
+      .state-card {
+        border: 1px solid var(--border); border-radius: var(--r-card);
+        background: var(--surface); overflow: hidden;
+      }
+      .state-card .sc-h {
+        font: 600 10px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.05em; color: var(--faint);
+        padding: 8px 11px; border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .state-card .sc-b {
+        padding: 14px 11px; position: relative;
+      }
+      .mini-drop {
+        border: 1px solid var(--border); border-radius: var(--r-card);
+        background: var(--surface); box-shadow: var(--sh-subtle);
+        overflow: hidden;
+      }
+      .mini-drop .md-head {
+        padding: 7px 11px 4px;
+        font: 600 10px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--faint);
+      }
+      .mini-drop .md-row {
+        display: flex; align-items: center; gap: 7px;
+        padding: 6px 11px; font-size: 12px; color: var(--text);
+      }
+      .mini-drop .md-hint {
+        padding: 10px 11px; font-size: 11px; color: var(--muted);
+      }
+      .mini-drop .md-hint .spinner {
+        display: inline-block; width: 12px; height: 12px;
+        border-radius: 50%; border: 2px solid #d8d4cd; border-top-color: var(--accent);
+        vertical-align: -2px; margin-right: 5px;
+      }
+
+      /* ═══════════════ PRE-SCOPED ENTRANCE (5) ═══════════════ */
+      .entrance-frame {
+        display: grid; grid-template-columns: 1fr 320px; height: 360px;
+      }
+
+      /* ---- misc ---- */
+      .row-of {
+        display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start;
+      }
+      .mini-label {
+        font: 600 10px var(--mono); text-transform: uppercase;
+        letter-spacing: 0.05em; color: var(--faint); margin-bottom: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc-head">
+      <h1>@-mention work-item picker in the planning chat</h1>
+      <p>
+        MOTIR-1490 · <b>type: design</b> · Parent MOTIR-812 (Contextual planning from each work item).
+        The user types <code style="font-family: var(--mono)">@</code> in the planning-chat composer →
+        a search dropdown over the project's work items; picked items become inline target chips.
+        <b>Multiple targets</b> supported — the session API (MOTIR-909) accepts a target SET.
+      </p>
+      <div class="refs">
+        <span class="ref">MOTIR-1490 · design</span>
+        <span class="ref">composes: WorkItemRefChip (5.8)</span>
+        <span class="ref">composes: PlanningWorkspace (7.20)</span>
+        <span class="ref">composes: DiscoveryChatRail</span>
+        <span class="ref">relates_to: MOTIR-909 (session)</span>
+        <span class="ref">relates_to: MOTIR-1489 (entrance)</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 1 — @ trigger + search dropdown ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>The <code>@</code> trigger — search/locate work items from the chat composer</h2>
+        <span class="cap">pick a target</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div style="max-width: 340px; border-right: 1px solid var(--border)">
+            <div class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">contextual</span>
+              </div>
+              <div class="log">
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    I'm looking at the current plan. Which work item(s) should I plan around?
+                  </div>
+                </div>
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">
+                    Focus on billing — I need to expand that area.
+                  </div>
+                </div>
+              </div>
+              <div class="composer">
+                <div class="composer-row" style="position: relative">
+                  <span class="inp">
+                    <span style="color: var(--muted)">Add sub-stories to </span>
+                    <span style="color: var(--accent); font-family: var(--mono); font-weight: 600; background: var(--accent-soft); border-radius: 4px; padding: 1px 5px">@bil</span>
+                    <span style="border-left: 1.5px solid var(--accent); margin-left: 1px">&nbsp;</span>
+                  </span>
+                  <span class="send">➤</span>
+                  <!-- @-PICKER DROPDOWN -->
+                  <div class="dropdown" role="listbox" aria-label="Pick a work item to target">
+                    <div class="drop-head">Work items matching <span class="q">"bil"</span></div>
+                    <div class="drop-row is-active" aria-selected="true">
+                      <span class="dr-type t-story">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+                      </span>
+                      <span class="dr-key">MOTIR-812</span>
+                      <span class="dr-title">Billing — automated invoicing</span>
+                      <span class="dr-status"><span class="pill p-planned">To Do</span></span>
+                    </div>
+                    <div class="drop-row">
+                      <span class="dr-type t-story">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+                      </span>
+                      <span class="dr-key">MOTIR-814</span>
+                      <span class="dr-title">Billable hours tracking</span>
+                      <span class="dr-status"><span class="pill p-inprogress">In Progress</span></span>
+                    </div>
+                    <div class="drop-row">
+                      <span class="dr-type t-task">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+                      </span>
+                      <span class="dr-key">MOTIR-918</span>
+                      <span class="dr-title">Migrate billing from legacy</span>
+                      <span class="dr-status"><span class="pill p-done">Done</span></span>
+                    </div>
+                    <div class="drop-row">
+                      <span class="dr-type t-bug">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
+                      </span>
+                      <span class="dr-key">MOTIR-922</span>
+                      <span class="dr-title">Invoice total rounding error</span>
+                      <span class="dr-status"><span class="pill p-blocked">Blocked</span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>REUSES the shipped work-item search + chip vocabulary.</b>
+        Typing <code>@</code> in the chat composer triggers the search dropdown (NOT the full tiptap
+        @-mention picker — the chat composer is a plain text input, not a rich-text editor). The
+        dropdown reuses the <b>work-item-search row grammar</b> from <code>internal-links.mock.html</code>
+        panel 3 (<code>.pop-row</code>: type-icon · mono key · title · status Pill) and the
+        <code>/api/work-items/mention-search?q=</code> fetcher from
+        <code>lib/mentions/workItemMentionSearch.ts</code> (5.8.5 / MOTIR-1405, shipped). Keyboard:
+        ↑/↓/Enter/Esc; <code>aria-activedescendant</code> on the listbox. Results are
+        <b>scoped to the currently active project</b> — the same scope the session operates in.
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 2 — multi-target tray ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>Multi-target tray — picked items become chips above the input</h2>
+        <span class="cap">add several · remove any</span>
+      </div>
+      <div class="sheetbody">
+        <div class="row-of">
+          <div style="width: 340px">
+            <div class="mini-label">(a) Two targets picked — chips in the tray</div>
+            <div class="screen" style="border-bottom: 0">
+              <div class="composer">
+                <div class="targets-tray">
+                  <span class="targets-tray-label">Targets</span>
+                  <span class="wi-chip">
+                    <span class="type-icon t-story">
+                      <svg viewBox="0 0 24 24"><use href="#i-book"/></svg>
+                    </span>
+                    <span class="wi-key">MOTIR-812</span>
+                    <span class="wi-title">Billing — automated invoicing</span>
+                    <span class="wi-remove" aria-label="Remove MOTIR-812">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </span>
+                  </span>
+                  <span class="wi-chip">
+                    <span class="type-icon t-task">
+                      <svg viewBox="0 0 24 24"><use href="#i-task"/></svg>
+                    </span>
+                    <span class="wi-key">MOTIR-918</span>
+                    <span class="wi-title">Migrate billing from legacy</span>
+                    <span class="wi-remove" aria-label="Remove MOTIR-918">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </span>
+                  </span>
+                </div>
+                <div class="composer-row">
+                  <span class="inp" style="color: var(--faint)">Ask Motir to expand these…</span>
+                  <span class="send">➤</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="width: 340px">
+            <div class="mini-label">(b) One target, one removed (⨉ hover)</div>
+            <div class="screen" style="border-bottom: 0">
+              <div class="composer">
+                <div class="targets-tray">
+                  <span class="targets-tray-label">Target</span>
+                  <span class="wi-chip">
+                    <span class="type-icon t-story">
+                      <svg viewBox="0 0 24 24"><use href="#i-book"/></svg>
+                    </span>
+                    <span class="wi-key">MOTIR-812</span>
+                    <span class="wi-title">Billing — automated invoicing</span>
+                    <span class="wi-remove" aria-label="Remove MOTIR-812">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </span>
+                  </span>
+                </div>
+                <div class="composer-row">
+                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="send">➤</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="width: 340px">
+            <div class="mini-label">(c) Empty — no targets yet</div>
+            <div class="screen" style="border-bottom: 0">
+              <div class="composer">
+                <div class="composer-row">
+                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="send">➤</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="width: 340px">
+            <div class="mini-label">(d) @-trigger button (before typing)</div>
+            <div class="screen" style="border-bottom: 0">
+              <div class="composer">
+                <div class="composer-row" style="position: relative">
+                  <div style="position: relative; flex: 1; min-width: 0; display: flex; align-items: center;">
+                    <span class="inp" style="padding-left: 36px; color: var(--faint); width: 100%">Message Motir AI…</span>
+                    <span style="position: absolute; left: 14px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--r-control); border: 1px solid var(--border); background: var(--soft); font: 600 12px var(--mono); color: var(--muted); cursor: pointer">@</span>
+                  </div>
+                  <span class="send">➤</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>The tray holds the target SET.</b> Picking a work item from the @ dropdown inserts its chip
+        into the targets tray; the input text stays focused so the user can keep typing. The <b>⨉</b>
+        button on each chip removes that target from the set (no confirmation). The chips REUSE the
+        shipped <code>WorkItemRefChip</code> vocabulary (<code>internal-links.mock.html</code> panels
+        0–2: <code>.wi-chip</code>, type icon · mono key · title — no status dot in this context,
+        because a target assignment doesn't imply status relevance). The <b>@ button</b> (panel d) is
+        a visible trigger affordance to the left of the placeholder — clicking it focuses the input
+        and opens the dropdown with the last query, or a "type to search" hint when there's no
+        previous query. The tray label reads "Target" (singular) or "Targets" (plural) depending on
+        count.
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 3 — targets in conversation + map highlight ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>Targets in the conversation — chips in the turn + map highlight on the canvas</h2>
+        <span class="cap">chat ↔ canvas link</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="frame">
+            <!-- CANVAS LEFT — target nodes highlighted -->
+            <div class="canvas">
+              <span class="canvas-label">Targets focused on the map</span>
+              <!-- a non-target node (dimmed) -->
+              <div class="node upcoming" style="top: 30px; left: 30px">
+                <div class="nhead">
+                  <span class="tile" style="background: var(--peach)">⚙</span>
+                  <div>
+                    <div class="ntitle">Payments</div>
+                    <div class="nsub">2 stories</div>
+                  </div>
+                </div>
+              </div>
+              <!-- TARGET 1: active + focus ring -->
+              <div class="node active" style="top: 20px; left: 260px">
+                <div class="focus-ring"></div>
+                <div class="focus-pill">Target</div>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--lavender)">📚</span>
+                  <div>
+                    <div class="ntitle">Billing — invoicing</div>
+                    <div class="nsub">MOTIR-812 · 3 stories</div>
+                  </div>
+                </div>
+              </div>
+              <!-- a non-target done node -->
+              <div class="node done" style="top: 200px; left: 40px">
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mint)">✓</span>
+                  <div>
+                    <div class="ntitle">Auth module</div>
+                    <div class="nsub">Done</div>
+                  </div>
+                </div>
+              </div>
+              <!-- TARGET 2: active + focus ring -->
+              <div class="node active" style="top: 180px; left: 280px">
+                <div class="focus-ring"></div>
+                <div class="focus-pill">Target</div>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--lavender)">📋</span>
+                  <div>
+                    <div class="ntitle">Migrate billing</div>
+                    <div class="nsub">MOTIR-918 · Done</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- CHAT RIGHT — turn with target chips -->
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">contextual</span>
+              </div>
+              <div class="log">
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user" style="max-width: 260px">
+                    <div style="font-size: 10.5px; color: rgba(255,255,255,0.7); margin-bottom: 4px; display: flex; align-items: center; gap: 4px">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="M12 7v7"/><path d="M17 12h-4"/><path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1"/></svg>
+                      Targeting 2 items
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px">
+                      <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.15); border-radius: 5px; padding: 2px 7px; font-size: 11px">
+                        <svg viewBox="0 0 24 24" width="12" height="12"><use href="#i-book"/></svg>
+                        MOTIR-812
+                      </span>
+                      <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.15); border-radius: 5px; padding: 2px 7px; font-size: 11px">
+                        <svg viewBox="0 0 24 24" width="12" height="12"><use href="#i-task"/></svg>
+                        MOTIR-918
+                      </span>
+                    </div>
+                    Expand billing — add sub-stories for the invoice recurrence feature.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai" style="max-width: 260px">
+                    <div style="font-size: 10.5px; color: var(--muted); margin-bottom: 4px; display: flex; align-items: center; gap: 4px">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)"><circle cx="12" cy="5" r="1"/><path d="M12 7v7"/><path d="M17 12h-4"/><path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1"/></svg>
+                      Scoped to MOTIR-812, MOTIR-918
+                    </div>
+                    Got it — drafting sub-stories for recurring invoices under Billing. I'll place them now.
+                  </div>
+                </div>
+              </div>
+              <div class="composer">
+                <div class="targets-tray">
+                  <span class="targets-tray-label">Targets</span>
+                  <span class="wi-chip">
+                    <span class="type-icon t-story"><svg viewBox="0 0 24 24"><use href="#i-book"/></svg></span>
+                    <span class="wi-key">MOTIR-812</span>
+                    <span class="wi-title">Billing — invoicing</span>
+                    <span class="wi-remove" aria-label="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                  </span>
+                  <span class="wi-chip">
+                    <span class="type-icon t-task"><svg viewBox="0 0 24 24"><use href="#i-task"/></svg></span>
+                    <span class="wi-key">MOTIR-918</span>
+                    <span class="wi-title">Migrate billing</span>
+                    <span class="wi-remove" aria-label="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                  </span>
+                </div>
+                <div class="composer-row">
+                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="send">➤</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Chat turn carries the target set; canvas highlights it.</b> When the user sends a turn
+        with target(s), the turn bubble shows the target chips in a compact form — semi-transparent
+        accent chips on user bubbles (white background) and muted chips on AI bubbles — plus a
+        "Targeting <i>n</i> items" label. On the <b>canvas (left)</b>, the target node(s) are
+        highlighted with the <code>.node.active</code> ring + glow (the same accent-border + shadow
+        treatment from <code>planning-workspace.mock.html</code> sheet 2), plus a "Target" pill
+        above each. The user SEES which part of the plan the planner is acting on — the chat ↔ canvas
+        link is explicit. The targets tray stays populated across turns until the user removes them.
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 4 — states ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>States — empty, short-query, loading, no-results</h2>
+        <span class="cap">four states of the dropdown</span>
+      </div>
+      <div class="sheetbody">
+        <div class="states-grid">
+          <div class="state-card">
+            <div class="sc-h">Empty — no query yet</div>
+            <div class="sc-b">
+              <div class="mini-drop">
+                <div class="md-head">Work items</div>
+                <div class="md-hint" style="color: var(--faint);">
+                  Type to search the project's work items…
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="state-card">
+            <div class="sc-h">Short query — keep typing</div>
+            <div class="sc-b">
+              <div class="mini-drop">
+                <div class="md-head">Work items matching "a"</div>
+                <div class="md-hint">
+                  Keep typing to search work items…
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="state-card">
+            <div class="sc-h">Loading — searching</div>
+            <div class="sc-b">
+              <div class="mini-drop">
+                <div class="md-head">Work items matching "pay"</div>
+                <div class="md-hint">
+                  <span class="spinner" style="animation: spin 0.8s linear infinite"></span>
+                  Searching…
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="state-card">
+            <div class="sc-h">No results — not found</div>
+            <div class="sc-b">
+              <div class="mini-drop">
+                <div class="md-head">Work items matching "zzqq"</div>
+                <div class="md-hint">
+                  No work items match "zzqq".
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>States match the shipped work-item @-mention picker convention</b> from
+        <code>internal-links.mock.html</code> panel 3 (short query "keep typing", loading spinner,
+        no-results copy) and <code>comments.mock.html</code> panel 5 (the member mention empty-hint
+        pattern). The difference: the chat dropdown shows ONLY work items (no People section — chat
+        @-mention of members is not in scope for this surface). The empty state appears when the
+        dropdown opens with no typed query (e.g. clicking the @ button); the short-query hint
+        appears when the query is fewer than N characters (N = 2, matching the shipped
+        <code>mention-search</code> debounce threshold).
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 5 — pre-scoped entrance ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>Pre-scoped entrance — opened from an item's Plan/Re-plan, that item is pre-filled</h2>
+        <span class="cap">one target already set · can extend</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="entrance-frame">
+            <div class="canvas">
+              <span class="canvas-label">Opened from MOTIR-812's detail page</span>
+              <div class="node active" style="top: 100px; left: 80px">
+                <div class="focus-ring"></div>
+                <div class="focus-pill">Target</div>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--lavender)">📚</span>
+                  <div>
+                    <div class="ntitle">Billing — invoicing</div>
+                    <div class="nsub">MOTIR-812 · 3 stories</div>
+                  </div>
+                </div>
+              </div>
+              <div class="node upcoming" style="top: 40px; left: 320px">
+                <div class="nhead">
+                  <span class="tile" style="background: var(--peach)">⚙</span>
+                  <div>
+                    <div class="ntitle">Payments</div>
+                    <div class="nsub">2 stories</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">contextual</span>
+              </div>
+              <div class="log">
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai" style="max-width: 260px">
+                    You opened planning from <b>MOTIR-812 Billing — invoicing</b>. I'm scoped to this
+                    item. You can add more targets with @ if you want to plan across several items.
+                  </div>
+                </div>
+              </div>
+              <div class="composer">
+                <div class="targets-tray">
+                  <span class="targets-tray-label">Target</span>
+                  <span class="wi-chip">
+                    <span class="type-icon t-story"><svg viewBox="0 0 24 24"><use href="#i-book"/></svg></span>
+                    <span class="wi-key">MOTIR-812</span>
+                    <span class="wi-title">Billing — invoicing</span>
+                    <span class="wi-remove" aria-label="Remove MOTIR-812">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </span>
+                  </span>
+                </div>
+                <div class="composer-row">
+                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="send">➤</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Pre-scoped from the entrance (MOTIR-1489).</b> When the user activates Plan/Re-plan from
+        a work item's detail page or quick-view modal, the universal planning workspace opens with
+        that item already in the target set — the tray carries its chip, the canvas highlights it
+        with the active ring + "Target" pill, and the AI's opening turn acknowledges the scope.
+        The user CAN remove it (⨉) and/or add more via the @ picker — the entrance sets the
+        <i>initial</i> target, not a locked one. The model is: the entrance passes a target key;
+        the session is seeded with it; the user extends or replaces at will. This maintains
+        consistency with the entrance's Re-plan flow — the reason is the chat turn text, the
+        target is the item the user's operating on.
+      </div>
+    </section>
+
+    <!-- lucide icon defs -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="i-book" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>
+        </g>
+        <g id="i-task" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>
+        </g>
+        <g id="i-bug" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/>
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
