@@ -270,11 +270,17 @@ jobs:
       # passed explicitly.
       - run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=default --reporter=blob --coverage
       # Share this shard's blob report with the `coverage` merge job.
+      # `include-hidden-files: true` is REQUIRED: the blob reporter writes to
+      # .vitest-reports/ (a dot-directory), and upload-artifact EXCLUDES hidden
+      # files/dirs by default -- without this the upload finds "no files",
+      # uploads nothing, and the merge job crashes with ENOENT on
+      # .vitest-reports. Same gotcha as the .next/ artifact (MOTIR-1706).
       - name: Upload coverage blob
         uses: actions/upload-artifact@v7
         with:
           name: coverage-shard-${{ matrix.shard }}
           path: .vitest-reports
+          include-hidden-files: true
           retention-days: 1
 
   coverage:
