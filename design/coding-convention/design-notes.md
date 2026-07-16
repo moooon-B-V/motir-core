@@ -3,7 +3,17 @@
 Design reference for the **coding-convention + code-health audit** surface (Story 7.14 —
 "Coding-convention + code-health audit engine"). Produced by the **7.14.1** planning-time design
 gate (MOTIR-922); it is the layout source of truth for the UI code subtask **7.14.5** (MOTIR-926 —
-the review/approve UI + API), which is `blocked_by` this card.
+the code-health UI), which is `blocked_by` this card.
+
+> **Amendment (7.14.1b · MOTIR-1661, 2026-07-15):** rewrites the convention surface to match the
+> corrected model pinned by the decision **[MOTIR-1660](#)** (§2):
+> **(i)** the convention is **DERIVED + AUTO-USED** — no human approve gate and no free-edit
+> (supersedes the MOTIR-1567 free-edit Textarea + the MOTIR-922 approve gate);
+> **(ii)** the convention is **READ-ONLY** per repo, refined ONLY via the **universal AI chat**
+> (the "Refine with Motir" entry composes the existing `PlanWithAILauncher` → `PlanningWorkspace`
+> — cite `design/ai-chat/planning-workspace`; never a bespoke convention editor);
+> **(iii)** PER REPO — one convention per (project, repo) pair.
+> The audit report + the §10.3 "Deepen this audit" affordance are UNCHANGED.
 
 > **Amendment (7.14.x · MOTIR-1607, 2026-07-04):** added the **§10.3 "Deepen this audit"
 > connect-scanner affordance** — a non-blocking, dismissible card that renders INSIDE the audit
@@ -26,27 +36,29 @@ Built from the real design system: the mock inlines the token layer from
 
 ## The model: convention ↔ audit (the load-bearing relationship)
 
-The two artifacts are **linked**, and the direction matters (Yue, 2026-07-03):
+**Corrected by MOTIR-1660 (7.14.2e, 2026-07-06).** The two artifacts are **linked**, and the
+direction matters (Yue, 2026-07-03):
 
 - **The `CodingConvention` is the standard for the code Motir GENERATES** — not a linter for existing
   code. It is the house-rules document injected into every dispatched prompt (the productized
-  CLAUDE.md). It is **versioned and always EDITABLE**: editing the current standard (or an AI-proposed
-  draft) produces the next `proposed` version to approve; the approved `standard` supersedes the prior
-  one (kept in history).
-- **The `CodeAudit` measures EXISTING code against the approved convention** and reports what is **not
-  up to standard** — the conformance gap between the code you have and the standard you want for new
+  CLAUDE.md). It is **DERIVED from the real code** (migrate: the code IS the convention; fresh:
+  stack + clean-code defaults) and **AUTO-USED** — there is NO human approve gate and NO free-edit
+  (the ETH-Zurich "no-blind-auto-gen" caveat wanted grounding in the real code, not a non-expert
+  rubber-stamp). **READ-ONLY and PER REPO** — each repo has its own convention document discoverable
+  on the Code-health page; it cannot be hand-edited. **To change it, the user tells Motir in the
+  UNIVERSAL AI CHAT** via the "Refine with Motir" entry — the same `PlanWithAILauncher` →
+  `PlanningWorkspace` surface that handles ALL AI conversation (per design/ai-chat; never a bespoke
+  convention editor). Supersedes the ADR's `proposed → standard` approve lifecycle and the
+  MOTIR-1567 free-edit.
+- **The `CodeAudit` measures EXISTING code against the derived convention** and reports what is **not
+  up to standard** — the conformance gap between the code you have and the standard for new
   code. Where the convention is silent, it falls back to a clean-code baseline (so a finding is tagged
-  either the convention rule it breaks, or "clean-code baseline"). Before any convention is approved,
-  the baseline alone seeds the first proposed convention (adopt-if-clear / propose-if-messy).
-- **The trigger:** approving / updating the convention **re-audits** existing code against the new
-  standard (alongside the code-change trigger — on-demand / repo webhook). So the audit report is
-  always stamped to the convention version it was measured against (`§ Convention vN`).
-
-This is the corrected model the surface draws; it also refines the **7.14.2 decision** (the audit is
-measured against the approved convention, not only a standalone clean-code rule set; a convention
-update triggers a re-audit) and the **7.14.3 store** (`CodeAudit` gains a `conventionId` /
-`conventionVersion` ref; a finding carries an optional `conventionRuleRef`) — the correction is
-recorded as a comment on both sibling cards (MOTIR-923 / MOTIR-924) for the builder to fold in.
+  either the convention rule it breaks, or "clean-code baseline"). Before any convention exists from
+  code, the baseline alone seeds the first derived convention (adopt-if-clear / propose-if-messy).
+- **The trigger:** a code change (on-demand / repo webhook) proposes a new convention version if the
+  code drifts; a "refine with Motir" revision re-audits existing code against the revised standard.
+  So the audit report is always stamped to the convention version it was measured against
+  (`§ Convention vN`).
 
 ## The data behind the surface (from 7.14.2 / 7.14.3)
 
@@ -57,45 +69,43 @@ Two artifacts, one motir-ai store (never in motir-core — the open-core boundar
 conventionRuleRef? }]`, cursor-paginated), `codeGraphRef`, **`conventionId` / `conventionVersion`**
   (which approved convention the audit was measured against). Runs for migrate (there is code) AND on a
   convention approve/update (re-audit against the new standard).
-- **`CodingConvention`** — `status: proposed | standard`, `version` (monotonic), `contentMd` (the
-  sectioned document, EDITABLE), `provenanceJson` (per-rule adopted-vs-proposed for the badges),
-  `approvedByUserId` / `approvedAt`. Exactly ONE `standard` per project; prior standards retained as
-  history. Only a `standard` is injected into 7.6 prompt generation; a `proposed` is never injected.
+- **`CodingConvention`** — `contentMd` (the sectioned document, READ-ONLY), `provenanceJson`
+  (per-rule adopted-vs-proposed for the badges), `repoIdentifier` (one per repo). Derived from code
+  (migrate) or stack + clean-code defaults (fresh); auto-applied to every prompt for that repo.
+  Changes happen via the universal AI chat ("refine with Motir"); the version history tracks every
+  revision. The convention is the standard for NEW code — there is no "proposed" vs "standard"
+  lifecycle.
 
 ## Multi-panel board — review EACH panel (mistake #31)
 
-The `.mock.html` is a six-panel board; do not review only the first. Each panel is a `.panel-label`
-mono caption + a centred `.panel` wrapper (the `design/ready` convention).
+The `.mock.html` is a five-panel board (amended from six — the edit/approve panel removed per
+MOTIR-1660); do not review only the first. Each panel is a `.panel-label` mono caption + a centred
+`.panel` wrapper (the `design/ready` convention).
 
 1. **Panel 1 — THE FULL SCREEN, in the real app shell (Audit tab).** The complete Code health page
    as it renders: the full-width **TopNav**, the **persistent left `SidebarNav`** (Code health
    active), and the content region — page header + **Audit / Convention tabs** + the audit content
-   (conformance SUMMARY: grade + % conform + six-category breakdown, measured against the approved
+   (conformance SUMMARY: grade + % conform + six-category breakdown, measured against the derived
    convention; the **"Deepen this audit" affordance** in situ — the non-blocking §10.3 connect-scanner
    card, shown only in the `noExternalScanner` state, between the summary and the findings; then a
    grouped, virtualized findings list where each finding cites the convention rule it breaks, or the
    clean-code baseline). This is the panel that answers "where am I / is the nav there / how do I
    leave".
-2. **Panel 2 — Content region · the Convention tab.** The `contentMd` as a sectioned document with a
-   header toolbar (Edit / Approve), each rule badged by provenance (Adopted vs Proposed), BOTH status
-   banners (PROPOSED and STANDARD).
-3. **Panel 3 — Content region · Edit mode.** The editable Markdown (`Textarea`), the **Approve as
-   standard** primary action + explainer, and the approve-confirmation dialog (the deliberate human
-   gate). Reached by clicking **Edit** on the Convention tab; Cancel returns.
-4. **Panel 4 — Content region · Fresh (establish-only) + version states.** The no-codebase
-   `EmptyState`, the stack-derived (all-Proposed) proposal, the version-history affordance, the
-   "Re-run audit" action.
-5. **Panel 5 — The fresh-project door.** The onboarding wizard step (the steady-state door is the
+2. **Panel 2 — Content region · the Convention tab (READ-ONLY, per repo).** The `contentMd` as a
+   sectioned document with a header toolbar (per-repo label + "Refine with Motir" button), each rule
+   badged by provenance (Adopted vs Proposed), and a "DERIVED FROM YOUR CODE · auto-used" banner.
+   The **"Refine with Motir"** button composes the universal AI chat (`PlanWithAILauncher` →
+   `PlanningWorkspace` per `design/ai-chat`); there is NO approve gate, no Edit button, no Textarea.
+   The convention is a read-only document.
+3. **Panel 3 — Content region · Fresh (establish-only) + version states.** The no-codebase
+   `EmptyState`, the stack-derived proposal, the version-history affordance, the "Re-run audit"
+   action. Updated per MOTIR-1660: the stack-derived proposal is also derived + auto-used.
+4. **Panel 4 — The fresh-project door.** The onboarding wizard step (the steady-state door is the
    persistent sidebar entry, drawn in Panel 1's shell).
-6. **Panel 6 — The "Deepen this audit" affordance, state by state** (§10.3; MOTIR-1590 + MOTIR-1591).
-   The DEFAULT card lives in Panel 1's audit report; this panel zooms its four states: **A** set-up
-   guidance (the best-fit CodeQL branch, copy-paste `.github/workflows/codeql.yml` + a "Use SonarQube
-   instead" out), **B** connected → re-auditing (the report refreshes — page-state-after-mutation),
-   **C** deepened (external findings ingested — the Tier-2 chip on the audit sub-line + the connected
-   banner; and the auto-detected variant that shows the same result with NO setup card), **D**
-   dismissed (report fully usable, a quiet one-line re-open link remains).
+5. **Panel 5 — The "Deepen this audit" affordance, state by state** (§10.3; MOTIR-1590 + MOTIR-1591).
+   The DEFAULT card lives in Panel 1's audit report; this panel zooms its four states unchanged.
 
-Panels 2–4 are the **content region of the Panel 1 screen** in each state — each carries a `.ctx`
+Panels 2–3 are the **content region of the Panel 1 screen** in each state — each carries a `.ctx`
 breadcrumb strip ("Code health › Convention tab", etc.) so the reader always knows it's the same
 screen, not a new one.
 
@@ -182,71 +192,46 @@ subtask 7.14.5 wires both.
   behaviour and points to Panel 6. The **access path** for the affordance is exactly this: it renders
   in the audit report the user is already reading, so the door is the report itself.
 
-### Panel 2 — proposed-convention review
+### Panel 2 — read-only convention per repo (MOTIR-1660)
 
-- **Document header toolbar (the edit door)**: a `.card-head` on the convention card — `<h3>`
-  "Coding convention" + a version count Pill ("v3 · proposed") + an **"Edit"** secondary `Button`
-  (lucide `pencil`) + an **"Approve as standard"** primary `Button`. The **Edit** button is the
-  visible affordance to START editing — clicking it opens edit mode (Panel 3). Every convention
-  state carries a matching edit door (State B / the standard has "Edit standard"; Panel 3 is the
-  entered edit mode). This answers "how do I start editing the convention" — the door is ON the
-  document, not just an editor that appears elsewhere.
-- **Status banner (State A, PROPOSED)**: `.banner-proposed` on `--el-warning-surface`, lucide
-  `alert-triangle`, title "**PROPOSED — review & approve**", sub "This draft is NOT yet used. Nothing
-  is injected into prompts until you approve it as the standard. Tweak it first with **Edit** ↑" (the
-  banner points at the header Edit button).
-- **Status banner (State B, STANDARD)**: `.banner-standard` on `--el-success-surface`, lucide
-  `shield-check`, title "**STANDARD — injected into every prompt for NEW code**", sub "The active
-  standard governs the code Motir GENERATES… it is not a linter for existing code — the audit measures
-  how far existing code is FROM this standard.", trailing count Pill "v2 · standard · approved by Yue".
-  Below it: an **"Edit standard"** secondary `Button` (lucide `pencil`) + the note "The standard stays
-  editable — **edit it anytime** (Panel 3) to produce the next version. Approving the new version
-  supersedes this one (kept in history) AND re-audits your existing code against it." (draws that the
-  standard itself is updatable + the re-audit trigger).
+- **Document header toolbar (the refine door)**: a `.card-head` on the convention card — `<h3>`
+  "Coding convention" + a per-repo label ("per repo · acme/web") + a "derived from your code"
+  provenance chip + a **"Refine with Motir"** secondary `Button` (lucide `sparkles` — the universal
+  AI chat identity). This button **composes** the existing universal AI chat launcher
+  (`PlanWithAILauncher` → `PlanningWorkspace`, per `design/ai-chat` and MOTIR-1193 / MOTIR-1299);
+  there is NO Edit (pencil) button, NO "Approve as standard" primary button, no Textarea.
+- **Status banner**: `.banner-standard` on `--el-success-surface`, lucide `database` (derived from
+  the code itself), title "**DERIVED FROM YOUR CODE · auto-used**", sub "This convention is derived
+  from the code in `acme/web` and applied automatically to every prompt for NEW code Motir generates
+  for this repo. There is no approve gate — the grounding in your real code IS the curation. To
+  change it, tell Motir in the universal AI chat with 'Refine with Motir' — the convention stays
+  read-only until you do."
 - **The document**: `.doc-section` blocks (Layering / Naming / Testing / Error handling), each a
   `<h4>` + rules. Every rule = a provenance `Pill` (Adopted / Proposed) + the rule text (with inline
-  `<code>` for identifiers). Provenance legend at the foot: "**Adopted** your code already does this —
-  we documented it" / "**Proposed** your code was silent / inconsistent — a clean-code default to
+  `<code>` for identifiers). Provenance legend at the foot: "**Adopted** your code already does this
+  — we documented it" / "**Proposed** your code was silent / inconsistent — a clean-code default to
   review".
+- **Refine callout**: a footer note below the document explaining that "Refine with Motir" opens the
+  universal AI chat where the convention is read-only context and the chat is the mutation surface —
+  no free-form Textarea. Cites `design/ai-chat` + `PlanWithAILauncher` / `PlanningWorkspace`.
 
-### Panel 3 — edit + approve
-
-- **This is EDIT MODE (reached via the "Edit" button on Panel 2).** The panel label says so, and the
-  editor lead reads "You reached this by clicking **Edit** on the convention — the read-only document
-  (Panel 2) swaps to this editable Markdown in place." A ghost **"Cancel"** button in the header
-  returns to read mode. (Read ↔ edit is an in-place toggle on the same convention card, not a separate
-  screen.)
-- **Editor** (`Card`): heading "Edit convention" + a count Pill "**editing v2 (standard) → v3 ·
-  proposed**" (shows editing works ON the current standard, not only a fresh proposal); the framing
-  "The convention is **always editable** — this is how you update it. Editing the current standard (or
-  an AI-proposed draft) produces the next version to approve…" + the ETH-Zurich curate-don't-auto-gen
-  explainer; a `Textarea` (label "Convention (Markdown)") holding the `contentMd` with `[adopted]` /
-  `[proposed]` provenance tags; helper naming how the tags drive the Panel 2 badges.
-- **Approve row**: primary `Button` "**Approve as standard**" (lucide `check`) + ghost `Button` "Save
-  draft" + the note "Approving makes this the standard **injected into every prompt** for NEW code,
-  supersedes v2 (kept in history), **and re-audits** your existing code against it."
-- **Confirmation** (`Modal`, `role="alertdialog"`, drawn OPEN over its `--el-overlay-scrim`): title
-  "**Approve as the coding standard?**", body "**v3** becomes the active standard, injected into every
-  coding-agent prompt for the NEW code Motir generates." + "Motir will also **re-audit your existing
-  code** against v3 and refresh the health report. The current standard **v2** is retained in history…",
-  footer ghost "Cancel" + primary "**Approve &amp; re-audit**" (the button names the trigger). This
-  communicates the deliberate human gate AND that approval re-audits.
-
-### Panel 4 — fresh (establish-only) + version states
+### Panel 3 — fresh (establish-only) + version states
 
 - **No audit** (`EmptyState`, lucide `file-search`): title "**No codebase to analyze yet**",
   description "Your convention is established from your chosen stack — the code-health audit runs
   later, once there's code to read.", action secondary `Button` "View chosen stack".
-- **Stack-derived proposal**: a `.banner-proposed` "**PROPOSED — established from your stack**" ·
+- **Stack-derived proposal**: a `.banner-standard` "**DERIVED FROM YOUR STACK · auto-used**" ·
   "Next.js + Prisma + Postgres defaults. No audit — nothing to adopt yet, so every rule is a
-  clean-code default.", then all-**Proposed** rules (no Adopted, because there is no code). Note:
-  "Same proposed → approve → standard gate (Panel 3). Only the audit differs (there is none)."
+  clean-code default. Auto-applied to every prompt; refine with Motir via the universal AI chat to
+  change.", then all-**Proposed** rules (no Adopted, because there is no code). Note:
+  "Same derived + auto-used, read-only model (Panel 2). Only the audit differs (there is none)."
 - **Version history** (`Card`): heading "Version history" + a secondary "Re-run audit" `Button`; the
-  refresh note names **three triggers** — code changes (on-demand / repo webhook, proposes a new
-  version if the code drifts) and convention changes (approving an edited convention re-audits existing
-  code against the new standard) — the approved standard retained, never silently overwritten. A
-  `.version` list: **v3** "Latest re-audit · Proposed" (Review), **v2** "Active standard · Standard ·
-  approved by Yue" (current, View), **v1** "First standard · superseded" (Restore).
+  refresh note names **two triggers** — code changes (on-demand / repo webhook, proposes a new
+  convention version if the code drifts) and convention changes (a "refine with Motir" revision via
+  the universal AI chat re-audits existing code against the revised standard). The convention is
+  retained and never silently overwritten — changes are tracked in the version history. A `.version`
+  list: **v3** "Latest re-audit" (Review), **v2** "Active" (current, View), **v1** "First standard ·
+  superseded" (Restore).
 
 ### Panel 5 — access path (the door)
 
@@ -300,43 +285,39 @@ Colour flows through Tier-3 `--el-*` ONLY — no Tier-0 `--color-*`, no invented
 `motir-core/CLAUDE.md` colour rule; mistake #54). Every coloured chip puts the hue in the TINT
 background with `--el-text-strong` ink, AA-safe in both themes (finding #35).
 
-| Element                                         | Token(s)                                                                                                                                                                                         | Note                                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Page / card body ink                            | `--el-text`, `--el-text-strong` (headings/emphasis), `--el-text-secondary` (copy), `--el-text-muted` / `--el-text-faint` (captions/eyebrows)                                                     | via the shipped text-role scale                                                             |
-| Card surface + edge                             | `--el-card` bg, `--el-border` (1px), `--shadow-subtle` on finding rows                                                                                                                           | `Card` primitive                                                                            |
-| **Severity — Critical**                         | `Pill severity="danger"` → `--el-tint-rose` bg + `--el-text-strong`                                                                                                                              | worst                                                                                       |
-| **Severity — High**                             | `Pill severity="warning"` → `--el-tint-peach` bg + `--el-text-strong`                                                                                                                            |                                                                                             |
-| **Severity — Medium**                           | `Pill severity="info"` → `--el-tint-sky` bg + `--el-text-strong`                                                                                                                                 |                                                                                             |
-| **Severity — Low**                              | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              | a quiet chip, not a hue                                                                     |
-| **Provenance — Adopted**                        | `Pill severity="success"` → `--el-tint-mint` bg + `--el-text-strong`                                                                                                                             | green = confirmed from your code                                                            |
-| **Provenance — Proposed**                       | `Pill status="planned"` → `--el-tint-lavender` bg + `--el-text-strong`                                                                                                                           | brand-lavender = a proposal to review                                                       |
-| **Banner — PROPOSED**                           | `--el-warning-surface` (peach) fill, glyph `--el-warning`, ink `--el-text-strong`                                                                                                                | attention, not yet active                                                                   |
-| **Banner — STANDARD**                           | `--el-success-surface` (mint) fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                 | settled / active                                                                            |
-| Health grade tile                               | `--el-success-surface` bg + `--el-text-strong`                                                                                                                                                   | a good (B) grade; a poor grade would fall to `--el-warning-surface` / `--el-danger-surface` |
-| Category dots                                   | `--el-success` (ok) · `--el-warning` (watch) · `--el-danger` (gap)                                                                                                                               | redundant text label beside each (not colour-alone)                                         |
-| File / symbol refs                              | `.coderef` → `--el-text-identifier` on `--el-code-bg`                                                                                                                                            | mono, matches shipped code-chip                                                             |
-| Convention-rule ref (finding cites convention)  | `.conv-ref` → `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                | lavender = the convention identity (matches the Proposed provenance tone)                   |
-| Clean-code-baseline ref (convention silent)     | `.base-ref` → `--el-text-secondary` on `--el-chip-bg` + `--el-chip-border`                                                                                                                       | a quiet neutral tag; the general-health "too"                                               |
-| Count / meta chips                              | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              |                                                                                             |
-| Primary CTA ("Approve as standard")             | `Button variant="primary"` → `--el-accent` + `--el-accent-text`                                                                                                                                  |                                                                                             |
-| Secondary CTA ("Re-run audit", "View stack")    | `Button variant="secondary"` → `--el-button-border` + `--el-text`                                                                                                                                |                                                                                             |
-| Ghost CTA ("Cancel", "Save draft", row actions) | `Button variant="ghost"` → `--el-text`                                                                                                                                                           |                                                                                             |
-| Textarea                                        | `--el-input-border` + `--el-page-bg` + `--el-text`                                                                                                                                               | `Textarea` primitive                                                                        |
-| Modal panel + scrim                             | `--el-page-bg` + `--el-border` + `--shadow-modal`; scrim `--el-overlay-scrim`                                                                                                                    | `Modal` (`role=alertdialog`)                                                                |
-| EmptyState icon                                 | `--el-icon-muted`                                                                                                                                                                                | `EmptyState` primitive                                                                      |
-| EmptyState / Modal description                  | `--el-text-subtitle`                                                                                                                                                                             | the shipped lead-paragraph role                                                             |
-| Current-version highlight                       | border `--el-accent-on-surface`, bg `--el-surface-soft`                                                                                                                                          | the active standard row                                                                     |
-| Sidebar rail (Panel 1 shell)                    | `--el-sidebar-bg` + `--el-sidebar-border`; active row `--el-sidebar-item-bg-active` + `--el-accent-on-surface` glyph; wizard current-step `--el-accent-on-surface`                               | the persistent nav                                                                          |
-| Top bar (TopNav) + tabs (Segmented)             | bar `--el-page-bg` + `--el-border` bottom hairline; Plan-with-AI `--el-accent`; tabs track `--el-tabnav-track`, active tab `--el-page-bg` + `--shadow-subtle`, active glyph `--el-tabnav-active` | the shell chrome + in-page view switch                                                      |
-| **Deepen card** (`.deepen`, secondary aside)    | bg `--el-surface-soft` (quiet, NOT `--el-card`) + `--el-border`; lead glyph `--el-accent-on-surface`; dismiss × `--el-text-muted`                                                                | reads as an optional aside inside the report, not a report card                             |
-| Tool option row (`.tool`)                       | bg `--el-page-bg` + `--el-border`; icon `--el-text-secondary`                                                                                                                                    | the SonarQube branch                                                                        |
-| **Recommended** tool (`.tool-rec`, best-fit)    | border `--el-accent-on-surface` + bg `--el-surface-soft`; icon `--el-accent-on-surface` (reuses the current-version-highlight pattern)                                                           | the GH-native CodeQL default                                                                |
-| "Recommended" tag (`.tag-rec`)                  | `--el-callout-text` on `--el-callout-bg` (lavender = the brand/recommendation identity)                                                                                                          | matches the convention-identity tone                                                        |
-| Copy-paste setup block (`.setup-code`)          | `--el-code-text` on `--el-code-bg` + `--el-border`, `--radius-input` editor surface                                                                                                              | the `codeql.yml` guidance                                                                   |
-| Tier-2 ingested chip (`.tier2-chip`)            | `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                              | on the audit sub-line, connected/auto-detected                                              |
-| Connected banner (`.deepen-done`)               | `--el-success-surface` fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                        | settled/deepened (State C); the re-auditing variant uses `--el-surface-soft` + a `.spin`    |
-| Re-open link (`.deepen-link`, dismissed)        | `--el-link`                                                                                                                                                                                      | the quiet one-line re-open (State D)                                                        |
-| Re-audit spinner (`.spin`)                      | ring `--el-border-strong`, head `--el-accent-on-surface`                                                                                                                                         | the re-auditing affordance (State B)                                                        |
+| Element                                                           | Token(s)                                                                                                                                                                                         | Note                                                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Page / card body ink                                              | `--el-text`, `--el-text-strong` (headings/emphasis), `--el-text-secondary` (copy), `--el-text-muted` / `--el-text-faint` (captions/eyebrows)                                                     | via the shipped text-role scale                                                             |
+| Card surface + edge                                               | `--el-card` bg, `--el-border` (1px), `--shadow-subtle` on finding rows                                                                                                                           | `Card` primitive                                                                            |
+| **Severity — Critical**                                           | `Pill severity="danger"` → `--el-tint-rose` bg + `--el-text-strong`                                                                                                                              | worst                                                                                       |
+| **Severity — High**                                               | `Pill severity="warning"` → `--el-tint-peach` bg + `--el-text-strong`                                                                                                                            |                                                                                             |
+| **Severity — Medium**                                             | `Pill severity="info"` → `--el-tint-sky` bg + `--el-text-strong`                                                                                                                                 |                                                                                             |
+| **Severity — Low**                                                | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              | a quiet chip, not a hue                                                                     |
+| **Provenance — Adopted**                                          | `Pill severity="success"` → `--el-tint-mint` bg + `--el-text-strong`                                                                                                                             | green = confirmed from your code                                                            |
+| **Provenance — Proposed**                                         | `Pill status="planned"` → `--el-tint-lavender` bg + `--el-text-strong`                                                                                                                           | brand-lavender = a proposal to review                                                       |
+| **Banner — DERIVED FROM YOUR CODE · auto-used**                   | `--el-success-surface` (mint) fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                 | settled / active                                                                            |
+| Health grade tile                                                 | `--el-success-surface` bg + `--el-text-strong`                                                                                                                                                   | a good (B) grade; a poor grade would fall to `--el-warning-surface` / `--el-danger-surface` |
+| Category dots                                                     | `--el-success` (ok) · `--el-warning` (watch) · `--el-danger` (gap)                                                                                                                               | redundant text label beside each (not colour-alone)                                         |
+| File / symbol refs                                                | `.coderef` → `--el-text-identifier` on `--el-code-bg`                                                                                                                                            | mono, matches shipped code-chip                                                             |
+| Convention-rule ref (finding cites convention)                    | `.conv-ref` → `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                | lavender = the convention identity (matches the Proposed provenance tone)                   |
+| Clean-code-baseline ref (convention silent)                       | `.base-ref` → `--el-text-secondary` on `--el-chip-bg` + `--el-chip-border`                                                                                                                       | a quiet neutral tag; the general-health "too"                                               |
+| Count / meta chips                                                | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              |                                                                                             |
+| Secondary CTA ("Refine with Motir", "Re-run audit", "View stack") | `Button variant="secondary"` → `--el-button-border` + `--el-text`                                                                                                                                |                                                                                             |
+| Ghost CTA ("Cancel", "Save draft", row actions)                   | `Button variant="ghost"` → `--el-text`                                                                                                                                                           |                                                                                             |
+| EmptyState icon                                                   | `--el-icon-muted`                                                                                                                                                                                | `EmptyState` primitive                                                                      |
+| EmptyState description                                            | `--el-text-subtitle`                                                                                                                                                                             | the shipped lead-paragraph role                                                             |
+| Current-version highlight                                         | border `--el-accent-on-surface`, bg `--el-surface-soft`                                                                                                                                          | the active standard row                                                                     |
+| Sidebar rail (Panel 1 shell)                                      | `--el-sidebar-bg` + `--el-sidebar-border`; active row `--el-sidebar-item-bg-active` + `--el-accent-on-surface` glyph; wizard current-step `--el-accent-on-surface`                               | the persistent nav                                                                          |
+| Top bar (TopNav) + tabs (Segmented)                               | bar `--el-page-bg` + `--el-border` bottom hairline; Plan-with-AI `--el-accent`; tabs track `--el-tabnav-track`, active tab `--el-page-bg` + `--shadow-subtle`, active glyph `--el-tabnav-active` | the shell chrome + in-page view switch                                                      |
+| **Deepen card** (`.deepen`, secondary aside)                      | bg `--el-surface-soft` (quiet, NOT `--el-card`) + `--el-border`; lead glyph `--el-accent-on-surface`; dismiss × `--el-text-muted`                                                                | reads as an optional aside inside the report, not a report card                             |
+| Tool option row (`.tool`)                                         | bg `--el-page-bg` + `--el-border`; icon `--el-text-secondary`                                                                                                                                    | the SonarQube branch                                                                        |
+| **Recommended** tool (`.tool-rec`, best-fit)                      | border `--el-accent-on-surface` + bg `--el-surface-soft`; icon `--el-accent-on-surface` (reuses the current-version-highlight pattern)                                                           | the GH-native CodeQL default                                                                |
+| "Recommended" tag (`.tag-rec`)                                    | `--el-callout-text` on `--el-callout-bg` (lavender = the brand/recommendation identity)                                                                                                          | matches the convention-identity tone                                                        |
+| Copy-paste setup block (`.setup-code`)                            | `--el-code-text` on `--el-code-bg` + `--el-border`, `--radius-input` editor surface                                                                                                              | the `codeql.yml` guidance                                                                   |
+| Tier-2 ingested chip (`.tier2-chip`)                              | `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                              | on the audit sub-line, connected/auto-detected                                              |
+| Connected banner (`.deepen-done`)                                 | `--el-success-surface` fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                        | settled/deepened (State C); the re-auditing variant uses `--el-surface-soft` + a `.spin`    |
+| Re-open link (`.deepen-link`, dismissed)                          | `--el-link`                                                                                                                                                                                      | the quiet one-line re-open (State D)                                                        |
+| Re-audit spinner (`.spin`)                                        | ring `--el-border-strong`, head `--el-accent-on-surface`                                                                                                                                         | the re-auditing affordance (State B)                                                        |
 
 **Shape** flows through element-semantic shape tokens ONLY (no raw `rounded-*`/`p-*`/`h-*`; the
 `motir-core/CLAUDE.md` shape rule): cards `--radius-card` + `--spacing-card-padding`; buttons
@@ -363,12 +344,9 @@ invented in this Story — if one were needed, that is a NEW `design/` subtask, 
 - [x] **Pill** (`components/ui/Pill.tsx`) — severity (info/success/warning/danger), provenance
       (severity="success" Adopted / status="planned" Proposed), and neutral count/meta chips. No
       custom tone invented — all are shipped `Pill` variants.
-- [x] **Button** (`components/ui/Button.tsx`) — primary (Approve as standard), secondary (Re-run
-      audit / View stack), ghost (Cancel / Save draft / row actions); sizes md + sm.
-- [x] **Modal** (`components/ui/Modal.tsx`) — the approve confirmation, `role="alertdialog"`, over
-      `--el-overlay-scrim`, with a ghost + primary `Modal.Footer`.
-- [x] **Textarea** (`components/ui/Textarea.tsx`) — the editable Markdown, on the input tokens.
-- [x] **EmptyState** (`components/ui/EmptyState.tsx`) — the fresh / no-codebase state (Panel 4).
+- [x] **Button** (`components/ui/Button.tsx`) — secondary (Refine with Motir / Re-run audit /
+      View stack), ghost (Cancel / row actions); sizes md + sm.
+- [x] **EmptyState** (`components/ui/EmptyState.tsx`) — the fresh / no-codebase state (Panel 3).
 - [x] **AppLayout shell** (`components/ui/AppLayout.tsx`) — the full-screen composition (Panel 1):
       the 56px full-width **TopNav** above the `[240px rail | scrolling main]` grid, reproduced so the
       surface is drawn as the REAL screen (persistent nav + top bar), not floating cards.
@@ -403,11 +381,12 @@ invented in this Story — if one were needed, that is a NEW `design/` subtask, 
 - **CodeRabbit `code-guidelines`** — the propose → review → approve-into-config shape. Grounds the
   Panel 2/3 flow: a generated draft the user curates and approves before it governs anything.
 - **The AGENTS.md / CLAUDE.md-generator caveat (ETH Zurich)** — blindly auto-generated agent
-  context files _reduced_ task success (~3%) and _raised_ cost (~20%). This JUSTIFIES the explicit
-  **Approve as standard** gate (Panel 3): Motir drafts a first version, but a human curates + approves
-  before it enters any prompt — the productized CLAUDE.md is curated, not bloated auto-gen. (Fuller
-  citation set — SonarQube, Sourcery "Teaching Sourcery", the "Learning Natural Coding Conventions"
-  research — lives in the 7.14.2 decision record.)
+  context files _reduced_ task success (~3%) and _raised_ cost (~20%). The MOTIR-1660 response is
+  that the convention is DERIVED FROM THE REAL CODE — the grounding in actual repository code IS the
+  curation. A non-technical founder cannot meaningfully "approve" a Node-layering rule, so the
+  `proposed → standard` human gate is removed; the convention is auto-applied and changed only via
+  the universal AI chat ("refine with Motir"). (Fuller citation set lives in the MOTIR-1660 decision
+  record.)
 - **GitHub code scanning / CodeQL — the SARIF-native, GitHub-integrated default** (Panel 1/6 best-fit).
   For a GitHub repo it is the lightest path: a workflow file, results uploaded as SARIF to the
   code-scanning API Motir already reads (no new account). Grounds why CodeQL is the `.tool-rec`
