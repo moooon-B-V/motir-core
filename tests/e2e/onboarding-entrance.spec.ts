@@ -6,8 +6,9 @@
 //   • Start planning → forwards to the discovery chat (/onboarding/discovery),
 //     which renders its composer (the idea is carried via the same preserved-idea
 //     cookie the chat already seeds from).
-//   • Import an existing project → the downstream hand-off stub
-//     (/onboarding/import), owned by 7.15 / 7.17.
+//   • Import an existing project → the migrate wizard (/onboarding/migrate,
+//     MOTIR-934), whose optional Import step reaches the importer (MOTIR-942)
+//     at /onboarding/import.
 //
 // motir-ai has no presence in CI, so the discovery hub's single browser-reachable
 // read (`/api/ai/pre-plan`) is stubbed for the render, exactly as the other
@@ -52,22 +53,18 @@ test('Start planning routes the entrance into the discovery chat', async ({ page
   await expect(page.getByRole('textbox', { name: 'Reply, or ask a question…' })).toBeVisible();
 });
 
-test('Import routes the entrance to the import wizard', async ({ page }) => {
-  await signUp(page, `entrance-import-${Date.now()}@example.com`);
+test('the existing-project door routes to the migrate wizard', async ({ page }) => {
+  await signUp(page, `entrance-migrate-${Date.now()}@example.com`);
   await createFirstProject(page, 'Invoicer');
 
   await page.goto('/onboarding');
   await page.getByRole('link', { name: /i have an existing project/i }).click();
 
-  // The entrance now opens the real import wizard (MOTIR-942, replacing the
-  // 7.22.4 "coming soon" stub in place), scoped to the active project.
-  await page.waitForURL('**/onboarding/import');
-  await expect(
-    page.getByRole('heading', { name: 'Import work items · into Invoicer' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Where are your issues coming from?' }),
-  ).toBeVisible();
+  // The entrance's existing-project door routes to the migrate wizard
+  // (MOTIR-934); its optional Import step reaches the importer (MOTIR-942) at
+  // /onboarding/import. No run exists yet → the wizard's Start panel.
+  await page.waitForURL('**/onboarding/migrate');
+  await expect(page.getByRole('heading', { name: 'Migrate an existing codebase' })).toBeVisible();
 });
 
 test('the "See how Motir works" link routes to the explainer hand-off', async ({ page }) => {

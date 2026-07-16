@@ -7,7 +7,7 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // "/onboarding renders the two-option fork (per 7.22.3) and routes: start-fresh →
 // discovery (seeded); existing → 7.15 wizard / 7.17." This unit renders the two
 // designed panels and asserts the fork's shape + destinations; the routing itself
-// (Start planning → /onboarding/discovery, Import → /onboarding/import) is proven
+// (Start planning → /onboarding/discovery, Migrate → /onboarding/migrate) is proven
 // end-to-end in tests/e2e/onboarding-entrance.spec.ts.
 //
 // `startPlanningAction` is a `'use server'` action that imports the `server-only`
@@ -43,15 +43,15 @@ describe('OnboardingEntrance', () => {
     const start = screen.getByRole('button', { name: /start planning/i }) as HTMLButtonElement;
     expect(start.type).toBe('submit');
 
-    // The secondary import row is a real link to the downstream hand-off.
+    // The secondary migrate row is a real link to the migrate wizard.
     screen.getByText('OR');
-    const importLink = screen.getByRole('link', {
-      name: /i have an existing project — import it/i,
+    const migrateLink = screen.getByRole('link', {
+      name: /i have an existing project — migrate it/i,
     });
-    expect(importLink.getAttribute('href')).toBe('/onboarding/import');
+    expect(migrateLink.getAttribute('href')).toBe('/onboarding/migrate');
   });
 
-  it('renders the carried-over panel: pre-filled idea, Continue CTA, NO import row', () => {
+  it('renders the carried-over panel: pre-filled idea, Continue CTA, NO migrate row', () => {
     const idea = 'A leave-tracking app for a 20-person startup.';
     renderWithIntl(<OnboardingEntrance carriedIdea={idea} />);
 
@@ -69,8 +69,8 @@ describe('OnboardingEntrance', () => {
     // The CTA becomes "Continue with this idea".
     screen.getByRole('button', { name: /continue with this idea/i });
 
-    // Arriving with an idea in hand = starting fresh: the import path is dropped.
-    expect(screen.queryByRole('link', { name: /import it/i })).toBeNull();
+    // Arriving with an idea in hand = starting fresh: the migrate path is dropped.
+    expect(screen.queryByRole('link', { name: /migrate it/i })).toBeNull();
     expect(screen.queryByText('OR')).toBeNull();
   });
 });

@@ -39,18 +39,25 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { migrateOnboardingService } = await import('@/lib/services/migrateOnboardingService');
 
-/** Seed a connected GitHub repo for the fixture's workspace so resolveCodeContext
- *  resolves it. Returns its `owner/name` ref. */
-async function seedConnectedRepo(fx: WorkItemFixture, owner: string, name: string) {
+/** Seed ONE GitHub installation for the fixture's workspace. resolveCodeContext
+ *  reads a single installation per workspace (`findFirst`), so all repos meant
+ *  to be visible together MUST share one installation — call this once, then
+ *  {@link seedRepo} for each repo under it. */
+async function seedInstallation(fx: WorkItemFixture, account = 'acme') {
   const rand = Math.random().toString(36).slice(2, 8);
-  const inst = await db.githubInstallation.create({
+  return db.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
-      accountLogin: owner,
+      accountLogin: account,
       accountType: 'Organization',
     },
   });
+}
+
+/** Seed a repo under an existing installation. Returns its `owner/name` ref. */
+async function seedRepo(inst: { id: string }, owner: string, name: string) {
+  const rand = Math.random().toString(36).slice(2, 8);
   await db.githubRepo.create({
     data: { installationId: inst.id, repoId: `repo-${rand}`, owner, name, defaultBranch: 'main' },
   });
@@ -115,8 +122,9 @@ describe('migrateOnboardingService.getIndexStatus', () => {
   it('maps each connected repo to indexed/pending and gates on all', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
-    const web = await seedConnectedRepo(fx, 'acme', 'web');
-    const api = await seedConnectedRepo(fx, 'acme', 'api');
+    const inst = await seedInstallation(fx);
+    const web = await seedRepo(inst, 'acme', 'web');
+    const api = await seedRepo(inst, 'acme', 'api');
     await seedSucceededIndexJob(fx, web);
 
     const status = await migrateOnboardingService.getIndexStatus(run.id, fx.ctx);
@@ -134,8 +142,9 @@ describe('migrateOnboardingService.getIndexStatus', () => {
   it('flips allIndexed once every repo has a succeeded index run', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
-    const web = await seedConnectedRepo(fx, 'acme', 'web');
-    const api = await seedConnectedRepo(fx, 'acme', 'api');
+    const inst = await seedInstallation(fx);
+    const web = await seedRepo(inst, 'acme', 'web');
+    const api = await seedRepo(inst, 'acme', 'api');
     await seedSucceededIndexJob(fx, web);
     await seedSucceededIndexJob(fx, api);
 
@@ -148,7 +157,8 @@ describe('migrateOnboardingService.getIndexStatus', () => {
   it('reports hasRunning when an index job is in flight (aggregate, not per-repo)', async () => {
     const fx = await makeWorkItemFixture();
     const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
-    await seedConnectedRepo(fx, 'acme', 'web');
+    const inst = await seedInstallation(fx);
+    await seedRepo(inst, 'acme', 'web');
     await seedRunningIndexJob(fx);
 
     const status = await migrateOnboardingService.getIndexStatus(run.id, fx.ctx);
