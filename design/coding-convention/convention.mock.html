@@ -4,14 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · Coding convention + code-health audit (Story 7.14 · 7.14.1, gating 7.14.5)
+      Design mock · Coding convention + code-health audit (Story 7.14 · 7.14.1b, gating 7.14.5)
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the CODING-CONVENTION surface (Story 7.14 —
-      the coding-convention + code-health audit engine). No `design/coding-convention/`
-      asset existed; the 7.14.1 design gate produces this. It is the layout source
-      of truth for the UI code subtask 7.14.5 (MOTIR-926 — the review/approve UI +
-      API), which is `blocked_by` this card.
+      the coding-convention + code-health audit engine).
+
+      7.14.1 (MOTIR-922): original — the approve/edit convention surface.
+      7.14.1b (MOTIR-1661, this amendment): the convention is now READ-ONLY +
+      "refine with Motir" via the universal AI chat — no approve gate, no free-edit,
+      per repo. Gated by the decision MOTIR-1660.
+
+      It is the layout source of truth for the UI code subtask 7.14.5 (MOTIR-926 —
+      the code-health UI), which is `blocked_by` this card.
 
       Built FROM the real design system: the token block below is copied from
       packages/design-system/theme.css (the @theme Tier-0 --color-*/shape scale,
@@ -20,37 +25,34 @@
       --el-card + data-surface="card"), Pill (severity info|success|warning|danger
       + status planned|done tones — hue in the TINT, --el-text-strong ink, AA-safe
       per finding #35), Button (primary/secondary/ghost), EmptyState (Card + lucide
-      icon + serif title + --el-text-subtitle desc + action), Modal (Radix dialog:
-      --shadow-modal + --el-overlay-scrim scrim, alertdialog role for the confirm),
-      Textarea (--radius-input + --el-input-border, FormField label). Every panel is
+      icon + serif title + --el-text-subtitle desc + action). Every panel is
       a NEW ARRANGEMENT of these primitives — no new vocabulary invented.
 
-      Model (per the 7.14.2 decision / 7.14.3 store): the CodingConvention is the
-      standard for the NEW code Motir generates (injected into every prompt — the
-      productized CLAUDE.md); it is versioned + always EDITABLE (edit the standard →
-      new proposed version → approve). The CodeAudit measures EXISTING code against
-      that approved convention (+ a clean-code baseline where the convention is
-      silent) and reports what is not up to standard. The two are LINKED: approving /
-      updating the convention TRIGGERS a re-audit against the new standard. See
-      design-notes.md for the full spec, the per-element --el-* role map, the copy
-      strings, and the verified mirror (CodeScene CodeHealth™, CodeRabbit
-      code-guidelines, the ETH-Zurich auto-gen caveat that justifies the approve gate).
+      Model (per the 7.14.2e decision MOTIR-1660): the CodingConvention is DERIVED +
+      AUTO-USED — there is no human approve gate and no free-edit. The convention is
+      READ-ONLY, discoverable on the Code-health page; to change it, the user tells
+      Motir in the universal AI chat via the "Refine with Motir" entry. PER REPO —
+      one convention per (project, repo) pair. The CodeAudit measures EXISTING code
+      against the derived convention and a clean-code baseline where the convention is
+      silent. See design-notes.md for the full spec, the per-element --el-* role map,
+      the copy strings, and the verified mirror (CodeScene CodeHealth™).
 
       Covers (multi-panel board — review EACH panel, mistake #31):
         (1) the code-health audit report — health SUMMARY (score/grade + category
             breakdown, NOT a raw lint dump) + grouped findings list, virtualized.
             MIGRATE-only (there is code to audit).
-        (2) the proposed-convention review — the contentMd as a sectioned document,
-            each rule badged Adopted vs Proposed, with BOTH status banners drawn
-            (PROPOSED — review & approve / STANDARD — injected into every prompt).
-        (3) edit + approve — the editable Markdown (Textarea) + "Approve as standard"
-            primary action + its confirmation dialog (the deliberate human gate).
-        (4) the FRESH (establish-only) + version states — the no-codebase EmptyState,
-            the stack-derived (all-Proposed) proposal, the version-history affordance,
-            and the "Re-run audit" action.
-        (5) the ACCESS PATH (the door) — the project sidebar rail with the "Code health"
+        (2) the READ-ONLY convention per repo — the contentMd as a sectioned document,
+            each rule badged Adopted vs Proposed, with the "Derived from your code ·
+            auto-used" banner and a "Refine with Motir" entry that composes the
+            universal AI chat (PlanWithAILauncher → PlanningWorkspace, per MOTIR-1193 /
+            MOTIR-1299 design/ai-chat).
+        (3) the FRESH (establish-only) + version states — the no-codebase EmptyState,
+            the stack-derived proposal, the version-history affordance, and the
+            "Re-run audit" action.
+        (4) the ACCESS PATH (the door) — the project sidebar rail with the "Code health"
             entry drawn active + the fresh-project onboarding wizard step, so the reader
             SEES the door, not just a named route.
+        (5) the "Deepen this audit" scanner affordance — state gallery (unchanged).
       Toggle dark mode (top-right) to confirm token parity in both themes.
     -->
     <style>
@@ -2193,15 +2195,16 @@
       the <strong>Acme › Engineering</strong> crumb up top. The
       <strong>Audit / Convention</strong> tabs switch the two views of this page. There is no
       separate “Back” button — Code health is a top-level project page, so the persistent nav IS how
-      you move. (Panels 2–4 below zoom into the main content region in each state.)
+      you move. (Panels 2–3 below zoom into the main content region in each state.)
     </p>
 
     <!-- ══════════════════════════════════════════════════════════════════
          PANEL 2 — CONVENTION TAB (content region of the screen above)
+         READ-ONLY, per repo, refined via the universal AI chat (MOTIR-1660)
          ══════════════════════════════════════════════════════════════════ -->
     <div class="panel-label">
-      Panel 2 · Content region · the CONVENTION tab — the standard document + Edit / Approve (both
-      PROPOSED and STANDARD states)
+      Panel 2 · Content region · the CONVENTION tab — READ-ONLY per repo, refined via "Refine with
+      Motir" (universal AI chat); no approve gate, no free-edit
     </div>
     <div class="ctx">
       <span class="crumb">
@@ -2221,18 +2224,27 @@
         </svg>
         Code health <span class="sep">›</span> <span class="here">Convention tab</span>
       </span>
-      <span>— the main content region of the screen above, Convention tab selected.</span>
+      <span>— the main content region of the screen above, Convention tab selected. Read-only; refine
+      via the universal AI chat.</span>
     </div>
     <div class="panel">
-      <!-- State A: PROPOSED -->
+      <!-- READ-ONLY convention per repo — no approve gate, no free-edit (MOTIR-1660) -->
       <div class="card">
         <div class="card-head">
           <h3>Coding convention</h3>
-          <span class="count-pill">v3 · proposed</span>
+          <span class="count-pill">per repo · acme/web</span>
+          <span
+            class="conv-ref"
+            style="margin-left: 6px"
+            title="Derived from acme/web@a1b9f30"
+          >derived from your code</span>
           <div class="spacer"></div>
-          <!-- the DOOR into editing — starts edit mode (Panel 3) on the current document -->
+          <!-- refine-with-Motir: composes the universal AI chat launcher (PlanWithAILauncher →
+               PlanningWorkspace, per MOTIR-1193 / MOTIR-1299 / design/ai-chat).
+               A secondary button, not a free-form editor — the universal chat is the sole mutation
+               surface (MOTIR-1660 §2). -->
           <button class="btn btn-secondary btn-sm">
-            <!-- lucide: pencil -->
+            <!-- lucide: sparkles (the universal AI chat identity) -->
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -2242,29 +2254,15 @@
               stroke-linejoin="round"
             >
               <path
-                d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+                d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
               />
-              <path d="m15 5 4 4" />
             </svg>
-            Edit
-          </button>
-          <button class="btn btn-primary btn-sm">
-            <!-- lucide: check -->
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            Approve as standard
+            Refine with Motir
           </button>
         </div>
-        <div class="banner banner-proposed">
-          <!-- lucide: alert-triangle -->
+
+        <div class="banner banner-standard" style="margin-bottom: 14px">
+          <!-- lucide: database (derived from the code itself) -->
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -2273,15 +2271,18 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
-            <path d="M12 9v4" />
-            <path d="M12 17h.01" />
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
           </svg>
           <div class="b-text">
-            <div class="b-title">PROPOSED — review &amp; approve</div>
+            <div class="b-title">DERIVED FROM YOUR CODE · auto-used</div>
             <div class="b-sub">
-              This draft is NOT yet used. Nothing is injected into prompts until you approve it as
-              the standard. Tweak it first with <strong>Edit</strong> ↑.
+              This convention is derived from the code in <code class="coderef">acme/web</code> and
+              <strong>applied automatically</strong> to every prompt for NEW code Motir generates for
+              this repo. There is no approve gate — the grounding in your real code IS the curation.
+              <strong>To change it, tell Motir in the universal AI chat</strong> with
+              &ldquo;Refine with Motir&rdquo; ↑ — the convention stays read-only until you do.
             </div>
           </div>
         </div>
@@ -2354,172 +2355,41 @@
             a clean-code default to review</span
           >
         </div>
-      </div>
 
-      <!-- State B: STANDARD (post-approval) -->
-      <div class="card">
-        <div class="banner banner-standard">
-          <!-- lucide: shield-check -->
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1 1 0 0 1 1.3 0C15.5 3.8 18 5 20 5a1 1 0 0 1 1 1Z"
-            />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-          <div class="b-text">
-            <div class="b-title">STANDARD — injected into every prompt for NEW code</div>
-            <div class="b-sub">
-              The active standard governs the code Motir GENERATES: it’s folded into every
-              dispatched coding-agent prompt (the productized CLAUDE.md). It is not a linter for
-              existing code — the audit above measures how far existing code is FROM this standard.
-            </div>
-          </div>
-          <span class="count-pill">v2 · standard · approved by Yue</span>
-        </div>
-        <div class="approve-row" style="margin: 4px 0 0">
-          <button class="btn btn-secondary btn-sm">
-            <!-- lucide: pencil -->
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-              />
-              <path d="m15 5 4 4" />
-            </svg>
-            Edit standard
-          </button>
-          <div class="approve-note">
-            The standard stays editable — <strong>edit it anytime</strong> (Panel 3) to produce the
-            next version. Approving the new version supersedes this one (kept in history) AND
-            re-audits your existing code against it.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════════
-         PANEL 3 — EDIT + APPROVE (the deliberate human gate)
-         ══════════════════════════════════════════════════════════════════ -->
-    <div class="panel-label">
-      Panel 3 · Content region · EDIT MODE — reached by clicking “Edit” on the Convention tab; the
-      document body becomes editable Markdown + the “Approve as standard” gate
-    </div>
-    <div class="ctx">
-      <span class="crumb">
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <!-- The refine-with-Motir callout — composes the universal AI chat launcher,
+             never a bespoke editor (MOTIR-1660 §2). The actual "Refine with Motir" button
+             is in the card header above; this note explains the mechanism. -->
+        <div
+          style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--el-border-soft)"
         >
-          <path
-            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
-          />
-        </svg>
-        Code health <span class="sep">›</span> Convention tab <span class="sep">›</span>
-        <span class="here">Edit</span>
-      </span>
-      <span>— still the same screen; Cancel returns to the Convention tab.</span>
-    </div>
-    <div class="panel">
-      <div class="card">
-        <div class="card-head">
-          <h3>Edit convention</h3>
-          <span class="count-pill">editing v2 (standard) → v3 · proposed</span>
-          <div class="spacer"></div>
-          <button class="btn btn-ghost btn-sm">Cancel</button>
-        </div>
-        <p class="subtle" style="margin: 2px 0 14px">
-          You reached this by clicking <strong>Edit</strong> on the convention — the read-only
-          document (Panel 2) swaps to this editable Markdown in place. The convention is
-          <strong>always editable</strong>: editing the current standard (or an AI-proposed draft)
-          produces the next version to approve; trim, reword, or delete any rule. (The ETH-Zurich
-          finding: blindly auto-generated house-rules files <em>reduce</em> agent success — so Motir
-          drafts, but a human curates and approves.)
-        </p>
-        <label class="field-label" for="conv-md">Convention (Markdown)</label>
-        <textarea id="conv-md" class="textarea" spellcheck="false" aria-label="Convention Markdown">
-## Layering
-- Keep Route → Service → Repository → ORM one-directional.  [adopted]
-- A repository must never import from app/ or a route.       [proposed]
-
-## Naming
-- Services end in `Service`, repositories in `Repo`, components PascalCase.  [adopted]
-- Use camelCase for functions and variables.                                [proposed]
-
-## Testing
-- Every exported service method ships a Vitest unit test on real Postgres — no mocks.  [proposed]
-
-## Error handling
-- Throw typed domain errors from the service; map to HTTP at the route boundary.  [adopted]</textarea
-        >
-        <div class="helper">
-          Markdown · rendered as the review document in Panel 2. Provenance tags
-          <code class="coderef">[adopted]</code> / <code class="coderef">[proposed]</code> drive the
-          badges.
-        </div>
-
-        <div class="approve-row">
-          <button class="btn btn-primary">
-            <!-- lucide: check -->
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            Approve as standard
-          </button>
-          <button class="btn btn-ghost">Save draft</button>
-          <div class="approve-note">
-            Approving makes this the standard <strong>injected into every prompt</strong> for NEW
-            code, supersedes v2 (kept in history), <strong>and re-audits</strong> your existing code
-            against it.
-          </div>
-        </div>
-      </div>
-
-      <div class="eyebrow" style="margin: 18px 0 0">
-        Confirmation (Modal · role=alertdialog) — the deliberate human gate
-      </div>
-      <div class="modal-stage" aria-hidden="false">
-        <div class="scrim"></div>
-        <div class="modal" role="alertdialog" aria-labelledby="cf-title" aria-describedby="cf-desc">
-          <h3 id="cf-title">Approve as the coding standard?</h3>
-          <p id="cf-desc">
-            <strong>v3</strong> becomes the active standard, injected into every coding-agent prompt
-            for the NEW code Motir generates.
+          <p class="subtle" style="margin: 0">
+            <strong>To change this convention:</strong>
+            <button class="btn btn-secondary btn-sm" style="margin: 0 4px; vertical-align: middle">
+              <!-- lucide: sparkles -->
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                width="13"
+                height="13"
+              >
+                <path
+                  d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                />
+              </svg>
+              Refine with Motir
+            </button>
+            opens the same universal AI chat you use to plan your project. The canvas shows the
+            existing convention as read-only context; the chat is where you tell Motir what to change
+            and it revises. No free-form Textarea — the chat is the sole mutation surface. (See
+            <code class="coderef">design/ai-chat</code> · the universal
+            <code class="coderef">PlanWithAILauncher</code> →
+            <code class="coderef">PlanningWorkspace</code>, per
+            <a href="#">MOTIR-1193</a> / <a href="#">MOTIR-1299</a>.)
           </p>
-          <p>
-            Motir will also <strong>re-audit your existing code</strong> against v3 and refresh the
-            health report. The current standard <strong>v2</strong> is retained in history — you can
-            restore it anytime.
-          </p>
-          <div class="modal-foot">
-            <button class="btn btn-ghost btn-sm">Cancel</button>
-            <button class="btn btn-primary btn-sm">Approve &amp; re-audit</button>
-          </div>
         </div>
       </div>
     </div>
@@ -2586,7 +2456,7 @@
 
         <!-- Fresh: the stack-derived proposal (all Proposed, no Adopted) -->
         <div class="card">
-          <div class="banner banner-proposed" style="margin-bottom: 12px">
+          <div class="banner banner-standard" style="margin-bottom: 12px">
             <!-- lucide: sparkles -->
             <svg
               viewBox="0 0 24 24"
@@ -2601,10 +2471,11 @@
               />
             </svg>
             <div class="b-text">
-              <div class="b-title">PROPOSED — established from your stack</div>
+              <div class="b-title">DERIVED FROM YOUR STACK · auto-used</div>
               <div class="b-sub">
                 Next.js + Prisma + Postgres defaults. No audit — nothing to adopt yet, so every rule
-                is a clean-code default.
+                is a clean-code default. Auto-applied to every prompt; &ldquo;refine with Motir&rdquo;
+                via the universal AI chat to change.
               </div>
             </div>
           </div>
@@ -2626,7 +2497,7 @@
             </div>
           </div>
           <p class="subtle" style="margin: 6px 0 0">
-            Same proposed → approve → standard gate (Panel 3). Only the audit differs (there is
+            Same derived + auto-used, read-only model (Panel 2). Only the audit differs (there is
             none).
           </p>
         </div>
@@ -2657,9 +2528,10 @@
         <p class="subtle" style="margin: 2px 0 4px">
           An audit runs on three triggers: <strong>code changes</strong> (on demand or a repo
           webhook — proposes a new convention version if the code drifts), and
-          <strong>convention changes</strong> (approving an edited convention re-audits existing
-          code against the new standard). The approved standard is retained and never silently
-          overwritten — a new version must be re-approved to supersede.
+          <strong>convention changes</strong> (a &ldquo;refine with Motir&rdquo; revision
+          via the universal AI chat re-audits existing code against the revised standard). The
+          convention is retained and never silently overwritten — changes are tracked in the
+          version history.
         </p>
         <div class="versions">
           <div class="version">
@@ -2719,9 +2591,10 @@
         </div>
         <p class="subtle" style="margin: 0">
           For a start-fresh project the surface opens IN the wizard as the
-          <strong>Establish convention</strong> step — the same proposed → approve → standard gate
-          (Panels 2–3), fed by the stack-derived proposal (Panel 4), with no audit. After onboarding
-          it stays reachable at the “Code health” sidebar entry above.
+          <strong>Establish convention</strong> step — the stack-derived, read-only convention
+          (Panel 2, derived + auto-used; &ldquo;refine with Motir&rdquo; via the universal AI chat),
+          with no audit. After onboarding it stays reachable at the &ldquo;Code health&rdquo; sidebar
+          entry above.
         </p>
       </div>
     </div>
