@@ -56,6 +56,32 @@ function config(): ClientConfig {
   return { url: url.replace(/\/+$/, ''), serviceToken };
 }
 
+// The AI boundary is a separate service (Fly.io) that may scale to zero — a
+// cold-start fetch can take 15-30s while the machine boots. A 30s timeout gives
+// one cold-start enough runway; a brief retry catches the window where the first
+// request wakes the machine and the second finds it warm. Keep the timeout tight
+// enough that a true outage surfaces promptly, not after 60s of retries.
+const AI_FETCH_TIMEOUT_MS = 30_000;
+const AI_FETCH_RETRY_MS = 3000;
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit & { retryOn?: 'cold-start' | 'always' },
+): Promise<Response> {
+  const { retryOn, ...fetchInit } = init;
+  const doFetch = () =>
+    fetch(url, { ...fetchInit, signal: AbortSignal.timeout(AI_FETCH_TIMEOUT_MS) });
+
+  try {
+    return await doFetch();
+  } catch (err) {
+    if (!retryOn || retryOn === 'always') throw err;
+    // Cold-start retry: wait a beat for the machine to boot, then try once more.
+    await new Promise((r) => setTimeout(r, AI_FETCH_RETRY_MS));
+    return doFetch();
+  }
+}
+
 function authHeaders(serviceToken: string): Record<string, string> {
   return {
     Authorization: `Bearer ${serviceToken}`,
@@ -459,8 +485,9 @@ export async function getCodeAudit(query: CodeAuditQuery): Promise<RawCodeAuditS
   if (query.findingsLimit !== undefined) params.set('findingsLimit', String(query.findingsLimit));
   let res: Response;
   try {
-    res = await fetch(`${url}/v1/code-audit?${params.toString()}`, {
+    res = await fetchWithRetry(`${url}/v1/code-audit?${params.toString()}`, {
       headers: authHeaders(serviceToken),
+      retryOn: 'cold-start',
     });
   } catch (err) {
     throw new MotirAiUnavailableError(describe(err));
@@ -495,10 +522,11 @@ export async function refreshCodeAudit(
   });
   let res: Response;
   try {
-    res = await fetch(`${url}/v1/code-context/refresh`, {
+    res = await fetchWithRetry(`${url}/v1/code-context/refresh`, {
       method: 'POST',
       headers: authHeaders(serviceToken),
       body: JSON.stringify({ envelopeVersion: 'v1', tenant, context, readBackToken }),
+      retryOn: 'cold-start',
     });
   } catch (err) {
     throw new MotirAiUnavailableError(describe(err));
@@ -533,8 +561,9 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   if (query.versionsLimit !== undefined) params.set('versionsLimit', String(query.versionsLimit));
   let res: Response;
   try {
-    res = await fetch(`${url}/v1/convention?${params.toString()}`, {
+    res = await fetchWithRetry(`${url}/v1/convention?${params.toString()}`, {
       headers: authHeaders(serviceToken),
+      retryOn: 'cold-start',
     });
   } catch (err) {
     throw new MotirAiUnavailableError(describe(err));

@@ -58,7 +58,7 @@ export function CodeHealthClient({
   projectId: string;
   initialAudit: CodeAuditSurfaceDTO | null;
   initialConventions: ConventionSurfaceDTO[];
-  loadError: boolean;
+  loadError: string | false;
 }) {
   const t = useTranslations('codeHealth');
   const [tab, setTab] = useState<Tab>('audit');
@@ -67,7 +67,9 @@ export function CodeHealthClient({
   const [conventions, setConventions] = useState<ConventionSurfaceDTO[]>(initialConventions);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reauditing, setReauditing] = useState(false);
-  const [error, setError] = useState<string | null>(loadError ? t('errorLoad') : null);
+  const [error, setError] = useState<string | null>(
+    loadError ? `${t('errorLoad')} — ${loadError}` : null,
+  );
   const pageSeq = useRef(0);
   const reauditSeq = useRef(0);
 
