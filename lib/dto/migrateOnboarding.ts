@@ -54,3 +54,33 @@ export interface MigrateOnboardingDto {
 export interface StartMigrateOnboardingInput {
   connectedRepoRef?: string | null;
 }
+
+/** One connected repository's index status, as the wizard's Index step renders
+ *  it. `indexed` = a succeeded `system.code-graph-index` run matches this repo's
+ *  `output.repoRef`; `pending` = not yet (queued or in flight — the ledger cannot
+ *  distinguish per-repo, see `MigrateIndexStatusDto.hasRunning`). */
+export type MigrateIndexRepoStatusDto = 'indexed' | 'pending';
+
+/** One row in the Index step's per-repo list. */
+export interface MigrateIndexRepoDto {
+  provider: string;
+  repoRef: string;
+  status: MigrateIndexRepoStatusDto;
+}
+
+/**
+ * The migrate-onboarding Index step's live progress (Story 7.15 · MOTIR-934) —
+ * the per-repo view the wizard polls (`GET /api/onboarding/migrate/[id]/index-status`).
+ * `repos` is the workspace's connected set (`resolveCodeContext`); `indexedCount`
+ * of them have a succeeded index run; `hasRunning` is the aggregate "an index is
+ * in flight right now" flag (a running `system.code-graph-index` row exists — the
+ * ledger cannot tie a running row to a specific repo, so the in-flight state is
+ * aggregate, not per-repo). `allIndexed` gates the wizard's Next button.
+ */
+export interface MigrateIndexStatusDto {
+  repos: MigrateIndexRepoDto[];
+  indexedCount: number;
+  total: number;
+  hasRunning: boolean;
+  allIndexed: boolean;
+}

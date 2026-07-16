@@ -4124,9 +4124,9 @@
       "hintDefault": "You can start with a rough idea — the discovery chat asks follow-up questions.",
       "hintCarried": "Add or refine anything before you continue — the discovery chat takes it from here.",
       "or": "OR",
-      "importTitle": "I have an existing project — import it",
+      "importTitle": "I have an existing project — migrate it",
       "importDesc": "Connect your repository and Motir reads your code, then plans on top of what's already there. You can also bring over existing work items from Jira, Linear or Plane.",
-      "importCta": "Import"
+      "importCta": "Migrate"
     },
     "import": {
       "title": "Import an existing project",
@@ -4844,6 +4844,81 @@
         "not_found": "That project isn't among your GitLab memberships anymore.",
         "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again."
       }
+    }
+  },
+  "onboardingMigrate": {
+    "brandBar": {
+      "flowName": "Migrate an existing project",
+      "planAi": "Plan with AI"
+    },
+    "rail": {
+      "title": "Your migration",
+      "sub": "Indexing runs in the background — leave and come back.",
+      "setUp": "Set up your codebase",
+      "import": "Import your work",
+      "importOptional": "optional",
+      "connect": "Connect",
+      "index": "Index",
+      "importStep": "Import work items"
+    },
+    "common": {
+      "back": "Back",
+      "saveExit": "Save & exit",
+      "error": "Something went wrong. Try again."
+    },
+    "start": {
+      "eyebrow": "Existing codebase",
+      "heading": "Migrate an existing codebase",
+      "body": "Connect your repositories, let Motir read the code and derive conventions, then optionally import your backlog and plan.",
+      "projectLine": "The migrate wizard runs for this project.",
+      "cta": "Start"
+    },
+    "connect": {
+      "eyebrow": "Step 1 of 2 · Set up",
+      "heading": "Connect the repositories in this project",
+      "body": "Connect your GitHub repositories in workspace settings. Motir reads them through the GitProvider seam to build one code graph across the project.",
+      "cta": "Open GitHub settings",
+      "gitlabNote": "GitLab connect is coming soon.",
+      "next": "I've connected my repos"
+    },
+    "index": {
+      "eyebrow": "Step 2 of 2 · Set up",
+      "heading": "Indexing your codebase",
+      "body": "Motir builds one code graph for the project across all your repositories — files, symbols and how they reference each other. This can take a few minutes for a large codebase.",
+      "building": "Building the code graph…",
+      "aggregate": "{done} of {total} repositories done",
+      "waiting": "Waiting for repositories to be indexed…",
+      "perRepo": "Per repository",
+      "state": {
+        "indexed": "Indexed",
+        "queued": "Queued"
+      },
+      "callout": "Motir derives your conventions + a code-health check (and any plan) from the whole project, so it needs every repo indexed — Next stays disabled until every repository finishes.",
+      "completeTitle": "Code graph built",
+      "completeNote": "Per-repo conventions + a code-health check derived from your code — nothing to approve (they live on the Code health page). You're set up.",
+      "next": "Next: import your work"
+    },
+    "import": {
+      "eyebrow": "Optional · Import & plan",
+      "heading": "Bring in your existing backlog",
+      "body": "Already tracking work in Jira, Linear, GitHub, Plane or a CSV? Import it into this project — you'll review a dry-run preview before anything is written. Skip this if you have no backlog to bring in.",
+      "cta": "Open the importer",
+      "reconcile": "When you then generate a plan, Motir reconciles the two so nothing is duplicated.",
+      "skip": "Skip import",
+      "next": "I've imported — continue"
+    },
+    "decision": {
+      "eyebrow": "Set up complete",
+      "heading": "Your codebase is in Motir",
+      "body": "Plan your project now with AI, or finish and plan later from the project.",
+      "planNow": "Plan my project now",
+      "finishLater": "Finish — I'll plan later"
+    },
+    "resume": {
+      "eyebrow": "Planning in progress",
+      "heading": "Continue planning",
+      "body": "You started planning this project. Continue in the planning workspace.",
+      "cta": "Continue planning"
     }
   }
 }

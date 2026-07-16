@@ -155,16 +155,17 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
             {carried ? t('hintCarried') : t('hintDefault')}
           </p>
 
-          {/* SECONDARY — import an existing project. Dropped in the carried-idea
-            panel: arriving with an idea means the user is starting fresh. It is a
-            real link to the import hand-off (owned downstream by 7.15/7.17). */}
+          {/* SECONDARY — migrate an existing codebase. Dropped in the carried-idea
+            panel: arriving with an idea means the user is starting fresh. Routes
+            to the migrate wizard (7.15 / MOTIR-934), whose optional Import step
+            reaches the issue importer (7.17 / MOTIR-942) at /onboarding/import. */}
           {!carried && (
             <>
               <div className="mx-0.5 my-5 flex items-center gap-3 font-mono text-[11px] font-semibold tracking-wide text-(--el-text-faint) before:h-px before:flex-1 before:bg-(--el-border) before:content-[''] after:h-px after:flex-1 after:bg-(--el-border) after:content-['']">
                 {t('or')}
               </div>
               <Link
-                href="/onboarding/import"
+                href="/onboarding/migrate"
                 className="flex w-full items-center gap-3.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding) text-left shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong)"
               >
                 <span
