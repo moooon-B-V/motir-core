@@ -1,6 +1,6 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
-import type { JobStreamEvent } from '@/lib/ai/types';
+import type { ExistingWorkItemRef, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 
 // The chat front door's dispatch side (Subtask 7.3.4): the thin motir-core seam
@@ -22,8 +22,15 @@ import type { ProjectContext } from '@/lib/projects';
 export const aiChatService = {
   // Submit a user turn into a `discovery` job for the actor's active project.
   // The prompt rides in the context bag; motir-ai owns the interview state
-  // across turns. Returns the jobId the stream route subscribes to.
-  async submitDiscoveryTurn(prompt: string, ctx: ProjectContext): Promise<{ jobId: string }> {
+  // across turns. When `opts.existingWorkItems` is supplied (MOTIR-1259 — the
+  // migrate-existing-codebase path), the discovery handler grounds tier drafting
+  // in what already exists rather than starting from a blank slate. Returns the
+  // jobId the stream route subscribes to.
+  async submitDiscoveryTurn(
+    prompt: string,
+    ctx: ProjectContext,
+    opts?: { existingWorkItems?: ExistingWorkItemRef[] },
+  ): Promise<{ jobId: string }> {
     const { organizationId, isMeta } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -35,7 +42,15 @@ export const aiChatService = {
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
     };
-    return submitJob('discovery', tenant, { prompt }, { userId: ctx.userId });
+    return submitJob(
+      'discovery',
+      tenant,
+      {
+        prompt,
+        ...(opts?.existingWorkItems?.length ? { existingWorkItems: opts.existingWorkItems } : {}),
+      },
+      { userId: ctx.userId },
+    );
   },
 
   // The live channel the 7.3.5 UI subscribes to: relay the motir-ai job stream

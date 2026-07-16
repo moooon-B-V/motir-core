@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { readPendingIdea } from '@/lib/onboarding/pendingIdea';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding';
 
@@ -18,6 +19,11 @@ import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding
 // AI read itself — it only resolves the actor + the seed idea. The polished
 // two-pane shell (canvas roadmap + step host) is the onboarding shell, Subtask
 // 7.3.11 / MOTIR-840, which composes the chat + review surfaces built here.
+//
+// EXISTING-ITEM DETECTION (MOTIR-1259): a never-AI-planned project that already
+// has a committed work-item tree redirects to the migrate wizard
+// (`/onboarding/migrate`) instead of entering the start-fresh discovery loop.
+// Existing items ARE the project's understanding — the 4-tier pre-plan is skipped.
 
 export default async function OnboardingPage() {
   const session = await getSession();
@@ -39,8 +45,17 @@ export default async function OnboardingPage() {
   // real planning surface. A NEVER-onboarded project (existing tree but no
   // materialized plan — a db:seed tree or a migrate-existing project, MOTIR-815)
   // has a null marker and still enters onboarding; the 7.3 restore resumes an
-  // in-progress session from there.
+  // in-progress session from there — unless it already has existing work items
+  // (MOTIR-1259: route to the migrate wizard instead of the start-fresh path).
   if (ctx.project.onboardingRanAt) redirect('/roadmap');
+
+  // Existing-item gate (MOTIR-1259): a never-AI-planned project with a
+  // non-empty work-item tree skips the start-fresh discovery loop and routes to
+  // the migrate wizard. Existing items ARE the project's understanding.
+  if (!ctx.project.onboardingRanAt) {
+    const itemCount = await workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId);
+    if (itemCount > 0) redirect('/onboarding/migrate');
+  }
 
   const initialIdea = await readPendingIdea();
 
