@@ -210,8 +210,8 @@ test('migrate wizard — finish early: set up → skip import → finish later',
 
       // Rail: Connect current, Index upcoming, Import optional.
       const rail = page.getByRole('navigation', { name: 'Your migration' });
-      await expect(rail.getByText('Connect')).toBeVisible();
-      await expect(rail.getByText('Index')).toBeVisible();
+      await expect(rail.getByText('Connect', { exact: true })).toBeVisible();
+      await expect(rail.getByText('Index', { exact: true })).toBeVisible();
       await expect(rail.getByText('Import work items')).toBeVisible();
       await expect(page.getByText('optional')).toBeVisible();
       // NO convention/audit step (MOTIR-1660).
@@ -230,7 +230,7 @@ test('migrate wizard — finish early: set up → skip import → finish later',
   });
 
   await chapter('Index — per-repo rows + aggregate meter + callout', async () => {
-    const indexRegion = page.locator('[aria-live]');
+    const indexRegion = page.locator('[aria-live][aria-busy]');
     await expect(indexRegion).toBeVisible();
 
     // Per-repo rows with provider + repo name + status badge.
@@ -430,7 +430,7 @@ test('migrate wizard — index gate: Next stays disabled until every repo is ind
   expect((await resp).status()).toBe(200);
 
   await expect(page.getByRole('heading', { name: 'Indexing your codebase' })).toBeVisible();
-  await expect(page.locator('[aria-live]')).toBeVisible();
+  await expect(page.locator('[aria-live][aria-busy]')).toBeVisible();
 
   // Per-repo rows render after the first poll tick.
   await expect(page.getByText('acme/web')).toBeVisible({ timeout: 10_000 });
