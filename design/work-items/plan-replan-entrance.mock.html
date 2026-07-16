@@ -1,0 +1,1213 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Work-item Plan / Re-plan entrance on detail page + quick-view (MOTIR-1489)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the contextual Plan / Re-plan entrance on
+      BOTH the work-item detail page AND the quick-view / peek modal (MOTIR-1489,
+      gating MOTIR-910). The universal plan/launcher (MOTIR-1299, the global hero
+      pill in TopNav) is ALREADY shipped and is always available; THIS entrance is
+      the PER-ITEM contextual door that opens the universal PlanningWorkspace
+      (MOTIR-1193 / 7.20.1) scoped to THIS item's neighborhood.
+
+      COMPOSES — never redraws — the shipped surfaces: the issue detail page
+      (detail.pen / detail.png), the quick-view modal (quick-view.mock.html), the
+      universal PlanningWorkspace (planning-workspace.mock.html / 7.20.1 design),
+      and the PlanWithAILauncher (MOTIR-1299).
+
+      Panels:
+        1 · Detail page — PLAN state (item not yet planned, no children).
+            "Plan with AI" hero button in the header's right cluster.
+        2 · Detail page — RE-PLAN state (item already has children / a plan).
+            "Re-plan" button → clicks open an inline composer capturing the
+            opening-message REASON (natural language, as a chat turn).
+        3 · Quick-view — PLAN state (item not yet planned).
+            "Plan with AI" in the modal header bar.
+        4 · Quick-view — RE-PLAN state (item has children / a plan).
+            "Re-plan" button → inline composer INSIDE the Radix Dialog
+            (a small text panel below the header — portaled to the dialog's
+            own container, not body, avoiding the dropdown-in-dialog clipping
+            pitfall from notes.html). The RESIZING is drawn (the modal grows
+            to accommodate the composer).
+        5 · The SCOPED universal workspace (what opens):
+            - Map left (canvas scoped to item neighborhood — item + parent +
+              siblings) — the shipped WorkItemCanvas (MOTIR-1194), reused 1:1.
+            - Chat right (the shipped chat rail).
+            - Plan mode → direct: no opening turn needed.
+            - Re-plan mode → opening chat turn carries the user's reason.
+            - Diff/confirm states: proposed changes rendered as a diff on the
+              canvas; confirm gate (7.13.5 / MOTIR-911) renders inline.
+            - Done work shown LOCKED (immutable, visual lock state).
+        6 · States — empty (no plan context yet, the "this item is new" state),
+            loading (the "Planning…" / "Resuming…" state), error.
+
+      GROUNDED in the workflow-defining subtasks (design-content dependency rule):
+      - MOTIR-908 (contextual planning job): intent classification from the
+        opening turn text — Plan → expand_item, Re-plan reason → replan.
+      - MOTIR-911 (confirmation gate): every proposed change diffs + persists
+        only on explicit approve. The confirm gate renders in the workspace.
+
+      Tokens copied 1:1 from app/globals.css; colour only via Tier-3 --el-*;
+      shape via the element-semantic tokens. The global hero launcher shipped by
+      MOTIR-1299 is identifiably DISTINCT from this contextual button — the
+      global one is labelled "Plan with AI" as a hero pill; the contextual one
+      says "Plan"/"Re-plan" beside the item's own header actions, with the
+      Sparkles glyph + an accent-toned button (a per-item context-action, not
+      a global hero), so the two are visually separable.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf2cc;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+
+        /* Tier 3 — semantic element tokens (all colour goes through here) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-primary-foreground);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-tint-peach: #2e1e16;
+        --color-tint-rose: #2e1620;
+        --color-tint-mint: #162e20;
+        --color-tint-lavender: #20162e;
+        --color-tint-sky: #16202e;
+        --color-tint-yellow: #2e2a16;
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #f1efec;
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        padding: 30px 22px 60px;
+      }
+
+      .page-head {
+        max-width: 1150px;
+        margin: 0 auto 22px;
+      }
+      .page-head h1 {
+        font-size: 21px;
+        margin: 0 0 7px;
+        color: var(--el-text-strong);
+        letter-spacing: -0.01em;
+      }
+      .page-head p {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+        max-width: 920px;
+        margin: 0;
+      }
+      .page-head .ref {
+        color: var(--el-accent);
+        font: 600 12px var(--font-mono);
+      }
+
+      /* ── review-board sheet ── */
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 26px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .sheethead .n {
+        font: 700 11px var(--font-mono);
+        color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+      }
+      .sheetbody {
+        padding: 20px 18px 22px;
+      }
+      .note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 14px 18px 0;
+        padding: 10px 12px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        border-radius: 10px;
+      }
+      .note b { color: var(--el-text-strong); }
+      .note code {
+        font: 600 11.5px var(--font-mono);
+        color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+
+      /* ── a framed "screen" ── */
+      .screen {
+        border: 1px solid var(--el-border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px #0000000f;
+        background: var(--el-page-bg);
+      }
+      .screen.sm {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── detail-page header fragment ── */
+      .dt-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .dt-type-dot {
+        width: 20px; height: 20px; border-radius: 6px; flex: none;
+      }
+      .dt-ident {
+        font: 500 14px var(--font-mono);
+        color: var(--el-text-muted);
+      }
+      .dt-spacer { flex: 1; min-width: 0; }
+      .dt-h1 {
+        width: 100%;
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 2px 0 0;
+        line-height: 1.25;
+      }
+
+      /* ── the Plan / Re-plan contextual button ── */
+      .ctx-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--el-accent);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--el-accent);
+        font: 600 12.5px var(--font-sans);
+        cursor: default;
+        white-space: nowrap;
+        transition: background 0.15s;
+      }
+      .ctx-btn:hover {
+        background: var(--el-tint-lavender);
+      }
+      .ctx-btn svg {
+        width: 14px; height: 14px;
+      }
+      /* re-plan variant — same shape, slightly subdued to suggest "existing plan" */
+      .ctx-btn.replan {
+        border-color: var(--el-border-strong);
+        color: var(--el-text-secondary);
+      }
+      .ctx-btn.replan:hover {
+        border-color: var(--el-accent);
+        color: var(--el-accent);
+      }
+      /* tiny action-icon placeholder (watch / …) */
+      .act-icon {
+        width: 32px; height: 32px;
+        display: grid; place-items: center;
+        border-radius: 8px;
+        color: var(--el-text-muted);
+        border: 1px solid transparent;
+        cursor: default;
+      }
+
+      /* ── re-plan composer (inline, below the header row) ── */
+      .composer {
+        margin: 8px 0 0;
+        width: 100%;
+        padding: 10px 14px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: 10px;
+      }
+      .composer label {
+        display: block;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin-bottom: 6px;
+      }
+      .composer textarea {
+        width: 100%;
+        min-height: 52px;
+        border: 1px solid var(--el-border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: 13px var(--font-sans);
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        resize: vertical;
+      }
+      .composer textarea::placeholder {
+        color: var(--el-text-faint);
+      }
+      .composer .row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 7px;
+      }
+      .composer .cancel {
+        font: 500 12px var(--font-sans);
+        color: var(--el-text-muted);
+        background: none;
+        border: 0;
+        cursor: default;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .composer .submit {
+        font: 600 12px var(--font-sans);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border: 0;
+        cursor: default;
+        padding: 5px 14px;
+        border-radius: 999px;
+      }
+
+      /* ── quick-view mock (embedded frame) ── */
+      .qv-frame {
+        position: relative;
+        background: var(--el-page-bg);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .qv-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .qv-close {
+        width: 32px; height: 32px;
+        display: grid; place-items: center;
+        border-radius: 8px;
+        color: var(--el-text-muted);
+        cursor: default;
+        margin-left: 4px;
+      }
+      .qv-open-full {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 28px;
+        padding: 0 10px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font: 600 11.5px var(--font-sans);
+        border-radius: 7px;
+        white-space: nowrap;
+      }
+      .qv-body {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        min-height: 180px;
+      }
+      .qv-main {
+        padding: 18px 20px;
+        overflow: hidden;
+      }
+      .qv-rail {
+        padding: 16px;
+        background: var(--el-surface-soft);
+        border-left: 1px solid var(--el-border-soft);
+      }
+      .qv-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 10px;
+        line-height: 1.25;
+      }
+
+      /* ── workspace frame ── */
+      .ws-frame {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        height: 420px;
+      }
+      .ws-canvas {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-surface);
+      }
+      .ws-chat {
+        display: flex;
+        flex-direction: column;
+        border-left: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .ws-chat-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .ws-chat-header .dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--el-success);
+      }
+      .ws-chat-body {
+        flex: 1;
+        padding: 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+        overflow-y: auto;
+      }
+      .ws-chat-composer {
+        border-top: 1px solid var(--el-border-soft);
+        padding: 10px 14px;
+        display: flex;
+        gap: 8px;
+      }
+      .ws-chat-input {
+        flex: 1;
+        height: 36px;
+        border: 1px solid var(--el-border);
+        border-radius: 8px;
+        padding: 0 10px;
+        font-size: 12.5px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+      }
+      .ws-chat-send {
+        width: 34px; height: 34px;
+        border-radius: 8px;
+        background: var(--el-accent);
+        border: 0;
+        color: var(--el-accent-text);
+        display: grid;
+        place-items: center;
+        cursor: default;
+      }
+
+      /* ── canvas nodes (compact) ── */
+      .cnode {
+        position: absolute;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 11px;
+        padding: 10px 13px;
+        box-shadow: 0 2px 6px #0000000f;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        z-index: 2;
+      }
+      .cnode.active {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent), 0 3px 10px color-mix(in srgb, var(--el-accent) 16%, transparent);
+      }
+      .cnode.proposed {
+        border: 1.5px dashed var(--el-accent);
+        background: linear-gradient(180deg, #fbfaff, #f6f3ff);
+        box-shadow: 0 2px 10px color-mix(in srgb, var(--el-accent) 16%, transparent);
+      }
+      .cnode.locked {
+        opacity: 0.55;
+        border-style: solid;
+        background: var(--el-surface-soft);
+      }
+      .cnode .lock-icon {
+        display: inline-block;
+        margin-right: 4px;
+        font-size: 10px;
+      }
+      .cnode .row {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .cnode .kind-dot {
+        width: 10px; height: 10px; border-radius: 3px; flex: none;
+      }
+      .ctag {
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+      }
+
+      /* confirm gate bar */
+      .confirm-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        background: var(--el-page-bg);
+        border-top: 1px solid var(--el-accent);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        z-index: 10;
+      }
+      .confirm-bar .btn-confirm {
+        font: 600 11.5px var(--font-sans);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border: 0;
+        cursor: default;
+        padding: 5px 14px;
+        border-radius: 999px;
+        margin-left: auto;
+      }
+      .confirm-bar .btn-discard {
+        font: 500 11.5px var(--font-sans);
+        color: var(--el-text-muted);
+        background: none;
+        border: 1px solid var(--el-border);
+        cursor: default;
+        padding: 5px 12px;
+        border-radius: 999px;
+      }
+
+      /* diff highlight */
+      .diff-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font: 600 10px var(--font-sans);
+        color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+
+      /* opening turn bubble in chat */
+      .opening-bubble {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-bottom: 12px;
+        font-style: italic;
+      }
+
+      .key {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 10px;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .key i {
+        display: inline-block;
+        width: 10px; height: 10px;
+        border-radius: 3px;
+        flex: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-head">
+      <h1>Plan / Re-plan entrance — work-item detail page + quick-view</h1>
+      <p>
+        MOTIR-1489 · Design asset · <span class="ref">design/work-items/plan-replan-entrance</span>
+      </p>
+      <p style="margin-top:6px">
+        The contextual Plan / Re-plan entrance on BOTH the work-item detail page
+        AND the quick-view / peek modal, for EVERY work-item kind. Composes the
+        shipped surfaces — detail page (<code>detail.pen</code>), quick-view
+        (<code>quick-view.mock.html</code>), universal workspace
+        (<code>planning-workspace.mock.html</code> / 7.20.1) — and the shipped
+        <code>PlanWithAILauncher</code> (MOTIR-1299). Grounded in the workflow
+        subtasks MOTIR-908 (contextual planning job) + MOTIR-911 (confirm gate).
+      </p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      PANEL 1 — Detail page, PLAN state (item not yet planned, no children)
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>Detail page — PLAN state (item not yet planned)</h2>
+        <span class="cap">every kind · "Plan with AI" contextual button</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <!-- Detail header row (the real structure from page.tsx) -->
+          <div class="dt-header">
+            <div class="dt-type-dot" style="background:var(--el-type-story)"></div>
+            <span class="dt-ident">MOTIR-42</span>
+            <span style="font-size:12px;color:var(--el-text-muted);font-weight:500">Epic &rsaquo; Story &rsaquo;</span>
+            <div class="dt-spacer"></div>
+            <!-- The contextual Plan button — hero treatment (gradient + sparkle)
+                 but visually DISTINCT from the global TopNav launcher: it is a
+                 PER-ITEM action in the header's right cluster, labelled "Plan"
+                 not "Plan with AI", and scaled to the header row height. -->
+            <button class="ctx-btn" title="Plan this item with AI">
+              &#10022; Plan
+            </button>
+            <div class="act-icon" title="Watch">&#9733;</div>
+            <div class="act-icon" title="More…">&vellip;</div>
+            <div class="dt-h1">Build the user dashboard</div>
+          </div>
+          <!-- rest of the detail page (symbolic) — two-column body -->
+          <div style="display:grid;grid-template-columns:1fr 280px;gap:0;min-height:200px">
+            <div style="padding:20px 24px">
+              <p style="font-size:12px;font-weight:600;color:var(--el-text-muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">Description</p>
+              <p style="font-size:13.5px;color:var(--el-text-secondary);margin:0;line-height:1.55">A dashboard where users can see their projects, activity, and account
+              settings in one place. It replaces the current /dashboard stub with
+              a real multi-widget layout.</p>
+            </div>
+            <div style="padding:16px;background:var(--el-surface-soft);border-left:1px solid var(--el-border-soft);font-size:11px;color:var(--el-text-muted)">
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase">Status</div>
+              <div style="margin-bottom:12px"><span style="padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--el-tint-sky);color:var(--el-text-strong)">To Do</span></div>
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase">Priority</div>
+              <div style="margin-bottom:12px;font-size:12.5px;color:var(--el-text-secondary)">Medium</div>
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase">Assignees</div>
+              <div style="font-size:12.5px;color:var(--el-text-secondary)">Unassigned</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Placement:</b> the contextual <b>Plan</b> button sits in the detail
+          page header's right cluster (alongside the watch icon, rollup badge, and
+          &vellip; menu), BEFORE the existing <code>WatchControl</code> and
+          <code>WorkItemDetailActions</code>. It is a hero-toned pill with the
+          Sparkles icon + "Plan" label. The global header's
+          <code>PlanWithAILauncher</code> (labelled "Plan with AI") is ALREADY in
+          TopNav — this contextual button is a per-item action, visually distinct
+          (smaller, in the item's OWN header actions row, not the global chrome).
+          <b>Plan mode:</b> the item has NO children (not yet planned). Clicking
+          "Plan" opens the universal workspace scoped to this item, no opening
+          message needed — the item itself is the scope.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      PANEL 2 — Detail page, RE-PLAN state (item has children, already planned)
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>Detail page — RE-PLAN state (item already planned)</h2>
+        <span class="cap">every kind · click "Re-plan" opens the reason composer</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="dt-header">
+            <div class="dt-type-dot" style="background:var(--el-type-epic)"></div>
+            <span class="dt-ident">MOTIR-5</span>
+            <span style="font-size:12px;color:var(--el-text-muted);font-weight:500">Epic 2</span>
+            <div class="dt-spacer"></div>
+            <!-- Re-plan button — more subdued; the item already HAS a plan -->
+            <button class="ctx-btn replan" title="Re-plan this item with AI">
+              &#10022; Re-plan
+            </button>
+            <div class="act-icon" title="Watch">&#9733;</div>
+            <div class="act-icon" title="More…">&vellip;</div>
+            <div class="dt-h1">Core PM — boards, sprints &amp; backlog</div>
+            <!-- The RE-PLAN COMPOSER — appears inline below the header when
+                 "Re-plan" is clicked. The user types the opening-message reason,
+                 which is sent as the first chat turn (natural language, consumed
+                 by MOTIR-908's intent classification). -->
+            <div class="composer">
+              <label for="rp-detail">What's wrong? What should change?</label>
+              <textarea id="rp-detail" placeholder="e.g. The &quot;board swimlane&quot; story is too big — break it into per-view subtasks. Also add a &quot;bulk move&quot; subtask under sprint management."></textarea>
+              <div class="row">
+                <button class="cancel">Cancel</button>
+                <button class="submit">&#10022; Re-plan</button>
+              </div>
+            </div>
+          </div>
+          <!-- rest of detail page with children visible -->
+          <div style="display:grid;grid-template-columns:1fr 280px;gap:0;min-height:200px">
+            <div style="padding:20px 24px">
+              <p style="font-size:12px;font-weight:600;color:var(--el-text-muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">Description</p>
+              <p style="font-size:13.5px;color:var(--el-text-secondary);margin:0;line-height:1.55">The full Kanban + Scrum board, backlog management, and sprint planning
+              surfaces — the PM core's primary work-management views.</p>
+              <p style="font-size:12px;font-weight:600;color:var(--el-text-muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px">Children <span style="font-weight:400;text-transform:none;letter-spacing:0">(3)</span></p>
+              <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--el-text-secondary)">
+                <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--el-type-story);flex:none"></span> <span style="font:500 11px var(--font-mono);color:var(--el-text-muted)">MOTIR-6</span> Kanban board</div>
+                <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--el-type-story);flex:none"></span> <span style="font:500 11px var(--font-mono);color:var(--el-text-muted)">MOTIR-7</span> Scrum sprint board</div>
+                <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--el-type-story);flex:none"></span> <span style="font:500 11px var(--font-mono);color:var(--el-text-muted)">MOTIR-8</span> Backlog view</div>
+              </div>
+            </div>
+            <div style="padding:16px;background:var(--el-surface-soft);border-left:1px solid var(--el-border-soft);font-size:11px;color:var(--el-text-muted)">
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase">Status</div>
+              <div style="margin-bottom:12px"><span style="padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--el-tint-lavender);color:var(--el-text-strong)">Planned</span></div>
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase">Story Points</div>
+              <div style="margin-bottom:12px;font-size:12.5px;color:var(--el-text-secondary)">21</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Re-plan mode:</b> the item already HAS children (a plan exists).
+          The contextual button reads <b>"Re-plan"</b> (not "Plan") and is more
+          subdued (neutral border, secondary text) — it is an edit action on an
+          existing plan. Clicking it opens the <b>inline composer</b> (the text
+          area drawn above) that captures the opening-message reason as a chat
+          turn. The composer lives in the header (it pushes the rest of the page
+          down — the header grows). <b>The reason is the opening chat turn</b>
+          — there is NO structured <code>reason</code> param; MOTIR-908's intent
+          classification consumes it. On submit, the universal workspace opens
+          with the reason as the first chat message.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      PANEL 3 — Quick-view modal, PLAN state
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>Quick-view / peek modal — PLAN state</h2>
+        <span class="cap">every kind · button in the modal header bar</span>
+      </div>
+      <div class="sheetbody">
+        <!-- Quick-view frame (mimics the shipped IssueQuickViewPanel +
+             IssueQuickView — Radix Dialog, size xl, header bar + two-column body) -->
+        <div class="qv-frame" style="max-width:800px;margin:0 auto;border:1px solid var(--el-border);box-shadow:var(--shadow-modal)">
+          <!-- Modal header bar -->
+          <div class="qv-header">
+            <div style="width:18px;height:18px;border-radius:5px;background:var(--el-type-bug);flex:none"></div>
+            <span style="font:500 13px var(--font-mono);color:var(--el-link);cursor:default">MOTIR-99</span>
+            <span style="padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;background:var(--el-tint-rose);color:var(--el-text-strong)">To Do</span>
+            <div style="flex:1"></div>
+            <!-- The contextual Plan button in the quick-view header bar —
+                 sits between the status pill and "Open full page" -->
+            <button class="ctx-btn" style="height:28px;font-size:11px;padding:0 10px" title="Plan this item with AI">
+              &#10022; Plan
+            </button>
+            <span class="qv-open-full">Open full page &rarr;</span>
+            <div class="qv-close">&times;</div>
+          </div>
+          <div class="qv-body">
+            <div class="qv-main">
+              <h2 class="qv-title" style="margin-top:0">Sign-up flow crashes on email with plus-address</h2>
+              <p style="font-size:12px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px">Description</p>
+              <p style="font-size:13px;color:var(--el-text-secondary);margin:0;line-height:1.5">Users who sign up with an email like <code style="font-size:12px;background:var(--el-surface-soft);padding:1px 5px;border-radius:4px">user+tag@domain.com</code>
+              get a 500 error during account creation. The plus-sign is not being
+              URL-decoded before the verification lookup.</p>
+            </div>
+            <div class="qv-rail">
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase;font-size:10.5px">Status</div>
+              <div style="margin-bottom:12px"><span style="padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;background:var(--el-tint-rose);color:var(--el-text-strong)">To Do</span></div>
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase;font-size:10.5px">Priority</div>
+              <div style="font-size:12.5px;color:var(--el-text-secondary)">High</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Placement in the quick-view:</b> the <b>"Plan"</b> button sits in
+          the modal's header bar, between the status pill and the "Open full
+          page" link. It is the same contextual accent button as on the detail
+          page, sized down to match the header bar height. <b>Plan mode:</b>
+          no children. Clicking "Plan" launches the full universal workspace
+          (the modal closes; the workspace takes over — a handoff from the peek
+          to the planning surface).
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      PANEL 4 — Quick-view modal, RE-PLAN state (inline composer)
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>Quick-view / peek modal — RE-PLAN state</h2>
+        <span class="cap">every kind · inline composer INSIDE the Radix Dialog</span>
+      </div>
+      <div class="sheetbody">
+        <div class="qv-frame" style="max-width:800px;margin:0 auto;border:1px solid var(--el-border);box-shadow:var(--shadow-modal)">
+          <div class="qv-header">
+            <div style="width:18px;height:18px;border-radius:5px;background:var(--el-type-story);flex:none"></div>
+            <span style="font:500 13px var(--font-mono);color:var(--el-link);cursor:default">MOTIR-42</span>
+            <span style="padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;background:var(--el-tint-lavender);color:var(--el-text-strong)">Planned</span>
+            <div style="flex:1"></div>
+            <!-- Re-plan button — more subdued, same as detail page Panel 2 -->
+            <button class="ctx-btn replan" style="height:28px;font-size:11px;padding:0 10px" title="Re-plan this item with AI">
+              &#10022; Re-plan
+            </button>
+            <span class="qv-open-full">Open full page &rarr;</span>
+            <div class="qv-close">&times;</div>
+          </div>
+          <!-- The RE-PLAN COMPOSER INSIDE the quick-view modal.
+               It sits between the header bar and the two-column body.
+               The modal RESIZES to accommodate it — this is the RESIZING state
+               drawn. Portaled to the DIALOG's own container (not body), so it
+               stays inside the focus trap and never clips (the known
+               dropdown-in-dialog clipping pitfall from notes.html #31). -->
+          <div style="margin:0;padding:10px 20px 12px;border-bottom:1px solid var(--el-border-soft);background:var(--el-surface-soft)">
+            <label style="display:block;font-size:11px;font-weight:600;color:var(--el-text-secondary);margin-bottom:5px">
+              What's wrong? What should change?
+            </label>
+            <textarea style="width:100%;min-height:48px;border:1px solid var(--el-border);border-radius:8px;padding:7px 10px;font:12.5px var(--font-sans);color:var(--el-text);background:var(--el-page-bg);resize:vertical;box-sizing:border-box" placeholder="e.g. Split the auth service story into OAuth, email, and session management subtasks — it's too big as one unit."></textarea>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px">
+              <button style="font:500 11.5px var(--font-sans);color:var(--el-text-muted);background:none;border:0;cursor:default;padding:3px 8px;border-radius:6px">Cancel</button>
+              <button style="font:600 11.5px var(--font-sans);color:var(--el-accent-text);background:var(--el-accent);border:0;cursor:default;padding:5px 12px;border-radius:999px">&#10022; Re-plan</button>
+            </div>
+          </div>
+          <div class="qv-body">
+            <div class="qv-main">
+              <h2 class="qv-title" style="margin-top:0">Build the user dashboard</h2>
+              <p style="font-size:12px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px">Description</p>
+              <p style="font-size:13px;color:var(--el-text-secondary);margin:0;line-height:1.5">A dashboard where users can see their projects, activity, and account
+              settings in one place.</p>
+            </div>
+            <div class="qv-rail">
+              <div style="margin-bottom:10px;font-weight:600;color:var(--el-text-faint);text-transform:uppercase;font-size:10.5px">Status</div>
+              <div style="margin-bottom:12px"><span style="padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;background:var(--el-tint-lavender);color:var(--el-text-strong)">Planned</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Re-plan composer inside the quick-view (Radix Dialog):</b> the
+          composer renders INSIDE the dialog's portal container (not portaled to
+          document.body), below the header bar and above the two-column body.
+          The modal <b>resizes vertically</b> to fit it — a brief height
+          transition (the RESIZING state is drawn here). Because it lives in the
+          dialog's own portal, it stays inside the focus trap and never clips
+          behind the dialog chrome (the dropdown-in-dialog clipping pitfall,
+          <code>notes.html</code> #31 family). The composer is the SAME component
+          on both the detail page and the quick-view — one reusable
+          <code>ReplanReasonComposer</code>.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      PANEL 5 — The SCOPED universal workspace (what Plan/Re-plan opens)
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>Scoped universal workspace — what Plan / Re-plan opens</h2>
+        <span class="cap">map left + chat right · item-neighborhood-scoped · diff/confirm states</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen" style="margin-bottom:16px">
+          <div class="ws-frame">
+            <!-- Canvas pane — composed shipped WorkItemCanvas (MOTIR-1194),
+                 scoped to the item neighborhood (item + parent + siblings).
+                 The item is HIGHLIGHTED (active ring); siblings are visible -->
+            <div class="ws-canvas">
+              <!-- sibling node -->
+              <div class="cnode" style="top:20px;left:30px;width:180px">
+                <div class="row"><div class="kind-dot" style="background:var(--el-type-story)"></div>MOTIR-6</div>
+                <div class="ctag">Kanban board · To Do</div>
+              </div>
+              <!-- the focal item — ACTIVE (accent ring) -->
+              <div class="cnode active" style="top:20px;left:250px;width:180px">
+                <div class="row"><div class="kind-dot" style="background:var(--el-type-story)"></div>MOTIR-7</div>
+                <div class="ctag">Scrum sprint board · To Do</div>
+              </div>
+              <!-- another sibling -->
+              <div class="cnode" style="top:20px;left:470px;width:180px">
+                <div class="row"><div class="kind-dot" style="background:var(--el-type-story)"></div>MOTIR-8</div>
+                <div class="ctag">Backlog view · To Do</div>
+              </div>
+              <!-- parent node (ghost) -->
+              <div class="cnode" style="top:100px;left:250px;width:180px;opacity:0.7">
+                <div class="row"><div class="kind-dot" style="background:var(--el-type-epic)"></div>MOTIR-5</div>
+                <div class="ctag">Epic 2 · Core PM · Planned</div>
+              </div>
+
+              <!-- proposed new node (from Plan/Re-plan output) — DASHED + accent glow -->
+              <div class="cnode proposed" style="top:180px;left:250px;width:180px">
+                <div class="row"><div class="kind-dot" style="background:var(--el-type-story)"></div><span class="diff-badge">NEW</span> Sprint mgmt</div>
+                <div class="ctag">story · proposed</div>
+              </div>
+
+              <!-- done/shipped node — LOCKED (immutable, Re-plan mode) -->
+              <div class="cnode locked" style="top:100px;left:470px;width:180px">
+                <div class="row"><span class="lock-icon">&#128274;</span><div class="kind-dot" style="background:var(--el-type-story)"></div>MOTIR-4</div>
+                <div class="ctag">Auth system · Done</div>
+              </div>
+
+              <!-- confirm gate bar (at the bottom) -->
+              <div class="confirm-bar">
+                <span class="diff-badge">1 change</span>
+                <span>1 new story proposed — review the diff on the canvas.</span>
+                <button class="btn-discard">Discard</button>
+                <button class="btn-confirm">Confirm &amp; persist</button>
+              </div>
+            </div>
+            <!-- Chat rail — the shipped chat rail, scoped to the item -->
+            <div class="ws-chat">
+              <div class="ws-chat-header">
+                <span class="dot"></span> Motir AI
+                <span style="font-size:11px;color:var(--el-text-muted);font-weight:400;margin-left:auto">scoped to MOTIR-7</span>
+              </div>
+              <div class="ws-chat-body">
+                <!-- Opening turn (Re-plan mode) — the user's reason appears as the
+                     first chat turn, consumed by MOTIR-908 intent classification -->
+                <p style="font-size:11px;font-weight:600;color:var(--el-text-muted);text-transform:uppercase;margin:0 0 6px">Opening turn</p>
+                <div class="opening-bubble">
+                  The scrum board story is too big — split it into per-view subtasks
+                  (backlog · active sprint · completed) and add a sprint-switcher row.
+                </div>
+                <p style="font-size:11px;font-weight:600;color:var(--el-text-muted);text-transform:uppercase;margin:12px 0 6px">Motir AI</p>
+                <div style="background:var(--el-tint-lavender);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--el-text);line-height:1.5;margin-bottom:10px">
+                  I'll re-plan <b>MOTIR-7</b> with the scope you described. I'm
+                  proposing one new story under it — review the diff on the canvas
+                  and confirm when ready.
+                </div>
+              </div>
+              <div class="ws-chat-composer">
+                <input class="ws-chat-input" placeholder="Refine the plan…" value="Make the sprint-switcher a dropdown in the board header" />
+                <div class="ws-chat-send">&uarr;</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>The scoped universal workspace composes the shipped
+          <code>PlanningWorkspace</code> (MOTIR-1193) + <code>WorkItemCanvas</code>
+          (MOTIR-1194) — it does NOT redraw either.</b>
+          <span style="display:block;margin-top:6px">
+            <b>Map (left):</b> the canvas is scoped to the item's NEIGHBORHOOD —
+            the item itself (highlighted with an active ring), its parent (ghost),
+            its siblings — using the shipped <code>WorkItemCanvas</code>'s
+            presentational contract (forest + edges in, data-driven).
+            <b>Proposed changes</b> render as DASHED nodes with the accent glow
+            (the <code>.proposed</code> style from 7.20.1).
+            <b>Done work</b> is LOCKED — a lock icon, reduced opacity, and a
+            solid border (no interaction). The planner (MOTIR-908) locks done
+            nodes; the confirmation gate (MOTIR-911) rejects any delta that
+            touches a locked node.
+          </span>
+          <span style="display:block;margin-top:4px">
+            <b>Chat (right):</b> the shipped chat rail, with the item scope shown
+            in the header. <b>Re-plan mode:</b> the opening turn (the user's
+            reason text) is shown as the first chat bubble. The AI responds with
+            a summary of what it's planning. <b>Plan mode:</b> no opening turn —
+            the AI's first message is "Planning MOTIR-42…" (the "Planning…"
+            state), then "Here's a proposed plan…".
+          </span>
+          <span style="display:block;margin-top:4px">
+            <b>Confirm gate (bottom bar):</b> the <code>MOTIR-911</code> gate
+            renders as a full-width bar at the bottom of the canvas. It shows
+            the count of pending changes, a "Discard" button, and a
+            "Confirm &amp; persist" button. The gate IS the confirm surface —
+            there is NO separate modal or page. Empty delta → bar shows "No
+            changes to apply" and the confirm button is disabled.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      PANEL 6 — States (empty / loading / error)
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>States — loading · error · empty (no plan context)</h2>
+        <span class="cap">the entrance itself is always present; these are the workspace states</span>
+      </div>
+      <div class="sheetbody">
+        <!-- Loading state — "Planning…" / "Resuming…" -->
+        <div class="screen" style="margin-bottom:14px">
+          <div class="ws-frame" style="height:200px">
+            <div class="ws-canvas">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px">
+                <div style="width:32px;height:32px;border:3px solid var(--el-border-soft);border-top-color:var(--el-accent);border-radius:50%;animation:spin 0.8s linear infinite"></div>
+                <span style="font-size:13px;color:var(--el-text-muted)">Planning MOTIR-7…</span>
+              </div>
+            </div>
+            <div class="ws-chat">
+              <div class="ws-chat-header"><span class="dot"></span> Motir AI</div>
+              <div class="ws-chat-body" style="color:var(--el-text-muted)">
+                <div style="display:flex;gap:6px;align-items:center"><span style="width:6px;height:6px;border-radius:50%;background:var(--el-accent);animation:pulse 1s infinite"></span>Analysing item context…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p style="margin:0 0 10px;font-size:12px;color:var(--el-text-muted)"><b>Loading:</b> "Planning…" / "Resuming…" spinner on the canvas + animated "Analysing…" in the chat.</p>
+
+        <!-- Error state -->
+        <div class="screen" style="margin-bottom:14px">
+          <div class="ws-frame" style="height:200px">
+            <div class="ws-canvas">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;padding:20px;text-align:center">
+                <span style="font-size:28px">&#9888;</span>
+                <span style="font-size:13.5px;font-weight:600;color:var(--el-text)">Planning failed</span>
+                <span style="font-size:12px;color:var(--el-text-secondary);max-width:320px">The AI planner couldn't complete. This can happen if the item description is too sparse — try adding more detail and re-plan.</span>
+              </div>
+            </div>
+            <div class="ws-chat">
+              <div class="ws-chat-header"><span class="dot" style="background:var(--el-danger)"></span> Motir AI</div>
+              <div class="ws-chat-body" style="color:var(--el-text-muted)">
+                <div style="background:var(--el-tint-rose);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--el-danger);line-height:1.5">
+                  Sorry — I couldn't generate a plan for this item. The description
+                  might be too short. Try adding more detail about what you want to
+                  build and I'll try again.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p style="margin:0 0 10px;font-size:12px;color:var(--el-text-muted)"><b>Error:</b> "Planning failed" on the canvas + an error bubble in the chat with a recovery hint.</p>
+
+        <!-- Empty / no-context state (the item is brand-new, no description) -->
+        <div class="screen">
+          <div class="ws-frame" style="height:200px">
+            <div class="ws-canvas">
+              <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:8px;padding:20px;text-align:center">
+                <span style="font-size:28px">&#10022;</span>
+                <span style="font-size:13.5px;font-weight:600;color:var(--el-text)">Ready to plan</span>
+                <span style="font-size:12px;color:var(--el-text-secondary);max-width:320px">Describe what you want to build in the chat on the right, or use the opening reason to guide the re-plan.</span>
+              </div>
+            </div>
+            <div class="ws-chat">
+              <div class="ws-chat-header"><span class="dot"></span> Motir AI</div>
+              <div class="ws-chat-body" style="color:var(--el-text-muted)">
+                <div style="background:var(--el-tint-sky);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--el-text-secondary);line-height:1.5">
+                  I'm ready to help plan this item. Tell me what you're building
+                  and I'll propose a plan. (The item's description and title will
+                  be used as context.)
+                </div>
+              </div>
+              <div class="ws-chat-composer">
+                <input class="ws-chat-input" placeholder="Describe what to plan…" />
+                <div class="ws-chat-send">&uarr;</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p style="margin:12px 0 0;font-size:12px;color:var(--el-text-muted)"><b>Empty / no-context:</b> the item is brand-new or has minimal description. The canvas shows "Ready to plan" and the chat prompts for input.</p>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+      Footer — access-path assertion
+      ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">&#10003;</span>
+        <h2>Access path — the entrance on EVERY kind</h2>
+        <span class="cap">epic · story · task · bug · subtask — both surfaces</span>
+      </div>
+      <div class="sheetbody">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;color:var(--el-text-secondary);line-height:1.6">
+          <thead>
+            <tr style="text-align:left;border-bottom:1px solid var(--el-border)">
+              <th style="padding:8px 10px;font-weight:600;color:var(--el-text-strong)">Kind</th>
+              <th style="padding:8px 10px;font-weight:600;color:var(--el-text-strong)">Detail page entrance</th>
+              <th style="padding:8px 10px;font-weight:600;color:var(--el-text-strong)">Quick-view entrance</th>
+              <th style="padding:8px 10px;font-weight:600;color:var(--el-text-strong)">Plan or Re-plan?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--el-border-soft)">
+              <td style="padding:8px 10px"><span class="key"><i style="background:var(--el-type-epic)"></i>Epic</span></td>
+              <td style="padding:8px 10px">Header right cluster, after rollup badge</td>
+              <td style="padding:8px 10px">Header bar, before "Open full page"</td>
+              <td style="padding:8px 10px">Re-plan (epics always have children)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--el-border-soft)">
+              <td style="padding:8px 10px"><span class="key"><i style="background:var(--el-type-story)"></i>Story</span></td>
+              <td style="padding:8px 10px">Header right cluster, after rollup badge</td>
+              <td style="padding:8px 10px">Header bar, before "Open full page"</td>
+              <td style="padding:8px 10px">Plan (no children) or Re-plan (has children)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--el-border-soft)">
+              <td style="padding:8px 10px"><span class="key"><i style="background:var(--el-type-task)"></i>Task</span></td>
+              <td style="padding:8px 10px">Header right cluster</td>
+              <td style="padding:8px 10px">Header bar, before "Open full page"</td>
+              <td style="padding:8px 10px">Plan (no children) or Re-plan (has children)</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--el-border-soft)">
+              <td style="padding:8px 10px"><span class="key"><i style="background:var(--el-type-bug)"></i>Bug</span></td>
+              <td style="padding:8px 10px">Header right cluster</td>
+              <td style="padding:8px 10px">Header bar, before "Open full page"</td>
+              <td style="padding:8px 10px">Plan (no children) or Re-plan (has children)</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 10px"><span class="key"><i style="background:var(--el-type-subtask)"></i>Subtask</span></td>
+              <td style="padding:8px 10px">Header right cluster</td>
+              <td style="padding:8px 10px">Header bar, before "Open full page"</td>
+              <td style="padding:8px 10px">Plan (the subtask itself is the anchor — scoped to its parent's subtree)</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note" style="margin-top:12px">
+          <b>The entrance is the SAME affordance for every kind.</b> The Plan /
+          Re-plan label is gated on whether the item has children (Plan = no
+          children, Re-plan = children exist). The global
+          <code>PlanWithAILauncher</code> (MOTIR-1299, the hero pill in TopNav)
+          is ALREADY present on every screen — this contextual button is the
+          per-item entrance that opens the workspace SCOPED to this item's
+          neighborhood, distinct from the global launcher's project-level scope.
+        </div>
+      </div>
+    </div>
+
+    <style>
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    </style>
+  </body>
+</html>

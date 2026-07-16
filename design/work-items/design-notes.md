@@ -19,6 +19,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)              | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below.                                                                                                                                                                                                                                                                                          |
 | **Draft explanation with AI**                    | **`draft-with-ai.mock.html`** + `draft-with-ai.png` | The _Draft with AI_ INTERACTION for `explanationMd`, on BOTH the create modal and the detail page. Drawn against the SHIPPED components (`CreateIssueModal` disclosure + min `MarkdownEditor` + the existing disabled secondary "Draft with AI" button · `IssueExplanation` read-only card · `EditIssueForm`), NOT the legacy pens. Specifies streaming (SSE, 8.8.11), the draft landing in the editor (no accept/discard gate), `ai_draft` / `user_edited` source signalling, the cloud-gate, and the error state. Story 8.8 · 8.8.6 (MOTIR-1090). Gates 8.8.12 (MOTIR-1096). See below. |
 | **Work-item provenance on the detail rail**      | **`provenance.mock.html`** + `provenance.png`       | `detail.pen`/`CoreFieldsPanel` draw no provenance surface — two new READ-ONLY rail `FieldCard`s (Planning · Implementation), each a `source · harness · model` triple + the "—" unknown state. Composes the shipped rail (does not redraw); source = a tinted `Pill`-chip (six values). Story MOTIR-1685 · MOTIR-1688 (design). Gates MOTIR-1693. See below.                                                                                                                                                                                                                              |
+| **Plan / Re-plan entrance (detail + quick-view)** | **`plan-replan-entrance.mock.html`** + `plan-replan-entrance.png` | The contextual Plan / Re-plan entrance on BOTH the work-item detail page AND the quick-view / peek modal, for EVERY kind. COMPOSES the shipped surfaces — detail page (`detail.pen`), quick-view (`quick-view.mock.html`), universal workspace (`planning-workspace.mock.html` / 7.20.1), and `PlanWithAILauncher` (MOTIR-1299). **Plan** (no children): hero-toned "Plan" button opens the universal workspace directly. **Re-plan** (has children): "Re-plan" button opens an inline composer to capture the opening-message reason (a chat turn, consumed by MOTIR-908). The Re-plan composer renders INSIDE the quick-view's Radix Dialog portal container (never clips). Done work is shown LOCKED on the canvas. Confirm gate (MOTIR-911) renders as a bottom bar. Six panels: Plan detail · Re-plan detail + composer · Plan quick-view · Re-plan quick-view + composer · scoped workspace (map+chat, diff/confirm) · states (loading/error/empty). Story 7.12 · MOTIR-1489 (design). Gates MOTIR-910. See below. |
 
 ---
 
@@ -3835,3 +3836,124 @@ The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `provenance.mock.html` (source of truth) · `provenance.png` (full-page export).
 Rendered with Playwright chromium (full-page, light, `deviceScaleFactor: 2`,
 ~1200px wide); `prettier --check` clean.
+
+---
+
+## Plan / Re-plan entrance on detail page + quick-view (Story 7.12 · MOTIR-1489)
+
+`detail.pen` / `detail.png` and `quick-view.mock.html` draw no contextual
+Plan / Re-plan entrance on the work-item surface. This HTML mockup
+(`plan-replan-entrance.mock.html`, built from the live `--el-*` tokens + the
+shipped primitives) is the design asset for that surface. The code subtask
+(MOTIR-910) composes the same primitives.
+
+### Context
+
+The **global hero launcher** (`PlanWithAILauncher`, MOTIR-1299) is already
+shipped in `TopNav` — the hero gradient pill labelled "Plan with AI" + the
+floating "M" orb, both summonable from every screen (design
+`planning-workspace.mock.html` sheet 4, 7.20.1). It opens the universal
+`PlanningWorkspace` in the surface-appropriate mode (project → augment/re-plan
+or generation; roadmap → read+augment; work-item → contextual planning scoped
+to that item). The global entrance is context-aware — it moves with the user
+across screens.
+
+**This card designs the PER-ITEM contextual entrance** — the "Plan" / "Re-plan"
+button that sits ON the work-item detail page AND in the quick-view modal,
+opening the universal workspace SCOPED to THIS item's neighborhood. The global
+launcher already covers the "summon from anywhere" use case; the contextual
+button gives a dedicated per-item door that feels native to the item surface.
+
+### Placement
+
+**Detail page:** the contextual button sits in the header's right cluster
+(the `ml-auto flex items-center gap-3` div in `page.tsx`), BEFORE the existing
+`WatchControl` and `WorkItemDetailActions`. It is a hero-toned pill with the
+Sparkles icon + label, scaled to the header row height (32px). The global
+TopNav launcher is above it; the two are visually separable — the global one is
+a gradient pill at full header height, the contextual one is a per-item action
+among Watch / More-actions.
+
+**Quick-view modal:** the same button sits in the modal's header bar, between
+the `StatusValue` pill and the "Open full page" link. It scales down to match
+the header bar height (28px). Activating Plan/Re-plan from the quick-view
+CLOSES the modal (a handoff to the full-screen planning workspace).
+
+### Modes
+
+**Plan** (item has NO children — not yet planned):
+- Button label: **"Plan"** with the Sparkles glyph, accent-toned.
+- Click opens the universal workspace directly — the item's own description
+  and title are the scope; no opening reason needed. The AI's first message
+  is "Planning [identifier]…".
+
+**Re-plan** (item HAS children — a plan already exists):
+- Button label: **"Re-plan"**, more subdued (neutral border, secondary text).
+  It is an edit action on an existing plan.
+- Click opens an **inline composer** — a text area with the prompt
+  _"What's wrong? What should change?"_ — that captures the opening-message
+  reason as natural language. On submit, the reason becomes the first chat
+  turn in the universal workspace; MOTIR-908's intent classification consumes
+  it to dispatch the appropriate `replan` job. There is NO structured
+  `reason` param — the reason is the opening turn text.
+- The composer renders INSIDE the quick-view's Radix Dialog portal container
+  (never portaled to `document.body`), so it stays inside the focus trap and
+  never clips behind the dialog chrome — the known dropdown-in-dialog clipping
+  pitfall (`notes.html` #31 family).
+- The composer is the SAME reusable component on both the detail page and the
+  quick-view (`ReplanReasonComposer`).
+
+### The scoped universal workspace (what opens)
+
+The workspace is the shipped `PlanningWorkspace` (MOTIR-1193 / 7.20.1) +
+`WorkItemCanvas` (MOTIR-1194) — **composed, never redrawn**:
+- **Map (left):** the canvas scoped to the item's NEIGHBORHOOD — the item
+  itself (active ring), its parent (ghost), its siblings. Proposed changes
+  render as DASHED nodes with the accent glow (the `.proposed` style from
+  7.20.1). **Done work is LOCKED** — a lock icon, reduced opacity, solid
+  border. The planner (MOTIR-908) locks done nodes; the confirm gate
+  (MOTIR-911) rejects any delta that touches a locked node.
+- **Chat (right):** the shipped chat rail, with the item scope in the header.
+  Re-plan mode: the opening turn is the first chat bubble. Plan mode: no
+  opening turn. The AI responds with a summary.
+- **Confirm gate (bottom bar):** the MOTIR-911 gate renders as a full-width
+  bar at the canvas bottom: count of pending changes, "Discard", and
+  "Confirm & persist". The gate IS the confirm surface — no separate modal.
+  Empty delta → bar shows "No changes to apply" (confirm disabled).
+
+### States in the mockup
+
+1. **Detail page — Plan** (item not yet planned, no children)
+2. **Detail page — Re-plan** (item has children; click opens the composer)
+3. **Quick-view — Plan** (item not yet planned; button in the modal header)
+4. **Quick-view — Re-plan** (item has children; inline composer INSIDE the
+   Radix Dialog — the resizing state is drawn)
+5. **Scoped universal workspace** — map+chat, item-neighborhood-scoped, with
+   proposed (dashed) + locked (done) nodes, the confirm gate bar, and the
+   opening turn as a chat bubble
+6. **States** — loading ("Planning…" / "Resuming…"), error ("Planning
+   failed" + recovery hint), empty ("Ready to plan" with prompt to describe)
+
+### Tokens / primitives
+
+- Colour via `--el-*` only; the contextual button uses `--el-accent` (text
+  colour, transparent fill) to be visually related to but distinct from the
+  global launcher's `--el-accent` gradient fill.
+- Shape via element-semantic tokens: `--radius-badge` for the pill,
+  `--height-control` / `--spacing-control-x/y`.
+- The Sparkles glyph with a subtle accent filter; the Re-plan composer uses
+  the shipped `Input`/`Button` token sizes.
+- The canvas pane is the shipped `WorkItemCanvas` (MOTIR-1194, design
+  MOTIR-1009 @ `design/roadmap/`) composed 1:1 — the workspace does NOT
+  redesign the canvas.
+- AA contrast holds: the Plan button's accent text sits on transparent bg
+  (the parent page surface is the bg → `--el-accent` on `--el-page-bg` is AA
+  at ≥ 14px/12px bold). The Re-plan button uses `--el-text-secondary` on
+  transparent — also AA.
+
+### Deliverable
+
+The three-file set under `design/work-items/`: this `design-notes.md` section ·
+`plan-replan-entrance.mock.html` (source of truth) · `plan-replan-entrance.png`
+(full-page export). Rendered with Playwright chromium (full-page, light,
+`deviceScaleFactor: 2`, ~1200px wide); `prettier --check` clean.
