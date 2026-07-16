@@ -4,6 +4,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ProjectContext } from '@/lib/projects';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -76,6 +77,7 @@ const MIGRATE_DISCOVERY_PROMPT =
 const EXIT_REASON: Record<MigrateOnboardingStep, string> = {
   connect: 'no repository has been connected yet.',
   index: 'the code graph is still indexing.',
+  import: 'no import has been completed or skipped yet.',
   audit_convention: 'the coding convention has not been derived yet.',
   discovery: 'the discovery step has not produced direction docs yet.',
   generate: 'the plan has not finished generating yet.',
@@ -140,11 +142,10 @@ const CONNECT: StepWiring = {
   },
 };
 
-/** index → audit_convention. Waits on the code-graph index job's terminal state
- *  (the job_run ledger) — does NOT index (the grant flow enqueued it). */
+/** index → import. The index completed — advance to the optional import step. */
 const INDEX: StepWiring = {
   from: 'index',
-  to: 'audit_convention',
+  to: 'import',
   async checkExit({ run, ctx }) {
     if (run.codeGraphReady) return { ready: true };
     if (!run.connectedRepoRef) return { ready: false };
@@ -155,6 +156,28 @@ const INDEX: StepWiring = {
     );
     if (!succeeded) return { ready: false };
     return { ready: true, patch: { codeGraphReady: true } };
+  },
+};
+
+/** import → audit_convention. OPTIONAL step — exit when the user either completed
+ *  an import (a succeeded/partially_failed `Import` row exists for this project)
+ *  or explicitly skipped it. No kick — the user does the import in the standalone
+ *  import wizard or skips; this step only polls the outcome. */
+const IMPORT: StepWiring = {
+  from: 'import',
+  to: 'audit_convention',
+  async checkExit({ run, ctx }) {
+    // Already marked done (skip or completion persisted on a prior advance).
+    if (run.importSkipped || run.importCompleted) return { ready: true };
+    // Poll: has any import completed for this project?
+    const completed = await importRepository.findCompletedForProject(
+      run.projectId,
+      ctx.workspaceId,
+    );
+    if (completed) {
+      return { ready: true, patch: { importCompleted: true } };
+    }
+    return { ready: false };
   },
 };
 
@@ -234,7 +257,26 @@ const GENERATE: StepWiring = {
       );
     }
     if (run.generateJobId) return; // idempotent — one generation per run
-    const { jobId } = await aiGenerationService.startGeneration(pctx, {});
+    // Reconcile: when the optional import step completed, enrich the prompt with
+    // imported-work-item context so the code-aware plan de-dupes against the
+    // imported backlog (MOTIR-1643).
+    const genInput: Parameters<typeof aiGenerationService.startGeneration>[1] = {};
+    if (run.importCompleted) {
+      const completedImport = await importRepository.findCompletedForProject(
+        run.projectId,
+        pctx.workspaceId,
+      );
+      if (completedImport) {
+        genInput.prompt =
+          `This project has work items imported from ${completedImport.source}. ` +
+          `The existing backlog already tracks ${completedImport.createdCount} items ` +
+          `(with ${completedImport.updatedCount} updated and ${completedImport.skippedCount} skipped). ` +
+          `Generate a plan that complements the imported backlog — de-duplicate: ` +
+          `do NOT propose work items that are already covered by an imported item. ` +
+          `Focus on the gaps the codebase implies.`;
+      }
+    }
+    const { jobId } = await aiGenerationService.startGeneration(pctx, genInput);
     await withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: run.projectId },
       (tx) => migrateOnboardingRepository.update(run.id, { generateJobId: jobId }, tx),
@@ -395,9 +437,14 @@ export const migrateOnboardingService = {
     return advance(id, ctx, CONNECT);
   },
 
-  /** index → audit_convention. Exit: the repo is indexed into the code graph. */
+  /** index → import. Exit: the code graph index completed. */
   advanceFromIndex(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
     return advance(id, ctx, INDEX);
+  },
+
+  /** import → audit_convention. Exit: an import completed or was skipped. */
+  advanceFromImport(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    return advance(id, ctx, IMPORT);
   },
 
   /** audit_convention → discovery. Exit: the coding convention was derived
@@ -422,6 +469,35 @@ export const migrateOnboardingService = {
   },
 
   /**
+   * Skip the OPTIONAL import step — transition `import → audit_convention`,
+   * setting `importSkipped` to true. Only valid when the run is at the `import`
+   * step; rejects with `MigrateOnboardingStepError` otherwise. Idempotent: a run
+   * that already skipped is a no-op (returns the current row as-is).
+   */
+  async skipImport(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
+    const existing = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    if (!existing) throw new MigrateOnboardingNotFoundError(id);
+    await projectAccessService.assertCanEdit(existing.projectId, ctx);
+    if (existing.step !== 'import') {
+      throw new MigrateOnboardingStepError(id, existing.step, 'import');
+    }
+    // Already skipped or already past import — idempotent no-op.
+    if (existing.importSkipped || existing.importCompleted) {
+      return toMigrateOnboardingDto(existing);
+    }
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
+      (tx) =>
+        migrateOnboardingRepository.update(
+          id,
+          { importSkipped: true, step: 'audit_convention' as MigrateOnboardingStep },
+          tx,
+        ),
+    );
+    return toMigrateOnboardingDto(row);
+  },
+
+  /**
    * Attempt the NEXT transition from wherever the run currently sits — the single
    * entry point the resumable `…/advance` route calls (it holds a run id, not a
    * step). Dispatches to the step-specific transition; a `done` run has nothing
@@ -436,6 +512,8 @@ export const migrateOnboardingService = {
         return advance(id, ctx, CONNECT);
       case 'index':
         return advance(id, ctx, INDEX);
+      case 'import':
+        return advance(id, ctx, IMPORT);
       case 'audit_convention':
         return advance(id, ctx, AUDIT_CONVENTION);
       case 'discovery':

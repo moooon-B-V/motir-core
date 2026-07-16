@@ -3681,6 +3681,12 @@ model MigrateOnboarding {
   discoveryJobId       String?                 @map("discovery_job_id")
   /// The opaque motir-ai code-aware-generation job token. The `generate` step's output.
   generateJobId        String?                 @map("generate_job_id")
+  /// True when the user explicitly skipped the OPTIONAL import step — the
+  /// `import` step's skip exit. Mutually exclusive with `importCompleted`.
+  importSkipped        Boolean                 @default(false) @map("import_skipped")
+  /// True once an import completed on this project (a `succeeded` or
+  /// `partially_failed` import RUN exists). The `import` step's completion exit.
+  importCompleted      Boolean                 @default(false) @map("import_completed")
   createdAt            DateTime                @default(now()) @map("created_at")
   updatedAt            DateTime                @updatedAt @map("updated_at")
 
@@ -3707,6 +3713,7 @@ enum MigrateOnboardingKind {
 enum MigrateOnboardingStep {
   connect
   index
+  import
   audit_convention
   discovery
   generate
