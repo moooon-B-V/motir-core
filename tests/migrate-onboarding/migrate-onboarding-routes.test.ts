@@ -32,8 +32,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   getPreplanState: vi.fn(async () => ({ session: null, docs: [], catalog: null })),
   streamJob: vi.fn(),
   getJob: vi.fn(),
-  approveConvention: vi.fn(),
-  editConvention: vi.fn(),
   getConvention: vi.fn(),
   getCodeAudit: vi.fn(),
   saveDesignChoice: vi.fn(),

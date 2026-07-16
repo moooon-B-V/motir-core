@@ -10,13 +10,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import type { CodeAuditSurfaceDTO, ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
 import { CodeHealthClient } from './_components/CodeHealthClient';
 
-// The Code-health page (Subtask 7.14.5 / MOTIR-926) — a top-level, active-project
-// page (like /ready + /reports) rendering the audit report + the proposed-convention
-// review/approve surface. Server Component: session-gate, resolve the active project,
-// read BOTH panels' initial data through aiConventionService over the 7.1 boundary
-// (project-admin gated in the service — a non-admin sees the admin-only state), then
-// seed the interactive island. A boundary failure degrades to the island's retry
-// state rather than crashing the route.
+// The Code-health page (MOTIR-926/1663) — a top-level, active-project page
+// rendering the audit report + per-repo read-only convention cards. Server
+// Component: session-gate, resolve the active project, read initial data
+// through aiConventionService over the 7.1 boundary (project-admin gated),
+// then seed the interactive island.
 
 function Header({ title, subtitle }: { title: string; subtitle: string }) {
   return (
@@ -48,14 +46,18 @@ export default async function CodeHealthPage() {
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   let initialAudit: CodeAuditSurfaceDTO | null = null;
-  let initialConvention: ConventionSurfaceDTO | null = null;
+  let initialConventions: ConventionSurfaceDTO[] = [];
   let loadError = false;
 
   try {
-    [initialAudit, initialConvention] = await Promise.all([
+    const [auditResult, conventionResult] = await Promise.all([
       aiConventionService.getAudit(ctx.projectId, svcCtx),
       aiConventionService.getConvention(ctx.projectId, svcCtx),
     ]);
+    initialAudit = auditResult;
+    initialConventions = [conventionResult].filter(
+      (c) => c.proposed !== null || c.standard !== null,
+    );
   } catch (err) {
     if (err instanceof NotProjectAdminError || err instanceof ProjectNotFoundError) {
       return (
@@ -78,7 +80,7 @@ export default async function CodeHealthPage() {
       <CodeHealthClient
         projectId={ctx.projectId}
         initialAudit={initialAudit}
-        initialConvention={initialConvention}
+        initialConventions={initialConventions}
         loadError={loadError}
       />
     </div>
