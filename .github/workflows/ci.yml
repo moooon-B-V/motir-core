@@ -258,31 +258,36 @@ jobs:
       - run: pnpm prisma generate
         if: steps.cache-prisma-test.outputs.cache-hit != 'true'
       - run: pnpm prisma migrate deploy
-      # Run the test suite sharded — coverage runs separately in the `coverage`
-      # job below so each shard's coverage data doesn't need cross-runner merging.
-      - run: pnpm vitest run --shard=${{ matrix.shard }}/${{ matrix.total }}
+      # Run the test suite sharded, COLLECTING coverage into a per-shard blob
+      # report (MOTIR-1711). `--config vitest.collect.config.ts` is the base
+      # vitest.config.ts with the per-file thresholds STRIPPED (a shard only
+      # exercises a subset of the gated files, so a per-shard gate would fail
+      # on partial coverage); the `coverage` merge job below enforces them on
+      # the MERGED result via the base config. `--reporter=default` keeps test
+      # output in the log for debugging; `--reporter=blob` writes
+      # blob-<shard>-<total>.json (carrying v8 coverage) for the merge job to
+      # consume. `--shard` does NOT auto-enable blob in Vitest 4, so it must be
+      # passed explicitly.
+      - run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=default --reporter=blob --coverage
+      # Share this shard's blob report with the `coverage` merge job.
+      - name: Upload coverage blob
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: .vitest-reports
+          retention-days: 1
 
   coverage:
     name: Vitest coverage
     runs-on: ubuntu-latest
     if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
     needs: test
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: prodect
-          POSTGRES_PASSWORD: prodect
-          POSTGRES_DB: prodect
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U prodect -d prodect"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
     env:
-      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      # The merge step (`vitest --mergeReports`) does NOT run any tests, so it
+      # needs no Postgres service / migrate -- it only combines the shard blobs
+      # and enforces the thresholds. These auth env vars stay present only
+      # because vitest.config.ts sets them via `??=` at module-eval time; they
+      # are never used (no test imports lib/auth during a merge).
       BETTER_AUTH_SECRET: ci-coverage-only-not-a-real-secret-do-not-reuse
       GOOGLE_CLIENT_ID: ci-coverage-placeholder
       GOOGLE_CLIENT_SECRET: ci-coverage-placeholder
@@ -301,23 +306,24 @@ jobs:
         with:
           path: node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: Cache Prisma client
-        id: cache-prisma-coverage
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules/.prisma
-            node_modules/@prisma/client
-          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
         if: steps.cache-node-modules-coverage.outputs.cache-hit != 'true'
-      - run: pnpm prisma generate
-        if: steps.cache-prisma-coverage.outputs.cache-hit != 'true'
-      - run: pnpm prisma migrate deploy
-      # Enforce the ≥90% per-module thresholds for the work-item modules
-      # (vitest.config.ts). Runs AFTER all test shards pass. A regression
-      # below 90% fails CI.
-      - run: pnpm test:coverage
+      # Download every test shard's coverage blob into .vitest-reports/ so the
+      # merge step can combine them. `merge-multiple` flattens all matching
+      # artifacts into the one directory `vitest --mergeReports` reads from.
+      - name: Download coverage blobs
+        uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-shard-*
+          path: .vitest-reports
+          merge-multiple: true
+      # Merge the per-shard blobs into one coverage report and enforce the
+      # >=90% per-module thresholds (vitest.config.ts) on the MERGED result
+      # (MOTIR-1711). This REPLACES the old `vitest run --coverage` full-suite
+      # re-run -- no tests execute here, so this step is near-instant (the
+      # shards already collected the coverage). A regression below 90% fails
+      # CI (vitest exits 1 on a threshold breach).
+      - run: pnpm vitest --mergeReports --coverage
 
   e2e:
     # Sharded matrix (Subtask: E2E CI speedup). The suite is `workers: 1` /
