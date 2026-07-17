@@ -3844,120 +3844,71 @@ Rendered with Playwright chromium (full-page, light, `deviceScaleFactor: 2`,
 `detail.pen` / `detail.png` and `quick-view.mock.html` draw no contextual
 Plan / Re-plan entrance on the work-item surface. This HTML mockup
 (`plan-replan-entrance.mock.html`, built from the live `--el-*` tokens + the
-shipped primitives) is the design asset for that surface. The code subtask
-(MOTIR-910) composes the same primitives.
+shipped primitives) is the design asset for **the entrance only** — where the
+button sits and what happens on click. The universal `PlanningWorkspace`
+(MOTIR-1193 / 7.20.1) + `WorkItemCanvas` (MOTIR-1194) are already shipped and
+composed 1:1; this design does NOT redraw them. The code subtask (MOTIR-910)
+composes the same primitives.
 
 ### Context
 
 The **global hero launcher** (`PlanWithAILauncher`, MOTIR-1299) is already
-shipped in `TopNav` — the hero gradient pill labelled "Plan with AI" + the
-floating "M" orb, both summonable from every screen (design
-`planning-workspace.mock.html` sheet 4, 7.20.1). It opens the universal
-`PlanningWorkspace` in the surface-appropriate mode (project → augment/re-plan
-or generation; roadmap → read+augment; work-item → contextual planning scoped
-to that item). The global entrance is context-aware — it moves with the user
-across screens.
-
-**This card designs the PER-ITEM contextual entrance** — the "Plan" / "Re-plan"
-button that sits ON the work-item detail page AND in the quick-view modal,
-opening the universal workspace SCOPED to THIS item's neighborhood. The global
-launcher already covers the "summon from anywhere" use case; the contextual
-button gives a dedicated per-item door that feels native to the item surface.
+shipped in `TopNav` — the hero gradient pill labelled "Plan with AI", summonable
+from every screen. **This card designs the PER-ITEM contextual entrance** — the
+"Plan" / "Re-plan" button that sits ON the work-item detail page AND in the
+quick-view modal, opening the workspace scoped to THIS item's neighborhood.
 
 ### Placement
 
-**Detail page:** the contextual button sits in the header's right cluster
-(the `ml-auto flex items-center gap-3` div in `page.tsx`), BEFORE the existing
-`WatchControl` and `WorkItemDetailActions`. It is a hero-toned pill with the
-Sparkles icon + label, scaled to the header row height (32px). The global
-TopNav launcher is above it; the two are visually separable — the global one is
-a gradient pill at full header height, the contextual one is a per-item action
-among Watch / More-actions.
+**Detail page:** the button sits in the header's right cluster (the `ml-auto
+flex items-center gap-3` div in `page.tsx`), BEFORE `WatchControl` and
+`WorkItemDetailActions`. An accent-toned pill with Sparkles icon, scaled to
+header row height (32px).
 
-**Quick-view modal:** the same button sits in the modal's header bar, between
-the `StatusValue` pill and the "Open full page" link. It scales down to match
-the header bar height (28px). Activating Plan/Re-plan from the quick-view
-CLOSES the modal (a handoff to the full-screen planning workspace).
+**Quick-view modal:** the button sits in the modal header bar, between the
+`StatusValue` pill and "Open full page". Scaled to header bar height (28px).
+Clicking it closes the modal — a handoff to the planning workspace.
 
 ### Modes
 
-**Plan** (item has NO children — not yet planned):
+**Plan** (item has NO children):
 
-- Button label: **"Plan"** with the Sparkles glyph, accent-toned.
-- Click opens the universal workspace directly — the item's own description
-  and title are the scope; no opening reason needed. The AI's first message
-  is "Planning [identifier]…".
+- Accent-toned "Plan" pill. Opens the workspace — the AI starts from the
+  item description. No opening reason needed.
 
-**Re-plan** (item HAS children — a plan already exists):
+**Re-plan** (item HAS children):
 
-- Button label: **"Re-plan"**, more subdued (neutral border, secondary text).
-  It is an edit action on an existing plan.
-- Click opens the universal workspace directly — there is **NO pre-workspace
-  form or composer**. The chat composer inside the workspace is pre-focused
-  with the placeholder _"What's wrong? What should change?"_. The user types
-  the reason as the **first chat turn** — a natural-language message, consumed
-  by MOTIR-908's intent classification. There is NO structured `reason` param.
+- Subdued "Re-plan" pill (neutral border, secondary text). Opens the
+  workspace — the chat composer is pre-focused with
+  _"What's wrong? What should change?"_. The user types the reason as the
+  **first chat turn** (consumed by MOTIR-908). No pre-workspace form.
 
-**Plan / Re-plan is a CONVERSATION, not a single message.** The entrance
-button opens the workspace; the reason (for Re-plan) is the first chat turn.
-The conversation then continues naturally — the user and AI go back and forth,
-refining the plan through multiple turns. The canvas updates with each proposal.
-
-### The scoped universal workspace (what opens)
-
-The workspace is the shipped `PlanningWorkspace` (MOTIR-1193 / 7.20.1) +
-`WorkItemCanvas` (MOTIR-1194) — **composed, never redrawn**:
-
-- **Map (left):** the canvas scoped to the item's NEIGHBORHOOD — the item
-  itself (active ring), its parent (ghost), its siblings. Proposed changes
-  render as DASHED nodes with the accent glow (the `.proposed` style from
-  7.20.1). **Done work is LOCKED** — a lock icon, reduced opacity, solid
-  border. The planner (MOTIR-908) locks done nodes; the confirm gate
-  (MOTIR-911) rejects any delta that touches a locked node.
-- **Chat (right):** the shipped chat rail, with the item scope in the header.
-  A full CONVERSATION — not a single-message capture. Plan mode: AI begins
-  with "Planning…" and proposes a plan. Re-plan mode: AI prompts
-  "What's wrong? What should change?" — the user's response is the first
-  chat turn. Both then continue as normal conversations: refine, propose,
-  revise, confirm. The chat composer stays active throughout.
-- **Confirm gate (bottom bar):** the MOTIR-911 gate renders as a full-width
-  bar at the canvas bottom: count of pending changes, "Discard", and
-  "Confirm & persist". The gate IS the confirm surface — no separate modal.
-  Empty delta → bar shows "No changes to apply" (confirm disabled).
+**Both are conversations, not single messages.** The button opens the
+workspace; the user and AI converse through the shipped chat rail.
 
 ### States in the mockup
 
-1. **Detail page — Plan button** (item not yet planned; button opens workspace)
-2. **Detail page — Re-plan button** (item has children; button opens workspace)
-3. **Quick-view — Plan button** (item not yet planned; button opens workspace)
-4. **Quick-view — Re-plan button** (item has children; button opens workspace)
-5. **Scoped universal workspace** — the CONVERSATION:
-   - Plan flow: "Planning…" → AI proposes a plan → conversation continues
-   - Re-plan flow: composer pre-focused "What's wrong?" → user sends reason
-     as first chat turn → AI responds → conversation continues (multi-turn)
-   - Continuing conversation: canvas shows proposed (dashed) + locked (done)
-     nodes, the confirm gate bar, multi-turn chat bubbles
-6. **States** — loading ("Planning…" / "Resuming…"), error ("Planning
-   failed" + recovery hint), empty ("Ready to plan" with prompt to describe)
+1. **Detail page — Plan button** (item not yet planned; accent pill)
+2. **Detail page — Re-plan button** (item has children; subdued pill)
+3. **Quick-view — Plan button** (accent pill in modal header)
+4. **Quick-view — Re-plan button** (subdued pill in modal header)
+5. **What happens on click** — Plan flow (open workspace → AI plans →
+   conversation → confirm) vs Re-plan flow (open workspace → type reason as
+   first chat turn → AI responds → conversation → confirm). The shipped
+   workspace is composed, not redrawn.
+6. **Access-path table** — every kind on both surfaces
 
 ### Tokens / primitives
 
-- Colour via `--el-*` only; the contextual button uses `--el-accent` (text
-  colour, transparent fill) to be visually related to but distinct from the
-  global launcher's `--el-accent` gradient fill.
+- Colour via `--el-*` only; Plan button: `--el-accent` on transparent fill.
+  Re-plan button: `--el-text-secondary` + `--el-border-strong`.
 - Shape via element-semantic tokens: `--radius-badge` for the pill,
   `--height-control` / `--spacing-control-x/y`.
-- The canvas pane is the shipped `WorkItemCanvas` (MOTIR-1194, design
-  MOTIR-1009 @ `design/roadmap/`) composed 1:1 — the workspace does NOT
-  redesign the canvas.
-- AA contrast holds: the Plan button's accent text sits on transparent bg
-  (the parent page surface is the bg → `--el-accent` on `--el-page-bg` is AA
-  at ≥ 14px/12px bold). The Re-plan button uses `--el-text-secondary` on
-  transparent — also AA.
+- AA: accent text on page bg ≥ 14px/12px bold; secondary text on page bg also AA.
 
 ### Deliverable
 
 The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `plan-replan-entrance.mock.html` (source of truth) · `plan-replan-entrance.png`
 (full-page export). Rendered with Playwright chromium (full-page, light,
-`deviceScaleFactor: 2`, ~1200px wide); `prettier --check` clean.
+`deviceScaleFactor: 2`, ~960px wide); `prettier --check` clean.
