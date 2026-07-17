@@ -44,13 +44,12 @@
         2 · Multi-target tray — the composer above the input carries a "Targets"
             tray of picked-item chips; user can add several and remove any (X).
             States: empty tray, one target, multiple targets.
-        3 · Targets in the conversation — sent turn shows the target chips;
-            the map (canvas) highlights the target(s) with the active node ring.
+        3 · Targets in the conversation — sent turn shows all target chips;
+            the canvas highlights the PRIMARY target only (the dependency graph
+            doesn't display unrelated items from different parents together).
+            Additional targets are visible only as chips in the chat.
         4 · States — empty (no query), short query "keep typing", loading,
             no-results.
-        3b · Different-parent targets — when targets live in different parts of
-              the tree (different epics/stories), the canvas auto-zooms to fit
-              all; off-screen targets show directional edge markers.
         5 · Pre-scoped entrance — opened from an item's Plan/Re-plan entrance,
             that item is pre-filled as an initial target the user can extend.
 
@@ -1109,477 +1108,442 @@
       </div>
     </section>
 
-    <!-- ═══════════════ PANEL 3 — targets in conversation + map highlight ═══════════════ -->
+    <!-- ═══════════════ PANEL 3 — targets in conversation ═══════════════ -->
     <section class="sheet">
       <div class="sheethead">
         <span class="n">3</span>
-        <h2>Targets in the conversation — chips in the turn + map highlight on the canvas</h2>
-        <span class="cap">chat ↔ canvas link</span>
-      </div>
-      <div class="sheetbody">
-        <div class="screen">
-          <div class="frame">
-            <!-- CANVAS LEFT — target nodes highlighted -->
-            <div class="canvas">
-              <span class="canvas-label">Targets focused on the map</span>
-              <!-- a non-target node (dimmed) -->
-              <div class="node upcoming" style="top: 30px; left: 30px">
-                <div class="nhead">
-                  <span class="tile" style="background: var(--peach)">⚙</span>
-                  <div>
-                    <div class="ntitle">Payments</div>
-                    <div class="nsub">2 stories</div>
-                  </div>
-                </div>
-              </div>
-              <!-- TARGET 1: active + focus ring -->
-              <div class="node active" style="top: 20px; left: 260px">
-                <div class="focus-ring"></div>
-                <div class="focus-pill">Target</div>
-                <div class="nhead">
-                  <span class="tile" style="background: var(--lavender)">📚</span>
-                  <div>
-                    <div class="ntitle">Billing — invoicing</div>
-                    <div class="nsub">MOTIR-812 · 3 stories</div>
-                  </div>
-                </div>
-              </div>
-              <!-- a non-target done node -->
-              <div class="node done" style="top: 200px; left: 40px">
-                <div class="nhead">
-                  <span class="tile" style="background: var(--mint)">✓</span>
-                  <div>
-                    <div class="ntitle">Auth module</div>
-                    <div class="nsub">Done</div>
-                  </div>
-                </div>
-              </div>
-              <!-- TARGET 2: active + focus ring -->
-              <div class="node active" style="top: 180px; left: 280px">
-                <div class="focus-ring"></div>
-                <div class="focus-pill">Target</div>
-                <div class="nhead">
-                  <span class="tile" style="background: var(--lavender)">📋</span>
-                  <div>
-                    <div class="ntitle">Migrate billing</div>
-                    <div class="nsub">MOTIR-918 · Done</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- CHAT RIGHT — turn with target chips -->
-            <aside class="rail">
-              <div class="railhead">
-                <span class="dot"></span><span class="lbl">Motir AI</span>
-                <span class="mode">contextual</span>
-              </div>
-              <div class="log">
-                <div class="turn user">
-                  <span class="avatar user">·</span>
-                  <div class="bubble user" style="max-width: 260px">
-                    <div
-                      style="
-                        font-size: 10.5px;
-                        color: rgba(255, 255, 255, 0.7);
-                        margin-bottom: 4px;
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                      "
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="12"
-                        height="12"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <circle cx="12" cy="5" r="1" />
-                        <path d="M12 7v7" />
-                        <path d="M17 12h-4" />
-                        <path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1" />
-                      </svg>
-                      Targeting 2 items
-                    </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px">
-                      <span
-                        style="
-                          display: inline-flex;
-                          align-items: center;
-                          gap: 4px;
-                          background: rgba(255, 255, 255, 0.15);
-                          border-radius: 5px;
-                          padding: 2px 7px;
-                          font-size: 11px;
-                        "
-                      >
-                        <svg viewBox="0 0 24 24" width="12" height="12"><use href="#i-book" /></svg>
-                        MOTIR-812
-                      </span>
-                      <span
-                        style="
-                          display: inline-flex;
-                          align-items: center;
-                          gap: 4px;
-                          background: rgba(255, 255, 255, 0.15);
-                          border-radius: 5px;
-                          padding: 2px 7px;
-                          font-size: 11px;
-                        "
-                      >
-                        <svg viewBox="0 0 24 24" width="12" height="12"><use href="#i-task" /></svg>
-                        MOTIR-918
-                      </span>
-                    </div>
-                    Expand billing — add sub-stories for the invoice recurrence feature.
-                  </div>
-                </div>
-                <div class="turn">
-                  <span class="avatar ai">M</span>
-                  <div class="bubble ai" style="max-width: 260px">
-                    <div
-                      style="
-                        font-size: 10.5px;
-                        color: var(--muted);
-                        margin-bottom: 4px;
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                      "
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="12"
-                        height="12"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        style="color: var(--accent)"
-                      >
-                        <circle cx="12" cy="5" r="1" />
-                        <path d="M12 7v7" />
-                        <path d="M17 12h-4" />
-                        <path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1" />
-                      </svg>
-                      Scoped to MOTIR-812, MOTIR-918
-                    </div>
-                    Got it — drafting sub-stories for recurring invoices under Billing. I'll place
-                    them now.
-                  </div>
-                </div>
-              </div>
-              <div class="composer">
-                <div class="targets-tray">
-                  <span class="targets-tray-label">Targets</span>
-                  <span class="wi-chip">
-                    <span class="type-icon t-story"
-                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
-                    ></span>
-                    <span class="wi-key">MOTIR-812</span>
-                    <span class="wi-title">Billing — invoicing</span>
-                    <span class="wi-remove" aria-label="Remove"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M18 6 6 18" />
-                        <path d="m6 6 12 12" /></svg
-                    ></span>
-                  </span>
-                  <span class="wi-chip">
-                    <span class="type-icon t-task"
-                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
-                    ></span>
-                    <span class="wi-key">MOTIR-918</span>
-                    <span class="wi-title">Migrate billing</span>
-                    <span class="wi-remove" aria-label="Remove"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M18 6 6 18" />
-                        <path d="m6 6 12 12" /></svg
-                    ></span>
-                  </span>
-                </div>
-                <div class="composer-row">
-                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
-                  <span class="send">➤</span>
-                </div>
-              </div>
-            </aside>
-          </div>
-        </div>
-      </div>
-      <div class="note">
-        <b>Chat turn carries the target set; canvas highlights it.</b> When the user sends a turn
-        with target(s), the turn bubble shows the target chips in a compact form — semi-transparent
-        accent chips on user bubbles (white background) and muted chips on AI bubbles — plus a
-        "Targeting <i>n</i> items" label. On the <b>canvas (left)</b>, the target node(s) are
-        highlighted with the <code>.node.active</code> ring + glow (the same accent-border + shadow
-        treatment from <code>planning-workspace.mock.html</code> sheet 2), plus a "Target" pill
-        above each. The user SEES which part of the plan the planner is acting on — the
-        chat ↔ canvas link is explicit. The targets tray stays populated across turns until the user
-        removes them.
-      </div>
-    </section>
-
-    <!-- ═══════════════ PANEL 3b — different-parent targets ═══════════════ -->
-    <section class="sheet">
-      <div class="sheethead">
-        <span class="n">3b</span>
         <h2>
-          Different-parent targets — canvas auto-fits all, off-screen markers for scrolled-out
-          targets
+          Targets in the conversation — chips in the turn; canvas highlights the primary target
         </h2>
-        <span class="cap">separated targets</span>
+        <span class="cap">chat + canvas</span>
       </div>
       <div class="sheetbody">
         <div class="row-of" style="gap: 20px">
           <div style="flex: 1; min-width: 340px">
             <div class="mini-label">
-              (a) Two targets in different epics — auto-zoomed to fit both
+              (a) Turn with two targets — canvas scopes to the primary one
             </div>
             <div class="screen">
-              <div class="canvas" style="height: 360px; position: relative">
-                <span class="canvas-label">2 targets · 2 epics</span>
-                <!-- Epic 1 label -->
-                <div
-                  style="
-                    position: absolute;
-                    top: 18px;
-                    left: 100px;
-                    font: 600 10px var(--mono);
-                    color: var(--faint);
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    background: rgba(255, 255, 255, 0.8);
-                    padding: 2px 6px;
-                    border-radius: var(--r-control);
-                  "
-                >
-                  Epic 1 · Foundation
-                </div>
-                <!-- Epic 2 label far away -->
-                <div
-                  style="
-                    position: absolute;
-                    top: 18px;
-                    right: 60px;
-                    font: 600 10px var(--mono);
-                    color: var(--faint);
-                    text-transform: uppercase;
-                    letter-spacing: 0.05em;
-                    background: rgba(255, 255, 255, 0.8);
-                    padding: 2px 6px;
-                    border-radius: var(--r-control);
-                  "
-                >
-                  Epic 2 · Billing
-                </div>
-                <!-- Epics boundary line -->
-                <div
-                  style="
-                    position: absolute;
-                    top: 38px;
-                    left: 50%;
-                    width: 0;
-                    height: 290px;
-                    border-left: 1px dashed var(--hair-strong);
-                  "
-                ></div>
-                <!-- TARGET 1: Epic 1 story (left side) -->
-                <div class="node active" style="top: 60px; left: 40px; width: 190px">
-                  <div class="focus-ring"></div>
-                  <div class="focus-pill">Target</div>
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--lavender)">⚙</span>
-                    <div>
-                      <div class="ntitle">Auth module</div>
-                      <div class="nsub">MOTIR-511 · Done</div>
+              <div class="frame" style="height: 400px">
+                <div class="canvas">
+                  <span class="canvas-label">Scoped to MOTIR-812</span>
+                  <div class="node upcoming" style="top: 30px; left: 30px">
+                    <div class="nhead">
+                      <span class="tile" style="background: var(--peach)">⚙</span>
+                      <div>
+                        <div class="ntitle">Payments</div>
+                        <div class="nsub">2 stories</div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- PRIMARY TARGET — one node highlighted -->
+                  <div class="node active" style="top: 20px; left: 260px">
+                    <div class="focus-ring"></div>
+                    <div class="focus-pill">Target</div>
+                    <div class="nhead">
+                      <span class="tile" style="background: var(--lavender)">📚</span>
+                      <div>
+                        <div class="ntitle">Billing — invoicing</div>
+                        <div class="nsub">MOTIR-812 · 3 stories</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="node done" style="top: 200px; left: 40px">
+                    <div class="nhead">
+                      <span class="tile" style="background: var(--mint)">✓</span>
+                      <div>
+                        <div class="ntitle">Auth module</div>
+                        <div class="nsub">Done</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <!-- non-target nodes in Epic 1 -->
-                <div class="node upcoming" style="top: 160px; left: 30px; width: 190px">
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--sky)">🔑</span>
-                    <div>
-                      <div class="ntitle">API keys</div>
-                      <div class="nsub">1 story</div>
+                <aside class="rail">
+                  <div class="railhead">
+                    <span class="dot"></span><span class="lbl">Motir AI</span>
+                    <span class="mode">contextual</span>
+                  </div>
+                  <div class="log">
+                    <div class="turn user">
+                      <span class="avatar user">·</span>
+                      <div class="bubble user" style="max-width: 260px">
+                        <div
+                          style="
+                            font-size: 10.5px;
+                            color: rgba(255, 255, 255, 0.7);
+                            margin-bottom: 4px;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                          "
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="12"
+                            height="12"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <circle cx="12" cy="5" r="1" />
+                            <path d="M12 7v7" />
+                            <path d="M17 12h-4" />
+                            <path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1" />
+                          </svg>
+                          Targeting 2 items
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px">
+                          <span
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 4px;
+                              background: rgba(255, 255, 255, 0.15);
+                              border-radius: 5px;
+                              padding: 2px 7px;
+                              font-size: 11px;
+                            "
+                          >
+                            <svg viewBox="0 0 24 24" width="12" height="12">
+                              <use href="#i-book" />
+                            </svg>
+                            MOTIR-812
+                          </span>
+                          <span
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 4px;
+                              background: rgba(255, 255, 255, 0.15);
+                              border-radius: 5px;
+                              padding: 2px 7px;
+                              font-size: 11px;
+                            "
+                          >
+                            <svg viewBox="0 0 24 24" width="12" height="12">
+                              <use href="#i-task" />
+                            </svg>
+                            MOTIR-918
+                          </span>
+                        </div>
+                        Expand billing — add sub-stories for the invoice recurrence feature.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="avatar ai">M</span>
+                      <div class="bubble ai" style="max-width: 260px">
+                        <div
+                          style="
+                            font-size: 10.5px;
+                            color: var(--muted);
+                            margin-bottom: 4px;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                          "
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="12"
+                            height="12"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            style="color: var(--accent)"
+                          >
+                            <circle cx="12" cy="5" r="1" />
+                            <path d="M12 7v7" />
+                            <path d="M17 12h-4" />
+                            <path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1" />
+                          </svg>
+                          Scoped to MOTIR-812, MOTIR-918
+                        </div>
+                        Got it — drafting sub-stories for recurring invoices under Billing. I'll
+                        place them now.
+                      </div>
                     </div>
                   </div>
-                </div>
-                <!-- TARGET 2: Epic 2 story (right side, far away) -->
-                <div class="node active" style="top: 60px; right: 30px; width: 190px">
-                  <div class="focus-ring"></div>
-                  <div class="focus-pill">Target</div>
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--lavender)">📚</span>
-                    <div>
-                      <div class="ntitle">Billing — invoicing</div>
-                      <div class="nsub">MOTIR-812 · 3 stories</div>
+                  <div class="composer">
+                    <div class="targets-tray">
+                      <span class="targets-tray-label">Targets</span>
+                      <span class="wi-chip">
+                        <span class="type-icon t-story"
+                          ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                        ></span>
+                        <span class="wi-key">MOTIR-812</span>
+                        <span class="wi-title">Billing — invoicing</span>
+                        <span class="wi-remove" aria-label="Remove"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" /></svg
+                        ></span>
+                      </span>
+                      <span class="wi-chip">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                        ></span>
+                        <span class="wi-key">MOTIR-918</span>
+                        <span class="wi-title">Migrate billing</span>
+                        <span class="wi-remove" aria-label="Remove"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" /></svg
+                        ></span>
+                      </span>
+                    </div>
+                    <div class="composer-row">
+                      <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                      <span class="send">➤</span>
                     </div>
                   </div>
-                </div>
-                <!-- non-target nodes in Epic 2 -->
-                <div class="node" style="top: 160px; right: 30px; width: 190px">
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--peach)">💳</span>
-                    <div>
-                      <div class="ntitle">Payments</div>
-                      <div class="nsub">2 stories</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="node" style="top: 250px; right: 30px; width: 190px">
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--rose)">📊</span>
-                    <div>
-                      <div class="ntitle">Reports</div>
-                      <div class="nsub">1 story</div>
-                    </div>
-                  </div>
-                </div>
+                </aside>
               </div>
             </div>
           </div>
           <div style="flex: 1; min-width: 340px">
             <div class="mini-label">
-              (b) User scrolls/zooms in — off-screen target shows directional marker
+              (b) Targets under different parents — only the primary is on canvas
             </div>
             <div class="screen">
-              <div class="canvas" style="height: 360px; position: relative; overflow: hidden">
-                <span class="canvas-label">1 target in view · 1 off-screen →</span>
-                <!-- TARGET 1: in view, highlighted -->
-                <div class="node active" style="top: 120px; left: 60px; width: 200px">
-                  <div class="focus-ring"></div>
-                  <div class="focus-pill">Target</div>
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--lavender)">📚</span>
-                    <div>
-                      <div class="ntitle">Billing — invoicing</div>
-                      <div class="nsub">MOTIR-812 · 3 stories</div>
+              <div class="frame" style="height: 400px">
+                <div class="canvas">
+                  <span class="canvas-label">Scoped to MOTIR-812</span>
+                  <div class="node upcoming" style="top: 30px; left: 30px">
+                    <div class="nhead">
+                      <span class="tile" style="background: var(--peach)">⚙</span>
+                      <div>
+                        <div class="ntitle">Payments</div>
+                        <div class="nsub">2 stories</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="node active" style="top: 20px; left: 260px">
+                    <div class="focus-ring"></div>
+                    <div class="focus-pill">Target</div>
+                    <div class="nhead">
+                      <span class="tile" style="background: var(--lavender)">📚</span>
+                      <div>
+                        <div class="ntitle">Billing — invoicing</div>
+                        <div class="nsub">MOTIR-812 · 3 stories</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="node done" style="top: 200px; left: 40px">
+                    <div class="nhead">
+                      <span class="tile" style="background: var(--mint)">✓</span>
+                      <div>
+                        <div class="ntitle">Auth module</div>
+                        <div class="nsub">Done</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <!-- non-target peer nodes -->
-                <div class="node" style="top: 220px; left: 40px; width: 200px">
-                  <div class="nhead">
-                    <span class="tile" style="background: var(--peach)">💳</span>
-                    <div>
-                      <div class="ntitle">Payments</div>
-                      <div class="nsub">2 stories</div>
+                <aside class="rail">
+                  <div class="railhead">
+                    <span class="dot"></span><span class="lbl">Motir AI</span>
+                    <span class="mode">contextual</span>
+                  </div>
+                  <div class="log">
+                    <div class="turn user">
+                      <span class="avatar user">·</span>
+                      <div class="bubble user" style="max-width: 260px">
+                        <div
+                          style="
+                            font-size: 10.5px;
+                            color: rgba(255, 255, 255, 0.7);
+                            margin-bottom: 4px;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                          "
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="12"
+                            height="12"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <circle cx="12" cy="5" r="1" />
+                            <path d="M12 7v7" />
+                            <path d="M17 12h-4" />
+                            <path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1" />
+                          </svg>
+                          Targeting 3 items
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px">
+                          <span
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 4px;
+                              background: rgba(255, 255, 255, 0.15);
+                              border-radius: 5px;
+                              padding: 2px 7px;
+                              font-size: 11px;
+                            "
+                            ><svg viewBox="0 0 24 24" width="12" height="12">
+                              <use href="#i-book" /></svg
+                            >MOTIR-812</span
+                          >
+                          <span
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 4px;
+                              background: rgba(255, 255, 255, 0.15);
+                              border-radius: 5px;
+                              padding: 2px 7px;
+                              font-size: 11px;
+                            "
+                            ><svg viewBox="0 0 24 24" width="12" height="12">
+                              <use href="#i-task" /></svg
+                            >MOTIR-511</span
+                          >
+                          <span
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 4px;
+                              background: rgba(255, 255, 255, 0.15);
+                              border-radius: 5px;
+                              padding: 2px 7px;
+                              font-size: 11px;
+                            "
+                            ><svg viewBox="0 0 24 24" width="12" height="12">
+                              <use href="#i-bug" /></svg
+                            >MOTIR-922</span
+                          >
+                        </div>
+                        Plan sub-stories for billing, but also keep auth and that rounding bug in
+                        scope.
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="avatar ai">M</span>
+                      <div class="bubble ai" style="max-width: 260px">
+                        <div
+                          style="
+                            font-size: 10.5px;
+                            color: var(--muted);
+                            margin-bottom: 4px;
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                          "
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="12"
+                            height="12"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            style="color: var(--accent)"
+                          >
+                            <circle cx="12" cy="5" r="1" />
+                            <path d="M12 7v7" />
+                            <path d="M17 12h-4" />
+                            <path d="M20.5 12a8.5 8.5 0 1 0-6.1 8.1" />
+                          </svg>
+                          Across MOTIR-812, MOTIR-511, MOTIR-922
+                        </div>
+                        I see three targets across different areas. I'll draft the billing
+                        sub-stories first (the primary), then check how the auth and rounding items
+                        relate. The canvas shows Billing; the other two are tracked in the chat.
+                      </div>
                     </div>
                   </div>
-                </div>
-                <!-- OFF-SCREEN TARGET MARKER (right edge) -->
-                <div
-                  style="
-                    position: absolute;
-                    right: 8px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 3px;
-                    z-index: 10;
-                  "
-                >
-                  <!-- arrow pointing right (off-screen direction) -->
-                  <div
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 4px;
-                      background: var(--accent-soft);
-                      border: 1px solid var(--accent);
-                      border-radius: var(--r-control);
-                      padding: 5px 9px;
-                      box-shadow: 0 0 10px #5645d41f;
-                      cursor: pointer;
-                    "
-                  >
-                    <span
-                      class="type-icon t-story"
-                      style="width: 12px; height: 12px; color: var(--type-story)"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M12 7v14" />
-                        <path
-                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                        />
-                      </svg>
-                    </span>
-                    <span
-                      style="
-                        font-family: var(--mono);
-                        font-size: 10px;
-                        font-weight: 600;
-                        color: var(--accent);
-                      "
-                      >MOTIR-511</span
-                    >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="12"
-                      height="12"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      style="color: var(--accent)"
-                    >
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
+                  <div class="composer">
+                    <div class="targets-tray">
+                      <span class="targets-tray-label">Targets</span>
+                      <span class="wi-chip">
+                        <span class="type-icon t-story"
+                          ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                        ></span>
+                        <span class="wi-key">MOTIR-812</span><span class="wi-title">Billing</span>
+                        <span class="wi-remove" aria-label="Remove"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" /></svg
+                        ></span>
+                      </span>
+                      <span class="wi-chip">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                        ></span>
+                        <span class="wi-key">MOTIR-511</span
+                        ><span class="wi-title">Auth module</span>
+                        <span class="wi-remove" aria-label="Remove"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" /></svg
+                        ></span>
+                      </span>
+                      <span class="wi-chip">
+                        <span class="type-icon t-bug"
+                          ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                        ></span>
+                        <span class="wi-key">MOTIR-922</span
+                        ><span class="wi-title">Rounding error</span>
+                        <span class="wi-remove" aria-label="Remove"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" /></svg
+                        ></span>
+                      </span>
+                    </div>
+                    <div class="composer-row">
+                      <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                      <span class="send">➤</span>
+                    </div>
                   </div>
-                </div>
+                </aside>
               </div>
-            </div>
-            <div style="margin-top: 10px; font-size: 11px; color: var(--muted); line-height: 1.5">
-              When a target is scrolled out of view, an edge marker — a compact chip with its type
-              icon + key + a chevron pointing in the off-screen direction — appears on the nearest
-              canvas edge. Clicking it scrolls/animates to that target. Multiple off-screen targets
-              stack vertically on the same edge.
             </div>
           </div>
         </div>
       </div>
       <div class="note">
-        <b>Targets under different parents are the NORMAL case for multi-target planning.</b>
-        When the user picks targets from different epics/stories, the canvas
-        <b>auto-zooms to fit all targets</b> on target-set change — the zoom level and pan position
-        adjust so every target node is visible in the viewport (up to a minimum zoom floor; below
-        that, targets are as close as the floor allows with edge markers for the rest). The
-        canvas-label reflects the scope: <code>N targets · M epics</code>. If the user then
-        zooms/pans manually, a target that scrolls out of the viewport shows a
-        <b>directional edge marker</b> — a compact chip (type icon + key + chevron pointing
-        off-screen) pinned to the nearest canvas edge. Clicking it scrolls/animated to that target.
-        Multiple off-screen targets on the same edge stack vertically. This is the map-highlight
-        equivalent of the target chips in the chat turn — the user ALWAYS knows where every target
-        is, even when they're far apart.
+        <b>The chat owns the full target set; the canvas shows the PRIMARY target.</b>
+        When the user sends a turn with target(s), the turn bubble shows ALL target chips in a
+        compact form (semi-transparent accent chips on user bubbles, muted chips on AI bubbles) plus
+        a "Targeting <i>n</i> items" label. The <b>canvas (left)</b> highlights only the
+        <b>primary</b> target — the first one picked, or the context item when opened from that
+        item's entrance (Panel 5). The canvas is a <b>dependency graph</b> — it does not display
+        unrelated items from different parents together, because they share no
+        <code>blocked_by</code> edge and cramming them onto one viewport is meaningless. The primary
+        target gets the active node ring + "Target" pill; additional targets are visible only as
+        chips in the chat. The AI acknowledges ALL targets in its turn framing ("Across MOTIR-812,
+        MOTIR-511, MOTIR-922") and reasons across them, but the canvas stays scoped to the primary
+        item's neighbourhood. The targets tray stays populated across turns until the user removes
+        them.
       </div>
     </section>
 
