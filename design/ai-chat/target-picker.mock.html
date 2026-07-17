@@ -48,6 +48,9 @@
             the map (canvas) highlights the target(s) with the active node ring.
         4 · States — empty (no query), short query "keep typing", loading,
             no-results.
+        3b · Different-parent targets — when targets live in different parts of
+              the tree (different epics/stories), the canvas auto-zooms to fit
+              all; off-screen targets show directional edge markers.
         5 · Pre-scoped entrance — opened from an item's Plan/Re-plan entrance,
             that item is pre-filled as an initial target the user can extend.
 
@@ -1331,6 +1334,252 @@
         above each. The user SEES which part of the plan the planner is acting on — the
         chat ↔ canvas link is explicit. The targets tray stays populated across turns until the user
         removes them.
+      </div>
+    </section>
+
+    <!-- ═══════════════ PANEL 3b — different-parent targets ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3b</span>
+        <h2>
+          Different-parent targets — canvas auto-fits all, off-screen markers for scrolled-out
+          targets
+        </h2>
+        <span class="cap">separated targets</span>
+      </div>
+      <div class="sheetbody">
+        <div class="row-of" style="gap: 20px">
+          <div style="flex: 1; min-width: 340px">
+            <div class="mini-label">
+              (a) Two targets in different epics — auto-zoomed to fit both
+            </div>
+            <div class="screen">
+              <div class="canvas" style="height: 360px; position: relative">
+                <span class="canvas-label">2 targets · 2 epics</span>
+                <!-- Epic 1 label -->
+                <div
+                  style="
+                    position: absolute;
+                    top: 18px;
+                    left: 100px;
+                    font: 600 10px var(--mono);
+                    color: var(--faint);
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    background: rgba(255, 255, 255, 0.8);
+                    padding: 2px 6px;
+                    border-radius: var(--r-control);
+                  "
+                >
+                  Epic 1 · Foundation
+                </div>
+                <!-- Epic 2 label far away -->
+                <div
+                  style="
+                    position: absolute;
+                    top: 18px;
+                    right: 60px;
+                    font: 600 10px var(--mono);
+                    color: var(--faint);
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    background: rgba(255, 255, 255, 0.8);
+                    padding: 2px 6px;
+                    border-radius: var(--r-control);
+                  "
+                >
+                  Epic 2 · Billing
+                </div>
+                <!-- Epics boundary line -->
+                <div
+                  style="
+                    position: absolute;
+                    top: 38px;
+                    left: 50%;
+                    width: 0;
+                    height: 290px;
+                    border-left: 1px dashed var(--hair-strong);
+                  "
+                ></div>
+                <!-- TARGET 1: Epic 1 story (left side) -->
+                <div class="node active" style="top: 60px; left: 40px; width: 190px">
+                  <div class="focus-ring"></div>
+                  <div class="focus-pill">Target</div>
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--lavender)">⚙</span>
+                    <div>
+                      <div class="ntitle">Auth module</div>
+                      <div class="nsub">MOTIR-511 · Done</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- non-target nodes in Epic 1 -->
+                <div class="node upcoming" style="top: 160px; left: 30px; width: 190px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--sky)">🔑</span>
+                    <div>
+                      <div class="ntitle">API keys</div>
+                      <div class="nsub">1 story</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- TARGET 2: Epic 2 story (right side, far away) -->
+                <div class="node active" style="top: 60px; right: 30px; width: 190px">
+                  <div class="focus-ring"></div>
+                  <div class="focus-pill">Target</div>
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--lavender)">📚</span>
+                    <div>
+                      <div class="ntitle">Billing — invoicing</div>
+                      <div class="nsub">MOTIR-812 · 3 stories</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- non-target nodes in Epic 2 -->
+                <div class="node" style="top: 160px; right: 30px; width: 190px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--peach)">💳</span>
+                    <div>
+                      <div class="ntitle">Payments</div>
+                      <div class="nsub">2 stories</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="node" style="top: 250px; right: 30px; width: 190px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--rose)">📊</span>
+                    <div>
+                      <div class="ntitle">Reports</div>
+                      <div class="nsub">1 story</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 340px">
+            <div class="mini-label">
+              (b) User scrolls/zooms in — off-screen target shows directional marker
+            </div>
+            <div class="screen">
+              <div class="canvas" style="height: 360px; position: relative; overflow: hidden">
+                <span class="canvas-label">1 target in view · 1 off-screen →</span>
+                <!-- TARGET 1: in view, highlighted -->
+                <div class="node active" style="top: 120px; left: 60px; width: 200px">
+                  <div class="focus-ring"></div>
+                  <div class="focus-pill">Target</div>
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--lavender)">📚</span>
+                    <div>
+                      <div class="ntitle">Billing — invoicing</div>
+                      <div class="nsub">MOTIR-812 · 3 stories</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- non-target peer nodes -->
+                <div class="node" style="top: 220px; left: 40px; width: 200px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--peach)">💳</span>
+                    <div>
+                      <div class="ntitle">Payments</div>
+                      <div class="nsub">2 stories</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- OFF-SCREEN TARGET MARKER (right edge) -->
+                <div
+                  style="
+                    position: absolute;
+                    right: 8px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 3px;
+                    z-index: 10;
+                  "
+                >
+                  <!-- arrow pointing right (off-screen direction) -->
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 4px;
+                      background: var(--accent-soft);
+                      border: 1px solid var(--accent);
+                      border-radius: var(--r-control);
+                      padding: 5px 9px;
+                      box-shadow: 0 0 10px #5645d41f;
+                      cursor: pointer;
+                    "
+                  >
+                    <span
+                      class="type-icon t-story"
+                      style="width: 12px; height: 12px; color: var(--type-story)"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 7v14" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                      </svg>
+                    </span>
+                    <span
+                      style="
+                        font-family: var(--mono);
+                        font-size: 10px;
+                        font-weight: 600;
+                        color: var(--accent);
+                      "
+                      >MOTIR-511</span
+                    >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="12"
+                      height="12"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      style="color: var(--accent)"
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; color: var(--muted); line-height: 1.5">
+              When a target is scrolled out of view, an edge marker — a compact chip with its type
+              icon + key + a chevron pointing in the off-screen direction — appears on the nearest
+              canvas edge. Clicking it scrolls/animates to that target. Multiple off-screen targets
+              stack vertically on the same edge.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Targets under different parents are the NORMAL case for multi-target planning.</b>
+        When the user picks targets from different epics/stories, the canvas
+        <b>auto-zooms to fit all targets</b> on target-set change — the zoom level and pan position
+        adjust so every target node is visible in the viewport (up to a minimum zoom floor; below
+        that, targets are as close as the floor allows with edge markers for the rest). The
+        canvas-label reflects the scope: <code>N targets · M epics</code>. If the user then
+        zooms/pans manually, a target that scrolls out of the viewport shows a
+        <b>directional edge marker</b> — a compact chip (type icon + key + chevron pointing
+        off-screen) pinned to the nearest canvas edge. Clicking it scrolls/animated to that target.
+        Multiple off-screen targets on the same edge stack vertically. This is the map-highlight
+        equivalent of the target chips in the chat turn — the user ALWAYS knows where every target
+        is, even when they're far apart.
       </div>
     </section>
 
