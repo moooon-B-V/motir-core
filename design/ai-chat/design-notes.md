@@ -600,3 +600,129 @@ The three-file set under `design/ai-chat/` for this surface:
 `deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
 `7.4`/`7.11`/`7.12`/`7.19` (the modes) + `7.20.3`/`MOTIR-1299` (the launcher it
 gates); supersedes `MOTIR-898` + `MOTIR-907`.
+
+---
+
+## @-mention work-item picker in the planning chat (MOTIR-1490)
+
+Design for the **@-mention work-item target picker** inside the universal
+planning workspace's chat composer — MOTIR-1490, design subtask of
+MOTIR-812 (Contextual planning from each work item). The user must be able to
+**search/locate a work item and reference it as the planning/re-planning TARGET**
+in the chat — like Claude Code's `@ a file` — so the planner sees the target(s)
+in the conversation. **Multiple targets** supported.
+
+Grounded in the workflow-defining subtasks (the design-content dependency rule):
+**MOTIR-909** (contextual session — the session accepts ONE OR MORE target ids
+as a target SET) + **MOTIR-1489** (entrance design — the pre-scoped target
+from the entrance). The code subtask this design gates is **MOTIR-1491** (the
+picker implementation).
+
+**Asset:** `target-picker.mock.html` (source) + `target-picker.png` (full-page
+export). A five-panel review board:
+
+| Panel | What it shows                                                                                                                                                                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | The `@` trigger — typing `@` in the chat composer opens a search dropdown over the project's work items; each result shows kind icon · key · title · status Pill; type-to-filter; keyboard (↑/↓/Enter/Esc)                                                               |
+| **2** | Multi-target tray — the composer above the input carries a "Targets" tray of picked-item chips (reusing the shipped `WorkItemRefChip` vocabulary); user can add several and remove any (⨉). States: empty, one target, multiple targets, the @-trigger button affordance |
+| **3** | Targets in the conversation — a sent turn shows the target chips in the bubble; the map (canvas) highlights the target node(s) with the accent active ring + glow + "Target" pill                                                                                        |
+| **4** | States — empty (no query: "Type to search…"), short query ("Keep typing…"), loading (spinner + "Searching…"), no-results ("No work items match 'zzqq'")                                                                                                                  |
+| **5** | Pre-scoped entrance — opened from an item's Plan/Re-plan entrance (MOTIR-1489), that item is pre-filled as an initial target in the tray; the user can remove it or add more                                                                                             |
+
+### ⚠️ COMPOSES, DOES NOT REDRAW (design-compose rule, notes #82 + #95)
+
+Every element this surface needs already exists in shipped form; the @-picker
+is an ARRANGEMENT of them, never a redesign:
+
+- **The chat rail** = the shipped `DiscoveryChatRail.tsx` language, reproduced
+  faithfully in the mock (rail head + dot + "Motir AI" label + mode chip,
+  `Bubble` + `Avatar`, the composer `Input` + `Send` button). The one NEW
+  element is the @-trigger + targets tray — both live above/beside the
+  existing composer input.
+- **The @ search dropdown popup** = the shipped work-item-search row vocabulary
+  from `design/work-items/internal-links.mock.html` panel 3 (`.pop-row`:
+  type-icon · mono key · title · status Pill), adapted for a chat-context
+  dropdown. The search fetcher reuses the shipped
+  `lib/mentions/workItemMentionSearch.ts` (`GET /api/work-items/mention-search`).
+  Results are scoped to the currently active project — the same scope the
+  contextual session operates in. This is NOT the Tiptap `@`-mention picker
+  (`markdownEditorMentions.tsx`) — the chat composer is a plain text input,
+  not a rich-text editor, so the picker is a standalone combobox dropdown.
+- **The inserted chip** IS the shipped `WorkItemRefChip` (5.8 /
+  MOTIR-1399, done) — `components/markdown/WorkItemRefChip.tsx`, the
+  `.wi-chip` vocabulary with type icon · mono key · title. The targets tray
+  COMPOSES it — never redesigns the chip. (No status dot in this context —
+  a target assignment doesn't imply status relevance.)
+- **The map highlight** = the shipped canvas "active" node state from
+  `design/ai-chat/planning-workspace.mock.html` (`.node.active`: accent
+  border + ring + glow), plus a "Target" pill above each target node so the
+  user SEES which part of the plan the planner is acting on.
+
+### How it works (grounded in the workflow spec)
+
+1. **The `@` trigger.** Typing `@` (or clicking the @ button) in the chat
+   composer opens the search dropdown. The dropdown reuses the shipped
+   work-item-search fetcher debounced at N ≥ 2 characters; results carry
+   kind icon · key · title · status Pill. Keyboard: ↑/↓/Enter/Esc;
+   `aria-activedescendant` on the listbox.
+2. **Picking a target.** Enter/click on a result adds that item's chip to the
+   targets tray ABOVE the input; the dropdown closes; the input keeps focus
+   so the user can continue typing the message.
+3. **Multi-target.** The user can add several targets by repeating `@` →
+   pick. Each chip carries a ⨉ remove button; clicking it removes that target
+   from the set. The tray label reads "Target" (singular) or "Targets"
+   (plural). The session API (MOTIR-909) accepts the target SET as
+   `targetKeys[]`.
+4. **Sending a turn.** When the user sends, the turn bubble shows the target
+   chips in compact form (semi-transparent accent chips, plus a "Targeting
+   n items" label). On the canvas (left), the target node(s) are highlighted
+   with the active ring + glow + "Target" pill — the chat ↔ canvas link is
+   explicit. The targets tray stays populated across turns until the user
+   removes them.
+5. **Pre-scoped entrance (MOTIR-1489).** When the Plan/Re-plan entrance opens
+   the workspace from a specific item, that item is pre-filled as the initial
+   target in the tray; the canvas highlights it; the AI's opening turn
+   acknowledges the scope. The user CAN remove it (⨉) and/or add more — the
+   entrance sets the _initial_ target, not a locked one.
+
+### Primitives composed (no hand-rolling)
+
+| Element                        | Built from                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| chat rail + bubbles + composer | the shipped `DiscoveryChatRail` language — `Card`/`Avatar`/`Input`/`Button`                                         |
+| @-search dropdown              | the shipped `.pop`/`.pop-row` vocabulary from `internal-links.mock.html` panel 3 + the `mention-search` API fetcher |
+| target chip in tray            | the shipped `WorkItemRefChip` component (`internal-links.mock.html` panels 0–2)                                     |
+| ⨉ remove button                | `Button` (icon-only, `--radius-control`, ghost) with a `X` lucide icon                                              |
+| map highlight                  | the shipped `.node.active` accent ring + glow from `planning-workspace.mock.html`                                   |
+| @-trigger button               | `Button` (mono `@` glyph, `--radius-control`, soft fill) in the input's left padding                                |
+| icons                          | lucide-react (`Search`, `X`, `BookOpen`, `CheckSquare`, `Bug`, `GitPullRequest`, `Target`)                          |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*` (the mock inlines the real light-palette
+  values). The dropdown popup reuses `--el-surface` / `--el-border` /
+  `--el-muted`; the type icons are `--el-type-*`; the status Pill puts the
+  hue in the tint background with `--el-text-strong` (finding #35, AA). The
+  map highlight uses the accent ring (`--el-accent`) + glow (`--el-highlight`).
+  The @-trigger button is `--el-muted` text on `--el-surface-soft`.
+- **Shape** strictly via element-semantic tokens — the dropdown =
+  `--radius-card`, rows = `--radius-control`, the @ button = `--radius-control`,
+  chips = `--radius-control`, the send button = `--radius-btn`,
+  shadow = `--shadow-elevated`. `rounded-full` only on the rail's status dot.
+- **Not colour alone** — the `@` trigger pairs a glyph + "type to search" hint;
+  the active dropdown row pairs highlight + `aria-selected`; each target chip
+  pairs the type icon + key (not just a hue); the map "Target" pill pairs a
+  label + the ring.
+- **A11y** — the dropdown is a `role="listbox"` with `aria-label` and
+  `aria-activedescendant`; the @ button is a real `Button` with a label; the
+  ⨉ remove button has `aria-label="Remove <key>"`; the targets tray is a
+  labelled group; decorative icons are `aria-hidden`.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface:
+`design-notes.md` (this section) · `target-picker.mock.html` (source) ·
+`target-picker.png` (full-page export, Playwright chromium — light,
+`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
+MOTIR-909 (session API) + MOTIR-1489 (entrance) + MOTIR-1399 (work-item-link
+chip, shipped); gates MOTIR-1491 (code implementation).
