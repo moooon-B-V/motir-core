@@ -9,6 +9,9 @@
 //     marker null ⇒ render the onboarding surface (a never-onboarded project still
 //     enters onboarding). Since MOTIR-1462, `/onboarding` is the entrance fork and
 //     the discovery hub moved to `/onboarding/discovery`; the gate applies to both.
+//     MOTIR-1259: a never-onboarded project WITH existing work items redirects to
+//     `/onboarding/migrate` (the migrate wizard) instead of the start-fresh entrance
+//     — existing items ARE the project's understanding.
 //   • Gate 2 — the roadmap planning-origin cluster (MOTIR-1013): marker set ⇒ the
 //     "Idea → Discover · Shape · Validate → Plan" cluster is pinned at the road's
 //     start; marker null ⇒ it is omitted (the cluster would otherwise assert a
@@ -70,32 +73,22 @@ test('onboarded project: /onboarding redirects AND the roadmap shows the plannin
   await expect(page.getByText(seed.activeEpicTitle, { exact: true })).toBeVisible();
 });
 
-test('never-onboarded project: /onboarding renders the entrance AND the roadmap omits the planning-origin cluster', async ({
+test('never-onboarded project with existing items: /onboarding redirects to /onboarding/migrate AND the roadmap omits the planning-origin cluster', async ({
   page,
 }) => {
   const seed = await seedRoadmap('never-onboarded-gate@example.com', { onboarded: false });
   await signIn(page, seed.email, seed.password);
 
-  // The onboarding hub reads /api/ai/pre-plan on mount (motir-ai is absent in CI)
-  // — stub the EMPTY resume so the hub renders its chat composer instead of error.
-  await page.route('**/api/ai/pre-plan', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ session: null, docs: [], catalog: null }),
-    }),
-  );
-
-  // ── Gate 1 — /onboarding does NOT redirect: the entrance fork renders, and the
-  //    discovery hub it forwards to renders the chat (MOTIR-1462) ───────────────
+  // ── Gate 1 — MOTIR-1259: a never-onboarded project WITH existing work items
+  //    redirects /onboarding → /onboarding/migrate (the migrate wizard) instead of
+  //    showing the start-fresh entrance. Existing items ARE the understanding.
+  //    Both /onboarding (entrance fork) and /onboarding/discovery (discovery loop)
+  //    detect the non-empty tree and redirect. ───────────────────────────────────
   await page.goto('/onboarding');
-  await expect(page).toHaveURL(/\/onboarding(\?|$)/);
-  await expect(page.getByRole('heading', { name: 'How would you like to start?' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Your idea' })).toBeVisible();
+  await page.waitForURL('**/onboarding/migrate');
 
   await page.goto('/onboarding/discovery');
-  await expect(page).toHaveURL(/\/onboarding\/discovery$/);
-  await expect(page.getByRole('textbox', { name: 'Reply, or ask a question…' })).toBeVisible();
+  await page.waitForURL('**/onboarding/migrate');
 
   // ── Gate 2 — the roadmap mounts the canvas but OMITS the planning-origin ─────
   // Wait on the root-level read so the canvas has rendered its nodes BEFORE we

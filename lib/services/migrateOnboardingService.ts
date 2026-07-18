@@ -7,6 +7,8 @@ import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardin
 import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import type { ExistingWorkItemRef } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
@@ -216,13 +218,44 @@ const AUDIT_CONVENTION: StepWiring = {
 };
 
 /** discovery → generate. Kick a short migrate-variant discovery job; exit when
- *  direction docs exist. */
+ *  direction docs exist. For a project with existing work items (MOTIR-1259),
+ *  the existing tree is passed as grounding context — motir-ai's discovery
+ *  handler uses it to draft tiers that complement what already exists, never a
+ *  blank slate. */
 const DISCOVERY: StepWiring = {
   from: 'discovery',
   to: 'generate',
   async ensureKicked({ run, pctx }) {
     if (run.discoveryJobId) return; // idempotent — one discovery job per run
-    const { jobId } = await aiChatService.submitDiscoveryTurn(MIGRATE_DISCOVERY_PROMPT, pctx);
+    // Read the project's existing work-item tree to ground tier drafting
+    // (MOTIR-1259). Use the unpaginated findAllByProjectForValidity projection —
+    // we only need key + kind + title + status + parentKey, not full WorkItem
+    // rows. A project with no items → empty list → blank-slate discovery.
+    let existingWorkItems: ExistingWorkItemRef[] | undefined;
+    try {
+      const rows = await workItemRepository.findByProject(pctx.projectId, { take: 200 });
+      if (rows.length > 0) {
+        existingWorkItems = rows.map((r) => ({
+          key: r.identifier,
+          kind: r.kind,
+          title: r.title,
+          status: r.status,
+          parentKey: r.parentId,
+        }));
+      }
+    } catch (err) {
+      // Non-blocking: a failed item read (e.g. the project was just deleted
+      // concurrent with a resumed onboarding run) must never gate the discovery
+      // step. Log and proceed with a blank slate — the handler will operate on
+      // the prompt alone.
+      console.error(
+        `migrate-onboarding ${run.id}: failed to read existing work items for discovery grounding (non-blocking):`,
+        err,
+      );
+    }
+    const { jobId } = await aiChatService.submitDiscoveryTurn(MIGRATE_DISCOVERY_PROMPT, pctx, {
+      existingWorkItems,
+    });
     await withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: run.projectId },
       (tx) => migrateOnboardingRepository.update(run.id, { discoveryJobId: jobId }, tx),

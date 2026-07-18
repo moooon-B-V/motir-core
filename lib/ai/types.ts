@@ -127,6 +127,25 @@ export interface JobContextBag {
   // (MOTIR-1468). Absent/false ⇒ proposals carry no explanation. The flag rides
   // the envelope so motir-ai never reads motir-core config directly.
   generateExplanations?: boolean;
+  // The project's existing work-item tree summary (MOTIR-1259) — the items the
+  // user already has in the project, passed to motir-ai's discovery handler so
+  // tier drafting is grounded in what already exists, not a blank slate. Each
+  // entry carries the key, title, kind, status, and parentKey — enough to
+  // understand the tree's shape and complement it. Absent/empty ⇒ a blank-slate
+  // project (the start-fresh path). Loosely typed (the reserved-hole convention,
+  // like `discovery`); the motir-ai handler parses it.
+  existingWorkItems?: ExistingWorkItemRef[];
+}
+
+/** A lightweight summary of one committed work item in the project (MOTIR-1259),
+ *  the minimum shape motir-ai's discovery handler needs to ground tier drafting
+ *  in what already exists. */
+export interface ExistingWorkItemRef {
+  key: string;
+  kind: string;
+  title: string;
+  status: string;
+  parentKey: string | null;
 }
 
 export interface RequestEnvelope {
