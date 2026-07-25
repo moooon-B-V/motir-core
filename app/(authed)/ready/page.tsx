@@ -10,6 +10,7 @@ import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import { ReadyList } from './_components/ReadyList';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
+import { ExpansionNudgeBanner } from './_components/ExpansionNudgeBanner';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 
 // The Ready set — the AI dispatch surface (Story 7.0 · Subtask 7.0.6). A Server
@@ -69,6 +70,8 @@ export default async function ReadyPage() {
         </div>
         <ReadyHelpPopover />
       </header>
+
+      <ExpansionNudgeBanner />
 
       {isEmpty ? (
         <EmptyState

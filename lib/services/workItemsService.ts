@@ -96,7 +96,7 @@ import type {
 } from '@/lib/repositories/workItemRepository';
 import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import type { IssueSort } from '@/lib/issues/issueListView';
-import type { ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
+import type { ExpansionNudge, ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
 import {
   toReadyItemDto,
   toReadyItemDispatchDto,
@@ -3589,6 +3589,41 @@ export const workItemsService = {
   },
 
   /**
+   * Expansion-nudge detection (Subtask 7.11.7 / MOTIR-904) — productises
+   * Principle #17 ("the plan should keep itself runnable"). When the ready
+   * set is below the documented {@link EXPANSION_NUDGE_THRESHOLD} AND an
+   * expandable stub exists, returns the nominated stub so the /ready page
+   * can surface a dismissible banner. Returns `null` when suppressed (ready
+   * set is healthy or no stub exists — no false nag).
+   *
+   * Read-only: reuses the shipped {@link countReady} (no re-derivation) and
+   * {@link workItemRepository.findExpandableStubs}. Nominates the FIRST stub
+   * (sorted priority desc, key asc) as the best candidate to expand.
+   */
+  async computeExpansionNudge(
+    projectId: string,
+    ctx: ServiceContext,
+  ): Promise<ExpansionNudge | null> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    const { count } = await this.countReady(projectId, {}, ctx);
+    if (count >= EXPANSION_NUDGE_THRESHOLD) return null;
+
+    const stubs = await workItemRepository.findExpandableStubs(projectId, ctx.workspaceId);
+    if (stubs.length === 0) return null;
+
+    const nominated = stubs[0]!;
+    return {
+      readyCount: count,
+      nominatedKey: nominated.identifier,
+      nominatedTitle: nominated.title,
+      threshold: EXPANSION_NUDGE_THRESHOLD,
+    };
+  },
+
+  /**
    * Set or unset an epic's `publicChildrenHidden` privacy flag (Story 6.14 ·
    * Subtask 6.14.7 — the admin-gated write path that turns epic privacy on/off).
    * Per the epic-privacy ADR (§1, §5):
@@ -3690,6 +3725,15 @@ export { QUICK_SEARCH_DEFAULT_LIMIT, QUICK_SEARCH_MAX_LIMIT, QUICK_SEARCH_MIN_QU
  *  matrix caps real tree depth at 5 (epic→story→task→bug→subtask); the generous
  *  bound is a backstop against a malformed cycle, never reached normally. */
 const READY_MAX_TREE_DEPTH = 8;
+
+/**
+ * The documented "low" threshold for the expansion-nudge detector (Subtask
+ * 7.11.7 / MOTIR-904, Principle #17). When the ready set drops below this
+ * count AND an expandable stub exists, the /ready page surfaces the nudge.
+ * A documented constant, not magic — the card requires it to be named and
+ * visible so it can be tuned without a code search.
+ */
+const EXPANSION_NUDGE_THRESHOLD = 3;
 
 /**
  * The project's dispatchable ready leaves, computed TOP-DOWN by layer (Subtask

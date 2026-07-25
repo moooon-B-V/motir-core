@@ -139,3 +139,19 @@ export interface ReadyItemDispatchDto extends ReadyItemDto {
    */
   sessionBranch: string | null;
 }
+
+/**
+ * Expansion-nudge payload (Subtask 7.11.7 / MOTIR-904) — returned when the
+ * ready set is below the documented threshold AND at least one expandable stub
+ * exists, so the page can surface a dismissible banner. `null` when the nudge
+ * is suppressed (enough ready items or nothing expandable — no false nag).
+ *
+ * `threshold` is the documented constant so the UI can reference it in copy
+ * without hard-coding.
+ */
+export interface ExpansionNudge {
+  readyCount: number;
+  nominatedKey: string;
+  nominatedTitle: string;
+  threshold: number;
+}
