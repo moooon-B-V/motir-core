@@ -16,6 +16,7 @@ import { IssueAdvancedFilter } from './IssueAdvancedFilter';
 import { SavedFilterDropdown } from './SavedFilterDropdown';
 import { IssueViewSwitcher } from './IssueViewSwitcher';
 import { NewIssueButton } from './NewIssueButton';
+import { AugmentPromptButton } from '@/components/planning/PlanEditsLauncher';
 
 // The /items toolbar (Subtask 2.5.3; view switcher 2.5.8; filter bar 2.5.4;
 // advanced builder 6.1.4), per design/work-items/tree.png + list.mock.html +
@@ -131,6 +132,7 @@ export async function IssueListToolbar({
         ast={ast}
       />
       <IssueViewSwitcher view={view} sort={sort} filter={filter} />
+      <AugmentPromptButton />
       <NewIssueButton />
     </div>
   );
