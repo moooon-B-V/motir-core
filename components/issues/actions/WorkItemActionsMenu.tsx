@@ -2,7 +2,17 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Archive, Copy, Goal, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  Copy,
+  Goal,
+  Maximize2,
+  MoreHorizontal,
+  Pencil,
+  Repeat,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
@@ -61,6 +71,10 @@ export function WorkItemActionsMenu({
   editHref,
   align = 'end',
   triggerClassName,
+  kind,
+  hasChildren,
+  onExpand,
+  onReplan,
 }: {
   itemId: string;
   /** The `PROD-N` key — used for the link, the menu label, and toasts. */
@@ -100,8 +114,17 @@ export function WorkItemActionsMenu({
   align?: 'start' | 'center' | 'end';
   /** Override the trigger button styling for a given surface's placement. */
   triggerClassName?: string;
+  /** The work item's kind — gate "Expand" and "Re-plan" menu items. */
+  kind?: string | null;
+  /** Whether this item has children — "Expand" only shows when false. */
+  hasChildren?: boolean;
+  /** Callback when the user triggers "Expand" from the menu. */
+  onExpand?: () => void;
+  /** Callback when the user triggers "Re-plan" from the menu. */
+  onReplan?: () => void;
 }) {
   const t = useTranslations('workItemActions');
+  const te = useTranslations('planEdits');
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -223,6 +246,39 @@ export function WorkItemActionsMenu({
                 <Pencil className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
                 {t('editDetails')}
               </a>
+            ) : null}
+
+            {/* Expand — MOTIR-903: generate children for a childless container. */}
+            {canEdit && !archived && hasChildren === false && onExpand ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={ITEM_CLASS}
+                onClick={() => {
+                  setOpen(false);
+                  onExpand();
+                }}
+              >
+                <Maximize2 className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                {te('expandAction')}
+              </button>
+            ) : null}
+
+            {/* Re-plan — MOTIR-903: re-plan an epic or story, leaving completed
+                work untouched. */}
+            {canEdit && !archived && kind && (kind === 'epic' || kind === 'story') && onReplan ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={ITEM_CLASS}
+                onClick={() => {
+                  setOpen(false);
+                  onReplan();
+                }}
+              >
+                <Repeat className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                {te('replanAction')}
+              </button>
             ) : null}
 
             {/* Add to active sprint (2.4.14) — after Edit details. Enabled when an
