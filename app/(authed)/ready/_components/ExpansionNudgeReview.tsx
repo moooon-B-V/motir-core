@@ -3,9 +3,10 @@
 import { useTranslations } from 'next-intl';
 import { Check, FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import type { PlanDeltaCreateOp } from '@/lib/ai/planDelta';
 
 interface Props {
-  addedChildren: Array<{ title: string; kind: string }>;
+  addedChildren: PlanDeltaCreateOp[];
   onApprove: () => void;
   onDecline: () => void;
   approving: boolean;
@@ -25,7 +26,7 @@ export function ExpansionNudgeReview({ addedChildren, onApprove, onDecline, appr
             role="listitem"
           >
             <FileText className="h-3.5 w-3.5 shrink-0 text-(--el-text-muted)" aria-hidden />
-            <span className="truncate">{child.title}</span>
+            <span className="truncate">{child.fields.title}</span>
             <span className="shrink-0 text-xs text-(--el-text-muted)">{child.kind}</span>
           </li>
         ))}

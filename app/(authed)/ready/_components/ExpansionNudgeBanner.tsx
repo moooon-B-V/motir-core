@@ -13,6 +13,7 @@ import {
   submitExpandJob,
   PlanEditsClientError,
 } from '@/lib/planning/planEditsClient';
+import type { PlanDeltaCreateOp } from '@/lib/ai/planDelta';
 import type { ExpansionNudge } from '@/lib/dto/ready';
 
 const STORAGE_KEY_PREFIX = 'motir_expansion_nudge_dismissed_';
@@ -25,9 +26,7 @@ export function ExpansionNudgeBanner() {
   const [visible, setVisible] = useState(true);
   const [phase, setPhase] = useState<Phase>('idle');
   const [jobId, setJobId] = useState<string | null>(null);
-  const [addedChildren, setAddedChildren] = useState<Array<{ title: string; kind: string }> | null>(
-    null,
-  );
+  const [addedChildren, setAddedChildren] = useState<PlanDeltaCreateOp[] | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [approveResult, setApproveResult] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -79,11 +78,19 @@ export function ExpansionNudgeBanner() {
         try {
           const result = await fetchJobResult(jid);
           if (!mountedRef.current) return;
-          if (result.status === 'done' && result.result?.planDelta?.added) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            setAddedChildren(result.result.planDelta.added);
-            setPhase('review');
-          } else if (result.status === 'failed') {
+          const planDelta = result.result?.planDelta;
+          if (planDelta) {
+            const creates = planDelta.operations.filter(
+              (op): op is PlanDeltaCreateOp => op.op === 'create',
+            );
+            if (creates.length > 0) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              setAddedChildren(creates);
+              setPhase('review');
+            }
+          } else if (result.status !== 'done') {
+            // job still running, continue polling
+          } else {
             if (pollRef.current) clearInterval(pollRef.current);
             setErrorCode('JOB_FAILED');
             setPhase('error');
@@ -107,7 +114,7 @@ export function ExpansionNudgeBanner() {
     if (!jobId) return;
     setPhase('approving');
     try {
-      const result = await approvePlanDelta(jobId);
+      const result = await approvePlanDelta(jobId, undefined);
       if (!mountedRef.current) return;
       const n = result.created.length;
       setApproveResult(t('nudge.approved', { count: n }));
