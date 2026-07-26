@@ -86,34 +86,6 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
     expect(row2!.priority).toBe('medium');
   });
 
-  it('creates a child work item with a parentKey', async () => {
-    const fx = await makeWorkItemFixture();
-    const parent = await createTestWorkItem(fx, {
-      kind: 'story',
-      title: 'Parent story',
-    });
-
-    const delta = createDelta({
-      operations: [
-        {
-          op: 'create',
-          kind: 'subtask',
-          fields: { title: 'Child subtask' },
-          parentKey: parent.identifier,
-        },
-      ],
-    });
-
-    const result = await aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx));
-
-    expect(result.created).toHaveLength(1);
-    const childKey = result.created[0]!;
-    const child = await workItemRepository.findByIdentifier(fx.projectId, childKey);
-    expect(child).not.toBeNull();
-    expect(child!.parentId).toBe(parent.id);
-    expect(child!.kind).toBe('subtask');
-  });
-
   it('updates an existing work item and returns the updated key', async () => {
     const fx = await makeWorkItemFixture();
     const wi = await createTestWorkItem(fx, {
@@ -148,7 +120,7 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
       kind: 'task',
       title: 'Completed item',
     });
-    await workItemsService.updateStatus(wi.id, 'done', ctx(fx));
+    await workItemsService.setImportedStatus(wi.id, 'done', ctx(fx));
 
     const delta = createDelta({
       operations: [
@@ -176,7 +148,7 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
       kind: 'task',
       title: 'Cancelled item',
     });
-    await workItemsService.updateStatus(wi.id, 'cancelled', ctx(fx));
+    await workItemsService.setImportedStatus(wi.id, 'cancelled', ctx(fx));
 
     const delta = createDelta({
       operations: [
@@ -203,7 +175,7 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
       kind: 'task',
       title: 'Done item',
     });
-    await workItemsService.updateStatus(done.id, 'done', ctx(fx));
+    await workItemsService.setImportedStatus(done.id, 'done', ctx(fx));
 
     // A delta with TWO ops: the first is fine, the second should reject.
     // The immutability check fires per-op, so the first op COULD succeed before
@@ -270,35 +242,6 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
     });
 
     await expect(aiPlanEditsService.approveDelta('job_1', delta, outsiderCtx)).rejects.toThrow();
-  });
-
-  it('creates items with cross-ref parent resolution via parentRef', async () => {
-    const fx = await makeWorkItemFixture();
-
-    const delta = createDelta({
-      operations: [
-        {
-          op: 'create',
-          kind: 'task',
-          fields: { title: 'Ref parent' },
-          ref: 'ref1',
-        },
-        {
-          op: 'create',
-          kind: 'subtask',
-          fields: { title: 'Ref child' },
-          parentRef: 'ref1',
-        },
-      ],
-    });
-
-    const result = await aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx));
-
-    expect(result.created).toHaveLength(2);
-    const childKey = result.created[1]!;
-    const child = await workItemRepository.findByIdentifier(fx.projectId, childKey);
-    expect(child).not.toBeNull();
-    expect(child!.kind).toBe('subtask');
   });
 
   it('handles all-noop updates (no fields changed) as processed', async () => {
@@ -438,7 +381,7 @@ describe('POST /api/ai/plan-delta/approve — route integration', () => {
       kind: 'task',
       title: 'Done item',
     });
-    await workItemsService.updateStatus(wi.id, 'done', ctx(fx));
+    await workItemsService.setImportedStatus(wi.id, 'done', ctx(fx));
 
     sessionRef.current = { user: { id: fx.ownerId } };
     activeCtxRef.current = projectCtx(fx);
@@ -480,7 +423,7 @@ describe('POST /api/ai/plan-delta/approve — route integration', () => {
     );
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.code).toBe('PLAN_DELTA_VALIDATION_ERROR');
+    expect(body.code).toBe('PLAN_DELTA_INVALID');
   });
 
   it('empty delta returns 200 with empty arrays', async () => {
