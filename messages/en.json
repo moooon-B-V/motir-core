@@ -2325,6 +2325,20 @@
     "toast": {
       "title": "Copied",
       "body": "Paste {command} into your terminal."
+    },
+    "nudge": {
+      "body": "Only {count} work item ready — expand {key} ({title})?",
+      "expandLabel": "Expand",
+      "expanding": "Expanding…",
+      "dismissAria": "Dismiss expansion nudge",
+      "dismissLabel": "Dismiss",
+      "emptyHint": "The ready set is empty — expanding a stub will add new work.",
+      "reviewTitle": "Proposed children",
+      "approveLabel": "Approve",
+      "approving": "Approving…",
+      "declineLabel": "Decline",
+      "approved": "{count, plural, one {# child created} other {# children created}}",
+      "error": "Something went wrong ({code})."
     }
   },
   "backlog": {

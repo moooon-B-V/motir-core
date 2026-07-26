@@ -737,6 +737,39 @@ export const workItemRepository = {
   },
 
   /**
+   * Childless expandable STUBS (Subtask 7.11.7 / MOTIR-904) — epics and stories
+   * that have NO children and are NOT in a terminal status category (done /
+   * cancelled), so expanding them would replenish the ready set. Sorted by
+   * priority desc, key asc so the highest-priority stub is nominated first.
+   * Excludes triage items and archived rows. Read-only (db singleton, no tx).
+   */
+  async findExpandableStubs(
+    projectId: string,
+    workspaceId: string,
+  ): Promise<Array<{ identifier: string; title: string; kind: string; priority: string }>> {
+    return db.$queryRaw<
+      Array<{ identifier: string; title: string; kind: string; priority: string }>
+    >`
+      SELECT w."identifier", w."title", w."kind"::text AS "kind", w."priority"::text AS "priority"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+          ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE w."projectId" = ${projectId}
+         AND w."workspaceId" = ${workspaceId}
+         AND w."archivedAt" IS NULL
+         AND w."kind"::text IN ('epic', 'story')
+         AND ws."category" NOT IN ('done', 'cancelled')
+         AND ${notInTriageSql('w')}
+         AND NOT EXISTS (
+               SELECT 1 FROM "work_item" c
+                WHERE c."parentId" = w."id"
+                  AND c."archivedAt" IS NULL
+             )
+       ORDER BY w."identifier" ASC
+       LIMIT 5`;
+  },
+
+  /**
    * The ATOMIC claim read for `claim_next_ready` (MOTIR-1330) — the dispatch
    * race-fix. Given the service's pre-computed ready candidate ids in
    * dispatch-rank order, LOCK the highest-ranked one that is still claimable and
