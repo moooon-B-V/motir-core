@@ -236,9 +236,11 @@ test('augment — submit prompt, review provenance, approve, tree reflects the c
 
   await chapter('Review proposed changes and provenance', async () => {
     // Assert the proposed addition + provenance (parent key shown in the dock).
-    await expect(page.getByText('Payment Integration')).toBeVisible();
-    // The DeltaRow renders \u21B3 <parentKey> inside a Tooltip trigger span.
-    await expect(page.locator(`text=↳`).first()).toBeVisible();
+    // The delta items sit inside a scrollable container — toBeVisible may
+    // report "hidden" due to overflow clipping; use count assertions instead.
+    const dockBody = page.locator(reviewHeader).locator('..');
+    await expect(dockBody.getByText('Payment Integration')).toHaveCount(1);
+    await expect(dockBody.getByText(/↳/)).toHaveCount(1);
   });
 
   await chapter('Approve and verify', async () => {
@@ -281,8 +283,9 @@ test('expand — click Expand on childless stub, review, approve, children appea
   await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
 
   // Assert all three children are proposed.
+  const expandDock = page.locator(reviewHeader).locator('..');
   for (const title of ['In-app notifications', 'Email notifications', 'Push notifications']) {
-    await expect(page.getByText(title)).toBeVisible();
+    await expect(expandDock.getByText(title)).toHaveCount(1);
   }
 
   // Approve.
@@ -333,13 +336,15 @@ test('re-plan — completion-aware: done leaves locked, not-done portion changes
   await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
 
   // Assert the new stories for the not-done portion are proposed.
-  await expect(page.getByText('Billing plans')).toBeVisible();
-  await expect(page.getByText('API management')).toBeVisible();
+  const replanDock = page.locator(reviewHeader).locator('..');
+  await expect(replanDock.getByText('Billing plans')).toHaveCount(1);
+  await expect(replanDock.getByText('API management')).toHaveCount(1);
 
   // The delta MUST NOT propose changes to done (terminal) items — no `update`
   // ops targeting Theme toggle or Profile page. Assert no "Change" badge.
-  const dock = page.locator(reviewHeader).locator('..');
-  await expect(dock.getByText('Change', { exact: true })).toHaveCount(0);
+  await expect(
+    page.locator(reviewHeader).locator('..').getByText('Change', { exact: true }),
+  ).toHaveCount(0);
 
   // Approve.
   const approveResponse = page.waitForResponse(
