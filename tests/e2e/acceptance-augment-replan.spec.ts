@@ -1,4 +1,8 @@
-// E2E — AI augment, expand & re-plan (Subtask 7.11.9 / MOTIR-906).
+// Acceptance E2E — AI augment, expand & re-plan (Subtask 7.11.9 / MOTIR-906).
+//
+// Runs under playwright.acceptance.config.ts (MOTIR_CLOUD + video: 'on') so the
+// CI acceptance-video lane records a chaptered clip; the uploader resolves the
+// subtask key up to the parent story MOTIR-811 via authorizeAcceptancePublish.
 //
 // Drives the three operation surfaces from the user's seat in a real browser:
 // augment (prompt → review → approve), expand (click on stub → review → approve),
@@ -13,7 +17,8 @@
 // creates/updates work items through the shipped `aiPlanEditsService.approveDelta`,
 // so the spec asserts real DB state, not a stub echo.
 
-import { expect, test, type Page } from '@playwright/test';
+import { test, expect } from './_helpers/acceptance-video';
+import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -204,55 +209,67 @@ test.afterAll(async () => {
 
 test('augment — submit prompt, review provenance, approve, tree reflects the change', async ({
   page,
+  chapter,
+  acceptanceStory,
 }) => {
+  acceptanceStory('MOTIR-811');
   const seed = await seedAiAugmentReplan(`ai-augment-${Date.now()}@example.com`);
   await stubAiAccess(page);
   await stubEditsJobs(page);
   await stubJobResult(page, AUGMENT_JOB_ID, augmentDelta(seed.authEpicKey));
 
-  await signIn(page, seed.email, seed.password);
-  await page.goto('/items');
-
-  // Open the augment prompt modal.
-  await page.getByRole('button', { name: 'Augment from prompt' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page
-    .getByPlaceholder(/Describe what to add/)
-    .fill('Add a payment integration for the Stripe checkout flow');
-  await page.getByRole('button', { name: 'Augment', exact: true }).click();
-
-  // Wait for running phase (role="status" with "Motir AI is working on your plan…").
-  await expect(
-    page.locator(runningStatusLocator).filter({ hasText: /Motir AI is working/ }),
-  ).toBeVisible({ timeout: 10_000 });
-
-  // Wait for review dock — the authoritative signal the delta is rendered.
-  await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
-
-  // Assert the proposed addition + provenance (parent key).
-  await expect(page.getByText('Payment Integration')).toBeVisible();
-  await expect(page.locator(`text=↳ ${seed.authEpicKey}`)).toBeVisible();
-
-  // Approve: arm the response BEFORE clicking.
-  const approveResponse = page.waitForResponse(
-    (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
-  );
-  await page.locator(approveButton(1)).click();
-  expect((await approveResponse).status()).toBe(200);
-
-  await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
-
-  // Assert DB: the new work item was created.
-  const newItem = await db.workItem.findFirst({
-    where: { projectId: seed.projectId, title: 'Payment Integration' },
+  await chapter('Sign in and open the items list', async () => {
+    await signIn(page, seed.email, seed.password);
+    await page.goto('/items');
   });
-  expect(newItem).not.toBeNull();
-  expect(newItem!.kind).toBe('story');
+
+  await chapter('Submit augment prompt', async () => {
+    await page.getByRole('button', { name: 'Augment from prompt' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page
+      .getByPlaceholder(/Describe what to add/)
+      .fill('Add a payment integration for the Stripe checkout flow');
+    await page.getByRole('button', { name: 'Augment', exact: true }).click();
+
+    // Wait for running phase.
+    await expect(
+      page.locator(runningStatusLocator).filter({ hasText: /Motir AI is working/ }),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  await chapter('Review proposed changes and provenance', async () => {
+    // Wait for review dock — the authoritative signal the delta is rendered.
+    await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
+
+    // Assert the proposed addition + provenance (parent key).
+    await expect(page.getByText('Payment Integration')).toBeVisible();
+    await expect(page.locator(`text=↳ ${seed.authEpicKey}`)).toBeVisible();
+  });
+
+  await chapter('Approve and verify', async () => {
+    // Approve: arm the response BEFORE clicking.
+    const approveResponse = page.waitForResponse(
+      (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
+    );
+    await page.locator(approveButton(1)).click();
+    expect((await approveResponse).status()).toBe(200);
+
+    await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
+
+    // Assert DB: the new work item was created.
+    const newItem = await db.workItem.findFirst({
+      where: { projectId: seed.projectId, title: 'Payment Integration' },
+    });
+    expect(newItem).not.toBeNull();
+    expect(newItem!.kind).toBe('story');
+  });
 });
 
 test('expand — click Expand on childless stub, review, approve, children appear', async ({
   page,
+  acceptanceStory,
 }) => {
+  acceptanceStory('MOTIR-811');
   const seed = await seedAiAugmentReplan(`ai-expand-${Date.now()}@example.com`);
   await stubAiAccess(page);
   await stubEditsJobs(page);
@@ -298,7 +315,9 @@ test('expand — click Expand on childless stub, review, approve, children appea
 
 test('re-plan — completion-aware: done leaves locked, not-done portion changes', async ({
   page,
+  acceptanceStory,
 }) => {
+  acceptanceStory('MOTIR-811');
   const seed = await seedAiAugmentReplan(`ai-replan-${Date.now()}@example.com`);
   await stubAiAccess(page);
   await stubEditsJobs(page);
@@ -362,7 +381,9 @@ test('re-plan — completion-aware: done leaves locked, not-done portion changes
 
 test('nudge — near-drained project shows expansion-nudge banner and opens inline review', async ({
   page,
+  acceptanceStory,
 }) => {
+  acceptanceStory('MOTIR-811');
   const seed = await seedAiAugmentReplan(`ai-nudge-${Date.now()}@example.com`);
 
   // Stub the nudge endpoint — the banner fetches this on mount.
