@@ -183,10 +183,6 @@ function replanDelta(parentKey: string) {
 const reviewHeader = 'h2:has-text("Review proposed changes")';
 const doneTitle = 'h3:has-text("Work items updated")';
 
-function approveButton(n: number) {
-  return `button:has-text("Approve — add ${n} item${n > 1 ? 's' : ''}")`;
-}
-
 /** Open the actions menu on a table row identified by its item key, then click a menuitem. */
 async function clickRowAction(page: Page, itemKey: string, actionLabel: string): Promise<void> {
   const row = page.getByRole('row', { name: new RegExp(itemKey) });
@@ -216,10 +212,8 @@ test('augment — submit prompt, review provenance, approve, tree reflects the c
   await stubEditsJobs(page);
   await stubJobResult(page, AUGMENT_JOB_ID, augmentDelta(seed.authEpicKey));
 
-  await chapter('Sign in and open the items list', async () => {
-    await signIn(page, seed.email, seed.password);
-    await page.goto('/items');
-  });
+  await signIn(page, seed.email, seed.password);
+  await page.goto('/items');
 
   await chapter('Submit augment prompt', async () => {
     await page.getByRole('button', { name: 'Augment from prompt' }).click();
@@ -228,32 +222,21 @@ test('augment — submit prompt, review provenance, approve, tree reflects the c
       .getByPlaceholder(/Describe what to add/)
       .fill('Add a payment integration for the Stripe checkout flow');
     await page.getByRole('button', { name: 'Augment', exact: true }).click();
-
-    // Wait for review dock — with stubs the submit→running→review
-    // transitions happen in one tick, so wait for the authoritative signal.
     await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
   });
 
-  await chapter('Review proposed changes and provenance', async () => {
-    // The review dock has rendered — `reviewHeader` is already visible from the
-    // previous step. Assert the proposed item title and provenance marker exist
-    // on the page (the delta sits in a sibling div of the header, so do NOT
-    // scope — getByText searches the whole page).
+  await chapter('Review and approve', async () => {
     await expect(page.getByText('Payment Integration')).toHaveCount(1);
     await expect(page.getByText(/↳/)).toHaveCount(1);
-  });
 
-  await chapter('Approve and verify', async () => {
-    // Approve: arm the response BEFORE clicking.
     const approveResponse = page.waitForResponse(
       (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
     );
-    await page.locator(approveButton(1)).click();
+    await page.getByRole('button', { name: /Approve — add/ }).click();
     expect((await approveResponse).status()).toBe(200);
 
     await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
 
-    // Assert DB: the new work item was created.
     const newItem = await db.workItem.findFirst({
       where: { projectId: seed.projectId, title: 'Payment Integration' },
     });
@@ -292,7 +275,7 @@ test('expand — click Expand on childless stub, review, approve, children appea
   const approveResponse = page.waitForResponse(
     (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
   );
-  await page.locator(approveButton(3)).click();
+  await page.getByRole('button', { name: /Approve — add/ }).click();
   expect((await approveResponse).status()).toBe(200);
 
   await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
@@ -347,7 +330,7 @@ test('re-plan — completion-aware: done leaves locked, not-done portion changes
   const approveResponse = page.waitForResponse(
     (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
   );
-  await page.locator(approveButton(2)).click();
+  await page.getByRole('button', { name: /Approve — add/ }).click();
   expect((await approveResponse).status()).toBe(200);
 
   await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
