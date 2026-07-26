@@ -235,12 +235,12 @@ test('augment — submit prompt, review provenance, approve, tree reflects the c
   });
 
   await chapter('Review proposed changes and provenance', async () => {
-    // Assert the proposed addition + provenance (parent key shown in the dock).
-    // The delta items sit inside a scrollable container — toBeVisible may
-    // report "hidden" due to overflow clipping; use count assertions instead.
-    const dockBody = page.locator(reviewHeader).locator('..');
-    await expect(dockBody.getByText('Payment Integration')).toHaveCount(1);
-    await expect(dockBody.getByText(/↳/)).toHaveCount(1);
+    // The review dock has rendered — `reviewHeader` is already visible from the
+    // previous step. Assert the proposed item title and provenance marker exist
+    // on the page (the delta sits in a sibling div of the header, so do NOT
+    // scope — getByText searches the whole page).
+    await expect(page.getByText('Payment Integration')).toHaveCount(1);
+    await expect(page.getByText(/↳/)).toHaveCount(1);
   });
 
   await chapter('Approve and verify', async () => {
@@ -282,10 +282,10 @@ test('expand — click Expand on childless stub, review, approve, children appea
   // in one tick, so wait for the authoritative signal directly.
   await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
 
-  // Assert all three children are proposed.
-  const expandDock = page.locator(reviewHeader).locator('..');
+  // Assert all three children are proposed (page-level search — the delta
+  // sits in a sibling of the header, not inside it).
   for (const title of ['In-app notifications', 'Email notifications', 'Push notifications']) {
-    await expect(expandDock.getByText(title)).toHaveCount(1);
+    await expect(page.getByText(title)).toHaveCount(1);
   }
 
   // Approve.
@@ -336,15 +336,12 @@ test('re-plan — completion-aware: done leaves locked, not-done portion changes
   await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
 
   // Assert the new stories for the not-done portion are proposed.
-  const replanDock = page.locator(reviewHeader).locator('..');
-  await expect(replanDock.getByText('Billing plans')).toHaveCount(1);
-  await expect(replanDock.getByText('API management')).toHaveCount(1);
+  await expect(page.getByText('Billing plans')).toHaveCount(1);
+  await expect(page.getByText('API management')).toHaveCount(1);
 
   // The delta MUST NOT propose changes to done (terminal) items — no `update`
   // ops targeting Theme toggle or Profile page. Assert no "Change" badge.
-  await expect(
-    page.locator(reviewHeader).locator('..').getByText('Change', { exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByText('Change', { exact: true })).toHaveCount(0);
 
   // Approve.
   const approveResponse = page.waitForResponse(
