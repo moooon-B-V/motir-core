@@ -16,7 +16,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 
 export const AUGMENT_REPLAN_SEED_PASSWORD = 'ai-augment-replan-e2e-pass-9';
 
@@ -116,14 +115,6 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
   await db.workItem.update({ where: { id: theme.id }, data: { status: 'done' } });
   await db.workItem.update({ where: { id: profile.id }, data: { status: 'done' } });
 
-  // Re-read to get identifiers.
-  const [themeDone, profileDone, billingWip, apiWip] = await Promise.all([
-    workItemRepository.findByIdentifier(pid, theme.id),
-    workItemRepository.findByIdentifier(pid, profile.id),
-    workItemRepository.findByIdentifier(pid, billing.id),
-    workItemRepository.findByIdentifier(pid, api.id),
-  ]);
-
   return {
     email,
     password: AUGMENT_REPLAN_SEED_PASSWORD,
@@ -133,9 +124,9 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
     loginKey: login.identifier,
     notifKey: notif.identifier,
     settingsEpicKey: settingsEpic.identifier,
-    themeKey: themeDone!.identifier,
-    profileKey: profileDone!.identifier,
-    billingKey: billingWip!.identifier,
-    apiKey: apiWip!.identifier,
+    themeKey: theme.identifier,
+    profileKey: profile.identifier,
+    billingKey: billing.identifier,
+    apiKey: api.identifier,
   };
 }
