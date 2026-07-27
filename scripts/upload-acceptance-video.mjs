@@ -7,6 +7,12 @@
 // (`integration` scope) for an unconnected repo. A FAILING run leaves no video,
 // so this is a no-op — a red acceptance E2E publishes nothing.
 //
+// EVERY chaptered recording in the lane is published, each to its OWN declared
+// story (MOTIR-1734). The lane holds one chaptered acceptance spec per
+// user-facing story (the planner rule MOTIR-1644 / the per-story support
+// MOTIR-1700), so publishing "the" recording used to drop all but one story's
+// receipt — silently, on a green run. See `findRecordings`.
+//
 // Target STORY resolution (MOTIR-1684) — the publish is NO LONGER pinned to the
 // MOTIR-1627 dogfood constant. `resolveStoryKey` picks the target in precedence
 // order: (1) an explicit ACCEPTANCE_STORY_KEY (library / manual override); (2)
@@ -27,7 +33,7 @@
 //      MOTIR_BASE_URL (default https://app.motir.co),
 //      ACCEPTANCE_OUTPUT_DIR (default out/playwright-output-acceptance),
 //      ACCEPTANCE_PRODUCED_BY, plus GitHub's GITHUB_SHA / GITHUB_RUN_ID / … for
-//      provenance. Also usable as a library: import { findArtifacts,
+//      provenance. Also usable as a library: import { findRecordings,
 //      parseWorkItemKey, resolveStoryKey, requestGithubOidcToken,
 //      uploadAcceptanceVideo }.
 
@@ -41,40 +47,80 @@ const DEFAULT_OUTPUT_DIR = 'out/playwright-output-acceptance';
 const DEFAULT_OIDC_AUDIENCE = 'motir-acceptance-video';
 
 /**
- * Walk a Playwright output dir and locate the acceptance artifacts. Returns null
- * when there is NO video (a failed/aborted run recorded none) — the caller then
- * publishes nothing. `trace` / `chapters` are optional.
+ * Walk a Playwright output dir and locate EVERY recording it produced.
+ *
+ * One RECORDING is one test's output directory: its `video.webm` plus whatever
+ * sidecars sit beside it (`trace.zip`, `chapters.json`, `acceptance-story.json`).
+ * Grouping BY DIRECTORY is what makes a video inseparable from its own sidecars
+ * — the MOTIR-1680 invariant — and it now holds for N recordings instead of one.
+ * (A test's `attachments/` subdir holds hash-suffixed copies and no video, so it
+ * never forms a recording of its own.)
+ *
+ * Which recordings are published:
+ *
+ *  - If ANY recording carries a `chapters.json`, **every** chaptered recording is
+ *    returned, each with its own sidecars. This is the MOTIR-1734 fix: the lane's
+ *    `testMatch` is `acceptance*.spec.ts` and the planner rule (MOTIR-1644 /
+ *    MOTIR-1700) creates a chaptered acceptance spec per user-facing story, so
+ *    "the chaptered one" stopped being singular. Taking only the first —
+ *    whichever `fs.readdirSync` happened to yield — published one story's clip
+ *    and SILENTLY DROPPED every other, on a green run with no warning. (Observed
+ *    on PR #1620: three chaptered specs, MOTIR-811 published, MOTIR-1726's clip
+ *    discarded.)
+ *  - If NONE carries chapters, a single un-chaptered recording is returned, which
+ *    preserves the prior fallback behaviour for a non-chaptered suite (the story
+ *    then resolves from the PR ref / the configured fallback).
+ *
+ * Returns `[]` when the dir is absent or nothing recorded (a red / aborted run) —
+ * the caller then publishes nothing.
  */
-export function findArtifacts(outputDir) {
-  if (!fs.existsSync(outputDir)) return null;
+export function findRecordings(outputDir) {
+  if (!fs.existsSync(outputDir)) return [];
   const walk = (dir) =>
     fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
       const full = path.join(dir, entry.name);
       return entry.isDirectory() ? walk(full) : [full];
     });
-  const files = walk(outputDir);
-  const chapters = files.find((f) => f.endsWith('chapters.json'));
-  // Pin the published video + trace to the dogfood test's own directory —
-  // the one containing chapters.json. Only the chaptered happy-path test
-  // writes chapters, so the published artifacts are deterministically the
-  // dogfood clip, not a random first-find across all test runs. If no
-  // chapters.json exists (the happy-path didn't run / a red run / a
-  // non-chaptered suite), fall back to any .webm / trace.zip.
-  const inDog = (f, ext) =>
-    f.endsWith(ext) && (!chapters || path.dirname(f) === path.dirname(chapters));
-  const video = files.find((f) => inDog(f, '.webm'));
-  if (!video) return null;
-  // The recording's self-declared story (MOTIR-1684) — the `acceptance-story.json`
-  // sidecar the harness writes next to chapters.json, pinned to the same dogfood
-  // directory so a sibling recording can't shadow it. Null when the spec did not
-  // declare one (→ the uploader falls to the PR-derived / fallback story).
-  const storyMeta = files.find((f) => inDog(f, 'acceptance-story.json'));
-  return {
-    video,
-    trace: files.find((f) => inDog(f, 'trace.zip')) ?? null,
-    chapters: chapters ?? null,
-    storyKey: readStoryKey(storyMeta ?? null),
-  };
+
+  /** @type {Map<string, {dir: string, video: string|null, trace: string|null, chapters: string|null, storyMeta: string|null}>} */
+  const byDir = new Map();
+  for (const file of walk(outputDir)) {
+    const dir = path.dirname(file);
+    let entry = byDir.get(dir);
+    if (!entry) {
+      entry = { dir, video: null, trace: null, chapters: null, storyMeta: null };
+      byDir.set(dir, entry);
+    }
+    // First match wins per slot — a directory holds one of each by construction.
+    if (file.endsWith('.webm')) entry.video ??= file;
+    else if (file.endsWith('trace.zip')) entry.trace ??= file;
+    else if (file.endsWith('chapters.json')) entry.chapters ??= file;
+    else if (file.endsWith('acceptance-story.json')) entry.storyMeta ??= file;
+  }
+
+  /** @type {Array<{dir: string, video: string, trace: string|null, chapters: string|null, storyKey: string|null}>} */
+  const recordings = [];
+  // `fs.readdirSync` does not sort, and publish ORDER must not depend on the
+  // filesystem — the bug this function exists to fix was a walk-order race.
+  for (const entry of [...byDir.values()].sort((a, b) => a.dir.localeCompare(b.dir))) {
+    // A directory with no video is not a recording (a test's `attachments/`
+    // subdir, or the run's own metadata). The local binding also narrows the
+    // type, so a recording's `video` is non-nullable to every consumer.
+    const video = entry.video;
+    if (video === null) continue;
+    recordings.push({
+      dir: entry.dir,
+      video,
+      trace: entry.trace,
+      chapters: entry.chapters,
+      // The recording's self-declared story (MOTIR-1684). Null when the spec did
+      // not declare one (→ the PR-derived / fallback story).
+      storyKey: readStoryKey(entry.storyMeta),
+    });
+  }
+
+  const chaptered = recordings.filter((r) => r.chapters !== null);
+  return chaptered.length > 0 ? chaptered : recordings.slice(0, 1);
 }
 
 /** Parse the story key from an `acceptance-story.json` sidecar; null if absent
@@ -249,32 +295,61 @@ function ciRunUrl() {
     : null;
 }
 
-async function main() {
+/**
+ * Discover every recording, resolve each one's story, and publish them all.
+ *
+ * Exported so the ORCHESTRATION is unit-testable, not just its parts: the
+ * MOTIR-1734 bug lived precisely here — `findArtifacts` and
+ * `uploadAcceptanceVideo` were both well covered and both correct, while the
+ * single-publish loop between them dropped every story but one.
+ */
+export async function main() {
   const baseUrl = process.env['MOTIR_BASE_URL'] ?? DEFAULT_BASE_URL;
   const outputDir = process.env['ACCEPTANCE_OUTPUT_DIR'] ?? DEFAULT_OUTPUT_DIR;
   const audience = process.env['MOTIR_OIDC_AUDIENCE'] ?? DEFAULT_OIDC_AUDIENCE;
 
-  // Find the artifacts FIRST (a red run / recording-off publishes nothing) — the
-  // recording may self-declare its story, which outranks the PR-derived target.
-  const artifacts = findArtifacts(outputDir);
-  if (!artifacts) {
+  // Find the recordings FIRST (a red run / recording-off publishes nothing) —
+  // each may self-declare its story, which outranks the PR-derived target.
+  const recordings = findRecordings(outputDir);
+  if (recordings.length === 0) {
     console.log(
       `No acceptance video under ${outputDir} — red run or recording off; nothing to publish.`,
     );
     return;
   }
 
-  // Resolve the target story (MOTIR-1684): recording sidecar → PR `MOTIR-<id>` →
-  // dogfood fallback (explicit env outranks all). A run with a video but no
-  // resolvable story is a misconfiguration, not a silent skip.
-  const { storyKey, source } = resolveStoryKey(artifacts.storyKey);
-  if (!storyKey) {
+  // Resolve EVERY target before authenticating, so a misconfigured run fails
+  // loudly and up front instead of half-publishing (MOTIR-1684 precedence, per
+  // recording: sidecar → PR `MOTIR-<id>` → fallback; explicit env outranks all).
+  const targets = recordings.map((recording) => ({
+    recording,
+    ...resolveStoryKey(recording.storyKey),
+  }));
+  const unresolved = targets.filter((t) => !t.storyKey);
+  if (unresolved.length > 0) {
     console.error(
-      'No target story resolved — set ACCEPTANCE_STORY_KEY, a self-declared recording story, ACCEPTANCE_PR_REF/ACCEPTANCE_PR_TITLE, or ACCEPTANCE_FALLBACK_STORY_KEY.',
+      `No target story resolved for ${unresolved.length} recording(s) (${unresolved
+        .map((t) => path.basename(t.recording.dir))
+        .join(
+          ', ',
+        )}) — set ACCEPTANCE_STORY_KEY, a self-declared recording story, ACCEPTANCE_PR_REF/ACCEPTANCE_PR_TITLE, or ACCEPTANCE_FALLBACK_STORY_KEY.`,
     );
     process.exit(1);
   }
-  console.log(`Acceptance publish target: ${storyKey} (resolved via ${source}).`);
+
+  console.log(`Acceptance publish targets (${targets.length}):`);
+  for (const { recording, storyKey, source } of targets) {
+    console.log(`  ${path.basename(recording.dir)} → ${storyKey} (resolved via ${source}).`);
+  }
+  // Two recordings CAN legitimately target the same story (two chaptered tests in
+  // one spec, or an explicit ACCEPTANCE_STORY_KEY override). Both are published —
+  // evidence is append-only, and silently dropping one is the very bug MOTIR-1734
+  // fixed — but say so, because a duplicate receipt on a story is surprising.
+  const perStory = new Map();
+  for (const { storyKey } of targets) perStory.set(storyKey, (perStory.get(storyKey) ?? 0) + 1);
+  for (const [storyKey, count] of perStory) {
+    if (count > 1) console.log(`Note: ${count} recordings target ${storyKey} — publishing all.`);
+  }
 
   // Keyless GitHub OIDC first (MOTIR-1650); fall back to the MOTIR_UPLOAD_TOKEN
   // PAT for a repo not connected via the App. Neither present → opt-in no-op
@@ -293,19 +368,44 @@ async function main() {
       : 'Authenticating the acceptance-video publish via MOTIR_UPLOAD_TOKEN (PAT fallback).',
   );
 
-  const result = await uploadAcceptanceVideo({
-    baseUrl,
-    token,
-    oidcToken,
-    storyKey,
-    artifacts,
-    provenance: {
-      commitSha: process.env['GITHUB_SHA'] ?? null,
-      ciRunUrl: ciRunUrl(),
-      producedByKey: process.env['ACCEPTANCE_PRODUCED_BY'] ?? null,
-    },
-  });
-  console.log(`Published acceptance evidence for ${storyKey}: ${result?.evidence?.id ?? 'ok'}`);
+  const provenance = {
+    commitSha: process.env['GITHUB_SHA'] ?? null,
+    ciRunUrl: ciRunUrl(),
+    producedByKey: process.env['ACCEPTANCE_PRODUCED_BY'] ?? null,
+  };
+
+  // One publish per recording. A failure is REPORTED and the loop continues, so
+  // one story's bad publish cannot cost the others their receipt; the step still
+  // exits non-zero at the end, so a partial publish is never silently green.
+  let failed = 0;
+  for (const { recording, storyKey } of targets) {
+    try {
+      const result = await uploadAcceptanceVideo({
+        baseUrl,
+        token,
+        oidcToken,
+        storyKey,
+        artifacts: {
+          video: recording.video,
+          trace: recording.trace,
+          chapters: recording.chapters,
+        },
+        provenance,
+      });
+      console.log(`Published acceptance evidence for ${storyKey}: ${result?.evidence?.id ?? 'ok'}`);
+    } catch (err) {
+      failed += 1;
+      console.error(
+        `Failed to publish ${path.basename(recording.dir)} → ${storyKey}: ${err?.message ?? err}`,
+      );
+    }
+  }
+
+  if (failed > 0) {
+    console.error(`${failed} of ${targets.length} acceptance publish(es) failed.`);
+    process.exit(1);
+  }
+  console.log(`Published ${targets.length} acceptance recording(s).`);
 }
 
 // Run only when invoked as a script (not when imported by a test).
