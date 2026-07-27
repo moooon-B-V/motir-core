@@ -99,6 +99,17 @@ export interface BugAnalysisContext {
 export interface JobContextBag {
   prompt?: string | null;
   rootItemKey?: string | null;
+  // The CONTEXTUAL-PLANNING anchor SET (7.12.3 · MOTIR-909 producer ↔ 7.12.2 /
+  // MOTIR-908 consumer) — the work-item IDENTIFIERS a chat turn is anchored at.
+  // PRESENT ⇒ the submit is a contextual turn: motir-ai classifies the intent from
+  // `prompt` (the turn text — the re-plan "reason" IS that message, never a
+  // separate param), resolves which of the three shipped 7.11 kinds the turn really
+  // is, and pushes the UNION of every anchor's item + parent + siblings + children
+  // as grounding. ABSENT ⇒ not a contextual turn: `rootItemKey` drives the single
+  // anchor exactly as before. Introduces NO new `jobKind` — the submitted kind is
+  // only the fallback when the text carries no signal. Core sends the set only
+  // after resolving and view-gating every anchor.
+  targetKeys?: string[];
   discovery?: unknown;
   // The workspace's connected repo SET — the PLURAL cross-repo contract with
   // motir-ai's multi-repo code-graph reads (7.10.15/MOTIR-1598 producer ↔

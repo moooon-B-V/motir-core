@@ -281,6 +281,13 @@ export default defineConfig({
         'lib/planning/planChangeDiff.ts',
         'lib/planning/planChangeClient.ts',
         'lib/hooks/usePlanChangeConversation.ts',
+        // Story 7.12 · Subtask 7.12.3 (MOTIR-909) — CONTEXTUAL planning. The
+        // conversation's scoping is now a permission boundary: which anchors a
+        // turn plans against, and whether each one was view-gated, is decided in
+        // these two files. They join the same gate as the rest of the
+        // conversation stack they extend.
+        'lib/planChange/scope.ts',
+        'lib/services/contextualPlanningService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -496,6 +503,9 @@ export default defineConfig({
         'lib/planning/planChangeDiff.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/planChangeClient.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/hooks/usePlanChangeConversation.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask 7.12.3 (MOTIR-909) — the contextual-planning scope + orchestration.
+        'lib/planChange/scope.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/contextualPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

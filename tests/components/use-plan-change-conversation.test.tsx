@@ -40,6 +40,7 @@ function session(bodies: string[]): PlanChangeSessionDto {
   return {
     id: 's1',
     projectId: 'p1',
+    targetKeys: [],
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,

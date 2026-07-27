@@ -11,6 +11,7 @@ import {
   PlanChangeTurnConflictError,
 } from '@/lib/planChange/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -209,13 +210,21 @@ describe('planChangeSessionsService — append concurrency', () => {
     ]);
 
     const rows = await planChangeTurnRepository.listBySessionId(
-      (await planChangeSessionRepository.findByProjectId(fx.projectId, fx.workspaceId))!.id,
+      (await planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        PROJECT_SCOPE_KEY,
+        fx.workspaceId,
+      ))!.id,
       fx.workspaceId,
     );
     expect(rows.map((r) => r.seq)).toEqual([0, 1]);
     expect(rows.map((r) => r.body).sort()).toEqual(['A', 'B']);
 
-    const session = await planChangeSessionRepository.findByProjectId(fx.projectId, fx.workspaceId);
+    const session = await planChangeSessionRepository.findByProjectAndScope(
+      fx.projectId,
+      PROJECT_SCOPE_KEY,
+      fx.workspaceId,
+    );
     expect(session!.turnCount).toBe(2);
   });
 
@@ -276,10 +285,18 @@ describe('planChangeSessionsService — tenant isolation', () => {
 
     // The row exists — but not for tenant A's workspace scope.
     expect(
-      await planChangeSessionRepository.findByProjectId(other.projectId, fx.workspaceId),
+      await planChangeSessionRepository.findByProjectAndScope(
+        other.projectId,
+        PROJECT_SCOPE_KEY,
+        fx.workspaceId,
+      ),
     ).toBeNull();
     expect(
-      await planChangeSessionRepository.findByProjectId(other.projectId, other.workspaceId),
+      await planChangeSessionRepository.findByProjectAndScope(
+        other.projectId,
+        PROJECT_SCOPE_KEY,
+        other.workspaceId,
+      ),
     ).not.toBeNull();
   });
 });

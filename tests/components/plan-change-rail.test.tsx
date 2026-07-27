@@ -31,6 +31,7 @@ function session(turns: PlanChangeTurnDto[]): PlanChangeSessionDto {
   return {
     id: 's1',
     projectId: 'p1',
+    targetKeys: [],
     turnCount: turns.length,
     lastJobId: null,
     lastSubmittedAt: null,

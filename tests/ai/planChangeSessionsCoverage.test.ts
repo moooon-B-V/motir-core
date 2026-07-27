@@ -6,6 +6,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
+import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -78,8 +79,9 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
 
     // Every service path hands the repository a `tx`; these are the `tx ?? db`
     // arms — the shape any future read-only caller (a route, a report) would use.
-    const byProject = await planChangeSessionRepository.findByProjectId(
+    const byProject = await planChangeSessionRepository.findByProjectAndScope(
       fx.projectId,
+      PROJECT_SCOPE_KEY,
       fx.workspaceId,
     );
     expect(byProject?.id).toBe(opened.id);
@@ -89,7 +91,7 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
   });
 
   it('scopes both default-client reads to the workspace — a foreign tenant sees nothing', async () => {
-    // MOTIR-1728's suite proves this for `findByProjectId`; the two reads a
+    // MOTIR-1728's suite proves this for the by-project read; the two reads a
     // caller reaches a thread by its OWN id with — `findById` and the turn list —
     // carry the same scope and are asserted here.
     const c = ctx(fx);
@@ -126,8 +128,9 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
     await planChangeSessionsService.appendTurn('first', c);
     await planChangeSessionsService.appendTurn('second', c);
 
-    const session = (await planChangeSessionRepository.findByProjectId(
+    const session = (await planChangeSessionRepository.findByProjectAndScope(
       fx.projectId,
+      PROJECT_SCOPE_KEY,
       fx.workspaceId,
     ))!;
     const turns = await planChangeTurnRepository.listBySessionId(session.id, fx.workspaceId);
@@ -211,14 +214,14 @@ describe('planChangeSessionsService — error classification is not a catch-all'
         ),
     );
 
-    const findByProjectId = planChangeSessionRepository.findByProjectId.bind(
+    const findByProjectAndScope = planChangeSessionRepository.findByProjectAndScope.bind(
       planChangeSessionRepository,
     );
-    const spy = vi.spyOn(planChangeSessionRepository, 'findByProjectId');
+    const spy = vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope');
     // Only the FIRST read (the pre-read) sees an empty project; the recovery
     // read inside the catch runs for real and must return the winner.
     spy.mockResolvedValueOnce(null);
-    spy.mockImplementation(findByProjectId);
+    spy.mockImplementation(findByProjectAndScope);
 
     const resolved = await planChangeSessionsService.getOrCreateForProject(c);
 
@@ -237,7 +240,7 @@ describe('planChangeSessionsService — error classification is not a catch-all'
       code: 'P2002',
       clientVersion: 'test',
     });
-    vi.spyOn(planChangeSessionRepository, 'findByProjectId').mockResolvedValue(null);
+    vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope').mockResolvedValue(null);
     vi.spyOn(planChangeSessionRepository, 'create').mockRejectedValueOnce(conflict);
 
     await expect(planChangeSessionsService.getOrCreateForProject(c)).rejects.toBe(conflict);
@@ -278,6 +281,8 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       projectId: 'p1',
       createdById: 'u1',
       turnCount: 2,
+      scopeKey: '',
+      targetKeys: [],
       lastJobId: null,
       lastSubmittedAt: null,
       createdAt: now,

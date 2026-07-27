@@ -15,6 +15,7 @@ import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
 } from '@/lib/planChange/errors';
+import { PROJECT_SCOPE, PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 
 // The plan-change CONVERSATION seam (Story 7.30 · MOTIR-1728) — what makes
 // changing a plan a dialogue instead of a one-shot prompt.
@@ -89,13 +90,22 @@ async function toDto(
   return toPlanChangeSessionDto(row, turns);
 }
 
-/** Resolve the project's conversation or throw — the shared precondition of
- *  append + submit. Access-gated for EDIT: both mutate the thread. */
-async function requireSession(pctx: ProjectContext): Promise<PlanChangeSession> {
+/** Resolve ONE of the project's conversations — the shared precondition of append
+ *  + submit. `scopeKey` selects the thread: `''` is the project-wide one (the
+ *  shipped 7.30 behaviour), a canonical anchor-set key is a contextual planning
+ *  thread (7.12.3 · MOTIR-909). Access-gated for EDIT: both mutate the thread.
+ *  (The per-TARGET view gate is the caller's — `contextualPlanningService`
+ *  resolves every anchor through `workItemsService` first, so an anchor the actor
+ *  cannot browse never reaches a scope key.) */
+async function requireSession(
+  pctx: ProjectContext,
+  scopeKey: string = PROJECT_SCOPE_KEY,
+): Promise<PlanChangeSession> {
   const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
   await projectAccessService.assertCanEdit(pctx.projectId, ctx);
-  const session = await planChangeSessionRepository.findByProjectId(
+  const session = await planChangeSessionRepository.findByProjectAndScope(
     pctx.projectId,
+    scopeKey,
     pctx.workspaceId,
   );
   if (!session) throw new PlanChangeSessionNotFoundError(pctx.projectId);
@@ -161,17 +171,26 @@ async function appendLocked(
 
 export const planChangeSessionsService = {
   /**
-   * Open the project's plan-change conversation, or RESUME the existing one —
-   * the rail's mount read. Idempotent by construction: there is at most ONE
-   * thread per project (the `project_id` unique is the guard), so a lost
-   * create-race re-reads the winner's row and returns it rather than failing.
+   * Open the conversation for ONE SCOPE, or RESUME the existing one — the rail's
+   * (and the work-item panel's) mount read. Idempotent by construction: the
+   * `(project_id, scope_key)` unique admits at most one thread per scope, so a
+   * lost create-race re-reads the winner's row and returns it rather than
+   * failing.
+   *
+   * `scope` is derived from an ALREADY-RESOLVED anchor set (`buildScope`), never
+   * from raw client input: the caller has resolved and permission-checked every
+   * anchor, so an item the actor cannot browse can never become part of a key.
    */
-  async getOrCreateForProject(pctx: ProjectContext): Promise<PlanChangeSessionDto> {
+  async getOrCreateForScope(
+    pctx: ProjectContext,
+    scope: PlanChangeScope = PROJECT_SCOPE,
+  ): Promise<PlanChangeSessionDto> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanEdit(pctx.projectId, ctx);
 
-    const existing = await planChangeSessionRepository.findByProjectId(
+    const existing = await planChangeSessionRepository.findByProjectAndScope(
       pctx.projectId,
+      scope.scopeKey,
       pctx.workspaceId,
     );
     if (existing) return toDto(existing, pctx.workspaceId);
@@ -185,6 +204,8 @@ export const planChangeSessionsService = {
               workspaceId: pctx.workspaceId,
               projectId: pctx.projectId,
               createdById: pctx.userId,
+              scopeKey: scope.scopeKey,
+              targetKeys: scope.targetKeys,
             },
             tx,
           ),
@@ -194,8 +215,9 @@ export const planChangeSessionsService = {
       // A concurrent opener won the unique-index race. "Open the conversation" is
       // idempotent, so the right answer is the winner's thread — not an error.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        const winner = await planChangeSessionRepository.findByProjectId(
+        const winner = await planChangeSessionRepository.findByProjectAndScope(
           pctx.projectId,
+          scope.scopeKey,
           pctx.workspaceId,
         );
         if (winner) return toDto(winner, pctx.workspaceId);
@@ -205,15 +227,30 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * Open / resume the PROJECT-WIDE conversation — the shipped 7.30 entry point
+   * the planning rail mounts on, unchanged. The one-element case of
+   * {@link getOrCreateForScope} with the empty scope.
+   */
+  async getOrCreateForProject(pctx: ProjectContext): Promise<PlanChangeSessionDto> {
+    return this.getOrCreateForScope(pctx, PROJECT_SCOPE);
+  },
+
+  /**
    * Append what the user just typed to the thread and return the UPDATED session
    * (the full ordered thread included — the rail renders straight from it).
    * Appending does NOT submit: turns accumulate until the user asks for the
    * change, which is what makes refinement across turns possible.
+   *
+   * `scopeKey` selects WHICH thread (default: the project-wide one).
    */
-  async appendTurn(body: string, pctx: ProjectContext): Promise<PlanChangeSessionDto> {
+  async appendTurn(
+    body: string,
+    pctx: ProjectContext,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+  ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
-    const session = await requireSession(pctx);
+    const session = await requireSession(pctx, scopeKey);
     return appendLocked(session, pctx, { role: 'user', body: trimmed, authorId: pctx.userId });
   },
 
@@ -229,9 +266,18 @@ export const planChangeSessionsService = {
    *
    * Ordering is deliberate: the motir-ai round-trip happens OUTSIDE the
    * transaction, which then only records the outcome.
+   *
+   * A CONTEXTUAL thread (7.12.3 · MOTIR-909 — one whose `targetKeys` are
+   * non-empty) submits through the same job contract with the anchor set attached,
+   * so motir-ai (7.12.2 · MOTIR-908) classifies the turn against those items'
+   * neighborhood. The thread's own scope decides that — there is no second submit
+   * surface and no second job kind.
    */
-  async submit(pctx: ProjectContext): Promise<PlanChangeSubmitResultDto> {
-    const session = await requireSession(pctx);
+  async submit(
+    pctx: ProjectContext,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+  ): Promise<PlanChangeSubmitResultDto> {
+    const session = await requireSession(pctx, scopeKey);
     const turns = await planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId);
     const intent = buildAccumulatedIntent(turns);
     if (!intent) throw new EmptyPlanChangeIntentError(session.id);
@@ -240,7 +286,10 @@ export const planChangeSessionsService = {
     // code context, the metered motir-ai job). Its typed errors (out-of-credits /
     // transport) propagate for the route to map — a failed submit leaves the
     // thread untouched, so the user can retry without losing their turns.
-    const { jobId } = await aiPlanEditsService.submitAugment(intent, pctx);
+    const { jobId } =
+      session.targetKeys.length > 0
+        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx)
+        : await aiPlanEditsService.submitAugment(intent, pctx);
 
     const updated = await appendLocked(
       session,

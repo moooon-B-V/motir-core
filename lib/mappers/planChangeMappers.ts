@@ -34,6 +34,9 @@ export function toPlanChangeSessionDto(
   return {
     id: row.id,
     projectId: row.projectId,
+    // The anchor set crosses the boundary; the derived `scopeKey` it is stored
+    // under does not (the client never needs the discriminator, only the items).
+    targetKeys: row.targetKeys,
     turnCount: row.turnCount,
     lastJobId: row.lastJobId,
     lastSubmittedAt: row.lastSubmittedAt ? row.lastSubmittedAt.toISOString() : null,
