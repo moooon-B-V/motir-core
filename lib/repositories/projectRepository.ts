@@ -628,6 +628,71 @@ export const projectRepository = {
     return tx.project.update({ where: { id }, data });
   },
 
+  // --- AI-planning settings (Story 7.13 · Subtask MOTIR-915) ---------------
+  // The project-scoped AI configuration (`aiAutoPlanEnabled` /
+  // `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` / `aiSprintLengthDays` /
+  // `aiPlannerModel`, plus the Story-7.4 `aiGenerateExplanations` the same panel
+  // surfaces). Open-core `project` COLUMNS, not an AI-only table — so the read is
+  // an ordinary project projection. Single Prisma ops; the read takes an optional
+  // `tx` (the cadence engine reads it outside a transaction, the settings service
+  // inside one), the update REQUIRES `tx`.
+
+  /**
+   * Read just a project's AI-settings columns — the projection the AI-settings
+   * surface (MOTIR-919) and the cadence engine (MOTIR-916) need, without pulling
+   * the whole project row. Returns null when the project doesn't exist; the
+   * caller (`projectAiSettingsService`) owns the tenant gate + the not-found
+   * error. Read-only path → `db` singleton unless a `tx` is supplied (needed
+   * under the non-bypass `prodect_app` role, where the project RLS policy keys on
+   * the per-transaction workspace GUC — same contract as `findById`).
+   */
+  async findAiSettings(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    aiAutoPlanEnabled: boolean;
+    aiAutoPlanThreshold: number;
+    aiSprintPlanningEnabled: boolean;
+    aiSprintLengthDays: number;
+    aiPlannerModel: string | null;
+    aiGenerateExplanations: boolean;
+  } | null> {
+    const client = tx ?? db;
+    return client.project.findUnique({
+      where: { id },
+      select: {
+        aiAutoPlanEnabled: true,
+        aiAutoPlanThreshold: true,
+        aiSprintPlanningEnabled: true,
+        aiSprintLengthDays: true,
+        aiPlannerModel: true,
+        aiGenerateExplanations: true,
+      },
+    });
+  },
+
+  /**
+   * Update a project's AI-settings columns (any subset). `tx` REQUIRED; the
+   * caller (`projectAiSettingsService`) has already resolved + admin-gated the
+   * project and validated every value, so this is a plain id-keyed update.
+   * `aiPlannerModel: null` clears the per-project override back to the platform
+   * default.
+   */
+  async updateAiSettings(
+    id: string,
+    data: {
+      aiAutoPlanEnabled?: boolean;
+      aiAutoPlanThreshold?: number;
+      aiSprintPlanningEnabled?: boolean;
+      aiSprintLengthDays?: number;
+      aiPlannerModel?: string | null;
+      aiGenerateExplanations?: boolean;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data });
+  },
+
   /**
    * Atomically bump the per-project work-item counter and return the new
    * value. Uses UPDATE … RETURNING (NOT a read-then-write) so allocation is
