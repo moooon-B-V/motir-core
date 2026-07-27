@@ -4578,8 +4578,55 @@
     "emptyCanvasTitle": "Nothing on the canvas yet",
     "emptyCanvasDescription": "This project has no work items to draw. Add one by hand, or plan the first tree from the roadmap.",
     "railLabel": "Motir AI",
-    "railEmptyTitle": "The conversation isn't here yet",
-    "railEmptyDescription": "Your plan is on the canvas, but Motir AI can't take a message on this surface yet — nothing you do here changes the plan.",
+    "conversation": {
+      "opener": "What should change?",
+      "turn": "turn {n}",
+      "turnRefine": "turn {n} · refine",
+      "submitted": "Sent to Motir AI",
+      "composerPlaceholder": "Reply, or refine further…",
+      "send": "Send",
+      "retry": "Try again",
+      "discard": "Discard",
+      "approve": "Approve",
+      "approveChanges": "Approve changes",
+      "nothingSavedYet": "Nothing saved yet",
+      "barCounts": "{added, plural, =0 {No additions} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}",
+      "barNothingSaved": "Nothing is saved until you approve.",
+      "summary": "{added, plural, =0 {No new work items} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}} — it's on the canvas, nothing is saved yet.",
+      "lockedNote": "Anything already finished is left untouched — I can't change done work.",
+      "approved": "{created, plural, =0 {Nothing new was added} one {Added # work item} other {Added # work items}}{updated, plural, =0 {} one {, changed #} other {, changed #}} — it's in the plan now. Anything else?",
+      "starters": {
+        "addWork": "Add work to an epic",
+        "resequence": "Re-sequence what's left",
+        "drop": "Drop something we don't need"
+      },
+      "progress": {
+        "submitted": "Sending the conversation to Motir AI…",
+        "searching": "Reading your plan…",
+        "drilling": "Working through the tree…",
+        "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
+        "validating": "Checking the proposal against your plan…"
+      },
+      "error": {
+        "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
+        "empty": "Nothing came back to change. Try naming the epic or the work more specifically.",
+        "immutable": "Some of those work items are already finished, so they can't be changed. The rest is still on the canvas.",
+        "session": "This conversation couldn't be loaded. Try again — nothing in your plan has changed."
+      },
+      "diff": {
+        "add": "added",
+        "change": "changed",
+        "locked": "locked",
+        "cantChange": "can't change",
+        "field": {
+          "title": "title",
+          "priority": "priority",
+          "type": "type",
+          "estimate": "estimate",
+          "description": "description"
+        }
+      }
+    },
     "mode": {
       "project": "plan",
       "generation": "first plan",

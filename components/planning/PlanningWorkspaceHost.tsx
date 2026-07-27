@@ -1,14 +1,17 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Map, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
-import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
+import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
+import { PlanChangeConfirmBar } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
+import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
+import { indexPlanDelta } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
 
 // The client island of the established-project planning HOST (Subtask
@@ -25,9 +28,18 @@ import type { PlanningLaunch } from '@/lib/planning/launcher';
 // deliverable — `planningWorkspaceHref` stays the single entry href), so
 // "returns you to where you launched from" is a navigation back to that route.
 //
-// The chat pane is `PlanChangeRail`, which renders the mode + context honestly
-// and says the conversation itself is not wired up here yet — MOTIR-1730 owns
-// the multi-turn rail and replaces that one import.
+// The chat pane is `PlanChangeRail` — the multi-turn plan-change CONVERSATION
+// (Subtask MOTIR-1730). The host owns the conversation STATE
+// (`usePlanChangeConversation`) rather than the rail, because the proposal is
+// reviewed on the CANVAS: the same delta drives the rail's summary, the canvas's
+// in-place diff, and the confirm-to-persist bar between them.
+//
+// PAGE STATE AFTER A MUTATION (`motir-core/CLAUDE.md`): an approve commits work
+// items, which changes two kinds of surface. The canvas is a CLIENT ISLAND that
+// seeds its level once — `router.refresh()` cannot reach it — so it gets an
+// explicit refetch trigger (`treeVersion`, folded into the canvas's diff key);
+// the server-rendered surfaces behind this overlay (counts, headers, the backlog
+// underneath) take the `router.refresh()`. Both, because both apply.
 
 export interface PlanningWorkspaceHostProps {
   /** The project's `MOTIR`-style key — the canvas's per-level read source. */
@@ -50,6 +62,19 @@ export function PlanningWorkspaceHost({
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const router = useRouter();
+
+  // Bumped on every approve: the committed tree is new data, so the canvas island
+  // must refetch its level (the server-rendered surfaces take the refresh below).
+  const [treeVersion, setTreeVersion] = useState(0);
+  const onApproved = useCallback(() => {
+    setTreeVersion((v) => v + 1);
+    router.refresh();
+  }, [router]);
+  const { state, send, retry, approve, discard } = usePlanChangeConversation({ onApproved });
+
+  const index = useMemo(() => indexPlanDelta(state.delta), [state.delta]);
+  // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
+  const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${index.counts.added}-${index.counts.changed}`;
 
   const close = useCallback(() => router.push(backHref), [router, backHref]);
 
@@ -100,8 +125,10 @@ export function PlanningWorkspaceHost({
 
           <div className="min-h-0 flex-1 overflow-hidden">
             {hasItems ? (
-              <WorkItemRoadmap
+              <PlanChangeCanvas
                 projectKey={projectKey}
+                index={index}
+                diffKey={diffKey}
                 ariaLabel={t('canvasAria', { project: projectName })}
               />
             ) : (
@@ -114,9 +141,30 @@ export function PlanningWorkspaceHost({
               </div>
             )}
           </div>
+
+          {/* The gate — visible only while a proposal is pending on the canvas. */}
+          {state.delta && !index.isEmpty ? (
+            <PlanChangeConfirmBar
+              index={index}
+              approving={state.phase === 'approving'}
+              onApprove={approve}
+              onDiscard={discard}
+            />
+          ) : null}
         </div>
       }
-      chat={<PlanChangeRail launch={launch} projectName={projectName} />}
+      chat={
+        <PlanChangeRail
+          launch={launch}
+          projectName={projectName}
+          state={state}
+          index={index}
+          onSend={send}
+          onRetry={retry}
+          onApprove={approve}
+          onDiscard={discard}
+        />
+      }
     />
   );
 }

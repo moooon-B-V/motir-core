@@ -4574,8 +4574,55 @@
     "emptyCanvasTitle": "画布上还没有内容",
     "emptyCanvasDescription": "该项目还没有可绘制的工作项。可以手动添加一个，或从路线图开始规划第一版计划。",
     "railLabel": "Motir AI",
-    "railEmptyTitle": "对话还没有接入这里",
-    "railEmptyDescription": "你的计划已经在画布上，但 Motir AI 还无法在这个界面接收消息 —— 你在这里的操作不会改动计划。",
+    "conversation": {
+      "opener": "想改什么？",
+      "turn": "第 {n} 轮",
+      "turnRefine": "第 {n} 轮 · 细化",
+      "submitted": "已发送给 Motir AI",
+      "composerPlaceholder": "回复，或继续细化…",
+      "send": "发送",
+      "retry": "重试",
+      "discard": "放弃",
+      "approve": "确认",
+      "approveChanges": "确认变更",
+      "nothingSavedYet": "尚未保存",
+      "barCounts": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}",
+      "barNothingSaved": "确认之前不会保存任何内容。",
+      "summary": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}} —— 已放到画布上，尚未保存。",
+      "lockedNote": "已完成的工作保持不动 —— 我无法改动已完成的内容。",
+      "approved": "{created, plural, other {新增 # 个工作项}}{updated, plural, =0 {} other {，修改 # 个}} —— 已写入计划。还要改什么吗？",
+      "starters": {
+        "addWork": "为某个篇章补充工作",
+        "resequence": "重新排列剩下的工作",
+        "drop": "去掉不需要的部分"
+      },
+      "progress": {
+        "submitted": "正在把对话发送给 Motir AI…",
+        "searching": "正在读取你的计划…",
+        "drilling": "正在梳理工作项树…",
+        "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
+        "validating": "正在对照你的计划校验提议…"
+      },
+      "error": {
+        "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
+        "empty": "没有返回任何可改动的内容。可以更具体地指明篇章或工作。",
+        "immutable": "其中部分工作项已完成，无法改动。其余内容仍在画布上。",
+        "session": "这段对话加载失败。请重试 —— 你的计划没有任何变化。"
+      },
+      "diff": {
+        "add": "新增",
+        "change": "修改",
+        "locked": "已锁定",
+        "cantChange": "无法改动",
+        "field": {
+          "title": "标题",
+          "priority": "优先级",
+          "type": "类型",
+          "estimate": "预估工时",
+          "description": "描述"
+        }
+      }
+    },
     "mode": {
       "project": "规划",
       "generation": "首版计划",

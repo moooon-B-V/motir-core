@@ -113,12 +113,18 @@ export async function streamAugmentJob(
   signal: AbortSignal,
   onError: (code: string | null) => void,
   onDone: () => void,
+  /** Every non-terminal frame, in arrival order (MOTIR-1730). The `augment` job's
+   *  SSE carries structured PROGRESS frames (`search` / `drill` / `level_complete`
+   *  / `pass` / `planned` / `validated`), which the conversational rail narrates
+   *  live while the delta is computed. Optional — the dock consumers ignore them. */
+  onFrame?: (event: string, data: unknown) => void,
 ): Promise<void> {
   return consumeStream(
     `/api/ai/augment/${encodeURIComponent(jobId)}/stream`,
     signal,
     onError,
     onDone,
+    onFrame,
   );
 }
 
@@ -155,6 +161,7 @@ async function consumeStream(
   signal: AbortSignal,
   onError: (code: string | null) => void,
   onDone: () => void,
+  onFrame?: (event: string, data: unknown) => void,
 ): Promise<void> {
   try {
     const res = await fetch(url, {
@@ -184,6 +191,7 @@ async function consumeStream(
           onDone();
           return;
         }
+        onFrame?.(event, data);
       }
     }
     onDone();
