@@ -4,6 +4,8 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { readPendingIdea } from '@/lib/onboarding/pendingIdea';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
+import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding';
 
@@ -52,9 +54,22 @@ export default async function OnboardingPage() {
   // Existing-item gate (MOTIR-1259): a never-AI-planned project with a
   // non-empty work-item tree skips the start-fresh discovery loop and routes to
   // the migrate wizard. Existing items ARE the project's understanding.
+  //
+  // …UNLESS the migrate wizard already handed off to planning (MOTIR-1725): the
+  // gate is an inbound router, and bouncing the wizard's own "Plan my project
+  // now" back into the wizard made planning unreachable for every migrate
+  // project with a tree. The run is read only when the gate would otherwise
+  // fire, so the empty-project path keeps its single query.
   if (!ctx.project.onboardingRanAt) {
     const itemCount = await workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId);
-    if (itemCount > 0) redirect('/onboarding/migrate');
+    const run =
+      itemCount > 0
+        ? await migrateOnboardingService.getForProject(ctx.projectId, {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          })
+        : null;
+    if (shouldRouteToMigrateWizard({ itemCount, run })) redirect('/onboarding/migrate');
   }
 
   const initialIdea = await readPendingIdea();

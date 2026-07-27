@@ -4,6 +4,8 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { readPendingIdea } from '@/lib/onboarding/pendingIdea';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
+import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 
@@ -52,9 +54,20 @@ export default async function OnboardingEntrancePage() {
   // Existing-item gate (MOTIR-1259): a never-AI-planned project with a
   // non-empty work-item tree skips the start-fresh pre-plan path and routes to
   // the migrate wizard. Existing items ARE the project's understanding.
+  //
+  // …UNLESS the migrate wizard already handed off to planning (MOTIR-1725) —
+  // this route is also `PLANNING_WORKSPACE_PATH`, the universal "Plan with AI"
+  // target, so an unconditional bounce here trapped the hand-off as well.
   if (!ctx.project.onboardingRanAt) {
     const itemCount = await workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId);
-    if (itemCount > 0) redirect('/onboarding/migrate');
+    const run =
+      itemCount > 0
+        ? await migrateOnboardingService.getForProject(ctx.projectId, {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          })
+        : null;
+    if (shouldRouteToMigrateWizard({ itemCount, run })) redirect('/onboarding/migrate');
   }
 
   const carriedIdea = await readPendingIdea();
