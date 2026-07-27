@@ -44,18 +44,24 @@ toggling `data-theme="dark"` in the mock header.
 Read the real surfaces this wizard lands in / replaces before drawing — the mock fits and extends the
 implemented app, it does not invent a host:
 
-- **`app/(onboarding)/onboarding/import/page.tsx`** — the shipped **hand-off placeholder** (7.22.4 /
-  MOTIR-1462). The entrance's "I have an existing project — import it" row routes to `/onboarding/import`,
-  which today renders a "coming soon" `EmptyState`. **This wizard replaces that placeholder IN PLACE**
-  (MOTIR-1462's own comment says "the 7.15 wizard replaces this surface"). The provisional route
-  `/onboarding/import` is the host.
+- **`app/(onboarding)/onboarding/migrate/page.tsx`** — the wizard's **OWN route**, and its host.
+  > **⚠️ Route amended 2026-07-27 (MOTIR-1710).** This section originally named the provisional
+  > `/onboarding/import` hand-off placeholder (7.22.4 / MOTIR-1462) as the host, which "this wizard
+  > replaces IN PLACE." That is **no longer true**: `/onboarding/import` is now the shipped **issue
+  > importer** (7.16.6 / MOTIR-942 — `ImportWizard`, Connect → Map → Preview → Run), so the migrate
+  > wizard took a route of its own. Verified on `origin/main` (rung 2): the wizard ships at
+  > `app/(onboarding)/onboarding/migrate/page.tsx` + `_components/MigrateWizard.tsx` (7.15.5 /
+  > MOTIR-934), and `app/(onboarding)/onboarding/import/` holds the importer. Everything else this
+  > section specifies about the host still holds — only the route changed. (The importer is not
+  > displaced by this: the wizard **composes** it as the optional Import step, §Panel 3.)
 - **`app/(onboarding)/layout.tsx`** — the onboarding route group renders **OUTSIDE** the `(authed)`
   `AppLayout` (no top nav, no project sidebar) but is still **authenticated** (bounces a signed-out
   visitor to `/sign-in`). So the wizard **owns the whole viewport** with only a minimal brand bar —
   matched exactly, mirroring `design/onboarding-entrance`. (Onboarding is the one full-page first-run
   _route_, not the dismissable planning overlay — per `design/ai-chat`.)
 - **`components/onboarding/OnboardingEntrance.tsx`** — the inbound door: the entrance's secondary
-  import row (the `GitBranch` "I have an existing project — import it" button) → `/onboarding/import`.
+  import row (the `GitBranch` "I have an existing project — import it" button) → **`/onboarding/migrate`**
+  (verified on `origin/main`; amended with the route above — MOTIR-1710).
   The wizard's brand bar continues the entrance's exact chrome (the `Sparkles` logo tile on
   `--el-tint-lavender`, the signed-in avatar).
 - No wizard / stepper primitive ships in `components/ui/` — the **step rail is a NEW ARRANGEMENT** of
@@ -369,15 +375,15 @@ contract.
 
 ## Which Story owns each embedded surface (compose + cite, don't duplicate)
 
-| Step / surface                                  | Owner (design → build)                                                                                                                 | This card                                                           |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                                 | designs                                                             |
-| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                                     | designs                                                             |
-| Connect repos (step 1, GitHub + GitLab)         | **7.7.1** — `design/github/` (GitHub, build MOTIR-895) · **GitProvider seam** `lib/git` (MOTIR-891) · **GitLab provider = MOTIR-1470** | composes GitHub; draws the multi-provider surface, flags MOTIR-1470 |
-| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding)                 | consumes                                                            |
-| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                                       | composes                                                            |
-| Planning (discovery / generate / review)        | **The EXISTING universal plan screen** — `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 / 1299), already built                 | opens (not designed here)                                           |
-| The `/onboarding/import` host route             | **7.22.4 / MOTIR-1462** (placeholder the wizard replaces in place)                                                                     | replaces                                                            |
+| Step / surface                                  | Owner (design → build)                                                                                                                                             | This card                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Wizard chrome + step rail + gate**            | **MOTIR-930 (this design) → MOTIR-934 (UI) + MOTIR-931 (wiring) + MOTIR-1499 (state)**                                                                             | designs                                                             |
+| **Index-progress step**                         | **MOTIR-930 (this design)** — the NEW step it owns                                                                                                                 | designs                                                             |
+| Connect repos (step 1, GitHub + GitLab)         | **7.7.1** — `design/github/` (GitHub, build MOTIR-895) · **GitProvider seam** `lib/git` (MOTIR-891) · **GitLab provider = MOTIR-1470**                             | composes GitHub; draws the multi-provider surface, flags MOTIR-1470 |
+| Conventions + code-health (derived, NOT a step) | **7.14.1** — `design/coding-convention/` (audit + view + chat-to-revise live on the Code-health page, post-onboarding)                                             | consumes                                                            |
+| **Import work items (optional)**                | **7.16.1 / MOTIR-937** — `design/import/` (importer MOTIR-816; wired MOTIR-1643)                                                                                   | composes                                                            |
+| Planning (discovery / generate / review)        | **The EXISTING universal plan screen** — `PlanWithAILauncher` → `PlanningWorkspace` (MOTIR-1193 / 1299), already built                                             | opens (not designed here)                                           |
+| The `/onboarding/migrate` host route            | **MOTIR-930 (this design) → MOTIR-934 (UI)** — the wizard's OWN route in the `(onboarding)` group (`/onboarding/import` is the issue importer, 7.16.6 / MOTIR-942) | owns (route amended — MOTIR-1710)                                   |
 
 If a step needs a design-system entry none of the above owns, that is a **NEW `design/` subtask**, not
 a code workaround (the AC). None is introduced here — the rail, the chrome, and the index step compose
