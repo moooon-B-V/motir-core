@@ -613,6 +613,19 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
   nothing server-side, so re-dragging is safe.
 - **Fixed `waitForTimeout` is a smell** — it's a guess, not a signal. Wait on
   the response, a DOM/role state, or `expect.poll` of an authoritative read.
+- **The same rule holds one altitude down, in a Vitest + RTL COMPONENT test.**
+  A callback fired from a `useEffect` is NOT covered by an awaited `findBy*`.
+  React flushes passive effects on a scheduler callback AFTER commit, and RTL
+  deliberately turns the act environment OFF for the async queries, draining
+  with a bare zero-delay timer. So a rendered node proves the RENDER landed,
+  never that the effect ran — and a plain, non-retrying `expect(mock)` right
+  after it reads zero calls whenever that drain wins the race, which is exactly
+  what a loaded CI runner makes happen. Assert an **effect-driven** mock inside
+  a retrying `waitFor`, and flush the effect pass with an awaited empty async
+  `act` before a **negative** assertion, which would otherwise pass vacuously.
+  An **event-handler** callback is invoked synchronously inside the dispatched
+  handler, so it needs no wait. (MOTIR-1736: the `ProjectRoadmapCanvas`
+  auto-reset assertion flaked two PRs this way, on diffs that never touched it.)
 
 ### The app side (so tests CAN be deterministic)
 
