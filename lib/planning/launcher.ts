@@ -42,15 +42,22 @@ export type PlanningLaunchContext =
   | { kind: 'convention-refine'; repoKey: string };
 
 /**
- * The shipped planning-workspace entry path. Today the workspace renders as the
- * full-screen onboarding route (mirrors `ONBOARDING_ENTRY_PATH` in
- * `lib/onboarding/pendingIdea.ts`, which is `server-only` so it can't be
- * imported here). The design's on-top-of-the-app OVERLAY host for an existing
- * project is a follow-up owned by the reusable-shell decision (bug MOTIR-1300);
- * when it lands, only this constant + `planningWorkspaceHref` change — the
- * launcher affordance and the resolver stay put.
+ * The shipped planning-workspace entry path — the ESTABLISHED-project host
+ * (MOTIR-1729): a full-screen route outside the app shell that renders the
+ * canvas+chat workspace seeded from the `mode` + `from` context below.
+ *
+ * It used to be `/onboarding`, which dead-ended: `app/(onboarding)/onboarding/
+ * page.tsx` redirects a project whose `onboardingRanAt` is set straight to
+ * `/roadmap`, so the launcher round-tripped and the workspace never opened. As
+ * this module's original note promised, closing that gap changed only this
+ * constant + the resolver — every call site (the TopNav pill, the FAB, ⌘K, the
+ * roadmap empty state) is untouched.
+ *
+ * The onboarding gates are NOT relaxed: a project that never onboarded is
+ * forwarded from the host to `/onboarding`, so first-run and migrate projects
+ * keep their journey (the host is an ADDITIONAL surface, not a bypass).
  */
-export const PLANNING_WORKSPACE_PATH = '/onboarding';
+export const PLANNING_WORKSPACE_PATH = '/planning';
 
 /** Resolve the originating context to the planning mode the workspace opens in. */
 export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMode {
@@ -80,4 +87,95 @@ export function planningWorkspaceHref(context: PlanningLaunchContext): string {
   if (context.kind === 'work-item') params.set('item', context.itemKey);
   if (context.kind === 'convention-refine') params.set('repo', context.repoKey);
   return `${PLANNING_WORKSPACE_PATH}?${params.toString()}`;
+}
+
+// ─── The INVERSE: reading the launch context back off the host's query ────────
+//
+// `planningWorkspaceHref` writes the context; the host (MOTIR-1729) reads it.
+// Both halves live here, in the launcher's pure core, so the two can never drift
+// apart and both are unit-testable without a route.
+
+/** The origin kinds `planningWorkspaceHref` writes as `?from=`. */
+export type PlanningOrigin = PlanningLaunchContext['kind'];
+
+const PLANNING_MODES: readonly PlanningMode[] = [
+  'project',
+  'generation',
+  'replan',
+  'contextual',
+  'roadmap',
+];
+
+const PLANNING_ORIGINS: readonly PlanningOrigin[] = [
+  'project',
+  'work-item',
+  'roadmap',
+  'convention-refine',
+];
+
+/**
+ * The launch context AS THE HOST SEES IT — the resolved mode plus whatever
+ * originating detail survived the href. Every field is total: an absent or
+ * unrecognized param degrades to the coarse project-scoped default rather than
+ * erroring, because this is parsed from a user-editable URL.
+ */
+export interface PlanningLaunch {
+  mode: PlanningMode;
+  from: PlanningOrigin;
+  /** The `work-item` origin's target key, when carried. */
+  itemKey: string | null;
+  /** The `convention-refine` origin's repo key, when carried. */
+  repoKey: string | null;
+}
+
+/** The default a missing / unknown `?mode=` falls back to (never an error). */
+export const DEFAULT_PLANNING_MODE: PlanningMode = 'project';
+const DEFAULT_PLANNING_ORIGIN: PlanningOrigin = 'project';
+
+type RawParam = string | string[] | undefined;
+
+/** Next's `searchParams` hands a repeated key through as an array — take the first. */
+function first(raw: RawParam): string | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/** Parse `?mode=`; anything unrecognized falls back to the project default. */
+export function parsePlanningMode(raw: RawParam): PlanningMode {
+  const value = first(raw);
+  return PLANNING_MODES.find((m) => m === value) ?? DEFAULT_PLANNING_MODE;
+}
+
+/** Parse `?from=`; anything unrecognized falls back to the project origin. */
+export function parsePlanningOrigin(raw: RawParam): PlanningOrigin {
+  const value = first(raw);
+  return PLANNING_ORIGINS.find((o) => o === value) ?? DEFAULT_PLANNING_ORIGIN;
+}
+
+/** Read the whole launch context back off the host route's query params. */
+export function parsePlanningLaunch(searchParams: Record<string, RawParam>): PlanningLaunch {
+  const from = parsePlanningOrigin(searchParams['from']);
+  return {
+    mode: parsePlanningMode(searchParams['mode']),
+    from,
+    // Only the origin that WRITES the param may carry it back, so a hand-edited
+    // `?from=roadmap&item=X` can't smuggle a target into a non-item mode.
+    itemKey: from === 'work-item' ? first(searchParams['item']) : null,
+    repoKey: from === 'convention-refine' ? first(searchParams['repo']) : null,
+  };
+}
+
+/**
+ * Where the workspace's Close control returns to. The design's overlay "returns
+ * you to the exact screen you launched from" (`planning-workspace.mock.html`
+ * sheet 6); the host is a route, so the origin resolves to the surface that owns
+ * that context — the project roadmap being the project-scoped default.
+ */
+export function planningLaunchBackHref(launch: PlanningLaunch): string {
+  if (launch.from === 'work-item' && launch.itemKey) {
+    return `/items/${encodeURIComponent(launch.itemKey)}`;
+  }
+  if (launch.from === 'convention-refine') return '/code-health';
+  return '/roadmap';
 }

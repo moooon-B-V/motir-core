@@ -4563,6 +4563,36 @@
       "topUpCta": "充值额度"
     }
   },
+  "planningWorkspace": {
+    "noProjectTitle": "未选择项目",
+    "noProjectDescription": "从切换器中选择或创建一个项目，即可用 Motir AI 规划。",
+    "canvasAria": "{project} 的计划",
+    "backToRoadmap": "返回路线图",
+    "backToItem": "返回 {item}",
+    "backToCodeHealth": "返回代码健康度",
+    "escKey": "Esc",
+    "emptyCanvasTitle": "画布上还没有内容",
+    "emptyCanvasDescription": "该项目还没有可绘制的工作项。可以手动添加一个，或从路线图开始规划第一版计划。",
+    "railLabel": "Motir AI",
+    "railEmptyTitle": "对话还没有接入这里",
+    "railEmptyDescription": "你的计划已经在画布上，但 Motir AI 还无法在这个界面接收消息 —— 你在这里的操作不会改动计划。",
+    "mode": {
+      "project": "规划",
+      "generation": "首版计划",
+      "replan": "调整计划",
+      "contextual": "上下文",
+      "roadmap": "路线图"
+    },
+    "lead": {
+      "project": "已在 {project} 上打开。",
+      "generation": "已打开，从零开始为 {project} 规划。",
+      "replan": "已打开，用于调整 {project} 的现有计划。",
+      "contextual": "已在 {project} 的上下文中打开。",
+      "contextualItem": "已在 {item} 的上下文中打开。",
+      "conventionRefine": "已打开，用于完善 {repo} 的编码规范。",
+      "roadmap": "已从路线图打开。"
+    }
+  },
   "codeHealth": {
     "title": "代码健康度",
     "subtitle": "代码健康度审计，以及 Motir 从你的代码中提取并注入每条提示词的按仓库区分的编码规范。",

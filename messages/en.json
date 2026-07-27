@@ -4567,6 +4567,36 @@
       "topUpCta": "Top up credits"
     }
   },
+  "planningWorkspace": {
+    "noProjectTitle": "No project selected",
+    "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",
+    "canvasAria": "{project} plan",
+    "backToRoadmap": "Back to roadmap",
+    "backToItem": "Back to {item}",
+    "backToCodeHealth": "Back to code health",
+    "escKey": "Esc",
+    "emptyCanvasTitle": "Nothing on the canvas yet",
+    "emptyCanvasDescription": "This project has no work items to draw. Add one by hand, or plan the first tree from the roadmap.",
+    "railLabel": "Motir AI",
+    "railEmptyTitle": "The conversation isn't here yet",
+    "railEmptyDescription": "Your plan is on the canvas, but Motir AI can't take a message on this surface yet — nothing you do here changes the plan.",
+    "mode": {
+      "project": "plan",
+      "generation": "first plan",
+      "replan": "plan change",
+      "contextual": "in context",
+      "roadmap": "roadmap"
+    },
+    "lead": {
+      "project": "Opened on {project}.",
+      "generation": "Opened to plan {project} from scratch.",
+      "replan": "Opened to change {project}'s existing plan.",
+      "contextual": "Opened in context on {project}.",
+      "contextualItem": "Opened in the context of {item}.",
+      "conventionRefine": "Opened to refine {repo}'s coding convention.",
+      "roadmap": "Opened from the roadmap."
+    }
+  },
   "codeHealth": {
     "title": "Code health",
     "subtitle": "The code-health audit and the per-repo coding convention Motir derives from your code and injects into every prompt.",
