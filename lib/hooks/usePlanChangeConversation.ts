@@ -19,6 +19,11 @@ import {
   PlanEditsClientError,
   type ApproveDeltaResult,
 } from '@/lib/planning/planEditsClient';
+import {
+  extraPlanningTargetKeys,
+  primaryPlanningTarget,
+  type PlanningTarget,
+} from '@/lib/planning/planningTargets';
 
 // The client state machine behind the plan-change CONVERSATION rail (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 / 4 / 6). It
@@ -128,6 +133,33 @@ export interface UsePlanChangeConversationOptions {
   anchorId?: string | null;
 }
 
+/**
+ * What one run is ANCHORED at: the primary anchor (the endpoint's path item) plus
+ * the additional targets the `@`-mention picker added (MOTIR-1491). `null` is the
+ * project-wide thread. Every hop of a run — submit, stream, resubmit — uses the
+ * SAME anchor, because they all address one conversation.
+ */
+interface RunAnchor {
+  anchorId: string;
+  targetKeys: string[];
+}
+
+/**
+ * Which conversation a turn belongs to. The picker's SET wins when the caller
+ * has one (an empty set is a real answer — the project thread); a caller that
+ * passes nothing keeps the entrance's single anchor.
+ */
+function resolveAnchor(
+  targets: readonly PlanningTarget[] | undefined,
+  entranceAnchorId: string | null,
+): RunAnchor | null {
+  if (targets === undefined) {
+    return entranceAnchorId ? { anchorId: entranceAnchorId, targetKeys: [] } : null;
+  }
+  const primary = primaryPlanningTarget(targets);
+  return primary ? { anchorId: primary.id, targetKeys: extraPlanningTargetKeys(targets) } : null;
+}
+
 export function usePlanChangeConversation({
   onApproved,
   anchorId = null,
@@ -135,9 +167,12 @@ export function usePlanChangeConversation({
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
-  // The anchor, read by callbacks that must not be re-created when it changes
-  // (it is fixed per mounted workspace — the route's `?item=`).
+  // The entrance's anchor, read by callbacks that must not be re-created when it
+  // changes (it is fixed per mounted workspace — the route's `?item=`).
   const anchorRef = useRef(anchorId);
+  // What the LAST run was anchored at, so a retry resubmits to the same thread —
+  // which, once the picker is in play, may be a different set than the entrance's.
+  const lastAnchorRef = useRef<RunAnchor | null>(null);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`delta`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -171,7 +206,10 @@ export function usePlanChangeConversation({
     void (async () => {
       try {
         const session = anchorId
-          ? await resumeContextualSession(anchorId, controller.signal)
+          ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
+            // is seeded from that same item, and any target the user adds later
+            // starts a differently-scoped thread anyway.
+            await resumeContextualSession(anchorId, [], controller.signal)
           : await openPlanChangeSession(controller.signal);
         if (!mountedRef.current) return;
         setState((s) => ({ ...s, phase: 'idle', session }));
@@ -193,17 +231,21 @@ export function usePlanChangeConversation({
    *  settle, delta) is identical for both threads; only the URL differs. */
   const run = useCallback(
     async (
+      anchor: RunAnchor | null,
       submitter?: (
         signal: AbortSignal,
       ) => Promise<{ jobId: string; session: PlanChangeSessionDto }>,
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
-      const anchor = anchorRef.current;
+      // Remembered before the hop, so a retry after a failure re-sends to the
+      // thread this turn actually landed in.
+      lastAnchorRef.current = anchor;
       const submit =
         submitter ??
         (anchor
-          ? (signal: AbortSignal) => resubmitContextualPlan(anchor, signal)
+          ? (signal: AbortSignal) =>
+              resubmitContextualPlan(anchor.anchorId, anchor.targetKeys, signal)
           : (signal: AbortSignal) => submitPlanChange(signal));
 
       try {
@@ -227,7 +269,15 @@ export function usePlanChangeConversation({
               onError: (code: string | null) => void,
               onDone: () => void,
               onFrame: (event: string, data: unknown) => void,
-            ) => streamContextualPlanJob(anchor, jobId, controller.signal, onError, onDone, onFrame)
+            ) =>
+              streamContextualPlanJob(
+                anchor.anchorId,
+                jobId,
+                controller.signal,
+                onError,
+                onDone,
+                onFrame,
+              )
           : (
               onError: (code: string | null) => void,
               onDone: () => void,
@@ -288,16 +338,25 @@ export function usePlanChangeConversation({
     [],
   );
 
-  /** Append what the user typed, then run the ACCUMULATED intent. */
+  /**
+   * Append what the user typed, then run the ACCUMULATED intent.
+   *
+   * `targets` is the `@`-mention picker's TARGET SET (MOTIR-1491) and, when
+   * given, it is AUTHORITATIVE: its first entry is the primary anchor and the
+   * rest ride as additional ones — so removing every target really does make the
+   * turn project-wide, rather than silently keeping the entrance's item. Omitting
+   * the argument entirely means "no opinion about targets", which falls back to
+   * the entrance anchor (MOTIR-910's per-item workspace).
+   */
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, targets?: readonly PlanningTarget[]) => {
       const body = text.trim();
       if (!body || abortRef.current) return;
 
       // ANCHORED: appending and submitting are ONE call (MOTIR-909 resolves and
       // view-gates the anchors first, so the contract fuses them) — `run` does
       // the whole hop, and there is no separate append to fail on its own.
-      const anchor = anchorRef.current;
+      const anchor = resolveAnchor(targets, anchorRef.current);
       if (anchor) {
         // Busy from the click, not from the response: the composer must lock
         // immediately or a second Enter fires a second turn (the project branch
@@ -309,7 +368,9 @@ export function usePlanChangeConversation({
           errorCode: null,
           outOfCredits: false,
         }));
-        await run((signal) => submitContextualPlan(anchor, body, signal));
+        await run(anchor, (signal) =>
+          submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal),
+        );
         return;
       }
 
@@ -340,17 +401,24 @@ export function usePlanChangeConversation({
         return;
       }
       abortRef.current = null;
-      await run();
+      await run(null);
     },
     [run],
   );
 
   /** Re-send the accumulated intent after a failure — no new turn, so the
-   *  conversation CONTINUES rather than restarting (design panel 6, error). */
+   *  conversation CONTINUES rather than restarting (design panel 6, error).
+   *
+   *  It resubmits to the thread the FAILED run used (its target set included),
+   *  not to whatever is picked now — retrying a turn must not quietly re-aim it.
+   *  Before any run, that is the entrance's anchor. */
   const retry = useCallback(async () => {
     if (abortRef.current) return;
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
-    await run();
+    const anchor =
+      lastAnchorRef.current ??
+      (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
+    await run(anchor);
   }, [run]);
 
   /** Persist the proposal through the shipped approve route. The thread STAYS. */

@@ -113,6 +113,56 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
   });
 });
 
+describe('planChangeClient — the MULTI-TARGET anchors (MOTIR-1491)', () => {
+  it('carries the ADDITIONAL targets beside the prompt; the primary stays the path item', async () => {
+    const result = { jobId: 'job-ctx-1', sessionId: 's-ctx', session: SESSION };
+    fetchMock.mockResolvedValue(jsonResponse(result));
+
+    await expect(
+      submitContextualPlan('wi_812', 'Expand billing.', ['MOTIR-918', 'MOTIR-922']),
+    ).resolves.toEqual(result);
+
+    const [url, init] = lastCall();
+    // The SHIPPED 7.12.3 endpoint — the picker adds no route of its own.
+    expect(url).toBe('/api/work-items/wi_812/ai/plan');
+    expect(JSON.parse(init.body as string)).toEqual({
+      prompt: 'Expand billing.',
+      // The primary is NOT repeated: it travels as the path item and the service
+      // adds it to the scope itself.
+      targetKeys: ['MOTIR-918', 'MOTIR-922'],
+    });
+  });
+
+  it('OMITS the field entirely with no additional targets — the single-anchor request is unchanged', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
+
+    await submitContextualPlan('wi_812', 'Re-plan this story.');
+
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ prompt: 'Re-plan this story.' });
+  });
+
+  it('a RESUBMIT re-sends to the same anchor SET — retrying must not re-aim the turn', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
+
+    await resubmitContextualPlan('wi_812', ['MOTIR-918']);
+
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      resubmit: true,
+      targetKeys: ['MOTIR-918'],
+    });
+  });
+
+  it('RESUMES a multi-anchor thread through repeated ?targetKey= params', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ session: SESSION }));
+
+    await resumeContextualSession('wi_812', ['MOTIR-918', 'MOTIR-922']);
+
+    expect(lastCall()[0]).toBe(
+      '/api/work-items/wi_812/ai/plan?targetKey=MOTIR-918&targetKey=MOTIR-922',
+    );
+  });
+});
+
 describe('planChangeClient — failures surface as ONE error type', () => {
   it('throws PlanEditsClientError carrying the status and the typed code', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_CHANGE_SESSION_NOT_FOUND' }, 404));

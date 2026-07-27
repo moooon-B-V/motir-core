@@ -36,6 +36,17 @@ export interface PlanDeltaRelatedItem {
   relevance: string;
 }
 
+/**
+ * What the three plan-edit submit routes return. `planId` — the `generating`
+ * Plan the job's proposals append into (MOTIR-1743) — is OPTIONAL on purpose:
+ * it is an additive echo, and a caller must not depend on it (an E2E stub or a
+ * pre-1743 response carries only `jobId`). Read it defensively.
+ */
+export interface PlanEditSubmitResponse {
+  jobId: string;
+  planId?: string;
+}
+
 export interface ApproveDeltaResult {
   created: string[];
   updated: string[];
@@ -54,7 +65,7 @@ async function readErrorCode(res: Response): Promise<string | null> {
 export async function submitAugmentJob(
   prompt: string,
   signal?: AbortSignal,
-): Promise<{ jobId: string }> {
+): Promise<PlanEditSubmitResponse> {
   const res = await fetch('/api/ai/augment', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -62,13 +73,13 @@ export async function submitAugmentJob(
     signal,
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  return (await res.json()) as { jobId: string };
+  return (await res.json()) as PlanEditSubmitResponse;
 }
 
 export async function submitExpandJob(
   itemKey: string,
   signal?: AbortSignal,
-): Promise<{ jobId: string }> {
+): Promise<PlanEditSubmitResponse> {
   const res = await fetch('/api/ai/expand', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -76,13 +87,13 @@ export async function submitExpandJob(
     signal,
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  return (await res.json()) as { jobId: string };
+  return (await res.json()) as PlanEditSubmitResponse;
 }
 
 export async function submitReplanJob(
   itemKey: string,
   signal?: AbortSignal,
-): Promise<{ jobId: string }> {
+): Promise<PlanEditSubmitResponse> {
   const res = await fetch('/api/ai/replan', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -90,7 +101,7 @@ export async function submitReplanJob(
     signal,
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  return (await res.json()) as { jobId: string };
+  return (await res.json()) as PlanEditSubmitResponse;
 }
 
 export async function approvePlanDelta(

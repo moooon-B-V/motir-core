@@ -68,15 +68,37 @@ export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChange
 // the anchored endpoint does BOTH in one (it resolves + view-gates the anchors
 // first, so splitting it would gate twice for one turn).
 
+// MULTI-TARGET (MOTIR-1491): the anchor set is the PRIMARY anchor (the path
+// item) plus the ADDITIONAL ones the `@`-mention picker inserted, by identifier.
+// The route has accepted `targetKeys` on all three verbs since MOTIR-909 — these
+// helpers simply carry them, so the same set that resumes a thread also submits
+// and resubmits to it. Omitted / empty is exactly the single-anchor entrance.
+
 const anchorPath = (anchorId: string) => `/api/work-items/${encodeURIComponent(anchorId)}/ai/plan`;
+
+/** The additional anchors, OMITTED when there are none — so a single-anchor
+ *  request stays byte-identical to the entrance's (MOTIR-910) and the route's
+ *  `undefined` default does the rest. */
+function extra(targetKeys: readonly string[]): { targetKeys?: string[] } {
+  return targetKeys.length > 0 ? { targetKeys: [...targetKeys] } : {};
+}
+
+/** The additional anchors as the GET's repeated `?targetKey=` params. */
+function anchorQuery(targetKeys: readonly string[]): string {
+  if (targetKeys.length === 0) return '';
+  const params = new URLSearchParams();
+  for (const key of targetKeys) params.append('targetKey', key);
+  return `?${params.toString()}`;
+}
 
 /** RESUME the item's thread on mount. `null` when the item was never planned —
  *  a read, so looking at the entrance never writes a session row. */
 export async function resumeContextualSession(
   anchorId: string,
+  targetKeys: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<PlanChangeSessionDto | null> {
-  const res = await fetch(anchorPath(anchorId), {
+  const res = await fetch(`${anchorPath(anchorId)}${anchorQuery(targetKeys)}`, {
     headers: { Accept: 'application/json' },
     signal,
   });
@@ -90,16 +112,26 @@ export async function resumeContextualSession(
 export async function submitContextualPlan(
   anchorId: string,
   prompt: string,
+  targetKeys: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<ContextualPlanResultDto> {
-  return post<ContextualPlanResultDto>(anchorPath(anchorId), { prompt }, signal);
+  return post<ContextualPlanResultDto>(
+    anchorPath(anchorId),
+    { prompt, ...extra(targetKeys) },
+    signal,
+  );
 }
 
 /** Re-send the item thread's ACCUMULATED intent after a failed run, appending
  *  NOTHING — the conversation continues rather than restarting. */
 export async function resubmitContextualPlan(
   anchorId: string,
+  targetKeys: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<ContextualPlanResultDto> {
-  return post<ContextualPlanResultDto>(anchorPath(anchorId), { resubmit: true }, signal);
+  return post<ContextualPlanResultDto>(
+    anchorPath(anchorId),
+    { resubmit: true, ...extra(targetKeys) },
+    signal,
+  );
 }

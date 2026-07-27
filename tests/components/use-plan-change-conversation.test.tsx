@@ -55,11 +55,11 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
 import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 
-function session(bodies: string[]): PlanChangeSessionDto {
+function session(bodies: string[], targetKeys: string[] = []): PlanChangeSessionDto {
   return {
     id: 's1',
     projectId: 'p1',
-    targetKeys: [],
+    targetKeys,
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,
@@ -155,6 +155,98 @@ describe('usePlanChangeConversation — resume', () => {
     const { result } = await mounted();
 
     expect(result.current.state.errorCode).toBe('SESSION_UNAVAILABLE');
+  });
+});
+
+describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
+  const TARGETS = [
+    { id: 'w-812', identifier: 'MOTIR-812', title: 'Billing', kind: 'story' as const },
+    { id: 'w-918', identifier: 'MOTIR-918', title: 'Migrate', kind: 'subtask' as const },
+  ];
+
+  it('routes the turn to the CONTEXTUAL endpoint — primary as the anchor, the rest as targetKeys', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+
+    expect(submitAnchored).toHaveBeenCalledWith(
+      'w-812',
+      'Expand billing.',
+      ['MOTIR-918'],
+      expect.anything(),
+    );
+    // One call does open-or-resume + append + submit, so neither project-thread
+    // hop fires — a targeted turn must not land in the project conversation.
+    expect(append).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('adopts the SCOPED thread that comes back, so the rail shows what it is anchored at', async () => {
+    submitAnchored.mockResolvedValue({
+      jobId: 'job-ctx',
+      sessionId: 's-ctx',
+      session: session(['Expand billing.'], ['MOTIR-812', 'MOTIR-918']),
+    });
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+
+    expect(result.current.state.session?.targetKeys).toEqual(['MOTIR-812', 'MOTIR-918']);
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.delta).toEqual(DELTA);
+  });
+
+  it('streams the contextual job through ITS route — the anchor is re-gated on subscribe', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+
+    expect(streamAnchored).toHaveBeenCalledWith(
+      'w-812',
+      'job-anchored-1',
+      expect.anything(),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('a retry RESUBMITS to the same anchor set — never re-aimed, never duplicated', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+    submitAnchored.mockClear();
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    // The accumulated intent goes out again with NO new turn appended (MOTIR-910's
+    // resubmit), addressed to the set the failed turn actually landed in.
+    expect(resubmitAnchored).toHaveBeenCalledWith('w-812', ['MOTIR-918'], expect.anything());
+    expect(submitAnchored).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('an EMPTY target set is the ordinary project turn — the picker is additive', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.', []);
+    });
+
+    expect(submitAnchored).not.toHaveBeenCalled();
+    expect(append).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -344,7 +436,7 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
     resumeAnchored.mockResolvedValue(session(['Split this story.']));
     const { result } = await mountedAnchored();
 
-    expect(resumeAnchored).toHaveBeenCalledWith('wi_123', expect.anything());
+    expect(resumeAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
     expect(open).not.toHaveBeenCalled();
     expect(result.current.state.session?.turns).toHaveLength(1);
   });
@@ -364,7 +456,12 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       await result.current.send('Split this story.');
     });
 
-    expect(submitAnchored).toHaveBeenCalledWith('wi_123', 'Split this story.', expect.anything());
+    expect(submitAnchored).toHaveBeenCalledWith(
+      'wi_123',
+      'Split this story.',
+      [],
+      expect.anything(),
+    );
     // The project thread's two-call shape is never used here.
     expect(append).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
@@ -396,7 +493,7 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       await result.current.retry();
     });
 
-    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', expect.anything());
+    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
     expect(submitAnchored).not.toHaveBeenCalled();
     expect(result.current.state.jobId).toBe('job-anchored-2');
   });

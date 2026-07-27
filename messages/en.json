@@ -4646,6 +4646,7 @@
       "submitted": "Sent to Motir AI",
       "composerPlaceholder": "Reply, or refine further…",
       "composerPlaceholderReplan": "What’s wrong? What should change?",
+      "composerPlaceholderTargets": "Ask Motir to plan around these…",
       "send": "Send",
       "retry": "Try again",
       "discard": "Discard",
@@ -4688,6 +4689,21 @@
           "description": "description"
         }
       }
+    },
+    "targets": {
+      "sectionLabel": "Work items",
+      "sectionLabelQuery": "Work items matching “{query}”",
+      "emptyHint": "Type to search the project’s work items…",
+      "keepTyping": "Keep typing to search work items…",
+      "searching": "Searching…",
+      "noResults": "No work items match “{query}”.",
+      "listboxLabel": "Work items to plan around",
+      "trigger": "Add a work item to plan around",
+      "trayLabel": "{count, plural, one {Target} other {Targets}}",
+      "remove": "Remove {item}",
+      "limitReached": "You can plan around up to {max} work items at once.",
+      "turnLabel": "{count, plural, one {Targeting # item} other {Targeting # items}}",
+      "nodePill": "Target"
     },
     "mode": {
       "project": "plan",
