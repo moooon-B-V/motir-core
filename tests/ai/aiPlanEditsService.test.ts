@@ -7,6 +7,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext: vi.fn() }));
+vi.mock('@/lib/services/plansService');
 vi.mock('@/lib/services/workItemsService');
 vi.mock('@/lib/services/workflowsService');
 vi.mock('@/lib/repositories/workItemRepository');
@@ -20,12 +21,14 @@ import {
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent, JobContextBag } from '@/lib/ai/types';
 import { PlanDeltaValidationError } from '@/lib/ai/planDelta';
+import type { PlanDto } from '@/lib/dto/plans';
 import type { WorkItemKindDto, WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkItem } from '@prisma/client';
 
@@ -118,6 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(resolveTenantOrg).mockResolvedValue(mockOrg);
   vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+  vi.mocked(plansService.createPlan).mockResolvedValue({ id: 'plan_1' } as PlanDto);
 });
 
 function mockSubmitJob() {
@@ -133,7 +137,7 @@ describe('aiPlanEditsService.submitAugment', () => {
 
     const out = await aiPlanEditsService.submitAugment('add a login flow', ctx);
 
-    expect(out).toEqual({ jobId: 'job_1' });
+    expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'augment',
       {
@@ -154,7 +158,7 @@ describe('aiPlanEditsService.submitAugment', () => {
 
     const out = await aiPlanEditsService.submitAugment('add a login flow', ctx);
 
-    expect(out).toEqual({ jobId: 'job_1' });
+    expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
     const contextArg = vi.mocked(submitJob).mock.calls[0]?.[2] as JobContextBag;
     expect(contextArg.code).toBeUndefined();
   });
@@ -183,7 +187,7 @@ describe('aiPlanEditsService.submitExpand', () => {
 
     const out = await aiPlanEditsService.submitExpand('MOTIR-100', ctx);
 
-    expect(out).toEqual({ jobId: 'job_1' });
+    expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'expand_item',
       expect.objectContaining({ projectKey: 'MOTIR' }),
@@ -233,7 +237,7 @@ describe('aiPlanEditsService.submitReplan', () => {
 
     const out = await aiPlanEditsService.submitReplan('MOTIR-100', ctx);
 
-    expect(out).toEqual({ jobId: 'job_1' });
+    expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'replan',
       expect.any(Object),
@@ -260,6 +264,81 @@ describe('aiPlanEditsService.submitReplan', () => {
       InvalidTargetError,
     );
     expect(submitJob).not.toHaveBeenCalled();
+  });
+});
+
+// ─── The job's Plan (MOTIR-1743) ─────────────────────────────────────────────
+// Every plan-edit submit must OPEN a `generating` Plan bound to the job via
+// `sourceJobId` — motir-ai's augment / expand_item / replan handlers append their
+// output through the 7.21 proposal store, and the core callback seam resolves the
+// plan by that jobId. Without it every one of these jobs 404s on its FIRST
+// `addProposals` callback. These assert the half the submit tests above never
+// covered: the resulting Plan, not just that the job fired.
+describe("aiPlanEditsService — opens the job's Plan on submit", () => {
+  const CASES: Array<{ name: string; run: () => Promise<{ jobId: string; planId: string }> }> = [
+    { name: 'submitAugment', run: () => aiPlanEditsService.submitAugment('add a login flow', ctx) },
+    {
+      name: 'submitContextual',
+      run: () => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], ctx),
+    },
+    { name: 'submitExpand', run: () => aiPlanEditsService.submitExpand('MOTIR-100', ctx) },
+    { name: 'submitReplan', run: () => aiPlanEditsService.submitReplan('MOTIR-100', ctx) },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  for (const c of CASES) {
+    it(`${c.name} opens a Plan bound to the submitted job via sourceJobId`, async () => {
+      mockSubmitJob();
+
+      const out = await c.run();
+
+      expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
+      expect(plansService.createPlan).toHaveBeenCalledTimes(1);
+      expect(plansService.createPlan).toHaveBeenCalledWith(
+        'pj_1',
+        { title: null, summary: null, sourceJobId: 'job_1' },
+        ctx,
+      );
+    });
+
+    it(`${c.name} opens NO Plan when the submit fails (no orphan)`, async () => {
+      vi.mocked(submitJob).mockRejectedValue(new Error('motir-ai unreachable'));
+
+      await expect(c.run()).rejects.toThrow('motir-ai unreachable');
+
+      expect(plansService.createPlan).not.toHaveBeenCalled();
+    });
+  }
+
+  it('submits the job BEFORE opening the plan (so a failed submit leaves no orphan)', async () => {
+    mockSubmitJob();
+
+    await aiPlanEditsService.submitAugment('prompt', ctx);
+
+    const submitOrder = vi.mocked(submitJob).mock.invocationCallOrder[0]!;
+    const createOrder = vi.mocked(plansService.createPlan).mock.invocationCallOrder[0]!;
+    expect(submitOrder).toBeLessThan(createOrder);
+  });
+
+  it('submitContextual sends the anchor set with the augment kind', async () => {
+    mockSubmitJob();
+
+    await aiPlanEditsService.submitContextual('split this', ['MOTIR-100', 'MOTIR-101'], ctx);
+
+    expect(submitJob).toHaveBeenCalledWith(
+      'augment',
+      expect.objectContaining({ projectKey: 'MOTIR' }),
+      expect.objectContaining({
+        prompt: 'split this',
+        targetKeys: ['MOTIR-100', 'MOTIR-101'],
+      }),
+      { userId: 'user_1' },
+    );
   });
 });
 

@@ -2,10 +2,11 @@ import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { parsePlanDelta, PlanDeltaValidationError, type PlanDelta } from '@/lib/ai/planDelta';
-import type { JobStreamEvent } from '@/lib/ai/types';
+import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
+import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -51,26 +52,85 @@ function buildTenant(ctx: ProjectContext, organizationId: string, isMeta: boolea
   };
 }
 
+/** The job kinds a plan EDIT submits — the 7.11/7.12 set (`generate_tree` is
+ *  `aiGenerationService`'s). All three write their output through the 7.21
+ *  Plan/PlanItem proposal store. */
+type PlanEditJobKind = Extract<JobKind, 'augment' | 'expand_item' | 'replan'>;
+
+/**
+ * The ids a plan-edit submit hands back.
+ *
+ * The shape GREW a `planId` alongside `jobId` (MOTIR-1743) — the decision the
+ * bug asked to record: it mirrors `aiGenerationService.startGeneration`'s
+ * `{ jobId, planId }` exactly, so both producers into the 7.21 Plan substrate
+ * return the same pair, and a caller that wants to link the user straight to
+ * `/plans/<id>` no longer has to re-resolve the plan by `sourceJobId`. It is
+ * ADDITIVE: the REST routes echo it, and every existing consumer
+ * (`planEditsClient`, `usePlanEditsJob`, `planChangeSessionsService`)
+ * destructures `{ jobId }` and reads the new field defensively (optional in the
+ * browser-facing client types, since a stubbed/older response carries only
+ * `jobId`).
+ */
+export interface PlanEditSubmitResult {
+  jobId: string;
+  planId: string;
+}
+
+/**
+ * Submit a plan-edit job AND open the `generating` `Plan` its proposals append
+ * into — the ONE shared step every plan-edit submit needs (MOTIR-1743).
+ *
+ * Before this, the four submits stopped at `submitJob`, so no `Plan` existed for
+ * the job. But motir-ai's `augment` / `expand_item` / `replan` handlers write
+ * their output through the Plan/PlanItem proposal store (`addProposals` →
+ * `markPlanned`), and the core seam those callbacks land on
+ * (`aiGenerationService.appendProposals`) resolves the plan by `sourceJobId` —
+ * so EVERY plan-edit job died on its first callback with
+ * `NoPlanForJobError` → 404. Opening the plan here is the missing half.
+ *
+ * Order is deliberate and copied from `startGeneration`: the job is submitted
+ * FIRST so the Plan can bind to it via `sourceJobId`, and so a failed submit
+ * (motir-ai unreachable / out-of-credits) leaves NO orphan Plan behind — the
+ * typed `MotirAiError` propagates before any row is written.
+ *
+ * The Plan is opened untitled (`title`/`summary` null), exactly as
+ * `startGeneration` does by default; the review surfaces already render the
+ * `untitledPlan` fallback.
+ */
+async function submitPlanEditJob(
+  kind: PlanEditJobKind,
+  context: JobContextBag,
+  ctx: ProjectContext,
+): Promise<PlanEditSubmitResult> {
+  const { organizationId, isMeta } = await resolveTenantOrg({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const code = await resolveCodeContext({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const tenant = buildTenant(ctx, organizationId, isMeta);
+  const { jobId } = await submitJob(
+    kind,
+    tenant,
+    {
+      ...context,
+      ...(code ? { code } : {}),
+    },
+    { userId: ctx.userId },
+  );
+  const plan = await plansService.createPlan(
+    ctx.projectId,
+    { title: null, summary: null, sourceJobId: jobId },
+    ctx,
+  );
+  return { jobId, planId: plan.id };
+}
+
 export const aiPlanEditsService = {
-  async submitAugment(prompt: string, ctx: ProjectContext): Promise<{ jobId: string }> {
-    const { organizationId, isMeta } = await resolveTenantOrg({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const code = await resolveCodeContext({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const tenant = buildTenant(ctx, organizationId, isMeta);
-    return submitJob(
-      'augment',
-      tenant,
-      {
-        prompt,
-        ...(code ? { code } : {}),
-      },
-      { userId: ctx.userId },
-    );
+  async submitAugment(prompt: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
+    return submitPlanEditJob('augment', { prompt }, ctx);
   },
 
   /**
@@ -94,33 +154,17 @@ export const aiPlanEditsService = {
    *
    * The re-plan "reason" is the turn text itself — there is no separate `reason`
    * param, by contract. NO new job kind is introduced. Nothing is written to the
-   * plan here: this SUBMITS, and persisting a returned delta stays behind the
-   * confirmation gate (7.13.5) on the approve route.
+   * TREE here: this SUBMITS and opens the job's empty `generating` Plan (the
+   * proposal sink — MOTIR-1743); no work item is touched, and persisting a
+   * returned delta stays behind the confirmation gate (7.13.5) on the approve
+   * route.
    */
   async submitContextual(
     prompt: string,
     targetKeys: readonly string[],
     ctx: ProjectContext,
-  ): Promise<{ jobId: string }> {
-    const { organizationId, isMeta } = await resolveTenantOrg({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const code = await resolveCodeContext({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const tenant = buildTenant(ctx, organizationId, isMeta);
-    return submitJob(
-      'augment',
-      tenant,
-      {
-        prompt,
-        targetKeys: [...targetKeys],
-        ...(code ? { code } : {}),
-      },
-      { userId: ctx.userId },
-    );
+  ): Promise<PlanEditSubmitResult> {
+    return submitPlanEditJob('augment', { prompt, targetKeys: [...targetKeys] }, ctx);
   },
 
   /** The live channel for a contextual planning turn's job — the same 7.1.4 job
@@ -130,7 +174,7 @@ export const aiPlanEditsService = {
     return streamJob(jobId);
   },
 
-  async submitExpand(itemKey: string, ctx: ProjectContext): Promise<{ jobId: string }> {
+  async submitExpand(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
     const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
@@ -142,27 +186,10 @@ export const aiPlanEditsService = {
       );
     }
 
-    const { organizationId, isMeta } = await resolveTenantOrg({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const code = await resolveCodeContext({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const tenant = buildTenant(ctx, organizationId, isMeta);
-    return submitJob(
-      'expand_item',
-      tenant,
-      {
-        rootItemKey: itemKey,
-        ...(code ? { code } : {}),
-      },
-      { userId: ctx.userId },
-    );
+    return submitPlanEditJob('expand_item', { rootItemKey: itemKey }, ctx);
   },
 
-  async submitReplan(itemKey: string, ctx: ProjectContext): Promise<{ jobId: string }> {
+  async submitReplan(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
     const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
@@ -174,24 +201,7 @@ export const aiPlanEditsService = {
       );
     }
 
-    const { organizationId, isMeta } = await resolveTenantOrg({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const code = await resolveCodeContext({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    const tenant = buildTenant(ctx, organizationId, isMeta);
-    return submitJob(
-      'replan',
-      tenant,
-      {
-        rootItemKey: itemKey,
-        ...(code ? { code } : {}),
-      },
-      { userId: ctx.userId },
-    );
+    return submitPlanEditJob('replan', { rootItemKey: itemKey }, ctx);
   },
 
   streamAugment(jobId: string): AsyncGenerator<JobStreamEvent> {

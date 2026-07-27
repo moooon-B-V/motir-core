@@ -31,8 +31,17 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const { jobId } = await aiPlanEditsService.submitReplan(itemKey.trim().toUpperCase(), ctx);
-    return NextResponse.json({ jobId }, { headers: { 'Cache-Control': 'private, no-store' } });
+    // `planId` is the job's opened `generating` Plan (MOTIR-1743) — echoed
+    // alongside `jobId`, additively, so a surface can link straight to the plan
+    // without re-resolving it by `sourceJobId`. Consumers read it defensively.
+    const { jobId, planId } = await aiPlanEditsService.submitReplan(
+      itemKey.trim().toUpperCase(),
+      ctx,
+    );
+    return NextResponse.json(
+      { jobId, planId },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    );
   } catch (err) {
     if (err instanceof InvalidTargetError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
