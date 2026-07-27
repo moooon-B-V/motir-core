@@ -3,7 +3,15 @@ import { getTranslations } from 'next-intl/server';
 
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
-import { PlanNotFoundError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
+import {
+  PlanGrammarError,
+  PlanItemTargetMissingError,
+  PlanNotFoundError,
+  PlanNotInExpectedStatusError,
+  PlanRefGraphError,
+  PlanTargetImmutableError,
+  UnresolvedPlanRefError,
+} from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 
 // POST /api/plans/[id]/approve — APPROVE = materialize (Subtask 7.4.5 / MOTIR-847,
@@ -37,6 +45,27 @@ export async function POST(
     }
     if (err instanceof PlanNotInExpectedStatusError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+    }
+    // The confirmation gate (7.12.5 · MOTIR-911) — the proposal set was rejected
+    // BEFORE any write, so the tree is untouched. A malformed proposal is a 400
+    // (never the DB trigger's raw SQLSTATE surfacing as a 500); a target that
+    // reached a terminal status is a 409 (it moved under the proposal).
+    if (err instanceof PlanGrammarError || err instanceof PlanRefGraphError) {
+      return NextResponse.json(
+        { code: err.code, reason: err.reason, planItemId: err.planItemId, error: err.message },
+        { status: 400 },
+      );
+    }
+    if (err instanceof PlanTargetImmutableError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, error: err.message },
+        { status: 409 },
+      );
+    }
+    // Materialize-time proposal failures the gate cannot pre-empt (a target
+    // archived between the gate and the write). The transaction rolled back.
+    if (err instanceof UnresolvedPlanRefError || err instanceof PlanItemTargetMissingError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
     if (err instanceof ProjectAccessDeniedError) {
       return NextResponse.json(

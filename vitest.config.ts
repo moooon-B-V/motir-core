@@ -288,6 +288,12 @@ export default defineConfig({
         // conversation stack they extend.
         'lib/planChange/scope.ts',
         'lib/services/contextualPlanningService.ts',
+        // Story 7.12 · Subtask 7.12.5 (MOTIR-911) — the CONFIRMATION GATE at the
+        // persist boundary. This module decides whether an approved proposal set
+        // may become rows at all (the kind-parent grammar, the intra-plan ref
+        // graph, done-work immutability); it is the load-bearing SAFETY contract
+        // of the planning pipeline, so every branch of the verdict is gated.
+        'lib/plans/validateProposals.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -506,6 +512,8 @@ export default defineConfig({
         // Subtask 7.12.3 (MOTIR-909) — the contextual-planning scope + orchestration.
         'lib/planChange/scope.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/contextualPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask 7.12.5 (MOTIR-911) — the persist-time confirmation gate.
+        'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
