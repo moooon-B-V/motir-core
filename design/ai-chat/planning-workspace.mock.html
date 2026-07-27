@@ -666,6 +666,15 @@
       .modecard .mh .door b {
         color: var(--accent);
       }
+      .modecard .mh .door code {
+        font:
+          600 10.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 4px;
+        border-radius: 4px;
+      }
       .miniframe {
         display: grid;
         grid-template-columns: 1fr 132px;
@@ -1831,7 +1840,9 @@
               </h3>
               <div class="door">
                 Door: a project surface <b>with a plan</b> → expand / re-sequence; done work is
-                completion-aware (locked).
+                completion-aware (locked). <b>Drawn in full</b> (multi-turn conversation, in-canvas
+                diff, locked done work, the retired “Augment from prompt” door) in
+                <code>plan-change-conversation.mock.html</code> — MOTIR-1727.
               </div>
             </div>
             <div class="miniframe">

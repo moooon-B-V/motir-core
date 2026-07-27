@@ -1,0 +1,2382 @@
+<!doctype html>
+<!--
+  THE PROJECT-SCOPED PLAN-CHANGE CONVERSATION + the retired "Augment from prompt"
+  access path (MOTIR-1727, Story MOTIR-1726).
+
+  This is NOT a new surface. It is the RE-PLAN / plan-change MODE of the ONE
+  universal planning workspace already designed in
+  `design/ai-chat/planning-workspace.mock.html` (MOTIR-1193) — sheet 3 of that
+  asset already names this mode ("Augment / re-plan — 7.11 … Door: a project
+  surface WITH a plan"). Everything structural here is COMPOSED from that asset
+  verbatim: the two-pane `.frame` (canvas left · 22rem chat right), the canvas
+  `.node` / edge language, the `.rail` (railhead + mode chip + bubbles +
+  composer), the `.persistbar` confirm gate, and the `.wclose` exit chrome.
+  The NEW pixels are only: the entrance on an ESTABLISHED project, the
+  multi-turn conversation, the in-canvas DIFF (add / change / remove + LOCKED
+  done work), and the two toolbars the retired button LEAVES.
+
+  Drawn against SHIPPED REALITY — every app strip below was rendered from the
+  running app (prod build, signed in, PayFlow project, MOTIR_AI_URL configured)
+  before it was drawn, so the control order + labels are what the app shows:
+    · TopNav right cluster  = [Plan with AI] [Build in public] [+ Create ⌘C]
+                              [Search ⌘K] [bug] [screen] [bell] [avatar]
+    · /backlog toolbar      = [View all work items] [Filter] [Advanced]
+                              [Saved ▾] [+ New work item] [Augment from prompt]
+    · /items toolbar        = [Archived] [Filter] [Advanced] [Saved ▾] [Tree ▾]
+                              [Augment from prompt] [+ New work item]
+    · the floating "M" orb sits bottom-right on every authed screen
+  (`PlanWithAILauncher` + `PlanWithAIFab` render only when
+   `isMotirAiConfigured() && activeProject` — layout.tsx:153.)
+
+  Colours are the real Motir light palette (globals.css / @motir/design-system
+  `--el-*` values, inlined, as the sibling `design/ai-chat/` mocks do). No
+  invented hue: every fill is a token value or a color-mix of two of them; text
+  on a tint is always --el-text-strong (#37352f).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan change is a conversation — the re-plan mode of the universal workspace</title>
+    <style>
+      :root {
+        /* ── inlined --el-* (light) ── */
+        --text: #1a1a1a; /* --el-text */
+        --strong: #37352f; /* --el-text-strong (AA text on every tint) */
+        --secondary: #5d5b54; /* --el-text-secondary */
+        --muted: #787671; /* --el-text-muted */
+        --faint: #a4a097; /* --el-text-faint */
+        --surface: #ffffff; /* --el-page-bg / card */
+        --soft: #fafaf9; /* --el-surface-soft */
+        --hub: #f6f5f4; /* --el-surface */
+        --board: #ecebe7; /* --el-canvas (recessed planning board) */
+        --mutedfill: #f3f4f6; /* --el-muted */
+        --border: #e5e3df; /* --el-border */
+        --hair: #ede9e4; /* --el-border-soft */
+        --edge: color-mix(in srgb, #e5e3df 40%, #787671); /* canvas edge stroke (border↔muted) */
+        --accent: #5645d4; /* --el-accent */
+        --accent-soft: color-mix(in srgb, #5645d4 11%, #ffffff); /* accent tint */
+        --accent-text: #ffffff; /* --el-accent-text */
+        --pink: #ff64c8; /* --el-highlight (brand pink — glow only) */
+        --success: #1aae39; /* --el-success */
+        --warning: #dd5b00; /* --el-warning */
+        --info: #0075de; /* --el-info */
+        --danger: #e03131; /* --el-danger */
+        --peach: #ffe8d4; /* --el-tint-peach */
+        --rose: #fde0ec; /* --el-tint-rose */
+        --mint: #d9f3e1; /* --el-tint-mint */
+        --lavender: #e6e0f5; /* --el-tint-lavender */
+        --sky: #dcecfa; /* --el-tint-sky */
+        --yellow: #fef7d6; /* --el-tint-yellow */
+        --type-epic: #ff64c8;
+        --type-story: #1aae39;
+        --type-task: #0075de;
+        --type-bug: #e03131;
+        --type-subtask: #2a9d99;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f1efec;
+        color: var(--text);
+        padding: 30px 22px 60px;
+      }
+
+      /* ── page head ── */
+      .page-head {
+        max-width: 1150px;
+        margin: 0 auto 22px;
+      }
+      .page-head h1 {
+        font-size: 21px;
+        margin: 0 0 7px;
+        color: var(--strong);
+        letter-spacing: -0.01em;
+      }
+      .page-head p {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--muted);
+        max-width: 940px;
+        margin: 0 0 8px;
+      }
+      .page-head .ref {
+        color: var(--accent);
+        font:
+          600 12px ui-monospace,
+          monospace;
+      }
+
+      /* ── review-board sheet (identical to planning-workspace.mock.html) ── */
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .sheetbody {
+        padding: 20px 18px 22px;
+      }
+      .note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--secondary);
+        margin: 14px 18px 0;
+        padding: 10px 12px;
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 10px;
+      }
+      .note b {
+        color: var(--strong);
+      }
+      .note + .note {
+        margin-top: 8px;
+      }
+      .note code,
+      .sheethead code,
+      .page-head code {
+        font:
+          600 11.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+      .lbl-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 9px;
+      }
+      .lbl-row .tag {
+        font:
+          700 10px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 3px 8px;
+        border-radius: 5px;
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .lbl-row .tag.today {
+        background: var(--peach);
+        color: var(--strong);
+      }
+      .lbl-row .tag.after {
+        background: var(--mint);
+        color: var(--strong);
+      }
+      .lbl-row .cap2 {
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+
+      /* ── a framed "screen" ── */
+      .screen {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px #0000000f;
+        background: var(--surface);
+      }
+
+      /* ════════ shipped app chrome strips (rendered-from-reality) ════════ */
+      .appstrip {
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: 0 1px 3px #0000000d;
+      }
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 46px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--surface);
+      }
+      .topnav .ws {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--strong);
+      }
+      .topnav .ws .sq {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        background: var(--accent);
+        color: var(--accent-text);
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .topnav .right {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+      /* the shipped PlanWithAILauncher hero pill (gradient + aura + Sparkles) */
+      .heropill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 13px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent-text);
+        background: linear-gradient(
+          135deg,
+          var(--accent),
+          color-mix(in srgb, var(--accent) 55%, var(--pink))
+        );
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, var(--accent-text) 38%, transparent),
+          0 6px 18px -5px color-mix(in srgb, var(--accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--pink) 50%, transparent);
+        white-space: nowrap;
+      }
+      .heropill.lg {
+        padding: 9px 20px;
+        font-size: 13.5px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--secondary);
+        background: var(--surface);
+        white-space: nowrap;
+      }
+      .chip.bip {
+        background: var(--lavender);
+        border-color: transparent;
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .chip.ico {
+        padding: 5px 7px;
+        border-color: transparent;
+        color: var(--faint);
+      }
+      .chip.avatar {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border-radius: 999px;
+        background: var(--strong);
+        color: var(--accent-text);
+        justify-content: center;
+        font-weight: 700;
+        border-color: transparent;
+      }
+
+      /* the page header row of /backlog · /items · /roadmap */
+      .pagehead {
+        display: flex;
+        align-items: flex-end;
+        gap: 14px;
+        padding: 14px 14px 15px;
+        background: var(--surface);
+      }
+      .pagehead .h {
+        font-family: ui-serif, Georgia, serif;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.1;
+      }
+      .pagehead .sub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      .toolbar {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .tbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 11px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--secondary);
+        white-space: nowrap;
+      }
+      .tbtn.ghost {
+        border-color: transparent;
+      }
+      .tbtn.primary {
+        background: var(--accent);
+        border-color: transparent;
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      .tbtn .g {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      /* the control being RETIRED — marked, never restyled */
+      .tbtn.retire {
+        position: relative;
+        border-color: var(--danger);
+        background: color-mix(in srgb, var(--rose) 60%, var(--surface));
+        color: var(--strong);
+      }
+      .tbtn.retire::after {
+        content: '';
+        position: absolute;
+        inset: auto 8px 13px 8px;
+        border-top: 1.5px solid var(--danger);
+      }
+      /* the gap the removed control leaves — nothing else moves */
+      .gapslot {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 30px;
+        padding: 0 11px;
+        border-radius: 8px;
+        border: 1px dashed var(--border);
+        background: repeating-linear-gradient(
+          -45deg,
+          var(--surface),
+          var(--surface) 5px,
+          var(--soft) 5px,
+          var(--soft) 10px
+        );
+        font-size: 10.5px;
+        color: var(--faint);
+        white-space: nowrap;
+      }
+      .fab {
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        color: var(--accent-text);
+        font-weight: 700;
+        font-size: 15px;
+        background: linear-gradient(
+          135deg,
+          var(--accent),
+          color-mix(in srgb, var(--accent) 55%, var(--pink))
+        );
+        box-shadow:
+          0 6px 18px -5px color-mix(in srgb, var(--accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--pink) 55%, transparent);
+      }
+      .fabrow {
+        display: flex;
+        justify-content: flex-end;
+        padding: 6px 14px 12px;
+        background: var(--surface);
+      }
+      .doorline {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 9px 0 0;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .doorline .num {
+        width: 17px;
+        height: 17px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        display: grid;
+        place-items: center;
+        font:
+          700 10px ui-monospace,
+          monospace;
+        flex: none;
+      }
+
+      /* ════════ the workspace overlay (composed PlanningWorkspace) ════════ */
+      .overlay-wrap {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--hub);
+      }
+      /* the dimmed, inert app behind the overlay (sheet 6 of MOTIR-1193) */
+      .behind {
+        filter: saturate(0.45);
+        opacity: 0.5;
+      }
+      .overlay {
+        margin: -34px 12px 12px;
+        position: relative;
+        z-index: 3;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 34px #00000026;
+        background: var(--surface);
+      }
+      .frame {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        height: 400px;
+      }
+      .frame.tall {
+        height: 452px;
+      }
+      .frame.xtall {
+        height: 600px;
+      }
+
+      /* canvas pane — the composed WorkItemCanvas (design/roadmap/) */
+      .canvas {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e0ded8 1px, transparent 0) 0 0 / 24px 24px,
+          var(--board);
+      }
+      svg.edge {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .ov {
+        position: absolute;
+        z-index: 5;
+      }
+      .ov-top {
+        top: 11px;
+        left: 13px;
+        right: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wclose {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--secondary);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .wclose kbd,
+      .searchbox kbd {
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--faint);
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .crumb .muted {
+        color: var(--faint);
+        font-weight: 500;
+      }
+      .searchbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: 11.5px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .zoomctl {
+        bottom: 11px;
+        left: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 3px;
+        box-shadow: 0 1px 3px #0000000f;
+      }
+      .zoomctl button {
+        width: 24px;
+        height: 24px;
+        border: 0;
+        background: transparent;
+        border-radius: 6px;
+        color: var(--secondary);
+        font-size: 13px;
+        cursor: default;
+        display: grid;
+        place-items: center;
+      }
+      .zoomctl .pct {
+        font-size: 10.5px;
+        color: var(--muted);
+        padding: 0 5px;
+        min-width: 36px;
+        text-align: center;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 15px;
+        margin-top: 11px;
+        background: var(--soft);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 9px 13px;
+        font-size: 10.5px;
+        color: var(--muted);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 15px;
+        height: 0;
+        border-top: 2px solid var(--edge);
+        display: inline-block;
+        flex: none;
+      }
+      .legend i.pending {
+        border-top: 2px dashed var(--accent);
+      }
+      .legend i.cross {
+        border-top: 2px solid var(--warning);
+      }
+      .legend b.sw {
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        display: inline-block;
+        flex: none;
+      }
+
+      /* canvas node — the StationCard language of design/roadmap/ */
+      .node {
+        position: absolute;
+        width: 176px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        padding: 9px 10px;
+        box-shadow: 0 2px 6px #0000000f;
+        z-index: 2;
+      }
+      .nhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tile {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .ntitle {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.2;
+      }
+      .nsub {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 9.5px;
+        font-weight: 700;
+        white-space: nowrap;
+        color: var(--strong);
+      }
+      .pill.done {
+        background: var(--mint);
+      }
+      .pill.wip {
+        background: var(--lavender);
+      }
+      .pill.locked {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .pill.added {
+        background: var(--accent-soft);
+      }
+      .pill.changed {
+        background: var(--sky);
+      }
+      .pill.removed {
+        background: var(--rose);
+      }
+      .pill.target {
+        background: var(--yellow);
+      }
+      .nfoot {
+        margin-top: 7px;
+        padding-top: 6px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+
+      /* the four DIFF states — each pairs a border treatment + a pill + a glyph */
+      .node.added {
+        border: 1.5px dashed var(--accent);
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--accent) 3%, var(--surface)),
+          color-mix(in srgb, var(--accent) 7%, var(--surface))
+        );
+        box-shadow:
+          0 2px 10px color-mix(in srgb, var(--accent) 14%, transparent),
+          0 0 16px -2px color-mix(in srgb, var(--pink) 30%, transparent);
+      }
+      .node.changed {
+        border: 1.5px solid var(--info);
+        background: linear-gradient(
+          180deg,
+          var(--surface),
+          color-mix(in srgb, var(--sky) 45%, var(--surface))
+        );
+      }
+      .node.removed {
+        border: 1.5px dashed var(--danger);
+        background: color-mix(in srgb, var(--rose) 40%, var(--surface));
+      }
+      .node.removed .ntitle {
+        text-decoration: line-through;
+        color: var(--secondary);
+      }
+      /* LOCKED = done work. Not colour-alone: hatch + lock glyph + "locked" pill */
+      .node.locked {
+        border-color: var(--border);
+        background: repeating-linear-gradient(
+          -45deg,
+          var(--soft),
+          var(--soft) 6px,
+          var(--hub) 6px,
+          var(--hub) 12px
+        );
+        box-shadow: none;
+      }
+      .node.locked .ntitle {
+        color: var(--secondary);
+      }
+      .difftag {
+        position: absolute;
+        top: -9px;
+        left: 10px;
+        z-index: 3;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font:
+          700 9px ui-monospace,
+          monospace;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--strong);
+        border: 1px solid var(--surface);
+      }
+      .difftag.a {
+        background: var(--accent-soft);
+      }
+      .difftag.c {
+        background: var(--sky);
+      }
+      .difftag.r {
+        background: var(--rose);
+      }
+      .difftag.l {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+
+      /* chat rail — mirrors the shipped DiscoveryChatRail */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .railhead .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--pink));
+        box-shadow: 0 0 7px color-mix(in srgb, var(--pink) 52%, transparent);
+        flex: none;
+      }
+      .railhead .lbl {
+        font:
+          600 10.5px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--secondary);
+      }
+      .railhead .lbl::before {
+        content: '✦ ';
+        color: var(--accent);
+      }
+      .railhead .mode {
+        margin-left: auto;
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+        white-space: nowrap;
+      }
+      .log {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 13px 13px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.user {
+        flex-direction: row-reverse;
+      }
+      .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        font-weight: 700;
+        flex: none;
+      }
+      .avatar.ai {
+        background: var(--accent);
+        color: var(--accent-text);
+      }
+      .avatar.user {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .bubble {
+        border-radius: 12px;
+        padding: 8px 10px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        max-width: 236px;
+      }
+      .bubble.ai {
+        background: var(--soft);
+        color: var(--text);
+        border: 1px solid var(--hair);
+      }
+      .bubble.user {
+        background: var(--accent);
+        color: var(--accent-text);
+      }
+      .bubble .tn {
+        display: block;
+        font:
+          700 9px ui-monospace,
+          monospace;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        opacity: 0.62;
+        margin-bottom: 3px;
+      }
+      .drafting {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 12px;
+        padding: 8px 10px;
+        font-size: 11.5px;
+        color: var(--muted);
+        align-self: flex-start;
+      }
+      .spin {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        flex: none;
+      }
+      .streamtxt {
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--text);
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 12px;
+        padding: 8px 10px;
+        max-width: 236px;
+      }
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 12px;
+        background: var(--accent);
+        vertical-align: -2px;
+        margin-left: 1px;
+      }
+      .composer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--border);
+        padding: 10px 11px;
+      }
+      .composer .inp {
+        flex: 1;
+        min-width: 0;
+        height: 32px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 0 10px;
+        font-size: 11.5px;
+        color: var(--faint);
+        display: flex;
+        align-items: center;
+      }
+      .composer .send {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: var(--accent-text);
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 13px;
+      }
+
+      /* the confirm-to-persist gate (composed from MOTIR-1193 sheet 2) */
+      .persistbar {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        background: var(--surface);
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        padding: 8px 10px 8px 13px;
+        box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 16%, transparent);
+        white-space: nowrap;
+      }
+      .persistbar .txt {
+        font-size: 11.5px;
+        color: var(--strong);
+        font-weight: 700;
+      }
+      .persistbar .txt small {
+        display: block;
+        font-weight: 500;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .btn {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 11px;
+        font-size: 11.5px;
+        font-weight: 600;
+        background: var(--surface);
+        color: var(--secondary);
+        cursor: default;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .btn.primary {
+        background: linear-gradient(
+          135deg,
+          var(--accent),
+          color-mix(in srgb, var(--accent) 55%, var(--pink))
+        );
+        border-color: transparent;
+        color: var(--accent-text);
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, var(--accent-text) 30%, transparent),
+          0 4px 12px -4px color-mix(in srgb, var(--accent) 80%, transparent);
+      }
+      .btn.ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn.sm {
+        padding: 4px 9px;
+        font-size: 10.5px;
+      }
+
+      /* ════════ the replaced corner dock (PlanEditsReviewDock) ════════ */
+      .was {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .dockmini {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 3px 14px #00000014;
+        overflow: hidden;
+        opacity: 0.85;
+      }
+      .dockmini .dh {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border);
+        font-family: ui-serif, Georgia, serif;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .dockmini .drow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 12px;
+        font-size: 11px;
+        color: var(--text);
+      }
+      .dockmini .op {
+        font-size: 9.5px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 999px;
+        color: var(--strong);
+        flex: none;
+      }
+      .dockmini .df {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 12px;
+        border-top: 1px solid var(--border);
+        font-size: 10.5px;
+        color: var(--muted);
+        gap: 8px;
+      }
+      .strike {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        background: color-mix(in srgb, var(--rose) 30%, transparent);
+      }
+      .strike::before,
+      .strike::after {
+        content: '';
+        position: absolute;
+        left: -6%;
+        right: -6%;
+        top: 50%;
+        border-top: 2px solid var(--danger);
+        opacity: 0.85;
+      }
+      .strike::before {
+        transform: rotate(9deg);
+      }
+      .strike::after {
+        transform: rotate(-9deg);
+      }
+      .wasflag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font:
+          700 10px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--strong);
+        background: var(--rose);
+        border-radius: 5px;
+        padding: 3px 8px;
+        margin-bottom: 8px;
+      }
+      .wasflag.now {
+        background: var(--mint);
+      }
+
+      /* ════════ the state grid (panel 6) ════════ */
+      .states {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .statecard {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .statecard .sh {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 11px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .statecard .sh .k {
+        margin-left: auto;
+        font:
+          600 9px ui-monospace,
+          monospace;
+        color: var(--muted);
+      }
+      .statecard .sb {
+        padding: 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 128px;
+      }
+      .statecard .cap3 {
+        padding: 0 11px 11px;
+        font-size: 10.5px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+      .emptyhint {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-start;
+        border: 1px dashed var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 11px;
+        color: var(--muted);
+        background: var(--soft);
+      }
+      .sugg {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 3px 9px;
+        font-size: 10.5px;
+        color: var(--secondary);
+        background: var(--surface);
+      }
+      .alert {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        border-radius: 10px;
+        padding: 9px 10px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--strong);
+      }
+      .alert.err {
+        background: color-mix(in srgb, var(--rose) 55%, var(--surface));
+        border: 1px solid var(--danger);
+      }
+      .alert.credit {
+        background: var(--peach);
+        border: 1px solid var(--warning);
+      }
+      .alert .gl {
+        flex: none;
+        font-size: 12px;
+      }
+
+      table.tok {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11.5px;
+      }
+      table.tok th,
+      table.tok td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--hair);
+        vertical-align: top;
+      }
+      table.tok th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      table.tok td:first-child {
+        white-space: nowrap;
+      }
+      table.tok code {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-head">
+      <h1>Changing a plan is a CONVERSATION — the plan-change mode on an established project</h1>
+      <p>
+        <span class="ref">MOTIR-1727 · Story MOTIR-1726</span> — a change to the plan is
+        <b>always a conversation</b>; one prompt is not enough to reshape a plan. So the one-shot
+        <b>“Augment from prompt”</b> button retires and the capability moves onto the
+        <b>universal planning workspace</b>. This board draws the
+        <b>re-plan / plan-change MODE</b> — the entrance on a project that already HAS a plan, the
+        multi-turn conversation, the proposed changes as a <b>diff on the canvas</b> (not a corner
+        dock), the <b>locked</b> treatment for <code>done</code> work — and the two toolbars the
+        retired button leaves behind.
+      </p>
+      <p>
+        <b>This is a STATE of the one surface, not a new one.</b> Every structural element is
+        composed verbatim from <code>design/ai-chat/planning-workspace.mock.html</code> (MOTIR-1193)
+        — the two-pane <code>PlanningWorkspace</code> frame, the canvas node + edge language of
+        <code>design/roadmap/</code> (MOTIR-1009), the <code>DiscoveryChatRail</code> language, and
+        the confirm-to-persist bar. Its sheet 3 already names this mode; this asset draws it.
+        <b>Rendered against shipped reality first</b> — the app strips below reproduce the running
+        app’s real control order and labels (prod build, PayFlow project, AI configured).
+      </p>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — the door, on an established project ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>The door — “Plan with AI” is GLOBAL, so every project surface already has it</h2>
+        <span class="cap">shipped today · <code>PlanWithAILauncher</code></span>
+      </div>
+      <div class="sheetbody">
+        <div class="lbl-row">
+          <span class="tag today">as it ships today</span>
+          <span class="cap2"
+            >/backlog — the hero pill is in the header on <b>every</b> screen; the “M” orb floats
+            bottom-right; the per-surface <b>Augment from prompt</b> button is the one being
+            retired.</span
+          >
+        </div>
+        <div class="appstrip">
+          <div class="topnav">
+            <span class="ws"><span class="sq">PA</span> PayFlow</span>
+            <span class="right">
+              <span class="heropill">✦ Plan with AI</span>
+              <span class="chip bip">📣 Build in public</span>
+              <span class="chip">+ Create <kbd style="color: var(--faint)">C</kbd></span>
+              <span class="chip">⌕ Search <kbd style="color: var(--faint)">⌘K</kbd></span>
+              <span class="chip ico">◍</span>
+              <span class="chip ico">▭</span>
+              <span class="chip ico">◔</span>
+              <span class="chip avatar">D</span>
+            </span>
+          </div>
+          <div class="pagehead">
+            <div>
+              <div class="h">Backlog</div>
+              <div class="sub">PayFlow · plan &amp; groom — rank, sprint, estimate</div>
+            </div>
+            <div class="toolbar">
+              <span class="tbtn"><span class="g">↗</span> View all work items</span>
+              <span class="tbtn"><span class="g">≡</span> Filter</span>
+              <span class="tbtn"><span class="g">▽</span> Advanced</span>
+              <span class="tbtn"><span class="g">⌖</span> Saved <span class="g">⌄</span></span>
+              <span class="tbtn primary">+ New work item</span>
+              <span class="tbtn retire">✦ Augment from prompt</span>
+            </div>
+          </div>
+          <div class="fabrow"><span class="fab">M</span></div>
+        </div>
+
+        <div class="doorline">
+          <span class="num">1</span> the <b>header hero pill</b> — present on every authed screen
+          (<code>TopNav</code>), opens the workspace in the current context’s mode
+        </div>
+        <div class="doorline">
+          <span class="num">2</span> the floating <b>“M”</b> orb — the universal AI callout, also on
+          every screen (<code>PlanWithAIFab</code>)
+        </div>
+        <div class="doorline">
+          <span class="num">3</span> <b>⌘K</b> → the “Plan with AI” command in the
+          <code>Plan</code> group
+        </div>
+        <div class="doorline">
+          <span class="num">4</span> on <b>/roadmap</b> with nothing planned yet, the same pill is
+          the empty-state CTA — the identical component, a different context
+        </div>
+      </div>
+      <div class="note">
+        <b>Why removing the toolbar button costs no access.</b> The entrance was already corrected
+        to be <b>global, not per-surface</b> (MOTIR-1193 sheet 4, 2026-06-24): the header + ⌘K + the
+        orb are on every PM screen, so “Plan with AI” is summonable from <code>/backlog</code>,
+        <code>/items</code> and <code>/roadmap</code> without any of them owning a button.
+        <b>“Augment from prompt” is the leftover of the older per-surface model</b> — a second,
+        bespoke AI door into a one-shot modal. Retiring it removes a duplicate door, not a
+        capability. The door that stays is drawn above <b>in its real shipped position</b>: the pill
+        leads the header’s right cluster, ahead of <b>Build in public</b>.
+      </div>
+      <div class="note">
+        <b>What the door opens on an ESTABLISHED project (the gap this story closes).</b> Today
+        <code>planningWorkspaceHref()</code> points at <code>/onboarding?mode=…&amp;from=…</code>,
+        nothing reads <code>?mode=</code>, and an onboarding-ran project is redirected to
+        <code>/roadmap</code> — so the pill round-trips instead of opening the workspace. The host
+        that makes panel 2 real is <b>MOTIR-1729</b>; the rail that fills its chat pane is
+        <b>MOTIR-1730</b>; the conversation seam behind it is <b>MOTIR-1728</b>.
+      </div>
+    </section>
+
+    <!-- ════════════════ PANEL 2 — opening over an established project ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>Opening it — the workspace over a project that ALREADY has a plan (empty state)</h2>
+        <span class="cap">mode <code>plan change</code> · overlay on top of the app</span>
+      </div>
+      <div class="sheetbody">
+        <div class="overlay-wrap">
+          <div class="appstrip behind" style="border: 0; border-radius: 0">
+            <div class="topnav">
+              <span class="ws"><span class="sq">PA</span> PayFlow</span>
+              <span class="right">
+                <span class="heropill">✦ Plan with AI</span>
+                <span class="chip bip">📣 Build in public</span>
+                <span class="chip">+ Create</span>
+                <span class="chip">⌕ Search</span>
+                <span class="chip avatar">D</span>
+              </span>
+            </div>
+            <div class="pagehead" style="padding-bottom: 28px">
+              <div>
+                <div class="h">Backlog</div>
+                <div class="sub">PayFlow · plan &amp; groom — rank, sprint, estimate</div>
+              </div>
+              <div class="toolbar">
+                <span class="tbtn">≡ Filter</span>
+                <span class="tbtn">▽ Advanced</span>
+                <span class="tbtn primary">+ New work item</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="overlay">
+            <div class="frame">
+              <div class="canvas">
+                <svg class="edge">
+                  <g fill="none" stroke="var(--edge)" stroke-width="2">
+                    <path d="M190 126 C 210 126, 206 107, 226 107" />
+                    <path d="M190 126 C 210 126, 206 187, 226 187" />
+                    <path d="M190 126 C 212 126, 206 273, 226 273" />
+                    <path d="M402 107 C 452 107, 452 107, 502 107" />
+                    <path d="M402 187 C 452 187, 452 187, 502 187" />
+                  </g>
+                </svg>
+                <div class="ov ov-top">
+                  <span class="wclose"><span>✕</span> Back to backlog <kbd>Esc</kbd></span>
+                  <span class="crumb">PayFlow <span class="muted">· 14 work items</span></span>
+                  <span class="searchbox">⌕ Find a work item <kbd>/</kbd></span>
+                </div>
+
+                <div class="node" style="left: 14px; top: 100px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--lavender); color: var(--type-epic)"
+                      >◈</span
+                    >
+                    <div>
+                      <div class="ntitle">Billing</div>
+                      <div class="nsub">epic · 6 items</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="node" style="left: 226px; top: 68px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                      >▤</span
+                    >
+                    <div>
+                      <div class="ntitle">Invoice model</div>
+                      <div class="nsub">story · PAY-12</div>
+                    </div>
+                  </div>
+                  <div class="nfoot"><span class="pill done">✓ done</span></div>
+                </div>
+
+                <div class="node" style="left: 226px; top: 148px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                      >▤</span
+                    >
+                    <div>
+                      <div class="ntitle">Create invoice</div>
+                      <div class="nsub">story · PAY-13</div>
+                    </div>
+                  </div>
+                  <div class="nfoot"><span class="pill done">✓ done</span></div>
+                </div>
+
+                <div class="node" style="left: 226px; top: 234px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--sky); color: var(--type-task)"
+                      >☑</span
+                    >
+                    <div>
+                      <div class="ntitle">Send invoice</div>
+                      <div class="nsub">task · PAY-14</div>
+                    </div>
+                  </div>
+                  <div class="nfoot"><span class="pill wip">◔ in progress</span></div>
+                </div>
+
+                <div class="node" style="left: 502px; top: 68px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--sky); color: var(--type-task)"
+                      >☑</span
+                    >
+                    <div>
+                      <div class="ntitle">PDF renderer</div>
+                      <div class="nsub">task · PAY-18</div>
+                    </div>
+                  </div>
+                  <div class="nfoot"><span class="pill done">✓ done</span></div>
+                </div>
+
+                <div class="node" style="left: 502px; top: 148px">
+                  <div class="nhead">
+                    <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                      >▤</span
+                    >
+                    <div>
+                      <div class="ntitle">Payment reminders</div>
+                      <div class="nsub">story · PAY-21</div>
+                    </div>
+                  </div>
+                  <div class="nfoot"><span class="pill wip">◔ to do</span></div>
+                </div>
+
+                <div class="ov zoomctl">
+                  <button>−</button><span class="pct">80%</span><button>+</button><button>⤢</button>
+                </div>
+              </div>
+
+              <aside class="rail">
+                <div class="railhead">
+                  <span class="dot"></span><span class="lbl">Motir AI</span>
+                  <span class="mode">plan change</span>
+                </div>
+                <div class="log">
+                  <div class="turn">
+                    <span class="avatar ai">M</span>
+                    <div class="bubble ai">
+                      PayFlow’s plan is on the canvas — 2 epics, 14 work items, 5 already done. Tell
+                      me what should change and I’ll propose it here. Nothing is saved until you
+                      approve.
+                    </div>
+                  </div>
+                  <div class="emptyhint">
+                    <span>Not sure where to start?</span>
+                    <span class="sugg">＋ Add work to an epic</span>
+                    <span class="sugg">⇄ Re-sequence what’s left</span>
+                    <span class="sugg">✂ Drop something we don’t need</span>
+                  </div>
+                </div>
+                <div class="composer">
+                  <span class="inp">Message Motir AI…</span>
+                  <span class="send">➤</span>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>The same shell, seeded differently — that is all a MODE is.</b> The frame is the shipped
+        <code>components/planning/PlanningWorkspace.tsx</code>
+        (<code>grid grid-cols-[1fr_22rem]</code>, canvas left · chat right, no app nav), opened as a
+        <b>full-screen overlay ON TOP of the app</b> — the backlog stays mounted, dimmed and inert
+        behind it, and
+        <b>Close / <kbd>Esc</kbd> returns to the exact screen you launched from</b> (MOTIR-1193
+        sheet 6). The only differences from the generation mode: the canvas is seeded with the
+        project’s <b>existing</b> tree instead of an empty board, the mode chip reads
+        <code>plan change</code>, and the opening turn states what already exists.
+        <b>No “Plan with AI” button inside</b> — the conversation IS the input.
+      </div>
+      <div class="note">
+        <b>Empty state (drawn above).</b> Before the first turn the rail carries the opener plus
+        three <b>starter chips</b> phrased as outcomes, not jargon — they only prefill the composer,
+        they are not a menu of modes. The canvas is fully usable while the conversation is empty
+        (pan / zoom / search / drill-down all come from the composed canvas).
+      </div>
+    </section>
+
+    <!-- ════════════════ PANEL 3 — the multi-turn conversation ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>The conversation — MULTI-TURN refinement is the whole point (streaming turn)</h2>
+        <span class="cap">accumulated intent · <code>MOTIR-1728</code></span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="frame tall">
+            <div class="canvas">
+              <svg class="edge">
+                <g fill="none" stroke="var(--edge)" stroke-width="2">
+                  <path d="M190 176 C 208 176, 208 106, 226 106" />
+                  <path d="M190 176 C 208 176, 208 215, 226 215" />
+                </g>
+                <g fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4">
+                  <path d="M190 176 C 208 176, 208 313, 226 313" />
+                  <path d="M402 313 L 502 313" />
+                </g>
+              </svg>
+              <div class="ov ov-top">
+                <span class="wclose"><span>✕</span> Back to backlog <kbd>Esc</kbd></span>
+                <span class="crumb">Proposing <span class="muted">· 2 added, updating…</span></span>
+              </div>
+
+              <div class="node" style="left: 14px; top: 150px">
+                <div class="nhead">
+                  <span class="tile" style="background: var(--lavender); color: var(--type-epic)"
+                    >◈</span
+                  >
+                  <div>
+                    <div class="ntitle">Billing</div>
+                    <div class="nsub">epic · 6 items</div>
+                  </div>
+                </div>
+              </div>
+              <div class="node locked" style="left: 226px; top: 56px">
+                <span class="difftag l">🔒 locked</span>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mutedfill); color: var(--muted)"
+                    >▤</span
+                  >
+                  <div>
+                    <div class="ntitle">Invoice model</div>
+                    <div class="nsub">story · PAY-12</div>
+                  </div>
+                </div>
+                <div class="nfoot">
+                  <span class="pill done">✓ done</span><span class="pill locked">🔒 immutable</span>
+                </div>
+              </div>
+              <div class="node" style="left: 226px; top: 176px">
+                <div class="nhead">
+                  <span class="tile" style="background: var(--sky); color: var(--type-task)"
+                    >☑</span
+                  >
+                  <div>
+                    <div class="ntitle">Send invoice</div>
+                    <div class="nsub">task · PAY-14</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill wip">◔ in progress</span></div>
+              </div>
+              <div class="node added" style="left: 226px; top: 274px">
+                <span class="difftag a">＋ proposed</span>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                    >▤</span
+                  >
+                  <div>
+                    <div class="ntitle">Recurring invoices</div>
+                    <div class="nsub">story · new</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill added">＋ added</span></div>
+              </div>
+              <div class="node added" style="left: 502px; top: 274px">
+                <span class="difftag a">＋ proposed</span>
+                <div class="nhead">
+                  <span
+                    class="tile"
+                    style="
+                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
+                      color: var(--type-subtask);
+                    "
+                    >◇</span
+                  >
+                  <div>
+                    <div class="ntitle">Monthly schedule</div>
+                    <div class="nsub">subtask · new</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill added">＋ added</span></div>
+              </div>
+
+              <div class="ov zoomctl">
+                <button>−</button><span class="pct">80%</span><button>+</button><button>⤢</button>
+              </div>
+            </div>
+
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">plan change</span>
+              </div>
+              <div class="log">
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">
+                    <span class="tn">turn 1</span>Add recurring invoices to Billing.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Proposed a <b>Recurring invoices</b> story under Billing, after
+                    <b>Invoice model</b>. It’s on the canvas, not saved.
+                  </div>
+                </div>
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">
+                    <span class="tn">turn 2 · refine</span>Split it into monthly and yearly, and
+                    drop the SMS reminder — email only.
+                  </div>
+                </div>
+                <div class="streamtxt">
+                  Splitting it into <b>Monthly schedule</b> and <b>Yearly schedule</b>, and marking
+                  the SMS reminder for removal<span class="caret"></span>
+                </div>
+                <div class="drafting"><span class="spin"></span> Updating the proposal…</div>
+              </div>
+              <div class="composer">
+                <span class="inp">Reply, or refine further…</span>
+                <span class="send">➤</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Turn 2 REFINES turn 1 — it does not re-run it.</b> Each turn appends to a persisted,
+        project-scoped session and the <b>ACCUMULATED</b> intent is what is submitted
+        (<code>MOTIR-1728</code>), so “split it” and “drop the SMS reminder” land on the proposal
+        already on the canvas instead of starting a fresh, unrelated one. This is precisely what the
+        retired one-shot modal could not do: there, a wrong result left you re-typing a different
+        prompt from scratch. The session is persisted, so
+        <b>re-opening the workspace resumes the same thread</b> rather than a blank rail.
+      </div>
+      <div class="note">
+        <b>Streaming.</b> The reply streams into the rail (an
+        <code>aria-live="polite"</code> region) as partial text with a caret, followed by the
+        <code>Spinner</code> row while the delta is still being computed — the shipped
+        <code>DiscoveryChatRail</code> drafting language, unchanged. The canvas updates
+        <b>incrementally</b> as each proposed item arrives, exactly as in MOTIR-1193 sheet 2.
+      </div>
+    </section>
+
+    <!-- ════════════════ PANEL 4 — the in-canvas diff ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>Review — the proposed changes are a DIFF ON THE CANVAS, with done work locked</h2>
+        <span class="cap">confirm-to-persist · no corner dock</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="frame xtall">
+            <div class="canvas">
+              <svg class="edge">
+                <!-- parent → child, the canvas's firm neutral edge -->
+                <g fill="none" stroke="var(--edge)" stroke-width="2">
+                  <path d="M190 256 C 210 256, 206 106, 226 106" />
+                  <path d="M190 256 C 210 256, 206 226, 226 226" />
+                  <path d="M190 256 C 210 256, 206 445, 226 445" />
+                </g>
+                <!-- proposed (pending) edges — dashed accent, as in MOTIR-1193 sheet 2 -->
+                <g fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4">
+                  <path d="M190 256 C 212 256, 206 335, 226 335" />
+                  <path d="M402 335 C 442 335, 442 289, 480 289" />
+                  <path d="M402 335 C 442 335, 442 383, 480 383" />
+                </g>
+                <!-- the edge to a REMOVED child — dashed danger -->
+                <g fill="none" stroke="var(--danger)" stroke-width="2" stroke-dasharray="4 4">
+                  <path d="M402 445 C 442 445, 442 477, 480 477" />
+                </g>
+              </svg>
+              <div class="ov ov-top">
+                <span class="wclose"><span>✕</span> Back to backlog <kbd>Esc</kbd></span>
+                <span class="crumb"
+                  >Proposing <span class="muted">· 3 added · 1 changed · 1 removed</span></span
+                >
+                <span class="searchbox">⌕ Find a work item <kbd>/</kbd></span>
+              </div>
+
+              <div class="node" style="left: 14px; top: 230px">
+                <div class="nhead">
+                  <span class="tile" style="background: var(--lavender); color: var(--type-epic)"
+                    >◈</span
+                  >
+                  <div>
+                    <div class="ntitle">Billing</div>
+                    <div class="nsub">epic · 6 items</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- LOCKED done work -->
+              <div class="node locked" style="left: 226px; top: 56px">
+                <span class="difftag l">🔒 locked</span>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mutedfill); color: var(--muted)"
+                    >▤</span
+                  >
+                  <div>
+                    <div class="ntitle">Invoice model</div>
+                    <div class="nsub">story · PAY-12</div>
+                  </div>
+                </div>
+                <div class="nfoot">
+                  <span class="pill done">✓ done</span
+                  ><span class="pill locked">🔒 can’t change</span>
+                </div>
+              </div>
+              <div class="node locked" style="left: 226px; top: 176px">
+                <span class="difftag l">🔒 locked</span>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mutedfill); color: var(--muted)"
+                    >▤</span
+                  >
+                  <div>
+                    <div class="ntitle">Create invoice</div>
+                    <div class="nsub">story · PAY-13</div>
+                  </div>
+                </div>
+                <div class="nfoot">
+                  <span class="pill done">✓ done</span
+                  ><span class="pill locked">🔒 can’t change</span>
+                </div>
+              </div>
+
+              <!-- ADDED -->
+              <div class="node added" style="left: 226px; top: 296px">
+                <span class="difftag a">＋ add</span>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                    >▤</span
+                  >
+                  <div>
+                    <div class="ntitle">Recurring invoices</div>
+                    <div class="nsub">story · new · after PAY-12</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill added">＋ added</span></div>
+              </div>
+              <div class="node added" style="left: 480px; top: 250px">
+                <span class="difftag a">＋ add</span>
+                <div class="nhead">
+                  <span
+                    class="tile"
+                    style="
+                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
+                      color: var(--type-subtask);
+                    "
+                    >◇</span
+                  >
+                  <div>
+                    <div class="ntitle">Monthly schedule</div>
+                    <div class="nsub">subtask · new</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill added">＋ added</span></div>
+              </div>
+              <div class="node added" style="left: 480px; top: 344px">
+                <span class="difftag a">＋ add</span>
+                <div class="nhead">
+                  <span
+                    class="tile"
+                    style="
+                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
+                      color: var(--type-subtask);
+                    "
+                    >◇</span
+                  >
+                  <div>
+                    <div class="ntitle">Yearly schedule</div>
+                    <div class="nsub">subtask · new</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill added">＋ added</span></div>
+              </div>
+
+              <!-- CHANGED -->
+              <div class="node changed" style="left: 226px; top: 400px">
+                <span class="difftag c">✎ change</span>
+                <div class="nhead">
+                  <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                    >▤</span
+                  >
+                  <div>
+                    <div class="ntitle">Payment reminders</div>
+                    <div class="nsub">story · PAY-21 · title, scope</div>
+                  </div>
+                </div>
+                <div class="nfoot">
+                  <span class="pill changed">✎ changed</span
+                  ><span class="pill target">◎ email only</span>
+                </div>
+              </div>
+
+              <!-- REMOVED -->
+              <div class="node removed" style="left: 480px; top: 438px">
+                <span class="difftag r">− remove</span>
+                <div class="nhead">
+                  <span
+                    class="tile"
+                    style="
+                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
+                      color: var(--type-subtask);
+                    "
+                    >◇</span
+                  >
+                  <div>
+                    <div class="ntitle">SMS reminder</div>
+                    <div class="nsub">subtask · PAY-24 · to do</div>
+                  </div>
+                </div>
+                <div class="nfoot"><span class="pill removed">− removed</span></div>
+              </div>
+
+              <div class="ov zoomctl">
+                <button>−</button><span class="pct">75%</span><button>+</button><button>⤢</button>
+              </div>
+              <div class="persistbar">
+                <span class="txt"
+                  >3 added · 1 changed · 1 removed<small
+                    >2 done items locked · nothing saved yet</small
+                  ></span
+                >
+                <span class="btn ghost sm">Discard</span>
+                <span class="btn primary">✓ Approve changes</span>
+              </div>
+            </div>
+
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">plan change</span>
+              </div>
+              <div class="log">
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">
+                    <span class="tn">turn 2 · refine</span>Split it into monthly and yearly, and
+                    drop the SMS reminder — email only.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Here’s the updated proposal on the canvas: <b>3 added</b>,
+                    <b>1 changed</b> (Payment reminders → email only), <b>1 removed</b> (SMS
+                    reminder).
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    <b>Invoice model</b> and <b>Create invoice</b> are already done, so I left them
+                    untouched — I can’t change finished work. Approve when it looks right, or keep
+                    refining.
+                  </div>
+                </div>
+              </div>
+              <div class="composer">
+                <span class="inp">Reply, or refine further…</span>
+                <span class="send">➤</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div class="legend">
+          <span><b class="sw" style="background: var(--accent-soft)"></b> ＋ add</span>
+          <span><b class="sw" style="background: var(--sky)"></b> ✎ change</span>
+          <span><b class="sw" style="background: var(--rose)"></b> − remove</span>
+          <span><b class="sw" style="background: var(--mutedfill)"></b> 🔒 done · locked</span>
+          <span><i></i> parent → child</span>
+          <span><i class="pending"></i> proposed edge</span>
+        </div>
+
+        <div style="height: 18px"></div>
+
+        <div class="was">
+          <div>
+            <div class="wasflag">was · retired</div>
+            <div class="dockmini">
+              <div class="strike"></div>
+              <div class="dh">Proposed changes <span style="color: var(--faint)">✕</span></div>
+              <div class="drow">
+                <span class="op" style="background: var(--mint)">Add</span> Recurring invoices
+              </div>
+              <div class="drow">
+                <span class="op" style="background: var(--sky)">Change</span> PAY-21
+              </div>
+              <div class="drow">
+                <span class="op" style="background: var(--mint)">Add</span> Monthly schedule
+              </div>
+              <div class="df">
+                <span>3 items</span>
+                <span style="display: inline-flex; gap: 6px"
+                  ><span class="btn sm">Decline</span
+                  ><span class="btn sm primary">Approve 3</span></span
+                >
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="wasflag now">now · on the canvas</div>
+            <div class="note" style="margin: 0">
+              <b>The corner dock is replaced for this flow.</b> Today
+              <code>PlanEditsReviewDock</code> renders the delta as a
+              <b>fixed bottom-right list of rows</b> — a text list of ops, detached from the plan
+              they change, with no way to see WHERE a proposed item lands or what it depends on. In
+              the workspace the same delta becomes <b>the canvas itself</b>: each op is drawn on the
+              node it affects, in place, with its edges. The dock stays in the codebase for the
+              item-scoped <code>expand</code> / <code>replan</code> row actions on
+              <code>/items</code> (out of scope for this story, MOTIR-1731) — it is retired
+              <b>from this flow</b>, not deleted.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Done work is LOCKED, and the lock is visible — not colour-alone.</b> A
+        <code>done</code> item renders with a <b>hatched surface</b> + a <b>🔒 lock glyph</b> + a
+        <code>can’t change</code> pill + a <code>locked</code> corner tag, and the AI says so in the
+        rail. This is the completion-aware guarantee made legible: the engine may propose around
+        finished work, never over it, and an attempted immutable edit is rejected server-side.
+      </div>
+      <div class="note">
+        <b>Confirm-to-persist, and the conversation survives it.</b> Nothing reaches the database
+        until <b>Approve changes</b>; <b>Discard</b> drops the whole proposal and writes nothing.
+        <b>After either, the rail stays open</b> — that is what makes this a conversation instead of
+        a transaction, and it is why the flow does not close a modal on you. Closing the overlay
+        with a proposal still pending raises the shipped close-with-pending guard (<b
+          >Discard N proposed · Keep planning · Approve</b
+        >, MOTIR-1193 sheet 6). Approving changes the work-item tree, so the canvas — a client
+        island that owns its own state — refetches on an explicit trigger, and the server-rendered
+        counts behind the overlay take the route refresh.
+      </div>
+    </section>
+
+    <!-- ════════════════ PANEL 5 — the removed door ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>The removed door — the toolbars WITHOUT “Augment from prompt”</h2>
+        <span class="cap">MOTIR-1731 · nothing else moves</span>
+      </div>
+      <div class="sheetbody">
+        <div class="lbl-row">
+          <span class="tag today">/backlog · today</span>
+          <span class="cap2"
+            >the augment button trails the toolbar, after <b>New work item</b></span
+          >
+        </div>
+        <div class="appstrip" style="margin-bottom: 14px">
+          <div class="pagehead">
+            <div>
+              <div class="h">Backlog</div>
+              <div class="sub">PayFlow · plan &amp; groom — rank, sprint, estimate</div>
+            </div>
+            <div class="toolbar">
+              <span class="tbtn"><span class="g">↗</span> View all work items</span>
+              <span class="tbtn"><span class="g">≡</span> Filter</span>
+              <span class="tbtn"><span class="g">▽</span> Advanced</span>
+              <span class="tbtn"><span class="g">⌖</span> Saved <span class="g">⌄</span></span>
+              <span class="tbtn primary">+ New work item</span>
+              <span class="tbtn retire">✦ Augment from prompt</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-row">
+          <span class="tag after">/backlog · after</span>
+          <span class="cap2"
+            >the trailing slot simply ends; every other control keeps its order and position</span
+          >
+        </div>
+        <div class="appstrip" style="margin-bottom: 22px">
+          <div class="pagehead">
+            <div>
+              <div class="h">Backlog</div>
+              <div class="sub">PayFlow · plan &amp; groom — rank, sprint, estimate</div>
+            </div>
+            <div class="toolbar">
+              <span class="tbtn"><span class="g">↗</span> View all work items</span>
+              <span class="tbtn"><span class="g">≡</span> Filter</span>
+              <span class="tbtn"><span class="g">▽</span> Advanced</span>
+              <span class="tbtn"><span class="g">⌖</span> Saved <span class="g">⌄</span></span>
+              <span class="tbtn primary">+ New work item</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-row">
+          <span class="tag today">/items · today</span>
+          <span class="cap2"
+            >here it sits <b>between</b> the view switcher and <b>New work item</b></span
+          >
+        </div>
+        <div class="appstrip" style="margin-bottom: 14px">
+          <div class="pagehead">
+            <div>
+              <div class="h">Work Items</div>
+              <div class="sub">All work items in PayFlow</div>
+            </div>
+            <div class="toolbar">
+              <span class="tbtn ghost"><span class="g">▤</span> Archived</span>
+              <span class="tbtn"><span class="g">≡</span> Filter</span>
+              <span class="tbtn"><span class="g">▽</span> Advanced</span>
+              <span class="tbtn"><span class="g">⌖</span> Saved <span class="g">⌄</span></span>
+              <span class="tbtn"><span class="g">⌸</span> Tree <span class="g">⌄</span></span>
+              <span class="tbtn retire">✦ Augment from prompt</span>
+              <span class="tbtn primary">+ New work item</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbl-row">
+          <span class="tag after">/items · after</span>
+          <span class="cap2"
+            ><b>New work item</b> closes up against the view switcher — the only visible
+            change</span
+          >
+        </div>
+        <div class="appstrip">
+          <div class="pagehead">
+            <div>
+              <div class="h">Work Items</div>
+              <div class="sub">All work items in PayFlow</div>
+            </div>
+            <div class="toolbar">
+              <span class="tbtn ghost"><span class="g">▤</span> Archived</span>
+              <span class="tbtn"><span class="g">≡</span> Filter</span>
+              <span class="tbtn"><span class="g">▽</span> Advanced</span>
+              <span class="tbtn"><span class="g">⌖</span> Saved <span class="g">⌄</span></span>
+              <span class="tbtn"><span class="g">⌸</span> Tree <span class="g">⌄</span></span>
+              <span class="tbtn primary">+ New work item</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>What is lost, exactly.</b> One control on two surfaces, plus the small modal it opened (a
+        single <code>Input</code> + Submit) and its three
+        <code>planEdits.augmentPrompt*</code> strings in <b>both</b> locales.
+        <b>Nothing else shifts</b> — the toolbars are a plain <code>flex</code> row, so the
+        neighbour simply becomes the last control and everything keeps its order; there is no
+        placeholder, no empty slot, no re-layout. The <b>after</b> strips above are the real
+        post-removal toolbars, drawn to scale directly under their <b>today</b> counterparts.
+      </div>
+      <div class="note">
+        <b>What deliberately STAYS.</b> The item-scoped <b>expand</b> / <b>replan</b> row actions on
+        <code>/items</code> (<code>PlanEditsTrigger</code>) and their review dock, the
+        <code>/ready</code> expansion nudge, and <code>POST /api/ai/augment</code> with its whole
+        job path — the conversation drives that same endpoint. Only the
+        <b>prompt-driven one-shot entry</b> retires. Converging the row actions onto this workspace
+        belongs to the per-item entrance (MOTIR-812), not here.
+      </div>
+      <div class="note">
+        <b>Why this panel exists at all.</b> Per the REMOVAL corollary of the decision-amendment
+        rule (<code>notes.html</code> #154), a decision that <b>removes</b> an affordance must spawn
+        its matching design amendment in the same pass — otherwise the design of record keeps
+        depicting a control the product no longer has. This is that amendment: the post-removal
+        toolbars are now the drawn state of record.
+      </div>
+    </section>
+
+    <!-- ════════════════ PANEL 6 — the states ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>Rail states — empty · streaming · review · error · out of credits · after approve</h2>
+        <span class="cap">every state the rail can be in</span>
+      </div>
+      <div class="sheetbody">
+        <div class="states">
+          <div class="statecard">
+            <div class="sh">Empty <span class="k">no turns yet</span></div>
+            <div class="sb">
+              <div class="turn">
+                <span class="avatar ai">M</span>
+                <div class="bubble ai">
+                  PayFlow’s plan is on the canvas — 14 work items, 5 done. What should change?
+                </div>
+              </div>
+              <div class="emptyhint">
+                <span class="sugg">＋ Add work to an epic</span>
+                <span class="sugg">⇄ Re-sequence what’s left</span>
+              </div>
+            </div>
+            <div class="cap3">
+              The canvas already shows the plan, so “empty” is never a blank screen — only the
+              conversation is empty.
+            </div>
+          </div>
+
+          <div class="statecard">
+            <div class="sh">Streaming <span class="k">aria-live</span></div>
+            <div class="sb">
+              <div class="turn user">
+                <span class="avatar user">·</span>
+                <div class="bubble user">Split it into monthly and yearly.</div>
+              </div>
+              <div class="streamtxt">
+                Splitting <b>Recurring invoices</b> into two subtasks<span class="caret"></span>
+              </div>
+              <div class="drafting"><span class="spin"></span> Updating the proposal…</div>
+            </div>
+            <div class="cap3">
+              Partial text streams into a polite live region; the composer stays usable, the Send
+              control is disabled until the turn settles.
+            </div>
+          </div>
+
+          <div class="statecard">
+            <div class="sh">Review <span class="k">pending on canvas</span></div>
+            <div class="sb">
+              <div class="turn">
+                <span class="avatar ai">M</span>
+                <div class="bubble ai">
+                  <b>3 added</b>, <b>1 changed</b>, <b>1 removed</b> — 2 done items left untouched.
+                </div>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 7px;
+                  align-items: center;
+                  border: 1px solid var(--accent);
+                  border-radius: 10px;
+                  padding: 8px 9px;
+                "
+              >
+                <span style="font-size: 10.5px; color: var(--strong); font-weight: 700"
+                  >Nothing saved yet</span
+                >
+                <span class="btn ghost sm" style="margin-left: auto">Discard</span>
+                <span class="btn primary sm">✓ Approve</span>
+              </div>
+            </div>
+            <div class="cap3">
+              The gate is the canvas bar; the rail mirrors the counts so the numbers are readable
+              without hunting the board.
+            </div>
+          </div>
+
+          <div class="statecard">
+            <div class="sh">Error <span class="k">role=alert</span></div>
+            <div class="sb">
+              <div class="alert err">
+                <span class="gl">⚠</span>
+                <span
+                  >That didn’t go through. Your conversation is saved — try again, or rephrase the
+                  change.</span
+                >
+              </div>
+              <span class="btn sm" style="align-self: flex-start">↻ Try again</span>
+            </div>
+            <div class="cap3">
+              The failure is <b>recoverable in place</b>: the thread and any prior proposal survive,
+              so a retry continues the conversation instead of restarting it.
+            </div>
+          </div>
+
+          <div class="statecard">
+            <div class="sh">Out of credits <span class="k">cloud-gated</span></div>
+            <div class="sb">
+              <div class="alert credit">
+                <span class="gl">◔</span>
+                <span
+                  >You’re out of AI credits. The plan and this conversation are safe — top up to
+                  keep planning.</span
+                >
+              </div>
+              <span class="btn sm" style="align-self: flex-start">Top up credits</span>
+            </div>
+            <div class="cap3">
+              Distinct from an error: nothing failed, the capability is simply gated. The canvas
+              stays fully readable.
+            </div>
+          </div>
+
+          <div class="statecard">
+            <div class="sh">After approve <span class="k">stays open</span></div>
+            <div class="sb">
+              <div class="turn">
+                <span class="avatar ai">M</span>
+                <div class="bubble ai">
+                  Added 3 items, changed 1, removed 1. They’re in the plan now — anything else?
+                </div>
+              </div>
+              <div class="composer" style="border: 0; padding: 0">
+                <span class="inp">Message Motir AI…</span>
+                <span class="send">➤</span>
+              </div>
+            </div>
+            <div class="cap3">
+              <b>The conversation does not close on approve.</b> The canvas drops the pending
+              styling (the items are now real) and the thread continues — a plan change is rarely
+              one change.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Not colour alone, anywhere.</b> Each diff state pairs a <b>border treatment</b> (dashed
+        accent / solid info / dashed danger / hatched) with a <b>glyph</b> (＋ ✎ − 🔒) and a
+        <b>word</b> (added / changed / removed / can’t change), and every tinted chip puts the hue
+        in the <b>background</b> with <code>--el-text-strong</code> ink — so the board reads for a
+        colour-blind reviewer and holds AA. Each rail state pairs its icon with a sentence, never a
+        bare tint.
+      </div>
+    </section>
+
+    <!-- ════════════════ PANEL 7 — what this composes ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">7</span>
+        <h2>Composed from shipped code + shipped design — nothing here is re-drawn</h2>
+        <span class="cap">compose, don’t redraw</span>
+      </div>
+      <div class="sheetbody">
+        <table class="tok">
+          <thead>
+            <tr>
+              <th>Element on this board</th>
+              <th>What it actually is</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>the two-pane workspace frame</td>
+              <td>
+                the shipped <code>components/planning/PlanningWorkspace.tsx</code> —
+                <code>grid grid-cols-1 md:grid-cols-[1fr_22rem]</code>, canvas left · 22rem chat
+                right, no app nav. Presentational; each consumer supplies <code>canvas</code> +
+                <code>chat</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>the header hero pill + the “M” orb</td>
+              <td>
+                the shipped <code>PlanWithAILauncher</code> (a real <code>Link</code>, gradient
+                <code>color-mix</code> over <code>--el-accent</code>/<code>--el-highlight</code>,
+                <code>Sparkles</code>, reduced-motion-gated shimmer) and <code>PlanWithAIFab</code>,
+                both mounted by <code>(authed)/layout.tsx</code> when
+                <code>isMotirAiConfigured() &amp;&amp; activeProject</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>the canvas, its nodes, edges, zoom, search, breadcrumb</td>
+              <td>
+                the standalone work-item canvas — design <code>design/roadmap/</code> (MOTIR-1009)
+                over <code>ProjectRoadmapCanvas</code> / <code>PlanningCanvas</code>. Composed as a
+                per-level read, never a whole-tree dump.
+              </td>
+            </tr>
+            <tr>
+              <td>the diff rendering on the canvas</td>
+              <td>
+                <code>components/planning/PlanReviewCanvas.tsx</code> — it already feeds proposed
+                items into <code>ProjectRoadmapCanvas</code> as data. This board adds only the
+                <b>change</b> / <b>remove</b> / <b>locked</b> node states beside its existing
+                <b>add</b>.
+              </td>
+            </tr>
+            <tr>
+              <td>the chat rail — header, bubbles, drafting, composer</td>
+              <td>
+                the shipped <code>DiscoveryChatRail</code> language (status dot + mono
+                <b>Motir AI</b> label, <code>Avatar</code> + bubble, <code>Spinner</code>,
+                <code>Input</code> + primary send). The only per-mode difference is the mode chip.
+              </td>
+            </tr>
+            <tr>
+              <td>the confirm-to-persist bar + close-with-pending guard</td>
+              <td>
+                MOTIR-1193 sheets 2 + 6, unchanged — only its copy names add / change / remove /
+                locked counts.
+              </td>
+            </tr>
+            <tr>
+              <td>the multi-turn session behind it</td>
+              <td>
+                <b>MOTIR-1728</b> — a persisted, project-scoped session whose ACCUMULATED turns are
+                submitted to the already-shipped <code>POST /api/ai/augment</code> job contract. No
+                engine change, no new job kind.
+              </td>
+            </tr>
+            <tr>
+              <td>the @-mention target picker in the composer</td>
+              <td>
+                already designed — <code>design/ai-chat/target-picker.mock.html</code>
+                (MOTIR-1490). It composes into this rail unchanged; not re-drawn here.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <b>Token discipline.</b> Colour is the real <code>--el-*</code> light palette inlined at the
+        top of this file (the sibling <code>design/ai-chat/</code> convention); every non-token fill
+        is a <code>color-mix()</code> of two tokens — <b>no invented hue</b>. Tinted chips put the
+        hue in the background with <code>--el-text-strong</code> (AA). Shape maps to the
+        element-semantic tokens: node = <code>--radius-card</code>, pills =
+        <code>--radius-badge</code>, buttons = <code>--radius-btn</code>, the composer input =
+        <code>--radius-input</code>, toolbar controls + rail rows = <code>--radius-control</code>,
+        elevation = <code>--shadow-{subtle,card,elevated}</code> — so a <code>data-style</code> swap
+        reshapes the surface and a <code>data-palette</code> swap re-skins it.
+        <code>rounded-full</code> only on the status dot, avatars and the orb.
+      </div>
+      <div class="note">
+        <b>A11y.</b> The canvas and the rail are labelled regions; the streaming reply is an
+        <code>aria-live="polite"</code> region and the error is <code>role="alert"</code>; the diff
+        state of a node is in its accessible name (“Recurring invoices, proposed addition”), not in
+        its border alone; a locked node is <code>aria-disabled</code> and says why; Approve /
+        Discard are real buttons in the tab order, and <kbd>Esc</kbd> closes the overlay through the
+        pending guard.
+      </div>
+    </section>
+  </body>
+</html>
