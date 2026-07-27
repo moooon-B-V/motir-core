@@ -22,6 +22,11 @@ export const AUGMENT_REPLAN_SEED_PASSWORD = 'ai-augment-replan-e2e-pass-9';
 
 export const EXPAND_JOB_ID = 'job_e2e_expand';
 export const REPLAN_JOB_ID = 'job_e2e_replan';
+/** The two `augment` jobs the plan-change CONVERSATION acceptance spec stubs —
+ *  one per turn, so the SECOND (refining) turn returns a DIFFERENT delta and the
+ *  in-canvas diff is provably updated rather than merely re-rendered. */
+export const PLAN_CHANGE_JOB_ID = 'job_e2e_plan_change_1';
+export const PLAN_CHANGE_REFINE_JOB_ID = 'job_e2e_plan_change_2';
 
 export interface AiAugmentReplanSeed {
   email: string;
@@ -129,4 +134,22 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
     billingKey: billing.identifier,
     apiKey: api.identifier,
   };
+}
+
+/**
+ * Mark the seeded project ESTABLISHED — a project that already ran onboarding
+ * and has an approved plan.
+ *
+ * `/planning` (the MOTIR-1729 host) FORWARDS a project whose `onboardingRanAt`
+ * is null to `/onboarding`, which still owns the first-run fork. The plan-change
+ * conversation is the established-project case by definition, so its acceptance
+ * spec sets the same immutable marker both surfaces split on. `createProject`
+ * leaves it null (a fresh project has not onboarded), so the seed cannot carry
+ * it for every caller — the augment/replan spec drives `/items`, not `/planning`.
+ */
+export async function markProjectOnboarded(projectId: string): Promise<void> {
+  await db.project.update({
+    where: { id: projectId },
+    data: { onboardingRanAt: new Date() },
+  });
 }
