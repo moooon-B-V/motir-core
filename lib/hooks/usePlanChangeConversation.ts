@@ -6,15 +6,22 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import {
   appendPlanChangeTurn,
   openPlanChangeSession,
+  submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
 import {
   approvePlanDelta,
   fetchJobResult,
   streamAugmentJob,
+  streamContextualPlanJob,
   PlanEditsClientError,
   type ApproveDeltaResult,
 } from '@/lib/planning/planEditsClient';
+import {
+  extraPlanningTargetKeys,
+  primaryPlanningTarget,
+  type PlanningTarget,
+} from '@/lib/planning/planningTargets';
 
 // The client state machine behind the plan-change CONVERSATION rail (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 / 4 / 6). It
@@ -116,10 +123,22 @@ export interface UsePlanChangeConversationOptions {
   onApproved?: (result: ApproveDeltaResult) => void;
 }
 
+/** A submit ANCHORED at a target set — what the contextual endpoint takes. */
+interface ContextualAnchor {
+  /** The PRIMARY target's work-item id — the route's path item. */
+  anchorId: string;
+  /** The ADDITIONAL targets, by identifier. */
+  targetKeys: string[];
+  /** The turn text. The contextual submit appends it itself. */
+  prompt: string;
+}
+
 export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
+  // What the last submit was anchored at, so `retry` re-sends to the SAME thread.
+  const lastAnchorRef = useRef<ContextualAnchor | null>(null);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`delta`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -161,14 +180,25 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
     return () => controller.abort();
   }, []);
 
-  /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
-   *  by `send` (after the turn is appended) and `retry` (nothing new to append). */
-  const run = useCallback(async () => {
+  /** Submit, then stream + settle the job. Shared by `send` (after the turn is
+   *  appended, for the project thread) and `retry` (nothing new to append).
+   *
+   *  `anchor` non-null routes the turn through the CONTEXTUAL endpoint instead
+   *  (7.12.3 · MOTIR-909): a thread is identified by its anchor SET, so that one
+   *  call opens-or-resumes the scoped thread, appends the turn and submits it. */
+  const run = useCallback(async (anchor: ContextualAnchor | null) => {
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
-      const { jobId, session } = await submitPlanChange(controller.signal);
+      const { jobId, session } = anchor
+        ? await submitContextualPlan(
+            anchor.anchorId,
+            anchor.targetKeys,
+            anchor.prompt,
+            controller.signal,
+          )
+        : await submitPlanChange(controller.signal);
       if (!mountedRef.current) return;
       setState((s) => ({
         ...s,
@@ -181,7 +211,13 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
       }));
 
       let failed = false;
-      await streamAugmentJob(
+      // Same SSE frames either way — a contextual turn IS an augment job; only
+      // the route differs, because the anchor is re-gated on subscribe.
+      const stream: typeof streamAugmentJob = anchor
+        ? (id, signal, onError, onDone, onFrame) =>
+            streamContextualPlanJob(anchor.anchorId, id, signal, onError, onDone, onFrame)
+        : streamAugmentJob;
+      await stream(
         jobId,
         controller.signal,
         (code) => {
@@ -236,12 +272,40 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
     }
   }, []);
 
-  /** Append what the user typed, then run the ACCUMULATED intent. */
+  /**
+   * Append what the user typed, then run the ACCUMULATED intent.
+   *
+   * With TARGETS picked (MOTIR-1491) the turn is anchored instead: it goes to the
+   * contextual endpoint, which appends it to the thread scoped to that anchor SET
+   * — so there is no separate append hop, and the session that comes back is the
+   * SCOPED thread, not the project one. Switching targets switches conversation,
+   * which is the thread model 7.12.3 defines (scope IS the thread's identity).
+   */
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, targets: readonly PlanningTarget[] = []) => {
       const body = text.trim();
       if (!body || abortRef.current) return;
 
+      const primary = primaryPlanningTarget(targets);
+      if (primary) {
+        const anchor: ContextualAnchor = {
+          anchorId: primary.id,
+          targetKeys: extraPlanningTargetKeys(targets),
+          prompt: body,
+        };
+        lastAnchorRef.current = anchor;
+        setState((s) => ({
+          ...s,
+          phase: 'streaming',
+          progress: { kind: 'submitted' },
+          errorCode: null,
+          outOfCredits: false,
+        }));
+        await run(anchor);
+        return;
+      }
+
+      lastAnchorRef.current = null;
       const controller = new AbortController();
       abortRef.current = controller;
       setState((s) => ({
@@ -269,17 +333,22 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
         return;
       }
       abortRef.current = null;
-      await run();
+      await run(null);
     },
     [run],
   );
 
   /** Re-send the accumulated intent after a failure — no new turn, so the
-   *  conversation CONTINUES rather than restarting (design panel 6, error). */
+   *  conversation CONTINUES rather than restarting (design panel 6, error).
+   *
+   *  A failed CONTEXTUAL turn re-sends to the same anchor set: its submit is one
+   *  call that also appends, so the retried turn is appended again — the thread
+   *  records the attempt twice, which is the honest trace of what was sent, and
+   *  is why the retry cannot silently fall back to the project thread. */
   const retry = useCallback(async () => {
     if (abortRef.current) return;
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
-    await run();
+    await run(lastAnchorRef.current);
   }, [run]);
 
   /** Persist the proposal through the shipped approve route. The thread STAYS. */

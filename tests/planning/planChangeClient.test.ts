@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   openPlanChangeSession,
   appendPlanChangeTurn,
+  submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
@@ -107,6 +108,47 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
 
     await submitPlanChange(controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
+  });
+});
+
+describe('planChangeClient — the TARGETED submit (MOTIR-1491) rides the shipped contextual route', () => {
+  it('addresses the PRIMARY target by id and carries the rest as targetKeys', async () => {
+    const result = { jobId: 'job-ctx-1', sessionId: 's-ctx', session: SESSION };
+    fetchMock.mockResolvedValue(jsonResponse(result));
+
+    await expect(
+      submitContextualPlan('wi_812', ['MOTIR-918', 'MOTIR-922'], 'Expand billing.'),
+    ).resolves.toEqual(result);
+
+    const [url, init] = lastCall();
+    // The SHIPPED 7.12.3 endpoint — the picker adds no route of its own.
+    expect(url).toBe('/api/work-items/wi_812/ai/plan');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      prompt: 'Expand billing.',
+      // The primary is NOT repeated here: it travels as the path item and the
+      // service adds it to the scope itself.
+      targetKeys: ['MOTIR-918', 'MOTIR-922'],
+    });
+  });
+
+  it('encodes the anchor id into the path — never interpolates it raw', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
+
+    await submitContextualPlan('a/b?c', [], 'x');
+
+    expect(lastCall()[0]).toBe('/api/work-items/a%2Fb%3Fc/ai/plan');
+  });
+
+  it('sends an EMPTY targetKeys array for the single-target case (the 1-element scope)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
+
+    await submitContextualPlan('wi_812', [], 'Re-plan this story.');
+
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      prompt: 'Re-plan this story.',
+      targetKeys: [],
+    });
   });
 });
 

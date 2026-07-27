@@ -105,6 +105,13 @@ describe('the client/server boundary holds', () => {
       'components/planning/PlanChangeCanvas.tsx',
       'components/planning/PlanChangeConfirmBar.tsx',
       'lib/hooks/usePlanChangeConversation.ts',
+      // The `@`-mention target picker (MOTIR-1491) joins the same island: its
+      // search is the shipped mention-search ROUTE, never the service behind it.
+      'components/planning/PlanChangeComposer.tsx',
+      'components/planning/TargetSearchListbox.tsx',
+      'components/planning/PlanningTargetChip.tsx',
+      'components/planning/PlanningTargetNode.tsx',
+      'lib/hooks/useWorkItemTargetSearch.ts',
     ];
 
     for (const rel of storyClientModules) {
@@ -121,6 +128,9 @@ describe('the client/server boundary holds', () => {
     expect(client).toContain('/api/ai/plan-change/session');
     expect(client).toContain('/api/ai/plan-change/session/turns');
     expect(client).toContain('/api/ai/plan-change/session/submit');
+    // A TARGETED turn (MOTIR-1491) rides the shipped contextual route — the
+    // picker added no endpoint of its own.
+    expect(client).toContain('/ai/plan');
   });
 });
 

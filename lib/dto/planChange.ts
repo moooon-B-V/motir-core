@@ -61,3 +61,18 @@ export interface PlanChangeSubmitResultDto {
   jobId: string;
   session: PlanChangeSessionDto;
 }
+
+/**
+ * What `POST /api/work-items/[id]/ai/plan` answers (7.12.3 · MOTIR-909): the same
+ * two things a project submit returns, plus the id of the thread the turn landed
+ * in — which for a CONTEXTUAL turn is a different thread per anchor SET, so the
+ * caller cannot assume it is still talking to the project's one.
+ *
+ * The `@`-mention target picker (MOTIR-1491) is the client of this shape: the
+ * primary target is the route's path item and the rest travel as `targetKeys[]`.
+ */
+export interface ContextualPlanResultDto {
+  jobId: string;
+  sessionId: string;
+  session: PlanChangeSessionDto;
+}

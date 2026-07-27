@@ -128,6 +128,30 @@ export async function streamAugmentJob(
   );
 }
 
+/**
+ * The CONTEXTUAL planning job's stream (7.12.3 · MOTIR-909), consumed by the
+ * target-picker send (MOTIR-1491). Same SSE shape as the augment stream — it is
+ * the same job kind — but a different route, because the anchor is re-gated on
+ * every subscribe: a permission that held at submit is not evidence it still
+ * holds now. So the anchor id travels with the job id.
+ */
+export async function streamContextualPlanJob(
+  anchorId: string,
+  jobId: string,
+  signal: AbortSignal,
+  onError: (code: string | null) => void,
+  onDone: () => void,
+  onFrame?: (event: string, data: unknown) => void,
+): Promise<void> {
+  return consumeStream(
+    `/api/work-items/${encodeURIComponent(anchorId)}/ai/plan/${encodeURIComponent(jobId)}/stream`,
+    signal,
+    onError,
+    onDone,
+    onFrame,
+  );
+}
+
 export async function streamExpandJob(
   jobId: string,
   signal: AbortSignal,

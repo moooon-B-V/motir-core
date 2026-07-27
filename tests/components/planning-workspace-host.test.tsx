@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { parsePlanningLaunch, planningLaunchBackHref } from '@/lib/planning/launcher';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+import type { PlanningTarget } from '@/lib/planning/planningTargets';
 
 // The established-project planning HOST (Subtask MOTIR-1729, extended by
 // MOTIR-1730) — what "Plan with AI" opens once a project has a plan. These lock
@@ -25,15 +26,18 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     projectKey,
     ariaLabel,
     diffKey,
+    targetIds,
   }: {
     projectKey: string;
     ariaLabel?: string;
     diffKey: string | number;
+    targetIds?: readonly string[];
   }) => (
     <div
       data-testid="canvas-stub"
       data-project={projectKey}
       data-diff-key={String(diffKey)}
+      data-targets={(targetIds ?? []).join(',')}
       aria-label={ariaLabel}
     />
   ),
@@ -88,6 +92,7 @@ afterEach(() => {
   conversation.state = null;
   conversation.approve.mockReset();
   conversation.discard.mockReset();
+  conversation.send.mockReset();
 });
 
 /** Render the host exactly as the page does — parse the query, derive the href. */
@@ -96,7 +101,12 @@ function renderHost(
   {
     hasItems = true,
     state = IDLE,
-  }: { hasItems?: boolean; state?: PlanChangeConversationState } = {},
+    initialTarget = null,
+  }: {
+    hasItems?: boolean;
+    state?: PlanChangeConversationState;
+    initialTarget?: PlanningTarget | null;
+  } = {},
 ) {
   const launch = parsePlanningLaunch(searchParams);
   conversation.state = state;
@@ -107,6 +117,7 @@ function renderHost(
       hasItems={hasItems}
       launch={launch}
       backHref={planningLaunchBackHref(launch)}
+      initialTarget={initialTarget}
     />,
   );
 }
@@ -211,6 +222,65 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     expect(refresh).toHaveBeenCalledTimes(1);
     // …and the canvas — a client island the refresh CANNOT reach — is re-keyed.
     expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')).not.toBe(before);
+  });
+});
+
+describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTIR-1491)', () => {
+  const TARGET: PlanningTarget = {
+    id: 'wi-812',
+    identifier: 'MOTIR-812',
+    title: 'Billing — invoicing',
+    kind: 'story',
+  };
+
+  it('pre-fills the entrance’s item as the INITIAL target — the chat and the map agree', () => {
+    renderHost(
+      { mode: 'contextual', from: 'work-item', item: 'MOTIR-812' },
+      {
+        initialTarget: TARGET,
+      },
+    );
+
+    expect(screen.getByTestId('planning-target-chip').getAttribute('data-target-key')).toBe(
+      'MOTIR-812',
+    );
+    // The same set reaches the canvas, which rings it.
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('wi-812');
+  });
+
+  it('the pre-filled target is INITIAL, not locked — it can be removed', () => {
+    renderHost(
+      { mode: 'contextual', from: 'work-item', item: 'MOTIR-812' },
+      {
+        initialTarget: TARGET,
+      },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove MOTIR-812' }));
+
+    expect(screen.queryByTestId('planning-target-chip')).toBeNull();
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
+  });
+
+  it('sends the turn WITH the target set, so the rail never has to know how a turn is scoped', () => {
+    renderHost(
+      { mode: 'contextual', from: 'work-item', item: 'MOTIR-812' },
+      {
+        initialTarget: TARGET,
+      },
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Expand this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(conversation.send).toHaveBeenCalledWith('Expand this.', [TARGET]);
+  });
+
+  it('a project-scoped launch opens with NO target — the picker is opt-in', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+
+    expect(screen.queryByTestId('planning-target-tray')).toBeNull();
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
   });
 });
 

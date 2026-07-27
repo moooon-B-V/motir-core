@@ -94,6 +94,26 @@ export default async function PlanningWorkspacePage({
   // honest empty canvas instead of the canvas's bare "nothing here" panel.
   const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
 
+  // The Plan / Re-plan entrance's item, resolved to the PRE-FILLED initial target
+  // of the `@`-mention target set (MOTIR-1491). Resolved HERE because the host is
+  // a client island and the launcher carries only the KEY, while the contextual
+  // submit is addressed by the work item's id — and because a Server Component
+  // reading through a service IS the 4-layer shape. The read is view-gated by the
+  // service, so a hand-edited `?item=` naming another tenant's key resolves to
+  // nothing; an unknown / inaccessible key simply opens with no target rather
+  // than erroring the whole workspace.
+  const initialTarget = launch.itemKey
+    ? await workItemsService
+        .getWorkItemByIdentifier(ctx.projectId, launch.itemKey, wsCtx)
+        .then((item) => ({
+          id: item.id,
+          identifier: item.identifier,
+          title: item.title,
+          kind: item.kind,
+        }))
+        .catch(() => null)
+    : null;
+
   return (
     <PlanningWorkspaceHost
       projectKey={ctx.project.identifier}
@@ -101,6 +121,7 @@ export default async function PlanningWorkspacePage({
       hasItems={roots.nodes.length > 0}
       launch={launch}
       backHref={planningLaunchBackHref(launch)}
+      initialTarget={initialTarget}
     />
   );
 }

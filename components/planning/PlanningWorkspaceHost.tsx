@@ -12,6 +12,11 @@ import { PlanChangeConfirmBar } from '@/components/planning/PlanChangeConfirmBar
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
 import { indexPlanDelta } from '@/lib/planning/planChangeDiff';
+import {
+  addPlanningTarget,
+  removePlanningTarget,
+  type PlanningTarget,
+} from '@/lib/planning/planningTargets';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
 
 // The client island of the established-project planning HOST (Subtask
@@ -51,6 +56,10 @@ export interface PlanningWorkspaceHostProps {
   launch: PlanningLaunch;
   /** Where Close / `Esc` return to. */
   backHref: string;
+  /** The work item the Plan / Re-plan entrance opened on, resolved server-side
+   *  (MOTIR-1491): it is the PRE-FILLED initial target. Null for a project-scoped
+   *  launch — or when the `?item=` key no longer resolves. */
+  initialTarget?: PlanningTarget | null;
 }
 
 export function PlanningWorkspaceHost({
@@ -59,9 +68,24 @@ export function PlanningWorkspaceHost({
   hasItems,
   launch,
   backHref,
+  initialTarget = null,
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const router = useRouter();
+
+  // The turn's TARGET SET (MOTIR-1491). It lives HERE, not in the rail, because
+  // both panes read it: the composer collects it and the canvas rings it. The
+  // entrance's item seeds it as the INITIAL target — not a locked one, so the
+  // user can remove it (⨉) or add more (design panel 5).
+  const [targets, setTargets] = useState<PlanningTarget[]>(initialTarget ? [initialTarget] : []);
+  const addTarget = useCallback(
+    (target: PlanningTarget) => setTargets((current) => addPlanningTarget(current, target)),
+    [],
+  );
+  const removeTarget = useCallback(
+    (identifier: string) => setTargets((current) => removePlanningTarget(current, identifier)),
+    [],
+  );
 
   // Bumped on every approve: the committed tree is new data, so the canvas island
   // must refetch its level (the server-rendered surfaces take the refresh below).
@@ -71,6 +95,11 @@ export function PlanningWorkspaceHost({
     router.refresh();
   }, [router]);
   const { state, send, retry, approve, discard } = usePlanChangeConversation({ onApproved });
+
+  // The rail sends TEXT; the anchors come from the set this host owns, so the
+  // rail never has to know how a turn is scoped.
+  const sendTargeted = useCallback((text: string) => void send(text, targets), [send, targets]);
+  const targetIds = targets.map((target) => target.id);
 
   const index = useMemo(() => indexPlanDelta(state.delta), [state.delta]);
   // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
@@ -129,6 +158,7 @@ export function PlanningWorkspaceHost({
                 projectKey={projectKey}
                 index={index}
                 diffKey={diffKey}
+                targetIds={targetIds}
                 ariaLabel={t('canvasAria', { project: projectName })}
               />
             ) : (
@@ -159,7 +189,10 @@ export function PlanningWorkspaceHost({
           projectName={projectName}
           state={state}
           index={index}
-          onSend={send}
+          targets={targets}
+          onAddTarget={addTarget}
+          onRemoveTarget={removeTarget}
+          onSend={sendTargeted}
           onRetry={retry}
           onApprove={approve}
           onDiscard={discard}

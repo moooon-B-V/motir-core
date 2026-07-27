@@ -1,5 +1,9 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
-import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
+import type {
+  ContextualPlanResultDto,
+  PlanChangeSessionDto,
+  PlanChangeSubmitResultDto,
+} from '@/lib/dto/planChange';
 
 // Client reads/writes for the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728's routes), consumed by the conversational rail (MOTIR-1730). No
@@ -54,4 +58,27 @@ export async function appendPlanChangeTurn(
  *  just the newest one. Returns the shipped `augment` job to stream + approve. */
 export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChangeSubmitResultDto> {
   return post<PlanChangeSubmitResultDto>('/api/ai/plan-change/session/submit', undefined, signal);
+}
+
+/**
+ * Submit a turn ANCHORED at a target set — the `@`-mention picker's send
+ * (MOTIR-1491) over the SHIPPED contextual endpoint (7.12.3 · MOTIR-909).
+ *
+ * One call does open-or-resume + append + submit, because a contextual thread is
+ * identified by its anchor set: there is no "which thread?" to establish first.
+ * The PRIMARY target is the path item; the rest ride as `targetKeys[]`
+ * identifiers, and the server canonicalizes the union into the scope — so the
+ * same set picked in a different order resumes the same conversation.
+ */
+export async function submitContextualPlan(
+  anchorId: string,
+  targetKeys: readonly string[],
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<ContextualPlanResultDto> {
+  return post<ContextualPlanResultDto>(
+    `/api/work-items/${encodeURIComponent(anchorId)}/ai/plan`,
+    { prompt, targetKeys },
+    signal,
+  );
 }

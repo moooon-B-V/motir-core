@@ -8,19 +8,23 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 // The session seam (MOTIR-1728) and the shipped job helpers are mocked, so what
 // is under test is the state machine the rail and the canvas both read.
 
-const { open, append, submit, stream, fetchResult, approve } = vi.hoisted(() => ({
-  open: vi.fn(),
-  append: vi.fn(),
-  submit: vi.fn(),
-  stream: vi.fn(),
-  fetchResult: vi.fn(),
-  approve: vi.fn(),
-}));
+const { open, append, submit, submitContextual, stream, streamContextual, fetchResult, approve } =
+  vi.hoisted(() => ({
+    open: vi.fn(),
+    append: vi.fn(),
+    submit: vi.fn(),
+    submitContextual: vi.fn(),
+    stream: vi.fn(),
+    streamContextual: vi.fn(),
+    fetchResult: vi.fn(),
+    approve: vi.fn(),
+  }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
   openPlanChangeSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
+  submitContextualPlan: submitContextual,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -28,6 +32,7 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   return {
     ...actual,
     streamAugmentJob: stream,
+    streamContextualPlanJob: streamContextual,
     fetchJobResult: fetchResult,
     approvePlanDelta: approve,
   };
@@ -36,11 +41,11 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
 import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 
-function session(bodies: string[]): PlanChangeSessionDto {
+function session(bodies: string[], targetKeys: string[] = []): PlanChangeSessionDto {
   return {
     id: 's1',
     projectId: 'p1',
-    targetKeys: [],
+    targetKeys,
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,
@@ -82,6 +87,13 @@ beforeEach(() => {
   append.mockImplementation(async (body: string) => session([body]));
   submit.mockResolvedValue({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
   stream.mockImplementation(okStream());
+  submitContextual.mockResolvedValue({
+    jobId: 'job-ctx',
+    sessionId: 's-ctx',
+    session: session(['Expand billing.'], ['MOTIR-812', 'MOTIR-918']),
+  });
+  // The contextual stream takes the anchor id FIRST, then the job id.
+  streamContextual.mockImplementation(async () => {});
   fetchResult.mockResolvedValue({ status: 'succeeded', result: { planDelta: DELTA } });
   approve.mockResolvedValue({ created: ['PAY-30'], updated: [], unchanged: [] });
 });
@@ -113,6 +125,95 @@ describe('usePlanChangeConversation — resume', () => {
     const { result } = await mounted();
 
     expect(result.current.state.errorCode).toBe('SESSION_UNAVAILABLE');
+  });
+});
+
+describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
+  const TARGETS = [
+    { id: 'w-812', identifier: 'MOTIR-812', title: 'Billing', kind: 'story' as const },
+    { id: 'w-918', identifier: 'MOTIR-918', title: 'Migrate', kind: 'subtask' as const },
+  ];
+
+  it('routes the turn to the CONTEXTUAL endpoint — primary as the anchor, the rest as targetKeys', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+
+    expect(submitContextual).toHaveBeenCalledWith(
+      'w-812',
+      ['MOTIR-918'],
+      'Expand billing.',
+      expect.anything(),
+    );
+    // One call does open-or-resume + append + submit, so neither project-thread
+    // hop fires — a targeted turn must not land in the project conversation.
+    expect(append).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('adopts the SCOPED thread that comes back, so the rail shows what it is anchored at', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+
+    expect(result.current.state.session?.targetKeys).toEqual(['MOTIR-812', 'MOTIR-918']);
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.delta).toEqual(DELTA);
+  });
+
+  it('streams the contextual job through ITS route — the anchor is re-gated on subscribe', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+
+    expect(streamContextual).toHaveBeenCalledWith(
+      'w-812',
+      'job-ctx',
+      expect.anything(),
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('a retry re-sends to the SAME anchor set, never silently to the project thread', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Expand billing.', TARGETS);
+    });
+    submitContextual.mockClear();
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(submitContextual).toHaveBeenCalledWith(
+      'w-812',
+      ['MOTIR-918'],
+      'Expand billing.',
+      expect.anything(),
+    );
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('an EMPTY target set is the ordinary project turn — the picker is additive', async () => {
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.', []);
+    });
+
+    expect(submitContextual).not.toHaveBeenCalled();
+    expect(append).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });
 
