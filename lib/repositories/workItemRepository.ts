@@ -738,10 +738,22 @@ export const workItemRepository = {
 
   /**
    * Childless expandable STUBS (Subtask 7.11.7 / MOTIR-904) — epics and stories
-   * that have NO children and are NOT in a terminal status category (done /
-   * cancelled), so expanding them would replenish the ready set. Sorted by
-   * priority desc, key asc so the highest-priority stub is nominated first.
-   * Excludes triage items and archived rows. Read-only (db singleton, no tx).
+   * that have NO children and are NOT terminal, so expanding them would
+   * replenish the ready set. Sorted by priority desc, key asc so the
+   * highest-priority stub is nominated first. Excludes triage items and
+   * archived rows. Read-only (db singleton, no tx).
+   *
+   * **Terminal is `category = 'done'` — the ONLY terminal bucket** (MOTIR-1744).
+   * `status_category` is a THREE-label enum (`todo | in_progress | done`);
+   * `cancelled` is a per-project status KEY whose category is `done`
+   * (`lib/workflows/defaultWorkflow.ts`), so `<> 'done'` already excludes every
+   * cancelled item. This predicate shipped as
+   * `category NOT IN ('done', 'cancelled')`, which made Postgres fail to coerce
+   * the second literal and raise `22P02 invalid input value for enum
+   * status_category: "cancelled"` on EVERY call — so the /ready expansion-nudge
+   * banner 500'd in exactly the drained state it exists to announce. Branch on
+   * the CATEGORY, never on a per-project status key: the key set is
+   * admin-customizable, the three-bucket taxonomy is not.
    */
   async findExpandableStubs(
     projectId: string,
@@ -758,14 +770,14 @@ export const workItemRepository = {
          AND w."workspaceId" = ${workspaceId}
          AND w."archivedAt" IS NULL
          AND w."kind"::text IN ('epic', 'story')
-         AND ws."category" NOT IN ('done', 'cancelled')
+         AND ws."category" <> 'done'
          AND ${notInTriageSql('w')}
          AND NOT EXISTS (
                SELECT 1 FROM "work_item" c
                 WHERE c."parentId" = w."id"
                   AND c."archivedAt" IS NULL
              )
-       ORDER BY w."identifier" ASC
+       ORDER BY w."priority" DESC, w."key" ASC
        LIMIT 5`;
   },
 
