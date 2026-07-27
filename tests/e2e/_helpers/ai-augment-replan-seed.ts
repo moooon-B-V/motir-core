@@ -1,9 +1,10 @@
 // AI augment & re-plan E2E seed (Subtask 7.11.9 / MOTIR-906).
 //
 // Mints a sign-in-able tenant through shipped services, then seeds work items
-// that exercise the three operations: augment (an existing tree with related
-// neighbourhood), expand (a childless stub), and replan (an epic with mixed
-// done/not-done leaves). The spec stubs the browser→motir-ai boundary via
+// that exercise the operations: expand (a childless stub) and replan (an epic
+// with mixed done/not-done leaves), on a tree with a related neighbourhood.
+// (The augment leg + its `AUGMENT_JOB_ID` retired with the "Augment from
+// prompt" button — MOTIR-1731.) The spec stubs the browser→motir-ai boundary via
 // `page.route` and lets the real approve delta endpoint create real work items,
 // then asserts DB state — the same pattern `ai-plan-generation.spec.ts` uses
 // (stub the AI, drive the REAL substrate).
@@ -19,7 +20,6 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 export const AUGMENT_REPLAN_SEED_PASSWORD = 'ai-augment-replan-e2e-pass-9';
 
-export const AUGMENT_JOB_ID = 'job_e2e_augment';
 export const EXPAND_JOB_ID = 'job_e2e_expand';
 export const REPLAN_JOB_ID = 'job_e2e_replan';
 
