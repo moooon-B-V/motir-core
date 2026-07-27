@@ -219,6 +219,13 @@ model User {
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
   createdImports              Import[]                  @relation("ImportCreatedBy")
+  // Plan-change conversations this user opened + the turns they wrote (Story
+  // 7.30 · MOTIR-1728). SetNull on both FKs so a departed author leaves the
+  // thread intact and unattributed (the `Notification` ACTOR semantics) —
+  // the conversation is project history, not personal substrate. Modelled on
+  // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
+  createdPlanChangeSessions   PlanChangeSession[]       @relation("PlanChangeSessionCreatedBy")
+  authoredPlanChangeTurns     PlanChangeTurn[]          @relation("PlanChangeTurnAuthor")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -512,6 +519,10 @@ model Workspace {
   // Migrate-existing-codebase onboarding runs (Workflow B, Story 7.15 ·
   // MOTIR-1499). Cascade with the workspace.
   migrateOnboardings       MigrateOnboarding[]
+  // Plan-change conversations + their turns (Story 7.30 · MOTIR-1728).
+  // Workspace-scoped tenant data — cascade with the workspace.
+  planChangeSessions       PlanChangeSession[]
+  planChangeTurns          PlanChangeTurn[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -701,6 +712,10 @@ model Project {
   // Story 7.15 · MOTIR-1499). One per project (the state machine is resumable
   // by re-reading the saved step), so a `?` one-to-one. Cascade.
   migrateOnboarding      MigrateOnboarding?
+  // The project's plan-change CONVERSATION (Story 7.30 · MOTIR-1728). ONE
+  // resumable thread per project — the `migrateOnboarding` shape — so a `?`
+  // one-to-one. Cascade.
+  planChangeSession      PlanChangeSession?
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3729,4 +3744,102 @@ enum MigrateOnboardingStatus {
   failed
 
   @@map("migrate_onboarding_status")
+}
+
+/// The project's plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
+/// persisted thread that turns "change my plan" from a one-shot prompt into a
+/// refinement dialogue. A session ACCUMULATES the user's turns; submitting
+/// hands the accumulated intent to the already-shipped plan-edit job contract
+/// (`aiPlanEditsService.submitAugment` → `POST /api/ai/augment` + the job /
+/// stream / approve routes). It adds NO engine capability: motir-ai still sees
+/// one `augment` job with one prompt.
+///
+/// Why persisted rather than client state: a conversation that evaporates on
+/// reload is not a conversation. Re-opening the planning workspace RESUMES this
+/// thread (the resumability anchor, the `MigrateOnboarding` precedent), and the
+/// accumulated turns — not just the latest one — are what the job receives.
+///
+/// ONE thread per project (`project_id` UNIQUE — the DB is the guard, not an
+/// app-level check), so "open the plan-change conversation" is a get-or-create
+/// with no ambiguity about WHICH thread resumes. Workspace-scoped tenant data
+/// (RLS in the same migration).
+model PlanChangeSession {
+  id          String  @id @default(cuid())
+  workspaceId String  @map("workspace_id")
+  projectId   String  @map("project_id")
+  /// Who opened the thread. SetNull — a departed author leaves the conversation
+  /// intact and unattributed (the `Notification` actor semantics).
+  createdById String? @map("created_by_id")
+  /// The number of turns on the thread — the READ-DERIVED value an append
+  /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
+  /// and re-read it inside the transaction, so two concurrent appends serialize
+  /// into two ordered turns instead of colliding on `seq` (the
+  /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
+  /// DB-level backstop, translated to a typed error.
+  turnCount   Int     @default(0) @map("turn_count")
+  /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
+  /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
+  /// a resumed rail re-attaches its stream / diff review to.
+  lastJobId   String? @map("last_job_id")
+  /// When that submission happened. Null until the thread has been submitted at
+  /// least once (a thread can accumulate turns without ever submitting).
+  lastSubmittedAt DateTime? @map("last_submitted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?            @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  turns     PlanChangeTurn[]
+
+  /// ONE plan-change conversation per project (the resumable single thread); the
+  /// unique also makes the Project ↔ PlanChangeSession relation a clean one-to-one.
+  @@unique([projectId])
+  @@index([workspaceId])
+  @@map("plan_change_session")
+}
+
+/// One turn on a plan-change conversation (Story 7.30 · MOTIR-1728), ordered by
+/// `seq` within its session (0-based, gapless — allocated under the session's row
+/// lock). Two roles:
+///   * `user`   — what the person typed. These, IN ORDER, are the accumulated
+///                intent a submission sends to the plan-edit job.
+///   * `system` — a thread MARKER Motir wrote (today: "these turns were
+///                submitted", carrying the resulting `job_id`), so a resumed
+///                thread renders what already went out instead of looking like
+///                nothing happened. System turns are NOT part of the intent.
+/// Workspace-scoped tenant data (RLS in the same migration).
+model PlanChangeTurn {
+  id          String             @id @default(cuid())
+  workspaceId String             @map("workspace_id")
+  sessionId   String             @map("session_id")
+  /// 0-based position in the thread. Unique per session — the DB backstop for the
+  /// locked allocation; a violation means a lost append race and surfaces as a
+  /// typed domain error, never a raw P2002.
+  seq         Int
+  role        PlanChangeTurnRole
+  body        String             @db.Text
+  /// `system` submission markers only — the opaque motir-ai job token that
+  /// submission produced. Null on `user` turns.
+  jobId       String?            @map("job_id")
+  /// The author of a `user` turn (null for `system` markers, and cleared if the
+  /// author is deleted — SetNull, the session's `createdBy` semantics).
+  authorId    String?            @map("author_id")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  session   PlanChangeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  author    User?             @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, seq])
+  @@index([workspaceId])
+  @@map("plan_change_turn")
+}
+
+enum PlanChangeTurnRole {
+  user
+  system
+
+  @@map("plan_change_turn_role")
 }
