@@ -264,6 +264,23 @@ export default defineConfig({
         'lib/github/indexEnqueue.ts',
         'lib/github/webhookSignature.ts',
         'lib/ai/codeContext.ts',
+        // Story 7.30 (changing a plan is a CONVERSATION) · Subtask MOTIR-1732 —
+        // the story-level gate. The conversation's persistence layer
+        // (MOTIR-1728), the launcher↔host contract + its route gate
+        // (MOTIR-1729), and the rail's diff index + client state machine
+        // (MOTIR-1730) join together, once the story's code has merged and the
+        // numbers are real. The client TRANSPORT is gated too: it is the only
+        // path the rail reaches the server by, and it shipped untested.
+        'lib/services/planChangeSessionsService.ts',
+        'lib/repositories/planChangeSessionRepository.ts',
+        'lib/repositories/planChangeTurnRepository.ts',
+        'lib/mappers/planChangeMappers.ts',
+        'lib/planChange/errors.ts',
+        'lib/planning/launcher.ts',
+        'lib/planning/workspaceHost.ts',
+        'lib/planning/planChangeDiff.ts',
+        'lib/planning/planChangeClient.ts',
+        'lib/hooks/usePlanChangeConversation.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -463,6 +480,22 @@ export default defineConfig({
         'lib/github/indexEnqueue.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/webhookSignature.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ai/codeContext.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 7.30 · Subtask MOTIR-1732 — the plan-change conversation, the
+        // planning-workspace host contract, and the rail's client state machine.
+        'lib/services/planChangeSessionsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/planChangeSessionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/planChangeTurnRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/planChangeMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planChange/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/launcher.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/workspaceHost.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/planChangeDiff.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/planChangeClient.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/hooks/usePlanChangeConversation.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
