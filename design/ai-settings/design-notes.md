@@ -3,12 +3,16 @@
 **Story:** MOTIR-813 · _Cadence — auto-planning + AI sprint planning_ (Epic 7).
 **Subtask:** MOTIR-914 (7.13.1) — the design gate for MOTIR-919 (7.13.6), which implements this
 asset verbatim.
+**Amended by:** MOTIR-1739 (7.13.9) — **panel 6, the auto-plan PAUSED state** (§8 state 7), the
+design gate for MOTIR-1740 (7.13.10). The amendment adds one state to the Auto-plan card and
+nothing else: panels 0–5, every other panel, primitive, copy string and token role below are
+MOTIR-914's, unchanged.
 
-| File                             | What it is                                                                                |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ai-planning-settings.mock.html` | The asset SOURCE — six panels, built from the real design system. Layout source of truth. |
-| `ai-planning-settings.png`       | Full-page export (light, `deviceScaleFactor: 2`, viewport 1200) — the reviewable face.    |
-| `design-notes.md`                | This spec: placement, primitives, copy, token roles, states, a11y.                        |
+| File                             | What it is                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `ai-planning-settings.mock.html` | The asset SOURCE — seven panels, built from the real design system. Layout source of truth. |
+| `ai-planning-settings.png`       | Full-page export (light, `deviceScaleFactor: 2`, viewport 1200) — the reviewable face.      |
+| `design-notes.md`                | This spec: placement, primitives, copy, token roles, states, a11y.                          |
 
 The surface: **where a project is configured for cadence** — when Motir expands the plan, how it
 packs sprints, whether it drafts a "why" for each item, and which model does the drafting.
@@ -112,6 +116,8 @@ settings service → the MOTIR-915 repository methods; the client never touches 
 | Validation message                | inline `<p role="alert">`                                | `text-xs text-(--el-danger)` + `AlertCircle` — the shipped `CustomScaleEditor` treatment                                                                                                                                                                                                                    |
 | Read-only / not-connected banners | the Estimation lock-banner shape                         | `--el-surface` (lock) / `--el-tint-peach` (gate) inside the card body                                                                                                                                                                                                                                       |
 | Guardrail / rationale callouts    | same banner shape, tinted                                | `--el-tint-sky` (guardrail) · `--el-tint-lavender` (rationale)                                                                                                                                                                                                                                              |
+| **Paused status banner** (1739)   | the SAME callout box, in the **gate** role               | Not a new primitive and not a new tint: `--el-tint-peach` + `--el-warning`, the role this asset already gives "the setting is on, but the feature is not running — here is why". Adds a stacked text column + a meta line (§8.7).                                                                           |
+| **Out-of-date badge** (1739)      | the SHIPPED stale badge, reused verbatim                 | From `components/planning/PlanItemNode.tsx`: `--el-tint-yellow` fill, `--el-text-strong` text, `TriangleAlert`, `--radius-badge`, `--spacing-chip-x/y`. ONE addition — a `--el-border-soft` hairline, so it still reads sitting ON the peach banner rather than on the card.                                |
 | Rail row                          | `SidebarNavItem` via the nav registry                    | no bespoke nav markup                                                                                                                                                                                                                                                                                       |
 
 **No new primitive is required.** If the implementer finds one is, that is a new `design/` subtask —
@@ -136,6 +142,22 @@ Card 1 — Auto-plan:
 - **Guardrail (Principle #1, shown when the switch is on):**
   **Auto-plan _proposes_ an expansion for your approval — it never creates work without you.**
 - Validation: **Enter 1 or more ready items.**
+
+Card 1 — Auto-plan, **paused** (MOTIR-1739 · shown only when the switch is ON and a plan is
+undecided):
+
+- Banner lead **Auto-plan is paused — a plan is waiting for your review.**
+  body **Motir drafts one plan at a time. It picks up again as soon as you approve or decline this
+  one.**
+- Meta line **Planned {when}** · **{n} proposed items** — the same phrasing the shipped Plans list
+  uses (`aiPlanning.plannedAt` / `aiPlanning.itemCount`), so both surfaces describe a plan the same
+  way.
+- Link **Review the plan** (→ `/plans/{id}`)
+- The out-of-date face adds: badge **Out of date** (the shipped `planReview.staleBadge` string) +
+  **Your project has changed since this plan was drafted — {n} items may be out of date.**
+
+No implementation noun appears in any of it — no `Plan.status`, no "cadence", no "cron", no
+"stale". A reader learns both what stopped and what to do about it: a plan is waiting, go review it.
 
 Card 2 — AI sprint planning:
 
@@ -191,7 +213,7 @@ secondary mono text (the shipped `Combobox` label+secondary shape):
 Adding a model later is one more option row — no layout change. **Do not invent model names**; take
 the set from `PLANNER_MODELS` at implementation time.
 
-## 8. States (panels 1 · 2 · 4 · 5)
+## 8. States (panels 1 · 2 · 4 · 5 · 6)
 
 1. **Default / off.** Every AI setting ships off or at its default, so an existing project is
    untouched until someone opts in. A dependent control is **present but disabled**, never hidden —
@@ -213,37 +235,73 @@ the set from `PLANNER_MODELS` at implementation time.
    stated reason instead of offering switches that would do nothing. **Deliberately NO "Connect"
    button**: there is no in-app provisioning flow in the shipped app, and inventing one would be a
    route that does not exist. The banner renders on all three cards.
+7. **Auto-plan PAUSED — a plan is waiting for a decision (panel 6 · MOTIR-1739).** Auto-plan is ON
+   and configured, but MOTIR-916's watcher SKIPS the project because a plan is still undecided
+   (`generating` / `planned`), and nothing expires a plan — `plansService.declinePlan` is an
+   explicit human act. Without a signal that silence is indistinguishable from a broken feature, so
+   the state is **surfaced, never aged out** (the 2026-07-27 decision; auto-declining would silently
+   discard work someone may still want).
+   - **Where.** A status banner at the TOP of the Auto-plan card body — the same slot the lock and
+     not-connected banners use — above the switch row. It is the SAME `.callout` box as the
+     Principle-#1 guardrail, in the **gate** role (§9); no new banner primitive.
+   - **The way out.** The banner carries a **link to the waiting plan** (`/plans/{id}`, the shipped
+     MOTIR-847 detail). This is the point of the state: it makes the silence actionable, not merely
+     explained. Today that plan is otherwise reachable only from the Plans list.
+   - **Two faces, both drawn.** _Pending-and-current_ — lead + body + meta (planned-when · item
+     count) + link. _Pending-and-STALE_ — the same, plus the **Out of date** badge and the drift
+     sentence, because a drifted plan is where "go decide this" is most urgent. Staleness is the
+     rolled-up verdict of the shipped `planStalenessService` (MOTIR-1340); the banner shows the
+     count, never the per-item reason list (that lives on the plan detail).
+   - **Pausing is NOT disabling.** The enable switch and the threshold stepper stay fully
+     interactive, and Save works normally — the user can reconfigure while a plan waits. (Contrast
+     panel 5, where a non-admin's controls really are `disabled`.) The guardrail callout stays too:
+     it renders whenever the switch is on, paused or not.
+   - **When it does NOT render.** Auto-plan off, or no undecided plan → the card is exactly as
+     MOTIR-919 ships it (panel 6's left-hand card, identical to panel 2). Nothing is hidden or moved
+     to make room for the banner.
 
 ## 9. Colour + shape token roles (per element)
 
 Colour — `--el-*` only; **no Tier-0 `--color-*` in component code, no invented hue** anywhere:
 
-| Element                                            | Token                                                                        |
-| -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Page title · control labels                        | `--el-text`                                                                  |
-| Page description · card sub · field hints          | `--el-text-muted` / `--el-text-helper`                                       |
-| Disabled dependent label + hint                    | `--el-text-faint`                                                            |
-| Card surface · page background                     | `--el-card` / `--el-page-bg`                                                 |
-| Card border · inner dividers                       | `--el-border` / `--el-border-soft`                                           |
-| Card footer band                                   | `--el-surface-soft`                                                          |
-| Switch track ON · knob · track OFF                 | `--el-switch-on` · `--el-switch-knob` · `--el-muted` + `--el-border-strong`  |
-| Stepper input border · icon-button border          | `--el-input-border` · `--el-button-border`                                   |
-| Combobox trigger border · chevron · secondary text | `--el-input-border` · `--el-icon-field` · `--el-text-identifier`             |
-| Combobox option highlight · selected check         | `--el-option-active-bg` · `--el-accent-on-surface`                           |
-| Primary button fill / its text                     | `--el-accent` / `--el-accent-text`                                           |
-| Secondary button                                   | `--el-page-bg` + `--el-button-border` + `--el-text-secondary`                |
-| **Guardrail callout** (approval promise)           | `--el-tint-sky` bg + `--el-text-strong` + `--el-info` icon                   |
-| **Rationale callout** (short sprints)              | `--el-tint-lavender` bg + `--el-text-strong` + `--el-accent-on-surface` icon |
-| **Not-connected callout**                          | `--el-tint-peach` bg + `--el-text-strong` + `--el-warning` icon              |
-| Read-only lock banner                              | `--el-surface` + `--el-border` + `--el-icon-muted` icon                      |
-| Validation text + invalid border                   | `--el-danger`                                                                |
-| Saved toast icon                                   | `--el-success`                                                               |
-| Card-head glyphs                                   | `--el-icon-heading`                                                          |
-| Rail active row · its icon                         | `--el-sidebar-item-bg-active` + `--el-sidebar-border` · `--el-icon-active`   |
-| Focus ring                                         | `--focus-ring-color`                                                         |
+| Element                                            | Token                                                                                                    |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Page title · control labels                        | `--el-text`                                                                                              |
+| Page description · card sub · field hints          | `--el-text-muted` / `--el-text-helper`                                                                   |
+| Disabled dependent label + hint                    | `--el-text-faint`                                                                                        |
+| Card surface · page background                     | `--el-card` / `--el-page-bg`                                                                             |
+| Card border · inner dividers                       | `--el-border` / `--el-border-soft`                                                                       |
+| Card footer band                                   | `--el-surface-soft`                                                                                      |
+| Switch track ON · knob · track OFF                 | `--el-switch-on` · `--el-switch-knob` · `--el-muted` + `--el-border-strong`                              |
+| Stepper input border · icon-button border          | `--el-input-border` · `--el-button-border`                                                               |
+| Combobox trigger border · chevron · secondary text | `--el-input-border` · `--el-icon-field` · `--el-text-identifier`                                         |
+| Combobox option highlight · selected check         | `--el-option-active-bg` · `--el-accent-on-surface`                                                       |
+| Primary button fill / its text                     | `--el-accent` / `--el-accent-text`                                                                       |
+| Secondary button                                   | `--el-page-bg` + `--el-button-border` + `--el-text-secondary`                                            |
+| **Guardrail callout** (approval promise)           | `--el-tint-sky` bg + `--el-text-strong` + `--el-info` icon                                               |
+| **Rationale callout** (short sprints)              | `--el-tint-lavender` bg + `--el-text-strong` + `--el-accent-on-surface` icon                             |
+| **Not-connected callout**                          | `--el-tint-peach` bg + `--el-text-strong` + `--el-warning` icon                                          |
+| **Paused callout** (1739)                          | `--el-tint-peach` bg + `--el-text-strong` + `--el-warning` `PauseCircle`                                 |
+| **Paused callout's link** (1739)                   | `--el-text-strong` + underline (NOT `--el-link`) + `--el-warning` `ArrowRight`                           |
+| **Out-of-date badge** (1739)                       | `--el-tint-yellow` bg + `--el-text-strong` + `--el-warning` `TriangleAlert`, `--el-border-soft` hairline |
+| Read-only lock banner                              | `--el-surface` + `--el-border` + `--el-icon-muted` icon                                                  |
+| Validation text + invalid border                   | `--el-danger`                                                                                            |
+| Saved toast icon                                   | `--el-success`                                                                                           |
+| Card-head glyphs                                   | `--el-icon-heading`                                                                                      |
+| Rail active row · its icon                         | `--el-sidebar-item-bg-active` + `--el-sidebar-border` · `--el-icon-active`                               |
+| Focus ring                                         | `--focus-ring-color`                                                                                     |
 
 Three tinted callouts use **three distinct tint slots** so they never read as the same message; text
 on every tint is `--el-text-strong` (AA, finding #35). No page-level surface is tinted.
+
+**The paused banner (1739) REUSES the gate/peach role rather than claiming a fourth tint** — a
+deliberate choice, recorded here so it is not read as a collision. Peach already means _"the
+setting is on, but the feature is not running — here is why"_; paused is that same message with a
+different cause, and the two cannot co-occur (a deployment with no Motir AI connection can have no
+undecided plan). The two are told apart by their glyph and their first sentence, not by hue. The
+**link inside a tinted callout takes `--el-text-strong` + an underline, never `--el-link`**:
+`--el-link` on `--el-tint-peach` is 4.13:1, under AA (finding #35). The **Out of date** badge keeps
+its own shipped `--el-tint-yellow`, which is what the app already uses for drift everywhere else.
 
 Shape — element-semantic tokens only (`data-style` swaps them; never `rounded-md`/`p-2`/`h-9`):
 
@@ -271,6 +329,13 @@ trigger) · `--radius-control` (icon buttons, listbox rows, rail rows, chips) ·
 - Validation messages are `role="alert"` so they announce on appearance.
 - Keyboard: rail → page → each card top-to-bottom; no focus trap; the combobox returns focus to its
   trigger on close.
+- The paused banner (1739) is a `role="status"` region, so the state is announced when it appears
+  after a save or a refresh without stealing focus. Its meaning is carried by the sentence and the
+  `PauseCircle` glyph — **never by the peach fill alone**; the same holds for the **Out of date**
+  badge, whose word IS the signal (the `TriangleAlert` is `aria-hidden`, decorative). The link is a
+  real `<a>` whose accessible name ("Review the plan") says where it goes; the `·` separators in the
+  meta line are `aria-hidden`. The switch and stepper are NOT `aria-disabled` while paused — they
+  really are operable, and the a11y tree must say so.
 
 ## 11. i18n
 
@@ -283,6 +348,11 @@ convention for every settings page (`settings.estimation.*`, `settings.nav.*`), 
 > other `nav.*` keys, and avoids a namespace that exists for one page. Every new `en.json` key needs
 > its `zh.json` counterpart in the SAME PR (the i18n-catalog parity gate).
 
+The paused state (1739) adds `settings.aiPlanning.paused.*` — `lead`, `body`, `reviewCta`,
+`staleBody` — plus the two strings it REUSES rather than re-authors: `planReview.staleBadge` ("Out
+of date") and `aiPlanning.plannedAt` / `aiPlanning.itemCount` for the meta line. Re-authoring those
+would let the settings page and the Plans list drift apart in wording for the same fact.
+
 ## 12. Out of scope for this asset
 
 - The **plan-review surface** a cadence-fired proposal lands in — that is Story 7.4's, already
@@ -292,3 +362,8 @@ convention for every settings page (`settings.estimation.*`, `settings.nav.*`), 
   where billing lands.
 - Workspace- or org-level AI settings — every control here is **project-scoped**, matching the
   MOTIR-915 columns on `Project`.
+- **Expiry / auto-decline of a waiting plan** — explicitly NOT designed (MOTIR-1739). The decision
+  was to SURFACE the pause, not age it out; aging it out would discard proposals a human may still
+  want. If expiry is ever wanted, it is its own decision card and its own design.
+- The **plan detail** the paused banner links to — shipped (MOTIR-847); this asset only draws the
+  door to it.
