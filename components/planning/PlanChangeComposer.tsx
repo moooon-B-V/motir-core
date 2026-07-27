@@ -49,6 +49,11 @@ export interface PlanChangeComposerProps {
   /** Submit the turn. The composer clears the draft; the TARGETS persist across
    *  turns until the user removes them (design panel 3). */
   onSubmit: (text: string) => void;
+  /** The rail decides the prompt — a re-plan ASKS for the reason first
+   *  (MOTIR-910), which outranks the targeted variant. */
+  placeholder?: string;
+  /** Pre-focus, for the re-plan ask (MOTIR-910). */
+  autoFocus?: boolean;
   disabled?: boolean;
 }
 
@@ -59,6 +64,8 @@ export function PlanChangeComposer({
   onAddTarget,
   onRemoveTarget,
   onSubmit,
+  placeholder,
+  autoFocus = false,
   disabled = false,
 }: PlanChangeComposerProps) {
   const t = useTranslations('planningWorkspace.targets');
@@ -72,6 +79,9 @@ export function PlanChangeComposer({
   // effect (set-state-in-effect is a lint error in this repo).
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const resolvedPlaceholder =
+    placeholder ??
+    (targets.length > 0 ? tc('composerPlaceholderTargets') : tc('composerPlaceholder'));
   const atLimit = targets.length >= MAX_PLANNING_TARGETS;
   // Closed while the turn is in flight too: the composer is locked, so an open
   // dropdown would be a control the user cannot act on.
@@ -259,10 +269,14 @@ export function PlanChangeComposer({
             onKeyUp={(event) => syncMention(event.currentTarget)}
             onClick={(event) => syncMention(event.currentTarget)}
             disabled={disabled}
-            placeholder={
-              targets.length > 0 ? tc('composerPlaceholderTargets') : tc('composerPlaceholder')
-            }
-            aria-label={tc('composerPlaceholder')}
+            // Pre-focused for a re-plan so the reason can be typed straight away
+            // (MOTIR-910): the workspace is a full-screen route whose primary act
+            // IS this composer.
+            autoFocus={autoFocus}
+            placeholder={resolvedPlaceholder}
+            // The accessible name TRACKS the prompt (MOTIR-910's contract): a
+            // screen reader must hear the same ask the placeholder shows.
+            aria-label={resolvedPlaceholder}
             className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
           />
         </div>

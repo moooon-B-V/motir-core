@@ -352,3 +352,107 @@ describe('streamPlanJob — the browser streams from CORE', () => {
     expect(streamJobMock).not.toHaveBeenCalled();
   });
 });
+
+// ─────────── resume + resubmit — the entrance's two non-appending hops ───────────
+//
+// MOTIR-910's per-item entrance needs the conversation to SURVIVE a close (open
+// the door again → the thread is still there) and a failed run (Retry re-sends
+// what was already said). Both are anchored reads/writes that must NOT append.
+
+describe('getSessionForWorkItem — resuming the item’s thread (MOTIR-910)', () => {
+  it('returns null for an item that was never planned — and writes NO session row', async () => {
+    const result = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    expect(result.session).toBeNull();
+    // Opening the door is not starting a conversation.
+    expect(
+      await planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        buildScope([story.identifier]).scopeKey,
+        fx.workspaceId,
+      ),
+    ).toBeNull();
+  });
+
+  it('returns the SAME thread a turn created, with its turns in order', async () => {
+    await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this up' },
+      projectCtx(fx),
+    );
+
+    const { session } = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    expect(session).not.toBeNull();
+    expect(session!.targetKeys).toEqual([story.identifier]);
+    expect(session!.turns.map((t) => t.role)).toEqual(['user', 'system']);
+    expect(session!.turns[0]!.body).toBe('Break this up');
+  });
+
+  it('resumes by the CANONICAL anchor set — a multi-target thread resumes from either item', async () => {
+    const other = await createTestWorkItem(fx, { kind: 'story', title: 'Auth' });
+    await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, targetKeys: [other.identifier], prompt: 'Merge these' },
+      projectCtx(fx),
+    );
+
+    const fromOther = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: other.id, targetKeys: [story.identifier] },
+      projectCtx(fx),
+    );
+    expect(fromOther.session?.targetKeys).toEqual([story.identifier, other.identifier].sort());
+    // …while the SINGLE-item thread is a different conversation entirely.
+    const single = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    expect(single.session).toBeNull();
+  });
+
+  it('never resolves an anchor from another tenant — 404-shaped, not an empty read', async () => {
+    const rival = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
+    const theirs = await createTestWorkItem(rival, { kind: 'story', title: 'Theirs' });
+    await expect(
+      contextualPlanningService.getSessionForWorkItem({ anchorId: theirs.id }, projectCtx(fx)),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+});
+
+describe('resubmitFromWorkItem — Retry re-sends, it does not re-say (MOTIR-910)', () => {
+  it('re-submits the accumulated intent WITHOUT appending a turn', async () => {
+    await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this up' },
+      projectCtx(fx),
+    );
+    const before = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    const userTurnsBefore = before.session!.turns.filter((t) => t.role === 'user');
+
+    submitJobMock.mockResolvedValueOnce({ jobId: 'job-contextual-2' });
+    const again = await contextualPlanningService.resubmitFromWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+
+    expect(again.jobId).toBe('job-contextual-2');
+    expect(again.sessionId).toBe(before.session!.id);
+    // The user said nothing new — the second run carries the SAME intent, and the
+    // transcript does not duplicate their words.
+    const userTurnsAfter = again.session.turns.filter((t) => t.role === 'user');
+    expect(userTurnsAfter.map((t) => t.body)).toEqual(userTurnsBefore.map((t) => t.body));
+    expect(submittedKind(1)).toBe(submittedKind(0));
+    expect(submittedContext(1)['targetKeys']).toEqual([story.identifier]);
+  });
+
+  it('rejects a resubmit on an item with no thread yet — there is nothing to re-send', async () => {
+    await expect(
+      contextualPlanningService.resubmitFromWorkItem({ anchorId: story.id }, projectCtx(fx)),
+    ).rejects.toThrow();
+    expect(submitJobMock).not.toHaveBeenCalled();
+  });
+});

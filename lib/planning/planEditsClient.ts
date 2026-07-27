@@ -128,13 +128,10 @@ export async function streamAugmentJob(
   );
 }
 
-/**
- * The CONTEXTUAL planning job's stream (7.12.3 · MOTIR-909), consumed by the
- * target-picker send (MOTIR-1491). Same SSE shape as the augment stream — it is
- * the same job kind — but a different route, because the anchor is re-gated on
- * every subscribe: a permission that held at submit is not evidence it still
- * holds now. So the anchor id travels with the job id.
- */
+/** The ITEM-ANCHORED stream (7.12.3 · MOTIR-909's relay, consumed by the
+ *  MOTIR-910 entrance). Same SSE shape as `streamAugmentJob` — the job IS an
+ *  ordinary `augment` — but subscribed through the anchored route, which re-gates
+ *  the anchor on every subscribe. */
 export async function streamContextualPlanJob(
   anchorId: string,
   jobId: string,

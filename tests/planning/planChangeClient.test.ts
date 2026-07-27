@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   openPlanChangeSession,
   appendPlanChangeTurn,
+  resubmitContextualPlan,
+  resumeContextualSession,
   submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
@@ -111,44 +113,53 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
   });
 });
 
-describe('planChangeClient — the TARGETED submit (MOTIR-1491) rides the shipped contextual route', () => {
-  it('addresses the PRIMARY target by id and carries the rest as targetKeys', async () => {
+describe('planChangeClient — the MULTI-TARGET anchors (MOTIR-1491)', () => {
+  it('carries the ADDITIONAL targets beside the prompt; the primary stays the path item', async () => {
     const result = { jobId: 'job-ctx-1', sessionId: 's-ctx', session: SESSION };
     fetchMock.mockResolvedValue(jsonResponse(result));
 
     await expect(
-      submitContextualPlan('wi_812', ['MOTIR-918', 'MOTIR-922'], 'Expand billing.'),
+      submitContextualPlan('wi_812', 'Expand billing.', ['MOTIR-918', 'MOTIR-922']),
     ).resolves.toEqual(result);
 
     const [url, init] = lastCall();
     // The SHIPPED 7.12.3 endpoint — the picker adds no route of its own.
     expect(url).toBe('/api/work-items/wi_812/ai/plan');
-    expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
       prompt: 'Expand billing.',
-      // The primary is NOT repeated here: it travels as the path item and the
-      // service adds it to the scope itself.
+      // The primary is NOT repeated: it travels as the path item and the service
+      // adds it to the scope itself.
       targetKeys: ['MOTIR-918', 'MOTIR-922'],
     });
   });
 
-  it('encodes the anchor id into the path — never interpolates it raw', async () => {
+  it('OMITS the field entirely with no additional targets — the single-anchor request is unchanged', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
 
-    await submitContextualPlan('a/b?c', [], 'x');
+    await submitContextualPlan('wi_812', 'Re-plan this story.');
 
-    expect(lastCall()[0]).toBe('/api/work-items/a%2Fb%3Fc/ai/plan');
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ prompt: 'Re-plan this story.' });
   });
 
-  it('sends an EMPTY targetKeys array for the single-target case (the 1-element scope)', async () => {
+  it('a RESUBMIT re-sends to the same anchor SET — retrying must not re-aim the turn', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j', sessionId: 's', session: SESSION }));
 
-    await submitContextualPlan('wi_812', [], 'Re-plan this story.');
+    await resubmitContextualPlan('wi_812', ['MOTIR-918']);
 
     expect(JSON.parse(lastCall()[1].body as string)).toEqual({
-      prompt: 'Re-plan this story.',
-      targetKeys: [],
+      resubmit: true,
+      targetKeys: ['MOTIR-918'],
     });
+  });
+
+  it('RESUMES a multi-anchor thread through repeated ?targetKey= params', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ session: SESSION }));
+
+    await resumeContextualSession('wi_812', ['MOTIR-918', 'MOTIR-922']);
+
+    expect(lastCall()[0]).toBe(
+      '/api/work-items/wi_812/ai/plan?targetKey=MOTIR-918&targetKey=MOTIR-922',
+    );
   });
 });
 
@@ -187,5 +198,62 @@ describe('planChangeClient — failures surface as ONE error type', () => {
 
     const err = (await submitPlanChange().catch((e: unknown) => e)) as PlanEditsClientError;
     expect(err.isOutOfCredits).toBe(true);
+  });
+});
+
+// ─── The ITEM-ANCHORED calls (MOTIR-910 → the MOTIR-909 endpoints) ───────────
+
+describe('the anchored transport — a work item’s own thread', () => {
+  it('resumes by GET, and reads an unplanned item as null rather than an error', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: null }));
+    expect(await resumeContextualSession('wi_123')).toBeNull();
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/work-items/wi_123/ai/plan');
+    expect(init?.method ?? 'GET').toBe('GET');
+  });
+
+  it('returns the thread when the item has one', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: SESSION }));
+    expect(await resumeContextualSession('wi_123')).toMatchObject({ id: SESSION.id });
+  });
+
+  it('submits a turn as ONE POST carrying the prompt — the reason IS the turn', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ jobId: 'job-1', sessionId: 's1', session: SESSION }),
+    );
+    const result = await submitContextualPlan('wi_123', 'Split this story.');
+
+    expect(result.jobId).toBe('job-1');
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/work-items/wi_123/ai/plan');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ prompt: 'Split this story.' });
+  });
+
+  it('retries with the resubmit flag and NO prompt — nothing new is said', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ jobId: 'job-2', sessionId: 's1', session: SESSION }),
+    );
+    await resubmitContextualPlan('wi_123');
+
+    const [, init] = lastCall();
+    expect(JSON.parse(init.body as string)).toEqual({ resubmit: true });
+  });
+
+  it('encodes the anchor id into the path', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: null }));
+    await resumeContextualSession('wi/123');
+    expect(lastCall()[0]).toBe('/api/work-items/wi%2F123/ai/plan');
+  });
+
+  it('raises the ONE error type a caller branches on, carrying the typed code', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 'WORK_ITEM_NOT_FOUND' }, 404));
+    await expect(resumeContextualSession('wi_gone')).rejects.toBeInstanceOf(PlanEditsClientError);
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 'MOTIR_AI_OUT_OF_CREDITS' }, 402));
+    await expect(submitContextualPlan('wi_123', 'x')).rejects.toMatchObject({
+      isOutOfCredits: true,
+    });
   });
 });

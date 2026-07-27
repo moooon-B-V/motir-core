@@ -6,6 +6,8 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import {
   appendPlanChangeTurn,
   openPlanChangeSession,
+  resubmitContextualPlan,
+  resumeContextualSession,
   submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
@@ -121,24 +123,56 @@ export interface UsePlanChangeConversationOptions {
    * surfaces behind the workspace take the refresh. Both, where both apply.
    */
   onApproved?: (result: ApproveDeltaResult) => void;
+  /**
+   * The work item this conversation is ANCHORED at, by database id (MOTIR-910's
+   * per-item entrance). When set, every hop rides the item-scoped MOTIR-909
+   * endpoints instead of the project-wide thread — a different CONVERSATION, not
+   * a different mechanism: same substrate, same job kind, same approve route.
+   * Absent (the launcher's project/roadmap contexts) → the shipped 7.30 thread.
+   */
+  anchorId?: string | null;
 }
 
-/** A submit ANCHORED at a target set — what the contextual endpoint takes. */
-interface ContextualAnchor {
-  /** The PRIMARY target's work-item id — the route's path item. */
+/**
+ * What one run is ANCHORED at: the primary anchor (the endpoint's path item) plus
+ * the additional targets the `@`-mention picker added (MOTIR-1491). `null` is the
+ * project-wide thread. Every hop of a run — submit, stream, resubmit — uses the
+ * SAME anchor, because they all address one conversation.
+ */
+interface RunAnchor {
   anchorId: string;
-  /** The ADDITIONAL targets, by identifier. */
   targetKeys: string[];
-  /** The turn text. The contextual submit appends it itself. */
-  prompt: string;
 }
 
-export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversationOptions = {}) {
+/**
+ * Which conversation a turn belongs to. The picker's SET wins when the caller
+ * has one (an empty set is a real answer — the project thread); a caller that
+ * passes nothing keeps the entrance's single anchor.
+ */
+function resolveAnchor(
+  targets: readonly PlanningTarget[] | undefined,
+  entranceAnchorId: string | null,
+): RunAnchor | null {
+  if (targets === undefined) {
+    return entranceAnchorId ? { anchorId: entranceAnchorId, targetKeys: [] } : null;
+  }
+  const primary = primaryPlanningTarget(targets);
+  return primary ? { anchorId: primary.id, targetKeys: extraPlanningTargetKeys(targets) } : null;
+}
+
+export function usePlanChangeConversation({
+  onApproved,
+  anchorId = null,
+}: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
-  // What the last submit was anchored at, so `retry` re-sends to the SAME thread.
-  const lastAnchorRef = useRef<ContextualAnchor | null>(null);
+  // The entrance's anchor, read by callbacks that must not be re-created when it
+  // changes (it is fixed per mounted workspace — the route's `?item=`).
+  const anchorRef = useRef(anchorId);
+  // What the LAST run was anchored at, so a retry resubmits to the same thread —
+  // which, once the picker is in play, may be a different set than the entrance's.
+  const lastAnchorRef = useRef<RunAnchor | null>(null);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`delta`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -151,6 +185,7 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
   useEffect(() => {
     stateRef.current = state;
     approvedCbRef.current = onApproved;
+    anchorRef.current = anchorId;
   });
 
   useEffect(() => {
@@ -162,13 +197,20 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
     };
   }, []);
 
-  // Open OR RESUME the project's thread on mount. Best-effort: a failure leaves an
-  // empty thread with a recoverable error, never a broken rail.
+  // Open OR RESUME the thread on mount — the project's, or the ANCHORED item's.
+  // Best-effort: a failure leaves an empty thread with a recoverable error, never
+  // a broken rail. An anchored item that was never planned simply has no thread
+  // yet (`null`), which is an empty rail, not an error.
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       try {
-        const session = await openPlanChangeSession(controller.signal);
+        const session = anchorId
+          ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
+            // is seeded from that same item, and any target the user adds later
+            // starts a differently-scoped thread anyway.
+            await resumeContextualSession(anchorId, [], controller.signal)
+          : await openPlanChangeSession(controller.signal);
         if (!mountedRef.current) return;
         setState((s) => ({ ...s, phase: 'idle', session }));
       } catch (err) {
@@ -178,122 +220,147 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
       }
     })();
     return () => controller.abort();
-  }, []);
+  }, [anchorId]);
 
-  /** Submit, then stream + settle the job. Shared by `send` (after the turn is
-   *  appended, for the project thread) and `retry` (nothing new to append).
+  /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
+   *  by `send` (after the turn is appended) and `retry` (nothing new to append).
    *
-   *  `anchor` non-null routes the turn through the CONTEXTUAL endpoint instead
-   *  (7.12.3 · MOTIR-909): a thread is identified by its anchor SET, so that one
-   *  call opens-or-resumes the scoped thread, appends the turn and submits it. */
-  const run = useCallback(async (anchor: ContextualAnchor | null) => {
-    const controller = new AbortController();
-    abortRef.current = controller;
+   *  `submitter` is what actually sends: the project submit, the anchored
+   *  resubmit, or — anchored — the ONE call that appends the new turn AND submits
+   *  it (the MOTIR-909 contract fuses those two). Everything downstream (stream,
+   *  settle, delta) is identical for both threads; only the URL differs. */
+  const run = useCallback(
+    async (
+      anchor: RunAnchor | null,
+      submitter?: (
+        signal: AbortSignal,
+      ) => Promise<{ jobId: string; session: PlanChangeSessionDto }>,
+    ) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      // Remembered before the hop, so a retry after a failure re-sends to the
+      // thread this turn actually landed in.
+      lastAnchorRef.current = anchor;
+      const submit =
+        submitter ??
+        (anchor
+          ? (signal: AbortSignal) =>
+              resubmitContextualPlan(anchor.anchorId, anchor.targetKeys, signal)
+          : (signal: AbortSignal) => submitPlanChange(signal));
 
-    try {
-      const { jobId, session } = anchor
-        ? await submitContextualPlan(
-            anchor.anchorId,
-            anchor.targetKeys,
-            anchor.prompt,
-            controller.signal,
-          )
-        : await submitPlanChange(controller.signal);
-      if (!mountedRef.current) return;
-      setState((s) => ({
-        ...s,
-        phase: 'streaming',
-        session,
-        jobId,
-        progress: { kind: 'submitted' },
-        errorCode: null,
-        outOfCredits: false,
-      }));
+      try {
+        const { jobId, session } = await submit(controller.signal);
+        if (!mountedRef.current) return;
+        setState((s) => ({
+          ...s,
+          phase: 'streaming',
+          session,
+          jobId,
+          progress: { kind: 'submitted' },
+          errorCode: null,
+          outOfCredits: false,
+        }));
 
-      let failed = false;
-      // Same SSE frames either way — a contextual turn IS an augment job; only
-      // the route differs, because the anchor is re-gated on subscribe.
-      const stream: typeof streamAugmentJob = anchor
-        ? (id, signal, onError, onDone, onFrame) =>
-            streamContextualPlanJob(anchor.anchorId, id, signal, onError, onDone, onFrame)
-        : streamAugmentJob;
-      await stream(
-        jobId,
-        controller.signal,
-        (code) => {
-          failed = true;
-          if (!mountedRef.current) return;
-          const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
-          // The thread and any PRIOR proposal survive — recoverable in place.
+        let failed = false;
+        // Anchored runs subscribe through the item's own relay (which re-gates the
+        // anchor on subscribe); the project thread keeps the shipped augment SSE.
+        const stream = anchor
+          ? (
+              onError: (code: string | null) => void,
+              onDone: () => void,
+              onFrame: (event: string, data: unknown) => void,
+            ) =>
+              streamContextualPlanJob(
+                anchor.anchorId,
+                jobId,
+                controller.signal,
+                onError,
+                onDone,
+                onFrame,
+              )
+          : (
+              onError: (code: string | null) => void,
+              onDone: () => void,
+              onFrame: (event: string, data: unknown) => void,
+            ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame);
+        await stream(
+          (code) => {
+            failed = true;
+            if (!mountedRef.current) return;
+            const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+            // The thread and any PRIOR proposal survive — recoverable in place.
+            setState((s) => ({
+              ...s,
+              phase: s.delta ? 'review' : 'idle',
+              progress: null,
+              errorCode: gated ? null : (code ?? 'FAILED'),
+              outOfCredits: gated,
+            }));
+          },
+          () => {},
+          (event, data) => {
+            if (!mountedRef.current) return;
+            const progress = narrateFrame(event, data);
+            if (progress) setState((s) => ({ ...s, progress }));
+          },
+        );
+        if (failed || !mountedRef.current) return;
+
+        const result = await fetchJobResult(jobId, controller.signal);
+        if (!mountedRef.current) return;
+        const delta = result.result?.planDelta ?? null;
+        if (delta && delta.operations.length > 0) {
+          setState((s) => ({ ...s, phase: 'review', delta, progress: null, errorCode: null }));
+        } else {
+          // Nothing came back. The thread stays; the previous proposal (if any) too.
           setState((s) => ({
             ...s,
             phase: s.delta ? 'review' : 'idle',
             progress: null,
-            errorCode: gated ? null : (code ?? 'FAILED'),
-            outOfCredits: gated,
+            errorCode: 'EMPTY',
           }));
-        },
-        () => {},
-        (event, data) => {
-          if (!mountedRef.current) return;
-          const progress = narrateFrame(event, data);
-          if (progress) setState((s) => ({ ...s, progress }));
-        },
-      );
-      if (failed || !mountedRef.current) return;
-
-      const result = await fetchJobResult(jobId, controller.signal);
-      if (!mountedRef.current) return;
-      const delta = result.result?.planDelta ?? null;
-      if (delta && delta.operations.length > 0) {
-        setState((s) => ({ ...s, phase: 'review', delta, progress: null, errorCode: null }));
-      } else {
-        // Nothing came back. The thread stays; the previous proposal (if any) too.
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!mountedRef.current) return;
+        const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
         setState((s) => ({
           ...s,
           phase: s.delta ? 'review' : 'idle',
           progress: null,
-          errorCode: 'EMPTY',
+          errorCode: gated ? null : 'FAILED',
+          outOfCredits: gated,
         }));
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
       }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (!mountedRef.current) return;
-      const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
-      setState((s) => ({
-        ...s,
-        phase: s.delta ? 'review' : 'idle',
-        progress: null,
-        errorCode: gated ? null : 'FAILED',
-        outOfCredits: gated,
-      }));
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   /**
    * Append what the user typed, then run the ACCUMULATED intent.
    *
-   * With TARGETS picked (MOTIR-1491) the turn is anchored instead: it goes to the
-   * contextual endpoint, which appends it to the thread scoped to that anchor SET
-   * — so there is no separate append hop, and the session that comes back is the
-   * SCOPED thread, not the project one. Switching targets switches conversation,
-   * which is the thread model 7.12.3 defines (scope IS the thread's identity).
+   * `targets` is the `@`-mention picker's TARGET SET (MOTIR-1491) and, when
+   * given, it is AUTHORITATIVE: its first entry is the primary anchor and the
+   * rest ride as additional ones — so removing every target really does make the
+   * turn project-wide, rather than silently keeping the entrance's item. Omitting
+   * the argument entirely means "no opinion about targets", which falls back to
+   * the entrance anchor (MOTIR-910's per-item workspace).
    */
   const send = useCallback(
-    async (text: string, targets: readonly PlanningTarget[] = []) => {
+    async (text: string, targets?: readonly PlanningTarget[]) => {
       const body = text.trim();
       if (!body || abortRef.current) return;
 
-      const primary = primaryPlanningTarget(targets);
-      if (primary) {
-        const anchor: ContextualAnchor = {
-          anchorId: primary.id,
-          targetKeys: extraPlanningTargetKeys(targets),
-          prompt: body,
-        };
-        lastAnchorRef.current = anchor;
+      // ANCHORED: appending and submitting are ONE call (MOTIR-909 resolves and
+      // view-gates the anchors first, so the contract fuses them) — `run` does
+      // the whole hop, and there is no separate append to fail on its own.
+      const anchor = resolveAnchor(targets, anchorRef.current);
+      if (anchor) {
+        // Busy from the click, not from the response: the composer must lock
+        // immediately or a second Enter fires a second turn (the project branch
+        // below gets this from its own optimistic set).
         setState((s) => ({
           ...s,
           phase: 'streaming',
@@ -301,11 +368,12 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
           errorCode: null,
           outOfCredits: false,
         }));
-        await run(anchor);
+        await run(anchor, (signal) =>
+          submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal),
+        );
         return;
       }
 
-      lastAnchorRef.current = null;
       const controller = new AbortController();
       abortRef.current = controller;
       setState((s) => ({
@@ -341,14 +409,16 @@ export function usePlanChangeConversation({ onApproved }: UsePlanChangeConversat
   /** Re-send the accumulated intent after a failure — no new turn, so the
    *  conversation CONTINUES rather than restarting (design panel 6, error).
    *
-   *  A failed CONTEXTUAL turn re-sends to the same anchor set: its submit is one
-   *  call that also appends, so the retried turn is appended again — the thread
-   *  records the attempt twice, which is the honest trace of what was sent, and
-   *  is why the retry cannot silently fall back to the project thread. */
+   *  It resubmits to the thread the FAILED run used (its target set included),
+   *  not to whatever is picked now — retrying a turn must not quietly re-aim it.
+   *  Before any run, that is the entrance's anchor. */
   const retry = useCallback(async () => {
     if (abortRef.current) return;
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
-    await run(lastAnchorRef.current);
+    const anchor =
+      lastAnchorRef.current ??
+      (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
+    await run(anchor);
   }, [run]);
 
   /** Persist the proposal through the shipped approve route. The thread STAYS. */

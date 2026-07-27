@@ -66,7 +66,24 @@
            Save blocked.
         5  STATES — saved confirmation · non-admin read-only · Motir AI not
            connected.
+        6  AUTO-PLAN PAUSED (amendment · MOTIR-1739) — running vs paused-with-a-
+           current-plan vs paused-with-an-out-of-date-plan.
       Toggle dark mode (top right) to confirm token parity.
+
+      ── AMENDMENT · MOTIR-1739 (7.13.9) ──
+      Panel 6 and its three glyphs/styles are the ONLY additions; panels 0–5 are
+      MOTIR-914's asset untouched. It draws the state MOTIR-916's pending-proposal
+      gate creates — auto-plan on, but skipped because a plan is still undecided —
+      so MOTIR-1740 has a mockup to build. Grounded the same way as the rest:
+        · MOTIR-916 (the cadence trigger) — the gate that makes "paused" true.
+        · MOTIR-1740 — the code card; its read returns { pending, planId,
+          plannedAt, stale }, which is exactly what the banner renders.
+        · app/(authed)/plans/[id] (MOTIR-847) — the SHIPPED review surface the
+          link goes to; app/(authed)/plans (MOTIR-1338) is its only other door.
+        · components/planning/PlanItemNode.tsx — the SHIPPED stale badge
+          (--el-tint-yellow + --el-text-strong + TriangleAlert) reused verbatim.
+        · messages/en.json planReview.* / aiPlanning.* — the shipped vocabulary
+          this copy follows ("Out of date", "may be out of date", "planned {when}").
       Spec, copy strings and per-element token roles: design-notes.md.
     -->
     <style>
@@ -860,6 +877,68 @@
         color: var(--el-icon-muted);
       }
 
+      /* ── MOTIR-1739 (amendment) — the PAUSED status treatment ─────────────────
+         No new primitive: it is the SAME .callout box the guardrail uses, in the
+         .gate (peach + --el-warning) role this asset already defines for "the
+         setting is on, but the feature is not running — here is why". Its extra
+         parts are a stacked text column, a meta line, an in-tint link and the
+         SHIPPED stale chip (markup + tokens copied from
+         components/planning/PlanItemNode.tsx). */
+      .callout .ctext {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .callout .cmeta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--el-text-strong);
+      }
+      /* A link ON a tint takes --el-text-strong + an underline, NOT --el-link:
+         #0070d2 on --el-tint-peach is 4.13:1, under AA (finding #35). */
+      .callout .clink {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .callout .clink svg {
+        width: 13px;
+        height: 13px;
+        margin-top: 0;
+      }
+      .callout .dot {
+        color: var(--el-text-tertiary);
+      }
+      /* the shipped stale badge — bg --el-tint-yellow, --el-text-strong,
+         TriangleAlert; the hairline is the one addition, so it still reads when
+         it sits ON the peach callout instead of on the card. */
+      .stale-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-yellow);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .callout .stale-chip svg {
+        width: 12px;
+        height: 12px;
+        margin-top: 0;
+        color: var(--el-warning);
+      }
+
       /* ── Button (components/ui/Button) ────────────────────────────────────── */
       .btn {
         display: inline-flex;
@@ -1269,6 +1348,47 @@
       >
         <circle cx="11" cy="11" r="8" />
         <path d="m21 21-4.3-4.3" />
+      </symbol>
+      <!-- MOTIR-1739 (amendment) — the paused state's three glyphs. lucide
+           PauseCircle · TriangleAlert (the SAME glyph the shipped stale badge in
+           components/planning/PlanItemNode.tsx uses) · ArrowRight. -->
+      <symbol
+        id="i-pause-circle"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="10" x2="10" y1="15" y2="9" />
+        <line x1="14" x2="14" y1="15" y2="9" />
+      </symbol>
+      <symbol
+        id="i-alert-triangle"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-arrow-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="m12 5 7 7-7 7" />
       </symbol>
     </svg>
 
@@ -2105,6 +2225,242 @@
         there is no in-app provisioning flow in the shipped app, and inventing one would be a route
         that does not exist (notes.html #25 / #33). Cards 2 and 3 render the identical banner; only
         Auto-plan is drawn here to keep the panel readable.
+      </p>
+
+      <!-- ══════════ PANEL 6 — AUTO-PLAN PAUSED (amendment · MOTIR-1739) ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">6</span>
+          <span class="t">Auto-plan PAUSED — a plan is waiting for a decision</span>
+          <span class="d"
+            >Amendment (MOTIR-1739) · running vs paused-and-current vs paused-and-out-of-date ·
+            controls stay live</span
+          >
+        </div>
+        <div class="pad split">
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">Running — nothing waiting (the contrast)</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                ></span>
+                <div>
+                  <h3>Auto-plan</h3>
+                  <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="srow">
+                  <span class="sw on" role="switch" aria-checked="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Expand the plan automatically</span>
+                    <p class="hint">
+                      When ready work drains, Motir drafts the next slice of the plan for you to
+                      review.
+                    </p>
+                  </span>
+                </div>
+                <div class="dep">
+                  <span class="lbl">Ready-work threshold</span>
+                  <div class="stepper">
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num">5</span>
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">ready items</span>
+                  </div>
+                  <div class="callout guard">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span
+                      >Auto-plan <strong>proposes</strong> an expansion for your approval — it never
+                      creates work without you.</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">Paused — the waiting plan is current</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                ></span>
+                <div>
+                  <h3>Auto-plan</h3>
+                  <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="callout gate" role="status">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause-circle" /></svg>
+                  <span class="ctext">
+                    <span
+                      ><strong>Auto-plan is paused — a plan is waiting for your review.</strong>
+                      Motir drafts one plan at a time. It picks up again as soon as you approve or
+                      decline this one.</span
+                    >
+                    <span class="cmeta">
+                      <span>Planned 3 days ago</span>
+                      <span class="dot" aria-hidden="true">·</span>
+                      <span>12 proposed items</span>
+                      <a class="clink" href="/plans/pln_8f2">
+                        Review the plan
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-arrow-right" />
+                        </svg>
+                      </a>
+                    </span>
+                  </span>
+                </div>
+                <div class="srow">
+                  <span class="sw on" role="switch" aria-checked="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Expand the plan automatically</span>
+                    <p class="hint">
+                      When ready work drains, Motir drafts the next slice of the plan for you to
+                      review.
+                    </p>
+                  </span>
+                </div>
+                <div class="dep">
+                  <span class="lbl">Ready-work threshold</span>
+                  <div class="stepper">
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num">5</span>
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">ready items</span>
+                  </div>
+                  <div class="callout guard">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span
+                      >Auto-plan <strong>proposes</strong> an expansion for your approval — it never
+                      creates work without you.</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">Paused — the waiting plan is OUT OF DATE</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                ></span>
+                <div>
+                  <h3>Auto-plan</h3>
+                  <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="callout gate" role="status">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause-circle" /></svg>
+                  <span class="ctext">
+                    <span
+                      ><strong>Auto-plan is paused — a plan is waiting for your review.</strong>
+                      Motir drafts one plan at a time. It picks up again as soon as you approve or
+                      decline this one.</span
+                    >
+                    <span class="cmeta">
+                      <span class="stale-chip">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-alert-triangle" />
+                        </svg>
+                        Out of date
+                      </span>
+                      <span
+                        >Your project has changed since this plan was drafted — 4 items may be out
+                        of date.</span
+                      >
+                    </span>
+                    <span class="cmeta">
+                      <span>Planned 12 days ago</span>
+                      <span class="dot" aria-hidden="true">·</span>
+                      <span>12 proposed items</span>
+                      <a class="clink" href="/plans/pln_8f2">
+                        Review the plan
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-arrow-right" />
+                        </svg>
+                      </a>
+                    </span>
+                  </span>
+                </div>
+                <div class="srow">
+                  <span class="sw on" role="switch" aria-checked="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Expand the plan automatically</span>
+                    <p class="hint">
+                      When ready work drains, Motir drafts the next slice of the plan for you to
+                      review.
+                    </p>
+                  </span>
+                </div>
+                <div class="dep">
+                  <span class="lbl">Ready-work threshold</span>
+                  <div class="stepper">
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num">5</span>
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">ready items</span>
+                  </div>
+                  <div class="callout guard">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span
+                      >Auto-plan <strong>proposes</strong> an expansion for your approval — it never
+                      creates work without you.</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 6 — the pause, made legible (amendment · MOTIR-1739).</strong> MOTIR-916's
+        cadence trigger SKIPS a project whose plan is still undecided, and nothing expires a plan —
+        so the silence can last forever with no signal anywhere. This state says it out loud on the
+        page where auto-plan is configured. It is the SAME <code>.callout</code> box the guardrail
+        uses, in the <code>.gate</code> role (<code>--el-tint-peach</code> +
+        <code>--el-warning</code>) this asset already defines for "the setting is on, but the
+        feature is not running — here is why"; paused and not-connected are the same message family
+        and cannot co-occur, so the role is REUSED rather than a fourth tint invented. The
+        <strong>link is the way out</strong> — it goes to the shipped plan detail
+        (<code>/plans/[id]</code>, MOTIR-847), reached today only from the Plans list; on a tint it
+        takes <code>--el-text-strong</code> + an underline, never <code>--el-link</code> (4.13:1 on
+        peach — under AA). The <strong>out-of-date face</strong> carries the SHIPPED stale badge —
+        <code>--el-tint-yellow</code> + <code>--el-text-strong</code> + <code>TriangleAlert</code>,
+        markup copied from <code>components/planning/PlanItemNode.tsx</code>, plus a hairline so it
+        reads on the peach — and names the drift in the app's own words ("may be out of date",
+        <code>aiPlanning.mayBeOutOfDate</code>). <strong>Pausing is not disabling:</strong> the
+        switch and the threshold stepper stay fully interactive in both paused faces (compare panel
+        5, where a non-admin's controls really are disabled) — the user can still reconfigure while
+        a plan waits. Nothing paused renders when auto-plan is off, or when no plan is undecided:
+        that is the left-hand card, unchanged from panel 2.
       </p>
     </div>
   </body>

@@ -129,6 +129,45 @@ export const contextualPlanningService = {
   },
 
   /**
+   * RESUME the item's thread — the entrance's mount read (MOTIR-910), so
+   * re-opening the workspace on an item shows the conversation already had
+   * rather than a blank rail that only fills in after the next turn.
+   *
+   * Read-only by construction: it resolves + view-gates the anchor set exactly as
+   * a turn does, then READS the thread for that scope. An item never planned
+   * before has no thread — `null`, not a freshly written empty row (opening a
+   * door is not starting a conversation).
+   */
+  async getSessionForWorkItem(
+    req: Omit<ContextualPlanRequest, 'prompt'>,
+    pctx: ProjectContext,
+  ): Promise<{ session: PlanChangeSessionDto | null }> {
+    const scope = await resolveScope({ ...req, prompt: '' }, pctx);
+    const session = await planChangeSessionsService.findForScope(pctx, scope);
+    return { session };
+  },
+
+  /**
+   * RE-SUBMIT the thread's accumulated intent WITHOUT appending a turn — the
+   * rail's Retry after a failed run (MOTIR-910).
+   *
+   * Retry must not append: the design's error state is "recoverable in place —
+   * the thread survives", so re-sending the same accumulated intent is the
+   * correct repair. Appending the last turn again would instead change what the
+   * engine is asked, and duplicate the user's words in their own transcript.
+   * A scope with no thread yet has nothing to resubmit (`PlanChangeSessionNotFoundError`
+   * from the shared submit path).
+   */
+  async resubmitFromWorkItem(
+    req: Omit<ContextualPlanRequest, 'prompt'>,
+    pctx: ProjectContext,
+  ): Promise<ContextualPlanResult> {
+    const scope = await resolveScope({ ...req, prompt: '' }, pctx);
+    const { jobId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+    return { jobId, sessionId: session.id, session };
+  },
+
+  /**
    * The live channel for a submitted turn: relay the motir-ai job stream to the
    * browser. The anchor is re-gated on every subscribe (the stream route is a
    * separate request — a permission that held at submit is not evidence it still

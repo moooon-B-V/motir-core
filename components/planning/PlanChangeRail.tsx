@@ -99,6 +99,25 @@ export function PlanChangeRail({
   const busy = state.phase === 'streaming' || state.phase === 'approving';
   const userTurns = (state.session?.turns ?? []).filter((turn) => turn.role === 'user');
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading';
+  // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
+  // composer is pre-focused and prompts for what's wrong, and what the user types
+  // is the FIRST CHAT TURN — the reason itself, which MOTIR-908 classifies. There
+  // is no pre-workspace form and no separate reason field. Plan mode has no such
+  // prompt (the item's own description is the scope), and neither does a
+  // PROJECT-level re-plan, whose opener + starter chips already frame the ask
+  // (MOTIR-1730's shipped copy, deliberately untouched). Once the conversation
+  // has started the composer returns to its ordinary placeholder.
+  const askingForReason =
+    launch.mode === 'replan' && launch.itemKey !== null && userTurns.length === 0;
+  // The re-plan ASK wins over every other placeholder: it is a one-time prompt
+  // for the reason, and it stops the moment the conversation starts. Only then
+  // does the targeted variant apply (MOTIR-1491).
+  const composerPlaceholder = askingForReason
+    ? tc('composerPlaceholderReplan')
+    : targets.length > 0
+      ? tc('composerPlaceholderTargets')
+      : tc('composerPlaceholder');
+
   // What the THREAD is anchored at, per the server (`PlanChangeSessionDto`) —
   // not the local tray. A sent turn is scoped by the session it landed in, so
   // the chips on the turn come from the record, not from what is picked now.
@@ -250,6 +269,8 @@ export function PlanChangeRail({
         onAddTarget={onAddTarget}
         onRemoveTarget={onRemoveTarget}
         onSubmit={onSend}
+        placeholder={composerPlaceholder}
+        autoFocus={askingForReason}
         disabled={busy || state.phase === 'loading'}
       />
     </aside>

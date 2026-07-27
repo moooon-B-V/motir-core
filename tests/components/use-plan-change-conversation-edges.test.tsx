@@ -31,6 +31,11 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   openPlanChangeSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
+  // The anchored half (MOTIR-910) is unused by these project-thread edge cases,
+  // but the module mock must still carry every export the hook imports.
+  resumeContextualSession: vi.fn(),
+  submitContextualPlan: vi.fn(),
+  resubmitContextualPlan: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {

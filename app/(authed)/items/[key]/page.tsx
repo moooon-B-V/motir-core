@@ -23,6 +23,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
@@ -345,6 +346,18 @@ export default async function IssueDetailPage({
                   itemId={item.id}
                   initialTotal={parentRollup.total}
                   variant="header"
+                />
+              ) : null}
+              {/* MOTIR-910: the per-item Plan / Re-plan door — FIRST in the
+                right cluster, before Watch / ⋯ (the plan-replan-entrance
+                mockup's panel-1 placement). Plan when the item has no children
+                yet, Re-plan when it does. Gated on canEdit (planning proposes
+                changes to the plan, which a read-only viewer cannot approve)
+                and hidden on an archived item, which is not work to plan. */}
+              {canEdit && !isArchived ? (
+                <WorkItemPlanEntrance
+                  itemKey={item.identifier}
+                  hasChildren={detail.children.length > 0}
                 />
               ) : null}
               {/* 5.4.9: the watch control + watchers popover — BEFORE Edit,

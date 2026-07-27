@@ -105,4 +105,19 @@ export interface QuickViewData {
    * (design/github Panel 4a).
    */
   pullRequests: LinkedPullRequestDto[];
+  /**
+   * Does the item already have children (MOTIR-910)? The peek header's
+   * Plan / Re-plan entrance picks its face from this — an item with children is
+   * RE-planned, one without is planned. Derived from the same detail aggregate
+   * (`detail.children`), so it costs no extra read; the peek's own body still
+   * renders no child list (that stays detail-only).
+   */
+  hasChildren: boolean;
+  /**
+   * May this actor open the planning workspace on the item (MOTIR-910)? The
+   * planning conversation PROPOSES changes to the plan, so it rides the
+   * project's `canEdit` capability — a browse-only viewer sees no door rather
+   * than one that errors on the first turn.
+   */
+  canPlan: boolean;
 }

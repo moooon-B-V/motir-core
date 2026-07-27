@@ -1,4 +1,14 @@
-import { Bot, Box, Columns3, Gauge, SlidersHorizontal, Tag, Users, Workflow } from 'lucide-react';
+import {
+  Bot,
+  Box,
+  Columns3,
+  Gauge,
+  SlidersHorizontal,
+  Sparkles,
+  Tag,
+  Users,
+  Workflow,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The project-settings navigation REGISTRY (Story 6.5 · Subtask 6.5.2) — ONE
@@ -139,6 +149,23 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/components',
     icon: Box,
     labelKey: 'nav.components',
+    access: browse,
+  },
+  {
+    id: 'ai-planning',
+    group: 'automation',
+    href: '/settings/project/ai-planning',
+    icon: Sparkles,
+    labelKey: 'nav.aiPlanning',
+    // Story 7.13 · MOTIR-919 — the AI-planning cadence page (auto-plan, AI
+    // sprint planning, planner model + drafted explanations). Registered ABOVE
+    // Rules in the Automation group: cadence configures the automatic planner,
+    // the same family as automation rules. Browse-gated on purpose — every
+    // member SEES the configuration, a non-admin reads it read-only (the design
+    // asset's role-state; the write is re-gated in projectAiSettingsService).
+    // The entry lights BOTH doors at once — the settings rail row AND the ⌘K
+    // deep link (`settings-ai-planning`) — and keeps the route↔registry
+    // totality test green.
     access: browse,
   },
   {

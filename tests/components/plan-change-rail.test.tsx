@@ -72,12 +72,13 @@ const handlers = {
 
 function renderRail(
   state: Partial<PlanChangeConversationState> = {},
+  launch: typeof LAUNCH = LAUNCH,
   targets: PlanningTarget[] = [],
 ) {
   const merged = { ...BASE, ...state };
   return renderWithIntl(
     <PlanChangeRail
-      launch={LAUNCH}
+      launch={launch}
       projectName="PayFlow"
       state={merged}
       index={indexPlanDelta(merged.delta)}
@@ -189,7 +190,7 @@ describe('PlanChangeRail — the turn shows what it was TARGETED at (MOTIR-1491)
   });
 
   it('shows the picked targets as a removable tray above the composer', () => {
-    renderRail({}, [
+    renderRail({}, LAUNCH, [
       { id: 'w1', identifier: 'MOTIR-812', title: 'Billing — invoicing', kind: 'story' },
     ]);
 
@@ -274,5 +275,69 @@ describe('PlanChangeRail — error and out of credits are DIFFERENT states', () 
 
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText(/Planning is paused/)).toBeTruthy();
+  });
+});
+
+// ─── The RE-PLAN opening (MOTIR-910) ─────────────────────────────────────────
+//
+// A re-plan opens by ASKING. The reason is not a form field and not a separate
+// parameter: the composer prompts for it, and what the user types becomes the
+// FIRST CHAT TURN (which MOTIR-908 classifies). A plan — nothing to fix yet —
+// opens with the ordinary composer.
+
+const ITEM_REPLAN = parsePlanningLaunch({ mode: 'replan', from: 'work-item', item: 'MOTIR-5' });
+const ITEM_PLAN = parsePlanningLaunch({ mode: 'contextual', from: 'work-item', item: 'MOTIR-42' });
+
+describe('PlanChangeRail — the re-plan composer (MOTIR-910)', () => {
+  it('asks what is wrong, and pre-focuses the composer so the reason can be typed', () => {
+    renderRail({}, ITEM_REPLAN);
+
+    const composer = screen.getByRole('textbox', {
+      name: 'What’s wrong? What should change?',
+    }) as HTMLInputElement;
+    expect(composer.placeholder).toBe('What’s wrong? What should change?');
+    expect(document.activeElement).toBe(composer);
+  });
+
+  it('sends that reason as an ordinary FIRST TURN — no separate reason field', () => {
+    renderRail({}, ITEM_REPLAN);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'What’s wrong? What should change?' }), {
+      target: { value: 'The split is wrong — auth belongs in its own story.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(handlers.onSend).toHaveBeenCalledWith(
+      'The split is wrong — auth belongs in its own story.',
+    );
+  });
+
+  it('leaves a PROJECT-level re-plan’s composer exactly as MOTIR-1730 shipped it', () => {
+    // The prompt belongs to the per-ITEM door, whose whole promise is "tell me
+    // what's wrong with THIS"; the project re-plan already frames the ask in its
+    // opener + starter chips.
+    renderRail();
+
+    const composer = screen.getByRole('textbox', {
+      name: 'Reply, or refine further…',
+    }) as HTMLInputElement;
+    expect(composer.placeholder).toBe('Reply, or refine further…');
+  });
+
+  it('does NOT ask a childless item what is wrong — Plan just opens', () => {
+    renderRail({}, ITEM_PLAN);
+
+    const composer = screen.getByRole('textbox', {
+      name: 'Reply, or refine further…',
+    }) as HTMLInputElement;
+    expect(composer.placeholder).toBe('Reply, or refine further…');
+    expect(document.activeElement).not.toBe(composer);
+  });
+
+  it('drops the prompt once the conversation has started — it is an OPENING, not a label', () => {
+    renderRail({ session: session([turn(0, 'The split is wrong.')]) }, ITEM_REPLAN);
+
+    expect(screen.queryByRole('textbox', { name: 'What’s wrong? What should change?' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Reply, or refine further…' })).toBeTruthy();
   });
 });

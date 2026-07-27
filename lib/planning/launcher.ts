@@ -30,14 +30,18 @@ export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 
  * needs to open in the right mode.
  *
  * - `project` — a project-level surface with no specific item.
- * - `work-item` — a specific work item (its detail page / a row action).
+ * - `work-item` — a specific work item (its detail page / a row action). Its
+ *   `hasPlan` is the item's OWN plan-vs-re-plan split (MOTIR-910): an item that
+ *   already has children is being RE-planned, one without is being planned for
+ *   the first time. Same shape as the project context's `hasPlan`, one level
+ *   down; omitted (the coarse case) it degrades to the contextual default.
  * - `roadmap` — the Board↔Roadmap surface.
  * - `convention-refine` — refine a coding convention in the universal chat
  *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
  */
 export type PlanningLaunchContext =
   | { kind: 'project'; hasPlan?: boolean }
-  | { kind: 'work-item'; itemKey: string }
+  | { kind: 'work-item'; itemKey: string; hasPlan?: boolean }
   | { kind: 'roadmap' }
   | { kind: 'convention-refine'; repoKey: string };
 
@@ -63,7 +67,11 @@ export const PLANNING_WORKSPACE_PATH = '/planning';
 export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMode {
   switch (context.kind) {
     case 'work-item':
-      return 'contextual';
+      // The per-item entrance's two faces (MOTIR-910): an item that already has
+      // children opens the workspace in RE-PLAN (the composer asks what's wrong
+      // first); one that does not opens the plain contextual planning turn. An
+      // absent `hasPlan` is the coarse case — contextual, as before.
+      return context.hasPlan ? 'replan' : 'contextual';
     case 'roadmap':
       return 'roadmap';
     case 'convention-refine':

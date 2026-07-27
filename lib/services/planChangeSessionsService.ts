@@ -227,6 +227,31 @@ export const planChangeSessionsService = {
   },
 
   /**
+   * READ one scope's thread without creating it — the entrance's mount read
+   * (MOTIR-910). The workspace opens on an item the user may never have planned
+   * before, and merely LOOKING at the door must not write a session row; so this
+   * returns `null` for a scope that has no thread yet, and the first submitted
+   * turn is what creates it (via {@link getOrCreateForScope}).
+   *
+   * Gated on `canBrowse` rather than `canEdit`: this is a read of a conversation,
+   * and the write paths (append / submit) keep their own edit gate.
+   */
+  async findForScope(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+  ): Promise<PlanChangeSessionDto | null> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
+
+    const existing = await planChangeSessionRepository.findByProjectAndScope(
+      pctx.projectId,
+      scope.scopeKey,
+      pctx.workspaceId,
+    );
+    return existing ? toDto(existing, pctx.workspaceId) : null;
+  },
+
+  /**
    * Open / resume the PROJECT-WIDE conversation — the shipped 7.30 entry point
    * the planning rail mounts on, unchanged. The one-element case of
    * {@link getOrCreateForScope} with the empty scope.

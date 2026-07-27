@@ -1086,6 +1086,7 @@
       "estimation": "Estimation",
       "fields": "Fields",
       "components": "Components",
+      "aiPlanning": "AI planning",
       "rules": "Rules"
     },
     "area": {
@@ -2028,6 +2029,63 @@
           "description": "This rule hasn't fired. When an item matches its trigger and conditions, each run appears here with its result, duration and the item that triggered it."
         }
       }
+    },
+    "aiPlanning": {
+      "title": "AI planning",
+      "pageDescription": "How Motir's planner keeps this project moving — when it expands the plan, how it packs sprints, and which model drafts the work.",
+      "empty": {
+        "description": "Create a project to configure its AI planning settings."
+      },
+      "autoPlan": {
+        "title": "Auto-plan",
+        "subtitle": "Expand the plan automatically when ready work runs low.",
+        "enableLabel": "Expand the plan automatically",
+        "enableHint": "When ready work drains, Motir drafts the next slice of the plan for you to review.",
+        "thresholdLabel": "Ready-work threshold",
+        "thresholdHint": "Motir starts drafting when fewer than this many work items are ready to start.",
+        "thresholdUnit": "ready items",
+        "thresholdInvalid": "Enter 1 or more ready items.",
+        "decreaseAria": "Decrease threshold",
+        "increaseAria": "Increase threshold",
+        "guardrail": "Auto-plan <strong>proposes</strong> an expansion for your approval — it never creates work without you."
+      },
+      "sprint": {
+        "title": "AI sprint planning",
+        "subtitle": "Pack ready work into short sprints that respect what blocks what.",
+        "enableLabel": "Plan sprints with Motir",
+        "enableHint": "Motir proposes the next sprints from ready work; you approve before any sprint is created.",
+        "lengthLabel": "Sprint length",
+        "lengthHint": "Sized for agent throughput, not human sprints. Widen it if your team works at human pace.",
+        "lengthUnit": "days",
+        "lengthInvalid": "Choose a sprint length between 1 and 14 days.",
+        "decreaseAria": "Decrease sprint length",
+        "increaseAria": "Increase sprint length",
+        "rationale": "An agent finishes a work item in minutes, so a two-week sprint hides a whole plan inside one bucket. Short sprints keep plan → build → review a loop you can actually watch."
+      },
+      "planner": {
+        "title": "Planner",
+        "subtitle": "The model that drafts plans, sprints and explanations for this project.",
+        "explanationsLabel": "Draft a why for each item",
+        "explanationsHint": "Every proposed work item gets a short “why this matters” you can read without opening the code.",
+        "modelLabel": "Planner model",
+        "modelHint": "Leave this on Default unless you have a reason to pin one. Usage is billed to this workspace either way.",
+        "modelDefault": "Default",
+        "modelDefaultSecondary": "recommended",
+        "modelThorough": "Thorough",
+        "modelFast": "Fast"
+      },
+      "footer": {
+        "save": "Save changes",
+        "dirtyHint": "Unsaved changes",
+        "invalidHint": "Fix the highlighted fields to save"
+      },
+      "savedTitle": "AI planning settings saved",
+      "savedDesc": "Cadence updated for {project}.",
+      "errorTitle": "Couldn't save",
+      "saveError": "Your AI planning settings weren't saved. Please try again.",
+      "readOnlyBanner": "Only a project admin can change AI planning settings.",
+      "notConnectedTitle": "Motir AI isn't connected.",
+      "notConnectedBody": "AI planning runs on Motir's cloud service. These settings are saved but stay inactive until this deployment is connected to Motir AI."
     },
     "apiTokens": {
       "heading": "API tokens",
@@ -4562,6 +4620,12 @@
       "creditsTitle": "You’re out of planning credits",
       "creditsBody": "Generating a plan is metered. Top up to keep planning with Motir AI.",
       "topUpCta": "Top up credits"
+    },
+    "entrance": {
+      "plan": "Plan",
+      "replan": "Re-plan",
+      "planAria": "Plan {item}",
+      "replanAria": "Re-plan {item}"
     }
   },
   "planningWorkspace": {
@@ -4581,6 +4645,7 @@
       "turnRefine": "turn {n} · refine",
       "submitted": "Sent to Motir AI",
       "composerPlaceholder": "Reply, or refine further…",
+      "composerPlaceholderReplan": "What’s wrong? What should change?",
       "composerPlaceholderTargets": "Ask Motir to plan around these…",
       "send": "Send",
       "retry": "Try again",
@@ -4787,11 +4852,26 @@
       "heading": "Where are your issues coming from?",
       "body": "Pick a source. Whatever you choose, Motir normalises it into the same work items — issues, types, statuses, priorities, assignees and labels.",
       "sources": {
-        "jira": { "name": "Jira", "meta": "Cloud · OAuth" },
-        "linear": { "name": "Linear", "meta": "OAuth" },
-        "github": { "name": "GitHub Issues", "meta": "OAuth · owner/repo" },
-        "plane": { "name": "Plane", "meta": "OAuth · Cloud / self-host" },
-        "csv": { "name": "CSV", "meta": "Upload · no credentials" }
+        "jira": {
+          "name": "Jira",
+          "meta": "Cloud · OAuth"
+        },
+        "linear": {
+          "name": "Linear",
+          "meta": "OAuth"
+        },
+        "github": {
+          "name": "GitHub Issues",
+          "meta": "OAuth · owner/repo"
+        },
+        "plane": {
+          "name": "Plane",
+          "meta": "OAuth · Cloud / self-host"
+        },
+        "csv": {
+          "name": "CSV",
+          "meta": "Upload · no credentials"
+        }
       },
       "connected": "Connected",
       "notConnected": "Not connected",

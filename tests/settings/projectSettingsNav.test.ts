@@ -64,6 +64,21 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     // on-disk automation/page.tsx).
     expect(PROJECT_SETTINGS_ROUTES).toContainEqual(expect.objectContaining({ id: 'automation' }));
   });
+
+  it('AI planning is a real browse-gated route ABOVE Rules in Automation (MOTIR-919)', () => {
+    const aiPlanning = PROJECT_SETTINGS_NAV.find((e) => e.id === 'ai-planning');
+    expect(aiPlanning?.href).toBe('/settings/project/ai-planning');
+    expect(aiPlanning?.labelKey).toBe('nav.aiPlanning');
+    expect(aiPlanning?.placeholder).toBeUndefined();
+    // Browse-gated, NOT admin-gated: every member SEES the cadence config and a
+    // non-admin reads it read-only (unlike the admin-only Rules row).
+    expect(aiPlanning?.access({ canBrowse: true, canManage: false })).toBe(true);
+    // Rail order within Automation — cadence sits above the rules editor.
+    const automationIds = groupSettingsNav(PROJECT_SETTINGS_NAV)
+      .find((g) => g.group === 'automation')!
+      .entries.map((e) => e.id);
+    expect(automationIds).toEqual(['ai-planning', 'automation']);
+  });
 });
 
 describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)', () => {

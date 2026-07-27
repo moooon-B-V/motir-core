@@ -58,7 +58,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 // Import the handlers AFTER the mocks are registered.
-const { POST: plan } = await import('@/app/api/work-items/[id]/ai/plan/route');
+const { POST: plan, GET: resume } = await import('@/app/api/work-items/[id]/ai/plan/route');
 const { GET: stream } = await import('@/app/api/work-items/[id]/ai/plan/[jobId]/stream/route');
 const { MotirAiOutOfCreditsError, MotirAiUnavailableError, MotirAiJobNotFoundError } =
   await import('@/lib/ai/errors');
@@ -243,5 +243,94 @@ describe('GET /api/work-items/[id]/ai/plan/[jobId]/stream', () => {
       })(),
     );
     expect((await stream(new Request(BASE), streamParams(story.id, 'j1'))).status).toBe(502);
+  });
+});
+
+// ─── The two NON-submitting halves the entrance added (MOTIR-910) ─────────────
+//
+// `GET` resumes the item's thread on mount; `{ resubmit: true }` re-sends what
+// the thread already accumulated (the rail's Retry). Both are additive: the
+// shipped `{ prompt }` submit above is unchanged, and a body with neither is
+// still a 400 (proved by the validation block above).
+
+function resumeReq(id: string, targetKeys: string[] = []): Request {
+  const qs = targetKeys.map((k) => `targetKey=${encodeURIComponent(k)}`).join('&');
+  return new Request(`${BASE}/api/work-items/${id}/ai/plan${qs ? `?${qs}` : ''}`);
+}
+
+describe('GET /api/work-items/[id]/ai/plan — resume the item’s thread', () => {
+  it('401s without a session and 404s with no active project', async () => {
+    session.current = null;
+    expect((await resume(resumeReq(story.id), planParams(story.id))).status).toBe(401);
+
+    session.current = { user: { id: fx.ownerId, email: 'o@e.com', name: 'O' } };
+    activeCtx.current = null;
+    expect((await resume(resumeReq(story.id), planParams(story.id))).status).toBe(404);
+  });
+
+  it('returns { session: null } for an item never planned — and submits nothing', async () => {
+    const res = await resume(resumeReq(story.id), planParams(story.id));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await res.json()).toEqual({ session: null });
+    expect(submitJobMock).not.toHaveBeenCalled();
+  });
+
+  it('returns the thread once a turn has been submitted', async () => {
+    await plan(planReq(story.id, { prompt: 'Break this up' }), planParams(story.id));
+
+    const res = await resume(resumeReq(story.id), planParams(story.id));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      session: { targetKeys: string[]; turns: Array<{ role: string; body: string }> } | null;
+    };
+    expect(body.session?.targetKeys).toEqual([story.identifier]);
+    expect(body.session?.turns.map((t) => t.role)).toEqual(['user', 'system']);
+  });
+
+  it('400s on a repeated targetKey list that is not work-item identifiers', async () => {
+    // The query form of the same defensive parse the POST body gets.
+    const res = await resume(
+      new Request(`${BASE}/api/work-items/${story.id}/ai/plan?targetKey=`),
+      planParams(story.id),
+    );
+    // A blank target is dropped by the scope canonicalization, not a 400 — what
+    // must never happen is adopting an unresolvable one.
+    expect(res.status).toBe(200);
+  });
+
+  it('404s on an item from another tenant — never 403', async () => {
+    const rival = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
+    const theirs = await createTestWorkItem(rival, { kind: 'story', title: 'Theirs' });
+    const res = await resume(resumeReq(theirs.id), planParams(theirs.id));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/work-items/[id]/ai/plan — { resubmit: true }', () => {
+  it('re-sends the accumulated intent with no new turn', async () => {
+    await plan(planReq(story.id, { prompt: 'Break this up' }), planParams(story.id));
+    submitJobMock.mockResolvedValueOnce({ jobId: 'job-contextual-2' });
+
+    const res = await plan(planReq(story.id, { resubmit: true }), planParams(story.id));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      jobId: string;
+      session: { turns: Array<{ role: string; body: string }> };
+    };
+    expect(body.jobId).toBe('job-contextual-2');
+    expect(body.session.turns.filter((t) => t.role === 'user').map((t) => t.body)).toEqual([
+      'Break this up',
+    ]);
+    expect(submitJobMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('still 400s when a body carries neither a prompt nor a resubmit flag', async () => {
+    // The shipped contract is untouched: `resubmit` must be exactly `true`.
+    for (const body of [{}, { resubmit: false }, { resubmit: 'yes' }]) {
+      const res = await plan(planReq(story.id, body), planParams(story.id));
+      expect(res.status).toBe(400);
+    }
+    expect(submitJobMock).not.toHaveBeenCalled();
   });
 });

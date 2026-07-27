@@ -54,6 +54,16 @@ export interface PlanningWorkspaceHostProps {
   hasItems: boolean;
   /** The launcher's context, parsed off the query by the page. */
   launch: PlanningLaunch;
+  /**
+   * The ANCHOR work item's database id, when the workspace was summoned from a
+   * work item (MOTIR-910's Plan / Re-plan entrance) and that item resolved. The
+   * page resolves `launch.itemKey` → id server-side, so no client component
+   * touches the service layer; the conversation then rides the item-scoped
+   * MOTIR-909 endpoints instead of the project-wide thread. `null` for every
+   * project / roadmap launch — and for an item key that no longer resolves,
+   * which degrades to the project conversation rather than a dead workspace.
+   */
+  anchorId?: string | null;
   /** Where Close / `Esc` return to. */
   backHref: string;
   /** The work item the Plan / Re-plan entrance opened on, resolved server-side
@@ -67,6 +77,7 @@ export function PlanningWorkspaceHost({
   projectName,
   hasItems,
   launch,
+  anchorId = null,
   backHref,
   initialTarget = null,
 }: PlanningWorkspaceHostProps) {
@@ -94,7 +105,10 @@ export function PlanningWorkspaceHost({
     setTreeVersion((v) => v + 1);
     router.refresh();
   }, [router]);
-  const { state, send, retry, approve, discard } = usePlanChangeConversation({ onApproved });
+  const { state, send, retry, approve, discard } = usePlanChangeConversation({
+    onApproved,
+    anchorId,
+  });
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
   // rail never has to know how a turn is scoped.

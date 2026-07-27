@@ -7,6 +7,7 @@ import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { parsePlanningLaunch, planningLaunchBackHref } from '@/lib/planning/launcher';
+import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
 
@@ -94,25 +95,36 @@ export default async function PlanningWorkspacePage({
   // honest empty canvas instead of the canvas's bare "nothing here" panel.
   const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
 
-  // The Plan / Re-plan entrance's item, resolved to the PRE-FILLED initial target
-  // of the `@`-mention target set (MOTIR-1491). Resolved HERE because the host is
-  // a client island and the launcher carries only the KEY, while the contextual
-  // submit is addressed by the work item's id — and because a Server Component
-  // reading through a service IS the 4-layer shape. The read is view-gated by the
-  // service, so a hand-edited `?item=` naming another tenant's key resolves to
-  // nothing; an unknown / inaccessible key simply opens with no target rather
-  // than erroring the whole workspace.
-  const initialTarget = launch.itemKey
-    ? await workItemsService
-        .getWorkItemByIdentifier(ctx.projectId, launch.itemKey, wsCtx)
-        .then((item) => ({
-          id: item.id,
-          identifier: item.identifier,
-          title: item.title,
-          kind: item.kind,
-        }))
-        .catch(() => null)
-    : null;
+  // The entrance's work item, resolved ONCE, server-side (MOTIR-910 + MOTIR-1491).
+  // It answers two needs with one read: the client host needs the item's database
+  // id to address the MOTIR-909 endpoints (the href carries only the human
+  // identifier), and the `@`-mention target set opens PRE-FILLED with that item.
+  // Resolved here because no client component may reach the service layer, and a
+  // Server Component reading through a service IS the 4-layer shape. The read is
+  // the same view-gated resolve the detail page uses, so an item in another tenant
+  // or one this actor cannot browse yields no anchor at all — the workspace then
+  // opens on the project conversation instead of erroring.
+  let anchorId: string | null = null;
+  let initialTarget: PlanningTarget | null = null;
+  if (launch.itemKey) {
+    try {
+      const anchor = await workItemsService.getWorkItemByIdentifier(
+        ctx.projectId,
+        launch.itemKey,
+        wsCtx,
+      );
+      anchorId = anchor.id;
+      initialTarget = {
+        id: anchor.id,
+        identifier: anchor.identifier,
+        title: anchor.title,
+        kind: anchor.kind,
+      };
+    } catch {
+      anchorId = null;
+      initialTarget = null;
+    }
+  }
 
   return (
     <PlanningWorkspaceHost
@@ -120,6 +132,7 @@ export default async function PlanningWorkspacePage({
       projectName={ctx.project.name}
       hasItems={roots.nodes.length > 0}
       launch={launch}
+      anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
       initialTarget={initialTarget}
     />
