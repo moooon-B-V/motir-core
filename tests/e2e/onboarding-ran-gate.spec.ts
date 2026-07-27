@@ -152,8 +152,14 @@ test('never-onboarded project mid-hand-off: an active migrate run past set-up le
   await expect(page).toHaveURL(/\/onboarding(\?|$)/);
 
   // A COMPLETED run must not keep the router disarmed — once the migrate flow is
-  // finished the tree is again the project's understanding.
+  // finished the tree is again the project's understanding. The observable end
+  // state is `/roadmap`, not `/onboarding/migrate`: the router DOES re-arm and
+  // redirect to the wizard, but the wizard immediately forwards a completed run
+  // onward (migrate/page.tsx — "onboarding is done"), so the browser never rests
+  // on the intermediate URL. Landing anywhere other than `/onboarding/discovery`
+  // is what proves the re-arm — a still-disarmed router would have rendered the
+  // discovery loop and stayed put.
   await setStep('discovery', 'completed');
   await page.goto('/onboarding/discovery');
-  await page.waitForURL('**/onboarding/migrate');
+  await page.waitForURL('**/roadmap');
 });
