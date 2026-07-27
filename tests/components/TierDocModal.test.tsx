@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { TierDocModal } from '@/components/planning/TierDocModal';
 import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
@@ -58,7 +58,12 @@ describe('TierDocModal', () => {
     // The plain-language tier label (TIER_META.discovery.label) is the doc heading;
     // the jargon "# Discovery (Tier 1)" title is stripped by DirectionDocView.
     expect(await screen.findByText('Understanding your project')).toBeTruthy();
-    expect(screen.getByText(/building an internal tool for a small team/i)).toBeTruthy();
+    // Await the doc BODY — that is the authoritative "the fetch resolved and
+    // DirectionDocView rendered" signal. The heading above is NOT: the modal
+    // header renders the tier label while the body is still the loading
+    // spinner, so a non-retrying `getByText` here raced the fetch effect
+    // (MOTIR-1737 / MOTIR-1736's shape).
+    expect(await screen.findByText(/building an internal tool for a small team/i)).toBeTruthy();
     expect(global.fetch).toHaveBeenCalledWith('/api/ai/pre-plan', expect.anything());
   });
 
@@ -113,6 +118,10 @@ describe('TierDocModal', () => {
     render(<TierDocModal tier="vision" onClose={() => {}} />);
 
     expect(await screen.findByText(/isn't ready yet/i)).toBeTruthy();
+    // Flush pending passive effects before the negative assertion, so "no body"
+    // means the empty state really excludes it — not that the render is still
+    // in flight (MOTIR-1737).
+    await act(async () => {});
     // The doc body is never rendered in the empty state.
     expect(screen.queryByText(/building an internal tool/i)).toBeNull();
   });

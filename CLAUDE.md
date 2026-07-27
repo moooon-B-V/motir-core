@@ -652,6 +652,28 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
 - ❌ `await page.waitForTimeout(500)` as a synchronisation mechanism.
 - ❌ Merging a spec that passes only intermittently — it taxes every open PR via merge-with-main CI.
 
+### The component-test audit lane — `pnpm test:late-effects` (MOTIR-1737)
+
+The component-test half of this rule is **machine-checkable**, because the race
+is an ORDERING bug, not a speed bug. `tests/helpers/lateEffects.ts` defers
+React's passive-effect flush behind the zero-delay timer RTL drains on, which
+makes the latent "the assertion resolved before the effect landed" failure
+DETERMINISTIC — and because it only re-orders two already-queued callbacks, it
+adds no delay and so cannot manufacture a false "too slow" failure.
+
+- **Run it before merging a component-heavy PR:** `pnpm test:late-effects`
+  (config: `vitest.late-effects.config.ts`; scope: the happy-dom files).
+- **It also runs nightly on `main`** — `.github/workflows/component-effect-audit.yml`
+  — deliberately NOT on every PR: the shim re-orders the scheduler globally, so
+  a failure it surfaces is usually in a file the PR never touched, and gating on
+  it would red-light innocent diffs.
+- **A failure there is a REAL bug in the test**, never a reason to sleep: await
+  the authoritative signal, or `await act(async () => {})` before a negative
+  assertion.
+- **Known instrument artifact:** a file calling `vi.useFakeTimers()` replaces
+  `setTimeout`, so the shim's deferral never fires and the file stalls. Such
+  files are listed in the config's `exclude` — verify them by hand.
+
 ---
 
 ## ⚠️ Page state after a mutation — server refresh vs. client-island refetch

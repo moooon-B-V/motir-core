@@ -1,0 +1,90 @@
+name: Component effect-ordering audit
+
+# The MOTIR-1737 audit lane. Runs the browser-environment (happy-dom) test
+# files with `tests/helpers/lateEffects.ts` in `setupFiles`, which defers
+# React's passive-effect flush behind the `setTimeout(0)` React Testing Library
+# drains on. That turns the latent "the assertion resolved before the effect
+# landed" race into a DETERMINISTIC failure, with no added delay — see
+# tests/helpers/lateEffects.ts for the full mechanism and
+# vitest.late-effects.config.ts for the scope + the one excluded file.
+#
+# WHY NIGHTLY, NOT PR CI: the shim DETECTS the race class, it does not remove
+# it. On every PR it would double the component suite's cost and — because it
+# re-orders the scheduler globally — a failure it surfaces is usually in a file
+# the PR never touched, red-lighting an innocent diff (the exact tax the
+# flaky-test rule in CLAUDE.md exists to prevent). Nightly on `main` catches a
+# newly-introduced instance against the branch that introduced it, and
+# `workflow_dispatch` lets anyone run it on demand before merging a
+# component-heavy PR.
+#
+# A failure here is a REAL test bug: fix it by awaiting the authoritative
+# signal (`findBy*` / a retrying `waitFor`), or flush with
+# `await act(async () => {})` before a negative assertion. Never by sleeping.
+
+on:
+  schedule:
+    # 03:30 UTC daily — after the day's merges have landed on main.
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Vitest component suite (late-effect ordering)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prodect
+          POSTGRES_PASSWORD: prodect
+          POSTGRES_DB: prodect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prodect -d prodect"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # The component files render, they don't hit Postgres — but the shared
+      # `perWorkerDb` setupFile imports `@/lib/db`, so the suite still needs a
+      # reachable database. Same service + URL as the `test` job in ci.yml.
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      # Throwaway CI values the auth module reads at import time — identical to
+      # the `test` job. No real OAuth happens here.
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      BLOB_READ_WRITE_TOKEN: vercel_blob_rw_ci_test_only_placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-audit
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-audit
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-audit.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-audit.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm test:late-effects

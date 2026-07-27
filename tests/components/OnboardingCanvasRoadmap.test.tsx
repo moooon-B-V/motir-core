@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { OnboardingCanvas } from '@/components/onboarding/OnboardingCanvas';
@@ -63,6 +63,11 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     expect(await screen.findByText('Billing epic')).toBeTruthy(); // inside the preview
     expect(document.querySelector('[data-node-id="__plan__"]')).not.toBeNull();
     expect(document.querySelector('[data-node-id="plan"]')).not.toBeNull();
+    // Flush pending passive effects before the NEGATIVE assertions below — an
+    // awaited `findBy*` can resolve with the roadmap effect still queued, which
+    // would make "e1 is absent" / "no edge legend" pass for the wrong reason
+    // (nothing rendered yet) rather than because the level really excludes them.
+    await act(async () => {});
     expect(document.querySelector('[data-node-id="e1"]')).toBeNull(); // not yet drilled
     expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
     // The station serpentine is `flow`, not blocked-by deps → no dependency legend.
@@ -71,8 +76,15 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     // Selecting the preview, then its Open affordance, drills to the real epic root.
     fireEvent.keyDown(document.querySelector('[data-node-id="__plan__"]')!, { key: 'Enter' });
     fireEvent.click(await screen.findByTestId('drill-button'));
-    expect(await screen.findByText('Billing epic')).toBeTruthy();
-    expect(document.querySelector('[data-node-id="e1"]')).not.toBeNull();
+    // The AUTHORITATIVE signal that the drill landed is the real epic NODE.
+    // `findByText('Billing epic')` is NOT that signal: the same text is already
+    // on screen inside the top-level preview card, so it resolves against the
+    // PRE-drill render and the assertion below then races the drill's
+    // effect-driven level fetch (MOTIR-1737 / MOTIR-1736's shape).
+    await waitFor(() => {
+      expect(document.querySelector('[data-node-id="e1"]')).not.toBeNull();
+    });
+    expect(screen.getByText('Billing epic')).toBeTruthy();
   });
 
   it('without a projectKey, no roadmap is read and only the stations show', async () => {
