@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { fireEvent } from '@testing-library/dom';
 import {
@@ -34,6 +34,12 @@ function el(id: string) {
   return document.querySelector(`[data-node-id="${id}"]`);
 }
 
+// Asserting a mock in this file: an EVENT-HANDLER callback (`onSelect`, `onView`,
+// the "Reset layout" click → `onResetPositions`, `requestFullscreen`) is invoked
+// SYNCHRONOUSLY inside the dispatched handler, so a plain `expect(mock)` right
+// after `fireEvent` is deterministic and needs no wait. An EFFECT-driven callback
+// (the auto-reset below) is NOT — it must be awaited via `waitFor`. See the note
+// on that test.
 describe('ProjectRoadmapCanvas', () => {
   it('renders the root level, bare (no breadcrumb / search) by default', async () => {
     render(<ProjectRoadmapCanvas loadLevel={loadLevel} />);
@@ -110,6 +116,15 @@ describe('ProjectRoadmapCanvas', () => {
     expect(onResetPositions).toHaveBeenCalledWith(['S']); // only the arranged node
   });
 
+  // `onResetPositions` is fired from the AUTO-RESET *passive effect*, not from the
+  // render — so a rendered node is the WRONG signal to assert it on. React flushes
+  // passive effects on a scheduler callback AFTER commit, and RTL's async wrapper
+  // turns the act environment OFF for `findBy*` and drains with a bare
+  // `setTimeout(0)`; under CI load that macrotask can win the race against the
+  // scheduler, so `findByText('c')` resolves with the effect still pending and a
+  // plain `expect(mock)` samples 0 calls. Wait on the callback itself — the
+  // authoritative signal (CLAUDE.md § E2E tests wait on the AUTHORITATIVE signal /
+  // notes.html #37, at the component altitude). This is MOTIR-1736.
   it('auto-resets a level when its auto-laid node set changes (a re-plan)', async () => {
     const onResetPositions = vi.fn();
     let levelNodes = [node('A', 'a'), node('B', 'b')];
@@ -118,6 +133,10 @@ describe('ProjectRoadmapCanvas', () => {
       <ProjectRoadmapCanvas loadLevel={load} onResetPositions={onResetPositions} reloadKey="1" />,
     );
     await screen.findByText('a');
+    // Flush the pending effect pass BEFORE the negative assertion — otherwise it
+    // races the same way and would pass vacuously (green even if the component
+    // wrongly reset on first load).
+    await act(async () => {});
     expect(onResetPositions).not.toHaveBeenCalled(); // first render: no prior signature
     // the level's items change → bump reloadKey to refetch
     levelNodes = [node('A', 'a'), node('C', 'c')];
@@ -125,7 +144,9 @@ describe('ProjectRoadmapCanvas', () => {
       <ProjectRoadmapCanvas loadLevel={load} onResetPositions={onResetPositions} reloadKey="2" />,
     );
     await screen.findByText('c');
-    expect(onResetPositions).toHaveBeenCalledWith(expect.arrayContaining(['A', 'C']));
+    await waitFor(() =>
+      expect(onResetPositions).toHaveBeenCalledWith(expect.arrayContaining(['A', 'C'])),
+    );
   });
 
   it('search-to-focus highlights a match in the current level', async () => {
