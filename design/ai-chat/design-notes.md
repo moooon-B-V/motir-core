@@ -726,3 +726,203 @@ The three-file set under `design/ai-chat/` for this surface:
 `deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
 MOTIR-909 (session API) + MOTIR-1489 (entrance) + MOTIR-1399 (work-item-link
 chip, shipped); gates MOTIR-1491 (code implementation).
+
+---
+
+## ⭐ Changing a plan is a CONVERSATION — the plan-change mode + the retired "Augment from prompt" door (MOTIR-1727, 2026-07-27)
+
+**What changed, and why.** Product decision (Yue, 2026-07-27): **a change to the
+plan is ALWAYS a conversation** — a single prompt is not enough to reshape a
+plan. The shipped one-shot **"Augment from prompt"** entry (`MOTIR-903`, done) is
+therefore retired: a `Button` in the `/backlog` + `/items` toolbars opening a
+`Modal` with ONE `Input`, POSTing `{ prompt }` and rendering the delta in a fixed
+bottom-right `PlanEditsReviewDock` — **with no way to refine**. If the result is
+wrong you re-run a different prompt. That is a vending machine, not a planning
+conversation, and it is a **second, bespoke AI surface** beside the universal
+workspace (breaking the "all AI conversation rides ONE surface" invariant).
+Story **MOTIR-1726** replaces it with the conversational surface and removes the
+button.
+
+**This amendment adds a STATE, it does not redraw the workspace.** The
+`planning-workspace.mock.html` section above already specifies the four MODES as
+states of the one surface, "each tied to its entrance door" — its **sheet 3**
+names _"Augment / re-plan — 7.11 · Door: a project surface with a plan"_. That
+mode was named but never drawn. This asset draws it, and sheet 3's mode card now
+points here. **Nothing structural is new**: the two-pane frame, the canvas node +
+edge language, the chat rail, the confirm-to-persist bar and the close-with-pending
+guard are all composed verbatim from that asset.
+
+**Grounded in the workflow-defining subtasks** (the design-content dependency
+rule — design TO the spec, never invent the flow): **MOTIR-1729** (the workspace
+HOST for an established project — mode + originating context, replacing the
+launcher's dead-end round-trip), **MOTIR-1730** (the conversational rail — turn
+list, composer, streamed delta, in-canvas diff, approve/discard, and the rail
+STAYS OPEN after either), **MOTIR-1728** (the persisted, project-scoped session
+whose ACCUMULATED turns drive the already-shipped `POST /api/ai/augment` job
+contract — no engine change), and **MOTIR-1731** (the removal + its i18n and E2E
+sweep).
+
+**Asset:** `plan-change-conversation.mock.html` (source) +
+`plan-change-conversation.png` (full-page export). A seven-panel review board:
+
+| Panel | What it shows                                                                                                                                                                                                   |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **The door** — the shipped `/backlog` chrome with the hero pill in `TopNav`, the floating **M** orb, ⌘K, and the `/roadmap` empty-state CTA; the augment button marked for retirement                           |
+| **2** | **Opening it** on an ESTABLISHED project — the overlay over the (dimmed, inert) backlog, canvas seeded with the project's EXISTING tree, mode chip `plan change`, the **empty** conversation with starter chips |
+| **3** | **The conversation** — turn 1 → proposal → turn 2 REFINES it → the **streaming** reply (caret + `Spinner`), canvas updating incrementally                                                                       |
+| **4** | **Review** — the proposed changes as a **DIFF ON THE CANVAS** (add / change / remove) with `done` work **LOCKED**, the confirm-to-persist bar, and the corner `PlanEditsReviewDock` shown as **was → now**      |
+| **5** | **The removed door** — `/backlog` and `/items` toolbars **today vs after**, drawn to scale, plus what deliberately STAYS                                                                                        |
+| **6** | **Rail states** — empty · streaming · review · error · out of credits · after approve                                                                                                                           |
+| **7** | **What it composes** — every element mapped to the shipped component or design that owns it                                                                                                                     |
+
+### ⭐ Drawn against SHIPPED REALITY — rendered before drawn
+
+Per design-against-shipped-reality (and lesson #73 — a surface reasoned from
+`.tsx` alone silently drifts), every app strip on this board was **rendered from
+the running app first** (production build, signed in, a PayFlow project, with
+`MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` set so the launcher mounts). What the
+render corrected:
+
+- **The `TopNav` right cluster order** is `[Plan with AI] [Build in public]
+[+ Create ⌘C] [Search ⌘K] [bug] [screen] [bell] [avatar]` — the hero pill
+  **leads** the cluster.
+- **The two toolbars put the augment button in DIFFERENT places.** `/backlog`:
+  `[View all work items] [Filter] [Advanced] [Saved ▾] [+ New work item]
+[Augment from prompt]` — it **trails**. `/items`: `[Archived] [Filter]
+[Advanced] [Saved ▾] [Tree ▾] [Augment from prompt] [+ New work item]` — it sits
+  **between** the view switcher and New work item. Panel 5 draws both.
+- **The vocabulary is "work item", not "issue"** — the real labels are
+  _New work item_, _View all work items_, _Work Items_.
+- **The launcher is gated**: `(authed)/layout.tsx:153` mounts the pill AND the FAB
+  only when `isMotirAiConfigured() && activeProject`. With AI unconfigured the
+  header has no pill at all — worth knowing before assuming the door is present.
+
+### ⚠️ The door is GLOBAL — which is why the removal costs no access
+
+The entrance was already corrected to be **global, not per-surface** (sheet 4,
+2026-06-24): the header pill + ⌘K + the floating orb are on **every** PM screen,
+so "Plan with AI" is summonable from `/backlog`, `/items` and `/roadmap` without
+any of them owning a button. **"Augment from prompt" is the leftover of the older
+per-surface model.** Retiring it removes a duplicate door, not a capability.
+
+**But the door currently dead-ends on an established project** (verified, rung 2):
+`planningWorkspaceHref()` returns `/onboarding?mode=…&from=…`, **no file reads
+`?mode=`**, and `app/(onboarding)/onboarding/page.tsx` redirects an
+onboarding-ran project to `/roadmap` — so the pill round-trips. MOTIR-1729 owns
+the host that makes panel 2 real; this design does not assume it exists today.
+
+### The conversation — multi-turn is the whole point (panel 3)
+
+- **Turn 2 REFINES turn 1; it does not re-run it.** Each turn appends to a
+  persisted, project-scoped session and the **ACCUMULATED** intent is submitted
+  (MOTIR-1728), so "split it into monthly and yearly" lands on the proposal
+  already on the canvas. The session is persisted, so **re-opening the workspace
+  resumes the same thread**.
+- **Streaming** uses the shipped `DiscoveryChatRail` language unchanged: partial
+  text in an `aria-live="polite"` region with a caret, then the `Spinner` row
+  while the delta is computed. The canvas places each proposed item as it arrives.
+- **Empty is never a blank screen** — the canvas already shows the plan; only the
+  conversation is empty. Three **starter chips** (outcome-phrased: _add work to an
+  epic_ / _re-sequence what's left_ / _drop something we don't need_) prefill the
+  composer. They are hints, not a mode menu.
+
+### ⚠️ The review surface is the CANVAS, not a corner dock (panel 4)
+
+The delta renders **on the canvas, on the node it affects** — this replaces
+`PlanEditsReviewDock` **for this flow**. Four node states, each pairing a border
+treatment + a glyph + a word (never colour alone):
+
+| State      | Treatment                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| **add**    | dashed `--el-accent` border + faint accent-tinted surface + `＋ add` corner tag + `added` pill   |
+| **change** | solid `--el-info` border + `--el-tint-sky` wash + `✎ change` tag + `changed` pill + what changed |
+| **remove** | dashed `--el-danger` border + `--el-tint-rose` wash + struck-through title + `− remove` tag      |
+| **locked** | **hatched** surface + 🔒 lock glyph + `✓ done` + `can't change` pills + `locked` tag             |
+
+- **`done` work is LOCKED and the lock is legible.** The completion-aware
+  guarantee (7.11) becomes visible: the engine proposes AROUND finished work,
+  never over it, and the AI says so in the rail. An attempted immutable edit is
+  rejected server-side.
+- **Confirm-to-persist.** Nothing reaches the DB until **Approve changes**;
+  **Discard** writes nothing. **After either, the conversation stays open** — that
+  is what makes it a conversation rather than a transaction. Dismissing with a
+  pending proposal raises the shipped close-with-pending guard (sheet 6).
+- **Page state after approve:** the canvas is a **client island that owns its own
+  state**, so it will NOT see `router.refresh()` — it needs an explicit refetch
+  trigger; the server-rendered counts behind the overlay take the refresh. Both,
+  where both apply (`motir-core/CLAUDE.md`).
+- Edges keep the canvas's own language: firm neutral parent→child, **dashed
+  accent** for proposed edges, dashed `--el-danger` into a removed node.
+
+### ⚠️ The REMOVED door is drawn too (panel 5) — the removal corollary
+
+Per `notes.html` **#154**, a decision that **removes** an affordance must spawn
+its matching design amendment in the same pass, or the design of record keeps
+depicting a control the product no longer has. Panel 5 is that amendment: the
+`/backlog` and `/items` toolbars are drawn **today vs after**, to scale, one above
+the other. **Nothing else shifts** — the toolbars are a plain flex row, so the
+neighbour simply becomes the last control.
+
+**What is lost:** one control on two surfaces, its `Modal` (a single `Input` +
+Submit), and the three `planEdits.augmentPrompt*` keys in **both** locales.
+**What deliberately stays:** the item-scoped `expand` / `replan` row actions
+(`PlanEditsTrigger`) and their dock, the `/ready` expansion nudge, and
+`POST /api/ai/augment` with its whole job path — the conversation drives that
+same endpoint. Converging the row actions onto this workspace rides the per-item
+entrance (MOTIR-812), not this story.
+
+### States (panel 6)
+
+**Empty** (opener + starter chips; the canvas still shows the plan) ·
+**streaming** (partial text + `Spinner`, Send disabled until the turn settles) ·
+**review** (rail mirrors the canvas bar's counts) · **error** (`role="alert"`,
+**recoverable in place** — the thread and any prior proposal survive a retry) ·
+**out of credits** (distinct from an error: nothing failed, the capability is
+cloud-gated; the canvas stays readable) · **after approve** (the thread
+continues — a plan change is rarely one change).
+
+### Primitives composed (no hand-rolling)
+
+| Element                                           | Built from                                                                                                                                                  |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the two-pane workspace frame                      | the shipped `components/planning/PlanningWorkspace.tsx` (`grid grid-cols-1 md:grid-cols-[1fr_22rem]`)                                                       |
+| the header hero pill + the floating orb           | the shipped `PlanWithAILauncher` + `PlanWithAIFab`, mounted by `(authed)/layout.tsx` — never a hand-rolled AI affordance                                    |
+| canvas, nodes, edges, zoom, search, crumb         | the standalone work-item canvas — design `design/roadmap/` (MOTIR-1009) over `ProjectRoadmapCanvas` / `PlanningCanvas`; composed, never redrawn             |
+| the diff rendering                                | `components/planning/PlanReviewCanvas.tsx` (already feeds proposed items into the canvas as data); this asset adds only the change / remove / locked states |
+| the chat rail (head, bubbles, drafting, composer) | the shipped `DiscoveryChatRail` language — `Card`/`Avatar`/`Input`/`Spinner`/`Button`; the only per-mode difference is the mode chip                        |
+| confirm-to-persist bar + pending guard            | `planning-workspace.mock.html` sheets 2 + 6, unchanged — only the copy names add/change/remove/locked counts                                                |
+| the @-mention target picker in the composer       | already designed — `target-picker.mock.html` (MOTIR-1490); composes in unchanged, not redrawn here                                                          |
+| the multi-turn session behind it                  | MOTIR-1728 — accumulated turns → the shipped `POST /api/ai/augment` contract; no new job kind                                                               |
+| icons                                             | lucide-react (`Sparkles`, `Lock`, `Plus`, `Pencil`, `Minus`)                                                                                                |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*` (the real light values inlined at the top of
+  the mock, as the sibling `design/ai-chat/` mocks do). Every non-token fill is a
+  `color-mix()` of two tokens — **no invented hue**; the only raw values are the
+  body backdrop and the canvas grid-dot texture (non-semantic decoration). Tinted
+  chips put the hue in the **background** with `--el-text-strong` (finding #35,
+  AA). Work-item type hues are `--el-type-*`; the hero pill's gradient + glow are
+  palette-derived (`--el-accent` → `--el-highlight`) with the label over the
+  accent-dominant region.
+- **Shape** strictly via element-semantic tokens — node = `--radius-card`, pills =
+  `--radius-badge`, buttons = `--radius-btn`, the composer input =
+  `--radius-input`, toolbar controls + rail rows = `--radius-control`, elevation =
+  `--shadow-{subtle,card,elevated}` — so a `[data-style]` swap reshapes the surface.
+  `rounded-full` only on the status dot, avatars and the orb.
+- **Not colour alone** — every diff state pairs a border treatment + a glyph
+  (＋ ✎ − 🔒) + a word; every rail state pairs its icon with a sentence.
+- **A11y** — the canvas and the rail are labelled regions; the streaming reply is
+  `aria-live="polite"`, the error is `role="alert"`; a node's diff state is in its
+  accessible name ("Recurring invoices, proposed addition"), not its border alone;
+  a locked node is `aria-disabled` and says why; Approve / Discard are real buttons
+  in the tab order; `Esc` closes through the pending guard.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface:
+`design-notes.md` (this section) · `plan-change-conversation.mock.html` (source) ·
+`plan-change-conversation.png` (full-page export, Playwright chromium — light,
+`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Composes
+`planning-workspace.mock.html` (MOTIR-1193) + `design/roadmap/` (MOTIR-1009);
+grounded in MOTIR-1728 / 1729 / 1730 / 1731; gates those four code subtasks.
