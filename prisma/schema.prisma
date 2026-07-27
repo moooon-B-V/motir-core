@@ -638,6 +638,52 @@ model Project {
   /// (the toggle is SURFACED by the 7.13 AI-settings panel, MOTIR-919), so every
   /// existing project backfills to OFF with no data step.
   aiGenerateExplanations Boolean             @default(false) @map("ai_generate_explanations")
+  /// AUTO-PLAN cadence switch (Story 7.13 · MOTIR-915). When true, the cadence
+  /// engine (MOTIR-916) watches the project's ready set and fires a 7.4
+  /// expand-the-plan run once it drains below `aiAutoPlanThreshold`. Default
+  /// `false` — the feature is OFF until a project opts in, so every existing
+  /// project backfills to OFF with no migration data step. An open-core
+  /// `Project` COLUMN (not an AI-only table): the open PM core reads it to
+  /// decide whether to schedule the run at all.
+  aiAutoPlanEnabled      Boolean             @default(false) @map("ai_auto_plan_enabled")
+  /// The ready-set low-water mark the auto-expand fires at (Story 7.13 ·
+  /// MOTIR-915) — "fewer than N ready items left ⇒ expand". Default `5`,
+  /// mirroring Principle #17's "enough work, not all the work" (a
+  /// coding-agent-paced sprint drains a handful of items at a time). Must be
+  /// ≥ 1: a threshold of 0 could never fire (the ready set is never negative),
+  /// so it is a misconfiguration, not a way to disable the feature —
+  /// `aiAutoPlanEnabled` is. The bound is enforced APP-SIDE by
+  /// `projectAiSettingsService` with a typed 422 (never silently clamped at the
+  /// DB); the column carries no CHECK constraint, matching how every other
+  /// project-settings column here is validated in the service.
+  aiAutoPlanThreshold    Int                 @default(5) @map("ai_auto_plan_threshold")
+  /// AI SPRINT-PLANNING switch (Story 7.13 · MOTIR-915). When true, the
+  /// `plan_sprint` packing job (MOTIR-917) may pack the ready set into short
+  /// dependency-aware sprints, persisted through the Epic-4 sprint services
+  /// (MOTIR-918). Default `false` — OFF until opted in, so an existing project's
+  /// sprint board is never rearranged by a feature nobody enabled.
+  aiSprintPlanningEnabled Boolean            @default(false) @map("ai_sprint_planning_enabled")
+  /// The length, in days, of a sprint the AI packs (Story 7.13 · MOTIR-915).
+  /// Default `2` — the deliberate, RECORDED deviation from the mirror's 1–4
+  /// WEEK sprint: Motir's executor is a coding agent that lands a subtask in
+  /// tens of minutes, so a two-week sprint would hold months of agent
+  /// throughput and make the cadence meaningless. Bounded to
+  /// {@link AI_SPRINT_LENGTH_DAYS_MIN}..{@link AI_SPRINT_LENGTH_DAYS_MAX} (1–14)
+  /// app-side, so a human-paced team can still stretch it to a fortnight
+  /// without the column becoming a free-form integer.
+  aiSprintLengthDays     Int                 @default(2) @map("ai_sprint_length_days")
+  /// PER-PROJECT planner-model override (Story 7.13 · MOTIR-915). NULL — the
+  /// default — means "use the platform default planner model", which is
+  /// motir-ai's `plannerModel()` (`PLANNER_MODEL` env → `PLANNER_MODELS.default`,
+  /// 7.2.2); core NEVER hardcodes a model id. Modelled as a nullable STRING, not
+  /// an enum: the model vocabulary is owned by the 9.0 metering gateway +
+  /// motir-ai, so an enum in the open core would force a core migration every
+  /// time a channel is added and would drift from the real registry. The service
+  /// validates only the SHAPE of the override (a trimmed, bounded,
+  /// model-id-charset token) and normalizes `''` → NULL, so clearing the field
+  /// in the settings panel means "back to the default" rather than "the empty
+  /// model".
+  aiPlannerModel         String?             @map("ai_planner_model")
   /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
   /// validated at the service layer against the avatar registry
   /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier

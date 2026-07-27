@@ -136,6 +136,26 @@ export class AliasNotFoundError extends Error {
   }
 }
 
+// The project AI-planning settings patch is invalid (Story 7.13 · Subtask
+// MOTIR-915) — an out-of-range `aiAutoPlanThreshold` / `aiSprintLengthDays`, a
+// non-integer where an integer is required, or a malformed `aiPlannerModel`
+// override. The bounds live in `lib/projectAiSettings/limits.ts`; the value is
+// REJECTED, never silently clamped at the DB, so a settings panel that sends a
+// bad number learns about it instead of quietly persisting something else.
+// `field` lets the panel attach the message to the right control. The entity is
+// well-formed but the value semantics are wrong → 422 (the same family as
+// `InvalidScaleConfigError`).
+export class InvalidAiSettingsError extends Error {
+  readonly code = 'INVALID_AI_SETTINGS' as const;
+  constructor(
+    readonly field: 'aiAutoPlanThreshold' | 'aiSprintLengthDays' | 'aiPlannerModel',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'InvalidAiSettingsError';
+  }
+}
+
 export class ProjectNotFoundError extends Error {
   readonly code = 'PROJECT_NOT_FOUND' as const;
   constructor(projectId: string) {

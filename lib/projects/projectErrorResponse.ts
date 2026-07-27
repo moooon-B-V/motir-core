@@ -4,6 +4,7 @@ import {
   IdentifierReservedError,
   IdentifierTakenError,
   IdentifierUnchangedError,
+  InvalidAiSettingsError,
   InvalidAvatarError,
   InvalidIdentifierError,
   InvalidProjectNameError,
@@ -25,7 +26,18 @@ import {
 //   InvalidProjectNameError / InvalidIdentifierError
 //       / IdentifierUnchangedError / InvalidAvatarError       → 400
 //   IdentifierTakenError / IdentifierReservedError           → 409
+//   InvalidAiSettingsError                                   → 422 (Story 7.13 ·
+//       MOTIR-915 — a well-formed patch carrying an out-of-range threshold /
+//       sprint length or a malformed planner-model override; the value semantics
+//       are wrong, so it is the same 422 family as InvalidScaleConfigError, not a
+//       400 malformed-body)
 export function projectErrorResponse(err: unknown): NextResponse | null {
+  if (err instanceof InvalidAiSettingsError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, field: err.field },
+      { status: 422 },
+    );
+  }
   if (err instanceof ProjectNotFoundError || err instanceof AliasNotFoundError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
   }
