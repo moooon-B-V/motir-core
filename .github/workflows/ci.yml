@@ -614,8 +614,14 @@ jobs:
           SEED_REPORTING_ITEMS: ${{ matrix.seed_reporting_items }}
           SEED_REPORTING_RICH_ITEMS: ${{ matrix.seed_reporting_rich_items }}
 
-      # On a GREEN acceptance run, publish the recorded video to its STORY's
-      # acceptance panel (BYOK). Auth is KEYLESS GitHub OIDC first (MOTIR-1650) —
+      # On a GREEN acceptance run, publish EVERY recorded video to its OWN
+      # STORY's acceptance panel (BYOK). The lane carries one chaptered
+      # acceptance spec per user-facing story (MOTIR-1644 / MOTIR-1700), and
+      # MOTIR-1734 made the uploader publish them ALL — it used to take whichever
+      # recording `readdirSync` yielded first and silently drop the rest, so on a
+      # multi-story run only one story got its receipt (observed: PR #1620
+      # published MOTIR-811 and discarded MOTIR-1726's clip).
+      # Auth is KEYLESS GitHub OIDC first (MOTIR-1650) —
       # the moooon repo is App-connected, so no secret is needed;
       # MOTIR_UPLOAD_TOKEN is the PAT fallback. The uploader no-ops when NEITHER
       # is available (a fork PR gets no OIDC and no secret), so forks /
