@@ -1,0 +1,114 @@
+name: Postgres for CI
+description: >-
+  Start the CI Postgres container from a registry MIRROR, retrying the pull far
+  beyond the runner's built-in 3 attempts. Replaces a `services: postgres:`
+  block, which pulls during `Initialize containers` — a step that runs before
+  `actions/checkout` and offers no retry hook of its own, so a transient Docker
+  Hub outage red-lights the whole job with zero tests run (MOTIR-1742).
+
+inputs:
+  user:
+    description: POSTGRES_USER for the container (and the role tests connect as).
+    required: false
+    default: prodect
+  password:
+    description: POSTGRES_PASSWORD for the container.
+    required: false
+    default: prodect
+  database:
+    description: POSTGRES_DB created at first boot.
+    required: false
+    default: prodect
+  port:
+    description: Host port to publish 5432 on. DATABASE_URL must match.
+    required: false
+    default: '5432'
+  image-tag:
+    description: Postgres image tag. Keep in sync with docker-compose.yml.
+    required: false
+    default: 16-alpine
+  container-name:
+    description: Docker container name (one Postgres per job, so the default is fine).
+    required: false
+    default: ci-postgres
+
+runs:
+  using: composite
+  steps:
+    # Three INDEPENDENT sources for the same official image, tried in order, the
+    # whole list retried 3× with backoff — so the pull fails only if all three
+    # registries are unreachable at once, not when Docker Hub alone blips.
+    # public.ecr.aws/docker/library/* and mirror.gcr.io/library/* are the
+    # official-image mirrors AWS and Google publish; Docker Hub stays last as
+    # the canonical source.
+    - name: Pull the Postgres image (mirror first, retried)
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ inputs.image-tag }}
+      run: |
+        set -uo pipefail
+        sources=(
+          "public.ecr.aws/docker/library/postgres:${IMAGE_TAG}"
+          "mirror.gcr.io/library/postgres:${IMAGE_TAG}"
+          "postgres:${IMAGE_TAG}"
+        )
+        for attempt in 1 2 3; do
+          for src in "${sources[@]}"; do
+            echo "Pulling ${src} (attempt ${attempt})"
+            if docker pull --quiet "${src}"; then
+              echo "Pulled ${src} on attempt ${attempt}"
+              echo "POSTGRES_IMAGE=${src}" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "::warning::docker pull ${src} failed (attempt ${attempt})"
+          done
+          # No backoff after the final round — nothing follows it but the error.
+          if [ "${attempt}" -lt 3 ]; then
+            backoff=$((attempt * 10))
+            echo "All ${#sources[@]} sources failed on attempt ${attempt}; retrying in ${backoff}s"
+            sleep "${backoff}"
+          fi
+        done
+        echo "::error::Could not pull postgres:${IMAGE_TAG} from any of: ${sources[*]}"
+        exit 1
+
+    # The health flags mirror what the old `services:` block declared, so the
+    # readiness semantics are unchanged — only the retry surface is new.
+    - name: Start Postgres and wait for it to report healthy
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container-name }}
+        POSTGRES_USER: ${{ inputs.user }}
+        POSTGRES_PASSWORD: ${{ inputs.password }}
+        POSTGRES_DB: ${{ inputs.database }}
+        HOST_PORT: ${{ inputs.port }}
+      run: |
+        set -uo pipefail
+        docker run --detach --name "${CONTAINER}" \
+          --env POSTGRES_USER="${POSTGRES_USER}" \
+          --env POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+          --env POSTGRES_DB="${POSTGRES_DB}" \
+          --publish "${HOST_PORT}:5432" \
+          --health-cmd "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" \
+          --health-interval 2s \
+          --health-timeout 5s \
+          --health-retries 15 \
+          "${POSTGRES_IMAGE}"
+        for _ in $(seq 1 60); do
+          status=$(docker inspect --format '{{.State.Health.Status}}' "${CONTAINER}" 2>/dev/null || echo missing)
+          case "${status}" in
+            healthy)
+              echo "Postgres is healthy on port ${HOST_PORT}"
+              exit 0
+              ;;
+            unhealthy)
+              echo "::error::Postgres container reported unhealthy"
+              docker logs "${CONTAINER}"
+              exit 1
+              ;;
+          esac
+          sleep 1
+        done
+        echo "::error::Postgres did not become healthy within 60s (last status: ${status})"
+        docker logs "${CONTAINER}"
+        exit 1

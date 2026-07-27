@@ -100,21 +100,8 @@ jobs:
   build:
     name: Next.js build
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: prodect
-          POSTGRES_PASSWORD: prodect
-          POSTGRES_DB: prodect
-        ports:
-          - 5432:5432
-        # Wait until pg_isready returns OK before the job's steps start.
-        options: >-
-          --health-cmd "pg_isready -U prodect -d prodect"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
+    # Postgres is started by ./.github/actions/postgres (first step below), NOT
+    # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
       # In CI we use the standard 5432 (no doooo-postgres collision here).
       DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
@@ -139,6 +126,8 @@ jobs:
       BLOB_READ_WRITE_TOKEN: vercel_blob_rw_ci_build_only_placeholder
     steps:
       - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
@@ -204,20 +193,8 @@ jobs:
       matrix:
         shard: [1, 2, 3]
         total: [3]
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: prodect
-          POSTGRES_PASSWORD: prodect
-          POSTGRES_DB: prodect
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U prodect -d prodect"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
+    # Postgres is started by ./.github/actions/postgres (first step below), NOT
+    # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
       # In CI Postgres runs on the standard 5432.
       DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
@@ -234,6 +211,8 @@ jobs:
       HUSKY: '0'
     steps:
       - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
@@ -336,8 +315,9 @@ jobs:
     # `fullyParallel: false` ON PURPOSE — every spec shares one Postgres and a
     # global truncate, so parallel workers IN ONE PROCESS would race. We can't
     # parallelize inside a job, so we parallelize ACROSS jobs: each matrix leg is
-    # its own runner with its OWN ephemeral `postgres:16-alpine` service
-    # container, so there is zero cross-leg DB contention (the local shared-:5433
+    # its own runner with its OWN ephemeral `postgres:16-alpine` container
+    # (started by ./.github/actions/postgres), so there is zero cross-leg DB
+    # contention (the local shared-:5433
     # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)
     # to max(slowest leg).
     #   • 5 "bulk" legs — the non-at-scale, non-a11y suite split by Playwright's
@@ -463,20 +443,8 @@ jobs:
           # and publishes the video (BYOK — only when the token is set).
           - id: acceptance-video
             args: '--config playwright.acceptance.config.ts'
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: prodect
-          POSTGRES_PASSWORD: prodect
-          POSTGRES_DB: prodect
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U prodect -d prodect"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
+    # Postgres is started by ./.github/actions/postgres (first step below), NOT
+    # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
       # In CI Postgres runs on the standard 5432.
       DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
@@ -500,6 +468,8 @@ jobs:
       HUSKY: '0'
     steps:
       - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:

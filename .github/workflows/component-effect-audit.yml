@@ -35,24 +35,12 @@ jobs:
   audit:
     name: Vitest component suite (late-effect ordering)
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: prodect
-          POSTGRES_PASSWORD: prodect
-          POSTGRES_DB: prodect
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U prodect -d prodect"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
+    # Postgres is started by ./.github/actions/postgres (first step below), NOT
+    # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
       # The component files render, they don't hit Postgres — but the shared
       # `perWorkerDb` setupFile imports `@/lib/db`, so the suite still needs a
-      # reachable database. Same service + URL as the `test` job in ci.yml.
+      # reachable database. Same container + URL as the `test` job in ci.yml.
       DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
       # Throwaway CI values the auth module reads at import time — identical to
       # the `test` job. No real OAuth happens here.
@@ -63,6 +51,8 @@ jobs:
       HUSKY: '0'
     steps:
       - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
