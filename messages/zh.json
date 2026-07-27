@@ -1086,6 +1086,7 @@
       "estimation": "估算",
       "fields": "字段",
       "components": "组件",
+      "aiPlanning": "AI规划",
       "rules": "规则"
     },
     "area": {
@@ -2028,6 +2029,63 @@
           "description": "此规则尚未触发。当某个工作项匹配其触发器和条件时，每次运行都会显示在此处，包含运行结果、耗时以及触发该次运行的工作项。"
         }
       }
+    },
+    "aiPlanning": {
+      "title": "AI规划",
+      "pageDescription": "Motir的规划器如何推动该项目前进——何时扩展计划、如何编排Sprint，以及由哪个模型起草工作。",
+      "empty": {
+        "description": "创建一个项目以配置其AI规划设置。"
+      },
+      "autoPlan": {
+        "title": "自动规划",
+        "subtitle": "当就绪工作不足时自动扩展计划。",
+        "enableLabel": "自动扩展计划",
+        "enableHint": "当就绪工作即将耗尽时，Motir会起草下一部分计划，供你审阅。",
+        "thresholdLabel": "就绪工作阈值",
+        "thresholdHint": "当可开始的工作项少于该数量时，Motir开始起草。",
+        "thresholdUnit": "个就绪工作项",
+        "thresholdInvalid": "请输入1或更大的就绪工作项数量。",
+        "decreaseAria": "减小阈值",
+        "increaseAria": "增大阈值",
+        "guardrail": "自动规划只会<strong>提议</strong>扩展并交由你批准——未经你同意，它绝不会创建工作。"
+      },
+      "sprint": {
+        "title": "AI Sprint规划",
+        "subtitle": "将就绪工作编排为遵循阻塞关系的短Sprint。",
+        "enableLabel": "由Motir规划Sprint",
+        "enableHint": "Motir会依据就绪工作提议后续Sprint；创建任何Sprint前都需你批准。",
+        "lengthLabel": "Sprint长度",
+        "lengthHint": "按代理的吞吐量设定，而非人类的Sprint节奏。若你的团队按人类节奏工作，可将其调长。",
+        "lengthUnit": "天",
+        "lengthInvalid": "请选择1至14天之间的Sprint长度。",
+        "decreaseAria": "缩短Sprint长度",
+        "increaseAria": "延长Sprint长度",
+        "rationale": "代理在几分钟内即可完成一个工作项，因此两周的Sprint会把整份计划藏进一个区间。短Sprint让规划→构建→审阅始终是一个你真正看得见的循环。"
+      },
+      "planner": {
+        "title": "规划器",
+        "subtitle": "为该项目起草计划、Sprint与说明的模型。",
+        "explanationsLabel": "为每个工作项起草缘由",
+        "explanationsHint": "每个提议的工作项都会附带一段简短的“为何重要”，无需查看代码即可读懂。",
+        "modelLabel": "规划器模型",
+        "modelHint": "除非有特定理由指定，否则请保持为“默认”。无论选择哪一项，用量都会计入该工作区。",
+        "modelDefault": "默认",
+        "modelDefaultSecondary": "推荐",
+        "modelThorough": "深入",
+        "modelFast": "快速"
+      },
+      "footer": {
+        "save": "保存更改",
+        "dirtyHint": "有未保存的更改",
+        "invalidHint": "请修正高亮的字段后再保存"
+      },
+      "savedTitle": "AI规划设置已保存",
+      "savedDesc": "已更新{project}的规划节奏。",
+      "errorTitle": "无法保存",
+      "saveError": "AI规划设置未能保存，请重试。",
+      "readOnlyBanner": "只有项目管理员才能更改AI规划设置。",
+      "notConnectedTitle": "尚未连接Motir AI。",
+      "notConnectedBody": "AI规划运行于Motir的云服务。这些设置会被保存，但在该部署连接到Motir AI之前不会生效。"
     },
     "apiTokens": {
       "heading": "API 令牌",
@@ -4774,11 +4832,26 @@
       "heading": "你的工作项来自哪里？",
       "body": "选择一个来源。无论选择哪个，Motir 都会将其归一化为相同的工作项——问题、类型、状态、优先级、指派人和标签。",
       "sources": {
-        "jira": { "name": "Jira", "meta": "云端 · OAuth" },
-        "linear": { "name": "Linear", "meta": "OAuth" },
-        "github": { "name": "GitHub Issues", "meta": "OAuth · owner/repo" },
-        "plane": { "name": "Plane", "meta": "OAuth · 云端 / 自托管" },
-        "csv": { "name": "CSV", "meta": "上传 · 无需凭据" }
+        "jira": {
+          "name": "Jira",
+          "meta": "云端 · OAuth"
+        },
+        "linear": {
+          "name": "Linear",
+          "meta": "OAuth"
+        },
+        "github": {
+          "name": "GitHub Issues",
+          "meta": "OAuth · owner/repo"
+        },
+        "plane": {
+          "name": "Plane",
+          "meta": "OAuth · 云端 / 自托管"
+        },
+        "csv": {
+          "name": "CSV",
+          "meta": "上传 · 无需凭据"
+        }
       },
       "connected": "已连接",
       "notConnected": "未连接",

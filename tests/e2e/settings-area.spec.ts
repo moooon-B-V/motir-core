@@ -57,6 +57,9 @@ const SECTIONS: { label: string; path: string }[] = [
   { label: 'Estimation', path: '/settings/project/estimation' },
   { label: 'Fields', path: '/settings/project/fields' },
   { label: 'Components', path: '/settings/project/components' },
+  // Automation group — the browse-gated cadence page (MOTIR-919). `Rules` is
+  // NOT here: it is admin-only and owns its own spec (automation.spec.ts).
+  { label: 'AI planning', path: '/settings/project/ai-planning' },
 ];
 
 interface Tenant {
