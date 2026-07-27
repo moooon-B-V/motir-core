@@ -28,6 +28,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedRoadmap } from './_helpers/roadmap-seed';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Service-side tenant seeding + sign-in + a cold-compiled /onboarding + /roadmap +
 // the canvas render comfortably exceed the 30s default.
@@ -99,4 +100,60 @@ test('never-onboarded project with existing items: /onboarding redirects to /onb
   await expect(page.getByTestId('planning-canvas')).toBeVisible();
   await expect(page.getByText(seed.activeEpicTitle, { exact: true })).toBeVisible();
   await expect(page.getByTestId('planning-origin')).toHaveCount(0);
+});
+
+// ── MOTIR-1725: the existing-item router is INBOUND-only ─────────────────────
+//
+// Failing-first repro for the migrate-wizard dead end. The gate above is correct
+// on the way IN, but it also fired on the way OUT: the wizard's "Plan my project
+// now" hands off to the planning surface, the router saw the non-empty tree and
+// bounced the user back into the wizard — which, past `audit_convention`, renders
+// only its resume panel, whose CTA hands off again. Planning was unreachable for
+// exactly the projects the wizard serves (they imported a backlog, or the gate
+// above routed them here BECAUSE the tree was non-empty).
+//
+// This is asserted at the GATE, not through the wizard UI: the acceptance spec
+// drives the wizard against STUBBED migrate routes, so no server-side run exists
+// there and the gate could never observe the hand-off. Here the run is real.
+test('never-onboarded project mid-hand-off: an active migrate run past set-up lets BOTH onboarding routes through (MOTIR-1725)', async ({
+  page,
+}) => {
+  const seed = await seedRoadmap('migrate-handoff-gate@example.com', { onboarded: false });
+  await signIn(page, seed.email, seed.password);
+
+  // `migrate_onboarding` is FORCE-RLS'd on the active-workspace GUC, so the run
+  // is written through `withWorkspaceContext` — a bare `db.` insert is denied.
+  const wsCtx = { userId: seed.userId, workspaceId: seed.workspaceId };
+  const setStep = (step: 'index' | 'discovery', status: 'active' | 'completed' = 'active') =>
+    withWorkspaceContext(wsCtx, (tx) =>
+      tx.migrateOnboarding.upsert({
+        where: { projectId: seed.projectId },
+        create: { workspaceId: seed.workspaceId, projectId: seed.projectId, step, status },
+        update: { step, status },
+      }),
+    );
+
+  // Before the hand-off the router still applies — the run is mid-set-up, so the
+  // user belongs in the wizard (and this proves the seed really does trip the gate).
+  await setStep('index');
+  await page.goto('/onboarding/discovery');
+  await page.waitForURL('**/onboarding/migrate');
+
+  // Advance the run past set-up — exactly what "Plan my project now" does.
+  await setStep('discovery');
+
+  // …now BOTH onboarding routes must let the user through to plan. `/onboarding`
+  // matters as much as `/onboarding/discovery`: it is PLANNING_WORKSPACE_PATH,
+  // the universal "Plan with AI" target.
+  await page.goto('/onboarding/discovery');
+  await expect(page).toHaveURL(/\/onboarding\/discovery/);
+
+  await page.goto('/onboarding');
+  await expect(page).toHaveURL(/\/onboarding(\?|$)/);
+
+  // A COMPLETED run must not keep the router disarmed — once the migrate flow is
+  // finished the tree is again the project's understanding.
+  await setStep('discovery', 'completed');
+  await page.goto('/onboarding/discovery');
+  await page.waitForURL('**/onboarding/migrate');
 });
