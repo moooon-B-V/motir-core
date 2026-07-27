@@ -4562,6 +4562,12 @@
       "creditsTitle": "You’re out of planning credits",
       "creditsBody": "Generating a plan is metered. Top up to keep planning with Motir AI.",
       "topUpCta": "Top up credits"
+    },
+    "entrance": {
+      "plan": "Plan",
+      "replan": "Re-plan",
+      "planAria": "Plan {item}",
+      "replanAria": "Re-plan {item}"
     }
   },
   "planningWorkspace": {
@@ -4581,6 +4587,7 @@
       "turnRefine": "turn {n} · refine",
       "submitted": "Sent to Motir AI",
       "composerPlaceholder": "Reply, or refine further…",
+      "composerPlaceholderReplan": "What’s wrong? What should change?",
       "send": "Send",
       "retry": "Try again",
       "discard": "Discard",

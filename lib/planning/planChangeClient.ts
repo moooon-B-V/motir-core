@@ -1,5 +1,9 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
-import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
+import type {
+  ContextualPlanResultDto,
+  PlanChangeSessionDto,
+  PlanChangeSubmitResultDto,
+} from '@/lib/dto/planChange';
 
 // Client reads/writes for the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728's routes), consumed by the conversational rail (MOTIR-1730). No
@@ -54,4 +58,48 @@ export async function appendPlanChangeTurn(
  *  just the newest one. Returns the shipped `augment` job to stream + approve. */
 export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChangeSubmitResultDto> {
   return post<PlanChangeSubmitResultDto>('/api/ai/plan-change/session/submit', undefined, signal);
+}
+
+// ─── The ITEM-ANCHORED half — the MOTIR-909 contextual-planning endpoints ─────
+//
+// The per-item entrance (MOTIR-910) rides the SAME conversation substrate,
+// addressed by its anchor set instead of by the project. The shapes differ in one
+// way worth naming: the project thread appends and submits in two calls, while
+// the anchored endpoint does BOTH in one (it resolves + view-gates the anchors
+// first, so splitting it would gate twice for one turn).
+
+const anchorPath = (anchorId: string) => `/api/work-items/${encodeURIComponent(anchorId)}/ai/plan`;
+
+/** RESUME the item's thread on mount. `null` when the item was never planned —
+ *  a read, so looking at the entrance never writes a session row. */
+export async function resumeContextualSession(
+  anchorId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto | null> {
+  const res = await fetch(anchorPath(anchorId), {
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  const body = (await res.json()) as { session: PlanChangeSessionDto | null };
+  return body.session ?? null;
+}
+
+/** Append the turn to the item's thread AND submit the accumulated intent — one
+ *  call (the MOTIR-909 contract). The Re-plan "reason" IS this prompt. */
+export async function submitContextualPlan(
+  anchorId: string,
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<ContextualPlanResultDto> {
+  return post<ContextualPlanResultDto>(anchorPath(anchorId), { prompt }, signal);
+}
+
+/** Re-send the item thread's ACCUMULATED intent after a failed run, appending
+ *  NOTHING — the conversation continues rather than restarting. */
+export async function resubmitContextualPlan(
+  anchorId: string,
+  signal?: AbortSignal,
+): Promise<ContextualPlanResultDto> {
+  return post<ContextualPlanResultDto>(anchorPath(anchorId), { resubmit: true }, signal);
 }

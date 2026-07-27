@@ -48,12 +48,17 @@ const { conversation } = vi.hoisted(() => ({
     discard: vi.fn(),
     dismissError: vi.fn(),
     onApproved: null as ((r: unknown) => void) | null,
+    anchorId: null as string | null,
   },
 }));
 
 vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
-  usePlanChangeConversation: ({ onApproved }: { onApproved?: (r: unknown) => void } = {}) => {
+  usePlanChangeConversation: ({
+    onApproved,
+    anchorId,
+  }: { onApproved?: (r: unknown) => void; anchorId?: string | null } = {}) => {
     conversation.onApproved = onApproved ?? null;
+    conversation.anchorId = anchorId ?? null;
     return conversation;
   },
 }));
@@ -96,7 +101,12 @@ function renderHost(
   {
     hasItems = true,
     state = IDLE,
-  }: { hasItems?: boolean; state?: PlanChangeConversationState } = {},
+    anchorId = null,
+  }: {
+    hasItems?: boolean;
+    state?: PlanChangeConversationState;
+    anchorId?: string | null;
+  } = {},
 ) {
   const launch = parsePlanningLaunch(searchParams);
   conversation.state = state;
@@ -106,10 +116,26 @@ function renderHost(
       projectName="Acme"
       hasItems={hasItems}
       launch={launch}
+      anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
     />,
   );
 }
+
+describe('PlanningWorkspaceHost — the item ANCHOR (MOTIR-910)', () => {
+  it('hands the resolved anchor to the conversation, so the turn rides the ITEM’s thread', () => {
+    renderHost({ mode: 'replan', from: 'work-item', item: 'MOTIR-5' }, { anchorId: 'wi_123' });
+    expect(conversation.anchorId).toBe('wi_123');
+  });
+
+  it('falls back to the PROJECT conversation when no anchor resolved', () => {
+    // A hand-edited `?item=` for something deleted or in another tenant must not
+    // dead-end the workspace — the page resolves it to no anchor and the surface
+    // still opens, talking to the project thread.
+    renderHost({ mode: 'contextual', from: 'work-item', item: 'GONE-9' });
+    expect(conversation.anchorId).toBeNull();
+  });
+});
 
 describe('PlanningWorkspaceHost — the launcher context reaches the surface', () => {
   it('opens an established project in the plan-change mode with its tree on the canvas', () => {

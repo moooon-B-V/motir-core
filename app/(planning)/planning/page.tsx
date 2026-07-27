@@ -94,12 +94,34 @@ export default async function PlanningWorkspacePage({
   // honest empty canvas instead of the canvas's bare "nothing here" panel.
   const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
 
+  // The ANCHOR, when the workspace was summoned from a work item (MOTIR-910).
+  // Resolved HERE, server-side: the client host needs the item's database id (the
+  // MOTIR-909 endpoints are keyed by it) while the href carries the human
+  // identifier, and no client component may reach the service layer for it. The
+  // read is the same view-gated resolve the detail page uses, so an item in
+  // another tenant or one this actor cannot browse yields no anchor at all —
+  // the workspace then opens on the project conversation instead of erroring.
+  let anchorId: string | null = null;
+  if (launch.itemKey) {
+    try {
+      const anchor = await workItemsService.getWorkItemByIdentifier(
+        ctx.projectId,
+        launch.itemKey,
+        wsCtx,
+      );
+      anchorId = anchor.id;
+    } catch {
+      anchorId = null;
+    }
+  }
+
   return (
     <PlanningWorkspaceHost
       projectKey={ctx.project.identifier}
       projectName={ctx.project.name}
       hasItems={roots.nodes.length > 0}
       launch={launch}
+      anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
     />
   );

@@ -8,19 +8,37 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 // The session seam (MOTIR-1728) and the shipped job helpers are mocked, so what
 // is under test is the state machine the rail and the canvas both read.
 
-const { open, append, submit, stream, fetchResult, approve } = vi.hoisted(() => ({
+const {
+  open,
+  append,
+  submit,
+  stream,
+  fetchResult,
+  approve,
+  resumeAnchored,
+  submitAnchored,
+  resubmitAnchored,
+  streamAnchored,
+} = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
   submit: vi.fn(),
   stream: vi.fn(),
   fetchResult: vi.fn(),
   approve: vi.fn(),
+  resumeAnchored: vi.fn(),
+  submitAnchored: vi.fn(),
+  resubmitAnchored: vi.fn(),
+  streamAnchored: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
   openPlanChangeSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
+  resumeContextualSession: resumeAnchored,
+  submitContextualPlan: submitAnchored,
+  resubmitContextualPlan: resubmitAnchored,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -28,6 +46,7 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   return {
     ...actual,
     streamAugmentJob: stream,
+    streamContextualPlanJob: streamAnchored,
     fetchJobResult: fetchResult,
     approvePlanDelta: approve,
   };
@@ -84,6 +103,29 @@ beforeEach(() => {
   stream.mockImplementation(okStream());
   fetchResult.mockResolvedValue({ status: 'succeeded', result: { planDelta: DELTA } });
   approve.mockResolvedValue({ created: ['PAY-30'], updated: [], unchanged: [] });
+  resumeAnchored.mockResolvedValue(null);
+  submitAnchored.mockResolvedValue({
+    jobId: 'job-anchored-1',
+    sessionId: 's1',
+    session: session(['Split this story.']),
+  });
+  resubmitAnchored.mockResolvedValue({
+    jobId: 'job-anchored-2',
+    sessionId: 's1',
+    session: session(['Split this story.']),
+  });
+  streamAnchored.mockImplementation(
+    async (
+      _anchorId: string,
+      _jobId: string,
+      _signal: AbortSignal,
+      _onError: (code: string | null) => void,
+      _onDone: () => void,
+      onFrame?: (event: string, data: unknown) => void,
+    ) => {
+      void onFrame;
+    },
+  );
 });
 
 afterEach(() => {
@@ -281,5 +323,94 @@ describe('usePlanChangeConversation — approve / discard', () => {
     expect(result.current.state.delta).toBeNull();
     expect(result.current.state.phase).toBe('idle');
     expect(result.current.state.session?.turns).toHaveLength(1);
+  });
+});
+
+// ─── ANCHORED at a work item — the MOTIR-910 entrance's conversation ──────────
+//
+// Same state machine, different thread: when the workspace was summoned from a
+// work item, every hop rides the item-scoped MOTIR-909 endpoints. What these
+// lock is that the routing actually switches — the project thread must never be
+// touched from an item's door, and vice versa.
+
+async function mountedAnchored(anchorId = 'wi_123') {
+  const hook = renderHook(() => usePlanChangeConversation({ anchorId }));
+  await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+  return hook;
+}
+
+describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', () => {
+  it('resumes the ITEM’s thread on mount, never the project one', async () => {
+    resumeAnchored.mockResolvedValue(session(['Split this story.']));
+    const { result } = await mountedAnchored();
+
+    expect(resumeAnchored).toHaveBeenCalledWith('wi_123', expect.anything());
+    expect(open).not.toHaveBeenCalled();
+    expect(result.current.state.session?.turns).toHaveLength(1);
+  });
+
+  it('treats an item that was never planned as an EMPTY thread, not an error', async () => {
+    resumeAnchored.mockResolvedValue(null);
+    const { result } = await mountedAnchored();
+
+    expect(result.current.state.session).toBeNull();
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('sends the turn through the anchored endpoint — ONE call that appends AND submits', async () => {
+    const { result } = await mountedAnchored();
+
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+
+    expect(submitAnchored).toHaveBeenCalledWith('wi_123', 'Split this story.', expect.anything());
+    // The project thread's two-call shape is never used here.
+    expect(append).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.jobId).toBe('job-anchored-1');
+  });
+
+  it('streams through the item’s own relay, which re-gates the anchor on subscribe', async () => {
+    const { result } = await mountedAnchored();
+
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+
+    expect(streamAnchored).toHaveBeenCalledTimes(1);
+    expect(streamAnchored.mock.calls[0]![0]).toBe('wi_123');
+    expect(streamAnchored.mock.calls[0]![1]).toBe('job-anchored-1');
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('retries by RE-SENDING the accumulated intent — no duplicated turn', async () => {
+    const { result } = await mountedAnchored();
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+    submitAnchored.mockClear();
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', expect.anything());
+    expect(submitAnchored).not.toHaveBeenCalled();
+    expect(result.current.state.jobId).toBe('job-anchored-2');
+  });
+
+  it('approves through the SAME shipped route — the anchor changes the thread, not the gate', async () => {
+    const { result } = await mountedAnchored();
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(approve).toHaveBeenCalledWith('job-anchored-1', DELTA);
+    expect(result.current.state.delta).toBeNull();
   });
 });

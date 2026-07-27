@@ -4558,6 +4558,12 @@
       "creditsTitle": "你的规划额度已用尽",
       "creditsBody": "生成计划会计量消耗。充值即可继续用 Motir AI 规划。",
       "topUpCta": "充值额度"
+    },
+    "entrance": {
+      "plan": "规划",
+      "replan": "重新规划",
+      "planAria": "规划 {item}",
+      "replanAria": "重新规划 {item}"
     }
   },
   "planningWorkspace": {
@@ -4577,6 +4583,7 @@
       "turnRefine": "第 {n} 轮 · 细化",
       "submitted": "已发送给 Motir AI",
       "composerPlaceholder": "回复，或继续细化…",
+      "composerPlaceholderReplan": "哪里有问题？想怎么改？",
       "send": "发送",
       "retry": "重试",
       "discard": "放弃",

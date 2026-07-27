@@ -57,6 +57,8 @@ const DATA: QuickViewData = {
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
   readiness: null,
   pullRequests: [],
+  hasChildren: false,
+  canPlan: true,
 };
 
 afterEach(() => {

@@ -61,3 +61,14 @@ export interface PlanChangeSubmitResultDto {
   jobId: string;
   session: PlanChangeSessionDto;
 }
+
+/**
+ * What the ITEM-ANCHORED contextual endpoints return (7.12.3 · MOTIR-909) — the
+ * submit result plus the thread's own id, which the anchored caller needs
+ * because it did not open the session in a separate call. The wire shape of
+ * `contextualPlanningService`'s result; named here so the client (MOTIR-910) and
+ * the route agree on it without importing across the service boundary.
+ */
+export interface ContextualPlanResultDto extends PlanChangeSubmitResultDto {
+  sessionId: string;
+}

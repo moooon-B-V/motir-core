@@ -39,6 +39,8 @@ const DATA: QuickViewData = {
   parent: { identifier: 'MOTIR-1', title: '7.20 Workspace', kind: 'story' },
   readiness: null,
   pullRequests: [],
+  hasChildren: false,
+  canPlan: true,
 };
 
 afterEach(() => {

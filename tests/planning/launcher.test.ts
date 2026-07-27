@@ -35,6 +35,18 @@ describe('resolvePlanningMode', () => {
     expect(resolvePlanningMode({ kind: 'work-item', itemKey: 'MOTIR-42' })).toBe('contextual');
   });
 
+  it('maps a work item that ALREADY has a plan to re-plan (MOTIR-910)', () => {
+    // The per-item entrance's second face: an item with children is being
+    // RE-planned, so the workspace opens asking what's wrong — the same
+    // hasPlan split the project context makes, one level down.
+    expect(resolvePlanningMode({ kind: 'work-item', itemKey: 'MOTIR-5', hasPlan: true })).toBe(
+      'replan',
+    );
+    expect(resolvePlanningMode({ kind: 'work-item', itemKey: 'MOTIR-42', hasPlan: false })).toBe(
+      'contextual',
+    );
+  });
+
   it('maps the roadmap surface to roadmap-read (7.19)', () => {
     expect(resolvePlanningMode({ kind: 'roadmap' })).toBe('roadmap');
   });
@@ -120,6 +132,18 @@ describe('parsePlanningLaunch — the inverse of planningWorkspaceHref', () => {
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'MOTIR-7',
+      repoKey: null,
+    });
+  });
+
+  it('round-trips a RE-PLAN work-item launch — mode and anchor both survive', () => {
+    // The entrance's re-plan face (MOTIR-910): the host must see BOTH that this
+    // is a re-plan (so the composer asks what's wrong) and WHICH item it anchors
+    // at (so the conversation is the item's, not the project's).
+    expect(parseHref({ kind: 'work-item', itemKey: 'MOTIR-5', hasPlan: true })).toEqual({
+      mode: 'replan',
+      from: 'work-item',
+      itemKey: 'MOTIR-5',
       repoKey: null,
     });
   });
