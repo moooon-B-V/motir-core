@@ -65,6 +65,7 @@ const IDLE: PlanChangeConversationState = {
   session: {
     id: 's1',
     projectId: 'p1',
+    targetKeys: [],
     turnCount: 0,
     lastJobId: null,
     lastSubmittedAt: null,

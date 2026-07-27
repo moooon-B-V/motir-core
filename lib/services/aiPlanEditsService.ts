@@ -73,6 +73,63 @@ export const aiPlanEditsService = {
     );
   },
 
+  /**
+   * Submit a CONTEXTUAL planning turn — a chat turn anchored at one or more work
+   * items (7.12.3 · MOTIR-909), riding the SHIPPED 7.11 job contract.
+   *
+   * Two things make this different from {@link submitAugment}, and only two:
+   *
+   *  1. `context.targetKeys` carries the anchor SET. That flag is what turns the
+   *     submit into a contextual turn on the motir-ai side (7.12.2 · MOTIR-908):
+   *     the scoping module CLASSIFIES the intent from the turn text, RESOLVES which
+   *     of `expand_item` / `augment` / `replan` it really is (structure overrides
+   *     text — a leaf cannot be expanded; a subtask re-plan climbs to its story),
+   *     and pushes the UNION of every anchor's item + parent + siblings + children
+   *     as grounding.
+   *  2. The submitted kind is therefore only the FALLBACK when the turn text
+   *     carries no signal, and `augment` — additions-only — is deliberately that
+   *     floor: the safest thing to do with an ambiguous instruction is propose
+   *     ADDITIONS, never a re-shape. Core does NOT pre-classify; that would put two
+   *     classifiers in the loop and let core's guess override the engine's.
+   *
+   * The re-plan "reason" is the turn text itself — there is no separate `reason`
+   * param, by contract. NO new job kind is introduced. Nothing is written to the
+   * plan here: this SUBMITS, and persisting a returned delta stays behind the
+   * confirmation gate (7.13.5) on the approve route.
+   */
+  async submitContextual(
+    prompt: string,
+    targetKeys: readonly string[],
+    ctx: ProjectContext,
+  ): Promise<{ jobId: string }> {
+    const { organizationId, isMeta } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    const code = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    const tenant = buildTenant(ctx, organizationId, isMeta);
+    return submitJob(
+      'augment',
+      tenant,
+      {
+        prompt,
+        targetKeys: [...targetKeys],
+        ...(code ? { code } : {}),
+      },
+      { userId: ctx.userId },
+    );
+  },
+
+  /** The live channel for a contextual planning turn's job — the same 7.1.4 job
+   *  stream every plan-edit surface relays, named for its caller so the panel's
+   *  route reads as one seam. Browsers stream from CORE, never from motir-ai. */
+  streamContextual(jobId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId);
+  },
+
   async submitExpand(itemKey: string, ctx: ProjectContext): Promise<{ jobId: string }> {
     const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
     if (!wi || wi.projectId !== ctx.projectId) {

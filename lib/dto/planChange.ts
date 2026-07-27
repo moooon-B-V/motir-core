@@ -33,6 +33,15 @@ export interface PlanChangeTurnDto {
 export interface PlanChangeSessionDto {
   id: string;
   projectId: string;
+  /**
+   * The work items this thread is ANCHORED at, as identifiers, in canonical
+   * (deduped + sorted) order — 7.12.3 · MOTIR-909. Empty on the project-wide
+   * conversation; one or more entries on a contextual planning thread, which is
+   * what the embedded panel labels itself with and what a resumed thread
+   * re-submits as motir-ai's anchor set. The `scopeKey` these derive from is a
+   * server-side storage detail and deliberately does NOT cross the boundary.
+   */
+  targetKeys: string[];
   turnCount: number;
   lastJobId: string | null;
   lastSubmittedAt: string | null;

@@ -712,10 +712,12 @@ model Project {
   // Story 7.15 · MOTIR-1499). One per project (the state machine is resumable
   // by re-reading the saved step), so a `?` one-to-one. Cascade.
   migrateOnboarding      MigrateOnboarding?
-  // The project's plan-change CONVERSATION (Story 7.30 · MOTIR-1728). ONE
-  // resumable thread per project — the `migrateOnboarding` shape — so a `?`
-  // one-to-one. Cascade.
-  planChangeSession      PlanChangeSession?
+  // The project's plan-change CONVERSATIONS (Story 7.30 · MOTIR-1728; widened by
+  // 7.12.3 · MOTIR-909). Still ONE project-wide thread (`scope_key = ''`), plus
+  // one CONTEXTUAL thread per distinct work-item anchor set — enforced by
+  // `PlanChangeSession.@@unique([projectId, scopeKey])`, which is why this is a
+  // list rather than the former `?` one-to-one. Cascade.
+  planChangeSessions     PlanChangeSession[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3777,6 +3779,21 @@ model PlanChangeSession {
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
   turnCount   Int     @default(0) @map("turn_count")
+  /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
+  /// thread "the conversation about THESE work items" rather than "the project's
+  /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
+  /// joined by `,` (see `lib/planChange/scope.ts`). The empty string is the
+  /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
+  /// `(project_id, scope_key)` unique still admits exactly one of those per
+  /// project while allowing one contextual thread per distinct anchor set.
+  scopeKey    String  @default("") @map("scope_key")
+  /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
+  /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
+  /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
+  /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
+  /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
+  /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
+  targetKeys  String[] @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
@@ -3792,9 +3809,14 @@ model PlanChangeSession {
   createdBy User?            @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   turns     PlanChangeTurn[]
 
-  /// ONE plan-change conversation per project (the resumable single thread); the
-  /// unique also makes the Project ↔ PlanChangeSession relation a clean one-to-one.
-  @@unique([projectId])
+  /// ONE plan-change conversation per project PER ANCHOR SET (7.12.3 · MOTIR-909
+  /// widened the 7.30 `@@unique([projectId])`). `scope_key = ''` is the
+  /// project-wide thread, so the original "one resumable thread per project"
+  /// guarantee is preserved exactly; a contextual thread anchored at a set of
+  /// work items gets its own row, and re-opening the same anchor set RESUMES it
+  /// rather than forking a second conversation. A lost create-race still
+  /// translates from P2002 to "read the winner's row".
+  @@unique([projectId, scopeKey])
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
   /// `(id, workspace_id)` a referenceable key, so `plan_change_turn` can point its

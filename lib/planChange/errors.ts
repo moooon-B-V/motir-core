@@ -45,6 +45,21 @@ export class EmptyPlanChangeIntentError extends Error {
   }
 }
 
+/**
+ * A contextual planning turn named more anchors than one thread may carry
+ * (7.12.3 · MOTIR-909). The scope is pushed to motir-ai as the UNION of every
+ * anchor's neighborhood, so the bound is a real resource limit, not a style
+ * preference — see `MAX_SCOPE_TARGETS`. → 400: the request is malformed, and no
+ * retry of the same body will succeed.
+ */
+export class TooManyPlanChangeTargetsError extends Error {
+  readonly code = 'PLAN_CHANGE_TOO_MANY_TARGETS' as const;
+  constructor(count: number, max: number) {
+    super(`A planning conversation can be anchored at at most ${max} work items (got ${count}).`);
+    this.name = 'TooManyPlanChangeTargetsError';
+  }
+}
+
 /** The turn body was empty / blank. → 400 */
 export class EmptyPlanChangeTurnError extends Error {
   readonly code = 'PLAN_CHANGE_EMPTY_TURN' as const;

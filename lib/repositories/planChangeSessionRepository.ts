@@ -17,17 +17,21 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.create({ data });
   },
 
-  /** The project's single conversation — the RESUME read (re-opening the planning
-   *  workspace reloads the thread from here). Workspace-scoped so a project id
-   *  from another tenant resolves to null. Optional `tx` for use inside a
-   *  transaction. */
-  async findByProjectId(
+  /** The project's conversation FOR ONE SCOPE — the RESUME read (re-opening the
+   *  planning workspace, or re-opening the panel on the same work items, reloads
+   *  the thread from here). `scopeKey` is the canonical anchor-set discriminator
+   *  (`''` = the project-wide thread; 7.12.3 · MOTIR-909), so this reads exactly
+   *  the row the `(project_id, scope_key)` unique admits. Workspace-scoped so a
+   *  project id from another tenant resolves to null. Optional `tx` for use
+   *  inside a transaction. */
+  async findByProjectAndScope(
     projectId: string,
+    scopeKey: string,
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
     const client = tx ?? db;
-    return client.planChangeSession.findFirst({ where: { projectId, workspaceId } });
+    return client.planChangeSession.findFirst({ where: { projectId, scopeKey, workspaceId } });
   },
 
   async findById(
