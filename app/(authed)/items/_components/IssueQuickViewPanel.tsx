@@ -20,6 +20,7 @@ import { DevelopmentSection } from '@/components/github/DevelopmentSection';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
+import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
 import { ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
@@ -262,6 +263,21 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         </Link>
         <StatusValue category={data.statusCategory} label={data.statusLabel} />
         <span className="flex-1" />
+        {/* MOTIR-910: the same per-item Plan / Re-plan door the detail page
+          carries, here between the status pill and "Open full page" (the
+          plan-replan-entrance mockup's panels 3–4). Activating it hands off to
+          the planning workspace — a route navigation, which dismisses this
+          modal; a LOCAL-state host (the roadmap canvas peek, MOTIR-1352) also
+          gets its own close called so its state doesn't outlive the handoff.
+          The URL-driven peek passes no `onClose`, so its `?peek=` simply stays
+          on the history entry the user came from. */}
+        {data.canPlan ? (
+          <WorkItemPlanEntrance
+            itemKey={data.identifier}
+            hasChildren={data.hasChildren}
+            onActivate={props.onClose}
+          />
+        ) : null}
         <OpenFullPageLink identifier={data.identifier} />
         <QuickViewCloseButton variant="icon" onClose={props.onClose} />
       </header>

@@ -33,6 +33,7 @@ export function toQuickViewData(
   workItemRefs: WorkItemRefMap,
   projectIdentifier: string,
   pullRequests: LinkedPullRequestDto[],
+  canPlan: boolean,
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -76,5 +77,10 @@ export function toQuickViewData(
         : null,
     },
     pullRequests,
+    // MOTIR-910: the peek header's Plan / Re-plan door. `hasChildren` rides the
+    // detail aggregate already read above; `canPlan` is the project capability
+    // the service resolves (this mapper stays pure).
+    hasChildren: detail.children.length > 0,
+    canPlan,
   };
 }

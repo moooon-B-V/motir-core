@@ -128,6 +128,27 @@ export async function streamAugmentJob(
   );
 }
 
+/** The ITEM-ANCHORED stream (7.12.3 · MOTIR-909's relay, consumed by the
+ *  MOTIR-910 entrance). Same SSE shape as `streamAugmentJob` — the job IS an
+ *  ordinary `augment` — but subscribed through the anchored route, which re-gates
+ *  the anchor on every subscribe. */
+export async function streamContextualPlanJob(
+  anchorId: string,
+  jobId: string,
+  signal: AbortSignal,
+  onError: (code: string | null) => void,
+  onDone: () => void,
+  onFrame?: (event: string, data: unknown) => void,
+): Promise<void> {
+  return consumeStream(
+    `/api/work-items/${encodeURIComponent(anchorId)}/ai/plan/${encodeURIComponent(jobId)}/stream`,
+    signal,
+    onError,
+    onDone,
+    onFrame,
+  );
+}
+
 export async function streamExpandJob(
   jobId: string,
   signal: AbortSignal,

@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   openPlanChangeSession,
   appendPlanChangeTurn,
+  resubmitContextualPlan,
+  resumeContextualSession,
+  submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
@@ -145,5 +148,62 @@ describe('planChangeClient — failures surface as ONE error type', () => {
 
     const err = (await submitPlanChange().catch((e: unknown) => e)) as PlanEditsClientError;
     expect(err.isOutOfCredits).toBe(true);
+  });
+});
+
+// ─── The ITEM-ANCHORED calls (MOTIR-910 → the MOTIR-909 endpoints) ───────────
+
+describe('the anchored transport — a work item’s own thread', () => {
+  it('resumes by GET, and reads an unplanned item as null rather than an error', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: null }));
+    expect(await resumeContextualSession('wi_123')).toBeNull();
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/work-items/wi_123/ai/plan');
+    expect(init?.method ?? 'GET').toBe('GET');
+  });
+
+  it('returns the thread when the item has one', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: SESSION }));
+    expect(await resumeContextualSession('wi_123')).toMatchObject({ id: SESSION.id });
+  });
+
+  it('submits a turn as ONE POST carrying the prompt — the reason IS the turn', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ jobId: 'job-1', sessionId: 's1', session: SESSION }),
+    );
+    const result = await submitContextualPlan('wi_123', 'Split this story.');
+
+    expect(result.jobId).toBe('job-1');
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/work-items/wi_123/ai/plan');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ prompt: 'Split this story.' });
+  });
+
+  it('retries with the resubmit flag and NO prompt — nothing new is said', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ jobId: 'job-2', sessionId: 's1', session: SESSION }),
+    );
+    await resubmitContextualPlan('wi_123');
+
+    const [, init] = lastCall();
+    expect(JSON.parse(init.body as string)).toEqual({ resubmit: true });
+  });
+
+  it('encodes the anchor id into the path', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ session: null }));
+    await resumeContextualSession('wi/123');
+    expect(lastCall()[0]).toBe('/api/work-items/wi%2F123/ai/plan');
+  });
+
+  it('raises the ONE error type a caller branches on, carrying the typed code', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 'WORK_ITEM_NOT_FOUND' }, 404));
+    await expect(resumeContextualSession('wi_gone')).rejects.toBeInstanceOf(PlanEditsClientError);
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 'MOTIR_AI_OUT_OF_CREDITS' }, 402));
+    await expect(submitContextualPlan('wi_123', 'x')).rejects.toMatchObject({
+      isOutOfCredits: true,
+    });
   });
 });

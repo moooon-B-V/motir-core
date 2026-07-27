@@ -63,6 +63,8 @@ const DATA: QuickViewData = {
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
   readiness: null,
   pullRequests: [],
+  hasChildren: false,
+  canPlan: true,
 };
 
 // The /items row peek-on-click (the per-row eye `QuickViewTrigger` was removed
@@ -326,6 +328,39 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     );
     expect(screen.queryByText('Blocked')).toBeNull();
     expect(screen.queryByRole('link', { name: 'PROD-3' })).toBeNull();
+  });
+});
+
+describe('IssueQuickViewPanel — the Plan / Re-plan entrance (MOTIR-910)', () => {
+  it('carries the SAME per-item door the detail page does, scoped to this item', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    const door = screen.getByTestId('work-item-plan-entrance');
+    const url = new URL(door.getAttribute('href')!, 'https://motir.test');
+    expect(url.pathname).toBe('/planning');
+    expect(url.searchParams.get('item')).toBe('PROD-7');
+  });
+
+  it('reads "Plan" for a childless item and "Re-plan" once it has children', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    expect(screen.getByTestId('work-item-plan-entrance').getAttribute('data-mode')).toBe('plan');
+    cleanup();
+
+    render(<IssueQuickViewPanel state="ready" data={{ ...DATA, hasChildren: true }} />);
+    expect(screen.getByTestId('work-item-plan-entrance').getAttribute('data-mode')).toBe('replan');
+  });
+
+  it('shows NO door to an actor who cannot edit the plan', () => {
+    // Planning proposes plan changes; a browse-only viewer gets no door rather
+    // than one that fails on the first turn.
+    render(<IssueQuickViewPanel state="ready" data={{ ...DATA, canPlan: false }} />);
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
+  });
+
+  it('hands the peek OFF: a local-state host is told to close as the workspace opens', () => {
+    const onClose = vi.fn();
+    render(<IssueQuickViewPanel state="ready" data={DATA} onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('work-item-plan-entrance'));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 

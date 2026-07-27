@@ -88,6 +88,19 @@ export function PlanChangeRail({
   const busy = state.phase === 'streaming' || state.phase === 'approving';
   const userTurns = (state.session?.turns ?? []).filter((turn) => turn.role === 'user');
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading';
+  // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
+  // composer is pre-focused and prompts for what's wrong, and what the user types
+  // is the FIRST CHAT TURN — the reason itself, which MOTIR-908 classifies. There
+  // is no pre-workspace form and no separate reason field. Plan mode has no such
+  // prompt (the item's own description is the scope), and neither does a
+  // PROJECT-level re-plan, whose opener + starter chips already frame the ask
+  // (MOTIR-1730's shipped copy, deliberately untouched). Once the conversation
+  // has started the composer returns to its ordinary placeholder.
+  const askingForReason =
+    launch.mode === 'replan' && launch.itemKey !== null && userTurns.length === 0;
+  const composerPlaceholder = askingForReason
+    ? tc('composerPlaceholderReplan')
+    : tc('composerPlaceholder');
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -242,8 +255,12 @@ export function PlanChangeRail({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={busy || state.phase === 'loading'}
-          placeholder={tc('composerPlaceholder')}
-          aria-label={tc('composerPlaceholder')}
+          // Pre-focused for a re-plan so the reason can be typed straight away
+          // (the entrance's whole promise). Autofocus is safe here: the workspace
+          // is a full-screen route whose primary act IS this composer.
+          autoFocus={askingForReason}
+          placeholder={composerPlaceholder}
+          aria-label={composerPlaceholder}
           className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
         />
         <Button

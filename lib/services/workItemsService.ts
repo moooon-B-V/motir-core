@@ -3226,7 +3226,21 @@ export const workItemsService = {
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
     const pullRequests = await this.listLinkedPullRequests(detail.item.id);
-    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix, pullRequests);
+    // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
+    // changes, so the peek shows the door only to an actor who could approve
+    // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
+    // above has already asserted `canBrowse`, so this only widens to edit.
+    const { canEdit } = await projectAccessService.getCapabilities(projectId, ctx);
+    return toQuickViewData(
+      detail,
+      members,
+      locale,
+      sprintName,
+      workItemRefs,
+      prefix,
+      pullRequests,
+      canEdit,
+    );
   },
 
   /**

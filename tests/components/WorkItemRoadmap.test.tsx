@@ -35,6 +35,8 @@ const PEEK = {
   parent: null,
   readiness: null,
   pullRequests: [],
+  hasChildren: false,
+  canPlan: true,
 };
 
 afterEach(() => {
