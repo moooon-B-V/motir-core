@@ -1,0 +1,2111 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · AI planning project settings (Story 7.13 · MOTIR-914)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — the AI-PLANNING PROJECT SETTINGS panel.
+      Story MOTIR-813 (Cadence — auto-planning + AI sprint planning) · subtask
+      MOTIR-914 (7.13.1). Layout source of truth for MOTIR-919 (7.13.6), which
+      implements it verbatim.
+
+      ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
+      Every surface below was read from the running code on origin/main before it
+      was drawn, NOT imagined:
+        · app/(authed)/settings/project/{layout,estimation/page}.tsx — the area
+          shell: `mx-auto max-w-[42rem] flex-col gap-6`, a serif `text-3xl` page
+          title + muted sub, then Card(s). NO breadcrumb (an older sibling mock
+          drew one — the shipped page has none; this asset drops it).
+        · lib/settings/projectSettingsNav.ts — the settings area is a REGISTRY-
+          driven set of PAGES (groups General · Access · Work · Automation), one
+          concern per route, with a totality test pairing every
+          `settings/project/**/page.tsx` 1:1 with a registry entry.
+        · EstimationSettingsEditor.tsx — the settings-card grammar this reuses:
+          card head (title + hsub) · body of label/hint/control fields · admin-only
+          footer with Cancel + Save, optimistic-with-reconcile + toast, and the
+          non-admin lock banner.
+        · packages/design-system/src/components/ui/{Switch,Combobox,Input,Button}.tsx
+          — the primitives composed here (markup + token names copied 1:1).
+        · packages/design-system/theme.css — every --el-* / shape token value
+          below is copied from the CURRENT Tier-0 + Tier-3 blocks.
+        · lib/ai/availability.ts `isMotirAiConfigured()` — the shipped AI probe
+          panel 5 renders the not-provisioned state from.
+        · motir-ai src/llm/gatewayClient.ts `PLANNER_MODELS` — the REAL model set
+          the planner-model picker offers (deepseek-v4-pro default · -flash).
+        · prisma/schema.prisma `Project.aiGenerateExplanations` — shipped since
+          MOTIR-850 with NO UI anywhere; this panel is where it FIRST surfaces
+          (surfaced, never duplicated).
+
+      ── PLACEMENT (the one deviation from the card's prose — see design-notes.md §1) ──
+      The card says "among the existing project-settings ROWS … NOT a standalone
+      page". That premise does not match shipped reality: workflowPolicyMode,
+      estimationStatistic and pointScale do NOT share one page of rows — each is
+      its OWN page in the registry-driven area. So "one more settings section" in
+      the SHIPPED idiom is a new registry entry + its own route,
+      `/settings/project/ai-planning`, in the Automation group. Panel 0 draws that
+      door. Building it as a row inside another page would invent a layout the app
+      does not have and break the route↔registry totality test.
+
+      ── MIRROR (verified at plan time, and where Motir deviates) ──
+      Linear surfaces cycle LENGTH + an enable toggle; Jira uses per-sprint dates.
+      Neither has "auto-plan when work runs low" nor a planner-model choice. This
+      panel BORROWS the enable-switch + numeric-stepper shape and ADDS the
+      AI-native controls, with the short-sprint rationale stated in-panel.
+
+      ── PANELS (multi-panel board — review EVERY panel) ──
+        0  ACCESS PATH — the settings rail with the new "AI planning" entry (the
+           door), plus the command-palette deep link.
+        1  DEFAULT / OFF — the feature off; dependent controls present but
+           disabled; nothing is happening until opted in.
+        2  CONFIGURED / ON — both switches on, threshold 5, sprint length 2,
+           model pinned, explanations on; dirty footer.
+        3  GUARDRAILS — the Principle-#1 approval copy, the short-sprint
+           rationale, and the planner-model picker OPEN (its listbox).
+        4  VALIDATION — threshold < 1 and sprint length out of range, inline,
+           Save blocked.
+        5  STATES — saved confirmation · non-admin read-only · Motir AI not
+           connected.
+      Toggle dark mode (top right) to confirm token parity.
+      Spec, copy strings and per-element token roles: design-notes.md.
+    -->
+    <style>
+      /* ══ Tier 0 (--color-*) + Tier 3 (--el-*) + shape tokens ═══════════════
+         Copied 1:1 from packages/design-system/theme.css. The mock consumes ONLY
+         the Tier-3 --el-* names and the element-semantic shape tokens, exactly as
+         a component must (motir-core/CLAUDE.md § colour / § shape). No invented
+         hue anywhere: every fill is a token or a color-mix of two tokens. */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* shape — element-semantic tokens only (never --radius-sm/md/lg) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — the swap layer components consume */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.5);
+        --shadow-elevated: 0 6px 20px rgba(0, 0, 0, 0.55);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+
+      /* ── review chrome (mock-only scaffolding, not app UI) ───────────────── */
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+        line-height: 1.65;
+      }
+      .grid {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .panel-cap .n {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-accent-on-surface);
+      }
+      .panel-cap .t {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .panel-cap .d {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pad {
+        padding: 22px 18px;
+        background: var(--el-surface);
+      }
+      .pad.split {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      .note {
+        max-width: 1180px;
+        margin: 4px auto 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.65;
+      }
+      .note code,
+      .review-head code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .toggle {
+        position: fixed;
+        top: 14px;
+        right: 16px;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      /* ── settings AREA shell — rail + content (lib/settings/projectSettingsNav.ts,
+            markup mirrored from design/projects/settings-area.mock.html) ───── */
+      .shell {
+        display: flex;
+        min-height: 520px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .rail {
+        flex: none;
+        width: 248px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .proj {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .proj .pav {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-type-task);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .proj .pname {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: block;
+      }
+      .proj .pkey {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-identifier);
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-eyebrow);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-eyebrow);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        border: 1px solid transparent;
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-icon-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .nav-row.active .ni {
+        color: var(--el-icon-active);
+      }
+      .nav-row.is-hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row.soon {
+        color: var(--el-text-faint);
+      }
+      .nav-row .soon-chip {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+        background: var(--el-muted);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 28px 34px;
+        background: var(--el-page-bg);
+      }
+
+      /* ── the page shell — every app/(authed)/settings/project page.tsx ────── */
+      .page {
+        max-width: 42rem;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        line-height: 1.15;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head p {
+        font-size: 14px;
+        color: var(--el-text-muted);
+        margin: 4px 0 0;
+        max-width: 62ch;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      /* ── Card (components/ui/Card, as EstimationSettingsEditor composes it) ─ */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .card-head .chi {
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-icon-heading);
+      }
+      .card-head .chi svg {
+        width: 17px;
+        height: 17px;
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 3px 0 0;
+        max-width: 58ch;
+      }
+      .card-body {
+        padding: 18px var(--spacing-card-padding) 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .card-foot .dirty {
+        margin-right: auto;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── switch ROW — the Switch primitive + its visible label + hint ─────── */
+      .srow {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .srow .stext {
+        min-width: 0;
+        flex: 1;
+      }
+      .srow .stext .lbl {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+        display: block;
+      }
+      .srow .stext .hint {
+        font-size: 12px;
+        color: var(--el-text-helper);
+        margin: 3px 0 0;
+        max-width: 54ch;
+        line-height: 1.55;
+      }
+      /* components/ui/Switch.tsx — h-5 w-9, rounded-full track + size-3.5 knob */
+      .sw {
+        position: relative;
+        flex: none;
+        margin-top: 2px;
+        display: inline-flex;
+        align-items: center;
+        width: 36px;
+        height: 20px;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+      }
+      .sw .knob {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-switch-knob);
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+      }
+      .sw.on {
+        border-color: var(--el-switch-on);
+        background: var(--el-switch-on);
+      }
+      .sw.on .knob {
+        transform: translateX(18px);
+      }
+      .sw.disabled {
+        opacity: 0.5;
+      }
+
+      /* ── dependent (child) field — indented under its parent switch ───────── */
+      .dep {
+        margin-left: 50px;
+        padding-left: 14px;
+        border-left: 1px solid var(--el-border-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .dep .lbl {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .dep .hint {
+        font-size: 12px;
+        color: var(--el-text-helper);
+        max-width: 52ch;
+        line-height: 1.55;
+        margin: 0;
+      }
+      .dep.off .lbl,
+      .dep.off .hint {
+        color: var(--el-text-faint);
+      }
+
+      /* ── stepper — COMPOSED from Input(number) + two icon Buttons ─────────── */
+      .stepper {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+      }
+      .stepper .sbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 1px solid var(--el-button-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .stepper .sbtn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .stepper .num {
+        width: 74px;
+        height: var(--height-control);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-mono);
+        font-size: 14px;
+        font-weight: 600;
+        text-align: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stepper .unit {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .stepper.off .sbtn,
+      .stepper.off .num {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .stepper.off .unit {
+        color: var(--el-text-faint);
+      }
+      .stepper .num.invalid {
+        border-color: var(--el-danger);
+      }
+      .stepper .num.focus {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+
+      /* inline validation message (role="alert") */
+      .err {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-danger);
+        margin: 2px 0 0;
+      }
+      .err svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* ── Combobox (components/ui/Combobox) — trigger + panel + listbox ────── */
+      .cbx {
+        position: relative;
+        width: 320px;
+        max-width: 100%;
+      }
+      .cbx .trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .cbx .trigger .sec {
+        margin-left: auto;
+        font-size: 11.5px;
+        color: var(--el-text-identifier);
+        font-family: var(--font-mono);
+      }
+      .cbx .trigger .chev {
+        flex: none;
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-field);
+      }
+      .cbx.off .trigger {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .cbx .menu {
+        position: absolute;
+        top: calc(var(--height-control) + 5px);
+        left: 0;
+        width: 100%;
+        z-index: 5;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 5px;
+      }
+      .cbx .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: var(--height-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .cbx .opt .osec {
+        margin-left: auto;
+        font-size: 11.5px;
+        color: var(--el-text-identifier);
+        font-family: var(--font-mono);
+      }
+      .cbx .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .cbx .opt .ck {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .cbx .opt .ck.hidden {
+        visibility: hidden;
+      }
+
+      /* ── callouts — guardrail (info) · rationale (neutral) · gate (warning) ─ */
+      .callout {
+        display: flex;
+        gap: 10px;
+        padding: 11px 13px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .callout svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 2px;
+      }
+      .callout strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .callout.guard {
+        background: var(--el-tint-sky);
+        border-color: var(--el-border-soft);
+        color: var(--el-text-strong);
+      }
+      .callout.guard svg {
+        color: var(--el-info);
+      }
+      .callout.why {
+        background: var(--el-tint-lavender);
+        border-color: var(--el-border-soft);
+        color: var(--el-text-strong);
+      }
+      .callout.why svg {
+        color: var(--el-accent-on-surface);
+      }
+      .callout.gate {
+        background: var(--el-tint-peach);
+        border-color: var(--el-border-soft);
+        color: var(--el-text-strong);
+      }
+      .callout.gate svg {
+        color: var(--el-warning);
+      }
+      .callout.lock svg {
+        color: var(--el-icon-muted);
+      }
+
+      /* ── Button (components/ui/Button) ────────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-button-border);
+      }
+      .btn.off {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      /* ── Toast (components/ui/Toast, success variant) ─────────────────────── */
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        width: 340px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .toast .ti {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast .tt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .toast .td {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+
+      /* ── command palette row (the second door) ────────────────────────────── */
+      .palette {
+        width: 420px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .palette .pq {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .palette .pq svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-field);
+      }
+      .palette .plist {
+        padding: 5px;
+      }
+      .palette .prow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .palette .prow svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-muted);
+      }
+      .palette .prow.active {
+        background: var(--el-option-active-bg);
+        color: var(--el-text);
+      }
+      .palette .prow.active svg {
+        color: var(--el-icon-active);
+      }
+      .palette .prow .grp-hint {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .col > .cap {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-eyebrow);
+      }
+      .ro .lbl,
+      .ro .hint,
+      .ro .unit {
+        color: var(--el-text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-sparkles"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+        />
+      </symbol>
+      <symbol
+        id="i-bot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </symbol>
+      <symbol
+        id="i-sliders"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="21" x2="14" y1="4" y2="4" />
+        <line x1="10" x2="3" y1="4" y2="4" />
+        <line x1="21" x2="12" y1="12" y2="12" />
+        <line x1="8" x2="3" y1="12" y2="12" />
+        <line x1="21" x2="16" y1="20" y2="20" />
+        <line x1="12" x2="3" y1="20" y2="20" />
+        <line x1="14" x2="14" y1="2" y2="6" />
+        <line x1="8" x2="8" y1="10" y2="14" />
+        <line x1="16" x2="16" y1="18" y2="22" />
+      </symbol>
+      <symbol
+        id="i-users"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </symbol>
+      <symbol
+        id="i-workflow"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="8" height="8" x="3" y="3" rx="2" />
+        <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+        <rect width="8" height="8" x="13" y="13" rx="2" />
+      </symbol>
+      <symbol
+        id="i-columns"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
+        <path d="M15 3v18" />
+      </symbol>
+      <symbol
+        id="i-gauge"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m12 14 4-4" />
+        <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+      </symbol>
+      <symbol
+        id="i-tag"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+        />
+        <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+      </symbol>
+      <symbol
+        id="i-box"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+        />
+        <path d="m3.3 7 8.7 5 8.7-5" />
+        <path d="M12 22V12" />
+      </symbol>
+      <symbol
+        id="i-arrow-left"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m12 19-7-7 7-7" />
+        <path d="M19 12H5" />
+      </symbol>
+      <symbol
+        id="i-lock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+      <symbol
+        id="i-minus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-chevrons"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m7 15 5 5 5-5" />
+        <path d="m7 9 5-5 5 5" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-check-circle"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+        <path d="m9 11 3 3L22 4" />
+      </symbol>
+      <symbol
+        id="i-info"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+      </symbol>
+      <symbol
+        id="i-alert"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" x2="12" y1="8" y2="12" />
+        <line x1="12" x2="12.01" y1="16" y2="16" />
+      </symbol>
+      <symbol
+        id="i-cloud-off"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m2 2 20 20" />
+        <path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193" />
+        <path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07" />
+      </symbol>
+      <symbol
+        id="i-calendar"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M8 2v4" />
+        <path d="M16 2v4" />
+        <rect width="18" height="18" x="3" y="4" rx="2" />
+        <path d="M3 10h18" />
+      </symbol>
+      <symbol
+        id="i-search"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </symbol>
+    </svg>
+
+    <button
+      class="toggle"
+      onclick="
+        document.documentElement.dataset.theme =
+          document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+      "
+    >
+      ◐ Toggle theme
+    </button>
+
+    <div class="review-head">
+      <h1>AI planning — project settings · Story 7.13 (MOTIR-914)</h1>
+      <p>
+        Where a project is configured for <strong>cadence</strong>: auto-plan when ready work runs
+        low, AI sprint planning at agent pace, drafted explanations, and the planner model. Composed
+        from the shipped settings-area chrome (<code>Card</code> · <code>Switch</code> ·
+        <code>Combobox</code> · <code>Input</code> · <code>Button</code> · <code>Toast</code>) and
+        the real <code>--el-*</code> tokens. Placement follows shipped reality: its OWN registry
+        entry + route <code>/settings/project/ai-planning</code> in the Automation group — see
+        <code>design-notes.md</code> §1 for why the card's "among the existing rows" phrasing does
+        not describe the app that exists.
+      </p>
+    </div>
+
+    <div class="grid">
+      <!-- ══════════ PANEL 0 — THE ACCESS PATH (draw the door) ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">0</span>
+          <span class="t">Access path — how you REACH this page</span>
+          <span class="d"
+            >Settings rail · Automation group · new "AI planning" entry (+ the ⌘K deep link)</span
+          >
+        </div>
+        <div class="pad">
+          <div class="shell compact">
+            <aside class="rail">
+              <div class="rail-head">
+                <span class="back"
+                  ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+                >
+                <div class="proj">
+                  <span class="pav">M</span>
+                  <span>
+                    <span class="pname">motir</span>
+                    <span class="pkey">MOTIR</span>
+                  </span>
+                </div>
+                <span class="settings-eyebrow">Project settings</span>
+              </div>
+              <nav aria-label="Project settings">
+                <div class="grp">
+                  <div class="grp-label">General</div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                    ></span>
+                    <span class="nl">Details</span>
+                  </div>
+                </div>
+                <div class="grp">
+                  <div class="grp-label">Access</div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                    ></span>
+                    <span class="nl">Members &amp; access</span>
+                  </div>
+                </div>
+                <div class="grp">
+                  <div class="grp-label">Work</div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                    ></span>
+                    <span class="nl">Workflow</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                    ></span>
+                    <span class="nl">Boards</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                    ></span>
+                    <span class="nl">Estimation</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                    ></span>
+                    <span class="nl">Fields</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                    ></span>
+                    <span class="nl">Components</span>
+                  </div>
+                </div>
+                <div class="grp">
+                  <div class="grp-label">Automation</div>
+                  <div class="nav-row active" aria-current="page">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                    ></span>
+                    <span class="nl">AI planning</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                    ></span>
+                    <span class="nl">Rules</span>
+                  </div>
+                </div>
+              </nav>
+            </aside>
+            <div class="content">
+              <div class="page">
+                <div class="page-head">
+                  <h2>AI planning</h2>
+                  <p>
+                    How Motir's planner keeps this project moving — when it expands the plan, how it
+                    packs sprints, and which model drafts the work.
+                  </p>
+                </div>
+                <div class="col">
+                  <span class="cap">The second door — ⌘K</span>
+                  <div class="palette">
+                    <div class="pq">
+                      <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                      <span>ai plan</span>
+                    </div>
+                    <div class="plist">
+                      <div class="prow active">
+                        <svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                        <span>AI planning</span>
+                        <span class="grp-hint">Project settings</span>
+                      </div>
+                      <div class="prow">
+                        <svg viewBox="0 0 24 24"><use href="#i-bot" /></svg>
+                        <span>Rules</span>
+                        <span class="grp-hint">Project settings</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 0 — the door.</strong> The page is reached ONLY through the settings area, so
+        the entry affordance is a new <code>PROJECT_SETTINGS_NAV</code> entry:
+        <code>id: 'ai-planning'</code>, <code>group: 'automation'</code>,
+        <code>href: '/settings/project/ai-planning'</code>, icon <code>Sparkles</code>,
+        <code>labelKey: 'nav.aiPlanning'</code>, <code>access: browse</code> (every member SEES it;
+        a non-admin gets the read-only panel of panel 5). It sits ABOVE <code>Rules</code> in the
+        Automation group — cadence configures the automatic planner, the same family as automation
+        rules. Registering the entry lights up BOTH doors at once: the rail row AND the
+        <code>⌘K</code> deep link (<code>settings-ai-planning</code>), because the registry drives
+        both — and satisfies the route↔registry totality test
+        (<code>tests/settings/projectSettingsNav.test.ts</code>) that would otherwise fail the
+        moment the route lands. The row carries no badge — it is an ordinary nav entry.
+      </p>
+
+      <!-- ══════════ PANEL 1 — DEFAULT (feature OFF) ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <span class="t">Default — everything off (a fresh project)</span>
+          <span class="d"
+            >Dependent controls present but DISABLED · Save inert (not dirty) · admin view</span
+          >
+        </div>
+        <div class="pad">
+          <div class="page">
+            <div class="page-head">
+              <h2>AI planning</h2>
+              <p>
+                How Motir's planner keeps this project moving — when it expands the plan, how it
+                packs sprints, and which model drafts the work.
+              </p>
+            </div>
+            <div class="stack">
+              <!-- Auto-plan -->
+              <div class="card">
+                <div class="card-head">
+                  <span class="chi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                  ></span>
+                  <div>
+                    <h3>Auto-plan</h3>
+                    <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <span class="sw" role="switch" aria-checked="false"
+                      ><span class="knob"></span
+                    ></span>
+                    <span class="stext">
+                      <span class="lbl">Expand the plan automatically</span>
+                      <p class="hint">
+                        When ready work drains, Motir drafts the next slice of the plan for you to
+                        review.
+                      </p>
+                    </span>
+                  </div>
+                  <div class="dep off">
+                    <span class="lbl">Ready-work threshold</span>
+                    <p class="hint">
+                      Motir starts drafting when fewer than this many work items are ready to start.
+                    </p>
+                    <div class="stepper off">
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                      ></span>
+                      <span class="num">5</span>
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                      ></span>
+                      <span class="unit">ready items</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI sprint planning -->
+              <div class="card">
+                <div class="card-head">
+                  <span class="chi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg
+                  ></span>
+                  <div>
+                    <h3>AI sprint planning</h3>
+                    <p class="hsub">
+                      Pack ready work into short sprints that respect what blocks what.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <span class="sw" role="switch" aria-checked="false"
+                      ><span class="knob"></span
+                    ></span>
+                    <span class="stext">
+                      <span class="lbl">Plan sprints with Motir</span>
+                      <p class="hint">
+                        Motir proposes the next sprints from ready work; you approve before any
+                        sprint is created.
+                      </p>
+                    </span>
+                  </div>
+                  <div class="dep off">
+                    <span class="lbl">Sprint length</span>
+                    <p class="hint">
+                      Sized for agent throughput, not human sprints. Widen it if your team works at
+                      human pace.
+                    </p>
+                    <div class="stepper off">
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                      ></span>
+                      <span class="num">2</span>
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                      ></span>
+                      <span class="unit">days</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Planner -->
+              <div class="card">
+                <div class="card-head">
+                  <span class="chi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <div>
+                    <h3>Planner</h3>
+                    <p class="hsub">
+                      The model that drafts plans, sprints and explanations for this project.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <span class="sw" role="switch" aria-checked="false"
+                      ><span class="knob"></span
+                    ></span>
+                    <span class="stext">
+                      <span class="lbl">Draft a why for each item</span>
+                      <p class="hint">
+                        Every proposed work item gets a short "why this matters" you can read
+                        without opening the code.
+                      </p>
+                    </span>
+                  </div>
+                  <div class="dep" style="margin-left: 0; padding-left: 0; border-left: 0">
+                    <span class="lbl">Planner model</span>
+                    <p class="hint">
+                      Leave this on Default unless you have a reason to pin one. Usage is billed to
+                      this workspace either way.
+                    </p>
+                    <div class="cbx">
+                      <div class="trigger" role="combobox" aria-expanded="false">
+                        <span>Default</span>
+                        <span class="sec">recommended</span>
+                        <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevrons" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <button class="btn btn-secondary off">Cancel</button>
+                  <button class="btn btn-primary off">Save changes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 1 — off by default (safe by construction).</strong> Every AI setting ships
+        <code>false</code> / its default (MOTIR-915), so an existing project is untouched until
+        someone opts in. A dependent control is <em>present but disabled</em>, never hidden — the
+        reader sees WHAT turning the switch on will let them tune (the Linear cycle-settings shape).
+        Three cards, not one, because they are three decisions with different blast radius: when to
+        expand · how to pack sprints · which model runs. The footer is Cancel + Save only on the
+        LAST card and governs the whole page's dirty state, exactly as
+        <code>EstimationSettingsEditor</code> does today; it is inert while nothing is dirty.
+      </p>
+
+      <!-- ══════════ PANEL 2 — CONFIGURED (ON) ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <span class="t">Configured — cadence on</span>
+          <span class="d"
+            >Threshold 5 · sprint length 2 days · planner pinned to Thorough · explanations on ·
+            dirty</span
+          >
+        </div>
+        <div class="pad">
+          <div class="page">
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <span class="chi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                  ></span>
+                  <div>
+                    <h3>Auto-plan</h3>
+                    <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <span class="sw on" role="switch" aria-checked="true"
+                      ><span class="knob"></span
+                    ></span>
+                    <span class="stext">
+                      <span class="lbl">Expand the plan automatically</span>
+                      <p class="hint">
+                        When ready work drains, Motir drafts the next slice of the plan for you to
+                        review.
+                      </p>
+                    </span>
+                  </div>
+                  <div class="dep">
+                    <span class="lbl">Ready-work threshold</span>
+                    <p class="hint">
+                      Motir starts drafting when fewer than this many work items are ready to start.
+                    </p>
+                    <div class="stepper">
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                      ></span>
+                      <span class="num">5</span>
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                      ></span>
+                      <span class="unit">ready items</span>
+                    </div>
+                    <div class="callout guard">
+                      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                      <span
+                        >Auto-plan <strong>proposes</strong> an expansion for your approval — it
+                        never creates work without you.</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <span class="chi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg
+                  ></span>
+                  <div>
+                    <h3>AI sprint planning</h3>
+                    <p class="hsub">
+                      Pack ready work into short sprints that respect what blocks what.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <span class="sw on" role="switch" aria-checked="true"
+                      ><span class="knob"></span
+                    ></span>
+                    <span class="stext">
+                      <span class="lbl">Plan sprints with Motir</span>
+                      <p class="hint">
+                        Motir proposes the next sprints from ready work; you approve before any
+                        sprint is created.
+                      </p>
+                    </span>
+                  </div>
+                  <div class="dep">
+                    <span class="lbl">Sprint length</span>
+                    <p class="hint">
+                      Sized for agent throughput, not human sprints. Widen it if your team works at
+                      human pace.
+                    </p>
+                    <div class="stepper">
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                      ></span>
+                      <span class="num">2</span>
+                      <span class="sbtn"
+                        ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                      ></span>
+                      <span class="unit">days</span>
+                    </div>
+                    <div class="callout why">
+                      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                      <span
+                        >An agent finishes a work item in minutes, so a two-week sprint hides a
+                        whole plan inside one bucket. Short sprints keep plan → build → review a
+                        loop you can actually watch.</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <span class="chi"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <div>
+                    <h3>Planner</h3>
+                    <p class="hsub">
+                      The model that drafts plans, sprints and explanations for this project.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="srow">
+                    <span class="sw on" role="switch" aria-checked="true"
+                      ><span class="knob"></span
+                    ></span>
+                    <span class="stext">
+                      <span class="lbl">Draft a why for each item</span>
+                      <p class="hint">
+                        Every proposed work item gets a short "why this matters" you can read
+                        without opening the code.
+                      </p>
+                    </span>
+                  </div>
+                  <div class="dep" style="margin-left: 0; padding-left: 0; border-left: 0">
+                    <span class="lbl">Planner model</span>
+                    <p class="hint">
+                      Leave this on Default unless you have a reason to pin one. Usage is billed to
+                      this workspace either way.
+                    </p>
+                    <div class="cbx">
+                      <div class="trigger" role="combobox" aria-expanded="false">
+                        <span>Thorough</span>
+                        <span class="sec">deepseek-v4-pro</span>
+                        <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevrons" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <span class="dirty">Unsaved changes</span>
+                  <button class="btn btn-secondary">Cancel</button>
+                  <button class="btn btn-primary">Save changes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 2 — the configured look.</strong> Turning a parent switch on lights its
+        dependent control AND reveals that group's explanatory callout — the guardrail under
+        Auto-plan, the short-sprint rationale under Sprint length. They appear only when the setting
+        is live, so the default view stays quiet. The values shown are the shipped defaults from
+        MOTIR-915 (<code>aiAutoPlanThreshold = 5</code>, <code>aiSprintLengthDays = 2</code>). The
+        page header is omitted here only to keep the panel tight — it is identical to panel 1.
+      </p>
+
+      <!-- ══════════ PANEL 3 — GUARDRAILS + THE MODEL PICKER OPEN ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <span class="t">Guardrails + the planner-model picker OPEN</span>
+          <span class="d"
+            >Principle #1 in copy · the short-sprint rationale · the Combobox listbox</span
+          >
+        </div>
+        <div class="pad split">
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">The two explanations, in place</span>
+            <div class="callout guard">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                >Auto-plan <strong>proposes</strong> an expansion for your approval — it never
+                creates work without you.</span
+              >
+            </div>
+            <div class="callout why">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                >An agent finishes a work item in minutes, so a two-week sprint hides a whole plan
+                inside one bucket. Short sprints keep plan → build → review a loop you can actually
+                watch.</span
+              >
+            </div>
+            <div class="callout">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                >Nothing on this page dispatches work. Cadence decides when Motir
+                <strong>drafts</strong> a proposal; every proposal still lands in the plan review
+                you already use.</span
+              >
+            </div>
+          </div>
+          <div class="col" style="width: 380px">
+            <span class="cap">Planner model — open</span>
+            <div class="card">
+              <div class="card-body" style="padding-bottom: 150px">
+                <div class="dep" style="margin-left: 0; padding-left: 0; border-left: 0">
+                  <span class="lbl">Planner model</span>
+                  <p class="hint">
+                    Leave this on Default unless you have a reason to pin one. Usage is billed to
+                    this workspace either way.
+                  </p>
+                  <div class="cbx">
+                    <div class="trigger" role="combobox" aria-expanded="true">
+                      <span>Thorough</span>
+                      <span class="sec">deepseek-v4-pro</span>
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevrons" /></svg>
+                    </div>
+                    <div class="menu" role="listbox" aria-label="Planner model">
+                      <div class="opt" role="option" aria-selected="false">
+                        <svg class="ck hidden" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                        <span>Default</span>
+                        <span class="osec">recommended</span>
+                      </div>
+                      <div class="opt active" role="option" aria-selected="true">
+                        <svg class="ck" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                        <span>Thorough</span>
+                        <span class="osec">deepseek-v4-pro</span>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <svg class="ck hidden" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                        <span>Fast</span>
+                        <span class="osec">deepseek-v4-flash</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong
+          >Panel 3 — the picker is drawn OPEN because a closed trigger hides the choice.</strong
+        >
+        Three options, and only three, because that is the shipped model set:
+        <code>PLANNER_MODELS = { default: 'deepseek-v4-pro', flash: 'deepseek-v4-flash' }</code>
+        (motir-ai <code>src/llm/gatewayClient.ts</code>), selected today by the
+        <code>PLANNER_MODEL</code> env. <strong>Default</strong> writes
+        <code>aiPlannerModel = null</code> and follows the deployment; <strong>Thorough</strong> and
+        <strong>Fast</strong> pin a channel. The human-facing label leads and the model id is
+        SECONDARY text (the shipped <code>Combobox</code> label + secondary shape) — a non-technical
+        owner chooses "Thorough", an engineer still sees exactly what runs. Adding a model later is
+        one more option row, no layout change.
+      </p>
+
+      <!-- ══════════ PANEL 4 — VALIDATION ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <span class="t">Validation — inline, at the field</span>
+          <span class="d"
+            >Threshold ≥ 1 · sprint length 1–14 days · Save blocked while invalid</span
+          >
+        </div>
+        <div class="pad split">
+          <div class="col" style="flex: 1; min-width: 320px">
+            <span class="cap">Threshold below the floor</span>
+            <div class="card">
+              <div class="card-body">
+                <div class="dep">
+                  <span class="lbl">Ready-work threshold</span>
+                  <p class="hint">
+                    Motir starts drafting when fewer than this many work items are ready to start.
+                  </p>
+                  <div class="stepper">
+                    <span class="sbtn off"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num invalid focus">0</span>
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">ready items</span>
+                  </div>
+                  <p class="err" role="alert">
+                    <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                    Enter 1 or more ready items.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col" style="flex: 1; min-width: 320px">
+            <span class="cap">Sprint length out of range</span>
+            <div class="card">
+              <div class="card-body">
+                <div class="dep">
+                  <span class="lbl">Sprint length</span>
+                  <p class="hint">
+                    Sized for agent throughput, not human sprints. Widen it if your team works at
+                    human pace.
+                  </p>
+                  <div class="stepper">
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num invalid focus">30</span>
+                    <span class="sbtn off"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">days</span>
+                  </div>
+                  <p class="err" role="alert">
+                    <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                    Choose a sprint length between 1 and 14 days.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col" style="width: 100%">
+            <span class="cap">The footer while invalid</span>
+            <div class="card">
+              <div class="card-foot">
+                <span class="dirty">Fix the highlighted fields to save</span>
+                <button class="btn btn-secondary">Cancel</button>
+                <button class="btn btn-primary off">Save changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 4 — validate at the field, block at the footer.</strong> The stepper's own
+        <code>−</code> / <code>+</code> button disables at each end of the range, so the ordinary
+        path can't produce an invalid value at all; the error state exists for typed input. The
+        message sits under the control as <code>role="alert"</code> in <code>--el-danger</code> and
+        the input takes a <code>--el-danger</code> border (the
+        <code>CustomScaleEditor</code> pattern shipped in Estimation). Save is disabled while any
+        field is invalid — the client mirrors, and never replaces, the MOTIR-915 server validation
+        (<code>threshold ≥ 1</code>, length within range), whose typed error surfaces in the same
+        slot when a server rejection arrives.
+      </p>
+
+      <!-- ══════════ PANEL 5 — SAVE + PERMISSION + NOT-PROVISIONED ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <span class="t">Save confirmation · non-admin · Motir AI not connected</span>
+          <span class="d">The three terminal states of the page</span>
+        </div>
+        <div class="pad split">
+          <div class="col" style="width: 360px">
+            <span class="cap">Saved (optimistic + toast)</span>
+            <div class="card">
+              <div class="card-foot">
+                <button class="btn btn-secondary off">Cancel</button>
+                <button class="btn btn-primary off">Save changes</button>
+              </div>
+            </div>
+            <div class="toast">
+              <svg class="ti" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
+              <div>
+                <div class="tt">AI planning settings saved</div>
+                <div class="td">Cadence updated for motir.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">Non-admin — read-only</span>
+            <div class="card ro">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                ></span>
+                <div>
+                  <h3>Auto-plan</h3>
+                  <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="callout lock">
+                  <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                  <span>Only a project admin can change AI planning settings.</span>
+                </div>
+                <div class="srow">
+                  <span
+                    class="sw on disabled"
+                    role="switch"
+                    aria-checked="true"
+                    aria-disabled="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Expand the plan automatically</span>
+                    <p class="hint">
+                      When ready work drains, Motir drafts the next slice of the plan for you to
+                      review.
+                    </p>
+                  </span>
+                </div>
+                <div class="dep">
+                  <span class="lbl">Ready-work threshold</span>
+                  <div class="stepper off">
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num">5</span>
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">ready items</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">Motir AI not connected</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                ></span>
+                <div>
+                  <h3>Auto-plan</h3>
+                  <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="callout gate">
+                  <svg viewBox="0 0 24 24"><use href="#i-cloud-off" /></svg>
+                  <span
+                    ><strong>Motir AI isn't connected.</strong> AI planning runs on Motir's cloud
+                    service. These settings are saved but stay inactive until this deployment is
+                    connected to Motir AI.</span
+                  >
+                </div>
+                <div class="srow">
+                  <span class="sw disabled" role="switch" aria-checked="false" aria-disabled="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Expand the plan automatically</span>
+                    <p class="hint">
+                      When ready work drains, Motir drafts the next slice of the plan for you to
+                      review.
+                    </p>
+                  </span>
+                </div>
+                <div class="dep off">
+                  <span class="lbl">Ready-work threshold</span>
+                  <div class="stepper off">
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                    ></span>
+                    <span class="num">5</span>
+                    <span class="sbtn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                    ></span>
+                    <span class="unit">ready items</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong
+          >Panel 5 — three states, three different disabled reasons, each said out loud.</strong
+        >
+        <em>Saved</em> reuses the shipped optimistic-with-reconcile + success
+        <code>Toast</code> from <code>EstimationSettingsEditor</code> (the footer returns to
+        not-dirty). <em>Non-admin</em> shows the same lock banner + read-only controls the
+        Estimation panel ships — the page is visible to every member (<code>access: browse</code>),
+        the write is re-gated server-side. <em>Not connected</em> is driven by the shipped
+        <code>isMotirAiConfigured()</code> probe (env <code>MOTIR_AI_URL</code> +
+        <code>MOTIR_AI_SERVICE_TOKEN</code>): the controls grey out with a stated reason instead of
+        offering switches that would do nothing. <strong>Deliberately NO "Connect" button</strong> —
+        there is no in-app provisioning flow in the shipped app, and inventing one would be a route
+        that does not exist (notes.html #25 / #33). Cards 2 and 3 render the identical banner; only
+        Auto-plan is drawn here to keep the panel readable.
+      </p>
+    </div>
+  </body>
+</html>
