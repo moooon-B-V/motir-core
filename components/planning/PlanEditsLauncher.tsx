@@ -1,11 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { useEffect, useRef } from 'react';
 import { PlanEditsReviewDock } from '@/components/planning/PlanEditsReviewDock';
 import { usePlanEditsJob, type PlanEditsJobKind } from '@/lib/hooks/usePlanEditsJob';
 
@@ -17,77 +12,13 @@ import { usePlanEditsJob, type PlanEditsJobKind } from '@/lib/hooks/usePlanEdits
 // in app/(authed)/reports/_components/ReportPageChrome.tsx.
 const DOCK_SHELL = 'fixed bottom-6 right-6 z-50 w-full max-w-[32rem]';
 
-export function AugmentPromptButton() {
-  const t = useTranslations('planEdits');
-  const [open, setOpen] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const { state, startJob, approve, cancel, dismissReview } = usePlanEditsJob();
-
-  if (state.phase === 'done') {
-    return (
-      <div className={DOCK_SHELL}>
-        <PlanEditsReviewDock
-          state={state}
-          onApprove={approve}
-          onCancel={cancel}
-          onDismiss={dismissReview}
-        />
-      </div>
-    );
-  }
-
-  if (state.phase !== 'idle') {
-    return (
-      <div className={DOCK_SHELL}>
-        <PlanEditsReviewDock
-          state={state}
-          onApprove={approve}
-          onCancel={cancel}
-          onDismiss={dismissReview}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <Button
-        variant="secondary"
-        size="sm"
-        leftIcon={<Sparkles className="h-4 w-4" />}
-        onClick={() => setOpen(true)}
-      >
-        {t('augmentPromptLabel')}
-      </Button>
-      <Modal open={open} onOpenChange={setOpen} title={t('augmentPromptLabel')} size="sm">
-        <div className="flex flex-col gap-3">
-          <Input
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder={t('augmentPromptPlaceholder')}
-            autoFocus
-          />
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              leftIcon={<Sparkles className="h-4 w-4" />}
-              disabled={!prompt.trim()}
-              onClick={() => {
-                setOpen(false);
-                startJob('augment', { prompt: prompt.trim() });
-              }}
-            >
-              {t('augmentPromptSubmit')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </>
-  );
-}
+// NOTE — the one-shot `AugmentPromptButton` (a toolbar `Button` → `Modal` with a
+// single `Input` → `POST /api/ai/augment`) was RETIRED by MOTIR-1731. Changing a
+// plan is a CONVERSATION, so the entrance is the universal Plan-with-AI workspace
+// (the global `TopNav` pill / ⌘K / the floating orb), never a per-surface button
+// with no way to refine. See design/ai-chat/design-notes.md ("the retired
+// 'Augment from prompt' door", MOTIR-1727) panel 5. The `/api/ai/augment` job
+// path itself is UNTOUCHED — the conversation drives it.
 
 export interface PlanEditsTriggerProps {
   /** The kind of job — expand or replan. */

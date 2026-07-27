@@ -26,7 +26,6 @@ import { EstimationConfigProvider } from '@/components/issues/EstimationConfigPr
 import { AdvancedFilterProvider } from '../items/_components/AdvancedFilterContext';
 import { SavedFilterSessionProvider } from '../items/_components/SavedFilterContext';
 import { NewIssueButton } from '../items/_components/NewIssueButton';
-import { AugmentPromptButton } from '@/components/planning/PlanEditsLauncher';
 import { BacklogContainer } from './_components/BacklogContainer';
 import { BacklogFilterControls } from './_components/BacklogFilterControls';
 import { BacklogAppliedFilterBar } from './_components/BacklogAppliedFilterBar';
@@ -183,7 +182,6 @@ export default async function BacklogPage({
                 viewer={viewer}
               />
               <NewIssueButton />
-              <AugmentPromptButton />
             </div>
           </header>
 
