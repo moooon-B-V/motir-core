@@ -650,10 +650,20 @@ jobs:
       # the report is small. The trace/video/screenshot artifacts only exist for
       # failures (config above). The artifact name MUST be unique per leg or the
       # matrix legs collide on upload (upload-artifact@v4+ errors on a dup name).
+      #
+      # The path is a GLOB because the non-default lanes write to SUFFIXED report
+      # folders: the bulk/at-scale legs use `out/playwright-report`
+      # (playwright.config.ts), but the billing lane uses
+      # `out/playwright-report-billing` and the acceptance lane
+      # `out/playwright-report-acceptance`. The old hardcoded
+      # `out/playwright-report` matched neither, so those two legs silently
+      # uploaded NOTHING ("No files were found with the provided path") — a red
+      # acceptance/billing leg left no trace, screenshot, or report to debug
+      # from. The glob covers all three.
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.id }}
-          path: out/playwright-report
+          path: out/playwright-report*
           retention-days: 7

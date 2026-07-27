@@ -9,6 +9,14 @@ import { Modal } from '@/components/ui/Modal';
 import { PlanEditsReviewDock } from '@/components/planning/PlanEditsReviewDock';
 import { usePlanEditsJob, type PlanEditsJobKind } from '@/lib/hooks/usePlanEditsJob';
 
+// The dock's fixed bottom-right shell. Arbitrary `max-w-[32rem]`, NOT
+// `max-w-lg` — this project's Tailwind `@theme` defines the `--spacing-*`
+// namespace, so Tailwind v4 resolves `max-w-lg` to `var(--spacing-lg)` (20px)
+// instead of the default `--container-lg` (32rem), collapsing the dock to a
+// ~20px sliver whose footer buttons overflow off-screen. Same trap documented
+// in app/(authed)/reports/_components/ReportPageChrome.tsx.
+const DOCK_SHELL = 'fixed bottom-6 right-6 z-50 w-full max-w-[32rem]';
+
 export function AugmentPromptButton() {
   const t = useTranslations('planEdits');
   const [open, setOpen] = useState(false);
@@ -17,7 +25,7 @@ export function AugmentPromptButton() {
 
   if (state.phase === 'done') {
     return (
-      <div className="fixed bottom-6 right-6 z-50 w-full max-w-lg">
+      <div className={DOCK_SHELL}>
         <PlanEditsReviewDock
           state={state}
           onApprove={approve}
@@ -30,7 +38,7 @@ export function AugmentPromptButton() {
 
   if (state.phase !== 'idle') {
     return (
-      <div className="fixed bottom-6 right-6 z-50 w-full max-w-lg">
+      <div className={DOCK_SHELL}>
         <PlanEditsReviewDock
           state={state}
           onApprove={approve}
@@ -114,7 +122,7 @@ export function PlanEditsTrigger({ kind, itemKey, onDismiss }: PlanEditsTriggerP
 
   if (state.phase !== 'idle' && state.phase !== 'done') {
     return (
-      <div className="fixed bottom-6 right-6 z-50 w-full max-w-lg">
+      <div className={DOCK_SHELL}>
         <PlanEditsReviewDock
           state={state}
           onApprove={approve}
@@ -127,7 +135,7 @@ export function PlanEditsTrigger({ kind, itemKey, onDismiss }: PlanEditsTriggerP
 
   if (state.phase === 'done') {
     return (
-      <div className="fixed bottom-6 right-6 z-50 w-full max-w-lg">
+      <div className={DOCK_SHELL}>
         <PlanEditsReviewDock
           state={state}
           onApprove={approve}

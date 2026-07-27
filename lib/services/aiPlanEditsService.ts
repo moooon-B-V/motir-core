@@ -185,12 +185,28 @@ export const aiPlanEditsService = {
     const svcCtx: ServiceContext = { userId: ctx.userId, workspaceId: ctx.workspaceId };
     const created: string[] = [];
     const updated: string[] = [];
-    const refToKey = new Map<string, string>();
+    // ref → the CREATED item's DATABASE id (not its identifier): `parentId` on
+    // CreateWorkItemInput is a DB id, so an in-delta `parentRef` must resolve to
+    // one directly.
+    const refToId = new Map<string, string>();
 
     for (const op of delta.operations) {
       if (op.op === 'create') {
-        const parentId =
-          op.parentKey ?? (op.parentRef ? (refToKey.get(op.parentRef) ?? null) : null);
+        // `parentKey` is an existing item's KEY ("ARP-1", the planDelta
+        // contract), but `createWorkItem` takes a DB id and looks it up with
+        // findById — passing the key straight through made every parented
+        // create throw WorkItemNotFoundError (a 500 on approve), so resolve the
+        // key to its id first.
+        let parentId: string | null = null;
+        if (op.parentKey) {
+          const parent = await workItemRepository.findByIdentifier(ctx.projectId, op.parentKey);
+          if (!parent) {
+            throw new PlanDeltaApproveError(`Parent item ${op.parentKey} not found`);
+          }
+          parentId = parent.id;
+        } else if (op.parentRef) {
+          parentId = refToId.get(op.parentRef) ?? null;
+        }
         const wi = await workItemsService.createWorkItem(
           {
             projectId: ctx.projectId,
@@ -206,7 +222,7 @@ export const aiPlanEditsService = {
           svcCtx,
         );
         created.push(wi.identifier);
-        if (op.ref) refToKey.set(op.ref, wi.identifier);
+        if (op.ref) refToId.set(op.ref, wi.id);
       } else if (op.op === 'update') {
         const targetKey = op.targetKey;
         const existing = await workItemRepository.findByIdentifier(ctx.projectId, targetKey);
