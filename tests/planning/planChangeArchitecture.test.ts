@@ -48,9 +48,33 @@ function read(file: string): string {
 }
 
 function isClientModule(text: string): boolean {
-  // The directive must be the module's first statement, so it is always in the
-  // opening lines — a later mention inside a comment or a string is not one.
-  return /^\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*['"]use client['"]/.test(text);
+  // The directive must be the module's FIRST statement, so a mention further
+  // down — inside a comment, a string, or this very file — is not one.
+  //
+  // Scanned rather than matched: the obvious regex for "skip leading whitespace
+  // and comments" puts an ambiguous alternation under a `*`
+  // (`(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*`), which a source file made of many
+  // `*//*` repetitions can force into exponential backtracking — a real ReDoS
+  // CodeQL flags (js/redos). This walk is linear and never backtracks.
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+      i += 1;
+    } else if (text.startsWith('//', i)) {
+      const newline = text.indexOf('\n', i + 2);
+      if (newline === -1) return false;
+      i = newline + 1;
+    } else if (text.startsWith('/*', i)) {
+      const close = text.indexOf('*/', i + 2);
+      if (close === -1) return false;
+      i = close + 2;
+    } else {
+      // The first thing that is neither whitespace nor a comment decides it.
+      return text.startsWith("'use client'", i) || text.startsWith('"use client"', i);
+    }
+  }
+  return false;
 }
 
 // ─────────── Guard 1 — no client component reaches the service layer ───────────
@@ -252,5 +276,34 @@ describe('the source scan is not vacuous', () => {
   it('walked the app, components and lib trees', () => {
     expect(SOURCE_FILES.length).toBeGreaterThan(200);
     expect(SOURCE_FILES.some((f) => f.endsWith(`planning${sep}launcher.ts`))).toBe(true);
+  });
+
+  it('classifies client modules correctly — a false-everywhere scanner would pass guard 1 vacuously', () => {
+    expect(isClientModule("'use client';\nexport const a = 1;\n")).toBe(true);
+    expect(isClientModule('"use client";\n')).toBe(true);
+    expect(isClientModule("// a leading comment\n\n'use client';\n")).toBe(true);
+    expect(isClientModule("/* block */ 'use client';\n")).toBe(true);
+    expect(isClientModule("/* one */\n// two\n/* three */\n'use client';\n")).toBe(true);
+
+    // A mention that is NOT the first statement — the false positives the walk
+    // exists to reject (this very file contains one).
+    expect(isClientModule("import x from 'y';\n'use client';\n")).toBe(false);
+    expect(isClientModule("// mentions 'use client' in prose\nexport const a = 1;\n")).toBe(false);
+    expect(isClientModule('const s = "\'use client\'";\n')).toBe(false);
+    expect(isClientModule('')).toBe(false);
+    expect(isClientModule('   \n\n')).toBe(false);
+    // Unterminated comments: bail rather than loop or mis-read past them.
+    expect(isClientModule("/* never closed\n'use client';")).toBe(false);
+    expect(isClientModule('// no trailing newline')).toBe(false);
+  });
+
+  it('classifies in linear time on the input that made the old regex backtrack', () => {
+    // The js/redos repro: many `*//*` repetitions with no directive after them.
+    // Exponential backtracking would hang here; the walk returns immediately.
+    const adversarial = `/*${'*//*'.repeat(2000)}`;
+    const started = process.hrtime.bigint();
+    expect(isClientModule(adversarial)).toBe(false);
+    const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+    expect(elapsedMs).toBeLessThan(1000);
   });
 });
