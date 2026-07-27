@@ -125,44 +125,120 @@ describe('plan_change_session RLS — reads', () => {
 });
 
 describe('plan_change_session RLS — writes', () => {
-  it('⚠️ KNOWN GAP (MOTIR-1735): a turn labelled with A’s workspace can point at B’s session', async () => {
-    // This test pins SHIPPED REALITY, not the invariant we want — and it is the
-    // reason MOTIR-1735 exists.
+  it('tenant A cannot plant a turn of its OWN tenancy under tenant B’s session', async () => {
+    // The MOTIR-1735 fix, asserted at the DB. RLS alone could not stop this: the
+    // `WITH CHECK` half of `plan_change_turn_active_workspace` validates only the
+    // row's OWN `workspace_id`, and RLS does NOT traverse foreign keys (the FK's
+    // lookup runs as the table owner, RLS bypassed). So a turn labelled with A's
+    // workspace but pointing at B's session used to pass every policy.
     //
-    // The `WITH CHECK` half of `plan_change_turn_active_workspace` validates only
-    // the row's OWN `workspace_id`. Nothing checks that `session_id` belongs to
-    // that workspace, and RLS does not traverse foreign keys (the FK check runs
-    // as the table owner, RLS bypassed). So tenant A CAN plant a turn of its own
-    // tenancy under tenant B's session — and because `(session_id, seq)` is
-    // UNIQUE and that index is enforced without RLS, the planted row claims a
-    // seq slot B can never use, wedging B's thread (`PlanChangeTurnConflictError`
-    // on every retry, since B's `turnCount` never advances).
-    //
-    // Not reachable through the shipped app — the service always resolves the
-    // session by `(projectId, workspaceId)` first and no route accepts a session
-    // id — so this is a defence-in-depth gap, fixed by a migration in MOTIR-1735
-    // (out of scope for a test card; `notes.html` mistake #27). When that lands,
-    // this case becomes a `.rejects.toThrow()`.
-    const planted = await asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+    // What rejects it now is structural, not a policy: the FK references the PAIR
+    // `(session_id, workspace_id)`, so no session row `(B's id, A's workspace)`
+    // exists to point at. Note this holds for a BYPASSRLS superuser too — the
+    // layer beneath the policies, which is the point of a defence-in-depth fix.
+    await expect(
+      asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+        tx.planChangeTurn.create({
+          data: {
+            workspaceId: a.workspaceId,
+            sessionId: sessionB.id,
+            seq: 1,
+            role: 'user',
+            body: 'injected',
+            authorId: a.ownerId,
+          },
+        }),
+      ),
+    ).rejects.toThrow(/[Ff]oreign key/);
+
+    // Nothing landed: B's thread still holds exactly its own single turn.
+    expect(await db.planChangeTurn.count({ where: { sessionId: sessionB.id } })).toBe(1);
+  });
+
+  it('tenant A cannot RE-POINT one of its own turns at tenant B’s session', async () => {
+    // The UPDATE face of the same hole. A owns this row, so RLS's `USING` half
+    // lets A see and update it — only the composite FK stops the `session_id`
+    // from being rewritten to a foreign session.
+    const own = await asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
       tx.planChangeTurn.create({
         data: {
           workspaceId: a.workspaceId,
-          sessionId: sessionB.id,
+          sessionId: sessionA.id,
           seq: 1,
           role: 'user',
-          body: 'injected',
+          body: 'mine, for now',
           authorId: a.ownerId,
         },
       }),
     );
-    expect(planted.workspaceId).toBe(a.workspaceId);
 
-    // What DOES hold, and is the reason this is availability-not-confidentiality:
-    // the planted row is invisible to B, and B's own turn is invisible to A.
-    const bSees = await asAppRole({ userId: b.ownerId, workspaceId: b.workspaceId }, (tx) =>
-      tx.planChangeTurn.findMany({ where: { sessionId: sessionB.id } }),
+    await expect(
+      asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+        tx.planChangeTurn.update({
+          where: { id: own.id },
+          data: { sessionId: sessionB.id },
+        }),
+      ),
+    ).rejects.toThrow(/[Ff]oreign key/);
+
+    const after = await db.planChangeTurn.findUniqueOrThrow({ where: { id: own.id } });
+    expect(after.sessionId).toBe(sessionA.id);
+    expect(await db.planChangeTurn.count({ where: { sessionId: sessionB.id } })).toBe(1);
+  });
+
+  it('tenant A’s DELETE of tenant B’s TURNS removes nothing', async () => {
+    // Reads are still the policy's job: B's turns are invisible under A's GUC, so
+    // a scoped delete matches zero rows rather than truncating B's thread.
+    const result = await asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+      tx.planChangeTurn.deleteMany({ where: { sessionId: sessionB.id } }),
     );
-    expect(bSees.map((t) => t.body)).toEqual(['Tenant B: add a reporting story']);
+    expect(result.count).toBe(0);
+    expect(await db.planChangeTurn.count({ where: { sessionId: sessionB.id } })).toBe(1);
+  });
+
+  it('after a planting ATTEMPT, tenant B’s next append still succeeds — no wedged seq', async () => {
+    // The defect's actual damage, asserted absent. `(session_id, seq)` is UNIQUE
+    // and that index is enforced WITHOUT RLS, so a planted row used to claim a
+    // seq slot B could never use: B allocates `seq` from its own `turn_count`,
+    // collides, rolls back — so `turn_count` never advances and every retry
+    // re-collides on the same seq. A permanently wedged conversation.
+    await expect(
+      asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+        tx.planChangeTurn.create({
+          data: {
+            workspaceId: a.workspaceId,
+            sessionId: sessionB.id,
+            seq: 1,
+            role: 'user',
+            body: 'injected',
+            authorId: a.ownerId,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    // B now appends at exactly the seq the attacker tried to burn.
+    const appended = await asAppRole({ userId: b.ownerId, workspaceId: b.workspaceId }, (tx) =>
+      tx.planChangeTurn.create({
+        data: {
+          workspaceId: b.workspaceId,
+          sessionId: sessionB.id,
+          seq: 1,
+          role: 'user',
+          body: 'Tenant B: and split the biggest one',
+          authorId: b.ownerId,
+        },
+      }),
+    );
+    expect(appended.seq).toBe(1);
+
+    const thread = await asAppRole({ userId: b.ownerId, workspaceId: b.workspaceId }, (tx) =>
+      tx.planChangeTurn.findMany({ where: { sessionId: sessionB.id }, orderBy: { seq: 'asc' } }),
+    );
+    expect(thread.map((t) => t.body)).toEqual([
+      'Tenant B: add a reporting story',
+      'Tenant B: and split the biggest one',
+    ]);
   });
 
   it('tenant A cannot INSERT a row labelled with tenant B’s workspace', async () => {

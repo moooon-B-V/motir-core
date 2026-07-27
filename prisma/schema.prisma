@@ -3795,6 +3795,12 @@ model PlanChangeSession {
   /// ONE plan-change conversation per project (the resumable single thread); the
   /// unique also makes the Project ↔ PlanChangeSession relation a clean one-to-one.
   @@unique([projectId])
+  /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
+  /// this adds no integrity constraint of its own — it exists solely to make
+  /// `(id, workspace_id)` a referenceable key, so `plan_change_turn` can point its
+  /// FK at the PAIR and prove a turn's tenancy against its parent's. See the
+  /// `session` relation on `PlanChangeTurn`.
+  @@unique([id, workspaceId])
   @@index([workspaceId])
   @@map("plan_change_session")
 }
@@ -3828,7 +3834,16 @@ model PlanChangeTurn {
   createdAt   DateTime           @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  session   PlanChangeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
+  /// not at `session_id` alone, so a turn can only ever attach to a session IN ITS
+  /// OWN WORKSPACE. This is the structural half of the tenancy guarantee: RLS
+  /// checks the row's own `workspace_id` but does NOT traverse foreign keys, so a
+  /// single-column FK let a tenant plant a turn under a FOREIGN session — passing
+  /// `WITH CHECK` while claiming a `(session_id, seq)` slot the victim could never
+  /// use, wedging their thread (a cross-tenant DoS). Referencing the pair makes
+  /// that row nonexistent rather than merely invisible, and unlike a policy it
+  /// also holds for BYPASSRLS/superuser connections.
+  session   PlanChangeSession @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   author    User?             @relation("PlanChangeTurnAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   @@unique([sessionId, seq])
