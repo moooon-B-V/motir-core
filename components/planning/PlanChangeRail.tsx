@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, RefreshCw, Send, Sparkles } from 'lucide-react';
+import { Check, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { AiPaywall } from '@/components/ai/AiPaywall';
+import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
 import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
+import type { PlanningTarget } from '@/lib/planning/planningTargets';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -65,6 +68,11 @@ export interface PlanChangeRailProps {
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
+  /** The turn's TARGET SET (MOTIR-1491). Owned by the host, because the canvas
+   *  highlights the same set the composer collects. */
+  targets: readonly PlanningTarget[];
+  onAddTarget: (target: PlanningTarget) => void;
+  onRemoveTarget: (identifier: string) => void;
   onSend: (text: string) => void;
   onRetry: () => void;
   onApprove: () => void;
@@ -76,6 +84,9 @@ export function PlanChangeRail({
   projectName,
   state,
   index,
+  targets,
+  onAddTarget,
+  onRemoveTarget,
   onSend,
   onRetry,
   onApprove,
@@ -98,17 +109,19 @@ export function PlanChangeRail({
   // has started the composer returns to its ordinary placeholder.
   const askingForReason =
     launch.mode === 'replan' && launch.itemKey !== null && userTurns.length === 0;
+  // The re-plan ASK wins over every other placeholder: it is a one-time prompt
+  // for the reason, and it stops the moment the conversation starts. Only then
+  // does the targeted variant apply (MOTIR-1491).
   const composerPlaceholder = askingForReason
     ? tc('composerPlaceholderReplan')
-    : tc('composerPlaceholder');
+    : targets.length > 0
+      ? tc('composerPlaceholderTargets')
+      : tc('composerPlaceholder');
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || busy) return;
-    onSend(text);
-    setDraft('');
-  }
+  // What the THREAD is anchored at, per the server (`PlanChangeSessionDto`) —
+  // not the local tray. A sent turn is scoped by the session it landed in, so
+  // the chips on the turn come from the record, not from what is picked now.
+  const turnTargetKeys = state.session?.targetKeys ?? [];
 
   return (
     <aside
@@ -159,7 +172,7 @@ export function PlanChangeRail({
         ) : null}
 
         {(state.session?.turns ?? []).map((turn) => (
-          <Turn key={turn.id} turn={turn} userTurns={userTurns} />
+          <Turn key={turn.id} turn={turn} userTurns={userTurns} targetKeys={turnTargetKeys} />
         ))}
 
         {/* The proposal, said in words — the rail mirrors the canvas bar's counts
@@ -246,33 +259,20 @@ export function PlanChangeRail({
         {state.outOfCredits ? <AiPaywall triggeredOutOfCredits /> : null}
       </div>
 
-      <form
-        onSubmit={submit}
-        className="flex items-center gap-2 border-t border-(--el-border) px-3 py-3"
-      >
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          disabled={busy || state.phase === 'loading'}
-          // Pre-focused for a re-plan so the reason can be typed straight away
-          // (the entrance's whole promise). Autofocus is safe here: the workspace
-          // is a full-screen route whose primary act IS this composer.
-          autoFocus={askingForReason}
-          placeholder={composerPlaceholder}
-          aria-label={composerPlaceholder}
-          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
-        />
-        <Button
-          type="submit"
-          variant="primary"
-          size="sm"
-          disabled={busy || draft.trim().length === 0}
-          aria-label={tc('send')}
-        >
-          <Send className="size-4" aria-hidden="true" />
-        </Button>
-      </form>
+      {/* The composer carries the `@` TARGET picker + the tray (MOTIR-1491) — the
+          message field and the target set are one control, because the targets
+          scope the turn the field sends. */}
+      <PlanChangeComposer
+        draft={draft}
+        onDraftChange={setDraft}
+        targets={targets}
+        onAddTarget={onAddTarget}
+        onRemoveTarget={onRemoveTarget}
+        onSubmit={onSend}
+        placeholder={composerPlaceholder}
+        autoFocus={askingForReason}
+        disabled={busy || state.phase === 'loading'}
+      />
     </aside>
   );
 }
@@ -297,8 +297,19 @@ function errorKey(code: string): string {
  *  second and later ones are REFINEMENTS, which is the whole point); a `system`
  *  turn is the submission MARKER — its body is the accumulated intent that went
  *  out, which is provenance, not conversation, so it renders as a quiet divider. */
-function Turn({ turn, userTurns }: { turn: PlanChangeTurnDto; userTurns: PlanChangeTurnDto[] }) {
+function Turn({
+  turn,
+  userTurns,
+  targetKeys,
+}: {
+  turn: PlanChangeTurnDto;
+  userTurns: PlanChangeTurnDto[];
+  /** The thread's anchor set — rendered on a user turn so the reader SEES what
+   *  the planner was pointed at (design panel 3). Empty on the project thread. */
+  targetKeys: readonly string[];
+}) {
   const tc = useTranslations('planningWorkspace.conversation');
+  const tt = useTranslations('planningWorkspace.targets');
 
   if (turn.role === 'system') {
     return (
@@ -311,6 +322,16 @@ function Turn({ turn, userTurns }: { turn: PlanChangeTurnDto; userTurns: PlanCha
   const n = userTurns.findIndex((u) => u.id === turn.id) + 1;
   return (
     <Bubble role="user" label={n > 1 ? tc('turnRefine', { n }) : tc('turn', { n })}>
+      {targetKeys.length > 0 ? (
+        <span className="mb-1 flex flex-wrap items-center gap-1">
+          <span className="text-[10px] font-semibold tracking-wide uppercase opacity-80">
+            {tt('turnLabel', { count: targetKeys.length })}
+          </span>
+          {targetKeys.map((key) => (
+            <PlanningTargetKeyChip key={key} identifier={key} tone="on-accent" />
+          ))}
+        </span>
+      ) : null}
       {turn.body}
     </Bubble>
   );

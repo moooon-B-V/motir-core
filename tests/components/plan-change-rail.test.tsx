@@ -7,6 +7,7 @@ import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import { indexPlanDelta } from '@/lib/planning/planChangeDiff';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import type { PlanDelta } from '@/lib/ai/planDelta';
 
 // The conversational RAIL (Subtask MOTIR-1730; design panels 3 + 6). It is
@@ -27,11 +28,11 @@ function turn(seq: number, body: string, role: 'user' | 'system' = 'user'): Plan
   };
 }
 
-function session(turns: PlanChangeTurnDto[]): PlanChangeSessionDto {
+function session(turns: PlanChangeTurnDto[], targetKeys: string[] = []): PlanChangeSessionDto {
   return {
     id: 's1',
     projectId: 'p1',
-    targetKeys: [],
+    targetKeys,
     turnCount: turns.length,
     lastJobId: null,
     lastSubmittedAt: null,
@@ -65,11 +66,14 @@ const handlers = {
   onRetry: vi.fn(),
   onApprove: vi.fn(),
   onDiscard: vi.fn(),
+  onAddTarget: vi.fn(),
+  onRemoveTarget: vi.fn(),
 };
 
 function renderRail(
   state: Partial<PlanChangeConversationState> = {},
   launch: typeof LAUNCH = LAUNCH,
+  targets: PlanningTarget[] = [],
 ) {
   const merged = { ...BASE, ...state };
   return renderWithIntl(
@@ -78,6 +82,7 @@ function renderRail(
       projectName="PayFlow"
       state={merged}
       index={indexPlanDelta(merged.delta)}
+      targets={targets}
       {...handlers}
     />,
   );
@@ -159,6 +164,39 @@ describe('PlanChangeRail — MULTI-TURN refinement', () => {
   it('hides the starter chips once the conversation has started', () => {
     renderRail({ session: session([turn(0, 'Add recurring invoices.')]) });
     expect(screen.queryByRole('button', { name: 'Add work to an epic' })).toBeNull();
+  });
+});
+
+describe('PlanChangeRail — the turn shows what it was TARGETED at (MOTIR-1491)', () => {
+  it('labels a turn with the THREAD’s anchor set, so the reader sees the scope', () => {
+    // The keys come from the SESSION (the server's record of the thread's scope),
+    // not from the composer's tray — a sent turn is scoped by where it landed.
+    renderRail({
+      session: session([turn(0, 'Expand billing.')], ['MOTIR-812', 'MOTIR-918']),
+    });
+
+    expect(screen.getByText('Targeting 2 items')).toBeTruthy();
+    expect(screen.getAllByTestId('planning-turn-target').map((el) => el.textContent)).toEqual([
+      'MOTIR-812',
+      'MOTIR-918',
+    ]);
+  });
+
+  it('says nothing about targets on the PROJECT-wide thread', () => {
+    renderRail({ session: session([turn(0, 'Expand billing.')]) });
+
+    expect(screen.queryByTestId('planning-turn-target')).toBeNull();
+    expect(screen.queryByText(/Targeting/)).toBeNull();
+  });
+
+  it('shows the picked targets as a removable tray above the composer', () => {
+    renderRail({}, LAUNCH, [
+      { id: 'w1', identifier: 'MOTIR-812', title: 'Billing — invoicing', kind: 'story' },
+    ]);
+
+    expect(screen.getByTestId('planning-target-tray')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove MOTIR-812' }));
+    expect(handlers.onRemoveTarget).toHaveBeenCalledWith('MOTIR-812');
   });
 });
 

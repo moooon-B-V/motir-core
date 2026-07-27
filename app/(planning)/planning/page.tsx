@@ -7,6 +7,7 @@ import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { parsePlanningLaunch, planningLaunchBackHref } from '@/lib/planning/launcher';
+import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
 
@@ -94,14 +95,17 @@ export default async function PlanningWorkspacePage({
   // honest empty canvas instead of the canvas's bare "nothing here" panel.
   const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
 
-  // The ANCHOR, when the workspace was summoned from a work item (MOTIR-910).
-  // Resolved HERE, server-side: the client host needs the item's database id (the
-  // MOTIR-909 endpoints are keyed by it) while the href carries the human
-  // identifier, and no client component may reach the service layer for it. The
-  // read is the same view-gated resolve the detail page uses, so an item in
-  // another tenant or one this actor cannot browse yields no anchor at all —
-  // the workspace then opens on the project conversation instead of erroring.
+  // The entrance's work item, resolved ONCE, server-side (MOTIR-910 + MOTIR-1491).
+  // It answers two needs with one read: the client host needs the item's database
+  // id to address the MOTIR-909 endpoints (the href carries only the human
+  // identifier), and the `@`-mention target set opens PRE-FILLED with that item.
+  // Resolved here because no client component may reach the service layer, and a
+  // Server Component reading through a service IS the 4-layer shape. The read is
+  // the same view-gated resolve the detail page uses, so an item in another tenant
+  // or one this actor cannot browse yields no anchor at all — the workspace then
+  // opens on the project conversation instead of erroring.
   let anchorId: string | null = null;
+  let initialTarget: PlanningTarget | null = null;
   if (launch.itemKey) {
     try {
       const anchor = await workItemsService.getWorkItemByIdentifier(
@@ -110,8 +114,15 @@ export default async function PlanningWorkspacePage({
         wsCtx,
       );
       anchorId = anchor.id;
+      initialTarget = {
+        id: anchor.id,
+        identifier: anchor.identifier,
+        title: anchor.title,
+        kind: anchor.kind,
+      };
     } catch {
       anchorId = null;
+      initialTarget = null;
     }
   }
 
@@ -123,6 +134,7 @@ export default async function PlanningWorkspacePage({
       launch={launch}
       anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
+      initialTarget={initialTarget}
     />
   );
 }

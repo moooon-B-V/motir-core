@@ -4642,6 +4642,7 @@
       "submitted": "已发送给 Motir AI",
       "composerPlaceholder": "回复，或继续细化…",
       "composerPlaceholderReplan": "哪里有问题？想怎么改？",
+      "composerPlaceholderTargets": "请 Motir 围绕这些进行规划…",
       "send": "发送",
       "retry": "重试",
       "discard": "放弃",
@@ -4684,6 +4685,21 @@
           "description": "描述"
         }
       }
+    },
+    "targets": {
+      "sectionLabel": "工作项",
+      "sectionLabelQuery": "包含“{query}”的工作项",
+      "emptyHint": "输入以搜索项目中的工作项…",
+      "keepTyping": "继续输入以搜索工作项…",
+      "searching": "搜索中…",
+      "noResults": "没有匹配“{query}”的工作项。",
+      "listboxLabel": "要围绕规划的工作项",
+      "trigger": "添加要围绕规划的工作项",
+      "trayLabel": "{count, plural, other {目标}}",
+      "remove": "移除 {item}",
+      "limitReached": "一次最多可围绕 {max} 个工作项规划。",
+      "turnLabel": "{count, plural, other {针对 # 个工作项}}",
+      "nodePill": "目标"
     },
     "mode": {
       "project": "规划",

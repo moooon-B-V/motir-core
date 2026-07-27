@@ -9,6 +9,7 @@ import {
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
+import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import { isProposedNodeId, type PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 
@@ -39,10 +40,20 @@ export interface PlanChangeCanvasProps {
   index: PlanChangeDiffIndex;
   /** Bumped by the host whenever the proposal (or the committed tree) changed. */
   diffKey: string | number;
+  /** The chat's planning TARGETS, by work-item id (MOTIR-1491) — the ones on the
+   *  CURRENT level take the target ring, so the user sees what the planner is
+   *  pointed at. */
+  targetIds?: readonly string[];
   ariaLabel?: string;
 }
 
-export function PlanChangeCanvas({ projectKey, index, diffKey, ariaLabel }: PlanChangeCanvasProps) {
+export function PlanChangeCanvas({
+  projectKey,
+  index,
+  diffKey,
+  targetIds,
+  ariaLabel,
+}: PlanChangeCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const { registerItems, onView, quickView } = useWorkItemQuickView();
 
@@ -61,9 +72,16 @@ export function PlanChangeCanvas({ projectKey, index, diffKey, ariaLabel }: Plan
   // own ref and only re-runs it when the focus or `reloadKey` changes, so a new
   // proposal identity here is picked up by the `diffKey`-driven reload — with the
   // FRESH index, not a render-time ref that would lag that reload by one pass.
+  // The target set as a STABLE dependency: the prop is a fresh array on every
+  // host render, so the joined key is what `loadLevel` (and the reload key
+  // below) depend on — the level is rebuilt when the SET changes, not on every
+  // keystroke in the composer.
+  const targetKey = (targetIds ?? []).join(',');
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       const diff = index;
+      const targets = targetKey === '' ? [] : targetKey.split(',');
       const focus = {
         focusNodeId: parentId,
         focusKey: parentId === null ? null : (keyByIdRef.current.get(parentId) ?? null),
@@ -72,6 +90,8 @@ export function PlanChangeCanvas({ projectKey, index, diffKey, ariaLabel }: Plan
       // Drilled into a PROPOSED item: nothing is persisted, so there is no level to
       // read — its children come straight from the delta.
       if (parentId !== null && isProposedNodeId(parentId)) {
+        // A proposed item's children are not work items, so none of them can be
+        // a target — no target pass here.
         return decoratePlanChangeLevel({ nodes: [], deps: [] }, EMPTY_LEVEL, diff, focus);
       }
 
@@ -88,18 +108,24 @@ export function PlanChangeCanvas({ projectKey, index, diffKey, ariaLabel }: Plan
       registerItems(wi);
       for (const item of wi.items) keyByIdRef.current.set(item.id, item.identifier);
 
-      return decoratePlanChangeLevel(buildWorkItemLevel(wi, { markActive: true }), wi, diff, focus);
+      // Targets are marked LAST, so the ring sits outside the diff frame when a
+      // node is both targeted and touched by a pending proposal.
+      return decorateTargetLevel(
+        decoratePlanChangeLevel(buildWorkItemLevel(wi, { markActive: true }), wi, diff, focus),
+        targets,
+      );
     },
-    [projectKey, diffKey, index, registerItems],
+    [projectKey, diffKey, index, registerItems, targetKey],
   );
 
   return (
     <>
       <ProjectRoadmapCanvas
         loadLevel={loadLevel}
-        // Re-runs the CURRENT level's load when the proposal changes, so the diff
-        // appears (and disappears on approve/discard) without a remount.
-        reloadKey={`plan-change:${diffKey}`}
+        // Re-runs the CURRENT level's load when the proposal — or the target set
+        // — changes, so the diff and the target ring appear (and disappear)
+        // without a remount, drill / zoom / pan preserved.
+        reloadKey={`plan-change:${diffKey}:${targetKey}`}
         onView={onView}
         searchable
         fullScreenable
