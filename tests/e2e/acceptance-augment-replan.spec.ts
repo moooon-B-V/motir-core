@@ -142,6 +142,9 @@ async function stubJobResult(page: Page, jobId: string, delta: object): Promise<
 
 // ── Delta factories (the crafted responses motir-ai would return) ────────────
 
+// NOTE on `type`: it is LEAF-ONLY (the 2.7.2 ADR — an epic/story carrying a
+// type is rejected with TypeNotAllowedOnKindError, 422). So the `story` ops
+// below set no `type`; only the `task` ops in expandDelta do.
 function augmentDelta(parentKey: string) {
   return {
     operations: [
@@ -152,19 +155,36 @@ function augmentDelta(parentKey: string) {
         fields: {
           title: 'Payment Integration',
           descriptionMd: 'Add Stripe payment flow integrated with auth',
-          type: 'code',
         },
       },
     ],
   };
 }
 
-function expandDelta() {
+// Expand proposes the stub's CHILDREN, so every op carries `parentKey` — the
+// expanded item's key. (Without it the ops commit as roots, which is not what
+// "expand" means and leaves the stub still childless.)
+function expandDelta(parentKey: string) {
   return {
     operations: [
-      { op: 'create', kind: 'task', fields: { title: 'In-app notifications', type: 'code' } },
-      { op: 'create', kind: 'task', fields: { title: 'Email notifications', type: 'code' } },
-      { op: 'create', kind: 'task', fields: { title: 'Push notifications', type: 'code' } },
+      {
+        op: 'create',
+        kind: 'task',
+        parentKey,
+        fields: { title: 'In-app notifications', type: 'code' },
+      },
+      {
+        op: 'create',
+        kind: 'task',
+        parentKey,
+        fields: { title: 'Email notifications', type: 'code' },
+      },
+      {
+        op: 'create',
+        kind: 'task',
+        parentKey,
+        fields: { title: 'Push notifications', type: 'code' },
+      },
     ],
   };
 }
@@ -172,8 +192,8 @@ function expandDelta() {
 function replanDelta(parentKey: string) {
   return {
     operations: [
-      { op: 'create', kind: 'story', parentKey, fields: { title: 'Billing plans', type: 'code' } },
-      { op: 'create', kind: 'story', parentKey, fields: { title: 'API management', type: 'code' } },
+      { op: 'create', kind: 'story', parentKey, fields: { title: 'Billing plans' } },
+      { op: 'create', kind: 'story', parentKey, fields: { title: 'API management' } },
     ],
   };
 }
@@ -222,6 +242,9 @@ test('augment — submit prompt, review provenance, approve, tree reflects the c
       .getByPlaceholder(/Describe what to add/)
       .fill('Add a payment integration for the Stripe checkout flow');
     await page.getByRole('button', { name: 'Augment', exact: true }).click();
+    // The Radix Dialog overlay animates out — wait until the modal
+    // is fully removed from the DOM so it doesn't cover the dock.
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
     await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
   });
 
@@ -253,7 +276,7 @@ test('expand — click Expand on childless stub, review, approve, children appea
   const seed = await seedAiAugmentReplan(`ai-expand-${Date.now()}@example.com`);
   await stubAiAccess(page);
   await stubEditsJobs(page);
-  await stubJobResult(page, EXPAND_JOB_ID, expandDelta());
+  await stubJobResult(page, EXPAND_JOB_ID, expandDelta(seed.notifKey));
 
   await signIn(page, seed.email, seed.password);
   await page.goto('/items');
@@ -398,13 +421,16 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
       body: doneSse(),
     });
   });
-  await stubJobResult(page, EXPAND_JOB_ID, expandDelta());
+  await stubJobResult(page, EXPAND_JOB_ID, expandDelta(seed.notifKey));
 
   await signIn(page, seed.email, seed.password);
   await page.goto('/ready');
 
-  // The nudge banner appears — it names the nominated stub.
-  await expect(page.locator(`text=${seed.notifKey}`)).toBeVisible({ timeout: 10_000 });
+  // The nudge banner appears — it names the nominated stub. `.first()` for the
+  // same reason as the title below: the key appears BOTH in the banner sentence
+  // ("… expand ARP-4 (Notifications)") and in its own font-mono key chip, so a
+  // bare text= locator is a strict-mode violation as soon as both have rendered.
+  await expect(page.locator(`text=${seed.notifKey}`).first()).toBeVisible({ timeout: 10_000 });
   // The nudge body also contains the nominated title — use .first() to avoid
   // strict-mode collision with the items-list row that also has "Notifications".
   await expect(page.locator('text=Notifications').first()).toBeVisible();
