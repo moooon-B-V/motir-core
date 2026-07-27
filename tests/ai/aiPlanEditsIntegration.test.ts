@@ -3,10 +3,14 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
-import { aiPlanEditsService, PlanDeltaImmutabilityError } from '@/lib/services/aiPlanEditsService';
+import {
+  aiPlanEditsService,
+  PlanDeltaApproveError,
+  PlanDeltaImmutabilityError,
+} from '@/lib/services/aiPlanEditsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import type { PlanDelta } from '@/lib/ai/planDelta';
+import { PlanDeltaValidationError, type PlanDelta } from '@/lib/ai/planDelta';
 
 import {
   createTestWorkspace,
@@ -47,7 +51,7 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
     await db.$disconnect();
   });
 
-  it('creates work items through workItemsService and returns the keys', async () => {
+  it('creates work items atomically through the work-item leaves and returns the keys', async () => {
     const fx = await makeWorkItemFixture();
     const delta = createDelta({
       operations: [
@@ -165,7 +169,7 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
     );
   });
 
-  it('immutability guard fires before any operation persists (defense in depth)', async () => {
+  it('immutability guard fires before ANY operation persists (defense in depth)', async () => {
     const fx = await makeWorkItemFixture();
     const good = await createTestWorkItem(fx, {
       kind: 'task',
@@ -177,10 +181,9 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
     });
     await workItemsService.setImportedStatus(done.id, 'done', ctx(fx));
 
-    // A delta with TWO ops: the first is fine, the second should reject.
-    // The immutability check fires per-op, so the first op COULD succeed before
-    // the second fails — but approveDelta runs sequentially without a
-    // transaction wrap, so we assert at least the terminal op is rejected.
+    // A delta with TWO ops: the first is fine, the second targets a done node.
+    // The whole delta is re-validated BEFORE the persist transaction opens
+    // (MOTIR-911), so the legal first op must NOT have landed either.
     const delta = createDelta({
       operations: [
         {
@@ -200,10 +203,128 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
       PlanDeltaImmutabilityError,
     );
 
-    // The first (non-terminal) op may have succeeded — its persistence is not
-    // rolled back since approveDelta doesn't wrap in a transaction. That's
-    // acceptable: the error signals the delta was partially applied and the
-    // caller must retry the whole thing.
+    const untouched = await workItemRepository.findByIdentifier(fx.projectId, good.identifier);
+    expect(untouched!.title).toBe('Mutable item');
+  });
+
+  it('rolls the WHOLE delta back when a later op fails (one transaction)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Existing target' });
+
+    // The failure is manufactured at the LAST op, after two creates and an update
+    // have already been applied inside the transaction: the update's row is
+    // deleted out from under the locked re-read, so `lockById` finds nothing and
+    // the persist throws mid-flight. Nothing may survive.
+    const doomed = await createTestWorkItem(fx, { kind: 'task', title: 'Vanishes' });
+    const delta = createDelta({
+      operations: [
+        { op: 'create', kind: 'task', fields: { title: 'Rolled back A' } },
+        { op: 'create', kind: 'bug', fields: { title: 'Rolled back B' } },
+        { op: 'update', targetKey: target.identifier, fields: { title: 'Rolled back edit' } },
+        { op: 'update', targetKey: doomed.identifier, fields: { title: 'Never applied' } },
+      ],
+    });
+    // Resolve pre-flight against the live row, then remove it before the tx runs.
+    const spy = vi
+      .spyOn(workItemRepository, 'lockById')
+      .mockImplementation(async (id: string) => (id === doomed.id ? null : { id }));
+
+    await expect(aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx))).rejects.toThrow();
+    spy.mockRestore();
+
+    const survivors = await workItemRepository.findByProject(fx.projectId);
+    expect(survivors.map((r) => r.title)).not.toContain('Rolled back A');
+    expect(survivors.map((r) => r.title)).not.toContain('Rolled back B');
+    const reread = await workItemRepository.findByIdentifier(fx.projectId, target.identifier);
+    expect(reread!.title).toBe('Existing target');
+  });
+
+  it('re-validates the kind-parent grammar independently and rejects an illegal edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'task', title: 'A task' });
+
+    // A `story` may not be parented to a `task` (lib/issues/parentRules.ts).
+    const delta = createDelta({
+      operations: [
+        { op: 'create', kind: 'story', parentKey: parent.identifier, fields: { title: 'Illegal' } },
+      ],
+    });
+
+    await expect(aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx))).rejects.toThrow(
+      PlanDeltaValidationError,
+    );
+
+    const children = await workItemRepository.findSiblings(fx.projectId, parent.id);
+    expect(children).toHaveLength(0);
+  });
+
+  it('resolves intra-delta parentRefs to real keys, parent before child', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Holder epic' });
+
+    // The child is submitted BEFORE the parent it references — the gate's
+    // topological order is what makes this persist correctly.
+    const delta = createDelta({
+      operations: [
+        { op: 'create', kind: 'subtask', parentRef: 'r1', fields: { title: 'Child leaf' } },
+        {
+          op: 'create',
+          kind: 'story',
+          ref: 'r1',
+          parentKey: epic.identifier,
+          fields: { title: 'Parent story' },
+        },
+      ],
+    });
+
+    const result = await aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx));
+    expect(result.created).toHaveLength(2);
+
+    const story = (await workItemRepository.findByProject(fx.projectId)).find(
+      (r) => r.title === 'Parent story',
+    );
+    const leaf = (await workItemRepository.findByProject(fx.projectId)).find(
+      (r) => r.title === 'Child leaf',
+    );
+    expect(story!.parentId).toBe(epic.id);
+    expect(leaf!.parentId).toBe(story!.id);
+  });
+
+  it('rejects a delta naming a work item outside the active project (404-not-403)', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHR' });
+    const foreign = await createTestWorkItem(other, { kind: 'task', title: 'Another tenant' });
+
+    const delta = createDelta({
+      operations: [{ op: 'update', targetKey: foreign.identifier, fields: { title: 'Reach' } }],
+    });
+
+    await expect(aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx))).rejects.toThrow(
+      PlanDeltaApproveError,
+    );
+
+    const untouched = await workItemRepository.findByIdentifier(
+      other.projectId,
+      foreign.identifier,
+    );
+    expect(untouched!.title).toBe('Another tenant');
+  });
+
+  it('records a created revision + auto-watch for every node the approve lands', async () => {
+    const fx = await makeWorkItemFixture();
+    const delta = createDelta({
+      operations: [{ op: 'create', kind: 'task', fields: { title: 'Audited create' } }],
+    });
+
+    const result = await aiPlanEditsService.approveDelta('job_1', delta, projectCtx(fx));
+    const row = await workItemRepository.findByIdentifier(fx.projectId, result.created[0]!);
+
+    const revisions = await db.workItemRevision.findMany({ where: { workItemId: row!.id } });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]!.changeKind).toBe('created');
+
+    const watchers = await db.watcher.findMany({ where: { workItemId: row!.id } });
+    expect(watchers.map((w) => w.userId)).toContain(fx.ownerId);
   });
 
   it('empty delta returns empty arrays (valid no-op)', async () => {
@@ -225,7 +346,7 @@ describe('aiPlanEditsService.approveDelta — persist integration (real Postgres
     expect(result.unchanged).toEqual([]);
   });
 
-  it('a non-member of the project workspace is rejected by the workItemsService layer', async () => {
+  it('a non-member of the project workspace is rejected by the 6.4 edit gate', async () => {
     const fx = await makeWorkItemFixture();
     const outsider = await createTestUser();
 
