@@ -49,10 +49,15 @@
       ARRANGEMENTS of the shipped primitives (Card / Button / Pill / EmptyState /
       Switch) — no new vocabulary is invented.
 
-      HOST — designed against SHIPPED REALITY. Replaces the shipped /onboarding/import
-      placeholder (app/(onboarding)/onboarding/import/page.tsx, MOTIR-1462). Renders in
-      the (onboarding) route group — full-screen, OUTSIDE the (authed) AppLayout, but
-      authenticated — owning the viewport with a minimal brand bar, like
+      HOST — designed against SHIPPED REALITY. The wizard has its OWN route:
+      /onboarding/migrate (app/(onboarding)/onboarding/migrate/page.tsx +
+      _components/MigrateWizard.tsx, MOTIR-934).
+      ROUTE AMENDED 2026-07-27 (MOTIR-1710): this note originally said the wizard replaces
+      the /onboarding/import placeholder (MOTIR-1462) IN PLACE — no longer true, since
+      /onboarding/import is now the shipped issue importer (MOTIR-942), which this wizard
+      COMPOSES as the optional Import step (Panel 3) rather than displacing.
+      Renders in the (onboarding) route group — full-screen, OUTSIDE the (authed)
+      AppLayout, but authenticated — owning the viewport with a minimal brand bar, like
       design/onboarding-entrance.
 
       MIRROR (rung-1, VERIFIED — cited in design-notes.md): CodeRabbit connect-your-repo;
