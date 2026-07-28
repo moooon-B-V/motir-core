@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
-import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import {
   appendPlanChangeTurn,
   openPlanChangeSession,
@@ -17,12 +16,13 @@ import {
   streamContextualPlanJob,
   PlanEditsClientError,
 } from '@/lib/planning/planEditsClient';
+import { approvePlanRequest, declinePlanRequest } from '@/lib/planning/planReviewClient';
 import {
-  approvePlanRequest,
-  declinePlanRequest,
-  fetchPlanReview,
-  PlanRequestError,
-} from '@/lib/planning/planReviewClient';
+  planDecisionErrorCode,
+  readPendingProposal,
+  summarizePlanApproval,
+  type PlanApproveSummary,
+} from '@/lib/planning/planReview';
 import {
   extraPlanningTargetKeys,
   primaryPlanningTarget,
@@ -81,15 +81,10 @@ export type PlanChangeProgress =
   | { kind: 'proposed'; count: number }
   | { kind: 'validating' };
 
-/** What an approve landed, as the rail says it back. Derived from the plan the
- *  approve returns: its `add` items became work items, its `modify` items changed
- *  existing ones. (It replaces the delta route's `ApproveDeltaResult`, which named
- *  the same two facts about a delta that was always empty.) */
-export interface PlanApproveSummary {
-  created: string[];
-  updated: string[];
-  removed: string[];
-}
+/** What an approve landed, as the rail says it back — the shared summary every
+ *  confirming surface reports (`planReviewClient`), re-exported here because the
+ *  rail's components type their `onApproved` against the hook. */
+export type { PlanApproveSummary };
 
 export interface PlanChangeConversationState {
   phase: PlanChangePhase;
@@ -188,44 +183,6 @@ interface RunAnchor {
  * has one (an empty set is a real answer — the project thread); a caller that
  * passes nothing keeps the entrance's single anchor.
  */
-/**
- * Read a run's proposals, and answer the one question the gate turns on: is there
- * something PENDING to confirm? Only a `planned` plan carrying items is — a
- * `generating` one has not closed its frontier yet (the handler marks it planned
- * before the job completes, so the settled read sees `planned`), and an
- * approved / declined one is history, not a review.
- */
-async function readPendingProposal(
-  planId: string,
-  signal?: AbortSignal,
-): Promise<PlanReviewDto | null> {
-  const review = await fetchPlanReview(planId, signal);
-  return review.status === 'planned' && review.items.length > 0 ? review : null;
-}
-
-/**
- * A failed decision, as a copy key the rail can explain. The two the reviewer can
- * actually hit are named; everything else falls to the generic recoverable line,
- * so a raw server code never reaches the screen.
- *  • `PLAN_TARGET_IMMUTABLE` — the gate refused: a target reached done/cancelled
- *    under the proposal (nothing was written).
- *  • `PLAN_NOT_IN_EXPECTED_STATUS` / a 404 — someone (or another tab) already
- *    decided this plan, so there is nothing left to confirm.
- */
-function decisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'): string {
-  if (!(err instanceof PlanRequestError)) return fallback;
-  if (err.code === 'PLAN_TARGET_IMMUTABLE') return 'immutable';
-  if (err.code === 'PLAN_NOT_IN_EXPECTED_STATUS' || err.status === 404) return 'decided';
-  return fallback;
-}
-
-/** What an approve landed, read off the plan `materialize` returned. */
-function summarize(plan: PlanWithItemsDto): PlanApproveSummary {
-  const ids = (op: 'add' | 'modify' | 'remove') =>
-    plan.items.filter((item) => item.op === op).map((item) => item.workItemId ?? item.id);
-  return { created: ids('add'), updated: ids('modify'), removed: ids('remove') };
-}
-
 function resolveAnchor(
   targets: readonly PlanningTarget[] | undefined,
   entranceAnchorId: string | null,
@@ -535,7 +492,7 @@ export function usePlanChangeConversation({
     setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
 
     try {
-      const approved = summarize(await approvePlanRequest(planId));
+      const approved = summarizePlanApproval(await approvePlanRequest(planId));
       if (!mountedRef.current) return;
       setState((s) => ({
         ...s,
@@ -552,7 +509,7 @@ export function usePlanChangeConversation({
       approvedCbRef.current?.(approved);
     } catch (err) {
       if (!mountedRef.current) return;
-      setState((s) => ({ ...s, phase: 'review', errorCode: decisionErrorCode(err) }));
+      setState((s) => ({ ...s, phase: 'review', errorCode: planDecisionErrorCode(err) }));
     }
   }, []);
 
@@ -581,7 +538,11 @@ export function usePlanChangeConversation({
       if (!mountedRef.current) return;
       // The proposal is still pending — say so and leave it decidable, rather
       // than clearing a canvas the server still considers awaiting a decision.
-      setState((s) => ({ ...s, phase: 'review', errorCode: decisionErrorCode(err, 'discard') }));
+      setState((s) => ({
+        ...s,
+        phase: 'review',
+        errorCode: planDecisionErrorCode(err, 'discard'),
+      }));
     }
   }, []);
 

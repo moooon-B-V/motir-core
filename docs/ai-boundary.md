@@ -23,12 +23,17 @@ This repo is the side that **enforces** invariants 1, 2, and 4; #3 is the closed
    `motir-ai/README.md`, ADR-008, and `vision.html` principle #19). No client component, route
    handler reachable from the browser, or public API ever issues a request to `motir-ai`.
 2. **The AI never writes the tree directly.** `motir-core` is the **sole** authority over
-   `work_item` rows. `motir-ai` only ever **reads** the plan tree and **proposes** a structured
-   tree-delta; this repo validates and applies it through the **same `workItemsService` a route
-   calls** (`lib/services/workItemsService.ts`), with the identical permission, workflow, and
-   tenancy checks the UI uses. The only write path is `POST /api/internal/ai/plan-delta` →
-   `lib/services/aiBoundaryService.ts` → `workItemsService`; the AI has no other endpoint,
-   credential, or code path that mutates a `work_item`.
+   `work_item` rows. `motir-ai` only ever **reads** the plan tree and **proposes** — it appends
+   `PlanItem` proposals into a `Plan` via `POST /api/internal/ai/plan-proposals`
+   (`lib/services/aiGenerationService.ts`), and **nothing becomes a work item until a human
+   approves that plan**. There is exactly ONE proposal→tree write path:
+   `POST /api/plans/[id]/approve` → `plansService.approvePlan` → `materialize`, behind the 7.12.5
+   persist gate, applying the identical permission, workflow, and tenancy checks the UI uses. The
+   AI has no other endpoint, credential, or code path that mutates a `work_item`. (Two earlier
+   write paths are gone: the buffered whole-delta persist `POST /api/internal/ai/plan-delta`,
+   removed by 7.4.4 · MOTIR-846, and the browser-side `POST /api/ai/plan-delta/approve`, removed by
+   MOTIR-1747 — every planner returned an empty `planDelta`, so it never carried a proposal at
+   all.)
 3. **`motir-ai` holds no connection to this repo's database.** The closed side runs its own
    separate datastore and never receives a `work_item` connection string; it learns the tree only
    by asking over the read-back API. (Enforced on the closed side, but stated here so the boundary

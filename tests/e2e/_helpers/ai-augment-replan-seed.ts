@@ -5,9 +5,11 @@
 // with mixed done/not-done leaves), on a tree with a related neighbourhood.
 // (The augment leg + its `AUGMENT_JOB_ID` retired with the "Augment from
 // prompt" button — MOTIR-1731.) The spec stubs the browser→motir-ai boundary via
-// `page.route` and lets the real approve delta endpoint create real work items,
-// then asserts DB state — the same pattern `ai-plan-generation.spec.ts` uses
-// (stub the AI, drive the REAL substrate).
+// `page.route` and lets the REAL plan approve route create real work items, then
+// asserts DB state — the same pattern `ai-plan-generation.spec.ts` uses (stub the
+// AI, drive the REAL substrate). What a run proposes is seeded as a real `Plan`
+// (`seedPlanChangeProposal`), because that is what motir-ai actually writes: its
+// `planDelta` is empty by construction (MOTIR-1747).
 //
 // The nudge test stubs `GET /api/ready/nudge` to return a fixed suggestion.
 
@@ -45,6 +47,8 @@ export interface AiAugmentReplanSeed {
   notifId: string;
   /** Epic: "Settings" — has done + not-done leaves for replan. */
   settingsEpicKey: string;
+  /** …and its id, which a proposal's `parentRef` addresses it by. */
+  settingsEpicId: string;
   /** Done subtasks — must be byte-identical after replan. */
   themeKey: string;
   profileKey: string;
@@ -134,6 +138,7 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
     notifKey: notif.identifier,
     notifId: notif.id,
     settingsEpicKey: settingsEpic.identifier,
+    settingsEpicId: settingsEpic.id,
     themeKey: theme.identifier,
     profileKey: profile.identifier,
     billingKey: billing.identifier,
@@ -161,8 +166,12 @@ export async function seedPlanChangeProposal(
   args: {
     jobId: string;
     title: string;
-    /** Root `add` proposals, by title. */
+    /** The `add` proposals, by title. */
     adds: readonly string[];
+    /** How each `add` is proposed. Default: a ROOT `story`, so the diff is
+     *  visible on the canvas's top level without drilling. An EXPAND run instead
+     *  proposes CHILDREN — pass the parent's id + the leaf kind/type it carries. */
+    addShape?: { kind?: string; type?: string; parentRef?: string };
     /** An existing item to propose a rename of (`modify`). */
     rename?: { workItemId: string; title: string };
   },
@@ -175,12 +184,16 @@ export async function seedPlanChangeProposal(
   await plansService.addProposals(
     plan.id,
     [
-      // Root proposals (no parentRef), so the diff is visible on the canvas's TOP
-      // level without drilling. `story` carries no `type` — that is leaf-only
-      // (the 2.7.2 ADR; an epic/story with a type is rejected 422 by the approve).
+      // `story` carries no `type` — that is leaf-only (the 2.7.2 ADR; an
+      // epic/story with a type is rejected 422 by the approve).
       ...args.adds.map((title) => ({
         op: 'add' as const,
-        proposedFields: { title, kind: 'story' },
+        proposedFields: {
+          title,
+          kind: args.addShape?.kind ?? 'story',
+          ...(args.addShape?.type ? { type: args.addShape.type } : {}),
+        },
+        ...(args.addShape?.parentRef ? { parentRef: args.addShape.parentRef } : {}),
       })),
       ...(args.rename
         ? [

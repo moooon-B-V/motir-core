@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
@@ -152,6 +152,12 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     'components/planning/planChangeLevel.tsx',
     'components/planning/PlanChangeDiffNode.tsx',
     'lib/planning/planChangeDiff.ts',
+    // The OTHER two entrances, moved off the same dead delta by MOTIR-1747: the
+    // item-scoped expand/replan dock and the `/ready` expansion nudge.
+    'lib/hooks/usePlanEditsJob.ts',
+    'components/planning/PlanEditsReviewDock.tsx',
+    'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
+    'app/(authed)/ready/_components/ExpansionNudgeReview.tsx',
   ];
 
   it.each(CONVERSATION_MODULES)('%s reads no planDelta and calls no delta approve', (rel) => {
@@ -165,12 +171,15 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     );
   });
 
-  it('the conversation confirms through the SAME client the plan detail uses', () => {
-    // Two entrances (the rail and `/plans/[id]`), ONE gate: both go through
-    // `planReviewClient` → `POST /api/plans/[id]/approve` → `materialize`. A
-    // second write path is how the same proposal lands twice.
+  it('every AI-planning entrance confirms through the SAME client', () => {
+    // FOUR entrances (the rail, the item-scoped dock, the `/ready` nudge and
+    // `/plans/[id]`), ONE gate: all go through `planReviewClient` →
+    // `POST /api/plans/[id]/approve` → `materialize`. A second write path is how
+    // the same proposal lands twice.
     for (const rel of [
       'lib/hooks/usePlanChangeConversation.ts',
+      'lib/hooks/usePlanEditsJob.ts',
+      'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
       'components/planning/PlanDetail.tsx',
     ]) {
       expect(read(join(ROOT, rel)), rel).toMatch(/from '@\/lib\/planning\/planReviewClient'/);
@@ -178,6 +187,43 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     const client = read(join(ROOT, 'lib/planning/planReviewClient.ts'));
     expect(client).toContain('/approve');
     expect(client).toContain('/decline');
+  });
+
+  it('EXACTLY ONE proposal→tree write path survives, repo-wide (MOTIR-1747)', () => {
+    // The bug this closes: two independent paths turned proposals into work
+    // items — `approvePlan` → `materialize` (live) and `approveDelta` (dead,
+    // because every planner returns an empty delta). The dead one is gone, and
+    // this asserts it stays gone WITHOUT naming the files that used to hold it:
+    // a scan of the whole app/components/lib tree, so a reintroduction anywhere
+    // fails here.
+    const offenders = SOURCE_FILES.filter((file) => {
+      const code = read(file)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/[^\n]*$/gm, '');
+      return /planDelta|approvePlanDelta|plan-delta\/approve|approveDelta/.test(code);
+    }).map((f) => relative(ROOT, f));
+    expect(offenders).toEqual([]);
+
+    // The route, the service method, the client helper and the shape gate are
+    // deleted — not merely unreferenced.
+    for (const gone of [
+      'app/api/ai/plan-delta/approve/route.ts',
+      'lib/ai/planDelta.ts',
+      'lib/ai/planDeltaGate.ts',
+    ]) {
+      expect(existsSync(join(ROOT, gone)), `${gone} must not exist`).toBe(false);
+    }
+
+    // …and no OTHER endpoint persists proposals: the only route that materializes
+    // a plan is the plans approve route the four entrances share.
+    const approveRoutes = SOURCE_FILES.filter((file) => {
+      if (!relative(ROOT, file).startsWith(`app${sep}api`)) return false;
+      const code = read(file)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/[^\n]*$/gm, '');
+      return /plansService\.approvePlan\(|materializePlan\(/.test(code);
+    }).map((f) => relative(ROOT, f));
+    expect(approveRoutes).toEqual([join('app', 'api', 'plans', '[id]', 'approve', 'route.ts')]);
   });
 });
 
@@ -188,7 +234,6 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
     'app/api/ai/plan-change/session/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
-    'app/api/ai/plan-delta/approve/route.ts',
   ];
 
   it.each(STORY_ROUTES)('%s calls no db.* and opens no $transaction', (rel) => {
