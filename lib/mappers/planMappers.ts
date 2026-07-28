@@ -37,6 +37,7 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     title: row.title,
     summary: row.summary,
     sourceJobId: row.sourceJobId,
+    origin: row.origin,
     itemCount,
     createdAt: row.createdAt.toISOString(),
     plannedAt: row.plannedAt ? row.plannedAt.toISOString() : null,

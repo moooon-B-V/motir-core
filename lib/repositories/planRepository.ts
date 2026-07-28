@@ -31,6 +31,35 @@ export const planRepository = {
     });
   },
 
+  /**
+   * The project's UNDECIDED plan, if it has one — the read behind the
+   * pending-proposal GATE (MOTIR-916). "Undecided" is `generating` (the engine
+   * is still producing it) or `planned` (it is sitting in the human review
+   * queue); `approved` / `declined` are decided and do not gate anything.
+   *
+   * WHO started it is deliberately NOT part of the predicate: a user-clicked
+   * expand saturates the reviewer exactly as much as a cadence-fired one, and a
+   * second proposal against the same committed tree makes the first STALE
+   * (`planStalenessService` warns but never blocks). So any undecided plan
+   * pauses cadence for the project, whatever its `origin`.
+   *
+   * Newest first, so the ONE row returned is the plan a caller would show. Takes
+   * an optional `tx` because both consumers read it inside a workspace context
+   * (correct under the non-bypass `prodect_app` role, where the plan policy keys
+   * on the per-transaction workspace GUC).
+   */
+  async findUndecidedByProject(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Plan | null> {
+    const client = tx ?? db;
+    return client.plan.findFirst({
+      where: { projectId, workspaceId, status: { in: ['generating', 'planned'] } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.create({ data });
   },

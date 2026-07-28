@@ -299,9 +299,13 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
 
       expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
       expect(plansService.createPlan).toHaveBeenCalledTimes(1);
+      // `origin: 'user'` (MOTIR-916) — every REQUEST-path submit records a
+      // human-initiated plan; only the auto-plan cadence watcher passes
+      // `cadence`. Asserted on the call, not just defaulted downstream, so a
+      // future submit path can't silently start mislabelling its provenance.
       expect(plansService.createPlan).toHaveBeenCalledWith(
         'pj_1',
-        { title: null, summary: null, sourceJobId: 'job_1' },
+        { title: null, summary: null, sourceJobId: 'job_1', origin: 'user' },
         ctx,
       );
     });

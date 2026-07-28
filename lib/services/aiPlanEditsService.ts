@@ -11,6 +11,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { WorkItemPriorityDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { PlanOriginDto } from '@/lib/dto/plans';
 
 export class PlanDeltaApproveError extends Error {
   readonly code = 'PLAN_DELTA_APPROVE_ERROR' as const;
@@ -77,6 +78,18 @@ export interface PlanEditSubmitResult {
 }
 
 /**
+ * Per-submit knobs that describe the SUBMIT, not the planning request itself
+ * (nothing here reaches motir-ai — the job envelope is unchanged).
+ *
+ * `origin` (MOTIR-916) stamps the opened Plan's provenance. Every request-path
+ * caller omits it and gets `user`; the auto-plan cadence watcher passes
+ * `cadence` so the review surface can label an expansion nobody clicked.
+ */
+export interface PlanEditSubmitOptions {
+  origin?: PlanOriginDto;
+}
+
+/**
  * Submit a plan-edit job AND open the `generating` `Plan` its proposals append
  * into — the ONE shared step every plan-edit submit needs (MOTIR-1743).
  *
@@ -101,6 +114,7 @@ async function submitPlanEditJob(
   kind: PlanEditJobKind,
   context: JobContextBag,
   ctx: ProjectContext,
+  opts: PlanEditSubmitOptions = {},
 ): Promise<PlanEditSubmitResult> {
   const { organizationId, isMeta } = await resolveTenantOrg({
     userId: ctx.userId,
@@ -122,7 +136,7 @@ async function submitPlanEditJob(
   );
   const plan = await plansService.createPlan(
     ctx.projectId,
-    { title: null, summary: null, sourceJobId: jobId },
+    { title: null, summary: null, sourceJobId: jobId, origin: opts.origin ?? 'user' },
     ctx,
   );
   return { jobId, planId: plan.id };
@@ -174,7 +188,11 @@ export const aiPlanEditsService = {
     return streamJob(jobId);
   },
 
-  async submitExpand(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
+  async submitExpand(
+    itemKey: string,
+    ctx: ProjectContext,
+    opts: PlanEditSubmitOptions = {},
+  ): Promise<PlanEditSubmitResult> {
     const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
@@ -186,7 +204,7 @@ export const aiPlanEditsService = {
       );
     }
 
-    return submitPlanEditJob('expand_item', { rootItemKey: itemKey }, ctx);
+    return submitPlanEditJob('expand_item', { rootItemKey: itemKey }, ctx, opts);
   },
 
   async submitReplan(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {

@@ -726,6 +726,11 @@ export const plansService = {
             title: input.title ?? null,
             summary: input.summary ?? null,
             sourceJobId: input.sourceJobId ?? null,
+            // WHY the plan was started (MOTIR-916). Defaults to `user`, so every
+            // request-path producer keeps recording a human-initiated plan
+            // without passing anything; only the cadence watcher passes
+            // `cadence`.
+            origin: input.origin ?? 'user',
           },
           tx,
         ),
