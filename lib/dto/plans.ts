@@ -13,6 +13,16 @@ export type PlanStatusDto = 'generating' | 'planned' | 'approved' | 'declined';
 export type PlanItemOpDto = 'add' | 'modify' | 'remove';
 
 /**
+ * Wire form of the Prisma `PlanOrigin` enum (MOTIR-916) — WHY the plan was
+ * started, as opposed to `sourceJobId`'s WHICH job produced it. `user` is every
+ * request-path submit (someone clicked generate / augment / expand / re-plan);
+ * `cadence` is the auto-plan watcher firing on a drained ready set. The review
+ * surface reads it to LABEL an auto-proposed expansion — it changes nothing
+ * about how the plan is reviewed, approved, or declined.
+ */
+export type PlanOriginDto = 'user' | 'cadence';
+
+/**
  * The proposed fields of an `add` PlanItem — the new node's values, which live
  * HERE until materialize (no WorkItem exists yet). `kind` defaults to `task`
  * (a standalone leaf) when omitted; `parentRef` (on the PlanItem) decides the
@@ -117,6 +127,9 @@ export interface PlanDto {
   title: string | null;
   summary: string | null;
   sourceJobId: string | null;
+  /** WHY the plan was started — `user` (someone clicked) or `cadence` (the
+   *  auto-plan watcher fired it). Set at submit; never changes. */
+  origin: PlanOriginDto;
   itemCount: number;
   createdAt: string;
   plannedAt: string | null;
@@ -141,6 +154,10 @@ export interface CreatePlanInput {
   title?: string | null;
   summary?: string | null;
   sourceJobId?: string | null;
+  /** Defaults to `user` when omitted — so every existing caller (and every
+   *  request-path submit) keeps recording a human-initiated plan without
+   *  passing anything. Only the cadence watcher passes `cadence`. */
+  origin?: PlanOriginDto;
 }
 
 /** A single proposed operation appended via `plansService.addProposals`. */

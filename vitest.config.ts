@@ -294,6 +294,13 @@ export default defineConfig({
         // graph, done-work immutability); it is the load-bearing SAFETY contract
         // of the planning pipeline, so every branch of the verdict is gated.
         'lib/plans/validateProposals.ts',
+        // Story 7.13 · Subtask 7.13.3 (MOTIR-916) — the auto-plan CADENCE
+        // trigger. This module decides, with no human in the loop, whether to
+        // spend a planning job on a tenant: the pending-proposal gate, the drain
+        // threshold, the stub nomination, the actor it submits as, and the
+        // per-project failure isolation. An untested branch here is an
+        // unattended one, so every branch of the decision is gated.
+        'lib/services/autoPlanCadenceService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -514,6 +521,8 @@ export default defineConfig({
         'lib/services/contextualPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.5 (MOTIR-911) — the persist-time confirmation gate.
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask 7.13.3 (MOTIR-916) — the unattended auto-plan cadence trigger.
+        'lib/services/autoPlanCadenceService.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
