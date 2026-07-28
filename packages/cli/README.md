@@ -45,7 +45,50 @@ motir auth logout  [--server <url>]                   # forget the stored token
 motir link [--server <url>] [--workspace <slug>] [--project <key>] [--repo <name>]
 motir link add <repo> <path>                          # add a checkout-path override
 motir link remove <repo>                              # remove an override
+
+motir doctor [--agent <cmd>] [--json]                 # BYOK preflight (read-only)
 ```
+
+## `motir doctor` — the BYOK preflight
+
+Motir is **BYOK**: you bring your own coding agent and your own model key. So
+before `motir next` / `motir auto`, `motir doctor` answers "is my setup
+correct?" in one read-only pass instead of letting a missing agent or an
+unsigned-in key surface halfway through a dispatch:
+
+| Check                   | PASS means                                                   | FAIL means                                                                       |
+| ----------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| **Auth**                | the stored PAT connects, lists tools, and identifies you     | no token, or it is invalid/expired → `motir auth login`                          |
+| **Project link**        | `.motir.json` resolved (walking up from the cwd)             | no link here or above → `motir link`                                             |
+| **Workspace + project** | the linked project is reachable _for this token_             | wrong key, or your user is not a member                                          |
+| **Repo checkouts**      | every override path resolves                                 | — (a not-yet-cloned **convention** path is fine, and only WARNs for an override) |
+| **Coding agent**        | the binary is on PATH and answers `--version`                | it is not on PATH → the profile's install source                                 |
+| **Agent credential**    | the agent's credential dir exists, or its key env var is set | neither → where to sign in                                                       |
+
+It exits **non-zero** when any hard check fails, so `motir doctor && motir auto`
+is a usable gate. `--json` emits the same report machine-readably. WARN rows
+never fail the run — "no agent configured" is a warning, because `motir next
+--print` hands you the prompt for an agent Motir never launches.
+
+**Which agent gets checked**, in priority order: `--agent <cmd>` → the
+`MOTIR_AGENT` env var → `agentCommand` in the user config. The value is a full
+command line (`claude --dangerously-skip-permissions`); the first token is the
+binary Motir looks for.
+
+**It never reads your secret.** The credential check asks only whether a path
+EXISTS or an env var is SET — the engine has no way to obtain a file's contents
+or an env var's value, so nothing sensitive can be printed or logged. Nor does
+`doctor` write anything: its only server calls are the handshake, `whoami`, and
+a one-row search that proves the project is reachable.
+
+**Known agent profiles** (the sandbox matrix, 7.9.7b) — Tier 1 pins both the
+install source and the credential mount: `claude` (`~/.claude`), `codex`
+(`~/.codex`), `opencode` (`~/.config/opencode`), `kimi`. Tier 2 —
+`antigravity`, `cursor`, `aider`, `goose` — pins the install source only; where
+those keep credentials is deliberately **not guessed**, so they report a WARN
+("verify this one yourself") rather than a false FAIL. Any other agent works
+too (`--agent "<cmd> <flag>"`): its binary is still checked, its credential is
+yours to confirm.
 
 ### Config files
 

@@ -28,6 +28,14 @@ export interface StoredCredential {
 export interface UserConfig {
   /** server URL (normalized, no trailing slash) → credential */
   tokens: Record<string, StoredCredential>;
+  /**
+   * The coding agent Motir launches on your behalf — a full command line
+   * (`claude --dangerously-skip-permissions`), because BYOK means the agent is
+   * yours, not Motir's. Read by `motir doctor` (and the dispatch commands);
+   * overridden per-run by `--agent` or `MOTIR_AGENT`. Never a credential — the
+   * agent authenticates with its OWN key, which Motir never reads.
+   */
+  agentCommand?: string;
 }
 
 const EMPTY: UserConfig = { tokens: {} };
@@ -54,7 +62,11 @@ export function readUserConfig(): UserConfig {
   if (!existsSync(path)) return { tokens: {} };
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<UserConfig>;
-    return { tokens: parsed.tokens ?? {} };
+    // Every known key is carried through — the config is rewritten wholesale on
+    // login/logout, so a key dropped here would be ERASED by the next write.
+    const config: UserConfig = { tokens: parsed.tokens ?? {} };
+    if (typeof parsed.agentCommand === 'string') config.agentCommand = parsed.agentCommand;
+    return config;
   } catch {
     // A corrupt file shouldn't wedge every command — treat it as empty; the
     // next `auth login` rewrites it cleanly.
@@ -90,6 +102,12 @@ export function removeCredential(serverUrl: string): boolean {
   delete config.tokens[key];
   writeUserConfig(config);
   return true;
+}
+
+/** The configured coding-agent command line, if the user set one. */
+export function getAgentCommand(): string | undefined {
+  const value = readUserConfig().agentCommand?.trim();
+  return value ? value : undefined;
 }
 
 export function listServers(): string[] {
