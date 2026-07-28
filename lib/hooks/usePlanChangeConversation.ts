@@ -72,6 +72,15 @@ export interface PlanChangeConversationState {
   /** The proposal on the canvas — pending until approved or discarded. */
   delta: PlanDelta | null;
   jobId: string | null;
+  /**
+   * The `Plan` the current run's proposals append into (MOTIR-1743/1745) — what a
+   * confirm must address. Set from the submit response, and RE-ESTABLISHED on
+   * mount from the resume when the thread left a proposal undecided, so a user
+   * who closed the workspace mid-review comes back able to act on it. `null`
+   * whenever there is nothing pending, and read defensively: an older response or
+   * a stubbed one carries only `jobId`.
+   */
+  planId: string | null;
   /** The last approve's result, so the rail can say what landed. */
   approved: ApproveDeltaResult | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
@@ -86,6 +95,7 @@ const INITIAL: PlanChangeConversationState = {
   progress: null,
   delta: null,
   jobId: null,
+  planId: null,
   approved: null,
   errorCode: null,
   outOfCredits: false,
@@ -205,14 +215,16 @@ export function usePlanChangeConversation({
     const controller = new AbortController();
     void (async () => {
       try {
-        const session = anchorId
+        // The anchored resume also reports the thread's still-undecided proposal
+        // (MOTIR-1745); the project thread's open carries no plan of its own.
+        const { session, planId } = anchorId
           ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
             // is seeded from that same item, and any target the user adds later
             // starts a differently-scoped thread anyway.
             await resumeContextualSession(anchorId, [], controller.signal)
-          : await openPlanChangeSession(controller.signal);
+          : { session: await openPlanChangeSession(controller.signal), planId: null };
         if (!mountedRef.current) return;
-        setState((s) => ({ ...s, phase: 'idle', session }));
+        setState((s) => ({ ...s, phase: 'idle', session, planId: planId ?? null }));
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
@@ -234,7 +246,7 @@ export function usePlanChangeConversation({
       anchor: RunAnchor | null,
       submitter?: (
         signal: AbortSignal,
-      ) => Promise<{ jobId: string; session: PlanChangeSessionDto }>,
+      ) => Promise<{ jobId: string; planId?: string; session: PlanChangeSessionDto }>,
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
@@ -249,13 +261,16 @@ export function usePlanChangeConversation({
           : (signal: AbortSignal) => submitPlanChange(signal));
 
       try {
-        const { jobId, session } = await submit(controller.signal);
+        const { jobId, planId, session } = await submit(controller.signal);
         if (!mountedRef.current) return;
         setState((s) => ({
           ...s,
           phase: 'streaming',
           session,
           jobId,
+          // A new run supersedes whatever the resume re-attached to, so this is
+          // an assignment, not a merge — `undefined` (a stub) clears it.
+          planId: planId ?? null,
           progress: { kind: 'submitted' },
           errorCode: null,
           outOfCredits: false,
@@ -435,6 +450,9 @@ export function usePlanChangeConversation({
         phase: 'idle',
         delta: null,
         jobId: null,
+        // Settled: the run is no longer addressable, so its plan handle goes
+        // with its job id rather than lingering as a stale confirm target.
+        planId: null,
         approved,
         progress: null,
         errorCode: null,
@@ -459,6 +477,7 @@ export function usePlanChangeConversation({
       phase: 'idle',
       delta: null,
       jobId: null,
+      planId: null,
       progress: null,
       errorCode: null,
     }));

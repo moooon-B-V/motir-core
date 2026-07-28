@@ -310,8 +310,11 @@ export const planChangeSessionsService = {
     // Side effect OUTSIDE the tx: the shipped submit path (tenant/org resolution,
     // code context, the metered motir-ai job). Its typed errors (out-of-credits /
     // transport) propagate for the route to map — a failed submit leaves the
-    // thread untouched, so the user can retry without losing their turns.
-    const { jobId } =
+    // thread untouched, so the user can retry without losing their turns. A
+    // failure therefore also yields NO plan: `submitPlanEditJob` opens the Plan
+    // only AFTER the job is accepted, so there is no `planId` to report and no
+    // orphan row to clean up.
+    const { jobId, planId } =
       session.targetKeys.length > 0
         ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx)
         : await aiPlanEditsService.submitAugment(intent, pctx);
@@ -322,6 +325,9 @@ export const planChangeSessionsService = {
       { role: 'system', body: intent, jobId },
       { lastJobId: jobId, lastSubmittedAt: new Date() },
     );
-    return { jobId, session: updated };
+    // `planId` is PASSED THROUGH, never re-derived: the submit above already
+    // opened exactly one `generating` Plan bound to `jobId` (MOTIR-1743), so
+    // this seam opens none of its own (MOTIR-1745).
+    return { jobId, planId, session: updated };
   },
 };

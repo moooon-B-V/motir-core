@@ -759,6 +759,35 @@ export const plansService = {
     };
   },
 
+  /**
+   * The still-UNDECIDED plan a job produced, by id — or `null` (MOTIR-1745).
+   *
+   * The RESUME half of the `{ jobId, planId }` pair a submit returns: a caller
+   * that comes back to a thread holds only the job it last submitted, and needs
+   * the Plan awaiting confirmation to address it. Resolves through the plan's
+   * `sourceJobId` binding (the same one the proposal callbacks resolve on).
+   *
+   * `null` — never an error — in all three "nothing to confirm" cases: no plan
+   * for that job, a plan belonging to another project in the workspace (a job id
+   * never addresses across projects), or one already `approved` / `declined`. A
+   * decided plan is history, so surfacing it as pending would invite a confirm
+   * of something already settled. `generating` and `planned` both count as
+   * pending: the rail legitimately re-attaches to a run still in flight.
+   *
+   * Read-only, gated on `canBrowse` like every other plan read.
+   */
+  async findPendingPlanIdForJob(
+    projectId: string,
+    jobId: string,
+    ctx: ServiceContext,
+  ): Promise<string | null> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    if (!plan || plan.projectId !== projectId) return null;
+    if (plan.status === 'approved' || plan.status === 'declined') return null;
+    return plan.id;
+  },
+
   /** A plan + its bundled proposal items (the detail view). The lifecycle
    *  timestamps + decider on the returned plan ARE the history surface. */
   async getPlan(planId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {

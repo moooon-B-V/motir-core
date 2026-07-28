@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -169,9 +170,15 @@ describe('POST /api/ai/plan-change/session/submit', () => {
     expect(res.status).toBe(200);
     const dto = (await res.json()) as {
       jobId: string;
+      planId: string;
       session: { lastJobId: string; turnCount: number };
     };
     expect(dto.jobId).toBe('job-augment-1');
+    // The project-wide submit echoes the job's Plan too (MOTIR-1745) — the same
+    // `{ jobId, planId }` pair the anchored path and the three REST submits return.
+    expect(dto.planId).toBe(
+      (await planRepository.findBySourceJobId('job-augment-1', fx.workspaceId))?.id,
+    );
     expect(dto.session.lastJobId).toBe('job-augment-1');
     expect(dto.session.turnCount).toBe(3); // two user turns + the submission marker
 

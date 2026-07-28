@@ -4,11 +4,12 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { buildScope, MAX_SCOPE_TARGETS, type PlanChangeScope } from '@/lib/planChange/scope';
 import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { ContextualPlanResultDto, ContextualSessionResumeDto } from '@/lib/dto/planChange';
 
 // CONTEXTUAL PLANNING — the motir-core side (7.12.3 · MOTIR-909).
 //
@@ -57,11 +58,13 @@ export interface ContextualPlanRequest {
   prompt: string;
 }
 
-export interface ContextualPlanResult {
-  jobId: string;
-  sessionId: string;
-  session: PlanChangeSessionDto;
-}
+/**
+ * What an anchored turn returns — the wire shape itself (`ContextualPlanResultDto`),
+ * which the route echoes verbatim. It was a separate local interface until
+ * MOTIR-1745 grew both by `planId`; two identical shapes that must stay in sync is
+ * the drift this seam does not need, so the DTO is now the single definition.
+ */
+export type ContextualPlanResult = ContextualPlanResultDto;
 
 /**
  * Resolve + VIEW-GATE every anchor, and return the canonical scope.
@@ -123,9 +126,9 @@ export const contextualPlanningService = {
     // make the submit contextual — this service does not pass them twice).
     await planChangeSessionsService.getOrCreateForScope(pctx, scope);
     await planChangeSessionsService.appendTurn(req.prompt, pctx, scope.scopeKey);
-    const { jobId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
 
-    return { jobId, sessionId: session.id, session };
+    return { jobId, planId, sessionId: session.id, session };
   },
 
   /**
@@ -137,14 +140,30 @@ export const contextualPlanningService = {
    * a turn does, then READS the thread for that scope. An item never planned
    * before has no thread — `null`, not a freshly written empty row (opening a
    * door is not starting a conversation).
+   *
+   * It also reports the thread's PENDING `planId` (MOTIR-1745) — the plan its last
+   * submission opened, when that plan is still undecided. Resume is the one path
+   * where the rail cannot have the id already: a submit hands back `{ jobId,
+   * planId }`, but a user who closed the workspace mid-proposal returns holding
+   * neither. Resolved from the thread's own `lastJobId`, so a thread that never
+   * submitted (and one whose plan was approved / declined) reports `null` and the
+   * rail simply has nothing to confirm.
    */
   async getSessionForWorkItem(
     req: Omit<ContextualPlanRequest, 'prompt'>,
     pctx: ProjectContext,
-  ): Promise<{ session: PlanChangeSessionDto | null }> {
+  ): Promise<ContextualSessionResumeDto> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
     const session = await planChangeSessionsService.findForScope(pctx, scope);
-    return { session };
+    if (!session?.lastJobId) return { session, planId: null };
+
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    const planId = await plansService.findPendingPlanIdForJob(
+      pctx.projectId,
+      session.lastJobId,
+      ctx,
+    );
+    return { session, planId };
   },
 
   /**
@@ -163,8 +182,8 @@ export const contextualPlanningService = {
     pctx: ProjectContext,
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
-    const { jobId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
-    return { jobId, sessionId: session.id, session };
+    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+    return { jobId, planId, sessionId: session.id, session };
   },
 
   /**

@@ -103,7 +103,7 @@ beforeEach(() => {
   stream.mockImplementation(okStream());
   fetchResult.mockResolvedValue({ status: 'succeeded', result: { planDelta: DELTA } });
   approve.mockResolvedValue({ created: ['PAY-30'], updated: [], unchanged: [] });
-  resumeAnchored.mockResolvedValue(null);
+  resumeAnchored.mockResolvedValue({ session: null, planId: null });
   submitAnchored.mockResolvedValue({
     jobId: 'job-anchored-1',
     sessionId: 's1',
@@ -433,7 +433,7 @@ async function mountedAnchored(anchorId = 'wi_123') {
 
 describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', () => {
   it('resumes the ITEM’s thread on mount, never the project one', async () => {
-    resumeAnchored.mockResolvedValue(session(['Split this story.']));
+    resumeAnchored.mockResolvedValue({ session: session(['Split this story.']), planId: null });
     const { result } = await mountedAnchored();
 
     expect(resumeAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
@@ -442,11 +442,55 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
   });
 
   it('treats an item that was never planned as an EMPTY thread, not an error', async () => {
-    resumeAnchored.mockResolvedValue(null);
+    resumeAnchored.mockResolvedValue({ session: null, planId: null });
     const { result } = await mountedAnchored();
 
     expect(result.current.state.session).toBeNull();
     expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('re-establishes the pending planId on mount, so a reopened workspace can still confirm (MOTIR-1745)', async () => {
+    resumeAnchored.mockResolvedValue({
+      session: session(['Split this story.']),
+      planId: 'plan_pending',
+    });
+    const { result } = await mountedAnchored();
+
+    expect(result.current.state.planId).toBe('plan_pending');
+  });
+
+  it('adopts the SUBMIT’s planId, and drops it once the proposal is settled', async () => {
+    submitAnchored.mockResolvedValue({
+      jobId: 'job-anchored-1',
+      planId: 'plan_fresh',
+      sessionId: 's1',
+      session: session(['Split this story.']),
+    });
+    const { result } = await mountedAnchored();
+
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+    expect(result.current.state.planId).toBe('plan_fresh');
+
+    // Discarding ends the review, so the handle goes with the job id rather than
+    // lingering as a stale confirm target.
+    act(() => result.current.discard());
+    expect(result.current.state.planId).toBeNull();
+    expect(result.current.state.jobId).toBeNull();
+  });
+
+  it('degrades to no planId when the response carries only a jobId', async () => {
+    // The defensive read the optional browser-facing type exists for: a stub or
+    // an older deployment answers without it, and the rail simply has nothing to
+    // confirm — it does not crash and does not invent an id.
+    const { result } = await mountedAnchored();
+
+    await act(async () => {
+      await result.current.send('Split this story.');
+    });
+    expect(result.current.state.jobId).toBe('job-anchored-1');
+    expect(result.current.state.planId).toBeNull();
   });
 
   it('sends the turn through the anchored endpoint — ONE call that appends AND submits', async () => {

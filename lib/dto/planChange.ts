@@ -56,9 +56,17 @@ export interface PlanChangeSessionDto {
  * `GET /api/ai/augment/[jobId]` and approves via the existing approve route —
  * this card adds no job kind and no new stream/approve surface), plus the
  * session as it now stands (its new `system` marker turn included).
+ *
+ * `planId` is the `generating` `Plan` that submit OPENED for the job (bound to
+ * it by `sourceJobId` — MOTIR-1743), which the job's proposals append into. It
+ * is carried here (MOTIR-1745) so the rail can name the Plan it must confirm
+ * instead of re-resolving it from the job id; the same `{ jobId, planId }` pair
+ * the three REST plan-edit submits already return. Nothing is opened twice: the
+ * value is the one `aiPlanEditsService` produced, previously discarded.
  */
 export interface PlanChangeSubmitResultDto {
   jobId: string;
+  planId: string;
   session: PlanChangeSessionDto;
 }
 
@@ -71,4 +79,21 @@ export interface PlanChangeSubmitResultDto {
  */
 export interface ContextualPlanResultDto extends PlanChangeSubmitResultDto {
   sessionId: string;
+}
+
+/**
+ * What the anchored RESUME returns (the `GET` half of the contextual endpoint) —
+ * the item's thread, or `null` when it was never planned.
+ *
+ * `planId` (MOTIR-1745) is the thread's still-UNDECIDED proposal, resolved from
+ * its last submission's job. It matters because a resume is exactly the case the
+ * submit response cannot cover: the user closed the workspace while a proposal
+ * was pending and came back, so the rail has a thread but no in-memory job — and
+ * without this it could not address the Plan awaiting confirmation. `null` when
+ * there is no thread, when the thread never submitted, or when its plan was
+ * already approved / declined (a decided plan is history, not a pending review).
+ */
+export interface ContextualSessionResumeDto {
+  session: PlanChangeSessionDto | null;
+  planId: string | null;
 }
