@@ -108,6 +108,10 @@ const MATERIALIZED: PlanWithItemsDto = {
   title: null,
   summary: null,
   sourceJobId: 'job-1',
+  // A rail-driven run is `user`-origin; the auto-plan watcher's is `cadence`
+  // (MOTIR-916) — same Plan, same review, same confirm, per this card's
+  // invariant that the trigger is irrelevant.
+  origin: 'user',
   itemCount: 1,
   createdAt: '2026-07-27T09:00:00.000Z',
   plannedAt: '2026-07-27T09:01:00.000Z',
