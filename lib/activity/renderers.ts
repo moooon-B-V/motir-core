@@ -336,6 +336,12 @@ const REGISTRY: Record<string, RegistryEntry> = {
   type: textField(),
   executor: textField(),
   storyPoints: textField(),
+  // The repo pin (Story 7.9 · MOTIR-1804) — a plain string scalar naming the repo
+  // this item's work ships in. RENDERABLE, not suppressed: "which repo does this
+  // ship in" is a real planning decision (one subtask = one repo = one PR), and a
+  // reader auditing why a dispatch went to the wrong checkout needs to see it
+  // change in the History.
+  targetRepo: textField(),
   projectId: textField(),
   // -- body fields: edit recorded, content never inlined --------------------
   descriptionMd: editedField(),

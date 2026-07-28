@@ -41,6 +41,14 @@ export interface ReadyDispatchContext extends ReadyItemContext {
    * DTO doc.
    */
   sessionBranch: string | null;
+  /**
+   * The RESOLVED target repo (Story 7.9 · MOTIR-1804) — the item's explicit pin,
+   * else the workspace's single connected repo, else null. Resolved by the
+   * service (it needs the workspace's connected repo set, which the row does not
+   * carry), not read from the row: `row.targetRepo` is only the pin. See the DTO
+   * doc for why the fallback stops at "exactly one".
+   */
+  targetRepo: string | null;
 }
 
 function toAssigneeDto(assignee: ReadyAssignee | null): ReadyItemDto['assignee'] {
@@ -102,5 +110,6 @@ export function toReadyItemDispatchDto(
     parentKey: ctx.parent?.identifier ?? null,
     runCommand: `motir run ${row.identifier}`,
     sessionBranch: ctx.sessionBranch,
+    targetRepo: ctx.targetRepo,
   };
 }

@@ -42,6 +42,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     submittedByUserId: null,
     publicChildrenHidden: false,
     sessionBranch: null,
+    targetRepo: null,
     planningSource: null,
     planningHarness: null,
     planningModel: null,
@@ -159,6 +160,9 @@ describe('toReadyItemDispatchDto', () => {
         parent: { identifier: 'PROD-1' },
         contextRefs: ['lib/dto/ready.ts', 'lib/mappers/readyMappers.ts'],
         sessionBranch: null,
+        // The RESOLVED target repo (MOTIR-1804) is supplied by the service, not
+        // read off the row — the mapper's job is only to carry it through.
+        targetRepo: 'motir-core',
       },
     );
 
@@ -172,6 +176,7 @@ describe('toReadyItemDispatchDto', () => {
     expect(dto.parentKey).toBe('PROD-1');
     expect(dto.runCommand).toBe('motir run PROD-7');
     expect(dto.runCommand).toMatch(/^motir run PROD-\d+$/);
+    expect(dto.targetRepo).toBe('motir-core');
   });
 
   it('no blockers → empty blockerKeys; no parent → null parentKey', () => {
@@ -181,10 +186,13 @@ describe('toReadyItemDispatchDto', () => {
       parent: null,
       contextRefs: [],
       sessionBranch: null,
+      targetRepo: null,
     });
     expect(dto.blockerKeys).toEqual([]);
     expect(dto.parentKey).toBeNull();
     expect(dto.contextRefs).toEqual([]);
+    // No pin and nothing to fall back to → the honest "Motir cannot say".
+    expect(dto.targetRepo).toBeNull();
   });
 });
 

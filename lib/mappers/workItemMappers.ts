@@ -64,6 +64,11 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     // The integration branch (Story 7.8 · Subtask 7.8.11) — non-null while the
     // item is integrated-awaiting-review; null once it reaches done. Pass through.
     sessionBranch: row.sessionBranch,
+    // The repo pin (Story 7.9 · MOTIR-1804) — the EXPLICIT attribution, passed
+    // through verbatim. No default is applied on the detail DTO: "pinned to the
+    // only connected repo" and "not pinned" are different states here, and only
+    // the DISPATCH mapper collapses them (a dispatching agent needs an answer).
+    targetRepo: row.targetRepo,
     // Work-item provenance (Story MOTIR-1685) — the planning + implementation
     // triples; nullable enums + free-text. A null triple is the "unknown / —"
     // state the detail (MOTIR-1693) renders.
