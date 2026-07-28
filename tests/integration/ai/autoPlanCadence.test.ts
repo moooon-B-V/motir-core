@@ -16,6 +16,8 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 import { db } from '@/lib/db';
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
+import { planStalenessService } from '@/lib/services/planStalenessService';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { plansService } from '@/lib/services/plansService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -41,6 +43,12 @@ import type { PlanStatus } from '@prisma/client';
 //     for byte unchanged; only `Plan` rows appear;
 //   * FAILURE ISOLATION — one project's submit blowing up does not stop the
 //     sweep for any other project, and nothing is left half-written.
+//
+// MOTIR-1740 adds the INDICATOR half — `getAutoPlanPauseState`, what the
+// AI-planning settings page reads to SAY the cadence is paused. Its `pending` is
+// the same `getPendingPlan` verdict gate 1 uses, and the closing test asserts
+// that equivalence as SET equality over a sweep: the projects skipped
+// `pending_proposal` are exactly the projects the indicator reports as paused.
 
 async function truncateAll(): Promise<void> {
   await db.$executeRawUnsafe(
@@ -264,6 +272,177 @@ describe('Auto-plan cadence — the pending-proposal gate (MOTIR-916)', () => {
     const pending = await autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx);
 
     expect(pending?.id).toBe(newest);
+  });
+});
+
+describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
+  /** Attach `count` proposal items to a plan, so the meta line has a size. */
+  async function seedItems(
+    fx: WorkItemFixture,
+    planId: string,
+    count: number,
+    parentRef?: string,
+  ): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      await db.planItem.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          planId,
+          op: 'add',
+          proposedFields: { title: `Proposed ${i}`, kind: 'subtask' },
+          blockedByRefs: [],
+          ...(parentRef ? { parentRef } : {}),
+        },
+      });
+    }
+  }
+
+  it('reports NOT paused when the project has no undecided plan', async () => {
+    const { fx } = await makeDrainedProject();
+    await seedPlan(fx, 'declined');
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(state).toEqual({
+      pending: false,
+      planId: null,
+      plannedAt: null,
+      itemCount: 0,
+      stale: false,
+      staleCount: 0,
+    });
+  });
+
+  it('reports the waiting plan — its id, when it was planned, and how many items it proposes', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'planned');
+    const plannedAt = new Date('2026-07-20T10:00:00.000Z');
+    await db.plan.update({ where: { id: planId }, data: { plannedAt } });
+    await seedItems(fx, planId, 3);
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(state).toEqual({
+      pending: true,
+      planId,
+      plannedAt: plannedAt.toISOString(),
+      itemCount: 3,
+      stale: false,
+      staleCount: 0,
+    });
+  });
+
+  it('is paused by a still-GENERATING plan too — no plannedAt yet, and never stale', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'generating');
+    await seedItems(fx, planId, 2);
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(state).toMatchObject({ pending: true, planId, plannedAt: null, itemCount: 2 });
+    expect(state.stale).toBe(false);
+  });
+
+  it('flags a DRIFTED waiting plan via planStalenessService — the count, not the reason list', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'planned');
+    // The proposal's parent is archived after the plan was drafted → the shipped
+    // `parent_removed` rule fires. Real drift, computed by the shipped service.
+    const parent = await makeItem(fx, { kind: 'story', title: 'Parent that goes away' });
+    await db.plan.update({ where: { id: planId }, data: { plannedAt: new Date() } });
+    await seedItems(fx, planId, 2, parent.id);
+    await db.workItem.update({ where: { id: parent.id }, data: { archivedAt: new Date() } });
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(state).toMatchObject({
+      pending: true,
+      planId,
+      itemCount: 2,
+      stale: true,
+      staleCount: 2,
+    });
+  });
+
+  it('degrades to not-stale when the staleness read fails — it WARNS, it never gates', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'planned');
+    await seedItems(fx, planId, 1);
+    vi.spyOn(planStalenessService, 'computePlanStaleness').mockRejectedValueOnce(
+      new Error('staleness read blew up'),
+    );
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    // The page still learns cadence is paused — the drift line is what's lost.
+    expect(state).toMatchObject({ pending: true, planId, stale: false, staleCount: 0 });
+  });
+
+  it('is tenant-scoped — another workspace’s member gets 404-not-403, never the plan', async () => {
+    const { fx } = await makeDrainedProject({ name: 'Acme', identifier: 'AAA' });
+    await seedPlan(fx, 'planned');
+    const other = await makeWorkItemFixture({ name: 'Beta', identifier: 'BBB' });
+
+    // Not-found, never access-denied: the project's existence does not leak to
+    // another tenant (finding #26), and the route layer maps this to a 404.
+    await expect(
+      autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, other.ctx),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+
+  it('writes nothing — the indicator is a pure read', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'planned');
+    await seedItems(fx, planId, 2);
+    const plansBefore = await db.plan.findMany({ orderBy: { id: 'asc' } });
+    const itemsBefore = await db.planItem.findMany({ orderBy: { id: 'asc' } });
+    const treeBefore = await db.workItem.findMany({ orderBy: { id: 'asc' } });
+
+    await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(await db.plan.findMany({ orderBy: { id: 'asc' } })).toEqual(plansBefore);
+    expect(await db.planItem.findMany({ orderBy: { id: 'asc' } })).toEqual(itemsBefore);
+    expect(await db.workItem.findMany({ orderBy: { id: 'asc' } })).toEqual(treeBefore);
+  });
+
+  it('ONE predicate, TWO consumers — the trigger skips exactly the projects the indicator calls paused', async () => {
+    // Three opted-in, drained projects in three tenants: one with an undecided
+    // plan, one with a decided plan, one with no plan at all.
+    const paused = await makeDrainedProject({ name: 'Acme', identifier: 'AAA' });
+    const decided = await makeDrainedProject({ name: 'Beta', identifier: 'BBB' });
+    const virgin = await makeDrainedProject({ name: 'Ceta', identifier: 'CCC' });
+    await seedPlan(paused.fx, 'planned');
+    await seedPlan(decided.fx, 'approved');
+
+    const fixtures = [paused, decided, virgin];
+    const indicator = new Map(
+      await Promise.all(
+        fixtures.map(
+          async ({ fx }) =>
+            [
+              fx.projectId,
+              (await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx)).pending,
+            ] as const,
+        ),
+      ),
+    );
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    // Set equality, both directions: the sweep's `pending_proposal` skips are
+    // EXACTLY the projects the settings page would show as paused.
+    const gated = summary.outcomes
+      .filter((o) => o.status === 'skipped' && o.reason === 'pending_proposal')
+      .map((o) => o.projectId)
+      .sort();
+    const reportedPaused = [...indicator.entries()]
+      .filter(([, pending]) => pending)
+      .map(([projectId]) => projectId)
+      .sort();
+    expect(gated).toEqual(reportedPaused);
+    expect(gated).toEqual([paused.fx.projectId]);
+    // …and the other two really did fire, so "not paused" means "cadence runs".
+    expect(summary).toMatchObject({ scanned: 3, fired: 2, skipped: 1 });
   });
 });
 

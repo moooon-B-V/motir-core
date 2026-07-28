@@ -292,3 +292,35 @@ export interface PlanValidityDto {
   valid: boolean;
   blockers: SprintBlockerDto[];
 }
+
+// --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------
+// The indicator half of MOTIR-916's pending-proposal gate. The cadence watcher
+// SKIPS a project whose plan is still undecided, and nothing expires a plan
+// (`declinePlan` is an explicit human act), so auto-plan can stay silent
+// indefinitely. This is what the AI-planning settings page reads to SAY SO —
+// the same predicate the trigger gates on, projected for the reader.
+
+/**
+ * Is auto-planning PAUSED for a project, and is the plan it is waiting on out of
+ * date? Flat (not a union) so a caller reads `pending` and the rest follows: when
+ * `pending` is false every other field is at its empty value.
+ *
+ * `stale` is the ROLLED-UP verdict of the shipped `planStalenessService`
+ * (MOTIR-1340) — the indicator shows the count, never the per-item reason list
+ * (that lives on the plan detail). Staleness WARNS; it gates nothing here.
+ */
+export interface AutoPlanPauseDto {
+  /** True ⟺ the project has an undecided plan (`generating` / `planned`) — i.e.
+   *  exactly when the cadence sweep skips it with `pending_proposal`. */
+  pending: boolean;
+  /** The waiting plan, so the indicator can LINK to it (`/plans/{id}`). */
+  planId: string | null;
+  /** When it finished generating; `null` while it is still `generating`. */
+  plannedAt: string | null;
+  /** How many items it proposes — the meta line's `aiPlanning.itemCount`. */
+  itemCount: number;
+  /** Whether ANY proposed item has drifted since the plan was drafted. */
+  stale: boolean;
+  /** How many have — the drift sentence's count. `0` when not stale. */
+  staleCount: number;
+}

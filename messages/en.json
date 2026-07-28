@@ -2049,6 +2049,12 @@
         "increaseAria": "Increase threshold",
         "guardrail": "Auto-plan <strong>proposes</strong> an expansion for your approval — it never creates work without you."
       },
+      "paused": {
+        "lead": "Auto-plan is paused — a plan is waiting for your review.",
+        "body": "Motir drafts one plan at a time. It picks up again as soon as you approve or decline this one.",
+        "reviewCta": "Review the plan",
+        "staleBody": "Your project has changed since this plan was drafted — {count, plural, one {# item} other {# items}} may be out of date."
+      },
       "sprint": {
         "title": "AI sprint planning",
         "subtitle": "Pack ready work into short sprints that respect what blocks what.",

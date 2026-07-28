@@ -2049,6 +2049,12 @@
         "increaseAria": "增大阈值",
         "guardrail": "自动规划只会<strong>提议</strong>扩展并交由你批准——未经你同意，它绝不会创建工作。"
       },
+      "paused": {
+        "lead": "自动规划已暂停——有一份计划正在等待你审阅。",
+        "body": "Motir 一次只起草一份计划。你批准或拒绝这一份后，它便会继续。",
+        "reviewCta": "审阅这份计划",
+        "staleBody": "自这份计划起草以来，项目已发生变化——{count, plural, other {# 个工作项}}可能已过期。"
+      },
       "sprint": {
         "title": "AI Sprint规划",
         "subtitle": "将就绪工作编排为遵循阻塞关系的短Sprint。",

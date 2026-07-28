@@ -1,17 +1,21 @@
 'use client';
 
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   AlertCircle,
+  ArrowRight,
   Bot,
   Calendar,
   CloudOff,
   Info,
   Lock,
   Minus,
+  PauseCircle,
   Plus,
   Sparkles,
+  TriangleAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Combobox } from '@/components/ui/Combobox';
@@ -58,10 +62,31 @@ import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 // what the switch unlocks); its group's explanatory callout appears only when
 // the setting is live, so the default view stays quiet.
 //
+// MOTIR-1740 adds ONE state to the Auto-plan card — the PAUSED banner (§8 state
+// 7): auto-plan is on, but MOTIR-916's watcher is skipping this project because
+// a plan is still waiting for a decision. Pausing is NOT disabling: the switch,
+// the stepper and Save stay fully interactive while a plan waits.
+//
 // Colour strictly `--el-*` (finding #54) with the three callouts on three
 // DISTINCT tint slots + `--el-text-strong` text (AA, finding #35); shape via the
 // element-semantic tokens. The stepper is a COMPOSITION of a number input and
 // two icon buttons — not a new primitive.
+
+/**
+ * The auto-plan PAUSED state (Subtask MOTIR-1740 · design §8 state 7, panel 6),
+ * as the server hands it to the client: the waiting plan's identity + size, its
+ * drift verdict, and its relative time ALREADY formatted (against the request's
+ * shared `now`, so nothing here derives a time client-side). `null` — the common
+ * case — means nothing is waiting and no paused treatment renders at all.
+ */
+export interface AutoPlanPauseView {
+  planId: string;
+  /** `null` while the plan is still `generating` (no `plannedAt` yet). */
+  plannedWhenLabel: string | null;
+  itemCount: number;
+  stale: boolean;
+  staleCount: number;
+}
 
 /** The panel's working state — the DTO plus the picker's sentinel form. */
 interface WorkingSettings {
@@ -125,12 +150,14 @@ export function AiPlanningSettingsEditor({
   settings,
   isAdmin,
   aiConfigured,
+  pause = null,
 }: {
   projectKey: string;
   projectName: string;
   settings: ProjectAiSettingsDto;
   isAdmin: boolean;
   aiConfigured: boolean;
+  pause?: AutoPlanPauseView | null;
 }) {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
@@ -248,6 +275,12 @@ export function AiPlanningSettingsEditor({
       >
         {notConnected}
         {!isAdmin ? <ReadOnlyBanner /> : null}
+        {/* The PAUSE (MOTIR-1740 · §8 state 7). It follows the SWITCH the reader
+            is currently looking at, exactly like the guardrail callout below:
+            with auto-plan turned off there is no cadence to be paused, so
+            claiming otherwise beside an off switch would contradict itself.
+            Pausing is NOT disabling — nothing below is disabled by it. */}
+        {working.autoPlanEnabled && pause ? <PausedBanner pause={pause} /> : null}
 
         <SwitchRow
           checked={working.autoPlanEnabled}
@@ -694,11 +727,15 @@ function Callout({
   icon,
   children,
   testId,
+  role,
 }: {
   tint: 'sky' | 'lavender' | 'peach' | 'plain';
   icon: ReactNode;
   children: ReactNode;
   testId?: string;
+  /** `status` for the paused banner (§10) — it appears after a save or a
+   *  refresh, so it announces without stealing focus. */
+  role?: 'status';
 }) {
   const surface =
     tint === 'sky'
@@ -719,6 +756,7 @@ function Callout({
   return (
     <div
       data-testid={testId}
+      {...(role ? { role } : {})}
       className={`flex gap-2.5 rounded-(--radius-card) border px-3.5 py-2.5 text-xs leading-relaxed ${surface}`}
     >
       <span className={`mt-px shrink-0 ${iconTone}`}>{icon}</span>
@@ -736,6 +774,89 @@ function ReadOnlyBanner() {
       testId="ai-planning-readonly-banner"
     >
       {t('aiPlanning.readOnlyBanner')}
+    </Callout>
+  );
+}
+
+// ── The auto-plan PAUSED banner (MOTIR-1740 · design §8 state 7, panel 6) ─────
+// MOTIR-916's watcher SKIPS a project whose plan is still undecided, and nothing
+// expires a plan — so without this the silence is indistinguishable from a
+// broken feature. It is the SAME `Callout` box the guardrail uses, in the GATE
+// (peach + `--el-warning`) role this surface already defines for "the setting is
+// on, but the feature is not running — here is why"; paused and not-connected
+// are the same message family and cannot co-occur (a deployment with no Motir AI
+// connection has no undecided plan), so the role is REUSED, not a fourth tint
+// invented. Told apart by their glyph and their first sentence, never by hue.
+//
+// The LINK is the point: it makes the silence actionable, pointing at the
+// shipped plan detail (MOTIR-847), which is otherwise reachable only from the
+// Plans list. On a tint it takes `--el-text-strong` + an underline, NEVER
+// `--el-link` (4.13:1 on peach — under AA, finding #35).
+//
+// The meta line REUSES the Plans list's own strings (`aiPlanning.plannedAt` /
+// `aiPlanning.itemCount` / `planReview.staleBadge`) rather than re-authoring
+// them (§11), so the two surfaces can never drift in how they describe the same
+// plan; only the paused-specific sentences are new.
+
+function PausedBanner({ pause }: { pause: AutoPlanPauseView }) {
+  const t = useTranslations('settings');
+  const tp = useTranslations('aiPlanning');
+  const tr = useTranslations('planReview');
+
+  return (
+    <Callout
+      tint="peach"
+      role="status"
+      icon={<PauseCircle className="size-[15px]" aria-hidden />}
+      testId="ai-planning-paused-banner"
+    >
+      <span className="flex min-w-0 flex-col gap-[7px]">
+        <span>
+          <strong className="font-semibold">{t('aiPlanning.paused.lead')}</strong>{' '}
+          {t('aiPlanning.paused.body')}
+        </span>
+
+        {/* The OUT-OF-DATE face — the shipped stale badge (markup + tokens from
+            components/planning/PlanItemNode.tsx) plus the drift sentence. The
+            WORD carries the meaning; the glyph is decorative (§10). */}
+        {pause.stale ? (
+          <span
+            className="flex flex-wrap items-center gap-2"
+            data-testid="ai-planning-paused-stale"
+          >
+            <span className="inline-flex items-center gap-1 rounded-(--radius-badge) border border-(--el-border-soft) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-text-strong)">
+              <TriangleAlert className="size-[12px] shrink-0 text-(--el-warning)" aria-hidden />
+              {tr('staleBadge')}
+            </span>
+            <span>{t('aiPlanning.paused.staleBody', { count: pause.staleCount })}</span>
+          </span>
+        ) : null}
+
+        <span className="flex flex-wrap items-center gap-2">
+          {pause.plannedWhenLabel ? (
+            <>
+              {/* The shipped string is sentence-cased for the Plans list's own
+                  slot ("planned 3 days ago"); leading this line it takes a
+                  capital — done in CSS so the STRING stays shared. */}
+              <span className="first-letter:uppercase">
+                {tp('plannedAt', { when: pause.plannedWhenLabel })}
+              </span>
+              <span className="text-(--el-text-tertiary)" aria-hidden>
+                ·
+              </span>
+            </>
+          ) : null}
+          <span>{tp('itemCount', { count: pause.itemCount })}</span>
+          <Link
+            href={`/plans/${pause.planId}`}
+            data-testid="ai-planning-paused-link"
+            className="inline-flex items-center gap-1.5 font-semibold text-(--el-text-strong) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          >
+            {t('aiPlanning.paused.reviewCta')}
+            <ArrowRight className="size-[13px] shrink-0" aria-hidden />
+          </Link>
+        </span>
+      </span>
     </Callout>
   );
 }
