@@ -44,7 +44,7 @@ playbook as GitLab, Sentry, Plane, and Mattermost.
 - **Lint / format**: [ESLint 9](https://eslint.org) (flat config) + [Prettier 3](https://prettier.io). [Husky](https://typicode.github.io/husky) pre-commit hook runs [lint-staged](https://github.com/lint-staged/lint-staged) to auto-fix staged files on every commit.
 - **Package manager**: [pnpm](https://pnpm.io) (version pinned via `packageManager` in `package.json`; use `corepack enable`)
 - **Deploy**: [Vercel](https://vercel.com) (lands in Subtask 1.0.5)
-- **CI**: [GitHub Actions](https://docs.github.com/actions) — three parallel jobs (lint, typecheck, build) on every PR; build uses a Postgres service container
+- **CI**: [GitHub Actions](https://docs.github.com/actions) — three parallel jobs (lint, typecheck, build) on every PR; build runs against a Postgres container started by the `.github/actions/postgres` composite action
 
 This Stack section is the **authoritative reference** for every later coding-agent
 prompt. Motir's planner (Epic 4) reads it verbatim into Subtask prompts so
@@ -122,7 +122,8 @@ Three parallel jobs:
 - **Lint** — `pnpm lint` + `pnpm format:check`
 - **TypeScript** — `pnpm prisma generate` then `pnpm typecheck`
 - **Build** — `pnpm prisma migrate deploy` then `pnpm build`, against a
-  Postgres 16 service container
+  Postgres 16 container (started by `.github/actions/postgres`, which pulls the
+  image mirror-first and retries — a `services:` block cannot, MOTIR-1742)
 
 The full suite targets <3 min on a fresh clone. The pre-commit hook (Husky +
 lint-staged) catches lint/format issues before they reach CI; CI is the
