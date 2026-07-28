@@ -29,6 +29,8 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `grid-init.png`             | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                              |
 | `detail-surfaces.mock.html` | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries |
 | `detail-surfaces.png`       | the detail-surfaces export (same render settings)                                                             |
+| `auto-drill.mock.html`      | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases         |
+| `auto-drill.png`            | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                              |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -943,9 +945,112 @@ row; the chip under all six node states).
 
 ---
 
+## ⭐ The auto-descended ARRIVAL state (MOTIR-1805 / Story MOTIR-1803 — `auto-drill.mock.html`)
+
+`auto-drill.mock.html` draws the state the canvas is in when it **arrives already drilled** — the
+one state no sheet in this area covered, because every drilled panel drawn before it (the sheet-6
+drill-down chain above) is the _result of a click_. Story MOTIR-1803 makes a level that resolves to
+**exactly one drillable node** descend into that node automatically, so a user can now land in a
+drilled view they never navigated to. Unaddressed, that reads as "the roadmap lost my sprint's top
+level."
+
+**This sheet COMPOSES; it does not redraw.** The canvas engine + layout (`roadmap.mock.html`,
+MOTIR-1009 / build MOTIR-1194), the edge language (`edges.mock.html`, MOTIR-1331), the grid + init
+arrangement (`grid-init.mock.html`, MOTIR-1333), the scope toggle (`scope-toggle.mock.html`,
+MOTIR-1380 / build MOTIR-1382) and the refresh control (`roadmap-refresh.mock.html`, MOTIR-1540) are
+all shipped designs this sheet cites and reuses unchanged. The node cards are the shipped
+`WorkItemNode`. The breadcrumb + Back overlay mirrors the RUNNING markup in
+`components/planning/ProjectRoadmapCanvas.tsx` verbatim rather than restyling it.
+
+### The condition, and where it comes from
+
+The sprint-scoped per-level read (MOTIR-1381) re-roots the root level at the **topmost in-sprint
+members**. When a sprint commits to one story's subtree — the common shape, and this project's own
+_Journey D · The Motir CLI_ sprint, where 14 of 15 items sit under MOTIR-809 — that root level is a
+**single node**, and the whole sprint hides one drill behind it. Whole-project scope hits the same
+degenerate case on a single-epic project.
+
+### DECISION 1 — the skipped level is carried by the **breadcrumb alone**
+
+No hint banner, no tell on the crumb, **no new `roadmap.canvas.*` string** — and therefore no
+`messages/en.json` + `messages/zh.json` addition for the code card. Three reasons:
+
+1. The treatment is **information-preserving on its own**: the crumb names the skipped ancestor and
+   is one click from restoring it, and the shipped `drilled = crumbs.length > 0` gate already
+   renders the overlay the moment the crumb stack is non-empty — the arrival needs **no new chrome
+   to be legible**.
+2. The rung-1 precedent the parent story is grounded in — VS Code's `explorer.compactFolders` —
+   adds no separate explanation either.
+3. A banner would make the arrival a **special mode**, which is the opposite of this story's
+   position: an auto-descend must produce an _ordinary drilled view_. Panel C draws the manual drill
+   and the auto arrival side by side to make that identity the visible claim.
+
+### DECISION 2 — the crumb LABEL must become `identifier · title` (a required delta for MOTIR-1807)
+
+Decision 1 is only true if the crumb actually **names** the skipped level. The shipped label does
+not: `components/planning/workItemLevel.tsx` sets `crumbLabel: item.identifier`, so the breadcrumb
+reads `Roadmap › MOTIR-809`. On a _manual_ drill that is sufficient — the user just read the card
+they clicked. On an _arrival_ nobody clicked, a bare key **references** the skipped level without
+naming it, and "the breadcrumb alone carries it" would be false. Principle #18 (review at the Story
+level, by a non-technical reader) makes an opaque key the wrong carrier.
+
+So this design specifies, and MOTIR-1807 must implement:
+
+| Change                                                                                 | Where                                                 |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `crumbLabel: item.identifier` → `` crumbLabel: `${item.identifier} · ${item.title}` `` | `components/planning/workItemLevel.tsx`               |
+| `Crumb`'s `max-w-[12rem]` → `max-w-[18rem]`                                            | `ProjectRoadmapCanvas.tsx` (the `Crumb` helper)       |
+| the overlay's `max-w-[min(36rem,…)]` → `max-w-[min(44rem,…)]`                          | `ProjectRoadmapCanvas.tsx` (the `drilled &&` `<nav>`) |
+
+It applies to **manual and auto crumbs identically**, so no special mode is introduced and
+MOTIR-1807's "crumb label identical to a hand-drilled one" criterion still holds exactly. Overflow
+stays the shipped answer — `truncate` plus the existing native `title={label}` tooltip; a
+three-crumb chain ellipsises the last crumb **by design** (not a second line, not a smaller font).
+Nothing else about the breadcrumb changes: Back control, separators, `aria-current="page"`, the
+`aria-label={t('breadcrumb')}` nav, the focus ring and every token are as shipped.
+
+### The six panels (`auto-drill.mock.html`)
+
+| Panel | State                          | What it draws                                                                                                                                                                                                           |
+| ----- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** | The arrival, through its door  | left-nav **Roadmap** entry → the `Segmented` scope toggle on **Active sprint** → the canvas painting **already drilled**, breadcrumb + Back present on first paint                                                      |
+| **B** | The skipped-level treatment    | the breadcrumb anatomy: shipped identifier-only crumb (rejected) vs. `identifier · title` (this design) vs. the focus-visible root crumb — plus the decision table the code card implements                             |
+| **C** | Manual drill **vs.** arrival   | the two routes in, side by side, pixel-identical — the design position that auto-descend is not a mode; the descent must reuse `handleDrill`'s transition so nothing downstream can tell them apart                     |
+| **D** | The CHAINED two-level arrival  | `epic → story → subtasks` compacted in one pass; both skipped ancestors as crumbs **in descent order**; the chain stops where the plan actually branches                                                                |
+| **E** | The NEGATIVE cases             | E1 a multi-root level (≥2 nodes → the choice is the user's) and E2 a single **non-drillable** leaf (nothing beneath it → the lone card is _correct_) — both with **no breadcrumb at all** — plus the full descend table |
+| **F** | Post-navigate-up resting state | after the user clicks the breadcrumb root (or Back), the single-parent level **sits still**; the re-descend table (refresh: no · explicit drill: yes · scope switch: yes)                                               |
+
+### Suppression is BEHAVIOUR, not chrome (panel F)
+
+After an explicit navigation up, the resting level is an ordinary root level — the same one card,
+the same drill chevron, no breadcrumb, no badge. Nothing marks the suppressed state, because
+drawing one would tell the user about an internal flag they never set. The **refresh** control
+(MOTIR-1540) must not re-descend either: it re-reads the CURRENT level, and re-descending would make
+Refresh feel like it lost the user's place — the same in-place contract `roadmap-refresh.mock.html`
+panel 2 already draws.
+
+### Access path (DRAW THE DOOR — `run.md` design gate)
+
+**No new door.** The surface is the shipped `/roadmap` route reached from the **Roadmap** primary
+left-nav entry (MOTIR-1011), with the scope toggle (MOTIR-1382) selecting **Active sprint** — drawn
+as a real rail + header in panel A, not merely named in prose. No new nav entry, no new route, no
+new setting is proposed (per the parent story: this is an opinionated default with no knob).
+
+### Token / a11y discipline (same rules as the canvas)
+
+Colour via `--el-*` only (the breadcrumb is `--el-surface` on `--el-border` with
+`--el-text-secondary` / `--el-text` crumb ink; the tints are the `--el-tint-*` set). Shape via
+`--radius-card` / `--radius-control` / `--radius-badge` / `--height-control` / `--shadow-card` —
+no Tier-0 `--color-*`, no raw `rounded-*`/`p-*`/`h-*`, no invented hue in any semantic surface (the
+canvas dot-grid + the review-board backdrop are the sanctioned non-semantic decoration). The
+breadcrumb keeps its shipped semantics: `<nav aria-label>` → `<ol>` → real `<button>` crumbs, the
+last carrying `aria-current="page"`, and the `--focus-ring-color` focus-visible ring drawn in panel B.
+
+---
+
 ## Deliverable
 
-Nine three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Ten three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
@@ -960,6 +1065,8 @@ Nine three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`
   `roadmap-refresh.png` (MOTIR-1540).
 - **Work-type: manual/human node** — `node-worktype.mock.html` +
   `node-worktype.png` (MOTIR-1641 / 8.8.35).
+- **Auto-descended arrival state** — `auto-drill.mock.html` + `auto-drill.png`
+  (MOTIR-1805 / Story MOTIR-1803).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
