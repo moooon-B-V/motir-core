@@ -164,6 +164,7 @@ test.afterAll(async () => {
 test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan pauses, then resumes', async ({
   page,
   chapter,
+  beat,
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-813');
@@ -176,12 +177,18 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
   // ── 1 ─────────────────────────────────────────────────────────────────────
   await chapter('Turn on auto-planning', async () => {
     await openAiPlanningSettings(page);
+    await beat();
 
     await autoPlanSwitch(page).click();
+    await beat();
     await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+    await beat();
     await sprintPlanningSwitch(page).click();
+    await beat();
     await page.getByTestId('ai-planning-sprint-length').fill(String(SPRINT_LENGTH_DAYS));
+    await beat();
     await saveAiSettings(page, seed.projectKey);
+    await beat();
 
     // Every setting round-trips — read back from the server, not from the
     // optimistic panel.
@@ -194,6 +201,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     await expect(page.getByTestId('ai-planning-sprint-length')).toHaveValue(
       String(SPRINT_LENGTH_DAYS),
     );
+    await beat();
   });
 
   // ── 2 ─────────────────────────────────────────────────────────────────────
@@ -202,15 +210,15 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
 
     // The door is live only because sprint planning was switched on above.
     //
-    // Explicit headroom on THIS assertion alone: `/backlog` is by far the
-    // heaviest render this spec touches, and it is markedly slower in the
-    // acceptance lane than on the main one (measured: the untouched shipped
-    // `backlog.spec.ts` runs ~1s per test on the main lane and 11–21s here). The
-    // lane's 20s default leaves no margin for the FIRST render, so this waits
-    // longer — for the same condition, on the same signal. It is headroom, not a
-    // sleep, and every later assertion keeps the strict default.
+    // Modest headroom on THIS assertion alone. `/backlog` is the heaviest render
+    // this spec touches and it used to 500 outright here — MOTIR-1753 (the libuv
+    // threadpool starving Prisma's in-flight transactions) fixed that, and it now
+    // renders in ~1-2s like every other lane. The extra margin is kept only for
+    // the FIRST render under CI contention; it is headroom on the same signal,
+    // not a sleep, and every later assertion keeps the lane's strict default.
     const planDoor = page.getByTestId('plan-sprints-with-motir');
-    await expect(planDoor).toBeEnabled({ timeout: 60_000 });
+    await expect(planDoor).toBeEnabled({ timeout: 30_000 });
+    await beat();
 
     // DISCARD FIRST — approve is the only write, so a run that is thrown away
     // must leave nothing behind. The card words this inside step 3 ("a
@@ -224,8 +232,10 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // created until they approve.
     await planDoor.click();
     await expect(page.getByTestId('proposed-sprint-sprint:1')).toBeVisible();
+    await beat();
     await page.getByTestId('sprint-plan-discard').click();
     await expect(page.getByTestId('sprint-plan-dock')).toBeHidden();
+    await beat();
     expect(await db.sprint.count({ where: { projectId: seed.projectId } })).toBe(0);
     expect(
       await db.workItem.count({ where: { projectId: seed.projectId, sprintId: { not: null } } }),
@@ -244,6 +254,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     );
     await expect(page.getByTestId('proposed-sprint-sprint:1')).toContainText(seed.formKey);
     await expect(page.getByTestId('proposed-sprint-sprint:2')).toContainText(seed.apiKey);
+    await beat();
 
     // Approve — the REAL persist (Epic-4 createSprint + bulkAssignToSprint).
     const approved = page.waitForResponse(
@@ -282,12 +293,14 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     for (const sprint of created.sprints) {
       await expect(page.getByText(sprint.name, { exact: true }).first()).toBeVisible();
     }
+    await beat();
   });
 
   // ── 3 ─────────────────────────────────────────────────────────────────────
   await chapter('Cadence fires on its own', async () => {
     await page.goto('/plans');
     expect(await plansOf(seed.projectId)).toHaveLength(0);
+    await beat();
 
     // Drive the ready set under the threshold, then advance the cron. Nobody
     // clicks anything: the proposal has to appear on its own.
@@ -317,6 +330,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
     // And it is on the review surface, without a click having produced it.
     await page.reload();
     await expect(page.getByText(`Expand ${seed.stubKey}`).first()).toBeVisible();
+    await beat();
   });
 
   // ── 4 ─────────────────────────────────────────────────────────────────────
@@ -332,6 +346,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
       'href',
       `/plans/${planId}`,
     );
+    await beat();
 
     // The gate holds: a further tick creates nothing.
     const secondTick = await runCadenceTick(2);
@@ -347,12 +362,14 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
   await chapter('Decide, and cadence resumes', async () => {
     const planId = (await plansOf(seed.projectId))[0]!.id;
     await page.goto(`/plans/${planId}`);
+    await beat();
 
     const declined = page.waitForResponse(
       (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
     );
     await page.getByRole('button', { name: 'Decline' }).click();
     expect((await declined).status()).toBe(200);
+    await beat();
 
     // Cadence resumes — the next tick drafts a FRESH proposal.
     const thirdTick = await runCadenceTick(3);
@@ -368,6 +385,7 @@ test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan
       'href',
       `/plans/${plans[1]!.id}`,
     );
+    await beat();
   });
 });
 

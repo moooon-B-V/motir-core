@@ -37,6 +37,7 @@ test.afterAll(async () => {
 test('paid + on → the reviewer plays the video and Approves → the story goes Done', async ({
   page,
   chapter,
+  beat,
   acceptanceStory,
 }) => {
   // This IS the MOTIR-1627 self-test dogfood — pin the recorded clip to MOTIR-1627
@@ -63,7 +64,7 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
     await expect(page.getByText('Open the story')).toBeVisible(); // a chapter marker
   });
-  await page.waitForTimeout(2000);
+  await beat();
 
   await chapter('Review the evidence + Approve', async () => {
     await page.getByRole('button', { name: 'Approve', exact: true }).click();
@@ -71,7 +72,7 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     // pill (the response IS the confirmation — the inline-edit rule).
     await expect(page.getByText('Approved', { exact: true })).toBeVisible();
   });
-  await page.waitForTimeout(2000);
+  await beat();
 
   await chapter('The story is Done', async () => {
     // Committed-state read: reload and confirm the story reached Done.
@@ -80,7 +81,7 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(persisted.status).toBe('done');
   });
-  await page.waitForTimeout(2000);
+  await beat();
 });
 
 // MOTIR-1665 / MOTIR-1670 — the story's OWN acceptance: the video is served
