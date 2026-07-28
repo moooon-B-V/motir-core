@@ -294,6 +294,15 @@ export default defineConfig({
         // graph, done-work immutability); it is the load-bearing SAFETY contract
         // of the planning pipeline, so every branch of the verdict is gated.
         'lib/plans/validateProposals.ts',
+        // Story 7.12 · Subtask 7.12.6 (MOTIR-912) — the REVIEW-AND-CONFIRM seam
+        // the story's rail runs on (MOTIR-1746/1747). `planReview.ts` answers the
+        // three questions every AI-planning entrance asks of a run (is a proposal
+        // pending? what did the approve land? what does a failed decision mean?)
+        // and `planReviewClient.ts` is the ONE HTTP client all four of them
+        // confirm through. They were the story's newest, least-gated code and they
+        // sit directly on the confirm-before-write path, so they join the floor.
+        'lib/planning/planReview.ts',
+        'lib/planning/planReviewClient.ts',
         // Story 7.13 · Subtask 7.13.3 (MOTIR-916) — the auto-plan CADENCE
         // trigger. This module decides, with no human in the loop, whether to
         // spend a planning job on a tenant: the pending-proposal gate, the drain
@@ -539,6 +548,9 @@ export default defineConfig({
         'lib/services/contextualPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.5 (MOTIR-911) — the persist-time confirmation gate.
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask 7.12.6 (MOTIR-912) — the shared review/confirm seam.
+        'lib/planning/planReview.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/planReviewClient.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.13.3 (MOTIR-916) — the unattended auto-plan cadence trigger.
         'lib/services/autoPlanCadenceService.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.13.7 (MOTIR-920) — the rest of the Story 7.13 surface at the
