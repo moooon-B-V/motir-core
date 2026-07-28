@@ -188,7 +188,13 @@ export async function streamReplanJob(
   );
 }
 
-async function consumeStream(
+/**
+ * The ONE SSE consumer every job stream in the app goes through. Exported
+ * (MOTIR-1750) so the sprint-planning client subscribes through it instead of
+ * introducing a second streaming implementation — same frame parsing, same
+ * `error` / `done` terminal contract, same abort semantics.
+ */
+export async function consumeStream(
   url: string,
   signal: AbortSignal,
   onError: (code: string | null) => void,

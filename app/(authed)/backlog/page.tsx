@@ -19,6 +19,8 @@ import { estimationService } from '@/lib/services/estimationService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { projectAiSettingsService } from '@/lib/services/projectAiSettingsService';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
 import { labelsService } from '@/lib/services/labelsService';
@@ -116,6 +118,7 @@ export default async function BacklogPage({
     components,
     referencedLabels,
     savedFilterCaps,
+    aiSettings,
   ] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
@@ -140,9 +143,19 @@ export default async function BacklogPage({
     componentsService.listComponents(ctx.project.identifier, accessCtx),
     labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, accessCtx),
     projectAccessService.getSavedFilterCapabilities(ctx.projectId, accessCtx),
+    // The AI sprint-planning switch (Subtask MOTIR-1750) — browse-gated, so it
+    // resolves for every member who can see the backlog. It drives whether the
+    // strip's AI door is live or renders disabled with the fix hint; the submit
+    // re-checks it server-side (`SprintPlanningDisabledError`), so this only
+    // governs the affordance, never the permission.
+    projectAiSettingsService.getAiSettings(ctx.project.identifier, accessCtx),
   ]);
 
   const viewer = { userId: ctx.userId, ...savedFilterCaps };
+  // Whether Motir AI is wired at all (a server-only env probe). Not wired ⇒ the
+  // AI door and its hint are both absent: there is nothing for the user to
+  // switch on, so promising the capability would be a lie.
+  const aiAvailable = isMotirAiConfigured();
 
   return (
     <AdvancedFilterProvider>
@@ -207,6 +220,8 @@ export default async function BacklogPage({
               projectName={ctx.project.name}
               filterQuery={filterQuery}
               filterActive={filterActive}
+              aiSprintPlanningEnabled={aiSettings.aiSprintPlanningEnabled}
+              aiAvailable={aiAvailable}
             />
           </EstimationConfigProvider>
         </div>

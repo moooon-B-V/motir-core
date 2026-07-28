@@ -5,9 +5,11 @@ import {
   SprintAssignmentValidationError,
 } from '@/lib/ai/sprintAssignment';
 import type { JobStreamEvent, SprintAssignmentDelta } from '@/lib/ai/types';
+import type { SprintPlanReviewDto, SprintPlanReviewItemDto } from '@/lib/dto/aiSprintPlan';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
 
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -170,6 +172,70 @@ export const aiSprintPlanningService = {
    *  by core. Browsers stream from CORE, never from motir-ai. */
   streamSprintPlan(jobId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId);
+  },
+
+  /**
+   * The REVIEW read (Subtask MOTIR-1750) — the proposed packing, RESOLVED for
+   * render.
+   *
+   * The delta a `plan_sprint` job returns carries work-item KEYS and nothing
+   * else, so the review surface needs two facts the browser cannot derive:
+   *
+   *  1. Each packed key's work item (title / kind / status / estimate) — the row
+   *     the design draws is the shipped backlog row, which binds a
+   *     `WorkItemSummaryDto`.
+   *  2. The `is_blocked_by` edges AMONG the packed items — the per-row "after
+   *     MOTIR-1749" caption. It is derived from the SAME
+   *     `workItemLinkRepository.findBlockedByEdges` read `validatePacking` uses,
+   *     so the caption can never disagree with the ordering the approve enforces.
+   *     Edges to items outside the packing are dropped, exactly as there.
+   *
+   * READ-ONLY: it opens no transaction and writes nothing. It reuses
+   * `parseSprintAssignmentDelta` as the shape gate so a malformed result is a 400
+   * here too, rather than a half-rendered review — same discipline as approve,
+   * one seam earlier.
+   *
+   * A job with no `sprintAssignment` yet (still running) or an EMPTY packing both
+   * return a `null` / empty proposal rather than throwing: "nothing to schedule"
+   * is a valid outcome the design draws (panel 4), not a failure.
+   */
+  async reviewSprintPlan(jobId: string, ctx: ProjectContext): Promise<SprintPlanReviewDto> {
+    const job = await getJob(jobId);
+    const raw = job.result?.sprintAssignment;
+    if (!raw) return { jobStatus: job.status, proposal: null, items: {} };
+
+    const delta = parseSprintAssignmentDelta(raw);
+    const keys = delta.sprints.flatMap((s) => s.itemKeys);
+    if (keys.length === 0) return { jobStatus: job.status, proposal: delta, items: {} };
+
+    // `rows` are exactly the packed keys that resolve in this project, so
+    // `idToKey` IS the in-packing set: an edge whose endpoint is missing from it
+    // points outside the packing (or at another project), and is dropped — the
+    // packing cannot order what it does not contain.
+    const rows = await workItemRepository.findByIdentifiers(ctx.projectId, keys);
+    const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
+
+    const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);
+    const blockersByKey = new Map<string, string[]>();
+    for (const edge of edges) {
+      const blockedKey = idToKey.get(edge.blockedId);
+      const blockerKey = idToKey.get(edge.blockerId);
+      if (blockedKey === undefined || blockerKey === undefined) continue;
+      const list = blockersByKey.get(blockedKey);
+      if (list) list.push(blockerKey);
+      else blockersByKey.set(blockedKey, [blockerKey]);
+    }
+
+    const items: Record<string, SprintPlanReviewItemDto> = {};
+    for (const row of rows) {
+      items[row.identifier] = {
+        item: toWorkItemSummaryDto(row),
+        // Stable order so two reads of the same packing render the same caption.
+        blockedByKeys: (blockersByKey.get(row.identifier) ?? []).sort(),
+      };
+    }
+
+    return { jobStatus: job.status, proposal: delta, items };
   },
 
   /**

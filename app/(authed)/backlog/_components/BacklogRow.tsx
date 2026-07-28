@@ -39,13 +39,15 @@ import type { StatusByKey } from './backlogShared';
 
 const EM_DASH = '—';
 
-// The presentational row body — shared by the in-list sortable row AND the
-// `DragOverlay` clone, so the lifted row looks identical to its resting form.
+// The presentational row body — shared by the in-list sortable row, the
+// `DragOverlay` clone, and the READ-ONLY proposed row the AI sprint-planning
+// review renders (MOTIR-1750), so the lifted / proposed row looks identical to
+// its resting form.
 // `dragProps`/`innerRef`/`style` are the dnd-kit handle wiring (absent on the
 // overlay); `dragging` swaps in the dashed ghost; `dropBefore` shows the
 // insertion bar; `selected` adds the selection tint; `checkbox`/`actions` are the
 // selection control + `⋯` menu (real on the row, static on the overlay).
-function BacklogRowBody({
+export function BacklogRowBody({
   item,
   statusByKey,
   assigneeNameById,
@@ -59,6 +61,11 @@ function BacklogRowBody({
   checkbox,
   actions,
   onEstimateChanged,
+  showGrip = true,
+  rowRole = 'row',
+  testIdPrefix = 'backlog-row',
+  trailing,
+  readOnlyEstimate = false,
 }: {
   item: WorkItemSummaryDto;
   statusByKey: StatusByKey;
@@ -76,6 +83,21 @@ function BacklogRowBody({
    *  roll-up (the sprint committed-points badge). Omitted on the drag overlay
    *  clone, which isn't an interactive edit surface (MOTIR-1495). */
   onEstimateChanged?: () => void;
+  /** The drag-affordance cue. OFF on a proposed row (MOTIR-1750): a proposal has
+   *  no lifecycle, so hinting at a drag that cannot happen would lie. */
+  showGrip?: boolean;
+  /** The row's ARIA role. `row` in the sortable grid; `listitem` on the proposed
+   *  list, which is static — claiming row semantics for a non-grid list misleads
+   *  (the listbox-row-actions lesson). */
+  rowRole?: 'row' | 'listitem';
+  /** Test-id namespace, so proposed rows never collide with the live backlog's
+   *  rows while both are on screen. */
+  testIdPrefix?: string;
+  /** An extra caption rendered after the title (the proposal's "after MOTIR-…"
+   *  dependency note). */
+  trailing?: ReactNode;
+  /** Render the estimate as a static chip — a proposal is reviewed, not edited. */
+  readOnlyEstimate?: boolean;
 }): ReactNode {
   const t = useTranslations('backlog');
   const status = statusByKey.get(item.status);
@@ -91,10 +113,10 @@ function BacklogRowBody({
       // keyboard handlers survive). The whole row is the drag handle (design
       // panel 3); `touch-none` keeps a touch-drag from scrolling the list.
       {...dragProps}
-      role="row"
+      role={rowRole}
       aria-selected={selected || undefined}
       onClick={onRowClick}
-      data-testid={`backlog-row-${item.identifier}`}
+      data-testid={`${testIdPrefix}-${item.identifier}`}
       data-dragging={dragging ? 'true' : undefined}
       data-selected={selected ? 'true' : undefined}
       className={`group relative flex touch-none items-center gap-2 rounded-(--radius-control) border px-(--spacing-control-x) py-(--spacing-control-y) select-none ${
@@ -115,14 +137,17 @@ function BacklogRowBody({
         />
       ) : null}
       {/* Drag affordance cue — the whole row is the handle (the grip is the hint). */}
-      <GripVertical
-        className="h-4 w-4 shrink-0 text-(--el-text-faint) opacity-0 group-hover:opacity-100"
-        aria-hidden
-      />
+      {showGrip ? (
+        <GripVertical
+          className="h-4 w-4 shrink-0 text-(--el-text-faint) opacity-0 group-hover:opacity-100"
+          aria-hidden
+        />
+      ) : null}
       {checkbox}
       <IssueTypeIcon type={item.kind as IssueType} className="h-4 w-4 shrink-0" />
       <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.identifier}</span>
       <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
+      {trailing}
       {/* The estimate seam the 4.2 row reserved is FILLED (Subtask 4.3.4) by the
           inline `EstimateBadge` — same fixed slot, no relayout. A flex sibling of
           the avatar / status / ⋯ controls, never nested in them. */}
@@ -131,6 +156,7 @@ function BacklogRowBody({
           itemId={item.id}
           storyPoints={item.storyPoints}
           estimateMinutes={item.estimateMinutes}
+          readOnly={readOnlyEstimate}
           onEstimateChanged={onEstimateChanged}
         />
       </span>

@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, Inbox, Plus } from 'lucide-react';
+import { ChevronDown, Inbox } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
+import { useSprintPlanJob } from '@/lib/hooks/useSprintPlanJob';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -15,7 +17,10 @@ import { BacklogDndProvider } from './BacklogDndProvider';
 import { BacklogSkeleton } from './BacklogSkeleton';
 import { BacklogFilteredEmptyState } from './BacklogFilteredEmptyState';
 import { CreateIssueRow } from './CreateIssueRow';
+import { CreateSprintStrip } from './CreateSprintStrip';
 import { SprintContainer } from './SprintContainer';
+import { SprintPlanDock } from './SprintPlanDock';
+import { PLAN_SPRINTS_PARAM } from './aiSprintPlanShared';
 import { BACKLOG_REGION_ID } from './backlogDnd';
 import {
   buildAssigneeNameById,
@@ -51,6 +56,8 @@ export function BacklogContainer({
   projectName,
   filterQuery = '',
   filterActive = false,
+  aiSprintPlanningEnabled = false,
+  aiAvailable = false,
 }: {
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
@@ -70,8 +77,14 @@ export function BacklogContainer({
    *  FILTERED-empty state ("nothing matches", Clear CTA / dashed placeholder)
    *  over its brand-new-empty state (which offers create). */
   filterActive?: boolean;
+  /** The project's `aiSprintPlanningEnabled` (Subtask MOTIR-1750). OFF ⇒ the AI
+   *  door renders disabled with the fix hint — never hidden. */
+  aiSprintPlanningEnabled?: boolean;
+  /** Whether Motir AI is wired at all. NOT wired ⇒ no AI door and no hint. */
+  aiAvailable?: boolean;
 }) {
   const t = useTranslations('backlog');
+  const { toast } = useToast();
   const statusByKey = useMemo(() => buildStatusByKey(workflow.statuses), [workflow.statuses]);
   const assigneeNameById = useMemo(() => buildAssigneeNameById(members), [members]);
 
@@ -131,6 +144,72 @@ export function BacklogContainer({
     await refetchSprints();
   }, [refetchSprints]);
 
+  // ── AI SPRINT PLANNING (Subtask MOTIR-1750) ─────────────────────────────────
+  // The run lives here because APPROVING writes into exactly this island's two
+  // regions. PAGE STATE AFTER THE MUTATION (CLAUDE.md): approve creates sprints
+  // AND moves work items out of the backlog, and `router.refresh()` reaches
+  // NEITHER — this container is a client island seeding `useState` from its own
+  // fetches, so its `useState` initializers never re-run. Both existing signals
+  // are bumped instead, the same pair a completed / deleted sprint already uses:
+  //   1. `reloadKey` (via `refetchSprints`) — the `/api/sprints` metadata, so the
+  //      created sprints APPEAR as ordinary Epic-4 sprint panels.
+  //   2. `issuesRefreshKey` — every region's issue list, so the approved items
+  //      LEAVE the backlog region and show up inside their new sprints.
+  // No third mechanism is introduced, and there is no server-rendered surface on
+  // this page that the write changes, so no `router.refresh()` is needed.
+  const [focusSprintId, setFocusSprintId] = useState<string | null>(null);
+  const handlePlanApproved = useCallback(
+    (result: { sprints: Array<{ id: string; name: string }>; assigned: number }) => {
+      setIssuesRefreshKey((k) => k + 1);
+      setReloadKey((k) => k + 1);
+      // Focus lands on the first created sprint, so a keyboard user arrives at
+      // the RESULT rather than on the dock that just unmounted.
+      setFocusSprintId(result.sprints[0]?.id ?? null);
+      toast({
+        variant: 'success',
+        title: t('aiPlan.doneTitle', { count: result.sprints.length }),
+        description: t('aiPlan.doneBody', {
+          items: result.assigned,
+          names: result.sprints.map((s) => s.name).join(', '),
+        }),
+      });
+    },
+    [t, toast],
+  );
+  const {
+    state: planState,
+    start: startPlanning,
+    cancel: cancelPlanning,
+    dismiss: dismissPlanning,
+    approve: approvePlan,
+  } = useSprintPlanJob({ onApproved: handlePlanApproved });
+
+  const approveCurrentPlan = useCallback(() => {
+    const proposal = planState.review?.proposal;
+    if (!planState.jobId || !proposal) return;
+    // The delta that goes over the wire is the one the review RENDERED, so what
+    // persists is exactly what was approved. The server re-validates it anyway.
+    void approvePlan(planState.jobId, proposal);
+  }, [approvePlan, planState.jobId, planState.review]);
+
+  // The ⌘K door (`/backlog?planSprints=1`) — the SECOND door onto the same one
+  // implementation. The param is consumed once and stripped from the URL, so a
+  // reload does not silently spend another run; the ref guards React's double
+  // effect invocation in dev.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoStartRef = useRef(false);
+  const autoStartRequested = searchParams.get(PLAN_SPRINTS_PARAM) === '1';
+  useEffect(() => {
+    if (!autoStartRequested || autoStartRef.current) return;
+    autoStartRef.current = true;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete(PLAN_SPRINTS_PARAM);
+    const qs = next.toString();
+    router.replace(qs ? `/backlog?${qs}` : '/backlog', { scroll: false });
+    if (aiSprintPlanningEnabled) void startPlanning();
+  }, [autoStartRequested, aiSprintPlanningEnabled, router, searchParams, startPlanning]);
+
   // Keep a sprint header's issue-count badge in sync with an optimistic
   // cross-region drag (Subtask 4.2.4) — the badge reads `sprint.issueCount`, so a
   // row dragged into / out of a sprint adjusts it here; a rejected move reverts it.
@@ -179,6 +258,7 @@ export function BacklogContainer({
             key={sprint.id}
             sprint={sprint}
             order={index}
+            autoFocus={sprint.id === focusSprintId}
             statusByKey={statusByKey}
             assigneeNameById={assigneeNameById}
             projectName={projectName}
@@ -195,7 +275,27 @@ export function BacklogContainer({
           />
         ))}
 
-        <CreateSprintButton onCreated={refetchSprints} />
+        {/* The dock REPLACES the strip in place while a run is live, so the user
+            stays on the backlog — the surface the result lands in. */}
+        {planState.phase === 'idle' ? (
+          <CreateSprintStrip
+            onCreated={refetchSprints}
+            aiEnabled={aiSprintPlanningEnabled}
+            aiAvailable={aiAvailable}
+            onPlanSprints={() => void startPlanning()}
+            planning={false}
+          />
+        ) : (
+          <SprintPlanDock
+            state={planState}
+            statusByKey={statusByKey}
+            assigneeNameById={assigneeNameById}
+            onCancel={cancelPlanning}
+            onDismiss={dismissPlanning}
+            onApprove={approveCurrentPlan}
+            onRetry={() => void startPlanning()}
+          />
+        )}
 
         {/* The backlog sits BELOW every sprint container → the highest stack order
             (shift-range selection reads regions top-to-bottom). */}
@@ -309,46 +409,5 @@ function BacklogRegion({
   );
 }
 
-// Create-sprint — adds an empty PLANNED sprint via the shipped POST /api/sprints
-// (4.1.3 `createSprint`), then refetches the sprint list. The design's primary
-// affordance in the no-sprints state; owned by no other Story-4.2 subtask, so it
-// is wired here.
-function CreateSprintButton({ onCreated }: { onCreated: () => Promise<void> }) {
-  const t = useTranslations('backlog');
-  const { toast } = useToast();
-  const [busy, setBusy] = useState(false);
-
-  const create = useCallback(async () => {
-    setBusy(true);
-    try {
-      const res = await fetch('/api/sprints', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) throw new Error(`create sprint ${res.status}`);
-      await onCreated();
-    } catch {
-      toast({
-        variant: 'error',
-        title: t('createSprintErrorTitle'),
-        description: t('createSprintErrorDescription'),
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [onCreated, t, toast]);
-
-  return (
-    <button
-      type="button"
-      onClick={create}
-      disabled={busy}
-      data-testid="create-sprint"
-      className="flex w-full items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-control-x) py-3 text-sm font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent-on-surface) disabled:opacity-60"
-    >
-      <Plus className="h-4 w-4 shrink-0" aria-hidden />
-      {busy ? t('creatingSprint') : t('createSprint')}
-    </button>
-  );
-}
+// (The create-sprint affordance moved into `CreateSprintStrip` — MOTIR-1750 made
+// it the left half of the two-action strip that also hosts the AI door.)
