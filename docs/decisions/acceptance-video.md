@@ -107,15 +107,57 @@ MOTIR-1630) so the panel, the publish endpoint, and the org toggle all agree.
 
 ### 2. Storage / retention (cost control)
 
-| Knob                 | Value                                                                                                                                     | Enforced by                                                                         |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Duration cap**     | ≤ 60 s (the acceptance E2E is a focused happy-path drive, not a full suite)                                                               | Playwright config (MOTIR-1632) — the recorded spec is scoped to the acceptance flow |
-| **Resolution cap**   | 1280×720 (720p), `video: { mode: 'on', size: { width: 1280, height: 720 } }`                                                              | Playwright `use.video`                                                              |
-| **Target size**      | a few MB; **hard ceiling = the org's per-file limit** (100 MB `scaled`)                                                                   | `resolvePerFileLimitBytes` at publish; publish rejects (413) over it                |
-| **Format**           | `video/webm` (Playwright's native output) primary; `video/mp4` also allowlisted                                                           | allowlist (MOTIR-1629)                                                              |
-| **Retention**        | **keep the latest evidence per story**; a new green run **supersedes** the prior current (history rows retained, only one marked current) | `acceptanceEvidenceService` supersede-on-create (MOTIR-1629)                        |
-| **Superseded blobs** | become orphaned Attachments → reclaimed by the existing **orphan-GC** sweep (blob-first, 7-day window)                                    | `attachmentsService` orphan GC — no new GC path                                     |
-| **Plan lapse**       | **keep existing videos read-only + stop generating new** (do NOT prune paid-for evidence on downgrade)                                    | eligibility gate blocks new publishes; existing rows/blobs untouched                |
+| Knob                 | Value                                                                                                                                     | Enforced by                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Duration**         | **No cap.** The clip runs as long as the Story's flow needs — see the watchability amendment below                                        | Not enforced; bounded upstream by Story scope (planner) and by the size ceiling |
+| **Resolution cap**   | 1280×720 (720p), `video: { mode: 'on', size: { width: 1280, height: 720 } }`                                                              | Playwright `use.video`                                                          |
+| **Target size**      | a few MB; **hard ceiling = the org's per-file limit** (100 MB `scaled`)                                                                   | `resolvePerFileLimitBytes` at publish; publish rejects (413) over it            |
+| **Format**           | `video/webm` (Playwright's native output) primary; `video/mp4` also allowlisted                                                           | allowlist (MOTIR-1629)                                                          |
+| **Retention**        | **keep the latest evidence per story**; a new green run **supersedes** the prior current (history rows retained, only one marked current) | `acceptanceEvidenceService` supersede-on-create (MOTIR-1629)                    |
+| **Superseded blobs** | become orphaned Attachments → reclaimed by the existing **orphan-GC** sweep (blob-first, 7-day window)                                    | `attachmentsService` orphan GC — no new GC path                                 |
+| **Plan lapse**       | **keep existing videos read-only + stop generating new** (do NOT prune paid-for evidence on downgrade)                                    | eligibility gate blocks new publishes; existing rows/blobs untouched            |
+
+#### Amendment 2026-07-28 (Yue) — no duration cap; the receipt must be WATCHABLE
+
+The original ≤ 60 s duration cap is **withdrawn.** It was the wrong lever, and it
+was pushing in the wrong direction.
+
+**Why it was wrong.** The cap treated clip length as the cost to control, but
+length is not a cost here — the _size_ ceiling already bounds cost, and it is the
+thing actually enforced at publish. What the cap really constrained was how much
+of a Story a recording was allowed to show, which is backwards: the video is an
+acceptance _receipt_, and a receipt that omits half the flow is worthless no
+matter how small it is. It also predates per-story acceptance specs (MOTIR-1700);
+the number was set against the original single-flow dogfood, not a five-phase
+Story walk-through.
+
+**What replaces it — two rules pulling in the right direction:**
+
+1. **The clip must be WATCHABLE by a human.** A reviewer approves a Story by
+   watching this video (Principle #18), so it has to be paced for eyes, not for
+   the runner. Driven at machine speed a full five-phase Story flow finishes in
+   ~5 seconds with every chapter stacked in the first four — technically green,
+   and useless as evidence. The recorded happy path therefore **holds the frame
+   after each user-visible action** so a person can actually see what happened.
+   (Worked example: MOTIR-921's cadence spec, ~5 s → ~78 s, chapters spread
+   1.8 / 30.6 / 51.3 / 59.7 / 64.1 s.)
+
+   This is pacing, **not** synchronisation — the `waitForTimeout` ban in
+   `CLAUDE.md` still holds in full. Every real wait stays an authoritative signal;
+   the hold only ever comes _after_ the assertion that proved the state, so it can
+   never mask a race.
+
+2. **Length is bounded upstream, by STORY SCOPE — the planner's job, not the
+   spec's.** If a Story's acceptance video is getting unreasonably long, the
+   signal is that the _Story_ is too big, and the fix belongs in planning (split
+   it), not in trimming the receipt until it no longer shows the feature. A
+   too-long video is a planning smell to act on, never a reason to speed up the
+   recording.
+
+The **size** ceiling is unchanged and remains the real cost bound: the enforced
+`MAX_UPLOAD_BYTES` / per-file limit at publish. At 720p a paced multi-minute clip
+still lands in single-digit MB (MOTIR-921's ~78 s clip is 4.4 MB against a 10 MB
+enforced cap), so removing the duration cap does not move the cost envelope.
 
 **Retention rationale (industry mirror):** CI systems bound video/artifact cost
 by _recency + short retention windows_, not by keeping every run — GitHub Actions
