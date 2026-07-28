@@ -2,6 +2,7 @@ import { PlanChangeDiffFrame, ProposedAddNode } from '@/components/planning/Plan
 import type { RoadmapLevel } from '@/components/planning/ProjectRoadmapCanvas';
 import {
   diffStateForItem,
+  proposalForItem,
   proposedAddsForLevel,
   type PlanChangeDiffIndex,
 } from '@/lib/planning/planChangeDiff';
@@ -18,48 +19,52 @@ import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 // Pure (no fetching, no effects) so the placement rules are unit-testable; the
 // consumer (`PlanChangeCanvas`) does the fetching and hands the result over.
 
-export interface PlanChangeLevelFocus {
-  /** The canvas focus — null at the top level. */
-  focusNodeId: string | null;
-  /** The focus's work-item key, when it is a committed item (for `parentKey`
-   *  placement of proposed children). Null at the top level. */
-  focusKey: string | null;
-}
-
 export function decoratePlanChangeLevel(
   base: RoadmapLevel,
   wi: RoadmapLevelData,
   index: PlanChangeDiffIndex,
-  focus: PlanChangeLevelFocus,
+  /** The canvas focus — null at the top level. For a committed item it is that
+   *  item's id, which is exactly what a proposal parented on it carries, so
+   *  placement needs no second key. */
+  focusNodeId: string | null,
 ): RoadmapLevel {
   if (index.isEmpty) return base;
 
   const itemById = new Map(wi.items.map((i) => [i.id, i]));
+  // Which items on this level have a proposal hanging under them. A childless
+  // item that the run proposes a child for MUST become drillable, or the proposal
+  // is unreachable — and "propose work under an existing story" is the commonest
+  // thing the engine does.
+  const gainsChildren = new Set(
+    index.adds.map((add) => add.parentNodeId).filter((id): id is string => id !== null),
+  );
 
   const nodes: ProjectCanvasNode[] = base.nodes.map((node) => {
     const item = itemById.get(node.id);
     if (!item) return node; // a ghost anchor / the planning-origin cluster
     const state = diffStateForItem(index, item);
-    if (!state) return node;
-    const op = state === 'change' ? index.updatesByKey.get(item.identifier) : undefined;
+    const gainsChild = gainsChildren.has(node.id);
+    if (!state) return gainsChild ? { ...node, drillable: true } : node;
+    const proposal = state === 'locked' ? undefined : proposalForItem(index, item.id);
     return {
       ...node,
-      // The state joins the node's search text so "changed" / "locked" is findable
-      // with the canvas's own search-to-locate, not only visible.
+      drillable: node.drillable || gainsChild,
+      // The state joins the node's search text so "changed" / "removed" / "locked"
+      // is findable with the canvas's own search-to-locate, not only visible.
       searchText: `${node.searchText} ${state}`,
       content: (
-        <PlanChangeDiffFrame state={state} {...(op ? { op } : {})}>
+        <PlanChangeDiffFrame state={state} {...(proposal ? { proposal } : {})}>
           {node.content}
         </PlanChangeDiffFrame>
       ),
     };
   });
 
-  const proposed: ProjectCanvasNode[] = proposedAddsForLevel(index, focus).map((add) => ({
+  const proposed: ProjectCanvasNode[] = proposedAddsForLevel(index, focusNodeId).map((add) => ({
     id: add.nodeId,
-    parentId: focus.focusNodeId,
-    searchText: `${add.op.fields.title} ${add.op.kind} proposed`,
-    crumbLabel: add.op.fields.title,
+    parentId: focusNodeId,
+    searchText: `${add.item.title} ${add.item.kind} proposed`,
+    crumbLabel: add.item.title,
     drillable: add.hasChildren,
     // A proposal has no work item to peek at yet — no View action.
     viewable: false,

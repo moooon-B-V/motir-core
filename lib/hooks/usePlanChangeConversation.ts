@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PlanDelta } from '@/lib/ai/planDelta';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import {
   appendPlanChangeTurn,
   openPlanChangeSession,
@@ -12,13 +13,16 @@ import {
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
 import {
-  approvePlanDelta,
-  fetchJobResult,
   streamAugmentJob,
   streamContextualPlanJob,
   PlanEditsClientError,
-  type ApproveDeltaResult,
 } from '@/lib/planning/planEditsClient';
+import {
+  approvePlanRequest,
+  declinePlanRequest,
+  fetchPlanReview,
+  PlanRequestError,
+} from '@/lib/planning/planReviewClient';
 import {
   extraPlanningTargetKeys,
   primaryPlanningTarget,
@@ -32,12 +36,23 @@ import {
 //   mount    → POST /api/ai/plan-change/session      (open OR RESUME the thread)
 //   a turn   → POST …/session/turns  (accumulate)  → POST …/session/submit
 //   running  → GET  /api/ai/augment/[jobId]/stream  (the shipped SSE)
-//   settled  → GET  /api/ai/jobs/[jobId]            (the PlanDelta)
-//   approve  → POST /api/ai/plan-delta/approve      (the MOTIR-1337 substrate)
+//   settled  → GET  /api/plans/[planId]             (the run's PROPOSALS)
+//   approve  → POST /api/plans/[planId]/approve     (materialize — the write)
+//   discard  → POST /api/plans/[planId]/decline
+//
+// ⚠️ It reviews the PLAN, not the job's `planDelta` (MOTIR-1746). Every plan-edit
+// handler in motir-ai returns `planDelta: { operations: [] }` and writes its
+// output as `PlanItem` proposals instead (`addProposals` → `markPlanned`), so the
+// delta read always fell through to `EMPTY`: the user was told nothing was
+// proposed while the proposals sat in the Plan store unread, and the Approve
+// could never fire. The engine's invariant is that ALL planning appends to a Plan
+// — whoever triggered it — so this reads and confirms that Plan, through the same
+// route `/plans/[id]` uses. Two entrances, ONE gate.
 //
 // Three things this deliberately does NOT do:
-//  • it does not re-implement submit / stream / approve — those are
-//    `planEditsClient`'s shipped helpers (the card's compose-don't-reinvent rule);
+//  • it does not re-implement the review read or the approve — those are
+//    `planReviewClient`'s shipped helpers, the same ones the plan-detail island
+//    calls (the compose-don't-reinvent rule);
 //  • it does not close on approve — `approved` is recorded and the phase returns
 //    to `idle` with the THREAD INTACT, which is what makes this a conversation
 //    rather than a transaction (design panel 6, "after approve");
@@ -53,7 +68,10 @@ import {
 // with the shipped drafting spinner. Faking a token stream would mean an engine
 // change, which this card explicitly does not make.
 
-export type PlanChangePhase = 'loading' | 'idle' | 'streaming' | 'review' | 'approving';
+/** `deciding` covers BOTH decisions: approve and discard are now server writes
+ *  against the Plan (materialize / decline), so the gate must read busy for
+ *  either — a Discard that looked idle mid-POST could be double-fired. */
+export type PlanChangePhase = 'loading' | 'idle' | 'streaming' | 'review' | 'deciding';
 
 /** A progress frame the run narrates while the job works. */
 export type PlanChangeProgress =
@@ -63,14 +81,25 @@ export type PlanChangeProgress =
   | { kind: 'proposed'; count: number }
   | { kind: 'validating' };
 
+/** What an approve landed, as the rail says it back. Derived from the plan the
+ *  approve returns: its `add` items became work items, its `modify` items changed
+ *  existing ones. (It replaces the delta route's `ApproveDeltaResult`, which named
+ *  the same two facts about a delta that was always empty.) */
+export interface PlanApproveSummary {
+  created: string[];
+  updated: string[];
+  removed: string[];
+}
+
 export interface PlanChangeConversationState {
   phase: PlanChangePhase;
   /** The persisted thread — the resume payload, re-read on mount. */
   session: PlanChangeSessionDto | null;
   /** The live narration of the running job (the `aria-live` line). */
   progress: PlanChangeProgress | null;
-  /** The proposal on the canvas — pending until approved or discarded. */
-  delta: PlanDelta | null;
+  /** The run's PROPOSALS, read from its Plan — what the canvas draws and what the
+   *  gate confirms. Pending until approved or discarded. */
+  review: PlanReviewDto | null;
   jobId: string | null;
   /**
    * The `Plan` the current run's proposals append into (MOTIR-1743/1745) — what a
@@ -82,7 +111,7 @@ export interface PlanChangeConversationState {
    */
   planId: string | null;
   /** The last approve's result, so the rail can say what landed. */
-  approved: ApproveDeltaResult | null;
+  approved: PlanApproveSummary | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
   errorCode: string | null;
   /** The metered-AI refusal — a distinct state, not an error (design panel 6). */
@@ -93,7 +122,7 @@ const INITIAL: PlanChangeConversationState = {
   phase: 'loading',
   session: null,
   progress: null,
-  delta: null,
+  review: null,
   jobId: null,
   planId: null,
   approved: null,
@@ -132,7 +161,7 @@ export interface UsePlanChangeConversationOptions {
    * cannot reach, so it needs an explicit refetch trigger, and the server-rendered
    * surfaces behind the workspace take the refresh. Both, where both apply.
    */
-  onApproved?: (result: ApproveDeltaResult) => void;
+  onApproved?: (result: PlanApproveSummary) => void;
   /**
    * The work item this conversation is ANCHORED at, by database id (MOTIR-910's
    * per-item entrance). When set, every hop rides the item-scoped MOTIR-909
@@ -159,6 +188,44 @@ interface RunAnchor {
  * has one (an empty set is a real answer — the project thread); a caller that
  * passes nothing keeps the entrance's single anchor.
  */
+/**
+ * Read a run's proposals, and answer the one question the gate turns on: is there
+ * something PENDING to confirm? Only a `planned` plan carrying items is — a
+ * `generating` one has not closed its frontier yet (the handler marks it planned
+ * before the job completes, so the settled read sees `planned`), and an
+ * approved / declined one is history, not a review.
+ */
+async function readPendingProposal(
+  planId: string,
+  signal?: AbortSignal,
+): Promise<PlanReviewDto | null> {
+  const review = await fetchPlanReview(planId, signal);
+  return review.status === 'planned' && review.items.length > 0 ? review : null;
+}
+
+/**
+ * A failed decision, as a copy key the rail can explain. The two the reviewer can
+ * actually hit are named; everything else falls to the generic recoverable line,
+ * so a raw server code never reaches the screen.
+ *  • `PLAN_TARGET_IMMUTABLE` — the gate refused: a target reached done/cancelled
+ *    under the proposal (nothing was written).
+ *  • `PLAN_NOT_IN_EXPECTED_STATUS` / a 404 — someone (or another tab) already
+ *    decided this plan, so there is nothing left to confirm.
+ */
+function decisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'): string {
+  if (!(err instanceof PlanRequestError)) return fallback;
+  if (err.code === 'PLAN_TARGET_IMMUTABLE') return 'immutable';
+  if (err.code === 'PLAN_NOT_IN_EXPECTED_STATUS' || err.status === 404) return 'decided';
+  return fallback;
+}
+
+/** What an approve landed, read off the plan `materialize` returned. */
+function summarize(plan: PlanWithItemsDto): PlanApproveSummary {
+  const ids = (op: 'add' | 'modify' | 'remove') =>
+    plan.items.filter((item) => item.op === op).map((item) => item.workItemId ?? item.id);
+  return { created: ids('add'), updated: ids('modify'), removed: ids('remove') };
+}
+
 function resolveAnchor(
   targets: readonly PlanningTarget[] | undefined,
   entranceAnchorId: string | null,
@@ -183,7 +250,7 @@ export function usePlanChangeConversation({
   // What the LAST run was anchored at, so a retry resubmits to the same thread —
   // which, once the picker is in play, may be a different set than the entrance's.
   const lastAnchorRef = useRef<RunAnchor | null>(null);
-  // A read-only mirror of the latest state, so a callback can read `jobId`/`delta`
+  // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
   const stateRef = useRef(state);
@@ -225,6 +292,19 @@ export function usePlanChangeConversation({
           : { session: await openPlanChangeSession(controller.signal), planId: null };
         if (!mountedRef.current) return;
         setState((s) => ({ ...s, phase: 'idle', session, planId: planId ?? null }));
+
+        // A thread that left a proposal UNDECIDED comes back reviewable: read its
+        // Plan and re-enter the gate, so closing the workspace mid-review is not
+        // the same as discarding. Its own try: a plan that can't be read is a
+        // usable thread with nothing pending, NOT an unavailable session.
+        if (!planId) return;
+        try {
+          const pending = await readPendingProposal(planId, controller.signal);
+          if (!mountedRef.current || !pending) return;
+          setState((s) => ({ ...s, phase: 'review', review: pending }));
+        } catch {
+          /* nothing pending we can show — the conversation still works */
+        }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
@@ -240,7 +320,7 @@ export function usePlanChangeConversation({
    *  `submitter` is what actually sends: the project submit, the anchored
    *  resubmit, or — anchored — the ONE call that appends the new turn AND submits
    *  it (the MOTIR-909 contract fuses those two). Everything downstream (stream,
-   *  settle, delta) is identical for both threads; only the URL differs. */
+   *  settle, review) is identical for both threads; only the URL differs. */
   const run = useCallback(
     async (
       anchor: RunAnchor | null,
@@ -306,7 +386,7 @@ export function usePlanChangeConversation({
             // The thread and any PRIOR proposal survive — recoverable in place.
             setState((s) => ({
               ...s,
-              phase: s.delta ? 'review' : 'idle',
+              phase: s.review ? 'review' : 'idle',
               progress: null,
               errorCode: gated ? null : (code ?? 'FAILED'),
               outOfCredits: gated,
@@ -321,16 +401,23 @@ export function usePlanChangeConversation({
         );
         if (failed || !mountedRef.current) return;
 
-        const result = await fetchJobResult(jobId, controller.signal);
+        // SETTLED → read what the run actually PROPOSED, from its Plan. The job
+        // result is not consulted: its `planDelta` is empty by construction.
+        const pending = planId ? await readPendingProposal(planId, controller.signal) : null;
         if (!mountedRef.current) return;
-        const delta = result.result?.planDelta ?? null;
-        if (delta && delta.operations.length > 0) {
-          setState((s) => ({ ...s, phase: 'review', delta, progress: null, errorCode: null }));
+        if (pending) {
+          setState((s) => ({
+            ...s,
+            phase: 'review',
+            review: pending,
+            progress: null,
+            errorCode: null,
+          }));
         } else {
           // Nothing came back. The thread stays; the previous proposal (if any) too.
           setState((s) => ({
             ...s,
-            phase: s.delta ? 'review' : 'idle',
+            phase: s.review ? 'review' : 'idle',
             progress: null,
             errorCode: 'EMPTY',
           }));
@@ -341,7 +428,7 @@ export function usePlanChangeConversation({
         const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
         setState((s) => ({
           ...s,
-          phase: s.delta ? 'review' : 'idle',
+          phase: s.review ? 'review' : 'idle',
           progress: null,
           errorCode: gated ? null : 'FAILED',
           outOfCredits: gated,
@@ -408,7 +495,7 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
         setState((s) => ({
           ...s,
-          phase: s.delta ? 'review' : 'idle',
+          phase: s.review ? 'review' : 'idle',
           progress: null,
           errorCode: 'FAILED',
         }));
@@ -436,22 +523,27 @@ export function usePlanChangeConversation({
     await run(anchor);
   }, [run]);
 
-  /** Persist the proposal through the shipped approve route. The thread STAYS. */
+  /**
+   * PERSIST the proposal — `POST /api/plans/[id]/approve` → `approvePlan` →
+   * `materialize`, the path that actually writes, behind the 7.12.5 persist gate.
+   * It is the SAME operation `/plans/[id]` performs, on the same Plan: two
+   * entrances, one gate, no second write path. The thread STAYS.
+   */
   const approve = useCallback(async () => {
-    const { jobId, delta } = stateRef.current;
-    if (!jobId || !delta) return;
-    setState((s) => ({ ...s, phase: 'approving', errorCode: null }));
+    const { planId } = stateRef.current;
+    if (!planId) return;
+    setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
 
     try {
-      const approved = await approvePlanDelta(jobId, delta);
+      const approved = summarize(await approvePlanRequest(planId));
       if (!mountedRef.current) return;
       setState((s) => ({
         ...s,
         phase: 'idle',
-        delta: null,
+        review: null,
         jobId: null,
-        // Settled: the run is no longer addressable, so its plan handle goes
-        // with its job id rather than lingering as a stale confirm target.
+        // Decided: the plan is no longer pending, so its handle goes with the
+        // job id rather than lingering as a stale confirm target.
         planId: null,
         approved,
         progress: null,
@@ -460,27 +552,37 @@ export function usePlanChangeConversation({
       approvedCbRef.current?.(approved);
     } catch (err) {
       if (!mountedRef.current) return;
-      const code =
-        err instanceof PlanEditsClientError
-          ? err.code === 'PLAN_DELTA_IMMUTABLE'
-            ? 'immutable'
-            : (err.code ?? 'APPROVE_ERROR')
-          : 'APPROVE_ERROR';
-      setState((s) => ({ ...s, phase: 'review', errorCode: code }));
+      setState((s) => ({ ...s, phase: 'review', errorCode: decisionErrorCode(err) }));
     }
   }, []);
 
-  /** Drop the proposal. Writes NOTHING — and the conversation stays open. */
-  const discard = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      phase: 'idle',
-      delta: null,
-      jobId: null,
-      planId: null,
-      progress: null,
-      errorCode: null,
-    }));
+  /**
+   * DISCARD the proposal — `POST /api/plans/[id]/decline`, which drops the
+   * proposed items and leaves the tree untouched. It writes to the PLAN (so the
+   * run is decided rather than left orphaned at `planned`) and never to the tree.
+   * The conversation stays open either way.
+   */
+  const discard = useCallback(async () => {
+    const { planId } = stateRef.current;
+    setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
+    try {
+      if (planId) await declinePlanRequest(planId);
+      if (!mountedRef.current) return;
+      setState((s) => ({
+        ...s,
+        phase: 'idle',
+        review: null,
+        jobId: null,
+        planId: null,
+        progress: null,
+        errorCode: null,
+      }));
+    } catch (err) {
+      if (!mountedRef.current) return;
+      // The proposal is still pending — say so and leave it decidable, rather
+      // than clearing a canvas the server still considers awaiting a decision.
+      setState((s) => ({ ...s, phase: 'review', errorCode: decisionErrorCode(err, 'discard') }));
+    }
   }, []);
 
   const dismissError = useCallback(() => {

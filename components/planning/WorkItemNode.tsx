@@ -325,6 +325,10 @@ export function WorkItemNode({
             ) : null}
           </div>
           <span
+            // Tagged so a decorator that WRAPS this node (the plan-change diff
+            // frame's `remove` state) can strike the title without redrawing the
+            // card — the same struck-title language `showDone` uses below.
+            data-node-title
             className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
               showDone ? 'text-(--el-text-muted) line-through' : 'text-(--el-text)'
             }`}

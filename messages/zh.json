@@ -4649,11 +4649,11 @@
       "approve": "确认",
       "approveChanges": "确认变更",
       "nothingSavedYet": "尚未保存",
-      "barCounts": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}",
+      "barCounts": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}{removed, plural, =0 {} other {，移除 #}}",
       "barNothingSaved": "确认之前不会保存任何内容。",
-      "summary": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}} —— 已放到画布上，尚未保存。",
+      "summary": "{added, plural, other {新增 #}}{changed, plural, =0 {} other {，修改 #}}{removed, plural, =0 {} other {，移除 #}} —— 已放到画布上，尚未保存。",
       "lockedNote": "已完成的工作保持不动 —— 我无法改动已完成的内容。",
-      "approved": "{created, plural, other {新增 # 个工作项}}{updated, plural, =0 {} other {，修改 # 个}} —— 已写入计划。还要改什么吗？",
+      "approved": "{created, plural, other {新增 # 个工作项}}{updated, plural, =0 {} other {，修改 # 个}}{removed, plural, =0 {} other {，移除 # 个}} —— 已写入计划。还要改什么吗？",
       "starters": {
         "addWork": "为某个篇章补充工作",
         "resequence": "重新排列剩下的工作",
@@ -4670,7 +4670,9 @@
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
         "empty": "没有返回任何可改动的内容。可以更具体地指明篇章或工作。",
         "immutable": "其中部分工作项已完成，无法改动。其余内容仍在画布上。",
-        "session": "这段对话加载失败。请重试 —— 你的计划没有任何变化。"
+        "session": "这段对话加载失败。请重试 —— 你的计划没有任何变化。",
+        "decided": "这份提议已经处理过了 —— 没有需要再确认的内容，也不会重复写入。",
+        "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。"
       },
       "diff": {
         "add": "新增",
@@ -4682,8 +4684,12 @@
           "priority": "优先级",
           "type": "类型",
           "estimate": "预估工时",
-          "description": "描述"
-        }
+          "description": "描述",
+          "points": "故事点",
+          "links": "依赖关系"
+        },
+        "remove": "移除",
+        "willRemove": "确认后移除"
       }
     },
     "targets": {

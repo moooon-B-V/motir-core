@@ -3,18 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
-// The conversation LOOP (Subtask MOTIR-1730): open/resume → append a turn →
-// submit the ACCUMULATED intent → stream → review the delta → approve or discard.
-// The session seam (MOTIR-1728) and the shipped job helpers are mocked, so what
-// is under test is the state machine the rail and the canvas both read.
+// The conversation LOOP (Subtask MOTIR-1730, re-pointed at the PLAN by
+// MOTIR-1746): open/resume → append a turn → submit the ACCUMULATED intent →
+// stream → read the run's PROPOSALS from its Plan → approve (materialize) or
+// discard (decline). The session seam (MOTIR-1728), the job stream and the plans
+// API are mocked, so what is under test is the state machine the rail and the
+// canvas both read.
 
 const {
   open,
   append,
   submit,
   stream,
-  fetchResult,
+  fetchReview,
   approve,
+  decline,
   resumeAnchored,
   submitAnchored,
   resubmitAnchored,
@@ -24,8 +27,9 @@ const {
   append: vi.fn(),
   submit: vi.fn(),
   stream: vi.fn(),
-  fetchResult: vi.fn(),
+  fetchReview: vi.fn(),
   approve: vi.fn(),
+  decline: vi.fn(),
   resumeAnchored: vi.fn(),
   submitAnchored: vi.fn(),
   resubmitAnchored: vi.fn(),
@@ -47,13 +51,26 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
     ...actual,
     streamAugmentJob: stream,
     streamContextualPlanJob: streamAnchored,
-    fetchJobResult: fetchResult,
-    approvePlanDelta: approve,
+  };
+});
+
+// The PLANS API — the same client the `/plans/[id]` island calls. Reviewing and
+// confirming both go through it now; there is no second write path to mock.
+vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/planning/planReviewClient')>();
+  return {
+    ...actual,
+    fetchPlanReview: fetchReview,
+    approvePlanRequest: approve,
+    declinePlanRequest: decline,
   };
 });
 
 import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
+import { PlanRequestError } from '@/lib/planning/planReviewClient';
+import { planReview, planReviewItem } from '../helpers/planReview';
+import type { PlanWithItemsDto } from '@/lib/dto/plans';
 
 function session(bodies: string[], targetKeys: string[] = []): PlanChangeSessionDto {
   return {
@@ -77,8 +94,38 @@ function session(bodies: string[], targetKeys: string[] = []): PlanChangeSession
   };
 }
 
-const DELTA = {
-  operations: [{ op: 'create' as const, kind: 'story' as const, fields: { title: 'Recurring' } }],
+/** What the run PROPOSED, as its Plan reads back. */
+const REVIEW = planReview([
+  planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' }),
+]);
+
+/** What `materialize` returns — the same plan, now `approved`, its `add` bound to
+ *  the work item it created. */
+const MATERIALIZED: PlanWithItemsDto = {
+  id: 'plan-1',
+  projectId: 'proj_1',
+  status: 'approved',
+  title: null,
+  summary: null,
+  sourceJobId: 'job-1',
+  itemCount: 1,
+  createdAt: '2026-07-27T09:00:00.000Z',
+  plannedAt: '2026-07-27T09:01:00.000Z',
+  decidedAt: '2026-07-27T09:05:00.000Z',
+  decidedById: 'u1',
+  items: [
+    {
+      id: 'pi_1',
+      op: 'add',
+      workItemId: 'wi_new',
+      proposedFields: { title: 'Recurring' },
+      patch: null,
+      parentRef: null,
+      blockedByRefs: [],
+      baseRevision: null,
+      createdAt: '2026-07-27T09:01:00.000Z',
+    },
+  ],
 };
 
 /** A stream that immediately reports success, optionally emitting progress frames. */
@@ -99,18 +146,25 @@ function okStream(frames: Array<[string, unknown]> = []) {
 beforeEach(() => {
   open.mockResolvedValue(session([]));
   append.mockImplementation(async (body: string) => session([body]));
-  submit.mockResolvedValue({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
+  submit.mockResolvedValue({
+    jobId: 'job-1',
+    planId: 'plan-1',
+    session: session(['Add recurring invoices.']),
+  });
   stream.mockImplementation(okStream());
-  fetchResult.mockResolvedValue({ status: 'succeeded', result: { planDelta: DELTA } });
-  approve.mockResolvedValue({ created: ['PAY-30'], updated: [], unchanged: [] });
+  fetchReview.mockResolvedValue(REVIEW);
+  approve.mockResolvedValue(MATERIALIZED);
+  decline.mockResolvedValue({ ...MATERIALIZED, status: 'declined', items: [] });
   resumeAnchored.mockResolvedValue({ session: null, planId: null });
   submitAnchored.mockResolvedValue({
     jobId: 'job-anchored-1',
+    planId: 'plan-anchored-1',
     sessionId: 's1',
     session: session(['Split this story.']),
   });
   resubmitAnchored.mockResolvedValue({
     jobId: 'job-anchored-2',
+    planId: 'plan-anchored-2',
     sessionId: 's1',
     session: session(['Split this story.']),
   });
@@ -186,6 +240,7 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
   it('adopts the SCOPED thread that comes back, so the rail shows what it is anchored at', async () => {
     submitAnchored.mockResolvedValue({
       jobId: 'job-ctx',
+      planId: 'plan-ctx',
       sessionId: 's-ctx',
       session: session(['Expand billing.'], ['MOTIR-812', 'MOTIR-918']),
     });
@@ -197,7 +252,7 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
 
     expect(result.current.state.session?.targetKeys).toEqual(['MOTIR-812', 'MOTIR-918']);
     expect(result.current.state.phase).toBe('review');
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
   });
 
   it('streams the contextual job through ITS route — the anchor is re-gated on subscribe', async () => {
@@ -251,7 +306,7 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
 });
 
 describe('usePlanChangeConversation — a turn', () => {
-  it('appends the turn, then submits the ACCUMULATED intent and reviews the delta', async () => {
+  it('appends the turn, then submits the ACCUMULATED intent and reviews the PROPOSALS', async () => {
     const { result } = await mounted();
 
     await act(async () => {
@@ -262,7 +317,7 @@ describe('usePlanChangeConversation — a turn', () => {
     // The submit takes NO prompt — the server builds it from every turn in order.
     expect(submit).toHaveBeenCalledTimes(1);
     expect(result.current.state.phase).toBe('review');
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
     expect(result.current.state.jobId).toBe('job-1');
   });
 
@@ -290,15 +345,12 @@ describe('usePlanChangeConversation — a turn', () => {
     await act(async () => {
       await result.current.send('Add recurring invoices.');
     });
-    // Settled → the narration clears; the delta is the outcome.
+    // Settled → the narration clears; the proposal is the outcome.
     expect(result.current.state.progress).toBeNull();
   });
 
   it('reports an EMPTY result without losing the thread', async () => {
-    fetchResult.mockResolvedValue({
-      status: 'succeeded',
-      result: { planDelta: { operations: [] } },
-    });
+    fetchReview.mockResolvedValue(planReview([]));
     const { result } = await mounted();
 
     await act(async () => {
@@ -328,7 +380,7 @@ describe('usePlanChangeConversation — failure is recoverable in place', () => 
     expect(result.current.state.errorCode).toBe('FAILED');
     // The proposal already on the canvas survives — a retry continues the
     // conversation instead of restarting it.
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
     expect(result.current.state.phase).toBe('review');
   });
 
@@ -372,21 +424,38 @@ describe('usePlanChangeConversation — approve / discard', () => {
       await result.current.approve();
     });
 
-    expect(approve).toHaveBeenCalledWith('job-1', DELTA);
-    expect(result.current.state.delta).toBeNull();
+    // The PLAN is what gets confirmed — the same operation `/plans/[id]` performs.
+    expect(approve).toHaveBeenCalledWith('plan-1');
+    expect(result.current.state.review).toBeNull();
     expect(result.current.state.approved).toEqual({
-      created: ['PAY-30'],
+      created: ['wi_new'],
       updated: [],
-      unchanged: [],
+      removed: [],
     });
+    // Decided → nothing is left addressable, so a second click cannot re-approve.
+    expect(result.current.state.planId).toBeNull();
     // The thread survives the commit — that is what makes it a conversation.
     expect(result.current.state.session?.turns).toHaveLength(1);
     // The caller is told, so it can refresh the server surfaces AND the island.
     expect(onApproved).toHaveBeenCalledTimes(1);
   });
 
+  it('WRITES NOTHING while the proposal is merely on screen', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    // The gate is the whole point: reviewing reads the Plan and stops there. No
+    // approve, no decline — so neither the tree nor the Plan's status moves until
+    // the user clicks.
+    expect(result.current.state.phase).toBe('review');
+    expect(approve).not.toHaveBeenCalled();
+    expect(decline).not.toHaveBeenCalled();
+  });
+
   it('surfaces an immutable rejection and leaves the proposal in review', async () => {
-    approve.mockRejectedValue(new PlanEditsClientError(409, 'PLAN_DELTA_IMMUTABLE'));
+    approve.mockRejectedValue(new PlanRequestError(409, 'PLAN_TARGET_IMMUTABLE'));
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');
@@ -398,23 +467,77 @@ describe('usePlanChangeConversation — approve / discard', () => {
 
     expect(result.current.state.errorCode).toBe('immutable');
     expect(result.current.state.phase).toBe('review');
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
   });
 
-  it('DISCARD writes nothing and leaves the thread intact', async () => {
+  it('DISCARD declines the PLAN, touches no work item, and leaves the thread intact', async () => {
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');
     });
 
-    act(() => {
-      result.current.discard();
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    // Declining DECIDES the plan (`planned → declined`) instead of abandoning it
+    // at `planned` forever — and it is the only write a discard makes.
+    expect(decline).toHaveBeenCalledWith('plan-1');
+    expect(approve).not.toHaveBeenCalled();
+    expect(result.current.state.review).toBeNull();
+    expect(result.current.state.planId).toBeNull();
+    expect(result.current.state.phase).toBe('idle');
+    expect(result.current.state.session?.turns).toHaveLength(1);
+  });
+
+  it('keeps the proposal decidable when the DISCARD itself fails', async () => {
+    decline.mockRejectedValue(new PlanRequestError(500, null));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    // Clearing the canvas here would tell the user it was dropped while the
+    // server still has it awaiting a decision.
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(result.current.state.planId).toBe('plan-1');
+    expect(result.current.state.errorCode).toBe('discard');
+  });
+
+  it('says a plan someone ALREADY decided is decided, and never writes twice', async () => {
+    approve.mockRejectedValue(new PlanRequestError(409, 'PLAN_NOT_IN_EXPECTED_STATUS'));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(result.current.state.errorCode).toBe('decided');
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('does not approve when there is no Plan to address', async () => {
+    // The defensive read: a stub / older response carried only a jobId, so there
+    // is nothing to confirm — the gate must no-op rather than POST to `undefined`.
+    submit.mockResolvedValue({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    await act(async () => {
+      await result.current.approve();
     });
 
     expect(approve).not.toHaveBeenCalled();
-    expect(result.current.state.delta).toBeNull();
-    expect(result.current.state.phase).toBe('idle');
-    expect(result.current.state.session?.turns).toHaveLength(1);
   });
 });
 
@@ -425,9 +548,9 @@ describe('usePlanChangeConversation — approve / discard', () => {
 // lock is that the routing actually switches — the project thread must never be
 // touched from an item's door, and vice versa.
 
-async function mountedAnchored(anchorId = 'wi_123') {
+async function mountedAnchored(anchorId = 'wi_123', settled: 'idle' | 'review' = 'idle') {
   const hook = renderHook(() => usePlanChangeConversation({ anchorId }));
-  await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+  await waitFor(() => expect(hook.result.current.state.phase).toBe(settled));
   return hook;
 }
 
@@ -454,9 +577,39 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       session: session(['Split this story.']),
       planId: 'plan_pending',
     });
-    const { result } = await mountedAnchored();
+    const { result } = await mountedAnchored('wi_123', 'review');
 
     expect(result.current.state.planId).toBe('plan_pending');
+    // …and it comes back REVIEWABLE: the undecided proposal is read from its Plan
+    // and put back on the canvas, so closing the workspace mid-review is not the
+    // same as discarding (MOTIR-1746).
+    expect(fetchReview).toHaveBeenCalledWith('plan_pending', expect.anything());
+    expect(result.current.state.review).toEqual(REVIEW);
+  });
+
+  it('comes back with NOTHING pending when the thread’s plan was already decided', async () => {
+    resumeAnchored.mockResolvedValue({
+      session: session(['Split this story.']),
+      planId: 'plan_decided',
+    });
+    fetchReview.mockResolvedValue(planReview([], { status: 'approved' }));
+    const { result } = await mountedAnchored();
+
+    // A decided plan is history, not a review — no gate, and no error either.
+    expect(result.current.state.review).toBeNull();
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
+  it('stays usable when the pending plan cannot be READ — that is not a broken session', async () => {
+    resumeAnchored.mockResolvedValue({
+      session: session(['Split this story.']),
+      planId: 'plan_pending',
+    });
+    fetchReview.mockRejectedValue(new PlanRequestError(500, null));
+    const { result } = await mountedAnchored();
+
+    expect(result.current.state.session?.turns).toHaveLength(1);
+    expect(result.current.state.errorCode).toBeNull();
   });
 
   it('adopts the SUBMIT’s planId, and drops it once the proposal is settled', async () => {
@@ -473,9 +626,12 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
     });
     expect(result.current.state.planId).toBe('plan_fresh');
 
-    // Discarding ends the review, so the handle goes with the job id rather than
-    // lingering as a stale confirm target.
-    act(() => result.current.discard());
+    // Discarding DECIDES that plan, so the handle goes with the job id rather
+    // than lingering as a stale confirm target.
+    await act(async () => {
+      await result.current.discard();
+    });
+    expect(decline).toHaveBeenCalledWith('plan_fresh');
     expect(result.current.state.planId).toBeNull();
     expect(result.current.state.jobId).toBeNull();
   });
@@ -484,6 +640,11 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
     // The defensive read the optional browser-facing type exists for: a stub or
     // an older deployment answers without it, and the rail simply has nothing to
     // confirm — it does not crash and does not invent an id.
+    submitAnchored.mockResolvedValue({
+      jobId: 'job-anchored-1',
+      sessionId: 's1',
+      session: session(['Split this story.']),
+    });
     const { result } = await mountedAnchored();
 
     await act(async () => {
@@ -551,7 +712,7 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       await result.current.approve();
     });
 
-    expect(approve).toHaveBeenCalledWith('job-anchored-1', DELTA);
-    expect(result.current.state.delta).toBeNull();
+    expect(approve).toHaveBeenCalledWith('plan-anchored-1');
+    expect(result.current.state.review).toBeNull();
   });
 });

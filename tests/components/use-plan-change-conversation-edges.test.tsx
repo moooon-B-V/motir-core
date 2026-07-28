@@ -18,13 +18,14 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 //   * `approve` with nothing selected, a non-typed approve failure, and
 //     `dismissError`.
 
-const { open, append, submit, stream, fetchResult, approve } = vi.hoisted(() => ({
+const { open, append, submit, stream, fetchReview, approve, decline } = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
   submit: vi.fn(),
   stream: vi.fn(),
-  fetchResult: vi.fn(),
+  fetchReview: vi.fn(),
   approve: vi.fn(),
+  decline: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -43,13 +44,25 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   return {
     ...actual,
     streamAugmentJob: stream,
-    fetchJobResult: fetchResult,
-    approvePlanDelta: approve,
+  };
+});
+
+vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/planning/planReviewClient')>();
+  return {
+    ...actual,
+    fetchPlanReview: fetchReview,
+    approvePlanRequest: approve,
+    declinePlanRequest: decline,
   };
 });
 
 import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
+import { PlanRequestError } from '@/lib/planning/planReviewClient';
+import { planReview, planReviewItem } from '../helpers/planReview';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanWithItemsDto } from '@/lib/dto/plans';
 
 function session(bodies: string[]): PlanChangeSessionDto {
   return {
@@ -73,8 +86,35 @@ function session(bodies: string[]): PlanChangeSessionDto {
   };
 }
 
-const DELTA = {
-  operations: [{ op: 'create' as const, kind: 'story' as const, fields: { title: 'Recurring' } }],
+const REVIEW: PlanReviewDto = planReview([
+  planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' }),
+]);
+
+const MATERIALIZED: PlanWithItemsDto = {
+  id: 'plan-1',
+  projectId: 'proj_1',
+  status: 'approved',
+  title: null,
+  summary: null,
+  sourceJobId: 'job-1',
+  itemCount: 1,
+  createdAt: '2026-07-27T09:00:00.000Z',
+  plannedAt: '2026-07-27T09:01:00.000Z',
+  decidedAt: '2026-07-27T09:05:00.000Z',
+  decidedById: 'u1',
+  items: [
+    {
+      id: 'pi_1',
+      op: 'add',
+      workItemId: 'wi_new',
+      proposedFields: { title: 'Recurring' },
+      patch: null,
+      parentRef: null,
+      blockedByRefs: [],
+      baseRevision: null,
+      createdAt: '2026-07-27T09:01:00.000Z',
+    },
+  ],
 };
 
 function okStream() {
@@ -101,10 +141,15 @@ function deferred<T>() {
 beforeEach(() => {
   open.mockResolvedValue(session([]));
   append.mockImplementation(async (body: string) => session([body]));
-  submit.mockResolvedValue({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
+  submit.mockResolvedValue({
+    jobId: 'job-1',
+    planId: 'plan-1',
+    session: session(['Add recurring invoices.']),
+  });
   stream.mockImplementation(okStream());
-  fetchResult.mockResolvedValue({ status: 'succeeded', result: { planDelta: DELTA } });
-  approve.mockResolvedValue({ created: ['PAY-30'], updated: [], unchanged: [] });
+  fetchReview.mockResolvedValue(REVIEW);
+  approve.mockResolvedValue(MATERIALIZED);
+  decline.mockResolvedValue({ ...MATERIALIZED, status: 'declined', items: [] });
 });
 
 afterEach(() => {
@@ -148,7 +193,7 @@ describe('usePlanChangeConversation — the APPEND leg fails', () => {
     });
 
     expect(result.current.state.phase).toBe('review');
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
   });
 
   it('releases the in-flight latch so the next send can proceed', async () => {
@@ -191,7 +236,7 @@ describe('usePlanChangeConversation — one run at a time', () => {
   });
 
   it('ignores a retry while a run is in flight', async () => {
-    const pending = deferred<{ jobId: string; session: PlanChangeSessionDto }>();
+    const pending = deferred<{ jobId: string; planId: string; session: PlanChangeSessionDto }>();
     submit.mockReturnValueOnce(pending.promise);
     const { result } = await mounted();
 
@@ -203,7 +248,11 @@ describe('usePlanChangeConversation — one run at a time', () => {
     expect(submit).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      pending.resolve({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
+      pending.resolve({
+        jobId: 'job-1',
+        planId: 'plan-1',
+        session: session(['Add recurring invoices.']),
+      });
       await first!;
     });
   });
@@ -265,7 +314,7 @@ describe('usePlanChangeConversation — an aborted call is not an error', () => 
 
 describe('usePlanChangeConversation — unmounting mid-flight', () => {
   it('aborts the in-flight run and writes no state after unmount', async () => {
-    const pending = deferred<{ jobId: string; session: PlanChangeSessionDto }>();
+    const pending = deferred<{ jobId: string; planId: string; session: PlanChangeSessionDto }>();
     submit.mockReturnValueOnce(pending.promise);
     const hook = await mounted();
 
@@ -280,12 +329,16 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     // Settling AFTER unmount must be inert: no stream, no result fetch, and no
     // React "update on an unmounted component" write.
     await act(async () => {
-      pending.resolve({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
+      pending.resolve({
+        jobId: 'job-1',
+        planId: 'plan-1',
+        session: session(['Add recurring invoices.']),
+      });
       await run!;
     });
 
     expect(stream).not.toHaveBeenCalled();
-    expect(fetchResult).not.toHaveBeenCalled();
+    expect(fetchReview).not.toHaveBeenCalled();
     expect(hook.result.current.state.phase).toBe(phaseAtUnmount);
   });
 
@@ -325,9 +378,9 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it('drops a job result that arrives after unmount', async () => {
-    const pending = deferred<{ status: string; result: { planDelta: typeof DELTA } }>();
-    fetchResult.mockReturnValueOnce(pending.promise);
+  it('drops a settled plan read that arrives after unmount', async () => {
+    const pending = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(pending.promise);
     const hook = await mounted();
 
     let run: Promise<void>;
@@ -337,11 +390,11 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     hook.unmount();
 
     await act(async () => {
-      pending.resolve({ status: 'succeeded', result: { planDelta: DELTA } });
+      pending.resolve(REVIEW);
       await run!;
     });
 
-    expect(hook.result.current.state.delta).toBeNull();
+    expect(hook.result.current.state.review).toBeNull();
   });
 
   it('drops a stream failure and its progress frames after unmount', async () => {
@@ -422,7 +475,7 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     });
 
     expect(hook.result.current.state.errorCode).toBeNull();
-    expect(hook.result.current.state.phase).toBe('approving');
+    expect(hook.result.current.state.phase).toBe('deciding');
   });
 
   it('drops an append SUCCESS that arrives after unmount', async () => {
@@ -484,7 +537,7 @@ describe('usePlanChangeConversation — a failed SUBMIT keeps the prior proposal
     });
 
     expect(result.current.state.phase).toBe('review');
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
     expect(result.current.state.errorCode).toBe('FAILED');
   });
 
@@ -501,12 +554,12 @@ describe('usePlanChangeConversation — a failed SUBMIT keeps the prior proposal
 
     expect(result.current.state.outOfCredits).toBe(true);
     expect(result.current.state.errorCode).toBeNull();
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
   });
 
   it('completes a run whose stream signals done', async () => {
     // The shipped suite's stub never calls `onDone`; the real SSE does on a
-    // clean close, and the hook must fall through to the result fetch.
+    // clean close, and the hook must fall through to reading the run's plan.
     stream.mockImplementationOnce(
       async (
         _jobId: string,
@@ -522,7 +575,7 @@ describe('usePlanChangeConversation — a failed SUBMIT keeps the prior proposal
       await result.current.send('Add recurring invoices.');
     });
 
-    expect(fetchResult).toHaveBeenCalledWith('job-1', expect.anything());
+    expect(fetchReview).toHaveBeenCalledWith('plan-1', expect.anything());
     expect(result.current.state.phase).toBe('review');
   });
 });
@@ -551,11 +604,11 @@ describe('usePlanChangeConversation — approve edges', () => {
     expect(result.current.state.errorCode).toBe('APPROVE_ERROR');
     expect(result.current.state.phase).toBe('review');
     // Nothing was consumed — the proposal is still there to retry.
-    expect(result.current.state.delta).toEqual(DELTA);
+    expect(result.current.state.review).toEqual(REVIEW);
   });
 
   it('falls back to APPROVE_ERROR for a typed error with no code', async () => {
-    approve.mockRejectedValue(new PlanEditsClientError(500, null));
+    approve.mockRejectedValue(new PlanRequestError(500, null));
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');
@@ -567,8 +620,8 @@ describe('usePlanChangeConversation — approve edges', () => {
     expect(result.current.state.errorCode).toBe('APPROVE_ERROR');
   });
 
-  it('surfaces a typed non-immutable approve code verbatim', async () => {
-    approve.mockRejectedValue(new PlanEditsClientError(400, 'PLAN_DELTA_APPROVE_ERROR'));
+  it('never puts a raw server code on screen — an unrecognized one reads as the generic failure', async () => {
+    approve.mockRejectedValue(new PlanRequestError(400, 'PLAN_GRAMMAR_VIOLATION'));
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');
@@ -577,7 +630,22 @@ describe('usePlanChangeConversation — approve edges', () => {
       await result.current.approve();
     });
 
-    expect(result.current.state.errorCode).toBe('PLAN_DELTA_APPROVE_ERROR');
+    // The two codes a reviewer can act on (`immutable` / `decided`) are named;
+    // everything else falls to the recoverable line rather than leaking a code.
+    expect(result.current.state.errorCode).toBe('APPROVE_ERROR');
+  });
+
+  it('reports a plan that vanished as already DECIDED, not as a failure to retry', async () => {
+    approve.mockRejectedValue(new PlanRequestError(404, 'PLAN_NOT_FOUND'));
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(result.current.state.errorCode).toBe('decided');
   });
 
   it('approves with NO onApproved callback wired', async () => {
@@ -592,9 +660,9 @@ describe('usePlanChangeConversation — approve edges', () => {
     });
 
     expect(result.current.state.approved).toEqual({
-      created: ['PAY-30'],
+      created: ['wi_new'],
       updated: [],
-      unchanged: [],
+      removed: [],
     });
     expect(result.current.state.phase).toBe('idle');
   });

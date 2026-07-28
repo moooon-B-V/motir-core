@@ -4653,11 +4653,11 @@
       "approve": "Approve",
       "approveChanges": "Approve changes",
       "nothingSavedYet": "Nothing saved yet",
-      "barCounts": "{added, plural, =0 {No additions} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}",
+      "barCounts": "{added, plural, =0 {No additions} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}}",
       "barNothingSaved": "Nothing is saved until you approve.",
-      "summary": "{added, plural, =0 {No new work items} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}} — it's on the canvas, nothing is saved yet.",
+      "summary": "{added, plural, =0 {No new work items} one {# added} other {# added}}{changed, plural, =0 {} one {, # changed} other {, # changed}}{removed, plural, =0 {} one {, # removed} other {, # removed}} — it's on the canvas, nothing is saved yet.",
       "lockedNote": "Anything already finished is left untouched — I can't change done work.",
-      "approved": "{created, plural, =0 {Nothing new was added} one {Added # work item} other {Added # work items}}{updated, plural, =0 {} one {, changed #} other {, changed #}} — it's in the plan now. Anything else?",
+      "approved": "{created, plural, =0 {Nothing new was added} one {Added # work item} other {Added # work items}}{updated, plural, =0 {} one {, changed #} other {, changed #}}{removed, plural, =0 {} one {, removed #} other {, removed #}} — it's in the plan now. Anything else?",
       "starters": {
         "addWork": "Add work to an epic",
         "resequence": "Re-sequence what's left",
@@ -4674,7 +4674,9 @@
         "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
         "empty": "Nothing came back to change. Try naming the epic or the work more specifically.",
         "immutable": "Some of those work items are already finished, so they can't be changed. The rest is still on the canvas.",
-        "session": "This conversation couldn't be loaded. Try again — nothing in your plan has changed."
+        "session": "This conversation couldn't be loaded. Try again — nothing in your plan has changed.",
+        "decided": "This proposal was already decided — nothing was left to confirm, and nothing was written twice.",
+        "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it."
       },
       "diff": {
         "add": "added",
@@ -4686,8 +4688,12 @@
           "priority": "priority",
           "type": "type",
           "estimate": "estimate",
-          "description": "description"
-        }
+          "description": "description",
+          "points": "points",
+          "links": "dependencies"
+        },
+        "remove": "removed",
+        "willRemove": "goes on approve"
       }
     },
     "targets": {

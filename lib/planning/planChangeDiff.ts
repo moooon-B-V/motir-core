@@ -1,30 +1,32 @@
-import type { PlanDelta, PlanDeltaCreateOp, PlanDeltaUpdateOp } from '@/lib/ai/planDelta';
+import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 
-// The PROPOSED-DELTA index behind the in-canvas diff (Subtask MOTIR-1730; design
+// The PROPOSED-PLAN index behind the in-canvas diff (Subtask MOTIR-1730; design
 // `design/ai-chat/plan-change-conversation.mock.html` panel 4). The conversation's
-// job returns a `PlanDelta` — a flat op list keyed by work-item KEY (`MOTIR-12`)
-// and by intra-delta `ref` — but the canvas renders one LEVEL at a time
-// (drill-down, mistake #91). This module turns the flat list into what a level
-// needs: "is THIS item changed / locked?" and "which proposed items are children
-// of THIS focus?".
+// run appends its proposals to a `Plan` as `PlanItem` rows, and the plan-review
+// read (`getPlanReview`, MOTIR-847) returns them already resolved for a canvas —
+// node ids, parents, live target fields, staleness. But the canvas renders one
+// LEVEL at a time (drill-down, mistake #91). This module turns that flat item list
+// into what a level needs: "is THIS item changed / removed / locked?" and "which
+// proposed items are children of THIS focus?".
 //
 // Pure (no React, no DOM, no fetching) so the placement rules are exhaustively
 // unit-testable; `planChangeLevel.tsx` renders what it returns.
 //
-// ⚠️ The shipped delta contract (`lib/ai/planDelta.ts`) carries `create` and
-// `update` ONLY — `link` / `move` "arrive with the generation stories", and there
-// is no delete/remove op at all. So the four design states map to three the
-// shipped engine can actually produce: ADD (a create), CHANGE (an update), and
-// LOCKED (an existing item in a terminal status). The design's REMOVE state has
-// no op to drive it and is deliberately not faked here; when a remove op lands in
-// the contract it becomes a fourth `PlanChangeDiffState`.
+// ⚠️ It indexes the PLAN, not a `PlanDelta` (MOTIR-1746). Every plan-edit handler
+// in motir-ai returns an EMPTY `planDelta` and writes its output as proposals
+// instead (`addProposals` → `markPlanned`), so a delta-fed index was always empty
+// and the review gate could never fire. Reading the plan also makes the design's
+// fourth state real: a `remove` proposal is something the engine genuinely emits
+// (`expandItem` / `replan`), where the delta contract had no op for it.
 
 /** The visual state a canvas node takes under a pending proposal. */
-export type PlanChangeDiffState = 'add' | 'change' | 'locked';
+export type PlanChangeDiffState = 'add' | 'change' | 'remove' | 'locked';
 
 /** The canvas node id prefix for a proposed (not-yet-persisted) item. Prefixed so
  *  it can never collide with a real work-item id, and so the canvas's drill /
- *  quick-view paths can tell a proposal from a committed item. */
+ *  quick-view paths can tell a proposal from a committed item. A `modify` /
+ *  `remove` keeps the TARGET's own id — it is the same node as the existing item,
+ *  not a ghost copy. */
 export const PROPOSED_NODE_PREFIX = 'proposed:';
 
 export function isProposedNodeId(id: string): boolean {
@@ -33,130 +35,143 @@ export function isProposedNodeId(id: string): boolean {
 
 /**
  * Statuses whose items an approve REFUSES to modify. This mirrors the server
- * gate exactly: `aiPlanEditsService.approve` throws `PlanDeltaImmutabilityError`
- * for any target whose status sits in a `done`-CATEGORY workflow status, which in
- * the default workflow is `done` + `cancelled`. Locking them on the canvas is the
- * same rule made visible BEFORE the user approves (design panel 4 — "the engine
- * proposes around finished work, never over it").
+ * gate exactly: `plansService.approvePlan`'s persist gate (7.12.5 · MOTIR-911)
+ * rejects any target whose status sits in a `done`-CATEGORY workflow status,
+ * which in the default workflow is `done` + `cancelled`. Locking them on the
+ * canvas is the same rule made visible BEFORE the user approves (design panel 4 —
+ * "the engine proposes around finished work, never over it").
  */
 const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
 
-/** One proposed `create`, placed in the drill-down forest. */
+/** One proposed `add`, placed in the drill-down forest. */
 export interface ProposedAdd {
-  /** The synthetic canvas node id (`proposed:<i>`). */
+  /** The synthetic canvas node id (`proposed:<planItemId>`). */
   nodeId: string;
-  op: PlanDeltaCreateOp;
-  /** Parent by an EARLIER create's `ref` → that create's synthetic node id. */
+  /** The review item itself — already the shape `PlanItemNode` draws. */
+  item: PlanReviewItemDto;
+  /** The parent's canvas node id: another `add`'s synthetic id, an EXISTING work
+   *  item's id, or null for a root proposal. */
   parentNodeId: string | null;
-  /** Parent by an EXISTING work item's key (`MOTIR-12`), or null for a root. */
-  parentKey: string | null;
-  /** Another proposed create is parented on this one → the node can be drilled. */
+  /** Another proposed add is parented on this one → the node can be drilled. */
   hasChildren: boolean;
 }
 
 export interface PlanChangeDiffIndex {
-  /** Every `update` op, by its target work-item key. */
-  updatesByKey: Map<string, PlanDeltaUpdateOp>;
+  /** Every `modify` proposal, by its target work-item id. */
+  changesById: Map<string, PlanReviewItemDto>;
+  /** Every `remove` proposal, by its target work-item id. */
+  removalsById: Map<string, PlanReviewItemDto>;
   adds: ProposedAdd[];
   /** The counts the confirm-to-persist bar + the rail both read. */
-  counts: { added: number; changed: number };
-  /** No operations at all → nothing to draw (an empty delta is a valid no-op). */
+  counts: { added: number; changed: number; removed: number };
+  /** No proposals at all → nothing to draw (an empty plan is a valid no-op). */
   isEmpty: boolean;
 }
 
 export const EMPTY_DIFF_INDEX: PlanChangeDiffIndex = {
-  updatesByKey: new Map(),
+  changesById: new Map(),
+  removalsById: new Map(),
   adds: [],
-  counts: { added: 0, changed: 0 },
+  counts: { added: 0, changed: 0, removed: 0 },
   isEmpty: true,
 };
 
 /**
- * Index a delta for the canvas. Placement resolution, in one pass:
- *  - a `create` with `parentRef` hangs off the synthetic node of the create that
- *    declared that `ref` (an unknown ref degrades to a root, never a dropped node);
- *  - a `create` with `parentKey` hangs off that EXISTING item's level;
- *  - a `create` with neither is a root proposal (drawn at the top level).
+ * Index a pending plan for the canvas. The review read has already resolved every
+ * ref to a node id, so placement is one pass: an `add` parented on another `add`
+ * carries that add's PlanItem id, which is re-prefixed here to the synthetic node
+ * id the canvas draws; an `add` parented on a committed item carries that item's
+ * real id, which IS its canvas node id and passes through untouched.
  */
-export function indexPlanDelta(delta: PlanDelta | null | undefined): PlanChangeDiffIndex {
-  if (!delta || delta.operations.length === 0) return EMPTY_DIFF_INDEX;
+export function indexPlanReview(review: PlanReviewDto | null | undefined): PlanChangeDiffIndex {
+  if (!review || review.items.length === 0) return EMPTY_DIFF_INDEX;
 
-  const updatesByKey = new Map<string, PlanDeltaUpdateOp>();
-  const creates: PlanDeltaCreateOp[] = [];
-  for (const op of delta.operations) {
-    if (op.op === 'update') updatesByKey.set(op.targetKey, op);
-    else creates.push(op);
+  const changesById = new Map<string, PlanReviewItemDto>();
+  const removalsById = new Map<string, PlanReviewItemDto>();
+  const addItems: PlanReviewItemDto[] = [];
+  for (const item of review.items) {
+    if (item.op === 'add') addItems.push(item);
+    else if (item.op === 'modify') changesById.set(item.nodeId, item);
+    else removalsById.set(item.nodeId, item);
   }
 
-  // ref → synthetic node id, so a `parentRef` resolves to a node the canvas has.
-  const nodeIdByRef = new Map<string, string>();
-  creates.forEach((op, i) => {
-    if (op.ref) nodeIdByRef.set(op.ref, `${PROPOSED_NODE_PREFIX}${i}`);
-  });
+  // Which node ids belong to a PROPOSED item, so a parent ref pointing at one is
+  // prefixed and a parent ref pointing at a committed item is left alone.
+  const addNodeIds = new Set(addItems.map((item) => item.nodeId));
+  const canvasNodeId = (nodeId: string) =>
+    addNodeIds.has(nodeId) ? `${PROPOSED_NODE_PREFIX}${nodeId}` : nodeId;
 
-  const adds: ProposedAdd[] = creates.map((op, i) => {
-    const parentNodeId = op.parentRef ? (nodeIdByRef.get(op.parentRef) ?? null) : null;
-    return {
-      nodeId: `${PROPOSED_NODE_PREFIX}${i}`,
-      op,
-      parentNodeId,
-      // A `parentRef` that RESOLVED wins; an unresolvable one falls back to the
-      // item key when the op carried both-ish shapes (the parser allows only one,
-      // so in practice exactly one of these is set).
-      parentKey: parentNodeId === null ? (op.parentKey ?? null) : null,
-      hasChildren: false,
-    };
-  });
+  const adds: ProposedAdd[] = addItems.map((item) => ({
+    nodeId: `${PROPOSED_NODE_PREFIX}${item.nodeId}`,
+    item,
+    parentNodeId: item.parentNodeId === null ? null : canvasNodeId(item.parentNodeId),
+    hasChildren: false,
+  }));
 
-  const withChildren = new Set(adds.map((a) => a.parentNodeId).filter((id): id is string => !!id));
+  const withChildren = new Set(
+    adds.map((a) => a.parentNodeId).filter((id): id is string => id !== null),
+  );
   for (const add of adds) add.hasChildren = withChildren.has(add.nodeId);
 
   return {
-    updatesByKey,
+    changesById,
+    removalsById,
     adds,
-    counts: { added: adds.length, changed: updatesByKey.size },
+    counts: { added: adds.length, changed: changesById.size, removed: removalsById.size },
     isEmpty: false,
   };
 }
 
 /** The diff state an EXISTING level item takes, or null when the proposal doesn't
- *  touch it and it is freely editable. Terminal wins over a proposed change: a
- *  finished item the engine tried to modify is still locked (and the approve is
- *  rejected server-side), so the lock is what the user must see. */
+ *  touch it and it is freely editable. Terminal wins over a proposed change or
+ *  removal: a finished item the engine tried to touch is still locked (and the
+ *  approve is rejected server-side), so the lock is what the user must see. */
 export function diffStateForItem(
   index: PlanChangeDiffIndex,
-  item: { identifier: string; status: string },
+  item: { id: string; status: string },
 ): PlanChangeDiffState | null {
   if (TERMINAL_STATUSES.has(item.status)) return 'locked';
-  return index.updatesByKey.has(item.identifier) ? 'change' : null;
+  if (index.removalsById.has(item.id)) return 'remove';
+  return index.changesById.has(item.id) ? 'change' : null;
+}
+
+/** The proposal (`modify` or `remove`) that put an existing item in that state,
+ *  so the node can name WHAT changed. Null for `add` / `locked` / untouched. */
+export function proposalForItem(
+  index: PlanChangeDiffIndex,
+  itemId: string,
+): PlanReviewItemDto | undefined {
+  return index.removalsById.get(itemId) ?? index.changesById.get(itemId);
 }
 
 /** The proposed items that belong on the level currently in focus. `focusNodeId`
- *  is the canvas focus (null at the top level); `focusKey` is that focus's work-item
- *  key when it is a committed item (null at the top level, or when the key isn't
- *  known yet). */
+ *  is the canvas focus (null at the top level) — for a committed item that is its
+ *  work-item id, which is exactly what an `add` parented on it carries. */
 export function proposedAddsForLevel(
   index: PlanChangeDiffIndex,
-  focus: { focusNodeId: string | null; focusKey: string | null },
+  focusNodeId: string | null,
 ): ProposedAdd[] {
-  if (focus.focusNodeId !== null && isProposedNodeId(focus.focusNodeId)) {
-    return index.adds.filter((a) => a.parentNodeId === focus.focusNodeId);
-  }
-  if (focus.focusNodeId === null) {
-    return index.adds.filter((a) => a.parentNodeId === null && a.parentKey === null);
-  }
-  if (focus.focusKey === null) return [];
-  return index.adds.filter((a) => a.parentNodeId === null && a.parentKey === focus.focusKey);
+  return index.adds.filter((a) => a.parentNodeId === focusNodeId);
 }
 
-/** The fields an `update` op changes, as plain field names — the compact
- *  "what changed" line on a changed node and in the rail's summary. */
-export function changedFields(op: PlanDeltaUpdateOp): string[] {
-  const fields: string[] = [];
-  if (op.fields.title !== undefined) fields.push('title');
-  if (op.fields.priority !== undefined) fields.push('priority');
-  if (op.fields.type !== undefined) fields.push('type');
-  if (op.fields.estimateMinutes !== undefined) fields.push('estimate');
-  if (op.fields.descriptionMd !== undefined) fields.push('description');
-  return fields;
+/** The wire field names `planReviewService` emits → the diff-chrome's copy keys.
+ *  It doubles as the WHITELIST: a field with no key here is dropped rather than
+ *  rendered, so adding a diffable field server-side can never crash the canvas on
+ *  a missing translation — it just doesn't name it until the copy lands. */
+const FIELD_KEY: Record<string, string> = {
+  title: 'title',
+  priority: 'priority',
+  type: 'type',
+  description: 'description',
+  links: 'links',
+  estimateMinutes: 'estimate',
+  storyPoints: 'points',
+};
+
+/** The fields a `modify` proposal changes, as those copy keys — the compact "what
+ *  changed" line on a changed node. */
+export function changedFields(item: PlanReviewItemDto): string[] {
+  return item.changes
+    .map((change) => FIELD_KEY[change.field])
+    .filter((key): key is string => key !== undefined);
 }

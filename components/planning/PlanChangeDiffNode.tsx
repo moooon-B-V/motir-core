@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Lock, Pencil, Plus } from 'lucide-react';
+import { Lock, Minus, Pencil, Plus } from 'lucide-react';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import {
@@ -11,7 +11,6 @@ import {
   type ProposedAdd,
 } from '@/lib/planning/planChangeDiff';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
-import type { PlanDeltaUpdateOp } from '@/lib/ai/planDelta';
 
 // The DIFF chrome a canvas node takes while a plan-change proposal is pending
 // (Subtask MOTIR-1730; design `plan-change-conversation.mock.html` panel 4 — "the
@@ -35,12 +34,22 @@ const FRAME: Record<PlanChangeDiffState, string> = {
   // A proposed add draws its own dashed-accent frame inside `PlanItemNode`.
   add: '',
   change: 'rounded-(--radius-card) ring-2 ring-(--el-info)',
+  // A proposed REMOVE (design panel 4's `.node.removed`): DASHED danger, like the
+  // add's dashed accent — dashed is the design's grammar for "proposed, not real
+  // yet", and only `change` (which touches a card that stays) is solid. An
+  // `outline` rather than a `border`, because a border would inset the fixed
+  // NODE_W×NODE_H box and break the canvas's deterministic spacing. Paired below
+  // with the glyph, the word, the struck title and the rose wash — never colour
+  // alone.
+  remove:
+    'rounded-(--radius-card) outline-2 outline-dashed outline-(--el-danger) [&_[data-node-title]]:text-(--el-text-muted) [&_[data-node-title]]:line-through',
   locked: 'rounded-(--radius-card) ring-1 ring-(--el-border-strong)',
 };
 
 const TAG_TONE: Record<PlanChangeDiffState, string> = {
   add: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
   change: 'bg-(--el-tint-sky) text-(--el-text-strong)',
+  remove: 'bg-(--el-tint-rose) text-(--el-text-strong)',
   locked: 'bg-(--el-muted) text-(--el-text-secondary)',
 };
 
@@ -55,14 +64,14 @@ const LOCK_HATCH =
 
 export interface PlanChangeDiffFrameProps {
   state: PlanChangeDiffState;
-  /** The `update` op behind a `change`, so the tag can name WHAT changed. */
-  op?: PlanDeltaUpdateOp;
+  /** The proposal behind a `change` / `remove`, so the tag can name WHAT changed. */
+  proposal?: PlanReviewItemDto;
   children: ReactNode;
 }
 
-export function PlanChangeDiffFrame({ state, op, children }: PlanChangeDiffFrameProps) {
+export function PlanChangeDiffFrame({ state, proposal, children }: PlanChangeDiffFrameProps) {
   const t = useTranslations('planningWorkspace.conversation.diff');
-  const fields = op ? changedFields(op) : [];
+  const fields = state === 'change' && proposal ? changedFields(proposal) : [];
 
   return (
     <div
@@ -85,6 +94,15 @@ export function PlanChangeDiffFrame({ state, op, children }: PlanChangeDiffFrame
         />
       ) : null}
 
+      {/* The removed card's rose wash (design `.node.removed`'s fill) — drawn OVER
+          the real card, translucent, so its own content stays readable. */}
+      {state === 'remove' ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-(--radius-card) bg-(--el-tint-rose) opacity-45"
+        />
+      ) : null}
+
       <span
         className={`absolute -top-2 left-2.5 inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-px font-mono text-[10px] font-bold tracking-wide uppercase ${TAG_TONE[state]}`}
       >
@@ -92,17 +110,27 @@ export function PlanChangeDiffFrame({ state, op, children }: PlanChangeDiffFrame
           <Plus className="size-3" aria-hidden="true" />
         ) : state === 'change' ? (
           <Pencil className="size-3" aria-hidden="true" />
+        ) : state === 'remove' ? (
+          <Minus className="size-3" aria-hidden="true" />
         ) : (
           <Lock className="size-3" aria-hidden="true" />
         )}
         {t(state)}
       </span>
 
-      {/* A locked node says WHY it can't move; a changed one says what moved. Both
-          are real text (never a bare tint), so the state is legible and audible. */}
+      {/* A locked node says WHY it can't move; a changed one says what moved; a
+          removed one says it goes. All are real text (never a bare tint), so the
+          state is legible and audible. */}
       {state === 'locked' ? (
         <span className="absolute right-2 -bottom-2 inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-px text-[10px] font-semibold text-(--el-text-secondary)">
           {t('cantChange')}
+        </span>
+      ) : state === 'remove' ? (
+        <span
+          data-testid="plan-change-fields"
+          className="absolute right-2 -bottom-2 inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-rose) px-(--spacing-chip-x) py-px text-[10px] font-semibold text-(--el-text-strong)"
+        >
+          {t('willRemove')}
         </span>
       ) : state === 'change' && fields.length > 0 ? (
         <span
@@ -118,38 +146,15 @@ export function PlanChangeDiffFrame({ state, op, children }: PlanChangeDiffFrame
 
 /**
  * A PROPOSED (not-yet-persisted) item's node. It reuses the shipped `PlanItemNode`
- * — the same card the 7.21 plan detail draws a proposal with — by adapting the
- * delta's `create` op to that component's review-item shape. Presentational
- * fields only: `PlanItemNode` reads op / kind / title / identifier / status /
- * stale / changes / hasChildren, so the adapter fills exactly those and nothing
- * is invented about a plan that does not exist yet.
+ * — the same card the 7.21 plan detail draws a proposal with — fed the review item
+ * VERBATIM (MOTIR-1746). Both entrances now read the same `PlanReviewItemDto` off
+ * the same Plan, so there is no adapter left to drift: the rail's canvas and
+ * `/plans/[id]` draw one proposal one way.
  */
 export function ProposedAddNode({ add }: { add: ProposedAdd }) {
   return (
     <PlanChangeDiffFrame state="add">
-      <PlanItemNode item={toProposedReviewItem(add)} />
+      <PlanItemNode item={add.item} />
     </PlanChangeDiffFrame>
   );
-}
-
-export function toProposedReviewItem(add: ProposedAdd): PlanReviewItemDto {
-  return {
-    planItemId: add.nodeId,
-    op: 'add',
-    nodeId: add.nodeId,
-    parentNodeId: add.parentNodeId,
-    blockedByNodeIds: [],
-    identifier: null,
-    title: add.op.fields.title,
-    kind: add.op.kind,
-    priority: add.op.fields.priority ?? null,
-    type: add.op.fields.type ?? null,
-    descriptionMd: add.op.fields.descriptionMd ?? null,
-    status: null,
-    hasChildren: add.hasChildren,
-    changes: [],
-    stale: false,
-    staleReasons: [],
-    targetMissing: false,
-  };
 }
