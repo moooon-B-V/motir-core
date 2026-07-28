@@ -1165,6 +1165,25 @@ model WorkItem {
   // (every item recorded on a branch) — a plain `String?` matching this table's
   // camelCase, no-`@map` columns.
   sessionBranch         String?
+  // Per-item REPO ATTRIBUTION (Story 7.9 · MOTIR-1804, the rebuilt half of the
+  // cancelled 7.7.3) — WHICH repo this item's work ships in, as the bare repo
+  // NAME (`motir-core`), or NULL when the planner never pinned one. A Motir
+  // project spans SEVERAL repos, so "one subtask = one repo = one PR" needs a
+  // per-item answer the CLI can route on: `motir link add <repo> <path>` already
+  // maps a repo NAME to a checkout path (packages/cli · linkConfig), and this is
+  // the column that tells it WHICH name an item belongs to. The bare name (not
+  // `owner/name`) is deliberate — it is exactly the key the CLI's `repos`
+  // override map and its `<root>/<repoName>` checkout convention use, so the two
+  // halves fit with zero translation. VALIDATED at the write layer against the
+  // workspace's CONNECTED repo set (the 7.10.3 installation mirror — one repo
+  // registry, not two); no DB constraint, since the domain lives in another
+  // table and changes as repos connect/disconnect. The DISPATCH payload's
+  // `targetRepo` is this value RESOLVED (an unpinned item falls back to the
+  // workspace's single connected repo, and stays null when ambiguous) — the
+  // column itself only ever holds an explicit pin. A plain `String?` matching
+  // this table's camelCase, no-`@map` columns; unindexed (never a lookup key).
+  // See docs/decisions/target-repo-attribution.md.
+  targetRepo            String?
   // CI / verification signal (Story 7.10 · Subtask 7.10.6 / MOTIR-894) — the
   // result of a linked PR's CI, flowed back from the `check_suite` / `check_run`
   // webhook so "did the dispatched work actually pass?" lives in Motir, not only

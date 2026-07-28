@@ -962,6 +962,7 @@
       "storyPoints": "Story points",
       "type": "Work type",
       "executor": "Executor",
+      "targetRepo": "Target repo",
       "descriptionMd": "Description",
       "explanationMd": "Explanation",
       "explanationSource": "Explanation source",

@@ -29,6 +29,22 @@ export const githubRepoRepository = {
     });
   },
 
+  /** Every repo connected under ANY of a workspace's installations, stable-ordered
+   *  (Story 7.9 · MOTIR-1804) — the workspace's connected repo SET as one read,
+   *  the validation domain + default source for a work item's `targetRepo`.
+   *  DELIBERATELY provider-agnostic (unlike `resolveCodeContext`, which reads the
+   *  GitHub installation only): the CLI routes on a CHECKOUT, and a GitLab-connected
+   *  repo is checked out exactly like a GitHub one, so narrowing by provider here
+   *  would reject a legitimate pin. Read inside a context transaction (the
+   *  `github_repo` / `github_installation` RLS policies are workspace-keyed), so it
+   *  takes `tx`. Empty when the workspace has no connection at all. */
+  async listByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
+    return tx.githubRepo.findMany({
+      where: { installation: { is: { workspaceId } } },
+      orderBy: [{ owner: 'asc' }, { name: 'asc' }],
+    });
+  },
+
   /** One selected repo by its `(installation_id, repo_id)` pair — the webhook's
    *  lookup from a normalized change request's `providerRepoId` (GitHub's numeric
    *  repo id) to the internal `GithubRepo.id` the PR row FKs against. Null when

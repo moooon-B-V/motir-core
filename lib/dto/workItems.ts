@@ -130,6 +130,16 @@ export interface WorkItemDto {
    */
   sessionBranch: string | null;
   /**
+   * The repo this item's work ships in (Story 7.9 · MOTIR-1804) — the bare repo
+   * NAME (`motir-core`), or `null` when no repo has been pinned. This is the
+   * EXPLICIT pin exactly as stored: the detail surface and the authoring tools
+   * must be able to tell "pinned to the only connected repo" from "not pinned",
+   * so no default is applied here. (`ReadyItemDispatchDto.targetRepo` is the
+   * RESOLVED counterpart — that one falls back to the workspace's single
+   * connected repo, because a dispatching agent needs an answer, not a state.)
+   */
+  targetRepo: string | null;
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — how the item was PLANNED and how it
    * was IMPLEMENTED, each a `source · harness · model` triple. All six nullable:
    * a null triple is the "unknown / —" state (pre-feature rows; items never
@@ -778,6 +788,15 @@ export interface CreateWorkItemInput {
    */
   executor?: ExecutorDto | null;
   /**
+   * Pin the repo this item's work ships in (Story 7.9 · MOTIR-1804) — the bare
+   * repo NAME, or the `owner/name` ref form (normalized to the name). Validated
+   * against the workspace's CONNECTED repo set; an unknown name is rejected with
+   * `UnknownTargetRepoError` (422). Omitted / null / blank → unpinned, and the
+   * dispatch payload falls back to the workspace's single connected repo when
+   * that is unambiguous.
+   */
+  targetRepo?: string | null;
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — stamp how the item was planned
    * and/or implemented at create time. The stamper subtasks (MOTIR-1689/1691)
    * supply `planning` with a server-set `source`; omitting it leaves all six
@@ -909,6 +928,16 @@ export interface UpdateWorkItemInput {
   type?: WorkItemTypeDto | null;
   /** Patch the executor (Story 2.7) — same leaf-only rule as `type`. */
   executor?: ExecutorDto | null;
+  /**
+   * Patch the repo pin (Story 7.9 · MOTIR-1804): set / change / clear (`null`,
+   * or a blank string) the bare repo NAME this item's work ships in. The
+   * `owner/name` ref form is accepted and normalized to the name. Validated
+   * against the workspace's CONNECTED repo set — the SAME rule create uses, so
+   * the patch surface is never looser than the create one. Recorded in the
+   * revision diff as `{ targetRepo: { from, to } }`, sharing the single 'updated'
+   * revision with any other field in the patch.
+   */
+  targetRepo?: string | null;
 }
 
 /**

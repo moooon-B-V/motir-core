@@ -112,6 +112,18 @@ const inputSchema = {
         'overrides the type default when supplied. Omit (or null) to take the ' +
         'type default (or leave it unset when no type is given).',
     ),
+  targetRepo: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'Optional: WHICH REPO this item ships in — the bare repo name (e.g. ' +
+        '"motir-core") or the "owner/name" form. Must name one of the workspace\'s ' +
+        'CONNECTED repositories; an unknown name is rejected. This is what routes ' +
+        'the CLI to the right checkout at dispatch (one subtask = one repo = one ' +
+        'PR). Omit (or null) to leave it unpinned — dispatch then falls back to the ' +
+        "workspace's single connected repo, or reports no repo when ambiguous.",
+    ),
   // Planning provenance (MOTIR-1685): an item created through this tool is
   // stamped `planningSource = mcp` server-side; the agent MAY self-report the
   // harness + model it planned with. Both open free-text (recorded as-is, no
@@ -145,6 +157,7 @@ interface CreateWorkItemArgs {
   estimateMinutes?: number | null;
   type?: WorkItemType | null;
   executor?: Executor | null;
+  targetRepo?: string | null;
   plannedWithHarness?: string;
   plannedWithModel?: string;
 }
@@ -198,6 +211,10 @@ export async function runCreateWorkItem(
       ...(args.estimateMinutes !== undefined ? { estimateMinutes: args.estimateMinutes } : {}),
       ...(args.type !== undefined ? { type: args.type as WorkItemTypeDto | null } : {}),
       ...(args.executor !== undefined ? { executor: args.executor as ExecutorDto | null } : {}),
+      // Target repo (MOTIR-1804): forward only when supplied. The service owns
+      // the normalization (`owner/name` → name) and the connected-set validation
+      // — this stays a thin pass-through, like every other leaf field here.
+      ...(args.targetRepo !== undefined ? { targetRepo: args.targetRepo } : {}),
       // Planning provenance (MOTIR-1685): server-set `source: 'mcp'` for anything
       // created through this agent tool surface; the harness/model are the agent's
       // self-reported values (null when not supplied). The source is fixed here —

@@ -151,6 +151,11 @@ import type {
   WorkItemLinkDto,
 } from '@/lib/dto/workItemLinks';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import {
+  listConnectedRepoNames,
+  resolveAuthoredTargetRepo,
+  resolveDispatchTargetRepo,
+} from '@/lib/workItems/targetRepo';
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -319,6 +324,11 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   // records the chosen type + (seeded or explicit) executor.
   set('type', row.type);
   set('executor', row.executor);
+  // The repo pin (Story 7.9 · MOTIR-1804): the `set` helper skips null, so an
+  // unpinned create's diff is unchanged; a pinned create records the repo the
+  // planner chose, which is exactly the "one subtask = one repo" decision a
+  // reader of the History wants to see.
+  set('targetRepo', row.targetRepo);
   // sprintId is null for a backlog create (the `set` helper skips nulls, so the
   // diff is unchanged from pre-4.2.2 for the common case); it is captured only
   // when the issue is born directly in a sprint (Subtask 4.2.2 create-into-
@@ -683,6 +693,15 @@ export const workItemsService = {
     // column default (unestimated). Throws `InvalidEstimateError` (422).
     const storyPoints = validateStoryPoints(input.storyPoints ?? null);
 
+    // Target repo (Story 7.9 · MOTIR-1804): normalize the authored value (bare
+    // name or `owner/name`) and validate it against the workspace's CONNECTED
+    // repo set. BEFORE the key-allocation transaction for two reasons — an
+    // unknown repo never burns a work-item key, AND the resolver opens its OWN
+    // workspace context (the `github_repo` RLS policies are workspace-keyed), so
+    // it must not run nested inside our transaction. Throws
+    // `UnknownTargetRepoError` (422); omitted/null/blank → unpinned.
+    const targetRepo = await resolveAuthoredTargetRepo(input.targetRepo, ctx);
+
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
     // on a brand-new row, so this bypasses transition validation. The pre-2.2.4
@@ -855,6 +874,9 @@ export const workItemsService = {
         // seeded above; nulls for an untyped leaf or a container kind.
         type: itemType,
         executor: itemExecutor,
+        // The repo pin (Story 7.9 · MOTIR-1804) — validated above; null when the
+        // caller didn't pin one (the dispatch payload resolves the default).
+        targetRepo,
         sprintId: targetSprintId,
         position,
         backlogRank,
@@ -1051,6 +1073,7 @@ export const workItemsService = {
       'storyPoints',
       'type',
       'executor',
+      'targetRepo',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -1069,6 +1092,16 @@ export const workItemsService = {
     // Throws `InvalidEstimateError` (422).
     const nextStoryPoints =
       patch.storyPoints !== undefined ? validateStoryPoints(patch.storyPoints) : undefined;
+
+    // Target repo (Story 7.9 · MOTIR-1804): normalize + validate the pin against
+    // the workspace's connected repo set BEFORE the transaction — the same rule
+    // create uses (the patch surface is never looser), and the resolver opens its
+    // OWN workspace context, so it must not run nested inside the row lock's
+    // transaction. `undefined` → leave untouched; `null` / a blank string clears.
+    const nextTargetRepo =
+      patch.targetRepo !== undefined
+        ? await resolveAuthoredTargetRepo(patch.targetRepo, ctx)
+        : undefined;
 
     // Description mentions (Subtask 5.1.6): when the patch carries a body with
     // mention tokens, resolve the viewable-member set BEFORE the transaction
@@ -1193,6 +1226,14 @@ export const workItemsService = {
           update.storyPoints = nextStoryPoints;
           diff.storyPoints = { from: fromPoints, to: nextStoryPoints };
         }
+      }
+
+      // Target repo (Story 7.9 · MOTIR-1804): the normalized + validated value
+      // from above (`undefined` = not supplied). Compare against the stored pin
+      // so a re-save of the same repo stays a no-op and writes no revision.
+      if (nextTargetRepo !== undefined && nextTargetRepo !== current.targetRepo) {
+        update.targetRepo = nextTargetRepo;
+        diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
       }
 
       // Assignee: validate workspace membership on a change to a non-null
@@ -3866,10 +3907,15 @@ async function buildReadyDispatchDto(
   row: ReadyCandidateRow,
   ctx: ServiceContext,
 ): Promise<ReadyItemDispatchDto> {
-  const [parentRow, blockerLinks, readiness] = await Promise.all([
+  const [parentRow, blockerLinks, readiness, connectedRepos] = await Promise.all([
     row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
     workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by'),
     workItemsService.getReadiness(row.id, ctx),
+    // The workspace's connected repo set (Story 7.9 · MOTIR-1804) — the domain
+    // the item's `targetRepo` resolves against. Read here, alongside the other
+    // dispatch decorations, because it is only needed for the ONE item being
+    // dispatched (never for the list read).
+    listConnectedRepoNames(ctx),
   ]);
   const blockerRows = (await workItemRepository.findByIds(blockerLinks.map((l) => l.toId)))
     .slice()
@@ -3880,6 +3926,10 @@ async function buildReadyDispatchDto(
     parent: parentRow ? { identifier: parentRow.identifier } : null,
     contextRefs: extractContextRefs(row.descriptionMd),
     sessionBranch: readiness.inheritedSessionBranch,
+    // WHICH repo to run this in (Story 7.9 · MOTIR-1804): the item's explicit
+    // pin, else the workspace's SINGLE connected repo, else null — never a guess
+    // across an ambiguous set. The CLI maps this name to a checkout path.
+    targetRepo: resolveDispatchTargetRepo(row.targetRepo, connectedRepos),
   };
   return toReadyItemDispatchDto(row, blockerRows, dispatchCtx);
 }

@@ -82,6 +82,16 @@ const inputSchema = {
         'estimate above): a non-negative number ≤ 9999.99 with at most two ' +
         'decimal places. null clears it.',
     ),
+  targetRepo: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'WHICH REPO this item ships in — the bare repo name (e.g. "motir-core") or ' +
+        'the "owner/name" form; must name one of the workspace\'s CONNECTED ' +
+        'repositories. Routes the CLI to the right checkout at dispatch (one ' +
+        'subtask = one repo = one PR). null clears the pin.',
+    ),
   assigneeId: z
     .string()
     .nullable()
@@ -104,6 +114,7 @@ interface UpdateWorkItemArgs {
   executor?: Executor | null;
   estimateMinutes?: number | null;
   storyPoints?: number | null;
+  targetRepo?: string | null;
   assigneeId?: string | null;
   dueDate?: string | null;
 }
@@ -119,6 +130,7 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   if (args.executor !== undefined) patch.executor = args.executor as ExecutorDto | null;
   if (args.estimateMinutes !== undefined) patch.estimateMinutes = args.estimateMinutes;
   if (args.storyPoints !== undefined) patch.storyPoints = args.storyPoints;
+  if (args.targetRepo !== undefined) patch.targetRepo = args.targetRepo;
   if (args.assigneeId !== undefined) patch.assigneeId = args.assigneeId;
   if (args.dueDate !== undefined) patch.dueDate = args.dueDate;
   return patch;
@@ -160,9 +172,10 @@ export function registerUpdateWorkItem(
       title: 'Update work item',
       description:
         'Edit a work item (by identifier, e.g. "PROD-7"): patch any subset of title, ' +
-        'description, explanation, priority, type, executor, estimate, story points, assignee, ' +
-        'or due date. Use transition_status for the workflow status. Honors the same leaf-only ' +
-        'type rules, assignee-membership check, and access checks as the UI.',
+        'description, explanation, priority, type, executor, estimate, story points, target ' +
+        'repo, assignee, or due date. Use transition_status for the workflow status. Honors ' +
+        'the same leaf-only type rules, connected-repo validation, assignee-membership check, ' +
+        'and access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runUpdateWorkItem(args, resolveContext(extra)),

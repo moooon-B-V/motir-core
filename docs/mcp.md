@@ -215,8 +215,18 @@ to `excludeIds`.
 
 **Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null }`
 (`null` when nothing is ready). `ReadyItemDispatchDto` extends `ReadyItemDto`
-with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, and
-`runCommand` (`motir run <key>`).
+with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, `runCommand`
+(`motir run <key>`), `sessionBranch`, and `targetRepo`.
+
+**`targetRepo` — WHICH repo to run this in** (MOTIR-1804): the bare repo name
+(`"motir-core"`) the CLI maps to a checkout via `.motir.json` (`motir link add
+<repo> <path>`), so an item targeting repo B dispatches with the agent's cwd
+inside B's checkout even when invoked from repo A. **Resolved**, unlike the raw
+pin on `WorkItemDto`: the item's explicit `targetRepo` when it has one, else the
+workspace's **single** connected repo when it has exactly one, else `null`.
+`null` means Motir cannot say — with two or more connected repos and no pin it
+never guesses; the CLI falls back to its link-root rule. See
+`docs/decisions/target-repo-attribution.md`.
 
 #### `claim_next_ready`
 
@@ -284,6 +294,7 @@ epics included, so the agent surface can create one).
 | `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                   |
 | `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped. |
 | `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                               |
+| `targetRepo`         | string \| null                                      | no       | WHICH repo the item ships in — bare repo name (`"motir-core"`) or `"owner/name"`. Must name a **connected** repo (else `UNKNOWN_TARGET_REPO`). Omit/`null` → unpinned.        |
 | `plannedWithHarness` | string                                              | no       | Self-reported planning **harness** (e.g. `"Claude Code"`, `"Codex"`). Recorded as planning provenance alongside the server-set source `mcp`. Omit → unrecorded.               |
 | `plannedWithModel`   | string                                              | no       | Self-reported planning **model** (e.g. `"claude-opus-4-8"`, `"deepseek-chat"`). Recorded as planning provenance. Omit → unrecorded.                                           |
 
@@ -295,12 +306,23 @@ optional `plannedWithHarness` / `plannedWithModel` record the agent's
 self-reported harness + LLM (recorded as-is, no verification implied). See
 `docs/decisions/work-item-provenance.md`.
 
-The leaf-authoring fields (`estimateMinutes`, `type`, `executor`, `storyPoints`)
-mirror `update_work_item`, so a subtask can be created fully-specified in a
-single call rather than a create-then-update round-trip. The same service rules
-apply as on the patch path: `type`/`executor` are leaf-only (an epic/story kind
-is rejected), and setting `type` without an explicit `executor` seeds it from
-the type default.
+The leaf-authoring fields (`estimateMinutes`, `type`, `executor`, `storyPoints`,
+`targetRepo`) mirror `update_work_item`, so a subtask can be created
+fully-specified in a single call rather than a create-then-update round-trip. The
+same service rules apply as on the patch path: `type`/`executor` are leaf-only
+(an epic/story kind is rejected), setting `type` without an explicit `executor`
+seeds it from the type default, and `targetRepo` is validated against the
+workspace's connected repo set.
+
+**`targetRepo` — pinning the repo an item ships in** (MOTIR-1804). This is what
+makes _one subtask = one repo = one PR_ enforceable in the product rather than
+only in the planner's rules, and it is what routes the CLI: `motir link add
+<repo> <path>` maps a repo NAME to a checkout, and this field says which name the
+item belongs to. Accepts the bare name or `"owner/name"` (normalized to the
+name), matched case-insensitively against the workspace's connected repos and
+stored with the connected repo's own casing. An unknown name is rejected with
+`UNKNOWN_TARGET_REPO`, whose message lists the connected repos. See
+`docs/decisions/target-repo-attribution.md`.
 
 #### `transition_status`
 
@@ -398,12 +420,14 @@ the UI; the same Story-6.4 edit gate gates the call.
 | `executor`        | `"coding_agent" \| "human"` \| null | no       | Leaf items only; `null` clears it.                                                             |
 | `estimateMinutes` | number \| null                      | no       | Estimated minutes (time); `null` clears it.                                                    |
 | `storyPoints`     | number \| null                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it. |
+| `targetRepo`      | string \| null                      | no       | Repo the item ships in — bare name or `"owner/name"`; must be a connected repo. `null` clears. |
 | `assigneeId`      | string \| null                      | no       | Assignee user id (must be a workspace member); `null` unassigns.                               |
 | `dueDate`         | string (ISO-8601) \| null           | no       | Due date; `null` clears it.                                                                    |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
-assignee, a `type`/`executor` on a non-leaf, or an out-of-range `storyPoints`
-value returns a typed error.
+assignee, a `type`/`executor` on a non-leaf, an out-of-range `storyPoints` value,
+or a `targetRepo` outside the workspace's connected repo set
+(`UNKNOWN_TARGET_REPO`) returns a typed error.
 
 #### `change_kind`
 

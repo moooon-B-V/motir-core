@@ -124,6 +124,7 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
     backlogRank: 'a0',
     publicChildrenHidden: false,
     sessionBranch: null,
+    targetRepo: null,
     planningSource: null,
     planningHarness: null,
     planningModel: null,

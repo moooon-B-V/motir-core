@@ -138,6 +138,24 @@ export interface ReadyItemDispatchDto extends ReadyItemDto {
    * ready set (`getReadiness`'s `conflictingSessionBranches`).
    */
   sessionBranch: string | null;
+  /**
+   * WHICH REPO to run this item in (Story 7.9 · MOTIR-1804) — the bare repo NAME
+   * (`motir-core`), or `null` when Motir cannot say. This is the payload half of
+   * the CLI's repo routing: `motir link add <repo> <path>` (7.9.1) maps a repo
+   * NAME to a checkout path in `.motir.json`, and THIS is the field that tells
+   * the CLI which name the item belongs to — so an item targeting repo B
+   * dispatches with the agent's cwd inside B's checkout even when invoked from
+   * repo A. The bare name (not `owner/name`) is deliberate: it is exactly the key
+   * that override map and the `<root>/<repoName>` checkout convention use.
+   *
+   * RESOLVED, unlike `WorkItemDto.targetRepo` (the raw pin): the item's explicit
+   * pin when it has one, else the workspace's SINGLE connected repo when that is
+   * unambiguous, else `null`. `null` is a real answer — "Motir does not know" —
+   * and the CLI falls back to its link-root rule. It is NEVER a guess: with two
+   * or more connected repos and no pin, dispatching into an arbitrary checkout
+   * is worse than admitting the gap.
+   */
+  targetRepo: string | null;
 }
 
 /**

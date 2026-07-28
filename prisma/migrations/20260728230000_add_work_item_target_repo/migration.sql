@@ -1,0 +1,21 @@
+-- AlterTable
+ALTER TABLE "work_item" ADD COLUMN     "targetRepo" TEXT;
+
+-- ===========================================================================
+-- Per-item REPO ATTRIBUTION (Story 7.9 · MOTIR-1804).
+--
+-- Purely ADDITIVE and nullable: every existing row keeps NULL, which is the
+-- honest "the planner never pinned a repo for this item" state — the dispatch
+-- payload then falls back to the workspace's single connected repo (or stays
+-- null when the workspace has none or several). So there is NO backfill: a
+-- guessed attribution would be indistinguishable from a real pin, and the whole
+-- point of the column is that a pin is deliberate.
+--
+-- No RLS change is needed. `work_item` already carries its workspace policy
+-- (add_work_item_rls) plus the restrictive project-narrowing policy; a new
+-- column on an existing table inherits both unchanged.
+--
+-- No index. The column is never a lookup key — it is READ alongside the row it
+-- lives on (the dispatch payload) and WRITTEN by the planner; nothing filters or
+-- joins on it, so an index would be pure write cost.
+-- ===========================================================================

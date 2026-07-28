@@ -27,7 +27,8 @@ export type WorkItemErrorTag =
   | 'ILLEGAL_TRANSITION'
   | 'STALE_WORK_ITEM'
   | 'TYPE_NOT_ALLOWED_ON_KIND'
-  | 'NOT_EPIC';
+  | 'NOT_EPIC'
+  | 'UNKNOWN_TARGET_REPO';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -241,6 +242,32 @@ export class NotEpicError extends WorkItemError {
   constructor(kind: string) {
     super(`Epic privacy can only be set on an epic — this work item is a ${kind}.`);
     this.name = 'NotEpicError';
+  }
+}
+
+/**
+ * A work item's `targetRepo` (Story 7.9 · MOTIR-1804) named a repo that is NOT
+ * in the workspace's CONNECTED set. The connected set (the 7.10.3 installation
+ * mirror) is the single repo registry — validating against it is what keeps a
+ * pin meaningful, since the CLI resolves the stored name to a checkout directory
+ * and an unknown name can only ever resolve to a path that does not exist.
+ * REJECTED rather than stored-as-typed: a silent bad pin surfaces much later, as
+ * an agent dispatched into the wrong (or a missing) working tree. A client error
+ * → 422 (the route layer's blanket `WorkItemError` mapping); over MCP it is a
+ * clean tool error the agent self-corrects from, so the message NAMES the
+ * connected set.
+ */
+export class UnknownTargetRepoError extends WorkItemError {
+  readonly tag = 'UNKNOWN_TARGET_REPO' as const;
+  readonly code = 'UNKNOWN_TARGET_REPO' as const;
+  constructor(repoName: string, connectedRefs: string[]) {
+    super(
+      connectedRefs.length === 0
+        ? `Unknown target repo "${repoName}" — this workspace has no connected repositories. ` +
+            'Connect the repo first, or leave targetRepo unset.'
+        : `Unknown target repo "${repoName}". Connected repositories: ${connectedRefs.join(', ')}.`,
+    );
+    this.name = 'UnknownTargetRepoError';
   }
 }
 
