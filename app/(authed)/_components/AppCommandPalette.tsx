@@ -20,6 +20,7 @@ import {
   Users,
 } from 'lucide-react';
 import { planningWorkspaceHref } from '@/lib/planning/launcher';
+import { PLAN_SPRINTS_HREF } from '../backlog/_components/aiSprintPlanShared';
 import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { useTheme } from '@/lib/contexts/theme-context';
@@ -87,6 +88,7 @@ export function AppCommandPalette({
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
+  const tb = useTranslations('backlog');
   const { open, setOpen } = useCommandPalette();
   const { openCreateIssue, canCreate } = useCreateIssue();
   // The "Resume onboarding" ⌘K twin (MOTIR-1533) — same signal the sidebar row reads.
@@ -223,6 +225,28 @@ export function AppCommandPalette({
         icon: <LayoutList />,
         onSelect: () => go('/backlog'),
       },
+      // The SECOND door onto AI sprint planning (Subtask MOTIR-1750). The
+      // primary one is the two-action create-sprint strip on `/backlog`; this
+      // entry reaches the SAME action from anywhere, by navigating there with
+      // the run already asked for. Registered here — the same registry the
+      // shipped "Go to Backlog" / settings deep links come from — so the action
+      // has one implementation and two doors, and the cross-surface door is
+      // owned rather than left unbuilt.
+      //
+      // It is offered whenever the project's AI is wired, NOT gated on
+      // `aiSprintPlanningEnabled`: with the switch off the backlog shows the
+      // door disabled plus the fix hint, which teaches the capability, whereas a
+      // palette entry that silently does not exist teaches nothing.
+      ...(aiPlanningConfigured
+        ? [
+            {
+              id: 'backlog-plan-sprints',
+              label: tb('aiPlan.commandLabel'),
+              icon: <Sparkles />,
+              onSelect: () => go(PLAN_SPRINTS_HREF),
+            },
+          ]
+        : []),
       {
         id: 'nav-reports',
         label: t('commandPalette.goToReports'),

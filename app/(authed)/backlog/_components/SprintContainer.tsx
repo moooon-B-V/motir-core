@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, CheckCircle2, ChevronDown, Gauge, Play } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
@@ -63,6 +63,7 @@ export function SprintContainer({
   issuesRefreshKey,
   filterQuery,
   filterActive,
+  autoFocus = false,
 }: {
   sprint: SprintDto;
   /** Top-to-bottom stack position (sprints precede the backlog) — shift-range order (4.2.5). */
@@ -100,10 +101,18 @@ export function SprintContainer({
    *  sprint re-projects to its matching rows + filtered count. '' → unfiltered. */
   filterQuery: string;
   filterActive: boolean;
+  /** Move focus to this panel once it mounts (Subtask MOTIR-1750): after an AI
+   *  sprint-plan approve, a keyboard user must land on the first sprint that was
+   *  CREATED rather than on the dock that just unmounted. */
+  autoFocus?: boolean;
 }) {
   const t = useTranslations('backlog');
   const locale = useLocale();
   const [collapsed, setCollapsed] = useState(false);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (autoFocus) sectionRef.current?.focus();
+  }, [autoFocus]);
   const [startOpen, setStartOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   // The filter rides the fetch query (8.8.20) so the sprint shows only matching
@@ -133,6 +142,10 @@ export function SprintContainer({
 
   return (
     <section
+      ref={sectionRef}
+      // Programmatically focusable (never in the tab order) so the post-approve
+      // focus move can land here — the standard skip-target technique.
+      tabIndex={-1}
       aria-label={t('sprintRegionLabel', {
         name: sprint.name,
         state: stateLabel,
@@ -141,7 +154,7 @@ export function SprintContainer({
       // surface-material hook (glass frost / aurora glow); inert under
       // non-material styles. 7.3.38.
       data-surface="card"
-      className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-subtle)"
+      className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-subtle) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
       <div className="flex items-center gap-2 border-b border-(--el-border) px-(--spacing-card-padding) py-(--spacing-control-y)">
         <button
