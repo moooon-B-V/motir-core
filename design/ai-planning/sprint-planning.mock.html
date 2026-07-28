@@ -1,0 +1,2122 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · AI sprint planning — entrance, packing review, approve (MOTIR-1749)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — AI SPRINT PLANNING: the entrance, the proposed
+      packing review, and approve / discard.
+      Story MOTIR-813 (Cadence — auto-planning + AI sprint planning) · subtask
+      MOTIR-1749 (7.13.11). Layout source of truth for MOTIR-1750 (7.13.12),
+      which implements it.
+
+      ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
+      The host surface ALREADY EXISTS, so it was RENDERED before anything was
+      drawn — not reasoned from source (notes.html mistake #73). `pnpm next build`
+      + `next start` on origin/main @ 28c11c8b, signed in against a seeded tenant,
+      full-page screenshots of `/backlog`, `/settings/project/ai-planning` and
+      `/ready` at 1280×, deviceScaleFactor 2. Everything below composes what those
+      renders actually show:
+        · app/(authed)/backlog/page.tsx — the host. Serif `text-2xl` "Backlog"
+          + muted sub "Motir · plan & groom — rank, sprint, estimate"; toolbar
+          [View all work items] [Filter] [Advanced] [Saved] [+ New work item].
+        · _components/SprintContainer.tsx — the sprint panel this mock's PROPOSED
+          sprint is a variant of: chevron · name · state Pill · calendar range ·
+          count badge · committed-points · velocity seam · Start sprint · `⋯`.
+          Markup + token names copied 1:1.
+        · _components/BacklogRow.tsx — the work-item row (grip · checkbox ·
+          IssueTypeIcon · mono identifier · title · estimate · avatar · status ·
+          `⋯`). The proposed rows are this row, read-only.
+        · _components/BacklogContainer.tsx `CreateSprintButton` — the FULL-WIDTH
+          DASHED "＋ Create sprint" strip between the sprint region and the
+          Backlog region. That strip is where the new door lands (panel 0).
+        · app/(authed)/ready/_components/ExpansionNudgeBanner.tsx +
+          ExpansionNudgeReview.tsx — the SHIPPED in-surface AI proposal grammar
+          (lavender-tint Card · Sparkles in --el-accent-on-surface · phase
+          machine · Approve primary / Decline ghost). Reused, not re-invented.
+        · components/planning/PlanEditsReviewDock.tsx — the SHIPPED review-dock
+          grammar (header title + close · scrollable body · footer with the count
+          on the left and Decline-ghost / Approve-primary on the right, the
+          approve CTA carrying the count). Mirrored here.
+        · design/ai-planning/plans-surface.* (MOTIR-843) — the /plans proposal
+          review this surface's review grammar mirrors: nothing is real until
+          approve, approve MATERIALIZES, the CTA names what it will create.
+        · settings/project/ai-planning (rendered) — the "Plan sprints with Motir"
+          switch, its promise copy, and the peach "Motir AI isn't connected"
+          callout whose shape the off/error states reuse.
+        · lib/ai/sprintAssignment.ts + lib/ai/types (SprintAssignmentDelta /
+          ProposedSprint) — EVERY field rendered below is a real field:
+          sprintLengthDays · capacityMinutes · agentMinutesPerDay · sprints[]
+          {tempId, name, lengthDays, itemKeys, totalEstimateMinutes,
+          capacityMinutes, oversizedKeys, rationale} · itemCount ·
+          totalEstimateMinutes · unestimatedKeys · oversizedKeys.
+        · lib/services/aiSprintPlanningService.ts + app/api/ai/plan/sprint/**
+          — submit (409 disabled · 402 credits · 502 unreachable), the SSE
+          stream, and approve (400 shape / 400 semantic / 403 not sprint admin).
+        · packages/design-system/theme.css — every --el-* / shape token value in
+          the :root block is copied from the CURRENT Tier-0 + Tier-3 blocks.
+
+      ── PLACEMENT: the BACKLOG hosts the door (justified from the shipped IA) ──
+      The card offers three candidate hosts. Shipped reality picks one:
+        1. `/backlog` describes ITSELF as "The Backlog / sprint-planning surface
+           — Motir's clone of the Jira backlog". Sprints are created, filled,
+           started and completed there and nowhere else.
+        2. Approve writes EXACTLY the two gestures that page already owns:
+           `sprintsService.createSprint` (its dashed ＋ Create sprint strip) and
+           `backlogService.bulkAssignToSprint` (its drag-into-sprint / bulk move).
+           AI sprint planning is the AUTOMATED FORM of the host's own two
+           gestures, so the door belongs beside the manual one.
+        3. The settings asset EXPLICITLY disclaims it: design/ai-settings/
+           design-notes.md scopes card 2 to the toggles and lists "the
+           sprint-proposal review UI — ITS OWN SURFACE, not a settings pane" as
+           out of scope. Settings CONFIGURES; the backlog RUNS.
+        4. It earns NO new left-nav entry. A nav entry is the convention for a
+           first-class project VIEW (notes.html mistake #99); this is an ACTION
+           on the backlog's own objects, like Start sprint / Complete sprint,
+           which also live in-surface.
+      Second door: the ⌘K command palette (panel 0b) — the shipped convention for
+      reaching an in-surface action from anywhere. Both doors are DRAWN.
+
+      ── PANELS (multi-panel board — review EVERY panel) ──
+        0   ENTRANCE — the shipped backlog with the door on the create-sprint
+            strip, and 0b the ⌘K deep link.
+        1   OFF — AI sprint planning disabled for the project.
+        2   GENERATING — the streamed packing run, with Cancel.
+        3   PROPOSED PACKING — the review (the main panel).
+        4   EDGE STATES — empty packing · the four failure shapes.
+        5   AFTER APPROVE — the created sprints on the real backlog + the toast.
+      Toggle dark mode (top right) to confirm token parity.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+
+        /* shape — element-semantic tokens only (never --radius-sm/md/lg) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-icon-btn: 6px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — the swap layer components consume */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-success: var(--color-success);
+        --el-success-surface: var(--color-tint-mint);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.5);
+        --shadow-elevated: 0 6px 20px rgba(0, 0, 0, 0.55);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      svg {
+        display: block;
+      }
+
+      /* ── review chrome (mock-only scaffolding, not app UI) ───────────────── */
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 96ch;
+        line-height: 1.65;
+      }
+      .grid {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .panel-cap .n {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-accent-on-surface);
+      }
+      .panel-cap .t {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .panel-cap .d {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pad {
+        padding: 22px 18px;
+        background: var(--el-surface);
+      }
+      .pad.tight {
+        padding: 16px 18px;
+      }
+      .pad.split {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .col {
+        flex: 1 1 340px;
+        min-width: 320px;
+      }
+      .lede {
+        margin: 0 0 12px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .themebar {
+        max-width: 1180px;
+        margin: 0 auto 12px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .themebar button {
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-button-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+      }
+
+      /* ── app shell (mirrors the rendered /backlog) ───────────────────────── */
+      .app {
+        display: flex;
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        overflow: hidden;
+      }
+      .rail {
+        width: 176px;
+        flex: 0 0 176px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 10px;
+      }
+      .rail .proj {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px 14px;
+      }
+      .rail .proj .sq {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        background: var(--el-info);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .rail .proj b {
+        font-family: var(--font-serif);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .rail-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .rail-item.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      /* schematic nav glyph — the rail is CONTEXT here, so each entry's real
+         lucide icon is reduced to a neutral mark rather than redrawn wrong. */
+      .rail-item .dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 3px;
+        background: currentColor;
+        opacity: 0.28;
+        flex: 0 0 13px;
+      }
+      .main {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 20px 22px 24px;
+        background: var(--el-page-bg);
+      }
+      .page-h1 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-sub {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        margin: 16px 0 18px;
+        flex-wrap: wrap;
+      }
+      .tbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .tbtn.primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── sprint container (mirrors SprintContainer.tsx) ──────────────────── */
+      .sprint {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        margin-bottom: 14px;
+      }
+      .sprint-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border);
+        flex-wrap: wrap;
+        min-height: 48px;
+      }
+      .sprint-head .name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .meta.faint {
+        color: var(--el-text-faint);
+      }
+      .countbadge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-secondary);
+      }
+      .spacer {
+        flex: 1 1 auto;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+      }
+      .pill.lavender {
+        background: var(--el-tint-lavender);
+      }
+      .pill.mint {
+        background: var(--el-tint-mint);
+      }
+      .pill.sky {
+        background: var(--el-tint-sky);
+      }
+      .pill.peach {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .pill.rose {
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
+      }
+      .outline-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: transparent;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+      }
+
+      /* ── work-item row (mirrors BacklogRow.tsx) ──────────────────────────── */
+      .rows {
+        padding: var(--spacing-control-x);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+      }
+      .row .grip {
+        color: var(--el-text-faint);
+        opacity: 0.45;
+      }
+      .row .check {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .row .tico {
+        color: var(--el-type-task);
+        flex: 0 0 16px;
+      }
+      .row .ident {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+        flex: 0 0 auto;
+      }
+      .row .rtitle {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .row .est {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+        flex: 0 0 auto;
+      }
+      .row .avatar {
+        width: 22px;
+        height: 22px;
+        flex: 0 0 22px;
+        border-radius: 9999px;
+        border: 1px dashed var(--el-border-strong);
+        color: var(--el-text-faint);
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .row .status {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        flex: 0 0 auto;
+      }
+      .row .after {
+        font-size: 11px;
+        color: var(--el-text-faint);
+        flex: 0 0 auto;
+      }
+      .loaded {
+        text-align: center;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        padding: 8px 0 2px;
+      }
+      .createrow {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px var(--spacing-control-x) 4px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+
+      /* ── THE DOOR: the create-sprint strip, now two-action ───────────────── */
+      .strip {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        width: 100%;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        margin-bottom: 14px;
+      }
+      .strip-btn {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+      }
+      .strip-btn.ai {
+        flex: 0 0 auto;
+        padding-left: 22px;
+        padding-right: 22px;
+        color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+      }
+      .strip-btn.ai.off {
+        color: var(--el-text-faint);
+        background: var(--el-muted);
+      }
+      .strip-sep {
+        width: 1px;
+        background: var(--el-border-strong);
+        opacity: 0.7;
+        flex: 0 0 1px;
+      }
+      .strip-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: -6px 0 14px;
+        padding: 10px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .strip-hint a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      /* ── the review dock (mirrors PlanEditsReviewDock.tsx) ───────────────── */
+      .dock {
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        margin-bottom: 14px;
+        overflow: hidden;
+      }
+      .dock-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 13px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-tint-lavender);
+      }
+      .dock-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .dock-head .sub {
+        font-size: 12px;
+        color: var(--el-text-strong);
+        opacity: 0.78;
+      }
+      .dock-body {
+        padding: 16px var(--spacing-card-padding);
+        background: var(--el-surface-soft);
+      }
+      .dock-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        flex-wrap: wrap;
+      }
+      .dock-foot .fine {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        max-width: 52ch;
+        line-height: 1.5;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn.secondary {
+        background: var(--el-page-bg);
+        border-color: var(--el-button-border);
+        color: var(--el-text-secondary);
+      }
+      .btn.sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+      }
+
+      /* proposed sprint = SprintContainer with the proposed treatment */
+      .sprint.proposed {
+        border: 1px dashed var(--el-accent);
+        background: var(--el-page-bg);
+        box-shadow: none;
+      }
+      .sprint.proposed > .sprint-head {
+        background: var(--el-tint-lavender);
+        border-bottom-color: var(--el-accent);
+      }
+      /* the state pill sits ON the lavender head, so it flips to the page fill +
+         accent ink to keep the chip legible (a lavender chip on lavender is not
+         a chip). Both values are palette tokens. */
+      .sprint.proposed > .sprint-head .pill.lavender {
+        background: var(--el-page-bg);
+        color: var(--el-accent-on-surface);
+      }
+      .capline {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px var(--spacing-card-padding) 0;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .capbar {
+        position: relative;
+        flex: 0 0 128px;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .capbar i {
+        position: absolute;
+        inset: 0 auto 0 0;
+        display: block;
+        background: var(--el-accent);
+      }
+      .capbar.over i {
+        background: var(--el-warning);
+      }
+      .why {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 10px var(--spacing-card-padding) 0;
+        padding: 9px 11px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .why b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* callouts / states */
+      .callout {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        font-size: 12.5px;
+        line-height: 1.6;
+      }
+      .callout.peach {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .callout.rose {
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
+      }
+      .callout.mint {
+        background: var(--el-success-surface);
+        color: var(--el-text-strong);
+      }
+      .callout b {
+        font-weight: 700;
+      }
+      .callout .cta {
+        margin-top: 9px;
+        display: flex;
+        gap: 8px;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+        padding: 26px 18px;
+        text-align: center;
+      }
+      .empty h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .empty p {
+        margin: 0;
+        max-width: 56ch;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .spinner {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 15px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-tint-lavender);
+        border-top-color: var(--el-accent-on-surface);
+      }
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        max-width: 420px;
+        padding: 13px 15px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .toast .tt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .toast .td {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+
+      /* ⌘K palette (the second door) */
+      .kbar {
+        max-width: 460px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .kbar .kin {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 var(--spacing-input-x);
+        height: var(--height-input);
+        border-bottom: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .kbar .kgroup {
+        padding: 8px 10px 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .krow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 6px 4px;
+        padding: 0 var(--spacing-control-x);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .krow.on {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .krow .kkey {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: var(--radius-kbd);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-faint);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .caption {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin: 8px 0 0;
+        line-height: 1.55;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="themebar">
+      <button
+        type="button"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark mode
+      </button>
+    </div>
+
+    <div class="review-head">
+      <h1>AI sprint planning — the entrance, the packing review, approve / discard</h1>
+      <p>
+        Story MOTIR-813 · subtask MOTIR-1749 (7.13.11). The back end shipped without a front end:
+        MOTIR-917 packs, MOTIR-918 persists behind an approve gate, MOTIR-919 ships the toggle — and
+        the settings copy already promises the user
+        <em>“you approve before any sprint is created”</em>. This asset draws where that promise is
+        kept. The host is <b>/backlog</b>, rendered from <code>origin/main</code> before anything
+        here was drawn; every panel composes the shipped SprintContainer, BacklogRow, create-sprint
+        strip, ExpansionNudge and PlanEditsReviewDock markup rather than a stand-in.
+      </p>
+    </div>
+
+    <div class="grid">
+      <!-- ═══════════ PANEL 0 — THE ENTRANCE ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">0</span>
+          <span class="t">THE ENTRANCE — the door drawn in its host</span>
+          <span class="d"
+            >/backlog · the shipped create-sprint strip becomes a two-action strip</span
+          >
+        </div>
+        <div class="pad">
+          <div class="app">
+            <nav class="rail">
+              <div class="proj"><span class="sq">M</span><b>Motir</b></div>
+              <div class="rail-item"><span class="dot"></span>Dashboard</div>
+              <div class="rail-item"><span class="dot"></span>Work Items</div>
+              <div class="rail-item"><span class="dot"></span>Ready</div>
+              <div class="rail-item"><span class="dot"></span>Boards</div>
+              <div class="rail-item"><span class="dot"></span>Roadmap</div>
+              <div class="rail-item"><span class="dot"></span>Plans</div>
+              <div class="rail-item active"><span class="dot"></span>Backlog</div>
+              <div class="rail-item"><span class="dot"></span>Triage</div>
+              <div class="rail-item"><span class="dot"></span>Reports</div>
+              <div class="rail-item"><span class="dot"></span>Settings</div>
+            </nav>
+            <div class="main">
+              <h1 class="page-h1">Backlog</h1>
+              <p class="page-sub">Motir · plan &amp; groom — rank, sprint, estimate</p>
+              <div class="toolbar">
+                <span class="tbtn">View all work items</span>
+                <span class="tbtn">Filter</span>
+                <span class="tbtn">Advanced</span>
+                <span class="tbtn">Saved</span>
+                <span class="tbtn primary">+ New work item</span>
+              </div>
+
+              <!-- shipped sprint container, untouched -->
+              <div class="sprint">
+                <div class="sprint-head">
+                  <span class="icon-btn">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
+                  <span class="name">Sprint 1</span>
+                  <span class="pill lavender">Planned</span>
+                  <span class="meta">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <path d="M16 2v4M8 2v4M3 10h18" />
+                    </svg>
+                    Not started
+                  </span>
+                  <span class="countbadge">3</span>
+                  <span class="spacer"></span>
+                  <span class="meta">— committed</span>
+                  <span class="meta faint">velocity</span>
+                  <span class="outline-btn">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m5 3 14 9-14 9V3z" />
+                    </svg>
+                    Start sprint
+                  </span>
+                  <span class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" />
+                    </svg>
+                  </span>
+                </div>
+                <div class="rows">
+                  <div class="row">
+                    <span class="grip">⋮⋮</span><span class="check"></span>
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-918</span>
+                    <span class="rtitle">Sprint-planning API + persist</span>
+                    <span class="est">3</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="row">
+                    <span class="grip">⋮⋮</span><span class="check"></span>
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-919</span>
+                    <span class="rtitle">AI-settings UI panel</span>
+                    <span class="est">5</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="loaded">All 3 work items loaded</div>
+                  <div class="createrow">＋ Create work item</div>
+                </div>
+              </div>
+
+              <!-- ▼▼ THE ONLY NEW PIXELS ON THIS PANEL ▼▼ -->
+              <div class="strip">
+                <span class="strip-btn">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Create sprint
+                </span>
+                <span class="strip-sep"></span>
+                <span class="strip-btn ai">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"
+                    />
+                  </svg>
+                  Plan sprints with Motir
+                </span>
+              </div>
+
+              <div class="sprint">
+                <div class="sprint-head">
+                  <span class="icon-btn">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
+                  <span class="name">Backlog</span>
+                  <span class="countbadge">9 work items</span>
+                </div>
+                <div class="rows">
+                  <div class="row">
+                    <span class="grip">⋮⋮</span><span class="check"></span>
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-920</span>
+                    <span class="rtitle">Cadence trigger fires at threshold</span>
+                    <span class="est">5</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="row">
+                    <span class="grip">⋮⋮</span><span class="check"></span>
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-921</span>
+                    <span class="rtitle">Playwright E2E + acceptance video</span>
+                    <span class="est">5</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="caption">
+            The door sits on the strip that already means “make a sprint here”. Manual on the left
+            (<b>＋ Create sprint</b>, unchanged), automated on the right (<b
+              >Plan sprints with Motir</b
+            >, lavender-tinted like every other AI affordance in the app). Nothing else on the page
+            moves.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 0b — THE SECOND DOOR ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">0b</span>
+          <span class="t">THE SECOND DOOR — ⌘K</span>
+          <span class="d">the shipped command palette reaches the same action from anywhere</span>
+        </div>
+        <div class="pad split">
+          <div class="col">
+            <div class="kbar">
+              <div class="kin">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                plan sprints
+              </div>
+              <div class="kgroup">Backlog</div>
+              <div class="krow on">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"
+                  />
+                </svg>
+                Plan sprints with Motir
+                <span class="kkey">↵</span>
+              </div>
+              <div class="krow">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Create sprint
+              </div>
+              <div class="krow">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M3 10h18" />
+                </svg>
+                Go to Backlog
+              </div>
+              <div class="kgroup">Settings</div>
+              <div class="krow">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 3v2M12 19v2M3 12h2M19 12h2" />
+                </svg>
+                AI planning settings
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <p class="lede">
+              The palette entry navigates to <code>/backlog</code> and opens the run in one step, so
+              the action has one implementation and two doors. It is registered in the same command
+              registry the shipped “Go to Backlog” / settings deep links come from — a palette entry
+              is the app’s existing way to reach an in-surface action from elsewhere, so no third
+              surface is invented.
+            </p>
+            <p class="lede">
+              Not drawn on purpose: a left-nav entry. A nav entry is this app’s convention for a
+              first-class project <em>view</em> (Dashboard / Boards / Backlog / Roadmap / Plans).
+              Sprint planning is an <em>action on the backlog’s own objects</em> — the same class as
+              Start sprint and Complete sprint, which also live in-surface (notes.html #99).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 1 — OFF ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <span class="t">OFF — AI sprint planning is not enabled</span>
+          <span class="d"
+            >`aiSprintPlanningEnabled = false` · submit would 409 SPRINT_PLANNING_DISABLED</span
+          >
+        </div>
+        <div class="pad">
+          <div class="strip">
+            <span class="strip-btn">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Create sprint
+            </span>
+            <span class="strip-sep"></span>
+            <span class="strip-btn ai off">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"
+                />
+              </svg>
+              Plan sprints with Motir
+            </span>
+          </div>
+          <div class="strip-hint">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              style="flex: 0 0 15px; margin-top: 1px"
+            >
+              <path d="M12 9v4M12 17h.01" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            <span>
+              <b>AI sprint planning is off for this project.</b> Turn it on to let Motir pack your
+              ready work into short, dependency-aware sprints. <a href="#">AI planning settings</a>
+            </span>
+          </div>
+          <p class="caption">
+            The door is <em>present and disabled</em>, never hidden — a hidden control cannot teach
+            that the capability exists, and the settings page already promises it. The hint carries
+            the fix and links to the switch. Same peach <code>--el-warning-surface</code> callout
+            the settings page uses for “Motir AI isn’t connected”, so the two read as one family.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 2 — GENERATING ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <span class="t">GENERATING — the packing run, streamed</span>
+          <span class="d">POST /api/ai/plan/sprint → GET …/:jobId/stream (SSE)</span>
+        </div>
+        <div class="pad">
+          <div class="dock">
+            <div class="dock-head">
+              <span class="spinner"></span>
+              <h2>Planning your sprints…</h2>
+              <span class="spacer"></span>
+              <span class="btn ghost sm">Cancel</span>
+            </div>
+            <div class="dock-body">
+              <div class="stack">
+                <div class="row" style="border-color: var(--el-border-soft)">
+                  <span class="pill mint">done</span>
+                  <span class="rtitle">Read 9 ready work items and what blocks what</span>
+                </div>
+                <div class="row" style="border-color: var(--el-border-soft)">
+                  <span class="pill mint">done</span>
+                  <span class="rtitle"
+                    >Sized them against a 7-day sprint at 240 agent-minutes a day</span
+                  >
+                </div>
+                <div class="row" style="border-color: var(--el-border-soft)">
+                  <span class="spinner"></span>
+                  <span class="rtitle">Packing sprint 3 of 3…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="caption">
+            The dock replaces the strip in place — the user stays on the backlog, which is the
+            surface the result lands in. Progress lines are the job-stream frames, announced
+            <code>aria-live="polite"</code> (the shipped <code>PlanEditsReviewDock</code> running
+            state). <b>Cancel</b> abandons the run; the job writes nothing either way, so cancelling
+            costs nothing.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 3 — THE REVIEW ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <span class="t">PROPOSED PACKING — the review</span>
+          <span class="d">the main panel · every figure is a real SprintAssignmentDelta field</span>
+        </div>
+        <div class="pad">
+          <div class="dock">
+            <div class="dock-head">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                style="color: var(--el-accent-on-surface)"
+              >
+                <path
+                  d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"
+                />
+              </svg>
+              <div>
+                <h2>Proposed sprints</h2>
+                <div class="sub">
+                  3 sprints · 9 work items · 7 days each — nothing is created until you approve.
+                </div>
+              </div>
+              <span class="spacer"></span>
+              <span class="icon-btn">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+              </span>
+            </div>
+
+            <div class="dock-body">
+              <!-- proposed sprint 1 — expanded -->
+              <div class="sprint proposed">
+                <div class="sprint-head">
+                  <span class="icon-btn">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
+                  <span class="name">Sprint 2</span>
+                  <span class="pill lavender">Proposed</span>
+                  <span class="meta">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <path d="M16 2v4M8 2v4M3 10h18" />
+                    </svg>
+                    7 days
+                  </span>
+                  <span class="countbadge">4</span>
+                  <span class="spacer"></span>
+                  <span class="meta">first — nothing blocks it</span>
+                </div>
+                <div class="capline">
+                  <span class="capbar"><i style="width: 71%"></i></span>
+                  <span>19h 50m of 28h — 71% of a 7-day sprint at 240 agent-minutes a day</span>
+                </div>
+                <div class="rows">
+                  <div class="row">
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-920</span>
+                    <span class="rtitle">Cadence trigger fires at threshold</span>
+                    <span class="est">5 · 50m</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="row">
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-1749</span>
+                    <span class="rtitle">Design — the AI sprint-planning surface</span>
+                    <span class="est">3 · 45m</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="row">
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-1750</span>
+                    <span class="rtitle">AI sprint-planning UI</span>
+                    <span class="after">after MOTIR-1749</span>
+                    <span class="est">5 · 65m</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="row">
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-1751</span>
+                    <span class="rtitle">Planning bug — Story 7.13 planned back-to-front</span>
+                    <span class="est">1 · 15m</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                </div>
+                <div class="why" style="margin-bottom: 14px">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    style="flex: 0 0 14px; margin-top: 2px"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <span>
+                    <b>Why this order.</b> MOTIR-1750 renders the design MOTIR-1749 produces, so it
+                    follows it. Everything else here is unblocked and fills the sprint to capacity.
+                  </span>
+                </div>
+              </div>
+
+              <!-- proposed sprint 2 — with flags -->
+              <div class="sprint proposed">
+                <div class="sprint-head">
+                  <span class="icon-btn">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
+                  <span class="name">Sprint 3</span>
+                  <span class="pill lavender">Proposed</span>
+                  <span class="meta">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <path d="M16 2v4M8 2v4M3 10h18" />
+                    </svg>
+                    7 days
+                  </span>
+                  <span class="countbadge">3</span>
+                  <span class="spacer"></span>
+                  <span class="pill peach">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M12 3 2 20h20L12 3zM12 10v4M12 17h.01" />
+                    </svg>
+                    1 bigger than a sprint
+                  </span>
+                </div>
+                <div class="capline">
+                  <span class="capbar over"><i style="width: 100%"></i></span>
+                  <span
+                    >28h 40m of 28h — over by 40m, held together because MOTIR-1752 blocks the
+                    rest</span
+                  >
+                </div>
+                <div class="rows">
+                  <div class="row">
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-1752</span>
+                    <span class="rtitle">Sprint-planning acceptance video</span>
+                    <span class="after">after MOTIR-1750</span>
+                    <span class="pill peach">Bigger than a sprint</span>
+                    <span class="est">13 · 30h</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                  <div class="row">
+                    <span class="tico">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" />
+                      </svg>
+                    </span>
+                    <span class="ident">MOTIR-1753</span>
+                    <span class="rtitle">Cadence docs pass</span>
+                    <span class="pill sky">No estimate</span>
+                    <span class="est">—</span><span class="avatar">—</span
+                    ><span class="status">To Do</span>
+                  </div>
+                </div>
+                <div class="why" style="margin-bottom: 14px">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    style="flex: 0 0 14px; margin-top: 2px"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <span>
+                    <b>Why this order.</b> MOTIR-1752 needs the UI from sprint 2, so it starts here.
+                    It is bigger than one sprint on its own — split it, or start it here and let it
+                    run over. MOTIR-1753 has no estimate, so it was packed as free.
+                  </span>
+                </div>
+              </div>
+
+              <!-- proposed sprint 3 — collapsed -->
+              <div class="sprint proposed" style="margin-bottom: 0">
+                <div class="sprint-head" style="border-bottom: none">
+                  <span class="icon-btn">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      style="transform: rotate(-90deg)"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
+                  <span class="name">Sprint 4</span>
+                  <span class="pill lavender">Proposed</span>
+                  <span class="meta">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <path d="M16 2v4M8 2v4M3 10h18" />
+                    </svg>
+                    7 days
+                  </span>
+                  <span class="countbadge">2</span>
+                  <span class="spacer"></span>
+                  <span class="meta">8h 20m of 28h</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="dock-foot">
+              <span class="fine">
+                Approving creates these sprints and moves the work items into them. Nothing else
+                changes — no status moves, no sprint starts.
+              </span>
+              <span class="spacer"></span>
+              <span class="btn ghost">Discard</span>
+              <span class="btn primary">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="m5 13 4 4 10-11" />
+                </svg>
+                Create 3 sprints
+              </span>
+            </div>
+          </div>
+          <p class="caption">
+            A proposed sprint is the <em>shipped</em> <code>SprintContainer</code> with the proposed
+            treatment (dashed <code>--el-accent</code> border, lavender head, <b>Proposed</b> pill)
+            — so the review reads in the exact vocabulary the result will have. Read-only: no drag
+            handle, no checkbox, no <code>⋯</code>, no Start-sprint. The lifecycle controls appear
+            only once the sprints are real (panel 5). Editing a proposal is deliberately out of
+            scope here — the approve API accepts an edited delta, but the first release approves or
+            discards whole, and re-running is the way to get a different packing.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 4 — EDGE STATES ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <span class="t">EDGE STATES — empty packing and the four failures</span>
+          <span class="d">each maps to one shipped status code</span>
+        </div>
+        <div class="pad split">
+          <div class="col">
+            <p class="lede">
+              Empty packing — a valid result, never an error (the service returns zero counts and
+              opens no transaction).
+            </p>
+            <div class="dock">
+              <div class="dock-head">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style="color: var(--el-accent-on-surface)"
+                >
+                  <path d="M12 3v4M12 17v4M3 12h4M17 12h4" />
+                </svg>
+                <h2>Proposed sprints</h2>
+                <span class="spacer"></span>
+                <span class="icon-btn">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="m6 6 12 12M18 6 6 18" />
+                  </svg>
+                </span>
+              </div>
+              <div class="dock-body">
+                <div class="empty">
+                  <h3>Nothing to schedule</h3>
+                  <p>
+                    Every work item that could go into a sprint is already in one. Motir will have
+                    something to pack once new work is ready, or once this sprint completes.
+                  </p>
+                  <span class="btn secondary sm">Close</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="stack">
+              <div class="callout peach">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style="flex: 0 0 15px; margin-top: 2px"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 8v5M12 16h.01" />
+                </svg>
+                <span>
+                  <b>AI sprint planning is off for this project.</b> Nothing was created.
+                  <span class="cta"
+                    ><span class="btn secondary sm">AI planning settings</span></span
+                  >
+                </span>
+              </div>
+              <div class="callout peach">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style="flex: 0 0 15px; margin-top: 2px"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 8v5M12 16h.01" />
+                </svg>
+                <span>
+                  <b>You’re out of planning credits.</b> Top up to keep Motir planning your sprints.
+                  <span class="cta"><span class="btn secondary sm">Top up</span></span>
+                </span>
+              </div>
+              <div class="callout rose">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style="flex: 0 0 15px; margin-top: 2px"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m9 9 6 6M15 9l-6 6" />
+                </svg>
+                <span>
+                  <b>Motir didn’t answer.</b> Nothing was created — try again in a moment.
+                  <span class="cta"><span class="btn secondary sm">Try again</span></span>
+                </span>
+              </div>
+              <div class="callout rose">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  style="flex: 0 0 15px; margin-top: 2px"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m9 9 6 6M15 9l-6 6" />
+                </svg>
+                <span>
+                  <b>This packing no longer fits your plan.</b> MOTIR-1750 is blocked by MOTIR-1749,
+                  but the packing schedules MOTIR-1749 no earlier. Nothing was created.
+                  <span class="cta"><span class="btn secondary sm">Plan again</span></span>
+                </span>
+              </div>
+            </div>
+            <p class="caption">
+              Every failure says <b>nothing was created</b> — the approve is one transaction, so a
+              half-written plan is impossible and the copy can promise it. Rose is reserved for a
+              refusal, peach for a condition the user can fix.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════ PANEL 5 — AFTER APPROVE ═══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <span class="t">AFTER APPROVE — the sprints are real</span>
+          <span class="d">the dock is gone; the created sprints are ordinary Epic-4 sprints</span>
+        </div>
+        <div class="pad">
+          <div class="stack">
+            <div class="toast">
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                style="flex: 0 0 17px; margin-top: 1px; color: var(--el-success)"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="m8 12 3 3 5-6" />
+              </svg>
+              <span>
+                <span class="tt">3 sprints created</span>
+                <span class="td">9 work items moved into Sprint 2, Sprint 3 and Sprint 4.</span>
+              </span>
+            </div>
+
+            <div class="sprint" style="margin-bottom: 0">
+              <div class="sprint-head">
+                <span class="icon-btn">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </span>
+                <span class="name">Sprint 2</span>
+                <span class="pill lavender">Planned</span>
+                <span class="meta">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  Not started
+                </span>
+                <span class="countbadge">4</span>
+                <span class="spacer"></span>
+                <span class="meta">14 committed</span>
+                <span class="meta faint">velocity</span>
+                <span class="outline-btn">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="m5 3 14 9-14 9V3z" />
+                  </svg>
+                  Start sprint
+                </span>
+                <span class="icon-btn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="5" cy="12" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="19" cy="12" r="1.6" />
+                  </svg>
+                </span>
+              </div>
+              <div class="rows">
+                <div class="row">
+                  <span class="grip">⋮⋮</span><span class="check"></span>
+                  <span class="tico">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="m8 12 3 3 5-6" />
+                    </svg>
+                  </span>
+                  <span class="ident">MOTIR-920</span>
+                  <span class="rtitle">Cadence trigger fires at threshold</span>
+                  <span class="est">5</span><span class="avatar">—</span
+                  ><span class="status">To Do</span>
+                </div>
+                <div class="row">
+                  <span class="grip">⋮⋮</span><span class="check"></span>
+                  <span class="tico">
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="m8 12 3 3 5-6" />
+                    </svg>
+                  </span>
+                  <span class="ident">MOTIR-1749</span>
+                  <span class="rtitle">Design — the AI sprint-planning surface</span>
+                  <span class="est">3</span><span class="avatar">—</span
+                  ><span class="status">To Do</span>
+                </div>
+                <div class="loaded">All 4 work items loaded</div>
+                <div class="createrow">＋ Create work item</div>
+              </div>
+            </div>
+          </div>
+          <p class="caption">
+            After approve there is no AI residue: the sprints carry the ordinary
+            <b>Planned</b> pill, the ⋯ menu, drag, and Start sprint, exactly as a hand-made sprint
+            does — the sprints were created through the same Epic-4 services (<code
+              >createSprint</code
+            >
+            + <code>bulkAssignToSprint</code>), so nothing distinguishes them afterwards, and
+            nothing should. The proposed work items leave the Backlog region in the same update.
+          </p>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
