@@ -80,6 +80,22 @@ export const sprintsService = {
    * `startDate` when both given). Does NOT start the sprint — activation is
    * Story 4.4. Returns the new sprint's DTO (`issueCount` 0).
    *
+   * `tx` — when the caller ALREADY holds a workspace-bound transaction, the
+   * writes join it instead of opening a second one (Subtask 7.13.5 · MOTIR-918:
+   * approving an AI sprint plan creates N sprints and assigns their members
+   * atomically, so a partial plan is never committed). Omitted — every existing
+   * caller — the method opens its own `withWorkspaceContext` exactly as before,
+   * so this is purely additive. A supplied `tx` MUST already carry this
+   * workspace's GUCs, since the `sprint` RLS `WITH CHECK` is evaluated against
+   * them.
+   *
+   * Note the sequence read is a read-that-guards-a-write (`maxSequence + 1`), so
+   * two concurrent creates on one project can race to the same ordinal.
+   * `sequence` is a display ordinal with no unique constraint, and that race is
+   * pre-existing behaviour this parameter does not change; the AI approve path
+   * creates its sprints serially inside ONE transaction, so it cannot race
+   * itself.
+   *
    * Throws: `ProjectNotFoundError` (404 — unknown / cross-workspace project),
    * `NotSprintAdminError` (403), `InvalidSprintNameError` (400),
    * `SprintWindowInvalidError` (422).
@@ -88,6 +104,7 @@ export const sprintsService = {
     projectId: string,
     input: CreateSprintInput,
     ctx: ServiceContext,
+    tx?: Prisma.TransactionClient,
   ): Promise<SprintDto> {
     await assertSprintAdmin(ctx.userId, projectId, ctx.workspaceId);
 
@@ -96,26 +113,27 @@ export const sprintsService = {
     const endDate = parseNullableDate(input.endDate);
     assertWindow(startDate ?? null, endDate ?? null);
 
-    const row = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const sequence =
-          (await sprintRepository.maxSequenceForProject(projectId, ctx.workspaceId, tx)) + 1;
-        return sprintRepository.create(
-          {
-            workspaceId: ctx.workspaceId,
-            projectId,
-            name: name ?? `Sprint ${sequence}`,
-            goal: input.goal ?? null,
-            state: 'planned',
-            startDate: startDate ?? null,
-            endDate: endDate ?? null,
-            sequence,
-          },
-          tx,
-        );
-      },
-    );
+    const write = async (t: Prisma.TransactionClient) => {
+      const sequence =
+        (await sprintRepository.maxSequenceForProject(projectId, ctx.workspaceId, t)) + 1;
+      return sprintRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId,
+          name: name ?? `Sprint ${sequence}`,
+          goal: input.goal ?? null,
+          state: 'planned',
+          startDate: startDate ?? null,
+          endDate: endDate ?? null,
+          sequence,
+        },
+        t,
+      );
+    };
+
+    const row = tx
+      ? await write(tx)
+      : await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, write);
     return toSprintDto(row, 0);
   },
 

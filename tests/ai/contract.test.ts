@@ -49,6 +49,11 @@ const CANONICAL_JOB_KINDS = [
   // `propose_convention` (Story 7.14 — MOTIR-1601 handler / MOTIR-839 fresh trigger);
   // live in motir-ai's canonical set (motir-ai/tests/contract.test.ts, contract.md §2.3).
   'propose_convention',
+  // `plan_sprint` (Story 7.13 — MOTIR-917 handler / MOTIR-918 consumer); already in
+  // motir-ai's canonical set. Adding it HERE closes the drift motir-ai's envelope
+  // documented while its motir-core consumer was unbuilt — which is exactly the
+  // drift this guard exists to surface.
+  'plan_sprint',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

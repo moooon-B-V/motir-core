@@ -35,6 +35,19 @@ export const JOB_KINDS = [
   // handler auto-selects fresh-vs-migrate off the project's indexed code graph.
   // Mirror of the closed motir-ai enum (the open-core boundary).
   'propose_convention',
+  // `plan_sprint` (Story 7.13 — MOTIR-917 handler / MOTIR-918 consumer) — the
+  // SPRINT PACKING job. Over the project's schedulable open leaves + their
+  // `is_blocked_by` edges (read back over the 7.1.6 token) it packs a
+  // dependency-correct, capacity-bounded sequence of SHORT agent-cadence sprints
+  // and returns the versioned sprint-assignment delta on its result
+  // (`sprintAssignment`, below). Its schedule is DETERMINISTIC — a pure
+  // scheduler, never model-invented. It writes NOTHING: no plan delta
+  // (`operations: []`) and no sprint. THIS repo persists the proposal through
+  // the Epic-4 sprint services behind a human approve
+  // (`aiSprintPlanningService.approveSprintPlan`). Mirror of the closed motir-ai
+  // enum (the open-core boundary) — adding it here closes the drift motir-ai's
+  // envelope.ts documented while its consumer was unbuilt.
+  'plan_sprint',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -146,6 +159,24 @@ export interface JobContextBag {
   // project (the start-fresh path). Loosely typed (the reserved-hole convention,
   // like `discovery`); the motir-ai handler parses it.
   existingWorkItems?: ExistingWorkItemRef[];
+  // The sprint-planning settings a `plan_sprint` job (7.13.4 · MOTIR-917) packs
+  // with. `aiSprintPlanningService` sets `sprintLengthDays` from the project's
+  // `aiSprintLengthDays` column (MOTIR-915), so motir-ai reads the cadence ONLY
+  // from the envelope and never from motir-core config directly — the same
+  // discipline as `generateExplanations`. `agentMinutesPerDay` / `maxItems` are
+  // left to the scheduler's documented defaults today; they are part of the
+  // contract hole so a per-project override needs no envelope change. Parsed
+  // DEFENSIVELY on the far side (`parseSprintPlanningInput`) — a malformed hole
+  // falls back to defaults rather than failing the job.
+  sprintPlanning?: SprintPlanningContext;
+}
+
+/** The `context.sprintPlanning` hole a `plan_sprint` submit fills (7.13.4). */
+export interface SprintPlanningContext {
+  sprintLengthDays?: number;
+  agentMinutesPerDay?: number;
+  /** Cap on how many schedulable items one packing run reads back and packs. */
+  maxItems?: number;
 }
 
 /** A lightweight summary of one committed work item in the project (MOTIR-1259),
@@ -171,12 +202,72 @@ export interface PlanDelta {
   operations: unknown[];
 }
 
+/**
+ * The sprint-assignment delta's OWN version, independent of `envelopeVersion`
+ * (contract §3.2): the persist side switches on it, so the packing shape can
+ * evolve without a whole-envelope bump. Mirrors motir-ai's
+ * `SPRINT_ASSIGNMENT_DELTA_VERSION`.
+ */
+export const SPRINT_ASSIGNMENT_DELTA_VERSION = 'v1' as const;
+export type SprintAssignmentDeltaVersion = typeof SPRINT_ASSIGNMENT_DELTA_VERSION;
+
+/**
+ * ONE proposed sprint. `tempId` is a temp-ref (`sprint:<n>`) in the same spirit
+ * as the tree-delta's `planItem:<id>` refs: it names a sprint that does not
+ * exist yet, so the persist resolves it to a real sprint id as it creates them
+ * IN ORDER. `itemKeys` are REAL work-item identifiers — this delta proposes
+ * their sprint MEMBERSHIP only, never their existence — listed in dependency
+ * (topological) order within the sprint.
+ */
+export interface ProposedSprint {
+  /** `sprint:1`, `sprint:2`, … — position in the ordered sequence, 1-based. */
+  tempId: string;
+  name: string;
+  lengthDays: number;
+  itemKeys: string[];
+  totalEstimateMinutes: number;
+  capacityMinutes: number;
+  /** Members whose OWN estimate exceeds one sprint's capacity (they sprint alone). */
+  oversizedKeys: string[];
+  /** Deterministically derived explanation of this sprint's composition. */
+  rationale: string;
+}
+
+/**
+ * The versioned sprint-assignment proposal a `plan_sprint` job returns. It
+ * carries NO WRITE AUTHORITY: motir-core decides whether to commit it, creating
+ * the sprints and assigning members through the Epic-4 sprint services behind a
+ * human approve. The motir-core mirror of motir-ai's `SprintAssignmentDelta`.
+ */
+export interface SprintAssignmentDelta {
+  deltaVersion: SprintAssignmentDeltaVersion;
+  /** The cadence the packing used (from `context.sprintPlanning.sprintLengthDays`). */
+  sprintLengthDays: number;
+  /** `sprintLengthDays × agentMinutesPerDay` — the per-sprint estimate budget. */
+  capacityMinutes: number;
+  agentMinutesPerDay: number;
+  /** The proposed sprints, in the order they must run. */
+  sprints: ProposedSprint[];
+  itemCount: number;
+  totalEstimateMinutes: number;
+  /** Members with no `estimateMinutes` — charged the default, surfaced not hidden. */
+  unestimatedKeys: string[];
+  /** Members too big for one sprint — each got its own sprint, flagged not dropped. */
+  oversizedKeys: string[];
+}
+
 export interface ResultEnvelope {
   envelopeVersion: typeof ENVELOPE_VERSION;
   jobKind: JobKind;
   planDelta: PlanDelta;
   summary: string;
   usage: { model: string | null; inputTokens: number; outputTokens: number };
+  // The versioned sprint-assignment proposal (7.13.4 · MOTIR-917) — `plan_sprint`
+  // ONLY: the ordered sprints the deterministic scheduler packed, each carrying a
+  // `sprint:<n>` temp-ref + its real member keys. Absent for every other kind.
+  // Purely additive; results are read loosely, and the approve path re-parses
+  // this from scratch rather than trusting the shape (see lib/ai/sprintAssignment.ts).
+  sprintAssignment?: SprintAssignmentDelta | null;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';
