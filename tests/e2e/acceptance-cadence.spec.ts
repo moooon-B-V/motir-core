@@ -1,0 +1,434 @@
+// Acceptance E2E — Story 7.13 cadence: auto-planning + AI sprint planning
+// (Subtask MOTIR-921).
+//
+// Runs under playwright.acceptance.config.ts (MOTIR_CLOUD + video: 'on'), which
+// discovers this file by its `acceptance*.spec.ts` name (MOTIR-1700) — the bulk
+// shards `testIgnore` the same pattern, so this spec runs ONCE, in the lane that
+// records. The recorded happy path declares Story MOTIR-813 via `acceptanceStory`
+// (MOTIR-1684), so the clip publishes to 813 whichever PR triggered the run.
+//
+// It closes the story from the user's seat: a project manager turns the cadence
+// settings on, runs AI sprint planning and approves the packing, watches an
+// expansion fire on its own when ready work drains, finds auto-plan PAUSED while
+// that expansion waits, and sees cadence resume once they decide.
+//
+// DETERMINISM — no live model, no wall-clock waits:
+//   * The `plan_sprint` submit + SSE + review read are stubbed at the BROWSER
+//     (`page.route`), the same open-core seam `acceptance-augment-replan.spec.ts`
+//     uses. The recorded packing is resolved through the shipped repository +
+//     mapper (`buildSprintPlanReview`), and the APPROVE is left entirely real —
+//     `approveSprintPlan` re-validates the delta from the request body against
+//     live rows and never calls motir-ai — so the sprints this spec asserts are
+//     genuine Epic-4 state.
+//   * The cron is TRIGGERED, never awaited: `runCadenceTick` drives the shipped
+//     `runCadenceSweep` through its own `CadenceDeps.submitExpand` seam, so all
+//     three gates run as shipped and `origin: 'cadence'` is the value the sweep
+//     itself supplies.
+// See `_helpers/ai-cadence-seed.ts` for why each stub sits where it does.
+//
+// WHICH TEST CARRIES THE CAMERA: only the first. The edge cases below it (the
+// auto-plan-OFF tick, the user-clicked-origin variant) are asserted but
+// deliberately not narrated into the video. The discard-writes-nothing check is
+// the ONE the card listed as a sibling that is not one: it rides the recorded
+// run's own `/backlog` render instead, because a sibling test would pay a second
+// cold render of that page and this lane cannot currently afford it (see the
+// comment at the assertion, and the run note in the PR).
+
+import { test, expect } from './_helpers/acceptance-video';
+import type { Page } from '@playwright/test';
+import { resetDatabase, db } from './_helpers/db-reset';
+import { signIn } from './_helpers/shell-session';
+import {
+  AUTO_PLAN_THRESHOLD,
+  SPRINT_JOB_ID,
+  SPRINT_LENGTH_DAYS,
+  buildSprintPlanReview,
+  drainReadySetBelow,
+  proposedChildTitles,
+  recordedSprintPacking,
+  runCadenceTick,
+  seedAiCadence,
+  seedUserClickedProposal,
+  waitForSeedJobsToSettle,
+  type AiCadenceSeed,
+} from './_helpers/ai-cadence-seed';
+
+test.describe.configure({ timeout: 180_000 });
+
+// ── Stub the browser→motir-ai sprint-planning boundary ───────────────────────
+
+/** The two SSE frames the shipped `plan_sprint` handler emits, then `done`. */
+function sprintPlanSse(itemCount: number, sprintCount: number): string {
+  const packed = {
+    sprintLengthDays: SPRINT_LENGTH_DAYS,
+    capacityMinutes: SPRINT_LENGTH_DAYS * 240,
+    sprints: sprintCount,
+  };
+  return (
+    `event: read\ndata: ${JSON.stringify({ packing: itemCount })}\n\n` +
+    `event: packed\ndata: ${JSON.stringify(packed)}\n\n` +
+    `event: done\ndata: {}\n\n`
+  );
+}
+
+/**
+ * Stub submit + stream + the review READ. The approve is untouched on purpose —
+ * it is the one write in this flow and the whole point of the assertions that
+ * follow it.
+ */
+async function stubSprintPlanJob(page: Page, seed: AiCadenceSeed): Promise<void> {
+  const delta = recordedSprintPacking(seed);
+  const review = await buildSprintPlanReview(seed.projectId, delta);
+
+  await page.route('**/api/ai/plan/sprint', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ jobId: SPRINT_JOB_ID }),
+    });
+  });
+  await page.route(`**/api/ai/plan/sprint/${SPRINT_JOB_ID}/stream`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: sprintPlanSse(delta.itemCount, delta.sprints.length),
+    });
+  });
+  await page.route(`**/api/ai/plan/sprint/${SPRINT_JOB_ID}/review`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(review),
+    });
+  });
+}
+
+// ── Page helpers ─────────────────────────────────────────────────────────────
+
+/** Reach the AI-planning settings page through its real door — the settings
+ *  rail's Automation group — so the recording shows how a person gets there. */
+async function openAiPlanningSettings(page: Page): Promise<void> {
+  await page.goto('/settings/project');
+  await page.getByRole('link', { name: 'AI planning' }).click();
+  await page.waitForURL('**/settings/project/ai-planning');
+  await expect(page.getByTestId('ai-planning-settings')).toBeVisible();
+}
+
+const autoPlanSwitch = (page: Page) =>
+  page.getByRole('switch', { name: 'Expand the plan automatically' });
+const sprintPlanningSwitch = (page: Page) =>
+  page.getByRole('switch', { name: 'Plan sprints with Motir' });
+
+/** Save the settings panel and wait on the PATCH's 200 — the authoritative
+ *  signal. The panel is optimistic, so asserting the reload without this would
+ *  race the in-flight write (CLAUDE.md § E2E authoritative signal). */
+async function saveAiSettings(page: Page, projectKey: string): Promise<void> {
+  const saved = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/projects/${projectKey}/ai-settings`) &&
+      r.request().method() === 'PATCH',
+  );
+  await page.getByTestId('ai-planning-save').click();
+  expect((await saved).status()).toBe(200);
+}
+
+/** Every non-archived work item in the project, by title — the "tree unchanged"
+ *  witness. */
+async function treeTitles(projectId: string): Promise<string[]> {
+  const rows = await db.workItem.findMany({
+    where: { projectId, archivedAt: null },
+    select: { title: true },
+    orderBy: { key: 'asc' },
+  });
+  return rows.map((r) => r.title);
+}
+
+async function plansOf(projectId: string) {
+  return db.plan.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' } });
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+test.beforeEach(async () => {
+  await resetDatabase();
+});
+
+test.afterAll(async () => {
+  await db.$disconnect();
+});
+
+test('cadence — settings on, sprints approved, expansion auto-fires, auto-plan pauses, then resumes', async ({
+  page,
+  chapter,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-813');
+  const seed = await seedAiCadence(`ai-cadence-${Date.now()}@example.com`);
+  await stubSprintPlanJob(page, seed);
+  await waitForSeedJobsToSettle();
+
+  await signIn(page, seed.email, seed.password);
+
+  // ── 1 ─────────────────────────────────────────────────────────────────────
+  await chapter('Turn on auto-planning', async () => {
+    await openAiPlanningSettings(page);
+
+    await autoPlanSwitch(page).click();
+    await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+    await sprintPlanningSwitch(page).click();
+    await page.getByTestId('ai-planning-sprint-length').fill(String(SPRINT_LENGTH_DAYS));
+    await saveAiSettings(page, seed.projectKey);
+
+    // Every setting round-trips — read back from the server, not from the
+    // optimistic panel.
+    await page.reload();
+    await expect(autoPlanSwitch(page)).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('ai-planning-threshold')).toHaveValue(
+      String(AUTO_PLAN_THRESHOLD),
+    );
+    await expect(sprintPlanningSwitch(page)).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('ai-planning-sprint-length')).toHaveValue(
+      String(SPRINT_LENGTH_DAYS),
+    );
+  });
+
+  // ── 2 ─────────────────────────────────────────────────────────────────────
+  await chapter('Approve the proposed sprints', async () => {
+    await page.goto('/backlog');
+
+    // The door is live only because sprint planning was switched on above.
+    //
+    // Explicit headroom on THIS assertion alone: `/backlog` is by far the
+    // heaviest render this spec touches, and it is markedly slower in the
+    // acceptance lane than on the main one (measured: the untouched shipped
+    // `backlog.spec.ts` runs ~1s per test on the main lane and 11–21s here). The
+    // lane's 20s default leaves no margin for the FIRST render, so this waits
+    // longer — for the same condition, on the same signal. It is headroom, not a
+    // sleep, and every later assertion keeps the strict default.
+    const planDoor = page.getByTestId('plan-sprints-with-motir');
+    await expect(planDoor).toBeEnabled({ timeout: 60_000 });
+
+    // DISCARD FIRST — approve is the only write, so a run that is thrown away
+    // must leave nothing behind. The card words this inside step 3 ("a
+    // generate-then-discard run persisted NO sprints"), and it lives here rather
+    // than in a sibling test on purpose: a sibling would pay a SECOND cold
+    // `/backlog` render, which this lane cannot currently afford (see the run
+    // note in the PR — the shipped `backlog.spec.ts` is 10–20× slower here than
+    // on the main lane and its SSR transaction can exceed Prisma's 5s
+    // interactive budget). Asserting it on the render that already succeeded is
+    // both cheaper and a truer narration: the reviewer sees that nothing is
+    // created until they approve.
+    await planDoor.click();
+    await expect(page.getByTestId('proposed-sprint-sprint:1')).toBeVisible();
+    await page.getByTestId('sprint-plan-discard').click();
+    await expect(page.getByTestId('sprint-plan-dock')).toBeHidden();
+    expect(await db.sprint.count({ where: { projectId: seed.projectId } })).toBe(0);
+    expect(
+      await db.workItem.count({ where: { projectId: seed.projectId, sprintId: { not: null } } }),
+    ).toBe(0);
+
+    // Now run it for real.
+    await planDoor.click();
+
+    // The proposed packing renders: two short sprints, sized to the cadence the
+    // settings set, with the blocked item scheduled after its blocker.
+    await expect(page.getByTestId('sprint-plan-dock')).toBeVisible();
+    await expect(page.getByTestId('proposed-sprint-sprint:1')).toBeVisible();
+    await expect(page.getByTestId('proposed-sprint-sprint:2')).toBeVisible();
+    await expect(page.getByTestId('sprint-plan-dock')).toContainText(
+      `${SPRINT_LENGTH_DAYS} days each`,
+    );
+    await expect(page.getByTestId('proposed-sprint-sprint:1')).toContainText(seed.formKey);
+    await expect(page.getByTestId('proposed-sprint-sprint:2')).toContainText(seed.apiKey);
+
+    // Approve — the REAL persist (Epic-4 createSprint + bulkAssignToSprint).
+    const approved = page.waitForResponse(
+      (r) => r.url().includes('/api/ai/plan/sprint/approve') && r.request().method() === 'POST',
+    );
+    await page.getByTestId('sprint-plan-approve').click();
+    const approveRes = await approved;
+    expect(approveRes.status()).toBe(200);
+    const created = (await approveRes.json()) as {
+      sprints: Array<{ name: string; assignedCount: number }>;
+      assigned: number;
+    };
+    expect(created.sprints).toHaveLength(2);
+    expect(created.assigned).toBe(4);
+
+    // The sprints are real rows with the proposed members assigned…
+    const sprints = await db.sprint.findMany({
+      where: { projectId: seed.projectId },
+      orderBy: { sequence: 'asc' },
+    });
+    expect(sprints).toHaveLength(2);
+    const assigned = await db.workItem.findMany({
+      where: { projectId: seed.projectId, sprintId: { not: null } },
+      select: { identifier: true, sprintId: true },
+    });
+    expect(assigned.map((a) => a.identifier).sort()).toEqual(
+      [seed.apiKey, seed.confirmKey, seed.formKey, seed.receiptKey].sort(),
+    );
+    // …and the blocked item landed in a LATER sprint than its blocker.
+    const sprintIndex = new Map(sprints.map((s, i) => [s.id, i]));
+    const at = (key: string) =>
+      sprintIndex.get(assigned.find((a) => a.identifier === key)!.sprintId!)!;
+    expect(at(seed.apiKey)).toBeGreaterThan(at(seed.formKey));
+
+    // …and the board shows them.
+    for (const sprint of created.sprints) {
+      await expect(page.getByText(sprint.name, { exact: true }).first()).toBeVisible();
+    }
+  });
+
+  // ── 3 ─────────────────────────────────────────────────────────────────────
+  await chapter('Cadence fires on its own', async () => {
+    await page.goto('/plans');
+    expect(await plansOf(seed.projectId)).toHaveLength(0);
+
+    // Drive the ready set under the threshold, then advance the cron. Nobody
+    // clicks anything: the proposal has to appear on its own.
+    const readyCount = await drainReadySetBelow(AUTO_PLAN_THRESHOLD, seed);
+    expect(readyCount).toBeLessThan(AUTO_PLAN_THRESHOLD);
+    const treeBefore = await treeTitles(seed.projectId);
+
+    const tick = await runCadenceTick(1);
+    expect(tick.summary.fired).toBe(1);
+    expect(tick.origin).toBe('cadence');
+    const fired = tick.summary.outcomes[0];
+    expect(fired).toMatchObject({ status: 'fired', itemKey: seed.stubKey });
+
+    // Flagged cadence-initiated, and awaiting a decision.
+    const plans = await plansOf(seed.projectId);
+    expect(plans).toHaveLength(1);
+    expect(plans[0]!.origin).toBe('cadence');
+    expect(plans[0]!.status).toBe('planned');
+
+    // It is a PROPOSAL: the proposed items exist only as PlanItem rows, and the
+    // work-item tree is byte-identical to before the tick.
+    const proposedItems = await db.planItem.findMany({ where: { planId: plans[0]!.id } });
+    expect(proposedItems).toHaveLength(proposedChildTitles(1).length);
+    for (const item of proposedItems) expect(item.workItemId).toBeNull();
+    expect(await treeTitles(seed.projectId)).toEqual(treeBefore);
+
+    // And it is on the review surface, without a click having produced it.
+    await page.reload();
+    await expect(page.getByText(`Expand ${seed.stubKey}`).first()).toBeVisible();
+  });
+
+  // ── 4 ─────────────────────────────────────────────────────────────────────
+  await chapter('Auto-plan pauses for review', async () => {
+    await openAiPlanningSettings(page);
+
+    const banner = page.getByTestId('ai-planning-paused-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Auto-plan is paused');
+    // The link is the point — it makes the silence actionable.
+    const planId = (await plansOf(seed.projectId))[0]!.id;
+    await expect(page.getByTestId('ai-planning-paused-link')).toHaveAttribute(
+      'href',
+      `/plans/${planId}`,
+    );
+
+    // The gate holds: a further tick creates nothing.
+    const secondTick = await runCadenceTick(2);
+    expect(secondTick.summary.fired).toBe(0);
+    expect(secondTick.summary.outcomes[0]).toMatchObject({
+      status: 'skipped',
+      reason: 'pending_proposal',
+    });
+    expect(await plansOf(seed.projectId)).toHaveLength(1);
+  });
+
+  // ── 5 ─────────────────────────────────────────────────────────────────────
+  await chapter('Decide, and cadence resumes', async () => {
+    const planId = (await plansOf(seed.projectId))[0]!.id;
+    await page.goto(`/plans/${planId}`);
+
+    const declined = page.waitForResponse(
+      (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Decline' }).click();
+    expect((await declined).status()).toBe(200);
+
+    // Cadence resumes — the next tick drafts a FRESH proposal.
+    const thirdTick = await runCadenceTick(3);
+    expect(thirdTick.summary.fired).toBe(1);
+    const plans = await plansOf(seed.projectId);
+    expect(plans).toHaveLength(2);
+    expect(plans[1]!.status).toBe('planned');
+
+    // …and while THAT one waits, the panel reads paused again — but for the new
+    // plan, so the indicator tracks the live gate rather than a stale verdict.
+    await openAiPlanningSettings(page);
+    await expect(page.getByTestId('ai-planning-paused-link')).toHaveAttribute(
+      'href',
+      `/plans/${plans[1]!.id}`,
+    );
+  });
+});
+
+test('cadence off — the tick creates nothing', async ({ page }) => {
+  const seed = await seedAiCadence(`ai-cadence-off-${Date.now()}@example.com`);
+  await waitForSeedJobsToSettle();
+  await signIn(page, seed.email, seed.password);
+
+  // On, drained, and firing…
+  await openAiPlanningSettings(page);
+  await autoPlanSwitch(page).click();
+  await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+  await saveAiSettings(page, seed.projectKey);
+  await drainReadySetBelow(AUTO_PLAN_THRESHOLD, seed);
+  expect((await runCadenceTick(1)).summary.fired).toBe(1);
+
+  // …now switch it OFF and clear the pending proposal, so the ONLY thing left
+  // that could suppress the next tick is the switch itself.
+  await db.plan.updateMany({ where: { projectId: seed.projectId }, data: { status: 'declined' } });
+  await page.reload();
+  await autoPlanSwitch(page).click();
+  await saveAiSettings(page, seed.projectKey);
+
+  const plansBefore = await plansOf(seed.projectId);
+  const tick = await runCadenceTick(2);
+  // An opted-out project is not even scanned — there is nothing to skip.
+  expect(tick.summary.scanned).toBe(0);
+  expect(await plansOf(seed.projectId)).toHaveLength(plansBefore.length);
+});
+
+test('the pending-proposal gate is origin-independent — a user-clicked plan pauses cadence too', async ({
+  page,
+}) => {
+  const seed = await seedAiCadence(`ai-cadence-user-${Date.now()}@example.com`);
+  await waitForSeedJobsToSettle();
+  await signIn(page, seed.email, seed.password);
+
+  await openAiPlanningSettings(page);
+  await autoPlanSwitch(page).click();
+  await page.getByTestId('ai-planning-threshold').fill(String(AUTO_PLAN_THRESHOLD));
+  await saveAiSettings(page, seed.projectKey);
+  await drainReadySetBelow(AUTO_PLAN_THRESHOLD, seed);
+
+  // A proposal the USER started — no cron involved.
+  const userPlanId = await seedUserClickedProposal(seed, 1);
+  expect((await db.plan.findUniqueOrThrow({ where: { id: userPlanId } })).origin).toBe('user');
+
+  // The tick is suppressed identically…
+  const tick = await runCadenceTick(1);
+  expect(tick.summary.fired).toBe(0);
+  expect(tick.summary.outcomes[0]).toMatchObject({
+    status: 'skipped',
+    reason: 'pending_proposal',
+  });
+  expect(await plansOf(seed.projectId)).toHaveLength(1);
+
+  // …and the panel reads paused, pointing at the user's own plan.
+  await openAiPlanningSettings(page);
+  await expect(page.getByTestId('ai-planning-paused-banner')).toBeVisible();
+  await expect(page.getByTestId('ai-planning-paused-link')).toHaveAttribute(
+    'href',
+    `/plans/${userPlanId}`,
+  );
+});
