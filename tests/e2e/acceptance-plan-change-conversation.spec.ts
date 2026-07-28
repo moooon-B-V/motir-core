@@ -198,6 +198,7 @@ test.afterAll(async () => {
 test('plan change is a conversation — open, describe, refine, approve', async ({
   page,
   chapter,
+  beat,
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-1726');
@@ -245,6 +246,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     await expect(rail(page).getByRole('button', { name: 'Add work to an epic' })).toBeVisible();
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+    await beat();
   });
 
   await chapter('Describe the change — it lands on the canvas', async () => {
@@ -263,6 +265,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     await expect(page.locator('[data-diff-state="add"]')).toHaveCount(1);
     // The existing item the proposal renames wears the CHANGE frame in place.
     await expect(page.locator('[data-diff-state="change"]')).toHaveCount(1);
+    await beat();
   });
 
   await chapter('Refine in a second turn — the diff updates', async () => {
@@ -277,6 +280,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     await expect(confirmBar(page)).toContainText('2 added, 1 changed');
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();
     await expect(page.locator('[data-diff-state="add"]')).toHaveCount(2);
+    await beat();
   });
 
   await chapter('Approve — the plan changes', async () => {

@@ -18,9 +18,44 @@ export interface Chapter {
   tSeconds: number;
 }
 
+// ── Pacing: the recording is for a HUMAN (MOTIR-1772) ────────────────────────
+//
+// ⚠️ THE `waitForTimeout` BAN IN CLAUDE.md STILL HOLDS IN FULL. That rule
+// forbids sleeping to WAIT FOR STATE, and nothing here does: a hold is only ever
+// taken AFTER the spec's own authoritative signal has already proven the state
+// (`waitForResponse` on a write, `expect(...)` on the rendered result). Remove
+// every hold and the assertions are unchanged — a hold cannot mask a race
+// because it never stands in for one. Do not "fix" this by deleting it.
+//
+// It exists because this lane's output is a VIDEO a person watches to accept a
+// Story (Principle #18). Driven at machine speed a full five-phase Story flow
+// finishes in ~5 seconds with every chapter stacked inside the first four —
+// green, and useless as evidence (MOTIR-921, the incident this came from).
+//
+// Pacing lives HERE, on `chapter()`, and not in each spec, because `chapter()`
+// is the one call an acceptance spec cannot skip: it is what produces the
+// timeline markers, so a spec that wants chapters is paced whether or not its
+// author thought about it. Opt-in pacing would rot on the first spec written by
+// someone who had not read this comment.
+
+/** Held after each chapter, so a viewer can take in the phase that just ran. */
+export const CHAPTER_HOLD_MS = 2_500;
+
+/** Held by an explicit `beat()` — one user-visible action's worth of screen time. */
+export const BEAT_MS = 4_000;
+
 interface AcceptanceFixtures {
   /** Run a phase as a chaptered step; marks its start on the video timeline. */
   chapter: (label: string, body: () => Promise<void>) => Promise<void>;
+  /**
+   * Hold the frame for one user-visible action (MOTIR-1772).
+   *
+   * `chapter()` already paces each PHASE; call this for per-action pacing inside
+   * a phase, where a reviewer needs to see each individual step land (a toggle
+   * flipping, a value being typed, a dock opening). Pacing, never
+   * synchronisation — see the note at {@link CHAPTER_HOLD_MS}.
+   */
+  beat: () => Promise<void>;
   /**
    * Declare which STORY this recording accepts (MOTIR-1684). The uploader
    * publishes the clip to THIS story — so the self-test dogfood pins itself to
@@ -46,6 +81,9 @@ export const test = base.extend<AcceptanceFixtures>({
     const chapter = async (label: string, body: () => Promise<void>): Promise<void> => {
       chapters.push({ label, tSeconds: Math.max(0, (Date.now() - start) / 1000) });
       await test.step(label, body);
+      // Let the phase land before the next one starts. AFTER the body, so it
+      // holds a state the body's own assertions already proved.
+      await new Promise((resolve) => setTimeout(resolve, CHAPTER_HOLD_MS));
     };
 
     await provide(chapter);
@@ -55,6 +93,24 @@ export const test = base.extend<AcceptanceFixtures>({
     fs.mkdirSync(testInfo.outputDir, { recursive: true });
     fs.writeFileSync(file, JSON.stringify(chapters));
     await testInfo.attach('chapters', { path: file, contentType: 'application/json' });
+
+    // How long the recording actually ran. The uploader's watchability guard
+    // (MOTIR-1772) needs the TOTAL, which the chapter markers alone cannot give:
+    // a marker is a START offset, so a single-chapter recording's last marker is
+    // ~0 no matter how long the clip is. Its own sidecar, so `chapters.json`
+    // keeps the exact array shape the publish endpoint already consumes.
+    const metaFile = path.join(testInfo.outputDir, 'recording-meta.json');
+    fs.writeFileSync(
+      metaFile,
+      JSON.stringify({ totalSeconds: Math.max(0, (Date.now() - start) / 1000) }),
+    );
+    await testInfo.attach('recording-meta', { path: metaFile, contentType: 'application/json' });
+  },
+
+  beat: async ({ page }, provide) => {
+    await provide(async () => {
+      await page.waitForTimeout(BEAT_MS);
+    });
   },
 
   acceptanceStory: async ({}, provide, testInfo) => {

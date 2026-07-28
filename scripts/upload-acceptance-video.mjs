@@ -82,23 +82,31 @@ export function findRecordings(outputDir) {
       return entry.isDirectory() ? walk(full) : [full];
     });
 
-  /** @type {Map<string, {dir: string, video: string|null, trace: string|null, chapters: string|null, storyMeta: string|null}>} */
+  /** @type {Map<string, {dir: string, video: string|null, trace: string|null, chapters: string|null, storyMeta: string|null, recordingMeta: string|null}>} */
   const byDir = new Map();
   for (const file of walk(outputDir)) {
     const dir = path.dirname(file);
     let entry = byDir.get(dir);
     if (!entry) {
-      entry = { dir, video: null, trace: null, chapters: null, storyMeta: null };
+      entry = {
+        dir,
+        video: null,
+        trace: null,
+        chapters: null,
+        storyMeta: null,
+        recordingMeta: null,
+      };
       byDir.set(dir, entry);
     }
     // First match wins per slot — a directory holds one of each by construction.
     if (file.endsWith('.webm')) entry.video ??= file;
     else if (file.endsWith('trace.zip')) entry.trace ??= file;
     else if (file.endsWith('chapters.json')) entry.chapters ??= file;
+    else if (file.endsWith('recording-meta.json')) entry.recordingMeta ??= file;
     else if (file.endsWith('acceptance-story.json')) entry.storyMeta ??= file;
   }
 
-  /** @type {Array<{dir: string, video: string, trace: string|null, chapters: string|null, storyKey: string|null}>} */
+  /** @type {Array<{dir: string, video: string, trace: string|null, chapters: string|null, recordingMeta: string|null, storyKey: string|null}>} */
   const recordings = [];
   // `fs.readdirSync` does not sort, and publish ORDER must not depend on the
   // filesystem — the bug this function exists to fix was a walk-order race.
@@ -113,6 +121,7 @@ export function findRecordings(outputDir) {
       video,
       trace: entry.trace,
       chapters: entry.chapters,
+      recordingMeta: entry.recordingMeta,
       // The recording's self-declared story (MOTIR-1684). Null when the spec did
       // not declare one (→ the PR-derived / fallback story).
       storyKey: readStoryKey(entry.storyMeta),
@@ -210,6 +219,87 @@ function readChapters(file) {
   } catch {
     return [];
   }
+}
+
+/** Parse the recording-meta sidecar; null when absent or malformed. */
+export function readRecordingMeta(file) {
+  if (!file) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return typeof parsed?.totalSeconds === 'number' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A clip shorter than this is not a receipt a person can watch. */
+export const MIN_WATCHABLE_SECONDS = 15;
+/** Chapters closer together than this on the median are "bunched" — the
+ *  MOTIR-921 signature was five markers inside four seconds. */
+export const MIN_MEDIAN_CHAPTER_GAP_SECONDS = 2;
+
+/**
+ * Is this recording WATCHABLE by a human? (MOTIR-1772)
+ *
+ * A reviewer accepts a Story by watching the clip (Principle #18), so a
+ * recording driven at machine speed is a broken acceptance gate, not a cosmetic
+ * problem — MOTIR-921 passed while producing a ~5s clip with all five chapters
+ * inside the first four seconds. `chapter()` now paces every recording by
+ * default, but that still degrades silently if a spec bypasses it, so this is
+ * the machine-checked backstop.
+ *
+ * Two independent ways to fail, because they catch different mistakes: a clip
+ * that is simply too SHORT, and one that is long enough overall but whose phases
+ * are BUNCHED (a paced tail after an unwatchable opening).
+ *
+ * Deliberately a FLOOR and never a ceiling — the ADR's duration cap was
+ * withdrawn on 2026-07-28. A clip that is getting long means the STORY is too
+ * big, which is the planner's call, not a reason to speed up the recording.
+ *
+ * A recording with no meta sidecar (an older spec, or a non-chaptered one) is
+ * NOT failed: absence of evidence is not evidence of a bad clip, and failing it
+ * would red-light runs this guard was never meant to police.
+ *
+ * @param {{ chapters?: Array<{ label?: string, tSeconds?: number }>, meta?: { totalSeconds?: number } | null }} [args]
+ * @returns {{ watchable: boolean, reason: string|null, totalSeconds: number|null, medianGapSeconds: number|null }}
+ */
+export function assessWatchability(args = {}) {
+  const { chapters = [], meta = null } = args;
+  const totalSeconds = typeof meta?.totalSeconds === 'number' ? meta.totalSeconds : null;
+
+  const offsets = chapters
+    .map((c) => (typeof c?.tSeconds === 'number' ? c.tSeconds : null))
+    .filter((n) => n !== null)
+    .sort((a, b) => a - b);
+  const gaps = offsets.slice(1).map((t, i) => t - offsets[i]);
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const medianGapSeconds =
+    sortedGaps.length === 0
+      ? null
+      : sortedGaps.length % 2 === 1
+        ? sortedGaps[(sortedGaps.length - 1) / 2]
+        : (sortedGaps[sortedGaps.length / 2 - 1] + sortedGaps[sortedGaps.length / 2]) / 2;
+
+  if (totalSeconds === null) {
+    return { watchable: true, reason: null, totalSeconds, medianGapSeconds };
+  }
+  if (totalSeconds < MIN_WATCHABLE_SECONDS) {
+    return {
+      watchable: false,
+      reason: `the clip is ${totalSeconds.toFixed(1)}s, under the ${MIN_WATCHABLE_SECONDS}s watchable floor`,
+      totalSeconds,
+      medianGapSeconds,
+    };
+  }
+  if (medianGapSeconds !== null && medianGapSeconds < MIN_MEDIAN_CHAPTER_GAP_SECONDS) {
+    return {
+      watchable: false,
+      reason: `its ${chapters.length} chapters are bunched (median gap ${medianGapSeconds.toFixed(1)}s, under ${MIN_MEDIAN_CHAPTER_GAP_SECONDS}s)`,
+      totalSeconds,
+      medianGapSeconds,
+    };
+  }
+  return { watchable: true, reason: null, totalSeconds, medianGapSeconds };
 }
 
 /**
@@ -333,6 +423,32 @@ export async function main() {
         .join(
           ', ',
         )}) — set ACCEPTANCE_STORY_KEY, a self-declared recording story, ACCEPTANCE_PR_REF/ACCEPTANCE_PR_TITLE, or ACCEPTANCE_FALLBACK_STORY_KEY.`,
+    );
+    process.exit(1);
+  }
+
+  // WATCHABILITY GATE (MOTIR-1772) — before any auth or upload, so an
+  // unwatchable receipt fails the step loudly and publishes NOTHING rather than
+  // landing a clip nobody can review.
+  const unwatchable = targets
+    .map((t) => ({
+      ...t,
+      verdict: assessWatchability({
+        chapters: readChapters(t.recording.chapters),
+        meta: readRecordingMeta(t.recording.recordingMeta),
+      }),
+    }))
+    .filter((t) => !t.verdict.watchable);
+  if (unwatchable.length > 0) {
+    for (const { storyKey, recording, verdict } of unwatchable) {
+      console.error(
+        `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is NOT watchable: ${verdict.reason}.`,
+      );
+    }
+    console.error(
+      'A reviewer accepts the Story by WATCHING this clip, so an unwatchable recording is a broken acceptance gate — nothing was published.\n' +
+        'Pace the recorded happy path: wrap each phase in `chapter(...)` (which paces itself) and `await beat()` after each user-visible action. Both are in tests/e2e/_helpers/acceptance-video.ts.\n' +
+        'Do NOT fix this by lowering the floor.',
     );
     process.exit(1);
   }

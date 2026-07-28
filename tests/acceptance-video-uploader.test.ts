@@ -12,6 +12,7 @@ vi.mock('@vercel/blob/client', () => ({
 // The BYOK uploader (Subtask MOTIR-1632; direct-to-Blob MOTIR-1681) — pure
 // logic, no DB. Tests the no-op (red-run) path + the mint/upload/register flow.
 import {
+  assessWatchability,
   findRecordings,
   main,
   parseWorkItemKey,
@@ -38,6 +39,9 @@ function writeRecording(
     trace?: boolean;
     chapters?: string | null;
     storyKey?: string | null;
+    /** Writes the MOTIR-1772 `recording-meta.json`; omit for an unpaced/legacy
+     *  recording (no sidecar → the watchability guard abstains). */
+    totalSeconds?: number;
   } = {},
 ): string {
   const dir = path.join(root, name);
@@ -50,6 +54,11 @@ function writeRecording(
     fs.writeFileSync(
       path.join(dir, 'acceptance-story.json'),
       JSON.stringify({ storyKey: opts.storyKey }),
+    );
+  if (opts.totalSeconds !== undefined)
+    fs.writeFileSync(
+      path.join(dir, 'recording-meta.json'),
+      JSON.stringify({ totalSeconds: opts.totalSeconds }),
     );
   return dir;
 }
@@ -521,6 +530,43 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     return fetchMock;
   }
 
+  it('REFUSES to publish an unwatchable recording — nothing uploads, the step fails', async () => {
+    // The MOTIR-1772 gate end to end: the guard must bite in `main`, BEFORE any
+    // auth or upload, so a raced recording can never land as a story's receipt.
+    const dir = tmpDir();
+    writeRecording(dir, 'acceptance-raced-chromium', {
+      storyKey: 'MOTIR-813',
+      chapters: JSON.stringify([
+        { label: 'one', tSeconds: 1.7 },
+        { label: 'two', tSeconds: 2.5 },
+        { label: 'three', tSeconds: 3.1 },
+      ]),
+      totalSeconds: 5,
+    });
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    const fetchMock = stubFetch();
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+
+    await expect(main()).rejects.toThrow('process.exit');
+    expect(exit).toHaveBeenCalledWith(1);
+    // NOTHING was published — not even a token mint.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(putBlobMock).not.toHaveBeenCalled();
+  });
+
+  it('still publishes a legacy recording with no meta sidecar (the guard abstains)', async () => {
+    const dir = tmpDir();
+    writeRecording(dir, 'acceptance-legacy-chromium', { storyKey: 'MOTIR-1627' });
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    const fetchMock = stubFetch();
+
+    await main();
+
+    expect(publishedStories(fetchMock)).toEqual(['MOTIR-1627']);
+  });
+
   it('publishes ALL THREE chaptered recordings, each to its own declared story', async () => {
     const dir = tmpDir();
     writeRecording(dir, 'acceptance-augment-replan-chromium', { storyKey: 'MOTIR-811' });
@@ -588,5 +634,81 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     await main();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── The watchability guard (MOTIR-1772) ──────────────────────────────────────
+
+/** Chapter markers `n` seconds apart, the shape `chapter()` writes. */
+function chaptersEvery(gapSeconds: number, count: number, start = 1) {
+  return Array.from({ length: count }, (_, i) => ({
+    label: `phase ${i + 1}`,
+    tSeconds: start + i * gapSeconds,
+  }));
+}
+
+describe('assessWatchability (MOTIR-1772)', () => {
+  it('passes a paced recording — the MOTIR-921 clip AFTER it was paced', () => {
+    const verdict = assessWatchability({
+      chapters: [
+        { label: 'Turn on auto-planning', tSeconds: 1.8 },
+        { label: 'Approve the proposed sprints', tSeconds: 30.6 },
+        { label: 'Cadence fires on its own', tSeconds: 51.3 },
+        { label: 'Auto-plan pauses for review', tSeconds: 59.7 },
+        { label: 'Decide, and cadence resumes', tSeconds: 64.1 },
+      ],
+      meta: { totalSeconds: 78 },
+    });
+    expect(verdict.watchable).toBe(true);
+    expect(verdict.reason).toBeNull();
+  });
+
+  it('FAILS the exact MOTIR-921 regression — five chapters inside four seconds', () => {
+    const verdict = assessWatchability({
+      chapters: [
+        { label: 'Turn on auto-planning', tSeconds: 1.78 },
+        { label: 'Approve the proposed sprints', tSeconds: 2.53 },
+        { label: 'Cadence fires on its own', tSeconds: 3.07 },
+        { label: 'Auto-plan pauses for review', tSeconds: 3.4 },
+        { label: 'Decide, and cadence resumes', tSeconds: 3.73 },
+      ],
+      meta: { totalSeconds: 5 },
+    });
+    expect(verdict.watchable).toBe(false);
+    // The clip is short AND bunched; the floor is the first thing it trips.
+    expect(verdict.reason).toContain('watchable floor');
+  });
+
+  it('FAILS a long-enough clip whose chapters are BUNCHED (a paced tail cannot rescue a raced opening)', () => {
+    const verdict = assessWatchability({
+      chapters: chaptersEvery(0.5, 6),
+      meta: { totalSeconds: 40 },
+    });
+    expect(verdict.watchable).toBe(false);
+    expect(verdict.reason).toContain('bunched');
+  });
+
+  it('ABSTAINS when there is no recording-meta sidecar (legacy / non-chaptered run)', () => {
+    // Absence of evidence is not evidence of a bad clip — this guard must not
+    // red-light runs it was never meant to police.
+    expect(assessWatchability({ chapters: [], meta: null }).watchable).toBe(true);
+    expect(assessWatchability({}).watchable).toBe(true);
+  });
+
+  it('passes a single-chapter recording that is simply long — no gaps to judge', () => {
+    const verdict = assessWatchability({
+      chapters: [{ label: 'only phase', tSeconds: 1 }],
+      meta: { totalSeconds: 45 },
+    });
+    expect(verdict.watchable).toBe(true);
+    expect(verdict.medianGapSeconds).toBeNull();
+  });
+
+  it('applies a FLOOR and never a ceiling — the ADR withdrew the duration cap', () => {
+    const verdict = assessWatchability({
+      chapters: chaptersEvery(30, 8),
+      meta: { totalSeconds: 600 },
+    });
+    expect(verdict.watchable).toBe(true);
   });
 });
