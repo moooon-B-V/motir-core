@@ -3243,6 +3243,21 @@ enum PlanItemOp {
   @@map("plan_item_op")
 }
 
+/// WHY a `Plan` was started (MOTIR-916). `sourceJobId` already records WHICH job
+/// produced a plan; this records what decided to start it. `user` — a person
+/// clicked generate / augment / expand / re-plan (the default, so every existing
+/// row and every request-path submit reads as user-initiated). `cadence` — the
+/// auto-plan cadence watcher fired it because the project's ready set drained
+/// below `Project.aiAutoPlanThreshold`, with no human in the loop. The review
+/// surface reads it to LABEL an auto-proposed expansion; it does not change how
+/// the plan is reviewed or approved.
+enum PlanOrigin {
+  user
+  cadence
+
+  @@map("plan_origin")
+}
+
 /// An AI-planning proposal bundle (Story 7.21 — the Plan substrate). A `Plan`
 /// gathers proposed `PlanItem` operations the user reviews and approves/declines
 /// as ONE unit. Nothing it proposes is real until approve: an `add` lives only
@@ -3264,6 +3279,10 @@ model Plan {
   productName String?    @map("product_name")
   /// The motir-ai generation job that produced this plan, for provenance.
   sourceJobId String?    @map("source_job_id")
+  /// WHY this plan was started (MOTIR-916) — `user` (someone clicked) or
+  /// `cadence` (the auto-plan watcher fired it when the ready set drained).
+  /// Set at submit; never changes afterwards.
+  origin      PlanOrigin @default(user)
   createdAt   DateTime   @default(now()) @map("created_at")
   /// Set when generation completes (→ `planned`).
   plannedAt   DateTime?  @map("planned_at")
@@ -3278,6 +3297,11 @@ model Plan {
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
+  /// The pending-proposal GATE's read (MOTIR-916): "does this project have an
+  /// UNDECIDED plan (`generating` / `planned`)?" runs per project on every
+  /// cadence tick, so it gets its own composite index rather than riding the
+  /// (projectId, createdAt) one and filtering status in the heap.
+  @@index([projectId, status])
   @@map("plan")
 }
 

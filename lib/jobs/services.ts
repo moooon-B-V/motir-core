@@ -13,6 +13,7 @@ import { automationEngineService } from '@/lib/services/automationEngineService'
 import { billingService } from '@/lib/services/billingService';
 import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
+import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -41,6 +42,7 @@ export const jobServices = {
   billing: billingService,
   aiBugTelemetry: aiBugTelemetryService,
   codeGraph: codeGraphIndexService,
+  autoPlanCadence: autoPlanCadenceService,
 };
 
 export type JobServices = typeof jobServices;

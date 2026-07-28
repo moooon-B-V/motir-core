@@ -672,6 +672,33 @@ export const projectRepository = {
   },
 
   /**
+   * The CROSS-WORKSPACE scan behind the auto-plan cadence tick (MOTIR-916):
+   * every non-archived project that opted into auto-planning, keyset-paginated
+   * by id so the sweep is bounded per page (the `listDueByHour` precedent —
+   * finding #57). Returns only what the sweep needs to decide and act: the id,
+   * the workspace (which owner to act as), and the threshold to compare the
+   * ready count against.
+   *
+   * `tx` REQUIRED and expected to be a `withSystemContext` transaction: this is
+   * the one project read with NO workspace to bind, so it rides the
+   * `app.system_admin` READ branch the cadence migration added to the project
+   * policy. Everything the sweep does afterwards runs per project inside that
+   * project's own workspace context.
+   */
+  async listAutoPlanEnabled(
+    opts: { take: number; cursor?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string; aiAutoPlanThreshold: number }>> {
+    return tx.project.findMany({
+      where: { aiAutoPlanEnabled: true, archivedAt: null },
+      select: { id: true, workspaceId: true, aiAutoPlanThreshold: true },
+      orderBy: { id: 'asc' },
+      take: opts.take,
+      ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
    * Update a project's AI-settings columns (any subset). `tx` REQUIRED; the
    * caller (`projectAiSettingsService`) has already resolved + admin-gated the
    * project and validated every value, so this is a plain id-keyed update.

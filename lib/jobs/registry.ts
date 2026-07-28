@@ -27,6 +27,7 @@ import { billingSeatSync } from './definitions/billingSeatSync';
 import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { codeGraphRefresh } from './definitions/codeGraphRefresh';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
+import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
 // Subtask 1.6.2). Adding a new job = define it under `definitions/` and add it
@@ -54,4 +55,5 @@ export const jobFunctions = [
   codeGraphIndex,
   codeGraphRefresh,
   outwardBugTelemetryOnCreated,
+  autoPlanCadenceTick,
 ];

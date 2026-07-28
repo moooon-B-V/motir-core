@@ -279,6 +279,7 @@ export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'system.attachment-gc': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
+  'system.auto-plan-cadence-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
