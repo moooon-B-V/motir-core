@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
 import { buildScope, MAX_SCOPE_TARGETS, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -454,5 +455,157 @@ describe('resubmitFromWorkItem — Retry re-sends, it does not re-say (MOTIR-910
       contextualPlanningService.resubmitFromWorkItem({ anchorId: story.id }, projectCtx(fx)),
     ).rejects.toThrow();
     expect(submitJobMock).not.toHaveBeenCalled();
+  });
+});
+
+// ───────────────────── the planId seam (MOTIR-1745) ─────────────────────
+//
+// MOTIR-1743 made every plan-edit submit OPEN a `generating` Plan bound to the
+// job by `sourceJobId`, and grew the submit result to `{ jobId, planId }` — but
+// the contextual/session path dropped the `planId` on the floor, so the anchored
+// rail could not name the Plan it must confirm. These assert the whole carry:
+// the submit echoes the plan actually opened, the RESUME re-establishes it for a
+// user who came back to an undecided proposal, and a failed submit yields
+// neither a plan nor an id.
+//
+// The Plan rows here are REAL (only the motir-ai boundary is mocked), so
+// "echoes the planId the Plan was opened with" is checked against the row, not
+// against a stub of the layer under test.
+
+describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
+  it('submit echoes the planId of the Plan actually opened for the job', async () => {
+    const result = await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this into subtasks' },
+      projectCtx(fx),
+    );
+
+    expect(result.planId).toBeTruthy();
+    const plan = await planRepository.findBySourceJobId(result.jobId, fx.workspaceId);
+    // The id is the one bound to THIS job — not merely some plan that exists.
+    expect(plan?.id).toBe(result.planId);
+    expect(plan?.status).toBe('generating');
+    expect(plan?.projectId).toBe(fx.projectId);
+  });
+
+  it('opens exactly ONE Plan per submit — the seam passes the id through, it does not re-open', async () => {
+    // The regression this guards: "carry the planId" implemented by resolving or
+    // creating a plan in the session service would double-open per turn.
+    await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this up' },
+      projectCtx(fx),
+    );
+
+    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(1);
+
+    submitJobMock.mockResolvedValueOnce({ jobId: 'job-contextual-2' });
+    const again = await contextualPlanningService.resubmitFromWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+
+    // A SECOND run is a second proposal, so a second plan — bound to its own job.
+    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(2);
+    expect(again.planId).not.toBe(undefined);
+    expect((await planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId))?.id).toBe(
+      again.planId,
+    );
+  });
+
+  it('a RESUMED thread whose proposal is still undecided reports that plan', async () => {
+    // The case the submit response cannot cover: the user closed the workspace
+    // mid-review and came back holding neither the job nor the plan.
+    const submitted = await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this up' },
+      projectCtx(fx),
+    );
+
+    const resumed = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+
+    expect(resumed.session).not.toBeNull();
+    expect(resumed.planId).toBe(submitted.planId);
+  });
+
+  it('reports the LATEST submission’s plan when a thread submitted twice', async () => {
+    await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this up' },
+      projectCtx(fx),
+    );
+    submitJobMock.mockResolvedValueOnce({ jobId: 'job-contextual-2' });
+    const second = await contextualPlanningService.resubmitFromWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+
+    const resumed = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    // The thread's `lastJobId` is what resolves — a retry supersedes the run it
+    // replaced, so the rail confirms the newest proposal, never a stale one.
+    expect(resumed.planId).toBe(second.planId);
+  });
+
+  it('reports NO plan once the proposal has been decided', async () => {
+    const submitted = await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'Break this up' },
+      projectCtx(fx),
+    );
+
+    // A decided plan is history, not a pending review — surfacing it would invite
+    // a confirm of something already settled.
+    for (const status of ['approved', 'declined'] as const) {
+      await db.plan.update({ where: { id: submitted.planId }, data: { status } });
+      const resumed = await contextualPlanningService.getSessionForWorkItem(
+        { anchorId: story.id },
+        projectCtx(fx),
+      );
+      expect(resumed.session).not.toBeNull();
+      expect(resumed.planId).toBeNull();
+    }
+  });
+
+  it('reports NO plan for a thread that exists but never submitted', async () => {
+    const scope = buildScope([story.identifier]);
+    await planChangeSessionsService.getOrCreateForScope(projectCtx(fx), scope);
+    await planChangeSessionsService.appendTurn('Just typing', projectCtx(fx), scope.scopeKey);
+
+    const resumed = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    expect(resumed.session!.turns).toHaveLength(1);
+    expect(resumed.planId).toBeNull();
+  });
+
+  it('reports NO plan for an item never planned at all', async () => {
+    const resumed = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    expect(resumed.session).toBeNull();
+    expect(resumed.planId).toBeNull();
+  });
+
+  it('a FAILED submit yields no Plan and no planId', async () => {
+    // The Plan is opened only AFTER motir-ai accepts the job (the 1743 ordering),
+    // so a refused submit leaves the thread retryable and no orphan row behind.
+    submitJobMock.mockRejectedValueOnce(new Error('motir-ai unreachable'));
+
+    await expect(
+      contextualPlanningService.planFromWorkItem(
+        { anchorId: story.id, prompt: 'Break this up' },
+        projectCtx(fx),
+      ),
+    ).rejects.toThrow('motir-ai unreachable');
+
+    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const resumed = await contextualPlanningService.getSessionForWorkItem(
+      { anchorId: story.id },
+      projectCtx(fx),
+    );
+    expect(resumed.planId).toBeNull();
   });
 });

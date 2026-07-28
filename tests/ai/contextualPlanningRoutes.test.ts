@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import { planRepository } from '@/lib/repositories/planRepository';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
@@ -151,10 +152,16 @@ describe('POST /api/work-items/[id]/ai/plan — the happy path', () => {
 
     const body = (await res.json()) as {
       jobId: string;
+      planId: string;
       sessionId: string;
       session: { targetKeys: string[]; turns: Array<{ role: string; body: string }> };
     };
     expect(body.jobId).toBe('job-contextual-1');
+    // The Plan the job's proposals append into, echoed for the rail's confirm
+    // (MOTIR-1745) — bound to THIS job by `sourceJobId`.
+    expect(body.planId).toBe(
+      (await planRepository.findBySourceJobId('job-contextual-1', fx.workspaceId))?.id,
+    );
     expect(body.sessionId).toBeTruthy();
     expect(body.session.targetKeys).toEqual([story.identifier]);
     expect(body.session.turns.map((t) => t.role)).toEqual(['user', 'system']);
@@ -272,7 +279,9 @@ describe('GET /api/work-items/[id]/ai/plan — resume the item’s thread', () =
     const res = await resume(resumeReq(story.id), planParams(story.id));
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(await res.json()).toEqual({ session: null });
+    // The envelope carries `planId` too (MOTIR-1745) — null here, because an item
+    // never planned has no thread and so nothing pending to confirm.
+    expect(await res.json()).toEqual({ session: null, planId: null });
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 
@@ -286,6 +295,18 @@ describe('GET /api/work-items/[id]/ai/plan — resume the item’s thread', () =
     };
     expect(body.session?.targetKeys).toEqual([story.identifier]);
     expect(body.session?.turns.map((t) => t.role)).toEqual(['user', 'system']);
+  });
+
+  it('reports the still-undecided proposal’s planId on resume (MOTIR-1745)', async () => {
+    const submitted = (await (
+      await plan(planReq(story.id, { prompt: 'Break this up' }), planParams(story.id))
+    ).json()) as { planId: string };
+
+    const res = await resume(resumeReq(story.id), planParams(story.id));
+    const body = (await res.json()) as { planId: string | null };
+    // Same Plan the submit named — the rail re-attaches to the pending review
+    // rather than losing it when the workspace was closed and reopened.
+    expect(body.planId).toBe(submitted.planId);
   });
 
   it('400s on a repeated targetKey list that is not work-item identifiers', async () => {
@@ -316,9 +337,15 @@ describe('POST /api/work-items/[id]/ai/plan — { resubmit: true }', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       jobId: string;
+      planId: string;
       session: { turns: Array<{ role: string; body: string }> };
     };
     expect(body.jobId).toBe('job-contextual-2');
+    // The retry is its own proposal, so it echoes its OWN plan — confirming the
+    // retry must never address the superseded run's (MOTIR-1745).
+    expect(body.planId).toBe(
+      (await planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId))?.id,
+    );
     expect(body.session.turns.filter((t) => t.role === 'user').map((t) => t.body)).toEqual([
       'Break this up',
     ]);

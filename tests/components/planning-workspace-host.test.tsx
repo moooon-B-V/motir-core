@@ -85,6 +85,7 @@ const IDLE: PlanChangeConversationState = {
   progress: null,
   delta: null,
   jobId: null,
+  planId: null,
   approved: null,
   errorCode: null,
   outOfCredits: false,

@@ -1,9 +1,5 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
-import type {
-  ContextualPlanResultDto,
-  PlanChangeSessionDto,
-  PlanChangeSubmitResultDto,
-} from '@/lib/dto/planChange';
+import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
 // Client reads/writes for the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728's routes), consumed by the conversational rail (MOTIR-1730). No
@@ -16,6 +12,35 @@ import type {
 // `fetchJobResult`, `approvePlanDelta`). This module owns only the three session
 // calls, and reuses `PlanEditsClientError` so a caller branches on one error type
 // (its `isOutOfCredits` covers the 402 the submit path can raise).
+
+/**
+ * What a submit RESPONSE looks like to the browser. It mirrors the server's
+ * `PlanChangeSubmitResultDto` with ONE deliberate difference: `planId` — the
+ * `generating` Plan the job's proposals append into (MOTIR-1743/1745) — is
+ * OPTIONAL here, exactly as `planEditsClient`'s `PlanEditSubmitResponse` types
+ * it. It is an additive echo, so a caller must not depend on it: an E2E stub, a
+ * hand-rolled fixture, or a pre-1745 response carries only `jobId`. Read it
+ * defensively; the server DTO stays required, since the service always has one.
+ */
+export interface PlanChangeSubmitResponse {
+  jobId: string;
+  planId?: string;
+  session: PlanChangeSessionDto;
+}
+
+/** The anchored submit's response — the above plus the thread's own id, which the
+ *  anchored caller needs because it did not open the session in a separate call. */
+export interface ContextualPlanResponse extends PlanChangeSubmitResponse {
+  sessionId: string;
+}
+
+/** The anchored RESUME's response. `session` is `null` for an item never planned;
+ *  `planId` names the thread's still-undecided proposal, and is absent whenever
+ *  there is nothing pending to confirm — same defensive optionality as above. */
+export interface ContextualSessionResumeResponse {
+  session: PlanChangeSessionDto | null;
+  planId?: string | null;
+}
 
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' } as const;
 
@@ -56,8 +81,8 @@ export async function appendPlanChangeTurn(
 
 /** Submit the conversation's ACCUMULATED intent — every user turn in order, not
  *  just the newest one. Returns the shipped `augment` job to stream + approve. */
-export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChangeSubmitResultDto> {
-  return post<PlanChangeSubmitResultDto>('/api/ai/plan-change/session/submit', undefined, signal);
+export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChangeSubmitResponse> {
+  return post<PlanChangeSubmitResponse>('/api/ai/plan-change/session/submit', undefined, signal);
 }
 
 // ─── The ITEM-ANCHORED half — the MOTIR-909 contextual-planning endpoints ─────
@@ -91,20 +116,25 @@ function anchorQuery(targetKeys: readonly string[]): string {
   return `?${params.toString()}`;
 }
 
-/** RESUME the item's thread on mount. `null` when the item was never planned —
- *  a read, so looking at the entrance never writes a session row. */
+/** RESUME the item's thread on mount. A null `session` means the item was never
+ *  planned — a read, so looking at the entrance never writes a session row.
+ *
+ *  Returns the ENVELOPE rather than the bare session (MOTIR-1745): a resumed
+ *  thread may have a proposal still awaiting confirmation, and its `planId` is
+ *  what lets the rail address that Plan. Both fields are normalized to `null` so
+ *  a response predating the field reads the same as one with nothing pending. */
 export async function resumeContextualSession(
   anchorId: string,
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
-): Promise<PlanChangeSessionDto | null> {
+): Promise<ContextualSessionResumeResponse> {
   const res = await fetch(`${anchorPath(anchorId)}${anchorQuery(targetKeys)}`, {
     headers: { Accept: 'application/json' },
     signal,
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  const body = (await res.json()) as { session: PlanChangeSessionDto | null };
-  return body.session ?? null;
+  const body = (await res.json()) as ContextualSessionResumeResponse;
+  return { session: body.session ?? null, planId: body.planId ?? null };
 }
 
 /** Append the turn to the item's thread AND submit the accumulated intent — one
@@ -114,8 +144,8 @@ export async function submitContextualPlan(
   prompt: string,
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
-): Promise<ContextualPlanResultDto> {
-  return post<ContextualPlanResultDto>(
+): Promise<ContextualPlanResponse> {
+  return post<ContextualPlanResponse>(
     anchorPath(anchorId),
     { prompt, ...extra(targetKeys) },
     signal,
@@ -128,8 +158,8 @@ export async function resubmitContextualPlan(
   anchorId: string,
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
-): Promise<ContextualPlanResultDto> {
-  return post<ContextualPlanResultDto>(
+): Promise<ContextualPlanResponse> {
+  return post<ContextualPlanResponse>(
     anchorPath(anchorId),
     { resubmit: true, ...extra(targetKeys) },
     signal,

@@ -163,6 +163,42 @@ describe('planChangeClient — the MULTI-TARGET anchors (MOTIR-1491)', () => {
   });
 });
 
+describe('planChangeClient — the planId echo is read DEFENSIVELY (MOTIR-1745)', () => {
+  it('carries the submit’s planId when the response has one', async () => {
+    const result = { jobId: 'job-ctx-1', planId: 'plan_1', sessionId: 's-ctx', session: SESSION };
+    fetchMock.mockResolvedValue(jsonResponse(result));
+
+    await expect(submitContextualPlan('wi_812', 'Expand billing.')).resolves.toEqual(result);
+  });
+
+  it('still parses a submit response carrying ONLY a jobId', async () => {
+    // The whole reason the browser-facing type keeps `planId` optional: an E2E
+    // stub, a fixture, or a pre-1745 deployment answers without it, and the rail
+    // must degrade to "nothing to confirm" rather than fail to parse.
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'job-ctx-1', session: SESSION }));
+
+    const res = await submitPlanChange();
+    expect(res.jobId).toBe('job-ctx-1');
+    expect(res.planId).toBeUndefined();
+  });
+
+  it('returns the resume ENVELOPE, normalizing a missing planId to null', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ session: SESSION, planId: 'plan_7' }));
+    await expect(resumeContextualSession('wi_812')).resolves.toEqual({
+      session: SESSION,
+      planId: 'plan_7',
+    });
+
+    // No thread, and a response predating the field, both read as "nothing
+    // pending" — the caller branches on one shape, never on `undefined`.
+    fetchMock.mockResolvedValue(jsonResponse({ session: null }));
+    await expect(resumeContextualSession('wi_812')).resolves.toEqual({
+      session: null,
+      planId: null,
+    });
+  });
+});
+
 describe('planChangeClient — failures surface as ONE error type', () => {
   it('throws PlanEditsClientError carrying the status and the typed code', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_CHANGE_SESSION_NOT_FOUND' }, 404));
@@ -206,7 +242,9 @@ describe('planChangeClient — failures surface as ONE error type', () => {
 describe('the anchored transport — a work item’s own thread', () => {
   it('resumes by GET, and reads an unplanned item as null rather than an error', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ session: null }));
-    expect(await resumeContextualSession('wi_123')).toBeNull();
+    // The ENVELOPE, not the bare session (MOTIR-1745) — a resume also reports the
+    // thread's pending proposal, so an unplanned item reads as null on both.
+    expect(await resumeContextualSession('wi_123')).toEqual({ session: null, planId: null });
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/work-items/wi_123/ai/plan');
@@ -215,7 +253,9 @@ describe('the anchored transport — a work item’s own thread', () => {
 
   it('returns the thread when the item has one', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ session: SESSION }));
-    expect(await resumeContextualSession('wi_123')).toMatchObject({ id: SESSION.id });
+    expect(await resumeContextualSession('wi_123')).toMatchObject({
+      session: { id: SESSION.id },
+    });
   });
 
   it('submits a turn as ONE POST carrying the prompt — the reason IS the turn', async () => {
