@@ -7,6 +7,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import {
   AiPlanningSettingsEditor,
   isWholeNumberInRange,
+  type AutoPlanPauseView,
 } from '@/app/(authed)/settings/project/ai-planning/_components/AiPlanningSettingsEditor';
 import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 
@@ -23,7 +24,10 @@ import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 //   (d) Save fires the right PATCH (optimistic) and REVERTS on failure, with a
 //       typed 422 slotting its message under the field it names;
 //   (e) the non-admin read-only + Motir-AI-not-connected states disable the
-//       controls and say why.
+//       controls and say why;
+//   (f) the MOTIR-1740 auto-plan PAUSED state — both faces (current /
+//       out-of-date), the link out to the waiting plan, when it does NOT render,
+//       and that pausing is not disabling.
 
 function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
   return {
@@ -41,9 +45,22 @@ function render(ui: ReactElement) {
   return renderWithIntl(<ToastProvider>{ui}</ToastProvider>);
 }
 
+/** The MOTIR-1740 paused view the server hands down (relative time already
+ *  formatted). Defaults to a current (not drifted) waiting plan. */
+function pauseView(over: Partial<AutoPlanPauseView> = {}): AutoPlanPauseView {
+  return {
+    planId: 'pln_8f2',
+    plannedWhenLabel: '3 days ago',
+    itemCount: 12,
+    stale: false,
+    staleCount: 0,
+    ...over,
+  };
+}
+
 function mount(
   over: Partial<ProjectAiSettingsDto> = {},
-  props: { isAdmin?: boolean; aiConfigured?: boolean } = {},
+  props: { isAdmin?: boolean; aiConfigured?: boolean; pause?: AutoPlanPauseView | null } = {},
 ) {
   return render(
     <AiPlanningSettingsEditor
@@ -52,6 +69,7 @@ function mount(
       settings={dto(over)}
       isAdmin={props.isAdmin ?? true}
       aiConfigured={props.aiConfigured ?? true}
+      pause={props.pause ?? null}
     />,
   );
 }
@@ -323,5 +341,107 @@ describe('AiPlanningSettingsEditor — read-only + not-connected states', () => 
     // Deliberately no in-app provisioning affordance — that route does not exist.
     expect(screen.queryByRole('button', { name: /connect/i })).toBeNull();
     expect((explanationsSwitch() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('AiPlanningSettingsEditor — the auto-plan PAUSED state (MOTIR-1740)', () => {
+  const banner = () => screen.getByTestId('ai-planning-paused-banner');
+
+  it('says cadence is paused, and LINKS to the plan that is waiting', () => {
+    mount({ aiAutoPlanEnabled: true }, { pause: pauseView() });
+
+    expect(banner().textContent).toContain(
+      'Auto-plan is paused — a plan is waiting for your review.',
+    );
+    expect(banner().textContent).toContain('Motir drafts one plan at a time.');
+    // The meta line reuses the Plans list's own strings for the same facts.
+    expect(banner().textContent).toContain('planned 3 days ago');
+    expect(banner().textContent).toContain('12 items');
+    // The way OUT — the shipped plan detail (MOTIR-847).
+    const link = screen.getByTestId('ai-planning-paused-link');
+    expect(link.getAttribute('href')).toBe('/plans/pln_8f2');
+    expect(link.textContent).toContain('Review the plan');
+  });
+
+  it('announces as a status region, and carries its meaning in WORDS, not colour', () => {
+    mount({ aiAutoPlanEnabled: true }, { pause: pauseView() });
+
+    expect(banner().getAttribute('role')).toBe('status');
+    // The link's accessible name says where it goes; the glyphs are decorative.
+    expect(screen.getByRole('link', { name: /Review the plan/ })).toBeTruthy();
+    banner()
+      .querySelectorAll('svg')
+      .forEach((svg) => expect(svg.getAttribute('aria-hidden')).toBe('true'));
+  });
+
+  it('renders the OUT-OF-DATE face when the waiting plan has drifted', () => {
+    mount({ aiAutoPlanEnabled: true }, { pause: pauseView({ stale: true, staleCount: 4 }) });
+
+    const stale = screen.getByTestId('ai-planning-paused-stale');
+    // The SHIPPED badge string, not a re-authored one.
+    expect(stale.textContent).toContain('Out of date');
+    expect(stale.textContent).toContain(
+      'Your project has changed since this plan was drafted — 4 items may be out of date.',
+    );
+    // The pause message itself is unchanged — the drift is additive.
+    expect(banner().textContent).toContain('a plan is waiting for your review');
+  });
+
+  it('shows NO drift treatment when the waiting plan is current', () => {
+    mount({ aiAutoPlanEnabled: true }, { pause: pauseView() });
+
+    expect(screen.queryByTestId('ai-planning-paused-stale')).toBeNull();
+    expect(screen.queryByText('Out of date')).toBeNull();
+  });
+
+  it('omits the planned-when clause while the plan is still generating', () => {
+    mount({ aiAutoPlanEnabled: true }, { pause: pauseView({ plannedWhenLabel: null }) });
+
+    expect(banner().textContent).not.toContain('planned');
+    expect(banner().textContent).toContain('12 items');
+    expect(screen.getByTestId('ai-planning-paused-link')).toBeTruthy();
+  });
+
+  it('renders NOTHING paused when no plan is waiting — the card is exactly as 919 ships it', () => {
+    mount({ aiAutoPlanEnabled: true }, { pause: null });
+
+    expect(screen.queryByTestId('ai-planning-paused-banner')).toBeNull();
+    // The guardrail callout is untouched by this state.
+    expect(screen.getByText(/never creates work without you/)).toBeTruthy();
+  });
+
+  it('renders NOTHING paused while auto-plan is off — there is no cadence to pause', () => {
+    mount({ aiAutoPlanEnabled: false }, { pause: pauseView() });
+
+    expect(screen.queryByTestId('ai-planning-paused-banner')).toBeNull();
+
+    // …and it appears the moment the reader turns auto-plan on.
+    fireEvent.click(autoPlanSwitch());
+    expect(screen.getByTestId('ai-planning-paused-banner')).toBeTruthy();
+  });
+
+  it('PAUSING IS NOT DISABLING — the switch and the stepper stay interactive', () => {
+    mount({ aiAutoPlanEnabled: true, aiAutoPlanThreshold: 5 }, { pause: pauseView() });
+
+    expect((autoPlanSwitch() as HTMLButtonElement).disabled).toBe(false);
+    expect(threshold().disabled).toBe(false);
+    expect(threshold().getAttribute('aria-disabled')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Increase threshold' }));
+    expect(threshold().value).toBe('6');
+  });
+
+  it('saving settings while paused works normally', async () => {
+    mount({ aiAutoPlanEnabled: true, aiAutoPlanThreshold: 5 }, { pause: pauseView() });
+
+    fireEvent.change(threshold(), { target: { value: '9' } });
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body).toMatchObject({ aiAutoPlanEnabled: true, aiAutoPlanThreshold: 9 });
+    // The banner is a server-derived state — a settings save does not clear it.
+    expect(screen.getByTestId('ai-planning-paused-banner')).toBeTruthy();
   });
 });

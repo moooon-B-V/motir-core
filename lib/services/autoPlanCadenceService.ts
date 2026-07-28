@@ -1,13 +1,16 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
+import { planStalenessService } from '@/lib/services/planStalenessService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { toPlanDto } from '@/lib/mappers/planMappers';
-import type { PlanDto } from '@/lib/dto/plans';
+import type { AutoPlanPauseDto, PlanDto } from '@/lib/dto/plans';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -86,6 +89,28 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * How many of a waiting plan's proposed items have drifted since it was drafted
+ * (MOTIR-1740), via the SHIPPED `planStalenessService` (MOTIR-1340) — never a
+ * second drift derivation.
+ *
+ * Only a `planned` plan can be stale: a `generating` one has no `plannedAt` to
+ * measure drift against and is seconds old. Mirrors the Plans list's
+ * `staleCountFor` (`app/(authed)/plans/planRowView.ts`), including its graceful
+ * degradation — a staleness read that fails costs the indicator its drift line,
+ * it does not fail the settings page that is only asking whether cadence is
+ * paused.
+ */
+async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number> {
+  if (plan.status !== 'planned') return 0;
+  try {
+    const verdict = await planStalenessService.computePlanStaleness(plan.id, ctx);
+    return verdict.items.filter((item) => item.stale).length;
+  } catch {
+    return 0;
+  }
+}
+
 export const autoPlanCadenceService = {
   /**
    * THE pending-proposal predicate — the ONE place "is auto-planning paused for
@@ -113,6 +138,55 @@ export const autoPlanCadenceService = {
     // plan's identity/status, not its size — so this stays a single-row read
     // rather than a count join.
     return row ? toPlanDto(row, 0) : null;
+  },
+
+  /**
+   * The INDICATOR read behind {@link getPendingPlan} (MOTIR-1740) — "is
+   * auto-planning paused for this project, and has the plan it waits on gone out
+   * of date?", for the AI-planning settings page.
+   *
+   * ONE PREDICATE, TWO CONSUMERS. `pending` is `getPendingPlan(...) !== null` by
+   * construction — the SAME method the sweep's gate 1 calls — so the indicator
+   * and the trigger cannot disagree about whether a project is paused. Nothing
+   * is re-derived here: this method only PROJECTS that verdict for a reader
+   * (the plan's id, its size, and whether it has drifted). The sweep deliberately
+   * does NOT call this one: staleness is irrelevant to whether to fire, and a
+   * cron tick should not pay for it once per project per tick.
+   *
+   * Contracts: PURE READ (writes nothing), BATCHED (a bounded number of
+   * round-trips per plan — the plan row, one count, and `planStalenessService`'s
+   * own batched reads — never per item), TENANT-SCOPED (browse asserted, and
+   * every read is workspace-scoped, so a cross-tenant project is 404-not-403).
+   * Staleness WARNS and never blocks: it is reported, and gates nothing.
+   */
+  async getAutoPlanPauseState(projectId: string, ctx: ServiceContext): Promise<AutoPlanPauseDto> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    const pending = await this.getPendingPlan(projectId, ctx);
+    if (!pending) {
+      return {
+        pending: false,
+        planId: null,
+        plannedAt: null,
+        itemCount: 0,
+        stale: false,
+        staleCount: 0,
+      };
+    }
+
+    const [itemCount, staleCount] = await Promise.all([
+      planItemRepository.countByPlan(pending.id),
+      staleCountFor(pending, ctx),
+    ]);
+
+    return {
+      pending: true,
+      planId: pending.id,
+      plannedAt: pending.plannedAt,
+      itemCount,
+      stale: staleCount > 0,
+      staleCount,
+    };
   },
 
   /**
