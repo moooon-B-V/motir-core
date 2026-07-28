@@ -1,0 +1,692 @@
+// Acceptance E2E — CONTEXTUAL planning from a work item (Subtask MOTIR-913,
+// Story MOTIR-812).
+//
+// Runs under playwright.acceptance.config.ts (video: 'on') so the CI
+// acceptance-video lane records a chaptered clip; `acceptanceStory()` pins every
+// recording to Story MOTIR-812 regardless of the PR that triggered the run.
+//
+// The story's whole flow, from the user's seat: you are LOOKING AT a work item,
+// you ask for a plan change from that item's own door, you review what came
+// back, you confirm, and it lands UNDER that item.
+//
+//   1. The per-item Plan / Re-plan entrance (MOTIR-910) opens the universal
+//      planning workspace ANCHORED at that item — a scoped conversation, not the
+//      project-wide one.
+//   2. A turn runs, narrates, and settles into REVIEW with the engine's real
+//      proposals rendered. Not the `EMPTY` state — that is the regression
+//      MOTIR-1746 fixed and this spec's standing guard (every motir-ai plan-edit
+//      handler returns `planDelta: { operations: [] }`, so a delta-driven rail
+//      could never leave `EMPTY`).
+//   3. NOTHING IS WRITTEN until the confirm. This is the gate — the single most
+//      important assertion here (Story MOTIR-812 / the MOTIR-911 persist gate).
+//   4. Confirm → the items appear under the anchor and the Plan is `approved`.
+//   5. The SIBLING-under-the-parent and PARENT-re-plan cases go through the same
+//      confirm (test 2 / test 3): what may be PROPOSED is not scope-limited to
+//      the anchor's own subtree, but everything WRITTEN still passes one gate.
+//   6. Discard declines the Plan and leaves the tree untouched (test 4); a failed
+//      run is recoverable in place (test 5).
+//
+// DETERMINISM (`notes.html` #37 · `motir-core/CLAUDE.md` § E2E waits on the
+// authoritative signal). motir-ai has no presence in CI, so the browser→ai hop is
+// stubbed via `page.route` — the only interceptable one (a server-side fetch out
+// of a route handler is NOT reachable from `page.route`, mistakes #112 / #152).
+// Everything on THIS side of that hop runs REAL:
+//
+//   • the item-anchored THREAD — the submit stub lets the REAL route run first,
+//     which appends the user's turn to Postgres before it ever reaches motir-ai
+//     (`contextualPlanningService.planFromWorkItem`: `appendTurn` precedes
+//     `submit`), then re-reads the thread through the shipped resume GET. So the
+//     turns the rail renders are genuinely persisted rows, never stub echoes;
+//   • the PROPOSALS — a real `Plan`, seeded through the same
+//     `createPlan → addProposals → markPlanned` calls the handler's own callbacks
+//     make (MOTIR-1746), so the review is `planReviewService` reading Postgres;
+//   • the review READ, the approve and the decline — `/api/plans/[id]`,
+//     `…/approve` (→ `plansService.approvePlan` → `materialize`, behind the
+//     MOTIR-911 gate) and `…/decline`, so every assertion lands on real DB state;
+//   • the canvas levels — the shipped per-level roadmap endpoint.
+//
+// Only the job DISPATCH and the job's SSE are stubbed. The streaming state is
+// observed by HOLDING the plan read until the assertion has run — an
+// authoritative gate, never a timeout.
+
+import { test, expect } from './_helpers/acceptance-video';
+import type { Page, Route } from '@playwright/test';
+import { resetDatabase, db } from './_helpers/db-reset';
+import { signIn } from './_helpers/shell-session';
+import { seedAiAugmentReplan, markProjectOnboarded } from './_helpers/ai-augment-replan-seed';
+import {
+  childTitlesOf,
+  seedContextualProposal,
+  workItemIdByKey,
+  CONTEXTUAL_JOB_ID,
+} from './_helpers/contextual-plan-seed';
+
+test.describe.configure({ timeout: 120_000 });
+
+// ── What the runs propose ────────────────────────────────────────────────────
+
+const DIGEST = 'Email digest';
+const TOASTS = 'In-app toasts';
+const SIBLING = 'Session expiry banner';
+const UNDER_PARENT = 'Account recovery';
+const RENAMED_EPIC = 'Authentication & sessions';
+
+// ── Stubs for the browser→motir-ai boundary ──────────────────────────────────
+
+const AI_ACCESS_NA = {
+  applicable: false,
+  organizationId: null,
+  organizationName: null,
+  canManageBilling: false,
+  hasPaidAiPlan: false,
+  balance: 0,
+  tierName: null,
+  tierAllotment: null,
+  renewsAt: null,
+};
+
+async function stubAiAccess(page: Page): Promise<void> {
+  await page.route('**/api/ai/access', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(AI_ACCESS_NA),
+    });
+  });
+}
+
+/**
+ * Stub the item-anchored SUBMIT — `POST /api/work-items/[id]/ai/plan`, the one
+ * hop of a contextual turn that reaches motir-ai. The anchored contract FUSES
+ * appending the turn and submitting it (MOTIR-909 gates the anchor set once), so
+ * a stub that simply answered would mean the user's turn was never persisted and
+ * the rail would render a thread the app never wrote.
+ *
+ * So this does not fake the thread: it FIRES the real route, which appends the
+ * turn to Postgres before it ever reaches motir-ai, and then re-reads the
+ * resulting thread through the shipped resume `GET`. The stub contributes exactly
+ * the two facts motir-ai would have: the `jobId` and — the shipped MOTIR-1745
+ * contract — the `planId` of the Plan the run's proposals live in, which is what
+ * the rail reads and confirms. A stub answering with only a `jobId` would leave
+ * the rail with nothing to confirm, which is the shape of the bug MOTIR-1746
+ * fixed.
+ *
+ * ⚠️ It does NOT await that real call. The append commits early; the request then
+ * spends seconds failing to reach a motir-ai that CI does not run (an unresolvable
+ * host), and waiting for that would put a multi-second stall inside every turn —
+ * latency a loaded runner could stretch past the response timeout, for no signal.
+ * So the append is observed DIRECTLY instead: poll the resume until the turn is
+ * actually on the thread (`waitForAppendedTurn`). That is the authoritative
+ * signal — the committed row — rather than the failure's arrival time.
+ *
+ * A RESUBMIT (the rail's Try again) rides the same route and deliberately appends
+ * NOTHING, so the expected turn count does not move and the read settles at once.
+ */
+async function stubContextualSubmit(
+  page: Page,
+  anchorId: string,
+  runs: readonly { jobId: string; planId: string }[],
+): Promise<void> {
+  let call = 0;
+  // What the thread should hold once the current turn has landed. A submit adds
+  // one user turn; a resubmit adds none.
+  let expectedUserTurns = 0;
+  await page.route(`**/api/work-items/${anchorId}/ai/plan`, async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const run = runs[Math.min(call, runs.length - 1)]!;
+    call += 1;
+    const body = (request.postDataJSON() ?? {}) as { prompt?: string; resubmit?: boolean };
+    if (body.resubmit !== true) expectedUserTurns += 1;
+
+    // The real hop, fired and left to fail on its own time (see above).
+    void route.fetch().catch(() => undefined);
+
+    const resumeUrl = new URL(request.url());
+    resumeUrl.search = '';
+    const session = await waitForAppendedTurn(page, resumeUrl.toString(), expectedUserTurns);
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        jobId: run.jobId,
+        planId: run.planId,
+        sessionId: session?.id ?? null,
+        session,
+      }),
+    });
+  });
+}
+
+interface ThreadSession {
+  id?: string;
+  turns?: { role: string }[];
+}
+
+/**
+ * Read the item's thread through the shipped resume `GET` until it carries
+ * `expectedUserTurns` user turns — the authoritative "the append committed"
+ * signal, polled rather than slept on. Returns the thread as the app holds it.
+ *
+ * It THROWS on expiry rather than returning a short thread: a silently-missing
+ * turn would leave the rail rendering a conversation the app never wrote, which
+ * is precisely what this helper exists to prevent.
+ */
+async function waitForAppendedTurn(
+  page: Page,
+  resumeUrl: string,
+  expectedUserTurns: number,
+): Promise<ThreadSession | null> {
+  const deadline = Date.now() + 15_000;
+  let session: ThreadSession | null = null;
+  do {
+    const res = await page.request.get(resumeUrl, { headers: { Accept: 'application/json' } });
+    if (res.ok()) {
+      session = ((await res.json()) as { session: ThreadSession | null }).session;
+      const userTurns = (session?.turns ?? []).filter((turn) => turn.role === 'user').length;
+      if (userTurns >= expectedUserTurns) return session;
+    }
+    // The POLL INTERVAL between authoritative reads — not a synchronisation
+    // sleep. The condition below is the committed row; this only spaces the
+    // reads that check for it (`waitForTimeout` is deliberately avoided so the
+    // "fixed sleep as a wait" anti-pattern stays greppable in this repo).
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } while (Date.now() < deadline);
+  throw new Error(
+    `The contextual thread never reached ${expectedUserTurns} user turn(s) — the real route stopped appending before its motir-ai hop.`,
+  );
+}
+
+/** The contextual job's SSE, carrying the REAL frame vocabulary the rail narrates
+ *  (`search` / `planned` / `done`) — structured progress, not assistant tokens. */
+function progressSse(proposed: number): string {
+  return (
+    `event: search\ndata: {}\n\n` +
+    `event: planned\ndata: {"proposed":${proposed}}\n\n` +
+    `event: done\ndata: {}\n\n`
+  );
+}
+
+/** The anchored run's stream relay (`…/ai/plan/[jobId]/stream`). */
+async function stubContextualStream(
+  page: Page,
+  anchorId: string,
+  jobId: string,
+  body: string | (() => string),
+): Promise<void> {
+  await page.route(`**/api/work-items/${anchorId}/ai/plan/${jobId}/stream`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: typeof body === 'function' ? body() : body,
+    });
+  });
+}
+
+/**
+ * HOLD the settled read of one plan until the returned `release()` is called —
+ * then let it through to the REAL route. That makes the STREAMING state
+ * deterministically observable (the run cannot advance past a request the test is
+ * holding), so the narration is asserted against an authoritative gate rather
+ * than a timeout. It delays the response; it never fakes one.
+ */
+async function gatePlanRead(page: Page, planId: string): Promise<() => void> {
+  let open!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  await page.route(`**/api/plans/${planId}`, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await gate;
+    await route.continue();
+  });
+  return open;
+}
+
+// ── Locators ─────────────────────────────────────────────────────────────────
+
+const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
+/** The composer's message field. Its accessible name TRACKS the placeholder
+ *  (MOTIR-910: a re-plan asks for the reason), so it is addressed by ROLE — the
+ *  way the shipped composer documents its only textbox. */
+const composer = (page: Page) => rail(page).getByRole('textbox');
+const confirmBar = (page: Page) => page.getByTestId('plan-change-confirm-bar');
+const railReview = (page: Page) => page.getByTestId('plan-change-review');
+const entrance = (page: Page) => page.getByTestId('work-item-plan-entrance');
+const addFrames = (page: Page) => page.locator('[data-diff-state="add"]');
+
+/** A roadmap LEVEL fetch for one parent — the canvas's authoritative "this
+ *  level's committed children" read (armed BEFORE the drill that triggers it). */
+const levelLoad = (page: Page, parentId: string) =>
+  page.waitForResponse(
+    (r) =>
+      r.url().includes('/roadmap') &&
+      r.url().includes(`parentId=${parentId}`) &&
+      r.request().method() === 'GET' &&
+      r.ok(),
+  );
+
+/** Open a work item's planning door and land in the anchored workspace. */
+async function openWorkspaceFromItem(page: Page, itemKey: string, mode: 'plan' | 'replan') {
+  await page.goto(`/items/${itemKey}`);
+  await expect(entrance(page)).toBeVisible();
+  await expect(entrance(page)).toHaveAttribute('data-mode', mode);
+  await entrance(page).click();
+  await page.waitForURL(/\/planning\?/);
+  await expect(rail(page)).toBeVisible();
+  // The thread is scoped to the ITEM, and the rail says so.
+  await expect(rail(page).getByText(`Opened in the context of ${itemKey}.`)).toBeVisible();
+}
+
+/**
+ * Type a turn and send it, waiting on the SUBMIT's 200 — the authoritative "the
+ * turn went out" signal. The status is part of the predicate so the stub's own
+ * inner call to the real route can never be mistaken for it.
+ */
+async function sendTurn(page: Page, text: string): Promise<void> {
+  const submitted = page.waitForResponse(
+    (r) => r.url().includes('/ai/plan') && r.request().method() === 'POST' && r.status() === 200,
+  );
+  await composer(page).fill(text);
+  await rail(page).getByRole('button', { name: 'Send' }).click();
+  await submitted;
+}
+
+/** Select a node on the canvas and drill into it, awaiting its level fetch. */
+async function drillInto(page: Page, title: string, parentId: string): Promise<void> {
+  await page.locator('[data-node-id]').filter({ hasText: title }).first().click();
+  const openButton = page.getByTestId('drill-button');
+  await expect(openButton).toBeVisible();
+  const loaded = levelLoad(page, parentId);
+  await openButton.click();
+  await loaded;
+}
+
+/** Approve the pending proposal, waiting on the approve's 200 before any re-read
+ *  (never on the optimistic UI — `motir-core/CLAUDE.md` § authoritative signal). */
+async function approveProposal(page: Page, planId: string): Promise<void> {
+  const approved = page.waitForResponse(
+    (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
+  );
+  await confirmBar(page).getByRole('button', { name: 'Approve changes' }).click();
+  expect((await approved).status()).toBe(200);
+}
+
+const planStatus = async (planId: string) =>
+  (await db.plan.findUnique({ where: { id: planId } }))?.status;
+
+/**
+ * A DWELL between chapters of the recorded run — purely so the clip is watchable.
+ *
+ * The whole flow settles in about two seconds, which makes a technically correct
+ * but useless video: five chapters flash past before a reviewer can read one. So
+ * the recorded happy path pauses between chapters, exactly as the MOTIR-1627
+ * acceptance-video dogfood (`acceptance-video.spec.ts`) does.
+ *
+ * This is NOT synchronisation and never stands in for one: every assertion in
+ * this file still waits on its own authoritative signal, and these calls sit
+ * BETWEEN chapters, never between an action and the assertion that proves it.
+ * They only pace the recording, and only in the test that is recorded.
+ */
+const dwell = (page: Page) => page.waitForTimeout(1_800);
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+test.beforeEach(async () => {
+  await resetDatabase();
+});
+
+test.afterAll(async () => {
+  await db.$disconnect();
+});
+
+// The recorded happy path — it carries the chapter markers the acceptance
+// video's timeline is built from.
+test('planning in context — the item’s own door, reviewed, confirmed, landed under it', async ({
+  page,
+  chapter,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-812');
+  const seed = await seedAiAugmentReplan(`contextual-plan-${Date.now()}@example.com`);
+  await markProjectOnboarded(seed.projectId);
+
+  // The run's output as a REAL plan: two subtasks proposed UNDER the anchor —
+  // "break this story into subtasks", the commonest contextual ask.
+  const planId = await seedContextualProposal(seed.ctx, seed.projectId, {
+    jobId: CONTEXTUAL_JOB_ID,
+    title: 'Break Notifications into subtasks',
+    adds: [
+      {
+        title: DIGEST,
+        kind: 'subtask',
+        parentWorkItemId: seed.notifId,
+        type: 'code',
+        storyPoints: 3,
+        estimateMinutes: 45,
+      },
+      {
+        title: TOASTS,
+        kind: 'subtask',
+        parentWorkItemId: seed.notifId,
+        type: 'code',
+        storyPoints: 2,
+        estimateMinutes: 30,
+      },
+    ],
+  });
+
+  await stubAiAccess(page);
+  await stubContextualSubmit(page, seed.notifId, [{ jobId: CONTEXTUAL_JOB_ID, planId }]);
+  await stubContextualStream(page, seed.notifId, CONTEXTUAL_JOB_ID, progressSse(2));
+  const releasePlanRead = await gatePlanRead(page, planId);
+
+  await signIn(page, seed.email, seed.password);
+
+  await chapter('The work item’s own planning door', async () => {
+    await page.goto(`/items/${seed.notifKey}`);
+    // Asserted LOADED before any absence assertion, which would otherwise pass
+    // vacuously on a page that never rendered.
+    await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+    // The item starts childless — so the door reads PLAN, not Re-plan, and the
+    // detail page has no child section at all (a leaf renders none).
+    await expect(page.getByText('Child work items')).toHaveCount(0);
+    await expect(entrance(page)).toHaveAttribute('data-mode', 'plan');
+    await expect(entrance(page)).toHaveAccessibleName(`Plan ${seed.notifKey}`);
+
+    await entrance(page).click();
+    await page.waitForURL(/\/planning\?.*item=/);
+
+    // The workspace opens ANCHORED at the item: the rail names it, and the mode
+    // chip is the contextual one (not the project-wide plan change).
+    await expect(rail(page)).toBeVisible();
+    await expect(rail(page).getByText(`Opened in the context of ${seed.notifKey}.`)).toBeVisible();
+    await expect(page.getByTestId('planning-mode-chip')).toHaveText('in context');
+
+    // The EMPTY state: a thread with no turns is not a blank screen — the canvas
+    // already draws the plan, and there is nothing pending to confirm.
+    await expect(page.getByTestId('roadmap-canvas')).toBeVisible();
+    await expect(confirmBar(page)).toHaveCount(0);
+    await expect(railReview(page)).toHaveCount(0);
+    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+  });
+  await dwell(page);
+
+  await chapter('Ask Motir to break it down', async () => {
+    await sendTurn(page, 'Break this story into subtasks: an email digest and in-app toasts.');
+
+    // STREAMING: the plan read is held, so the run is parked mid-flight and the
+    // rail's live region shows the narration built from the SSE's real frames.
+    await expect(page.getByTestId('plan-change-progress')).toContainText(/proposed so far/);
+    releasePlanRead();
+
+    // REVIEW — with the engine's proposals, NOT the `EMPTY` state. The absence of
+    // an alert is the MOTIR-1746 regression guard: a delta-driven rail always
+    // landed on "Nothing came back to change".
+    await expect(railReview(page)).toBeVisible();
+    await expect(railReview(page)).toContainText('Nothing saved yet');
+    await expect(rail(page).getByRole('alert')).toHaveCount(0);
+    await expect(confirmBar(page)).toContainText('2 added');
+    await expect(confirmBar(page)).toContainText('Nothing is saved until you approve.');
+
+    // The turn is a PERSISTED row, appended by the real route — not a stub echo.
+    await expect(rail(page).getByText('turn 1')).toBeVisible();
+  });
+  await dwell(page);
+
+  await chapter('Nothing is written until you confirm', async () => {
+    // The proposal is reviewable ON THE CANVAS, one level down — the anchor was
+    // childless, so it became drillable precisely because the run proposed work
+    // under it.
+    await drillInto(page, 'Notifications', seed.notifId);
+    await expect(addFrames(page)).toHaveCount(2);
+    await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
+    await expect(page.getByText(TOASTS, { exact: true })).toBeVisible();
+
+    // THE GATE. Re-read the anchor authoritatively — through the shipped
+    // per-level endpoint, from the signed-in browser — and nothing has been
+    // written: the anchor still has no committed children.
+    const projectKey = (await db.project.findUniqueOrThrow({ where: { id: seed.projectId } }))
+      .identifier;
+    const level = await page.request.get(
+      `/api/projects/${projectKey}/roadmap?parentId=${seed.notifId}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    expect(level.ok()).toBe(true);
+    expect(((await level.json()) as { nodes: unknown[] }).nodes).toEqual([]);
+
+    // …and the substrate agrees: no rows, and the Plan is still undecided.
+    expect(await childTitlesOf(seed.notifId)).toEqual([]);
+    expect(await planStatus(planId)).toBe('planned');
+  });
+  await dwell(page);
+
+  await chapter('Confirm — the subtasks land under the item', async () => {
+    // The canvas island refetches the level it is showing once the tree changes,
+    // so the committed children replace the proposed frames in place.
+    const committed = levelLoad(page, seed.notifId);
+    await approveProposal(page, planId);
+    await committed;
+
+    // The rail says what landed and KEEPS the thread — a plan change is rarely
+    // one change, so the conversation stays open.
+    await expect(rail(page).getByText(/Added 2 work items/)).toBeVisible();
+    await expect(composer(page)).toBeEnabled();
+
+    // The gate is gone with the proposal, and what is drawn now is real work.
+    await expect(confirmBar(page)).toHaveCount(0);
+    await expect(addFrames(page)).toHaveCount(0);
+    await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
+
+    // The real substrate: both landed UNDER the anchor, as subtasks, and the Plan
+    // is decided — nothing left orphaned at `planned`.
+    expect(await childTitlesOf(seed.notifId)).toEqual([DIGEST, TOASTS]);
+    const children = await db.workItem.findMany({ where: { parentId: seed.notifId } });
+    expect(children).toHaveLength(2);
+    for (const child of children) expect(child.kind).toBe('subtask');
+    expect(await planStatus(planId)).toBe('approved');
+  });
+  await dwell(page);
+
+  await chapter('Back on the work item', async () => {
+    // Where the user started — the children are now the item's own.
+    await page.goto(`/items/${seed.notifKey}`);
+    await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+    const childSection = page.getByText('Child work items');
+    await expect(childSection).toBeVisible();
+    await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
+    await expect(page.getByText(TOASTS, { exact: true })).toBeVisible();
+    // The door now reads Re-plan: the item has children (MOTIR-910's two faces).
+    await expect(entrance(page)).toHaveAttribute('data-mode', 'replan');
+  });
+});
+
+test('a SIBLING under the anchor’s parent goes through the same confirm', async ({
+  page,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-812');
+  const seed = await seedAiAugmentReplan(`contextual-sibling-${Date.now()}@example.com`);
+  await markProjectOnboarded(seed.projectId);
+  const loginId = await workItemIdByKey(seed.projectId, seed.loginKey);
+  const authEpicId = await workItemIdByKey(seed.projectId, seed.authEpicKey);
+
+  // Anchored at "Login UI", the run proposes a SIBLING — a story under the SAME
+  // epic. What may be PROPOSED is not limited to the anchor's own subtree; what
+  // gets WRITTEN still passes the one confirm.
+  const planId = await seedContextualProposal(seed.ctx, seed.projectId, {
+    jobId: CONTEXTUAL_JOB_ID,
+    title: 'Add a session-expiry story beside Login UI',
+    adds: [{ title: SIBLING, kind: 'story', parentWorkItemId: authEpicId }],
+  });
+
+  await stubAiAccess(page);
+  await stubContextualSubmit(page, loginId, [{ jobId: CONTEXTUAL_JOB_ID, planId }]);
+  await stubContextualStream(page, loginId, CONTEXTUAL_JOB_ID, progressSse(1));
+
+  await signIn(page, seed.email, seed.password);
+  await openWorkspaceFromItem(page, seed.loginKey, 'plan');
+
+  await sendTurn(page, 'We also need a session-expiry banner beside this — put it in the epic.');
+  await expect(confirmBar(page)).toContainText('1 added');
+  await expect(rail(page).getByRole('alert')).toHaveCount(0);
+
+  // It is reviewable on the PARENT's level, where the proposal actually belongs.
+  await drillInto(page, 'Authentication', authEpicId);
+  await expect(addFrames(page)).toHaveCount(1);
+  await expect(page.getByText(SIBLING, { exact: true })).toBeVisible();
+
+  // Still nothing written before the confirm.
+  expect(await childTitlesOf(authEpicId)).toEqual(['Login UI', 'Password Reset']);
+
+  await approveProposal(page, planId);
+
+  // It landed as a SIBLING: under the epic, not under the anchor.
+  expect(await childTitlesOf(authEpicId)).toEqual(['Login UI', 'Password Reset', SIBLING]);
+  expect(await childTitlesOf(loginId)).toEqual([]);
+  expect(await planStatus(planId)).toBe('approved');
+});
+
+test('re-planning the PARENT goes through the same confirm', async ({ page, acceptanceStory }) => {
+  acceptanceStory('MOTIR-812');
+  const seed = await seedAiAugmentReplan(`contextual-parent-${Date.now()}@example.com`);
+  await markProjectOnboarded(seed.projectId);
+  const authEpicId = await workItemIdByKey(seed.projectId, seed.authEpicKey);
+
+  // The epic itself is the anchor — it HAS children, so this is a RE-plan: the
+  // run renames it and adds work under it.
+  const planId = await seedContextualProposal(seed.ctx, seed.projectId, {
+    jobId: CONTEXTUAL_JOB_ID,
+    title: 'Re-plan the Authentication epic',
+    adds: [{ title: UNDER_PARENT, kind: 'story', parentWorkItemId: authEpicId }],
+    modify: { workItemId: authEpicId, patch: { title: RENAMED_EPIC } },
+  });
+
+  await stubAiAccess(page);
+  await stubContextualSubmit(page, authEpicId, [{ jobId: CONTEXTUAL_JOB_ID, planId }]);
+  await stubContextualStream(page, authEpicId, CONTEXTUAL_JOB_ID, progressSse(1));
+
+  await signIn(page, seed.email, seed.password);
+  await openWorkspaceFromItem(page, seed.authEpicKey, 'replan');
+
+  // The RE-PLAN face opens by ASKING what's wrong (MOTIR-910): the first turn IS
+  // the reason — there is no separate reason field.
+  await expect(composer(page)).toHaveAccessibleName('What’s wrong? What should change?');
+
+  await sendTurn(page, 'This epic is too vague — rename it and add account recovery.');
+  await expect(confirmBar(page)).toContainText('1 added, 1 changed');
+  await expect(rail(page).getByRole('alert')).toHaveCount(0);
+
+  // The epic is a ROOT node, so its `change` frame is on the level already shown.
+  await expect(page.locator('[data-diff-state="change"]')).toHaveCount(1);
+
+  // Nothing written yet — the rename has not touched the item.
+  const before = await db.workItem.findUniqueOrThrow({ where: { id: authEpicId } });
+  expect(before.title).toBe('Authentication');
+
+  await approveProposal(page, planId);
+
+  const after = await db.workItem.findUniqueOrThrow({ where: { id: authEpicId } });
+  expect(after.title).toBe(RENAMED_EPIC);
+  expect(await childTitlesOf(authEpicId)).toEqual([UNDER_PARENT, 'Login UI', 'Password Reset']);
+  expect(await planStatus(planId)).toBe('approved');
+});
+
+test('Discard declines the plan and leaves the tree untouched', async ({
+  page,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-812');
+  const seed = await seedAiAugmentReplan(`contextual-discard-${Date.now()}@example.com`);
+  await markProjectOnboarded(seed.projectId);
+
+  const planId = await seedContextualProposal(seed.ctx, seed.projectId, {
+    jobId: CONTEXTUAL_JOB_ID,
+    title: 'Break Notifications into subtasks',
+    adds: [
+      { title: DIGEST, kind: 'subtask', parentWorkItemId: seed.notifId },
+      { title: TOASTS, kind: 'subtask', parentWorkItemId: seed.notifId },
+    ],
+  });
+
+  await stubAiAccess(page);
+  await stubContextualSubmit(page, seed.notifId, [{ jobId: CONTEXTUAL_JOB_ID, planId }]);
+  await stubContextualStream(page, seed.notifId, CONTEXTUAL_JOB_ID, progressSse(2));
+
+  await signIn(page, seed.email, seed.password);
+  await openWorkspaceFromItem(page, seed.notifKey, 'plan');
+
+  await sendTurn(page, 'Break this story into subtasks.');
+  await expect(confirmBar(page)).toContainText('2 added');
+
+  // The terminal action. It WRITES to the plan (so the run is decided rather than
+  // left orphaned at `planned`) and never to the tree.
+  const declined = page.waitForResponse(
+    (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
+  );
+  await confirmBar(page).getByRole('button', { name: 'Discard' }).click();
+  expect((await declined).status()).toBe(200);
+
+  // The gate is gone, the conversation stays, and the tree is exactly as it was.
+  await expect(confirmBar(page)).toHaveCount(0);
+  await expect(railReview(page)).toHaveCount(0);
+  await expect(composer(page)).toBeEnabled();
+  await expect(rail(page).getByText('turn 1')).toBeVisible();
+  expect(await childTitlesOf(seed.notifId)).toEqual([]);
+  expect(await planStatus(planId)).toBe('declined');
+});
+
+test('a failed run is recoverable in place — the thread survives, the tree is untouched', async ({
+  page,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-812');
+  const seed = await seedAiAugmentReplan(`contextual-error-${Date.now()}@example.com`);
+  await markProjectOnboarded(seed.projectId);
+
+  const planId = await seedContextualProposal(seed.ctx, seed.projectId, {
+    jobId: CONTEXTUAL_JOB_ID,
+    title: 'Break Notifications into subtasks',
+    adds: [
+      { title: DIGEST, kind: 'subtask', parentWorkItemId: seed.notifId },
+      { title: TOASTS, kind: 'subtask', parentWorkItemId: seed.notifId },
+    ],
+  });
+
+  // One job (and one plan) for both attempts: the STREAM fails first and succeeds
+  // on retry, which re-sends the accumulated intent to the same thread.
+  let failing = true;
+  await stubAiAccess(page);
+  await stubContextualSubmit(page, seed.notifId, [{ jobId: CONTEXTUAL_JOB_ID, planId }]);
+  await stubContextualStream(page, seed.notifId, CONTEXTUAL_JOB_ID, () =>
+    failing ? `event: error\ndata: {"code":"FAILED"}\n\n` : progressSse(2),
+  );
+
+  await signIn(page, seed.email, seed.password);
+  await openWorkspaceFromItem(page, seed.notifKey, 'plan');
+
+  await sendTurn(page, 'Break this story into subtasks.');
+
+  // The failure is STATED and recoverable: the turn is still on the thread, no
+  // gate appeared, and nothing was written.
+  await expect(rail(page).getByRole('alert')).toContainText(/didn't go through/);
+  await expect(rail(page).getByText('turn 1')).toBeVisible();
+  await expect(confirmBar(page)).toHaveCount(0);
+  expect(await childTitlesOf(seed.notifId)).toEqual([]);
+  expect(await planStatus(planId)).toBe('planned');
+
+  // Try again continues the SAME conversation rather than restarting it.
+  failing = false;
+  await rail(page).getByRole('button', { name: 'Try again' }).click();
+
+  await expect(confirmBar(page)).toContainText('2 added');
+  await expect(rail(page).getByRole('alert')).toHaveCount(0);
+  await expect(rail(page).getByText('turn 1')).toBeVisible();
+});
