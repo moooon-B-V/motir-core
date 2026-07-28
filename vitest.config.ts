@@ -301,6 +301,24 @@ export default defineConfig({
         // per-project failure isolation. An untested branch here is an
         // unattended one, so every branch of the decision is gated.
         'lib/services/autoPlanCadenceService.ts',
+        // Story 7.13 · Subtask 7.13.7 (MOTIR-920) — the REST of the story's
+        // merged surface joins the gate its cadence half already sits under.
+        // Measuring coverage over 7.13 as a whole (rather than per subtask, as
+        // each landed) found the residue: the cron DEFINITION that wraps the
+        // sweep shipped at 0% (the schedule, the retry budget and the registry
+        // wiring were all unproven), and so did the planner-model PICKER whose
+        // two mapping functions decide whether a tenant's pinned model survives
+        // a save. Both are now gated, together with the sprint-persist +
+        // settings services this story's other subtasks shipped, so the whole
+        // 7.13 surface is held to the same floor rather than only the piece
+        // MOTIR-916 happened to enrol.
+        'lib/services/aiSprintPlanningService.ts',
+        'lib/services/projectAiSettingsService.ts',
+        'lib/ai/sprintAssignment.ts',
+        'lib/mappers/projectAiSettingsMappers.ts',
+        'lib/projectAiSettings/limits.ts',
+        'lib/projectAiSettings/plannerModels.ts',
+        'lib/jobs/definitions/autoPlanCadenceTick.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -523,6 +541,17 @@ export default defineConfig({
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.13.3 (MOTIR-916) — the unattended auto-plan cadence trigger.
         'lib/services/autoPlanCadenceService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask 7.13.7 (MOTIR-920) — the rest of the Story 7.13 surface at the
+        // same floor. `limits.ts` / `plannerModels.ts` are the dependency-free
+        // modules the settings PANEL imports directly, so a regression in them
+        // reaches the browser with no service test in the way.
+        'lib/services/aiSprintPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/projectAiSettingsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ai/sprintAssignment.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/projectAiSettingsMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/projectAiSettings/limits.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/projectAiSettings/plannerModels.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/autoPlanCadenceTick.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
