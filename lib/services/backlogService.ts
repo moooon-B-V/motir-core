@@ -211,11 +211,21 @@ export const backlogService = {
    * — over the cap), `SprintNotFoundError` (404), `WorkItemNotFoundError` (404 —
    * an unknown / cross-workspace member), `CrossProjectSprintAssignmentError`
    * (422).
+   *
+   * `tx` — when the caller already holds a workspace-bound transaction, the
+   * batch joins it instead of opening a second one (Subtask 7.13.5 · MOTIR-918:
+   * approving an AI sprint plan creates N sprints and assigns each one's members
+   * in a SINGLE transaction, so a failure anywhere rolls the whole plan back).
+   * Omitted — every existing caller — the method opens its own
+   * `withWorkspaceContext` exactly as before, so this is purely additive. A
+   * supplied `tx` MUST already carry this workspace's GUCs, since the
+   * `work_item` RLS `WITH CHECK` is evaluated against them.
    */
   async bulkAssignToSprint(
     itemIds: string[],
     sprintId: string,
     ctx: ServiceContext,
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItemDto[]> {
     const ids = dedupe(itemIds);
     if (ids.length === 0) return []; // empty-input guard — no-op, not an error
@@ -223,56 +233,61 @@ export const backlogService = {
       throw new BulkBatchTooLargeError(ids.length, MAX_BULK_BATCH_SIZE);
     }
 
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    // The pre-write gate reads THROUGH the caller's transaction when there is
+    // one: a sprint created earlier in that same transaction is not visible to
+    // the `db` singleton until it commits, so reading outside it would 404 a
+    // sprint that demonstrably exists (what the AI sprint-plan approve does —
+    // create sprint, then assign into it, in one transaction).
+    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId, tx);
     if (!sprint) throw new SprintNotFoundError(sprintId);
 
     // Load + validate the WHOLE batch before any write: a missing / foreign
     // (404) or cross-project (422) member rejects the entire move atomically.
     const items: WorkItem[] = [];
     for (const id of ids) {
-      const item = await this.loadItem(id, ctx);
+      const item = await this.loadItem(id, ctx, tx);
       if (item.projectId !== sprint.projectId) {
         throw new CrossProjectSprintAssignmentError(id, sprintId);
       }
       items.push(item);
     }
 
-    return withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        // Append the batch to the sprint's tail. Read the boundary rank ONCE,
-        // then chain `keyForAppend` so each issue ranks strictly after the
-        // previous — bounded single-row writes, never an N-row renumber.
-        let prevRank = await workItemRepository.findBoundaryBacklogRank(
-          sprint.projectId,
-          ctx.workspaceId,
-          sprintId,
-          'max',
-          tx,
-        );
-        const out: WorkItemDto[] = [];
-        for (const item of items) {
-          const newRank = keyForAppend(prevRank);
-          prevRank = newRank;
-          await workItemRepository.setSprint(item.id, sprintId, tx);
-          const row = await workItemRepository.setBacklogRank(item.id, newRank, tx);
-          await workItemRevisionsService.recordRevision(
-            {
-              workItemId: item.id,
-              changedById: ctx.userId,
-              changeKind: 'updated',
-              diff: {
-                sprintId: { from: item.sprintId, to: sprintId },
-                backlogRank: { from: item.backlogRank, to: newRank },
-              },
+    const write = async (t: Prisma.TransactionClient): Promise<WorkItemDto[]> => {
+      // Append the batch to the sprint's tail. Read the boundary rank ONCE,
+      // then chain `keyForAppend` so each issue ranks strictly after the
+      // previous — bounded single-row writes, never an N-row renumber.
+      let prevRank = await workItemRepository.findBoundaryBacklogRank(
+        sprint.projectId,
+        ctx.workspaceId,
+        sprintId,
+        'max',
+        t,
+      );
+      const out: WorkItemDto[] = [];
+      for (const item of items) {
+        const newRank = keyForAppend(prevRank);
+        prevRank = newRank;
+        await workItemRepository.setSprint(item.id, sprintId, t);
+        const row = await workItemRepository.setBacklogRank(item.id, newRank, t);
+        await workItemRevisionsService.recordRevision(
+          {
+            workItemId: item.id,
+            changedById: ctx.userId,
+            changeKind: 'updated',
+            diff: {
+              sprintId: { from: item.sprintId, to: sprintId },
+              backlogRank: { from: item.backlogRank, to: newRank },
             },
-            tx,
-          );
-          out.push(toWorkItemDto(row));
-        }
-        return out;
-      },
-    );
+          },
+          t,
+        );
+        out.push(toWorkItemDto(row));
+      }
+      return out;
+    };
+
+    if (tx) return write(tx);
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, write);
   },
 
   /**
@@ -446,8 +461,11 @@ export const backlogService = {
    * cross-workspace item is an indistinguishable 404. Used by every write path
    * before it touches the row.
    */
-  async loadItem(itemId: string, ctx: ServiceContext) {
-    const item = await workItemRepository.findById(itemId);
+  async loadItem(itemId: string, ctx: ServiceContext, tx?: Prisma.TransactionClient) {
+    // `tx` — when the caller holds a transaction, the gate reads THROUGH it, so
+    // it sees rows that transaction has written but not yet committed. Omitted
+    // (every pre-existing caller) it reads the singleton exactly as before.
+    const item = await workItemRepository.findById(itemId, tx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(itemId);
     }
