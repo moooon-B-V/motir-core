@@ -1,0 +1,475 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  defaultDoctorProbe,
+  doctorCommand,
+  firstLine,
+  probeAgentVersion,
+  probeServerWith,
+  resolveOnPath,
+  type ReadOnlyServerClient,
+} from '../src/commands/doctor.js';
+import { AuthError } from '../src/errors.js';
+import type { SearchPage, WhoamiResult } from '../src/mcpClient.js';
+
+const WHOAMI: WhoamiResult = {
+  user: { id: 'u1', name: 'Yue', email: 'yue@example.com' },
+  workspace: { id: 'w1', name: 'moooon', slug: 'moooon' },
+};
+
+const PAGE: SearchPage = { items: [], total: 42, nextCursor: null };
+
+/** A read-only client that records every method the probe reaches for. */
+function spyClient(over: Partial<ReadOnlyServerClient> = {}): {
+  client: ReadOnlyServerClient;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const client: ReadOnlyServerClient = {
+    connect: async () => {
+      calls.push('connect');
+    },
+    close: async () => {
+      calls.push('close');
+    },
+    listToolNames: async () => {
+      calls.push('listToolNames');
+      return ['whoami', 'list_ready', 'transition_status'];
+    },
+    whoami: async () => {
+      calls.push('whoami');
+      return WHOAMI;
+    },
+    searchWorkItems: async () => {
+      calls.push('searchWorkItems');
+      return PAGE;
+    },
+    ...over,
+  };
+  return { client, calls };
+}
+
+describe('probeServerWith — read-only by construction', () => {
+  it('handshakes, identifies the user, and proves the project is reachable', async () => {
+    const { client, calls } = spyClient();
+    const result = await probeServerWith(client, 'MOTIR');
+    expect(result.ok).toBe(true);
+    expect(result.toolCount).toBe(3);
+    expect(result.user).toEqual({ name: 'Yue', email: 'yue@example.com' });
+    expect(result.workspace).toEqual({ name: 'moooon', slug: 'moooon' });
+    expect(result.project).toEqual({ key: 'MOTIR', reachable: true, total: 42 });
+    // The whole call list, pinned: connect + three READS + close. No dispatch,
+    // no transition, no write — `doctor` may never mutate server state.
+    expect(calls).toEqual(['connect', 'listToolNames', 'whoami', 'searchWorkItems', 'close']);
+  });
+
+  it('skips the project read when there is no linked project', async () => {
+    const { client, calls } = spyClient();
+    const result = await probeServerWith(client);
+    expect(result.project).toBeUndefined();
+    expect(calls).not.toContain('searchWorkItems');
+  });
+
+  it('reports a token with no active workspace', async () => {
+    const { client } = spyClient({
+      whoami: async () => ({ user: WHOAMI.user, workspace: null }),
+    });
+    await expect(probeServerWith(client)).resolves.toMatchObject({ ok: true, workspace: null });
+  });
+
+  it('describes a non-Error rejection without crashing', async () => {
+    const { client } = spyClient({
+      connect: async () => {
+        throw 'transport exploded';
+      },
+    });
+    await expect(probeServerWith(client)).resolves.toEqual({
+      ok: false,
+      error: { message: 'transport exploded' },
+    });
+  });
+
+  it('reports a project the token cannot reach without failing the handshake', async () => {
+    const { client } = spyClient({
+      searchWorkItems: async () => {
+        throw new Error('PROJECT_NOT_FOUND');
+      },
+    });
+    const result = await probeServerWith(client, 'NOPE');
+    expect(result.ok).toBe(true);
+    expect(result.project).toEqual({
+      key: 'NOPE',
+      reachable: false,
+      error: 'PROJECT_NOT_FOUND',
+    });
+  });
+
+  it('captures a failed connect as a red row, carrying the CliError hint', async () => {
+    const { client, calls } = spyClient({
+      connect: async () => {
+        throw new AuthError();
+      },
+    });
+    const result = await probeServerWith(client, 'MOTIR');
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain('Token invalid or expired');
+    expect(result.error?.hint).toContain('motir auth login');
+    // Nothing was attempted after the failed connect.
+    expect(calls).toEqual([]);
+  });
+
+  it('captures a mid-probe failure and still closes the client', async () => {
+    const { client, calls } = spyClient({
+      whoami: async () => {
+        throw new Error('network reset');
+      },
+    });
+    const result = await probeServerWith(client, 'MOTIR');
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toBe('network reset');
+    expect(calls).toContain('close');
+  });
+
+  it('survives a close that itself throws', async () => {
+    const { client } = spyClient({
+      close: async () => {
+        throw new Error('already closed');
+      },
+    });
+    await expect(probeServerWith(client)).resolves.toMatchObject({ ok: true });
+  });
+});
+
+describe('resolveOnPath', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'motir-doctor-path-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  function writeExecutable(name: string, body = '#!/bin/sh\necho "fake 1.2.3"\n'): string {
+    const path = join(dir, name);
+    writeFileSync(path, body);
+    chmodSync(path, 0o755);
+    return path;
+  }
+
+  it('finds an executable on PATH', () => {
+    const path = writeExecutable('fake-agent');
+    expect(resolveOnPath('fake-agent', { PATH: dir })).toBe(path);
+  });
+
+  it('returns null when the binary is absent', () => {
+    expect(resolveOnPath('definitely-not-here', { PATH: dir })).toBeNull();
+  });
+
+  it('returns null for a non-executable file of the right name', () => {
+    writeFileSync(join(dir, 'not-exec'), 'hi');
+    chmodSync(join(dir, 'not-exec'), 0o644);
+    expect(resolveOnPath('not-exec', { PATH: dir })).toBeNull();
+  });
+
+  it('ignores a DIRECTORY that shares the binary’s name', () => {
+    mkdirSync(join(dir, 'shadow'));
+    expect(resolveOnPath('shadow', { PATH: dir })).toBeNull();
+  });
+
+  it('checks an explicit path directly instead of scanning PATH', () => {
+    const path = writeExecutable('direct-agent');
+    expect(resolveOnPath(path, { PATH: '' })).toBe(path);
+    expect(resolveOnPath(join(dir, 'missing-agent'), { PATH: dir })).toBeNull();
+  });
+
+  it('tolerates an empty / unset PATH', () => {
+    expect(resolveOnPath('anything', {})).toBeNull();
+  });
+
+  it('tries each PATHEXT suffix on Windows', () => {
+    // The bare name does not exist; only `<name>.CMD` does — so a hit proves
+    // the extension candidates were tried.
+    const path = writeExecutable('win-agent.CMD');
+    expect(resolveOnPath('win-agent', { PATH: dir, PATHEXT: '.EXE;.CMD' }, 'win32')).toBe(path);
+    expect(resolveOnPath('win-agent', { PATH: dir }, 'win32')).toBe(path);
+    expect(resolveOnPath('win-agent', { PATH: dir }, 'linux')).toBeNull();
+  });
+});
+
+describe('probeAgentVersion', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'motir-doctor-version-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  function script(name: string, body: string): string {
+    const path = join(dir, name);
+    writeFileSync(path, body);
+    chmodSync(path, 0o755);
+    return path;
+  }
+
+  it('takes the first line of the version output', async () => {
+    const path = script('ok-agent', '#!/bin/sh\necho "fake-agent 9.9.9"\necho "extra line"\n');
+    await expect(probeAgentVersion(path)).resolves.toEqual({ version: 'fake-agent 9.9.9' });
+  });
+
+  it('reads a version printed on stderr', async () => {
+    const path = script('stderr-agent', '#!/bin/sh\necho "v2 (stderr)" >&2\n');
+    await expect(probeAgentVersion(path)).resolves.toEqual({ version: 'v2 (stderr)' });
+  });
+
+  it('reports an error for a non-zero exit', async () => {
+    const path = script('bad-agent', '#!/bin/sh\nexit 3\n');
+    const result = await probeAgentVersion(path);
+    expect(result.version).toBeUndefined();
+    expect(result.error).toBeTruthy();
+  });
+
+  it('reports an error when the agent answers with nothing at all', async () => {
+    const path = script('silent-agent', '#!/bin/sh\nexit 0\n');
+    await expect(probeAgentVersion(path)).resolves.toEqual({ error: 'no output' });
+  });
+});
+
+describe('firstLine', () => {
+  it('returns a single-line message unchanged, trimmed', () => {
+    expect(firstLine('  claude 1.4.2  ')).toBe('claude 1.4.2');
+  });
+  it('keeps only the first line of a chatty one', () => {
+    expect(firstLine('claude 1.4.2\nupdate available\n')).toBe('claude 1.4.2');
+  });
+});
+
+describe('doctorCommand', () => {
+  const savedExitCode = process.exitCode;
+  let stdout: string;
+  let write: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    stdout = '';
+    write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+  });
+  afterEach(() => {
+    write.mockRestore();
+    process.exitCode = savedExitCode;
+  });
+
+  /** The minimum probe shape: everything red, so the exit code is exercised. */
+  function emptyProbe() {
+    return {
+      findLink: () => null,
+      resolveServerUrl: () => 'https://motir.test',
+      hasCredential: () => false,
+      probeServer: async () => ({ ok: false as const }),
+      resolveRepos: () => [],
+      probeAgent: async () => ({ onPath: false }),
+      configuredAgentCommand: () => undefined,
+      agentEnvOverride: () => undefined,
+      pathExists: () => false,
+      hasEnv: () => false,
+      home: () => '/home/tester',
+      xdgConfigHome: () => '/home/tester/.config',
+    };
+  }
+
+  it('prints the human report and sets a non-zero exit code on a failure', async () => {
+    await doctorCommand({}, emptyProbe());
+    expect(stdout).toContain('motir doctor — BYOK preflight');
+    expect(stdout).toContain('FAIL  Project link');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('emits the same result machine-readably with --json', async () => {
+    await doctorCommand({ json: true }, emptyProbe());
+    const parsed = JSON.parse(stdout) as {
+      ok: boolean;
+      checks: { id: string; status: string; remediation?: string }[];
+    };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.checks.map((c) => c.id)).toEqual([
+      'link',
+      'auth',
+      'project',
+      'repos',
+      'agent',
+      'credential',
+    ]);
+    // Every non-passing row carries something actionable.
+    for (const check of parsed.checks.filter((c) => c.status !== 'pass')) {
+      expect(check.remediation).toBeTruthy();
+    }
+    expect(stdout).not.toContain('BYOK preflight');
+  });
+
+  it('leaves the exit code at zero when only warnings are reported', async () => {
+    await doctorCommand(
+      {},
+      {
+        ...emptyProbe(),
+        findLink: () => ({
+          dir: '/work',
+          path: '/work/.motir.json',
+          config: { serverUrl: 'https://motir.test', workspace: 'moooon', project: 'MOTIR' },
+        }),
+        hasCredential: () => true,
+        probeServer: async () => ({
+          ok: true as const,
+          toolCount: 1,
+          user: { name: 'Yue', email: 'yue@example.com' },
+          workspace: { name: 'moooon', slug: 'moooon' },
+          project: { key: 'MOTIR', reachable: true, total: 1 },
+        }),
+      },
+    );
+    expect(stdout).toContain('WARN  Coding agent');
+    expect(process.exitCode).toBe(0);
+  });
+});
+
+describe('the real probe, against a temp home', () => {
+  // Restore the touched keys INDIVIDUALLY — reassigning `process.env` wholesale
+  // detaches it from the native environment, and `os.homedir()` reads that, so
+  // the next test would keep seeing a stale HOME.
+  const TOUCHED = ['HOME', 'XDG_CONFIG_HOME', 'MOTIR_CONFIG_HOME', 'PATH', 'MOTIR_AGENT'] as const;
+  const savedEnv = new Map(TOUCHED.map((key) => [key, process.env[key]]));
+  const savedExitCode = process.exitCode;
+  let home: string;
+  let bin: string;
+  let stdout: string;
+  let write: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'motir-doctor-home-'));
+    bin = join(home, 'bin');
+    mkdirSync(bin);
+    // A credential directory holding a secret the report must never surface.
+    mkdirSync(join(home, '.claude'));
+    writeFileSync(join(home, '.claude', 'credentials.json'), '{"key":"sk-do-not-print-me"}');
+    const agent = join(bin, 'claude');
+    writeFileSync(agent, '#!/bin/sh\necho "claude 1.4.2"\n');
+    chmodSync(agent, 0o755);
+    process.env['HOME'] = home;
+    process.env['XDG_CONFIG_HOME'] = join(home, '.config');
+    process.env['MOTIR_CONFIG_HOME'] = join(home, '.config');
+    process.env['PATH'] = bin;
+    process.env['MOTIR_AGENT'] = 'claude --dangerously-skip-permissions';
+    stdout = '';
+    write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+  });
+
+  afterEach(() => {
+    write.mockRestore();
+    for (const [key, value] of savedEnv) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    process.exitCode = savedExitCode;
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('reads the credential store + repo overrides through the real config layer', async () => {
+    const probe = defaultDoctorProbe();
+    const configDir = join(home, '.config', 'motir');
+    mkdirSync(configDir, { recursive: true });
+
+    expect(probe.hasCredential('https://motir.test')).toBe(false);
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        tokens: { 'https://motir.test': { token: 'pat-secret' } },
+        agentCommand: 'codex --full-auto',
+      }),
+    );
+    expect(probe.hasCredential('https://motir.test/')).toBe(true);
+    expect(probe.configuredAgentCommand()).toBe('codex --full-auto');
+
+    // A repo override resolves relative to the link root; a convention repo is
+    // not listed (only overrides are enumerated).
+    expect(
+      probe.resolveRepos({
+        dir: home,
+        path: join(home, '.motir.json'),
+        config: {
+          serverUrl: 'https://motir.test',
+          workspace: 'moooon',
+          project: 'MOTIR',
+          repos: { 'motir-core': 'checkouts/core' },
+        },
+      }),
+    ).toEqual([
+      {
+        repoName: 'motir-core',
+        path: join(home, 'checkouts', 'core'),
+        source: 'override',
+        exists: false,
+      },
+    ]);
+  });
+
+  it('reports an unreachable server as a red row rather than throwing', async () => {
+    const probe = defaultDoctorProbe();
+    const configDir = join(home, '.config', 'motir');
+    mkdirSync(configDir, { recursive: true });
+
+    // No stored token → the probe answers without opening a connection at all.
+    await expect(probe.probeServer({ serverUrl: 'https://motir.test' })).resolves.toEqual({
+      ok: false,
+      error: { message: 'Not logged in to https://motir.test.' },
+    });
+
+    // With a token, it really tries — and a dead endpoint is a captured error.
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({ tokens: { 'http://127.0.0.1:1': { token: 'pat' } } }),
+    );
+    const result = await probe.probeServer({
+      serverUrl: 'http://127.0.0.1:1',
+      projectKey: 'MOTIR',
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain('127.0.0.1:1');
+  });
+
+  it('finds the real agent binary + credential dir, and prints NO secret', async () => {
+    const probe = defaultDoctorProbe();
+    expect(probe.home()).toBe(home);
+    expect(probe.agentEnvOverride()).toBe('claude --dangerously-skip-permissions');
+    expect(probe.configuredAgentCommand()).toBeUndefined();
+    expect(probe.hasEnv('MOTIR_AGENT')).toBe(true);
+    expect(probe.hasEnv('DEFINITELY_UNSET_VAR')).toBe(false);
+    expect(probe.pathExists(join(home, '.claude'))).toBe(true);
+
+    // Report against the real filesystem probe (no server: the temp config home
+    // holds no token, so the auth row fails without a network call).
+    await doctorCommand({}, probe);
+    expect(stdout).toContain('PASS  Coding agent');
+    expect(stdout).toContain('claude 1.4.2');
+    expect(stdout).toContain('PASS  Agent credential');
+    expect(stdout).toContain(join(home, '.claude'));
+    expect(stdout).not.toContain('sk-do-not-print-me');
+    expect(stdout).toContain('FAIL  Auth');
+  });
+
+  it('WARNS on a real binary that refuses --version', async () => {
+    const broken = join(bin, 'grumpy-agent');
+    writeFileSync(broken, '#!/bin/sh\nexit 7\n');
+    chmodSync(broken, 0o755);
+    process.env['MOTIR_AGENT'] = 'grumpy-agent';
+    await doctorCommand({}, defaultDoctorProbe());
+    expect(stdout).toContain('WARN  Coding agent');
+    expect(stdout).toContain('did not answer --version');
+  });
+
+  it('falls back to ~/.config when XDG_CONFIG_HOME is unset', () => {
+    delete process.env['XDG_CONFIG_HOME'];
+    expect(defaultDoctorProbe().xdgConfigHome()).toBe(join(home, '.config'));
+  });
+});

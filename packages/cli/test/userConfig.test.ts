@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   configPath,
   displayTokenPrefix,
+  getAgentCommand,
   getCredential,
   listServers,
   normalizeServerUrl,
   readUserConfig,
   removeCredential,
   setCredential,
+  writeUserConfig,
 } from '../src/config/userConfig.js';
 
 // The credential store. Point MOTIR_CONFIG_HOME at a temp dir so nothing
@@ -66,5 +68,50 @@ describe('userConfig', () => {
   it('displayTokenPrefix shows a short, non-reconstructable prefix', () => {
     expect(displayTokenPrefix('motir_pat_abcdefghijklmnop')).toBe('motir_pat_abcd…');
     expect(displayTokenPrefix('short')).toBe('short');
+  });
+
+  it('treats a corrupt config as empty instead of wedging every command', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(configPath(), '{ not json');
+    expect(readUserConfig()).toEqual({ tokens: {} });
+  });
+
+  it('tolerates a config file with no tokens map', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(configPath(), JSON.stringify({ agentCommand: 'claude' }));
+    expect(readUserConfig()).toEqual({ tokens: {}, agentCommand: 'claude' });
+    expect(listServers()).toEqual([]);
+  });
+
+  it('falls back to XDG_CONFIG_HOME when MOTIR_CONFIG_HOME is unset', () => {
+    delete process.env['MOTIR_CONFIG_HOME'];
+    process.env['XDG_CONFIG_HOME'] = home;
+    expect(configPath()).toBe(join(home, 'motir', 'config.json'));
+    delete process.env['XDG_CONFIG_HOME'];
+  });
+});
+
+describe('agentCommand', () => {
+  it('is undefined when unset, blank, or the wrong type', () => {
+    expect(getAgentCommand()).toBeUndefined();
+    writeUserConfig({ tokens: {}, agentCommand: '   ' });
+    expect(getAgentCommand()).toBeUndefined();
+
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(configPath(), JSON.stringify({ tokens: {}, agentCommand: 42 }));
+    expect(readUserConfig().agentCommand).toBeUndefined();
+  });
+
+  it('round-trips a full agent command line', () => {
+    writeUserConfig({ tokens: {}, agentCommand: 'claude --dangerously-skip-permissions' });
+    expect(getAgentCommand()).toBe('claude --dangerously-skip-permissions');
+  });
+
+  it('SURVIVES a credential write — the config is rewritten wholesale', () => {
+    writeUserConfig({ tokens: {}, agentCommand: 'codex --full-auto' });
+    setCredential('https://app.motir.co', { token: 'motir_pat_abc' });
+    expect(getAgentCommand()).toBe('codex --full-auto');
+    removeCredential('https://app.motir.co');
+    expect(getAgentCommand()).toBe('codex --full-auto');
   });
 });

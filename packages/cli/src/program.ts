@@ -3,6 +3,7 @@ import { CLI_VERSION } from './version.js';
 import { authLogin, authLogout, authStatus } from './commands/auth.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
 import { openCommand, readyCommand, statusCommand } from './commands/read.js';
+import { doctorCommand } from './commands/doctor.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
 // (`ready` / `status` / `open`) are 7.9.2, single dispatch (`next` / `run` /
@@ -70,6 +71,18 @@ export function buildProgram(): Command {
     .description('Show the project pulse: ready / in-flight counts + the active sprint.')
     .option('--json', 'Emit the pulse as JSON.')
     .action(statusCommand);
+  // ── doctor ────────────────────────────────────────────────────────────────
+  program
+    .command('doctor')
+    .description(
+      'Preflight your BYOK setup: auth, project link, agent binary, credential presence.',
+    )
+    .option('--agent <cmd>', 'Check THIS agent command instead of the configured one.')
+    .option('--json', 'Emit the check results as JSON.')
+    // Arity-1 wrapper: commander passes the Command as a second argument, which
+    // must not land in `doctorCommand`'s injectable probe parameter.
+    .action((opts) => doctorCommand(opts));
+
   program
     .command('open <key>')
     .description('Open a work item (e.g. PROD-7) in the browser; prints the URL.')
