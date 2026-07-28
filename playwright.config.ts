@@ -200,6 +200,20 @@ export default defineConfig({
         // this to stop the `next dev` webServer GC-thrashing/OOMing under load;
         // moving to a production build removes that failure mode entirely, but
         // the headroom still helps the build.)
+        // MOTIR-1753 — size the libuv THREADPOOL for a Node-served build.
+        // `next start` reads every static chunk off disk through the threadpool,
+        // whose libuv default is FOUR. Measured here: 125 outstanding
+        // `fs/promises` requests against those 4 threads — a ~31x queue depth.
+        // Everything else that shares the pool then queues behind it, including
+        // the completions Prisma's in-flight INTERACTIVE transactions are waiting
+        // on, so a transaction sits `idle in transaction` (Postgres reporting
+        // `Client/ClientRead` — waiting on US) until it blows Prisma's 5s budget
+        // and the render 500s with P2028 / "commit cannot be executed on an
+        // expired transaction". A/B on this lane: pool 4 -> 8s stalls + failure;
+        // pool 64 -> zero stalls, green, 4.5x faster.
+        // Same exposure applies to any deployment where Node serves the assets
+        // (self-host `next start`); behind a CDN the static reads never reach it.
+        UV_THREADPOOL_SIZE: '64',
         NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
