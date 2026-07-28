@@ -23,8 +23,8 @@ import { isProposedNodeId, type PlanChangeDiffIndex } from '@/lib/planning/planC
 //
 // It is its own consumer rather than a flag on `WorkItemRoadmap` for one concrete
 // reason: a PROPOSED item is not a work item, so drilling into one must NOT hit
-// the roadmap endpoint at all — its children live in the in-memory delta. That
-// branch belongs to this flow, not to the plain roadmap.
+// the roadmap endpoint at all — its children live in the pending Plan the host
+// read (MOTIR-1746). That branch belongs to this flow, not to the plain roadmap.
 //
 // `diffKey` is the CLIENT-ISLAND refetch trigger (`motir-core/CLAUDE.md`): the
 // canvas seeds its level once per `reloadKey`, so the host bumps this key when
@@ -62,11 +62,6 @@ export function PlanChangeCanvas({
   // has committed items the cached level no longer describes.
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
   const cacheKeyRef = useRef(diffKey);
-  // id → work-item key, accumulated across the levels already fetched. Drilling
-  // into a node requires having loaded the level that CONTAINS it, so by the time
-  // it is the focus its key is known — which is how a proposed child parented by
-  // `parentKey` finds its level.
-  const keyByIdRef = useRef(new Map<string, string>());
 
   // `index` is a real dependency (not a ref): the canvas holds `loadLevel` in its
   // own ref and only re-runs it when the focus or `reloadKey` changes, so a new
@@ -82,17 +77,13 @@ export function PlanChangeCanvas({
     async (parentId: string | null): Promise<RoadmapLevel> => {
       const diff = index;
       const targets = targetKey === '' ? [] : targetKey.split(',');
-      const focus = {
-        focusNodeId: parentId,
-        focusKey: parentId === null ? null : (keyByIdRef.current.get(parentId) ?? null),
-      };
 
       // Drilled into a PROPOSED item: nothing is persisted, so there is no level to
-      // read — its children come straight from the delta.
+      // read — its children come straight from the pending plan.
       if (parentId !== null && isProposedNodeId(parentId)) {
         // A proposed item's children are not work items, so none of them can be
         // a target — no target pass here.
-        return decoratePlanChangeLevel({ nodes: [], deps: [] }, EMPTY_LEVEL, diff, focus);
+        return decoratePlanChangeLevel({ nodes: [], deps: [] }, EMPTY_LEVEL, diff, parentId);
       }
 
       if (cacheKeyRef.current !== diffKey) {
@@ -106,12 +97,11 @@ export function PlanChangeCanvas({
         cacheRef.current.set(cacheKey, wi);
       }
       registerItems(wi);
-      for (const item of wi.items) keyByIdRef.current.set(item.id, item.identifier);
 
       // Targets are marked LAST, so the ring sits outside the diff frame when a
       // node is both targeted and touched by a pending proposal.
       return decorateTargetLevel(
-        decoratePlanChangeLevel(buildWorkItemLevel(wi, { markActive: true }), wi, diff, focus),
+        decoratePlanChangeLevel(buildWorkItemLevel(wi, { markActive: true }), wi, diff, parentId),
         targets,
       );
     },

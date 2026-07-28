@@ -30,12 +30,16 @@
 //     and `…/session/turns` (append) are motir-core + Postgres, so the turns the
 //     rail renders are genuinely persisted rows, not stub echoes. The submit stub
 //     even re-reads the live session, so the thread is never faked;
-//   • the approve — `POST /api/ai/plan-delta/approve` runs through the shipped
-//     `aiPlanEditsService.approveDelta`, so the spec asserts real DB state.
+//   • the PROPOSALS — the run's output is a real `Plan`, seeded through the same
+//     `createPlan → addProposals → markPlanned` calls the handler's own callbacks
+//     make (MOTIR-1746), so the review the rail renders is `planReviewService`
+//     reading Postgres;
+//   • the approve — `POST /api/plans/[id]/approve` runs through the shipped
+//     `plansService.approvePlan → materialize`, so the spec asserts real DB state.
 //
-// Only three things are stubbed: the SUBMIT (which calls motir-ai), the job's SSE
-// and the job result. The streaming state is observed by HOLDING the job-result
-// route until the assertion has run — an authoritative gate, never a timeout.
+// Only TWO things are stubbed: the SUBMIT (which calls motir-ai) and the job's
+// SSE. The streaming state is observed by HOLDING the plan-review read until the
+// assertion has run — an authoritative gate, never a timeout.
 
 import { test, expect } from './_helpers/acceptance-video';
 import type { Page, Route } from '@playwright/test';
@@ -43,6 +47,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   seedAiAugmentReplan,
+  seedPlanChangeProposal,
   markProjectOnboarded,
   PLAN_CHANGE_JOB_ID,
   PLAN_CHANGE_REFINE_JOB_ID,
@@ -50,38 +55,15 @@ import {
 
 test.describe.configure({ timeout: 120_000 });
 
-// ── The proposal motir-ai would return, per turn ─────────────────────────────
+// ── The proposals a run leaves behind, per turn ──────────────────────────────
 //
-// Both creates are ROOT proposals (no `parentKey` / `parentRef`), so they land on
-// the canvas's TOP level and the diff is visible without drilling. `story` carries
-// no `type` — that is leaf-only (the 2.7.2 ADR; an epic/story with a type is
-// rejected 422 by the approve).
+// Turn 1 proposes one addition plus a rename of an existing (non-terminal) root
+// item; turn 2 is the SAME intent refined — a second addition, so the counts move
+// 1 → 2, which is what proves the canvas re-rendered the NEW proposal.
 
 const ADDED_TITLE = 'Billing';
 const REFINED_TITLE = 'Reporting';
 const RENAMED_NOTIF = 'Notifications & alerts';
-
-/** Turn 1 — one addition plus a rename of an existing (non-terminal) root item. */
-function firstDelta(notifKey: string) {
-  return {
-    operations: [
-      { op: 'create', kind: 'story', fields: { title: ADDED_TITLE } },
-      { op: 'update', targetKey: notifKey, fields: { title: RENAMED_NOTIF } },
-    ],
-  };
-}
-
-/** Turn 2 — the SAME intent, refined: a second addition. The counts move 1 → 2,
- *  which is what proves the canvas re-rendered the NEW proposal. */
-function refinedDelta(notifKey: string) {
-  return {
-    operations: [
-      { op: 'create', kind: 'story', fields: { title: ADDED_TITLE } },
-      { op: 'create', kind: 'story', fields: { title: REFINED_TITLE } },
-      { op: 'update', targetKey: notifKey, fields: { title: RENAMED_NOTIF } },
-    ],
-  };
-}
 
 // ── Stubs for the browser→motir-ai boundary ──────────────────────────────────
 
@@ -117,21 +99,28 @@ async function stubAiAccess(page: Page): Promise<void> {
  * and the multi-turn assertion would be testing the stub. Only the motir-ai half
  * is faked.
  */
-async function stubPlanChangeSubmit(page: Page, jobIds: readonly string[]): Promise<void> {
+async function stubPlanChangeSubmit(
+  page: Page,
+  runs: readonly { jobId: string; planId: string }[],
+): Promise<void> {
   let call = 0;
   await page.route('**/api/ai/plan-change/session/submit', async (route) => {
     if (route.request().method() !== 'POST') {
       await route.continue();
       return;
     }
-    const jobId = jobIds[Math.min(call, jobIds.length - 1)]!;
+    // `planId` is the shipped contract (MOTIR-1745): submit OPENS the Plan the
+    // run's proposals append into, and the rail reads + confirms THAT plan. A
+    // stub that answered with only a jobId would leave the rail with nothing to
+    // confirm — which is exactly the shape of the bug MOTIR-1746 fixed.
+    const run = runs[Math.min(call, runs.length - 1)]!;
     call += 1;
     const sessionUrl = new URL('/api/ai/plan-change/session', route.request().url()).toString();
     const live = await route.fetch({ url: sessionUrl });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId, session: await live.json() }),
+      body: JSON.stringify({ jobId: run.jobId, planId: run.planId, session: await live.json() }),
     });
   });
 }
@@ -153,36 +142,27 @@ async function stubStream(page: Page, jobId: string, body: string): Promise<void
 }
 
 /**
- * Stub a job's result read, GATED: the route does not answer until the returned
- * `release()` is called. That makes the STREAMING state deterministically
- * observable — the run cannot advance past a request the test is holding — so the
- * narration is asserted against an authoritative gate rather than a timeout
- * (`motir-core/CLAUDE.md` § E2E waits on the authoritative signal).
+ * HOLD the settled read of one plan until the returned `release()` is called —
+ * then let it through to the REAL route. That makes the STREAMING state
+ * deterministically observable (the run cannot advance past a request the test is
+ * holding), so the narration is asserted against an authoritative gate rather
+ * than a timeout (`motir-core/CLAUDE.md` § E2E waits on the authoritative
+ * signal). It delays the response; it never fakes one.
  */
-async function stubGatedJobResult(page: Page, jobId: string, delta: object): Promise<() => void> {
+async function gatePlanRead(page: Page, planId: string): Promise<() => void> {
   let open!: () => void;
   const gate = new Promise<void>((resolve) => {
     open = resolve;
   });
-  await page.route(`**/api/ai/jobs/${jobId}`, async (route: Route) => {
+  await page.route(`**/api/plans/${planId}`, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
     await gate;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ status: 'completed', result: { planDelta: delta } }),
-    });
+    await route.continue();
   });
   return open;
-}
-
-async function stubJobResult(page: Page, jobId: string, delta: object): Promise<void> {
-  await page.route(`**/api/ai/jobs/${jobId}`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ status: 'completed', result: { planDelta: delta } }),
-    });
-  });
 }
 
 // ── Locators ─────────────────────────────────────────────────────────────────
@@ -224,16 +204,29 @@ test('plan change is a conversation — open, describe, refine, approve', async 
   const seed = await seedAiAugmentReplan(`plan-change-${Date.now()}@example.com`);
   await markProjectOnboarded(seed.projectId);
 
+  // The two runs' output, as REAL plans — what motir-ai's handler would have
+  // appended before returning.
+  const firstPlanId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: PLAN_CHANGE_JOB_ID,
+    title: 'Add billing',
+    adds: [ADDED_TITLE],
+    rename: { workItemId: seed.notifId, title: RENAMED_NOTIF },
+  });
+  const refinedPlanId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: PLAN_CHANGE_REFINE_JOB_ID,
+    title: 'Add billing and reporting',
+    adds: [ADDED_TITLE, REFINED_TITLE],
+    rename: { workItemId: seed.notifId, title: RENAMED_NOTIF },
+  });
+
   await stubAiAccess(page);
-  await stubPlanChangeSubmit(page, [PLAN_CHANGE_JOB_ID, PLAN_CHANGE_REFINE_JOB_ID]);
+  await stubPlanChangeSubmit(page, [
+    { jobId: PLAN_CHANGE_JOB_ID, planId: firstPlanId },
+    { jobId: PLAN_CHANGE_REFINE_JOB_ID, planId: refinedPlanId },
+  ]);
   await stubStream(page, PLAN_CHANGE_JOB_ID, progressSse(1));
   await stubStream(page, PLAN_CHANGE_REFINE_JOB_ID, progressSse(2));
-  const releaseFirstResult = await stubGatedJobResult(
-    page,
-    PLAN_CHANGE_JOB_ID,
-    firstDelta(seed.notifKey),
-  );
-  await stubJobResult(page, PLAN_CHANGE_REFINE_JOB_ID, refinedDelta(seed.notifKey));
+  const releaseFirstResult = await gatePlanRead(page, firstPlanId);
 
   await signIn(page, seed.email, seed.password);
 
@@ -257,7 +250,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
   await chapter('Describe the change — it lands on the canvas', async () => {
     await sendTurn(page, 'Add a billing epic and rename the notifications story.');
 
-    // STREAMING: the job result is held, so the run is parked mid-flight and the
+    // STREAMING: the plan read is held, so the run is parked mid-flight and the
     // rail's live region shows the narration built from the SSE's real frames.
     await expect(page.getByTestId('plan-change-progress')).toContainText(/proposed so far/);
     releaseFirstResult();
@@ -287,8 +280,11 @@ test('plan change is a conversation — open, describe, refine, approve', async 
   });
 
   await chapter('Approve — the plan changes', async () => {
+    // The confirm goes through the PLANS approve — the same operation
+    // `/plans/[id]` performs on the same plan. One gate, one write path.
     const approved = page.waitForResponse(
-      (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
+      (r) =>
+        r.url().includes(`/api/plans/${refinedPlanId}/approve`) && r.request().method() === 'POST',
     );
     await confirmBar(page).getByRole('button', { name: 'Approve changes' }).click();
     expect((await approved).status()).toBe(200);
@@ -319,6 +315,11 @@ test('plan change is a conversation — open, describe, refine, approve', async 
       where: { projectId: seed.projectId, identifier: seed.notifKey },
     });
     expect(renamed?.title).toBe(RENAMED_NOTIF);
+
+    // The PLAN itself is decided — a rail approve leaves nothing orphaned at
+    // `planned` for the plans list to show as still awaiting review.
+    const plan = await db.plan.findUnique({ where: { id: refinedPlanId } });
+    expect(plan?.status).toBe('approved');
   });
 });
 
@@ -330,10 +331,17 @@ test('a failed run is recoverable in place — the thread and the retry survive'
   const seed = await seedAiAugmentReplan(`plan-change-error-${Date.now()}@example.com`);
   await markProjectOnboarded(seed.projectId);
 
-  // One job id for both attempts; the STREAM fails first and succeeds on retry.
+  // One job (and one plan) for both attempts; the STREAM fails first and succeeds
+  // on retry — the retry re-sends the accumulated intent to the same run.
+  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: PLAN_CHANGE_JOB_ID,
+    title: 'Split settings',
+    adds: [ADDED_TITLE],
+    rename: { workItemId: seed.notifId, title: RENAMED_NOTIF },
+  });
   let failing = true;
   await stubAiAccess(page);
-  await stubPlanChangeSubmit(page, [PLAN_CHANGE_JOB_ID]);
+  await stubPlanChangeSubmit(page, [{ jobId: PLAN_CHANGE_JOB_ID, planId }]);
   await page.route(`**/api/ai/augment/${PLAN_CHANGE_JOB_ID}/stream`, async (route) => {
     await route.fulfill({
       status: 200,
@@ -341,7 +349,6 @@ test('a failed run is recoverable in place — the thread and the retry survive'
       body: failing ? `event: error\ndata: {"code":"FAILED"}\n\n` : progressSse(1),
     });
   });
-  await stubJobResult(page, PLAN_CHANGE_JOB_ID, firstDelta(seed.notifKey));
 
   await signIn(page, seed.email, seed.password);
   await page.goto('/planning?mode=replan&from=project');

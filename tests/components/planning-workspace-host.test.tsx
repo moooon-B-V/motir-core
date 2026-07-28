@@ -68,6 +68,7 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
 }));
 
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
+import { planReview, planReviewItem } from '../helpers/planReview';
 
 const IDLE: PlanChangeConversationState = {
   phase: 'idle',
@@ -83,7 +84,7 @@ const IDLE: PlanChangeConversationState = {
     turns: [],
   },
   progress: null,
-  delta: null,
+  review: null,
   jobId: null,
   planId: null,
   approved: null,
@@ -198,12 +199,18 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     ...IDLE,
     phase: 'review',
     jobId: 'job-1',
-    delta: {
-      operations: [
-        { op: 'create', kind: 'story', fields: { title: 'Recurring invoices' } },
-        { op: 'update', targetKey: 'PAY-21', fields: { title: 'Email reminders' } },
-      ],
-    },
+    planId: 'plan-1',
+    review: planReview([
+      planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' }),
+      planReviewItem({
+        planItemId: 'pi_2',
+        op: 'modify',
+        nodeId: 'wi_21',
+        identifier: 'PAY-21',
+        title: 'Email reminders',
+        changes: [{ field: 'title', from: 'Payment reminders', to: 'Email reminders' }],
+      }),
+    ]),
   };
 
   it('shows NO confirm gate while nothing is proposed', () => {
@@ -220,7 +227,7 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     // The canvas is re-keyed on the proposal, so the level redraws with the diff.
     const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
     expect(key).toContain('job-1');
-    expect(key).toContain('1-1');
+    expect(key).toContain('1-1-0');
   });
 
   it('routes Approve and Discard to the one conversation both panes share', () => {
@@ -239,8 +246,8 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
 
     // What the hook calls once the commit lands.
     fireEvent.click(screen.getByRole('button', { name: /Approve changes/ }));
-    conversation.state = { ...REVIEWING, phase: 'idle', delta: null, jobId: null };
-    act(() => conversation.onApproved?.({ created: ['PAY-30'], updated: [], unchanged: [] }));
+    conversation.state = { ...REVIEWING, phase: 'idle', review: null, jobId: null, planId: null };
+    act(() => conversation.onApproved?.({ created: ['wi_30'], updated: [], removed: [] }));
 
     // `router.refresh()` reaches the server-rendered surfaces behind the overlay…
     expect(refresh).toHaveBeenCalledTimes(1);

@@ -5,9 +5,10 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
 import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
-import { indexPlanDelta } from '@/lib/planning/planChangeDiff';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
+import { planReview, planReviewItem } from '../helpers/planReview';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
-import type { PlanDelta } from '@/lib/ai/planDelta';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 // The TARGET ring layered onto a roadmap level (Subtask MOTIR-1491; design
 // `target-picker.mock.html` panels 3 + 5 — "the canvas highlights the target").
@@ -39,15 +40,23 @@ const LEVEL: RoadmapLevelData = {
   offLevelBlockers: [],
 };
 
-const DELTA: PlanDelta = {
-  operations: [{ op: 'update', targetKey: 'PAY-812', fields: { title: 'Billing — invoices' } }],
-};
+const REVIEW: PlanReviewDto = planReview([
+  planReviewItem({
+    op: 'modify',
+    nodeId: 'wi-812',
+    identifier: 'PAY-812',
+    title: 'Billing — invoices',
+    changes: [{ field: 'title', from: 'Billing — invoicing', to: 'Billing — invoices' }],
+  }),
+]);
 
-function renderNode(nodeId: string, targetIds: string[], delta: PlanDelta | null = null) {
-  const base = decoratePlanChangeLevel(buildWorkItemLevel(LEVEL), LEVEL, indexPlanDelta(delta), {
-    focusNodeId: null,
-    focusKey: null,
-  });
+function renderNode(nodeId: string, targetIds: string[], review: PlanReviewDto | null = null) {
+  const base = decoratePlanChangeLevel(
+    buildWorkItemLevel(LEVEL),
+    LEVEL,
+    indexPlanReview(review),
+    null,
+  );
   const level = decorateTargetLevel(base, targetIds);
   const node = level.nodes.find((n) => n.id === nodeId)!;
   return { node, ...renderWithIntl(<>{node.content}</>) };
@@ -74,18 +83,22 @@ describe('the canvas shows what the planner is pointed at', () => {
   });
 
   it('is a no-op when nothing is targeted — the plain roadmap render', () => {
-    const base = decoratePlanChangeLevel(buildWorkItemLevel(LEVEL), LEVEL, indexPlanDelta(null), {
-      focusNodeId: null,
-      focusKey: null,
-    });
+    const base = decoratePlanChangeLevel(
+      buildWorkItemLevel(LEVEL),
+      LEVEL,
+      indexPlanReview(null),
+      null,
+    );
     expect(decorateTargetLevel(base, [])).toBe(base);
   });
 
   it('marks EVERY target that is on this level, not only the first', () => {
-    const base = decoratePlanChangeLevel(buildWorkItemLevel(LEVEL), LEVEL, indexPlanDelta(null), {
-      focusNodeId: null,
-      focusKey: null,
-    });
+    const base = decoratePlanChangeLevel(
+      buildWorkItemLevel(LEVEL),
+      LEVEL,
+      indexPlanReview(null),
+      null,
+    );
     const level = decorateTargetLevel(base, ['wi-812', 'wi-511']);
 
     // A target the user has not drilled to simply is not on this level — the
@@ -103,7 +116,7 @@ describe('the canvas shows what the planner is pointed at', () => {
   });
 
   it('COMPOSES with the diff frame — a targeted node the proposal also changes shows both', () => {
-    renderNode('wi-812', ['wi-812'], DELTA);
+    renderNode('wi-812', ['wi-812'], REVIEW);
 
     expect(screen.getByTestId('planning-target-node')).toBeTruthy();
     expect(screen.getByTestId('plan-change-diff-node')).toBeTruthy();

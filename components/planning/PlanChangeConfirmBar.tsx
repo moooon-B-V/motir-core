@@ -18,14 +18,16 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 
 export interface PlanChangeConfirmBarProps {
   index: PlanChangeDiffIndex;
-  approving: boolean;
+  /** A decision is in flight. BOTH decisions write now (approve materializes,
+   *  discard declines the plan), so both must lock the bar — not just approve. */
+  deciding: boolean;
   onApprove: () => void;
   onDiscard: () => void;
 }
 
 export function PlanChangeConfirmBar({
   index,
-  approving,
+  deciding,
   onApprove,
   onDiscard,
 }: PlanChangeConfirmBarProps) {
@@ -38,13 +40,17 @@ export function PlanChangeConfirmBar({
     >
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-sm font-semibold text-(--el-text)">
-          {t('barCounts', { added: index.counts.added, changed: index.counts.changed })}
+          {t('barCounts', {
+            added: index.counts.added,
+            changed: index.counts.changed,
+            removed: index.counts.removed,
+          })}
         </span>
         <span className="truncate text-xs text-(--el-text-muted)">{t('barNothingSaved')}</span>
       </span>
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {approving ? <Spinner size="sm" aria-hidden="true" /> : null}
-        <Button variant="ghost" size="sm" onClick={onDiscard} disabled={approving}>
+        {deciding ? <Spinner size="sm" aria-hidden="true" /> : null}
+        <Button variant="ghost" size="sm" onClick={onDiscard} disabled={deciding}>
           {t('discard')}
         </Button>
         <Button
@@ -52,7 +58,7 @@ export function PlanChangeConfirmBar({
           size="sm"
           leftIcon={<Check className="size-4" aria-hidden="true" />}
           onClick={onApprove}
-          disabled={approving}
+          disabled={deciding}
         >
           {t('approveChanges')}
         </Button>

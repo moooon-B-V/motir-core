@@ -19,8 +19,9 @@ import type { PlanningTarget } from '@/lib/planning/planningTargets';
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
 // a plan is a CONVERSATION: each turn appends to the persisted, project-scoped
 // thread (MOTIR-1728), submitting sends the ACCUMULATED intent, the run narrates
-// itself into a polite live region, and the resulting delta is reviewed ON THE
-// CANVAS — not in a corner dock.
+// itself into a polite live region, and the run's PROPOSALS are reviewed ON THE
+// CANVAS — not in a corner dock. (What feeds that review is the run's Plan, read
+// back through the plans API — MOTIR-1746; the rail's shape is unchanged.)
 //
 // It COMPOSES the shipped rail language from `DiscoveryChatRail` (the
 // `--el-success` status dot + mono header, the avatar/bubble pair, the drafting
@@ -96,7 +97,7 @@ export function PlanChangeRail({
   const tc = useTranslations('planningWorkspace.conversation');
   const [draft, setDraft] = useState('');
 
-  const busy = state.phase === 'streaming' || state.phase === 'approving';
+  const busy = state.phase === 'streaming' || state.phase === 'deciding';
   const userTurns = (state.session?.turns ?? []).filter((turn) => turn.role === 'user');
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading';
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
@@ -177,10 +178,14 @@ export function PlanChangeRail({
 
         {/* The proposal, said in words — the rail mirrors the canvas bar's counts
             so the numbers are readable without hunting the board. */}
-        {state.delta && !index.isEmpty ? (
+        {state.review && !index.isEmpty ? (
           <>
             <Bubble role="assistant">
-              {tc('summary', { added: index.counts.added, changed: index.counts.changed })}
+              {tc('summary', {
+                added: index.counts.added,
+                changed: index.counts.changed,
+                removed: index.counts.removed,
+              })}
             </Bubble>
             <Bubble role="assistant">{tc('lockedNote')}</Bubble>
             <div
@@ -212,11 +217,12 @@ export function PlanChangeRail({
 
         {/* After an approve the thread CONTINUES — a plan change is rarely one
             change (design panel 6, "after approve"). */}
-        {state.approved && !state.delta ? (
+        {state.approved && !state.review ? (
           <Bubble role="assistant">
             {tc('approved', {
               created: state.approved.created.length,
               updated: state.approved.updated.length,
+              removed: state.approved.removed.length,
             })}
           </Bubble>
         ) : null}
@@ -286,6 +292,12 @@ function errorKey(code: string): string {
       return 'error.empty';
     case 'immutable':
       return 'error.immutable';
+    // Someone (or another tab) already approved or declined this plan — there is
+    // nothing left to confirm, and nothing was written twice.
+    case 'decided':
+      return 'error.decided';
+    case 'discard':
+      return 'error.discard';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
     default:

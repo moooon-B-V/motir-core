@@ -2,138 +2,197 @@ import { describe, expect, it } from 'vitest';
 import {
   changedFields,
   diffStateForItem,
-  indexPlanDelta,
+  indexPlanReview,
   isProposedNodeId,
+  proposalForItem,
   proposedAddsForLevel,
 } from '@/lib/planning/planChangeDiff';
-import type { PlanDelta } from '@/lib/ai/planDelta';
+import { planReview, planReviewItem } from '../helpers/planReview';
 
-// The placement rules behind the IN-CANVAS diff (Subtask MOTIR-1730). The canvas
-// renders one level at a time, so the whole question this module answers is
-// "which of the delta's ops belong on the level in focus, and what state does each
-// existing item take?". Pure input → output, no React.
+// The placement rules behind the IN-CANVAS diff (Subtask MOTIR-1730, re-pointed
+// at the PLAN by MOTIR-1746). The canvas renders one level at a time, so the whole
+// question this module answers is "which of the run's proposals belong on the
+// level in focus, and what state does each existing item take?". Pure input →
+// output, no React.
 
-function delta(operations: PlanDelta['operations']): PlanDelta {
-  return { operations };
-}
-
-describe('indexPlanDelta', () => {
-  it('is empty for a null / no-op delta (an empty operations list is valid)', () => {
-    expect(indexPlanDelta(null).isEmpty).toBe(true);
-    expect(indexPlanDelta(delta([])).isEmpty).toBe(true);
-    expect(indexPlanDelta(delta([])).counts).toEqual({ added: 0, changed: 0 });
+describe('indexPlanReview', () => {
+  it('is empty for no plan / a plan with no proposals (both are valid no-ops)', () => {
+    expect(indexPlanReview(null).isEmpty).toBe(true);
+    expect(indexPlanReview(planReview([])).isEmpty).toBe(true);
+    expect(indexPlanReview(planReview([])).counts).toEqual({ added: 0, changed: 0, removed: 0 });
   });
 
-  it('counts adds and changes separately and keys updates by their target', () => {
-    const index = indexPlanDelta(
-      delta([
-        { op: 'create', kind: 'story', fields: { title: 'Recurring invoices' } },
-        { op: 'create', kind: 'subtask', fields: { title: 'Monthly schedule' } },
-        { op: 'update', targetKey: 'PAY-21', fields: { title: 'Email reminders' } },
+  it('counts each op separately and keys modify/remove by their TARGET work item', () => {
+    const index = indexPlanReview(
+      planReview([
+        planReviewItem({ planItemId: 'pi_a', nodeId: 'pi_a', title: 'Recurring invoices' }),
+        planReviewItem({ planItemId: 'pi_b', nodeId: 'pi_b', title: 'Monthly schedule' }),
+        planReviewItem({
+          planItemId: 'pi_c',
+          op: 'modify',
+          nodeId: 'wi_21',
+          identifier: 'PAY-21',
+          title: 'Email reminders',
+          changes: [{ field: 'title', from: 'Reminders', to: 'Email reminders' }],
+        }),
+        planReviewItem({
+          planItemId: 'pi_d',
+          op: 'remove',
+          nodeId: 'wi_24',
+          identifier: 'PAY-24',
+          title: 'SMS reminder',
+        }),
       ]),
     );
 
-    expect(index.counts).toEqual({ added: 2, changed: 1 });
-    expect(index.updatesByKey.get('PAY-21')?.fields.title).toBe('Email reminders');
+    expect(index.counts).toEqual({ added: 2, changed: 1, removed: 1 });
+    expect(index.changesById.get('wi_21')?.title).toBe('Email reminders');
+    expect(index.removalsById.get('wi_24')?.identifier).toBe('PAY-24');
+    // A proposed node is PREFIXED, so it can never collide with a work-item id —
+    // which is what lets the canvas tell "drill a proposal" from "drill an item".
     expect(index.adds.every((a) => isProposedNodeId(a.nodeId))).toBe(true);
   });
 
-  it('resolves a parentRef to the earlier create it names, and flags that parent drillable', () => {
-    const index = indexPlanDelta(
-      delta([
-        { op: 'create', ref: 'recurring', kind: 'story', fields: { title: 'Recurring' } },
-        { op: 'create', parentRef: 'recurring', kind: 'subtask', fields: { title: 'Monthly' } },
+  it('re-prefixes a parent that is ANOTHER proposal, and flags that parent drillable', () => {
+    const index = indexPlanReview(
+      planReview([
+        planReviewItem({ planItemId: 'pi_p', nodeId: 'pi_p', title: 'Recurring' }),
+        planReviewItem({
+          planItemId: 'pi_c',
+          nodeId: 'pi_c',
+          parentNodeId: 'pi_p',
+          title: 'Monthly',
+        }),
       ]),
     );
 
     const [parent, child] = index.adds;
     expect(child!.parentNodeId).toBe(parent!.nodeId);
-    expect(child!.parentKey).toBeNull();
     expect(parent!.hasChildren).toBe(true);
     expect(child!.hasChildren).toBe(false);
   });
 
-  it('keeps an UNRESOLVABLE parentRef as a root proposal instead of dropping the node', () => {
-    const index = indexPlanDelta(
-      delta([{ op: 'create', parentRef: 'ghost', kind: 'story', fields: { title: 'Orphan' } }]),
+  it('leaves a parent that is an EXISTING work item as its real id (that IS its canvas node)', () => {
+    const index = indexPlanReview(
+      planReview([planReviewItem({ planItemId: 'pi_x', nodeId: 'pi_x', parentNodeId: 'wi_3' })]),
     );
 
-    expect(index.adds).toHaveLength(1);
-    expect(index.adds[0]!.parentNodeId).toBeNull();
+    expect(index.adds[0]!.parentNodeId).toBe('wi_3');
   });
 });
 
 describe('proposedAddsForLevel', () => {
-  const index = indexPlanDelta(
-    delta([
-      {
-        op: 'create',
-        ref: 'recurring',
-        parentKey: 'PAY-3',
-        kind: 'story',
-        fields: { title: 'Recurring' },
-      },
-      { op: 'create', parentRef: 'recurring', kind: 'subtask', fields: { title: 'Monthly' } },
-      { op: 'create', kind: 'epic', fields: { title: 'Reporting' } },
+  const index = indexPlanReview(
+    planReview([
+      planReviewItem({
+        planItemId: 'pi_r',
+        nodeId: 'pi_r',
+        parentNodeId: 'wi_3',
+        title: 'Recurring',
+      }),
+      planReviewItem({
+        planItemId: 'pi_m',
+        nodeId: 'pi_m',
+        parentNodeId: 'pi_r',
+        title: 'Monthly',
+      }),
+      planReviewItem({ planItemId: 'pi_top', nodeId: 'pi_top', title: 'Reporting' }),
     ]),
   );
 
   it('puts a parentless proposal on the TOP level', () => {
-    const top = proposedAddsForLevel(index, { focusNodeId: null, focusKey: null });
-    expect(top.map((a) => a.op.fields.title)).toEqual(['Reporting']);
+    expect(proposedAddsForLevel(index, null).map((a) => a.item.title)).toEqual(['Reporting']);
   });
 
-  it('puts a parentKey proposal on the level of the existing item it names', () => {
-    const level = proposedAddsForLevel(index, { focusNodeId: 'wi-3', focusKey: 'PAY-3' });
-    expect(level.map((a) => a.op.fields.title)).toEqual(['Recurring']);
+  it('puts a proposal on the level of the EXISTING item it is parented on', () => {
+    expect(proposedAddsForLevel(index, 'wi_3').map((a) => a.item.title)).toEqual(['Recurring']);
   });
 
-  it('puts a parentRef proposal under its PROPOSED parent when that node is the focus', () => {
+  it('puts a proposal under its PROPOSED parent when that node is the focus', () => {
     const parent = index.adds[0]!;
-    const level = proposedAddsForLevel(index, { focusNodeId: parent.nodeId, focusKey: null });
-    expect(level.map((a) => a.op.fields.title)).toEqual(['Monthly']);
+    expect(proposedAddsForLevel(index, parent.nodeId).map((a) => a.item.title)).toEqual([
+      'Monthly',
+    ]);
   });
 
-  it('shows nothing on a level whose work-item key is not known yet', () => {
-    expect(proposedAddsForLevel(index, { focusNodeId: 'wi-9', focusKey: null })).toEqual([]);
+  it('shows nothing on a level nothing is proposed under', () => {
+    expect(proposedAddsForLevel(index, 'wi_9')).toEqual([]);
   });
 });
 
 describe('diffStateForItem', () => {
-  const index = indexPlanDelta(
-    delta([{ op: 'update', targetKey: 'PAY-21', fields: { priority: 'high' } }]),
+  const index = indexPlanReview(
+    planReview([
+      planReviewItem({
+        planItemId: 'pi_m',
+        op: 'modify',
+        nodeId: 'wi_21',
+        changes: [{ field: 'priority', from: 'medium', to: 'high' }],
+      }),
+      planReviewItem({ planItemId: 'pi_r', op: 'remove', nodeId: 'wi_24' }),
+    ]),
   );
 
-  it('marks an item the proposal updates as CHANGED', () => {
-    expect(diffStateForItem(index, { identifier: 'PAY-21', status: 'todo' })).toBe('change');
+  it('marks an item the proposal modifies as CHANGED', () => {
+    expect(diffStateForItem(index, { id: 'wi_21', status: 'todo' })).toBe('change');
+  });
+
+  it('marks an item the proposal removes as REMOVE — a state the engine really emits', () => {
+    // `expandItem` / `replan` append `remove` proposals; the delta contract this
+    // surface used to read had no op for them, so they were invisible before.
+    expect(diffStateForItem(index, { id: 'wi_24', status: 'todo' })).toBe('remove');
   });
 
   it('leaves an untouched item undecorated', () => {
-    expect(diffStateForItem(index, { identifier: 'PAY-22', status: 'todo' })).toBeNull();
+    expect(diffStateForItem(index, { id: 'wi_22', status: 'todo' })).toBeNull();
   });
 
   it('LOCKS finished work — the same terminal rule the approve enforces server-side', () => {
-    expect(diffStateForItem(index, { identifier: 'PAY-12', status: 'done' })).toBe('locked');
-    expect(diffStateForItem(index, { identifier: 'PAY-13', status: 'cancelled' })).toBe('locked');
+    expect(diffStateForItem(index, { id: 'wi_12', status: 'done' })).toBe('locked');
+    expect(diffStateForItem(index, { id: 'wi_13', status: 'cancelled' })).toBe('locked');
   });
 
-  it('LOCKS wins over a proposed change on the same item (the approve would reject it)', () => {
-    expect(diffStateForItem(index, { identifier: 'PAY-21', status: 'done' })).toBe('locked');
+  it('LOCKED wins over a proposed change or removal (the approve would reject it)', () => {
+    expect(diffStateForItem(index, { id: 'wi_21', status: 'done' })).toBe('locked');
+    expect(diffStateForItem(index, { id: 'wi_24', status: 'done' })).toBe('locked');
+  });
+
+  it('hands back the proposal behind the state, so the node can name what changed', () => {
+    expect(proposalForItem(index, 'wi_21')?.op).toBe('modify');
+    expect(proposalForItem(index, 'wi_24')?.op).toBe('remove');
+    expect(proposalForItem(index, 'wi_99')).toBeUndefined();
   });
 });
 
 describe('changedFields', () => {
-  it('names every field the update touches, including a null-ing one', () => {
+  it('names every field the modify touches, mapping the wire name to the copy key', () => {
     expect(
-      changedFields({
-        op: 'update',
-        targetKey: 'PAY-21',
-        fields: { title: 'x', type: null, estimateMinutes: 30 },
-      }),
-    ).toEqual(['title', 'type', 'estimate']);
+      changedFields(
+        planReviewItem({
+          op: 'modify',
+          changes: [
+            { field: 'title', from: 'a', to: 'b' },
+            { field: 'type', from: 'code', to: null },
+            { field: 'estimateMinutes', from: '20', to: '30' },
+            { field: 'storyPoints', from: '2', to: '3' },
+            { field: 'links', from: null, to: '+1' },
+          ],
+        }),
+      ),
+    ).toEqual(['title', 'type', 'estimate', 'points', 'links']);
   });
 
-  it('is empty for an update that sets nothing', () => {
-    expect(changedFields({ op: 'update', targetKey: 'PAY-21', fields: {} })).toEqual([]);
+  it('DROPS a field it has no copy for, rather than rendering a missing key', () => {
+    // The whitelist is the point: a diffable field added server-side must not be
+    // able to crash the canvas on a translation that has not landed yet.
+    expect(
+      changedFields(
+        planReviewItem({ op: 'modify', changes: [{ field: 'sprint', from: null, to: 'S3' }] }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('is empty for a modify that carries no diff', () => {
+    expect(changedFields(planReviewItem({ op: 'modify' }))).toEqual([]);
   });
 });

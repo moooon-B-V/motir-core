@@ -16,6 +16,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { plansService } from '@/lib/services/plansService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 export const AUGMENT_REPLAN_SEED_PASSWORD = 'ai-augment-replan-e2e-pass-9';
@@ -39,6 +40,9 @@ export interface AiAugmentReplanSeed {
   loginKey: string;
   /** Story: "Notifications" — childless stub for expand. */
   notifKey: string;
+  /** …and its database id, which a `modify` PROPOSAL addresses it by (the plan
+   *  substrate keys targets by id; identifiers are the human-facing name). */
+  notifId: string;
   /** Epic: "Settings" — has done + not-done leaves for replan. */
   settingsEpicKey: string;
   /** Done subtasks — must be byte-identical after replan. */
@@ -128,12 +132,72 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
     authEpicKey: authEpic.identifier,
     loginKey: login.identifier,
     notifKey: notif.identifier,
+    notifId: notif.id,
     settingsEpicKey: settingsEpic.identifier,
     themeKey: theme.identifier,
     profileKey: profile.identifier,
     billingKey: billing.identifier,
     apiKey: api.identifier,
   };
+}
+
+/**
+ * Seed the PROPOSALS a plan-edit run would have produced — as a real `Plan`, the
+ * way motir-ai actually produces them (MOTIR-1746).
+ *
+ * Every plan-edit handler writes its output through the internal append seam
+ * (`plansService.createPlan → addProposals → markPlanned`) and returns an EMPTY
+ * `planDelta`; the browser then reads the Plan and confirms it. CI has no
+ * motir-ai, so this helper stands in for the handler by making the SAME service
+ * calls the handler's callbacks make — which keeps everything on this side of
+ * that hop REAL: the spec's review read runs `planReviewService` and its approve
+ * runs `plansService.approvePlan → materialize` against Postgres.
+ *
+ * `sourceJobId` binds the plan to the stubbed job exactly as the submit does.
+ */
+export async function seedPlanChangeProposal(
+  ctx: ServiceContext,
+  projectId: string,
+  args: {
+    jobId: string;
+    title: string;
+    /** Root `add` proposals, by title. */
+    adds: readonly string[];
+    /** An existing item to propose a rename of (`modify`). */
+    rename?: { workItemId: string; title: string };
+  },
+): Promise<string> {
+  const plan = await plansService.createPlan(
+    projectId,
+    { title: args.title, sourceJobId: args.jobId },
+    ctx,
+  );
+  await plansService.addProposals(
+    plan.id,
+    [
+      // Root proposals (no parentRef), so the diff is visible on the canvas's TOP
+      // level without drilling. `story` carries no `type` — that is leaf-only
+      // (the 2.7.2 ADR; an epic/story with a type is rejected 422 by the approve).
+      ...args.adds.map((title) => ({
+        op: 'add' as const,
+        proposedFields: { title, kind: 'story' },
+      })),
+      ...(args.rename
+        ? [
+            {
+              op: 'modify' as const,
+              workItemId: args.rename.workItemId,
+              patch: { title: args.rename.title },
+            },
+          ]
+        : []),
+    ],
+    ctx,
+  );
+  // The handler's LAST callback — the plan leaves `generating` and becomes a
+  // pending review. Until it does, there is nothing for the rail to confirm.
+  await plansService.markPlanned(plan.id, ctx);
+  return plan.id;
 }
 
 /**

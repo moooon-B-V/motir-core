@@ -134,6 +134,53 @@ describe('the client/server boundary holds', () => {
   });
 });
 
+// ─────── Guard 1b — the conversation confirms the PLAN, through ONE gate ───────
+
+describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746)', () => {
+  // The whole defect: every plan-edit handler in motir-ai returns
+  // `planDelta: { operations: [] }` and writes its output as PlanItem proposals
+  // instead, so a surface that reads the delta can only ever show "nothing was
+  // proposed" — while the proposals sit in the Plan unread. These are STANDING
+  // invariants, not one-off assertions: a future edit that reaches back for the
+  // delta re-opens exactly that bug, silently.
+  const CONVERSATION_MODULES = [
+    'lib/hooks/usePlanChangeConversation.ts',
+    'components/planning/PlanningWorkspaceHost.tsx',
+    'components/planning/PlanChangeRail.tsx',
+    'components/planning/PlanChangeCanvas.tsx',
+    'components/planning/PlanChangeConfirmBar.tsx',
+    'components/planning/planChangeLevel.tsx',
+    'components/planning/PlanChangeDiffNode.tsx',
+    'lib/planning/planChangeDiff.ts',
+  ];
+
+  it.each(CONVERSATION_MODULES)('%s reads no planDelta and calls no delta approve', (rel) => {
+    const text = read(join(ROOT, rel));
+    // A prose mention in the header comment is the RECORD of why; an import or a
+    // call is the regression. So match code, not commentary.
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
+    expect(code, `${rel} must not read the job's planDelta`).not.toMatch(/planDelta/);
+    expect(code, `${rel} must not call the delta approve`).not.toMatch(
+      /approvePlanDelta|plan-delta\/approve/,
+    );
+  });
+
+  it('the conversation confirms through the SAME client the plan detail uses', () => {
+    // Two entrances (the rail and `/plans/[id]`), ONE gate: both go through
+    // `planReviewClient` → `POST /api/plans/[id]/approve` → `materialize`. A
+    // second write path is how the same proposal lands twice.
+    for (const rel of [
+      'lib/hooks/usePlanChangeConversation.ts',
+      'components/planning/PlanDetail.tsx',
+    ]) {
+      expect(read(join(ROOT, rel)), rel).toMatch(/from '@\/lib\/planning\/planReviewClient'/);
+    }
+    const client = read(join(ROOT, 'lib/planning/planReviewClient.ts'));
+    expect(client).toContain('/approve');
+    expect(client).toContain('/decline');
+  });
+});
+
 // ─────────── Guard 2 — the story's routes stay a thin HTTP layer ───────────
 
 describe('the story’s routes are HTTP-only (4-layer)', () => {

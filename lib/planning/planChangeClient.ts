@@ -7,11 +7,12 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 // the shipped `/api/ai/plan-change/session*` endpoints.
 //
 // The JOB half is deliberately NOT re-implemented: a submitted conversation
-// returns an ordinary `augment` job id, which the rail streams + approves through
-// the ALREADY-SHIPPED `planEditsClient` helpers (`streamAugmentJob`,
-// `fetchJobResult`, `approvePlanDelta`). This module owns only the three session
-// calls, and reuses `PlanEditsClientError` so a caller branches on one error type
-// (its `isOutOfCredits` covers the 402 the submit path can raise).
+// returns an ordinary `augment` job id, which the rail streams through the
+// ALREADY-SHIPPED `planEditsClient.streamAugmentJob`, and a `planId`, whose
+// proposals it reads + confirms through the shipped `planReviewClient`
+// (MOTIR-1746). This module owns only the three session calls, and reuses
+// `PlanEditsClientError` so a caller branches on one error type (its
+// `isOutOfCredits` covers the 402 the submit path can raise).
 
 /**
  * What a submit RESPONSE looks like to the browser. It mirrors the server's

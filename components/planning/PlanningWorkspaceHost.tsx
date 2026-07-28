@@ -11,7 +11,7 @@ import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanChangeConfirmBar } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
-import { indexPlanDelta } from '@/lib/planning/planChangeDiff';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import {
   addPlanningTarget,
   removePlanningTarget,
@@ -115,9 +115,9 @@ export function PlanningWorkspaceHost({
   const sendTargeted = useCallback((text: string) => void send(text, targets), [send, targets]);
   const targetIds = targets.map((target) => target.id);
 
-  const index = useMemo(() => indexPlanDelta(state.delta), [state.delta]);
+  const index = useMemo(() => indexPlanReview(state.review), [state.review]);
   // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
-  const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${index.counts.added}-${index.counts.changed}`;
+  const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${index.counts.added}-${index.counts.changed}-${index.counts.removed}`;
 
   const close = useCallback(() => router.push(backHref), [router, backHref]);
 
@@ -187,10 +187,10 @@ export function PlanningWorkspaceHost({
           </div>
 
           {/* The gate — visible only while a proposal is pending on the canvas. */}
-          {state.delta && !index.isEmpty ? (
+          {state.review && !index.isEmpty ? (
             <PlanChangeConfirmBar
               index={index}
-              approving={state.phase === 'approving'}
+              deciding={state.phase === 'deciding'}
               onApprove={approve}
               onDiscard={discard}
             />

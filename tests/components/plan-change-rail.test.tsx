@@ -4,11 +4,12 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
-import { indexPlanDelta } from '@/lib/planning/planChangeDiff';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
+import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
-import type { PlanDelta } from '@/lib/ai/planDelta';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 // The conversational RAIL (Subtask MOTIR-1730; design panels 3 + 6). It is
 // presentational — the host owns the conversation state — so each of the rail's
@@ -42,19 +43,41 @@ function session(turns: PlanChangeTurnDto[], targetKeys: string[] = []): PlanCha
   };
 }
 
-const DELTA: PlanDelta = {
-  operations: [
-    { op: 'create', kind: 'story', fields: { title: 'Recurring invoices' } },
-    { op: 'create', kind: 'subtask', fields: { title: 'Monthly schedule' } },
-    { op: 'update', targetKey: 'PAY-21', fields: { title: 'Email reminders' } },
-  ],
-};
+const REVIEW: PlanReviewDto = planReview([
+  planReviewItem({
+    planItemId: 'pi_1',
+    nodeId: 'pi_1',
+    kind: 'story',
+    title: 'Recurring invoices',
+  }),
+  planReviewItem({
+    planItemId: 'pi_2',
+    nodeId: 'pi_2',
+    kind: 'subtask',
+    title: 'Monthly schedule',
+  }),
+  planReviewItem({
+    planItemId: 'pi_3',
+    op: 'modify',
+    nodeId: 'wi_21',
+    identifier: 'PAY-21',
+    title: 'Email reminders',
+    changes: [{ field: 'title', from: 'Payment reminders', to: 'Email reminders' }],
+  }),
+  planReviewItem({
+    planItemId: 'pi_4',
+    op: 'remove',
+    nodeId: 'wi_24',
+    identifier: 'PAY-24',
+    title: 'SMS reminder',
+  }),
+]);
 
 const BASE: PlanChangeConversationState = {
   phase: 'idle',
   session: session([]),
   progress: null,
-  delta: null,
+  review: null,
   jobId: null,
   planId: null,
   approved: null,
@@ -82,7 +105,7 @@ function renderRail(
       launch={launch}
       projectName="PayFlow"
       state={merged}
-      index={indexPlanDelta(merged.delta)}
+      index={indexPlanReview(merged.review)}
       targets={targets}
       {...handlers}
     />,
@@ -221,12 +244,15 @@ describe('PlanChangeRail — review', () => {
     renderRail({
       phase: 'review',
       session: session([turn(0, 'Add recurring invoices.')]),
-      delta: DELTA,
+      review: REVIEW,
       jobId: 'job-1',
+      planId: 'plan-1',
     });
 
     expect(
-      screen.getByText(/2 added, 1 changed — it's on the canvas, nothing is saved yet\./),
+      screen.getByText(
+        /2 added, 1 changed, 1 removed — it's on the canvas, nothing is saved yet\./,
+      ),
     ).toBeTruthy();
     // The lock is SAID, not only drawn on the canvas.
     expect(screen.getByText(/I can't change done work/)).toBeTruthy();
@@ -243,10 +269,12 @@ describe('PlanChangeRail — after approve', () => {
   it('says what landed and KEEPS the conversation open (a plan change is rarely one change)', () => {
     renderRail({
       session: session([turn(0, 'Add recurring invoices.')]),
-      approved: { created: ['PAY-30', 'PAY-31'], updated: ['PAY-21'], unchanged: [] },
+      approved: { created: ['wi_30', 'wi_31'], updated: ['wi_21'], removed: ['wi_24'] },
     });
 
-    expect(screen.getByText(/Added 2 work items, changed 1 — it's in the plan now/)).toBeTruthy();
+    expect(
+      screen.getByText(/Added 2 work items, changed 1, removed 1 — it's in the plan now/),
+    ).toBeTruthy();
     // The composer is still there, enabled — the thread continues.
     expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
     expect(screen.queryByTestId('plan-change-review')).toBeNull();
