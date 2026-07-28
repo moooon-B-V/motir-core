@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **29 tools**.
+`initialize` handshake and registers **30 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -255,6 +255,48 @@ On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
 `item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
 claimed the last one — or check there is unblocked work to start). Scope token:
 `work_items:write` (it flips status).
+
+#### `dispatch_prompt`
+
+Return the **canonical, server-generated coding-agent prompt** for one work item.
+This is the prompt a BYOK CLI prints and hands to the agent verbatim — **the
+client never assembles its own prompt grammar**, so every agent harness (Claude
+Code / Codex / opencode / …) receives the identical instruction and the grammar
+versions with the product.
+
+A pure **read**: it does NOT claim the item and does NOT change its status
+(`claim_next_ready` is the tool that does both), and it works on ANY work item,
+not only a ready one — so re-printing an in-progress item's prompt is safe.
+
+| Input | Type   | Required | Notes                                  |
+| ----- | ------ | -------- | -------------------------------------- |
+| `key` | string | yes      | Work item identifier, e.g. `"PROD-7"`. |
+
+**Output** — `structuredContent`: `{ key, prompt, targetRepo, workflowMode, sessionBranch }`.
+
+- **`prompt`** — the full text, in four sections: **CONTEXT** (project, item,
+  sizing, repo, parent, satisfied dependencies, the context refs and the card
+  body), **WHAT TO DO**, **ACCEPTANCE CRITERIA**, **GIT WORKFLOW**. The card's
+  `## Acceptance criteria` and `## Context refs` sections are lifted into their
+  own sections rather than repeated inside the body.
+- **`targetRepo`** — the same RESOLVED repo `next_ready` returns (see
+  `next_ready` above and `docs/decisions/target-repo-attribution.md`).
+- **`workflowMode`** — `"per_item_pr"` (branch from `origin/main`, one PR, stop)
+  or `"session_lineage"` (branch from / integrate into the inherited session
+  branch, then call `mark_integrated`). **Chosen server-side** from the item's
+  inherited lineage — there is no input that lets a caller pick it.
+- **`sessionBranch`** — the branch the prompt instructs, or `null`.
+
+**Variants, all decided server-side.** WHAT TO DO varies by the item's `type`
+(`code` / `design` / `test` / `decision` / …). A **manual** item (`type: manual`
+or `executor: human`) gets the human-instruction form and **no GIT WORKFLOW
+section at all** — it has no branch and no PR — and reports `per_item_pr` with a
+null branch.
+
+The prompt is a **pure function of server state**: two calls for an unchanged item
+return byte-identical text (no LLM, no timestamps). See
+`docs/decisions/dispatch-prompt-assembly.md` for the grammar's rationale and the
+single named extension point enrichment lands on. Scope token: `read`.
 
 #### `get_work_item`
 

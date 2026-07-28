@@ -54,6 +54,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_work_item: 'read',
   list_ready: 'read',
   next_ready: 'read',
+  // dispatch_prompt only READS the item and assembles text — it never claims it
+  // or flips its status (that is claim_next_ready's job).
+  dispatch_prompt: 'read',
   search_work_items: 'read',
   whoami: 'read',
   list_sprints: 'read',
