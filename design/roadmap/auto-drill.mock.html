@@ -1,0 +1,1920 @@
+<!doctype html>
+<!--
+  ROADMAP — the AUTO-DESCENDED ARRIVAL STATE (MOTIR-1805 / Story MOTIR-1803).
+
+  COMPOSES the shipped roadmap canvas — it does NOT redraw it (notes.html #82/#95).
+  The canvas engine + node cards (ProjectRoadmapCanvas / WorkItemNode, MOTIR-1194;
+  design MOTIR-1009 / roadmap.mock.html), the edge language (MOTIR-1331 /
+  edges.mock.html), the grid + init arrangement (MOTIR-1333 / grid-init.mock.html)
+  and the scope toggle (MOTIR-1380 / scope-toggle.mock.html) are all SHIPPED designs
+  this sheet cites and reuses. The only thing drawn here that exists nowhere else is
+  the state the canvas is in when it ARRIVES already drilled — and the one delta that
+  arrival forces on the breadcrumb's crumb LABEL (panel B).
+
+  The breadcrumb + Back overlay below mirrors the RUNNING markup verbatim
+  (components/planning/ProjectRoadmapCanvas.tsx — the `drilled &&` <nav>, its
+  ChevronLeft Back button, the <ol> of <Crumb> buttons, the ChevronRight separators,
+  `aria-current="page"` on the last crumb) rather than restyling it.
+
+  Built from the real design system: every value below is the light-theme resolution
+  of a `globals.css` token, referenced through its `--el-*` / shape-token name (the
+  colour + shape swap rules — never a Tier-0 --color-* name, never a raw
+  rounded-*/p-*/h-*, never an invented hue in a semantic surface).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — the auto-descended arrival state (MOTIR-1805)</title>
+    <style>
+      :root {
+        /* ── colour (Tier-3 --el-*, light theme) ── */
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
+        --el-icon-muted: #787671;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-on-surface: #5645d4;
+        --el-success: #1aae39;
+        --el-tabnav-track: #f6f5f4;
+        --el-tabnav-active: #5645d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-peach: #ffe8d4;
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --focus-ring-color: #5645d4;
+        /* ── shape (element-semantic tokens) ── */
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --height-control: 36px;
+        --spacing-control-x: 10px;
+        --spacing-chip-x: 8px;
+        --spacing-chip-y: 2px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        /* non-semantic backdrop (the review board itself, not a product surface) */
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      p.docsub b {
+        color: var(--el-text-secondary);
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+        text-align: right;
+        max-width: 62%;
+      }
+      .body {
+        padding: 20px;
+      }
+      .note {
+        margin: 14px 0 0;
+        padding: 11px 13px;
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code,
+      .cap code,
+      td code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 4px;
+        color: var(--el-text-strong);
+      }
+
+      /* ── the PAGE HEADER (the shipped <header>, MOTIR-1011 + the MOTIR-1382 toggle) ── */
+      .pagehead {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      .pagehead .htext {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .pagehead h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+        line-height: 1.1;
+      }
+      .pagehead .sub {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      .pagehead .sub .sname {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .scopechip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 8px;
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 600;
+        vertical-align: middle;
+      }
+      .scopechip svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-accent-on-surface);
+      }
+      .grow {
+        margin-left: auto;
+      }
+
+      /* ── Segmented (components/ui/Segmented.tsx) — the scope toggle, REUSED ── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        background: transparent;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .seg-opt .ic {
+        display: inline-flex;
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .seg-opt.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-opt.on .ic {
+        color: var(--el-tabnav-active);
+      }
+
+      /* ── the LEFT-NAV rail (the shipped app shell) — drawn to show the DOOR ── */
+      .shell {
+        display: flex;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        width: 176px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 12px 8px;
+      }
+      .rail .rtitle {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding: 0 8px 7px;
+      }
+      .rail a {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .rail a svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-muted);
+      }
+      .rail a.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .rail a.on svg {
+        color: var(--el-accent-on-surface);
+      }
+      .shellmain {
+        flex: 1;
+        min-width: 0;
+        padding: 16px;
+      }
+
+      /* ── the canvas (COMPOSED — the shipped ProjectRoadmapCanvas) ── */
+      .canvas {
+        position: relative;
+        height: 300px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow: hidden;
+      }
+      .canvas.tall {
+        height: 352px;
+      }
+      .canvas.short {
+        height: 258px;
+      }
+
+      /* ── the BREADCRUMB + Back overlay — mirrors ProjectRoadmapCanvas.tsx ──
+         nav: absolute top-3 left-3 · rounded-(--radius-card) · border-(--el-border)
+              · bg-(--el-surface) · px-2 py-1 · shadow-(--shadow-card)
+         back: size-(--height-control) · rounded-(--radius-control)
+               · text-(--el-text-secondary) · ChevronLeft
+         crumb: rounded-(--radius-control) px-1.5 py-0.5 · truncate
+                · inactive text-(--el-text-secondary) · active font-semibold text-(--el-text) */
+      .bc {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        max-width: calc(100% - 24px);
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .bc .back {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        flex: none;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .bc .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .bc ol {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        min-width: 0;
+        list-style: none;
+        font-size: 13px;
+      }
+      .bc li {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .bc .sep {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .bc .c {
+        display: block;
+        max-width: 18rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 2px 6px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .bc .c.on {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      /* the annotated "focus-visible ring" state, drawn once in the anatomy strip */
+      .bc .c.ring {
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+
+      /* zoom cluster (the engine's own control — depicted, not redesigned) */
+      .zoom {
+        position: absolute;
+        left: 16px;
+        bottom: 14px;
+        display: inline-flex;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        box-shadow: var(--shadow-subtle);
+      }
+      .zoom span {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 30px;
+        font-size: 15px;
+        color: var(--el-text-secondary);
+      }
+      .zoom span + span {
+        border-left: 1px solid var(--el-border);
+      }
+
+      /* connector edges between nodes */
+      .edges {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .edges path {
+        fill: none;
+        stroke: var(--el-border-strong);
+        stroke-width: 1.5;
+      }
+
+      /* ── node card (components/planning/WorkItemNode.tsx) — REUSED, not redrawn ── */
+      .node {
+        position: absolute;
+        width: 206px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .node.done {
+        background: var(--el-tint-sky);
+        box-shadow: var(--shadow-subtle);
+      }
+      .node.ready {
+        background: var(--el-tint-mint);
+      }
+      .ntop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 10.5px;
+        font-weight: 600;
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .spill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .spill.prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .spill.blocked {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .spill.donep {
+        background: var(--el-text-secondary);
+        color: var(--el-text-inverted);
+      }
+      .spill.readyp {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-strong);
+      }
+      .spill.readyp svg {
+        color: var(--el-success);
+      }
+      .drill {
+        margin-left: auto;
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .tile {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile svg {
+        width: 15px;
+        height: 15px;
+      }
+      .tile.epic {
+        background: var(--el-tint-rose);
+      }
+      .tile.epic svg {
+        color: var(--el-type-epic);
+      }
+      .tile.story {
+        background: var(--el-tint-mint);
+      }
+      .tile.story svg {
+        color: var(--el-type-story);
+      }
+      .tile.subtask {
+        background: var(--el-tint-lavender);
+      }
+      .tile.subtask svg {
+        color: var(--el-type-subtask);
+      }
+      .nid {
+        font:
+          10.5px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.22;
+      }
+      .node.done .ntitle {
+        color: var(--el-text-muted);
+        text-decoration: line-through;
+      }
+      .meter {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .mtrack {
+        flex: 1;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .mfill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-success);
+      }
+      .mnum {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* the two-up comparison grid (same state, two routes in) */
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .col .collbl {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .col .collbl .tag {
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .tag.manual {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .tag.auto {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .col .colsub {
+        margin: -4px 0 8px;
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .same {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .same svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+
+      /* the "what the user did" step strip above a canvas */
+      .steps {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .steps .st {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-surface-soft);
+      }
+      .steps .st svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-icon-muted);
+      }
+      .steps .arr {
+        color: var(--el-text-faint);
+      }
+      .steps .st.now {
+        background: var(--el-tint-lavender);
+        border-color: var(--el-border-strong);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* the anatomy strip */
+      .anat {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .anatrow {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .anatlbl {
+        width: 118px;
+        flex: none;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--el-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .bcstatic {
+        position: static;
+        display: inline-flex;
+      }
+      .why {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        max-width: 22rem;
+      }
+
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin-top: 4px;
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      table.spec th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+        background: var(--el-surface-soft);
+      }
+      table.spec td b {
+        color: var(--el-text-strong);
+      }
+      table.spec tr:last-child td {
+        border-bottom: 0;
+      }
+      .yes {
+        color: var(--el-success);
+        font-weight: 700;
+      }
+      .no {
+        color: var(--el-text-muted);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — the auto-descended ARRIVAL state</h1>
+    <p class="docsub">
+      Subtask <b>MOTIR-1805</b> · Story <b>MOTIR-1803</b> — a level with a single drillable parent
+      descends to its children by default. <b>Composes</b> the shipped canvas
+      (<code>roadmap.mock.html</code>, <code>edges.mock.html</code>,
+      <code>grid-init.mock.html</code>, <code>scope-toggle.mock.html</code>); the only new pixels
+      are the arrival itself and the crumb-label delta in panel B.
+    </p>
+
+    <!-- ════════════════ PANEL A — the ARRIVAL, through its existing door ═══════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>A · The arrival state — reached through the shipped door</b>
+        <span class="cap"
+          >Left-nav <b>Roadmap</b> (MOTIR-1011) → scope toggle → <b>Active sprint</b> (MOTIR-1382).
+          No new nav entry, no new route.</span
+        >
+      </div>
+      <div class="body">
+        <div class="steps">
+          <span class="st">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+            </svg>
+            Click <b>Roadmap</b> in the left nav
+          </span>
+          <span class="arr">→</span>
+          <span class="st">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            Switch the scope to <b>Active sprint</b>
+          </span>
+          <span class="arr">→</span>
+          <span class="st now">The canvas paints ALREADY DRILLED</span>
+        </div>
+
+        <div class="shell">
+          <nav class="rail">
+            <div class="rtitle">Project</div>
+            <a href="#"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="18" rx="1.5" />
+                <rect x="14" y="3" width="7" height="11" rx="1.5" /></svg
+              >Board</a
+            >
+            <a href="#"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 6h16M4 12h16M4 18h16" /></svg
+              >Work items</a
+            >
+            <a href="#"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" /></svg
+              >Sprints</a
+            >
+            <a class="on" href="#"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="6" cy="6" r="2.5" />
+                <circle cx="18" cy="18" r="2.5" />
+                <path d="M8.5 6H14a4 4 0 0 1 0 8h-4a4 4 0 0 0 0 8h5.5" /></svg
+              >Roadmap</a
+            >
+            <a href="#"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19V5M9 19v-7M14 19V8M19 19v-4" /></svg
+              >Reports</a
+            >
+          </nav>
+
+          <div class="shellmain">
+            <div class="pagehead">
+              <div class="htext">
+                <h2>Roadmap</h2>
+                <span class="sub"
+                  ><span class="sname">Journey D · The Motir CLI</span> — ship the CLI end to end
+                  <span class="scopechip"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" /></svg
+                    >Sprint scope</span
+                  ></span
+                >
+              </div>
+              <div class="grow"></div>
+              <div class="seg" role="group" aria-label="Roadmap scope">
+                <span class="seg-opt"
+                  ><span class="ic"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" /></svg></span
+                  >Whole project</span
+                >
+                <span class="seg-opt on" aria-pressed="true"
+                  ><span class="ic"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 2" /></svg></span
+                  >Active sprint</span
+                >
+              </div>
+            </div>
+
+            <div class="canvas tall">
+              <nav class="bc" aria-label="Breadcrumb">
+                <button class="back" type="button" aria-label="Back">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+                <ol>
+                  <li><span class="c">Roadmap</span></li>
+                  <li>
+                    <svg
+                      class="sep"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                    <span class="c on" aria-current="page"
+                      >MOTIR-809 · Motir CLI — terminal dispatch of the work loop</span
+                    >
+                  </li>
+                </ol>
+              </nav>
+
+              <svg class="edges" viewBox="0 0 900 352" preserveAspectRatio="none">
+                <path d="M226 128 H262" />
+                <path d="M468 128 H504" />
+                <path d="M226 236 H262" />
+                <path d="M468 236 H504" />
+              </svg>
+
+              <div class="node done" style="left: 20px; top: 92px">
+                <div class="ntop">
+                  <span class="spill donep"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M8.5 12.5l2.5 2.5 4.5-5" /></svg
+                    >Done</span
+                  >
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-879</div>
+                    <div class="ntitle">7.9.1 CLI scaffold — MCP client core, auth + link</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node done" style="left: 262px; top: 92px">
+                <div class="ntop">
+                  <span class="spill donep"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M8.5 12.5l2.5 2.5 4.5-5" /></svg
+                    >Done</span
+                  >
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-880</div>
+                    <div class="ntitle">7.9.2 Read commands — ready, status, open</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node" style="left: 504px; top: 92px">
+                <div class="ntop">
+                  <span class="spill blocked"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M6 18L18 6" /></svg
+                    >Blocked</span
+                  >
+                  <svg
+                    class="drill"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-881</div>
+                    <div class="ntitle">7.9.3 Single dispatch — next, run, done</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node ready" style="left: 20px; top: 200px">
+                <div class="ntop">
+                  <span class="spill readyp"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M10 8.5l5.5 3.5L10 15.5z" /></svg
+                    >Ready</span
+                  >
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-882</div>
+                    <div class="ntitle">7.9.4 motir auto — the sequential loop</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node" style="left: 262px; top: 200px">
+                <div class="ntop">
+                  <span class="spill todo"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" stroke-dasharray="3 3" /></svg
+                    >To Do</span
+                  >
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-883</div>
+                    <div class="ntitle">7.9.5 Story tests — CLI integration suite</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node" style="left: 504px; top: 200px">
+                <div class="ntop">
+                  <span class="spill todo"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" stroke-dasharray="3 3" /></svg
+                    >To Do</span
+                  >
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-884</div>
+                    <div class="ntitle">7.9.6 Docs — docs/cli.md</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>What is new here is ONLY the arrival.</b> The breadcrumb, the Back control, the node
+          cards, the edges, the zoom cluster and the scope toggle are all the shipped canvas
+          (MOTIR-1194 / MOTIR-1380), reproduced verbatim. What no sheet drew before is the canvas
+          painting in this state <b>without a click</b>: the sprint's root level held exactly one
+          drillable node (MOTIR-809, parent of 14 of the sprint's 15 items), so the canvas descended
+          and seeded the crumb. <b>The overlay needs no new code to appear</b> — the shipped
+          <code>drilled = crumbs.length &gt; 0</code> gate already renders it the moment the crumb
+          stack is non-empty.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL B — how the SKIPPED LEVEL reads (the decision) ═══════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>B · How the skipped level reads — DECIDED: the breadcrumb alone</b>
+        <span class="cap"
+          >No hint string, no new <code>roadmap.canvas.*</code> key, no special mode — but the crumb
+          must NAME the ancestor, not just reference it.</span
+        >
+      </div>
+      <div class="body">
+        <div class="anat">
+          <div class="anatrow">
+            <span class="anatlbl">Shipped today</span>
+            <nav class="bc bcstatic" aria-label="Breadcrumb">
+              <button class="back" type="button" aria-label="Back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <ol>
+                <li><span class="c">Roadmap</span></li>
+                <li>
+                  <svg
+                    class="sep"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                  <span class="c on" aria-current="page">MOTIR-809</span>
+                </li>
+              </ol>
+            </nav>
+            <span class="why"
+              >❌ On an arrival, this references the skipped level without naming it — nobody read
+              that card.</span
+            >
+          </div>
+
+          <div class="anatrow">
+            <span class="anatlbl">This design</span>
+            <nav class="bc bcstatic" aria-label="Breadcrumb">
+              <button class="back" type="button" aria-label="Back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <ol>
+                <li><span class="c">Roadmap</span></li>
+                <li>
+                  <svg
+                    class="sep"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                  <span class="c on" aria-current="page"
+                    >MOTIR-809 · Motir CLI — terminal dispatch of the work loop</span
+                  >
+                </li>
+              </ol>
+            </nav>
+            <span class="why"
+              >✅ The crumb NAMES the skipped level, so the breadcrumb can carry it alone — no hint
+              string needed.</span
+            >
+          </div>
+
+          <div class="anatrow">
+            <span class="anatlbl">Focus-visible</span>
+            <nav class="bc bcstatic" aria-label="Breadcrumb">
+              <button class="back" type="button" aria-label="Back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <ol>
+                <li><span class="c ring">Roadmap</span></li>
+                <li>
+                  <svg
+                    class="sep"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                  <span class="c on" aria-current="page"
+                    >MOTIR-809 · Motir CLI — terminal dispatch of the work loop</span
+                  >
+                </li>
+              </ol>
+            </nav>
+            <span style="font-size: 12px; color: var(--el-text-muted)"
+              >the shipped <code>ring-(--focus-ring-color)</code> on the root crumb — the one click
+              back to the skipped level</span
+            >
+          </div>
+        </div>
+
+        <table class="spec">
+          <tr>
+            <th style="width: 210px">Decision</th>
+            <th>What it means for the code card (MOTIR-1807)</th>
+          </tr>
+          <tr>
+            <td><b>Breadcrumb alone</b> carries the skipped level</td>
+            <td>
+              <span class="no">No</span> hint banner, <span class="no">no</span> tell on the crumb,
+              <span class="no">no</span> new <code>roadmap.canvas.*</code> string, and therefore
+              <span class="no">no</span> <code>messages/en.json</code> +
+              <code>zh.json</code> addition. The treatment is information-preserving on its own: the
+              crumb names the ancestor and is one click from restoring it, and the rung-1 precedent
+              (VS Code <code>explorer.compactFolders</code>) adds no explanation either. A banner
+              would also make the arrival a <em>special mode</em>, which is the opposite of this
+              story's position.
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <b>The crumb label becomes <code>identifier · title</code></b>
+            </td>
+            <td>
+              <b>Required.</b> The shipped label is the bare identifier (<code
+                >workItemLevel.tsx</code
+              >
+              — <code>crumbLabel: item.identifier</code>). On a <em>manual</em> drill that is
+              enough, because the user just read the card they clicked. On an
+              <em>arrival</em> nobody clicked, <code>MOTIR-809</code> references the skipped level
+              without naming it — so "the breadcrumb alone carries it" would be false. One-line
+              change: <code>crumbLabel: `${item.identifier} · ${item.title}`</code>. It applies to
+              manual and auto crumbs <b>identically</b>, so no special mode is introduced and
+              MOTIR-1807's "crumb label identical to a hand-drilled one" criterion still holds
+              exactly.
+            </td>
+          </tr>
+          <tr>
+            <td><b>Room for the longer label</b></td>
+            <td>
+              <code>Crumb</code>'s <code>max-w-[12rem]</code> → <code>max-w-[18rem]</code>, and the
+              overlay's <code>max-w-[min(36rem,…)]</code> → <code>max-w-[min(44rem,…)]</code>. The
+              shipped <code>truncate</code> + the existing native <code>title={label}</code> tooltip
+              stay as the overflow answer — a three-crumb chain still ellipsises, by design.
+            </td>
+          </tr>
+          <tr>
+            <td><b>Nothing else changes</b></td>
+            <td>
+              Back control, separators, <code>aria-current="page"</code>, the
+              <code>aria-label={t('breadcrumb')}</code> nav, the focus ring, tokens: all shipped,
+              all untouched.
+            </td>
+          </tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═════════ PANEL C — the SAME state, two routes in (manual vs auto) ══════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>C · Manual drill vs. auto arrival — the SAME state</b>
+        <span class="cap"
+          >The design position: auto-descend produces an ordinary drilled view, not a mode. Every
+          pixel below is identical; only the route in differs.</span
+        >
+      </div>
+      <div class="body">
+        <div class="two">
+          <div class="col">
+            <div class="collbl"><span class="tag manual">MANUAL</span> The user clicked in</div>
+            <div class="colsub">
+              Root level → select MOTIR-809 → <b>Open ›</b> → <code>handleDrill</code>
+            </div>
+            <div class="canvas short">
+              <nav class="bc" aria-label="Breadcrumb">
+                <button class="back" type="button" aria-label="Back">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+                <ol>
+                  <li><span class="c">Roadmap</span></li>
+                  <li>
+                    <svg
+                      class="sep"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                    <span class="c on" aria-current="page">MOTIR-809 · Motir CLI — terminal…</span>
+                  </li>
+                </ol>
+              </nav>
+              <svg class="edges" viewBox="0 0 520 258" preserveAspectRatio="none">
+                <path d="M226 111 H262" />
+                <path d="M123 148 C123 153, 244 151, 244 156" />
+              </svg>
+              <div class="node done" style="left: 20px; top: 74px">
+                <div class="ntop">
+                  <span class="spill donep">Done</span>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-879</div>
+                    <div class="ntitle">7.9.1 CLI scaffold</div>
+                  </div>
+                </div>
+              </div>
+              <div class="node" style="left: 262px; top: 74px">
+                <div class="ntop">
+                  <span class="spill blocked">Blocked</span>
+                  <svg
+                    class="drill"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-881</div>
+                    <div class="ntitle">7.9.3 Single dispatch</div>
+                  </div>
+                </div>
+              </div>
+              <div class="node ready" style="left: 141px; top: 156px">
+                <div class="ntop">
+                  <span class="spill readyp">Ready</span>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-882</div>
+                    <div class="ntitle">7.9.4 motir auto</div>
+                  </div>
+                </div>
+              </div>
+              <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="collbl"><span class="tag auto">AUTO</span> First paint, no click</div>
+            <div class="colsub">
+              Root level resolved to ONE drillable node → the canvas descended for the user
+            </div>
+            <div class="canvas short">
+              <nav class="bc" aria-label="Breadcrumb">
+                <button class="back" type="button" aria-label="Back">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+                <ol>
+                  <li><span class="c">Roadmap</span></li>
+                  <li>
+                    <svg
+                      class="sep"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                    <span class="c on" aria-current="page">MOTIR-809 · Motir CLI — terminal…</span>
+                  </li>
+                </ol>
+              </nav>
+              <svg class="edges" viewBox="0 0 520 258" preserveAspectRatio="none">
+                <path d="M226 111 H262" />
+                <path d="M123 148 C123 153, 244 151, 244 156" />
+              </svg>
+              <div class="node done" style="left: 20px; top: 74px">
+                <div class="ntop">
+                  <span class="spill donep">Done</span>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-879</div>
+                    <div class="ntitle">7.9.1 CLI scaffold</div>
+                  </div>
+                </div>
+              </div>
+              <div class="node" style="left: 262px; top: 74px">
+                <div class="ntop">
+                  <span class="spill blocked">Blocked</span>
+                  <svg
+                    class="drill"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-881</div>
+                    <div class="ntitle">7.9.3 Single dispatch</div>
+                  </div>
+                </div>
+              </div>
+              <div class="node ready" style="left: 141px; top: 156px">
+                <div class="ntop">
+                  <span class="spill readyp">Ready</span>
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-882</div>
+                    <div class="ntitle">7.9.4 motir auto</div>
+                  </div>
+                </div>
+              </div>
+              <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="same">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 12.5l5 5L20 7" />
+          </svg>
+          Identical state — same crumb stack, same Back target, same node set, same
+          <code>localPositions</code>/selection reset. The auto descent must go through the SAME
+          transition <code>handleDrill</code> performs, so nothing downstream can tell the two
+          apart.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════ PANEL D — the CHAINED two-level arrival ═══════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>D · The CHAINED arrival — <code>epic → story → subtasks</code> in one pass</b>
+        <span class="cap"
+          >The multi-crumb case: both skipped ancestors are crumbs, in order. Whole-project scope on
+          a single-epic project hits this too.</span
+        >
+      </div>
+      <div class="body">
+        <div class="steps">
+          <span class="st">Root level: <b>1</b> drillable node (MOTIR-464)</span>
+          <span class="arr">→</span>
+          <span class="st">Next level: <b>1</b> drillable node (MOTIR-809)</span>
+          <span class="arr">→</span>
+          <span class="st now">Stops here — this level branches</span>
+        </div>
+
+        <div class="canvas">
+          <nav class="bc" aria-label="Breadcrumb">
+            <button class="back" type="button" aria-label="Back">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <ol>
+              <li><span class="c">Roadmap</span></li>
+              <li>
+                <svg
+                  class="sep"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+                <span class="c">MOTIR-464 · Epic 7: AI Planning Layer</span>
+              </li>
+              <li>
+                <svg
+                  class="sep"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+                <span class="c on" aria-current="page"
+                  >MOTIR-809 · Motir CLI — terminal dispatch…</span
+                >
+              </li>
+            </ol>
+          </nav>
+
+          <svg class="edges" viewBox="0 0 900 300" preserveAspectRatio="none">
+            <path d="M226 135 H262" />
+            <path d="M468 135 H504" />
+            <path d="M347 228 H383" />
+          </svg>
+
+          <div class="node done" style="left: 20px; top: 96px">
+            <div class="ntop"><span class="spill donep">Done</span></div>
+            <div class="nbody">
+              <span class="tile subtask"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <path d="M8 12h8" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-879</div>
+                <div class="ntitle">7.9.1 CLI scaffold</div>
+              </div>
+            </div>
+          </div>
+          <div class="node done" style="left: 262px; top: 96px">
+            <div class="ntop"><span class="spill donep">Done</span></div>
+            <div class="nbody">
+              <span class="tile subtask"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <path d="M8 12h8" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-880</div>
+                <div class="ntitle">7.9.2 Read commands</div>
+              </div>
+            </div>
+          </div>
+          <div class="node" style="left: 504px; top: 96px">
+            <div class="ntop">
+              <span class="spill blocked">Blocked</span>
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile subtask"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <path d="M8 12h8" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-881</div>
+                <div class="ntitle">7.9.3 Single dispatch</div>
+              </div>
+            </div>
+          </div>
+          <div class="node ready" style="left: 141px; top: 190px">
+            <div class="ntop"><span class="spill readyp">Ready</span></div>
+            <div class="nbody">
+              <span class="tile subtask"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <path d="M8 12h8" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-882</div>
+                <div class="ntitle">7.9.4 motir auto — the sequential loop</div>
+              </div>
+            </div>
+          </div>
+          <div class="node" style="left: 383px; top: 190px">
+            <div class="ntop"><span class="spill todo">To Do</span></div>
+            <div class="nbody">
+              <span class="tile subtask"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="4" width="16" height="16" rx="3" />
+                  <path d="M8 12h8" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-883</div>
+                <div class="ntitle">7.9.5 Story tests</div>
+              </div>
+            </div>
+          </div>
+          <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+        </div>
+
+        <p class="note">
+          <b>Both skipped ancestors are crumbs, in descent order</b> — the same order a two-click
+          manual drill would produce. The chain stops the moment a level is not "exactly one
+          drillable node", which is what makes the arrival land where the plan actually branches.
+          With three crumbs the overlay is at its widest: the last crumb ellipsises and the shipped
+          <code>title</code> tooltip carries the full string. That is the intended overflow answer —
+          <b>not</b> a second line, and not a smaller font.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL E — the NEGATIVE cases (no descend) ════════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>E · The NEGATIVE cases — when the canvas must NOT descend</b>
+        <span class="cap"
+          >Drawn so the code card cannot guess them. In all three the root level renders exactly as
+          it does today, with <b>no breadcrumb overlay at all</b>.</span
+        >
+      </div>
+      <div class="body">
+        <div class="two">
+          <div class="col">
+            <div class="collbl">E1 · A multi-root sprint level</div>
+            <div class="colsub">
+              ≥ 2 nodes → there is a choice to make → the user makes it. Unchanged.
+            </div>
+            <div class="canvas">
+              <svg class="edges" viewBox="0 0 520 300" preserveAspectRatio="none">
+                <path d="M226 118 H262" />
+              </svg>
+              <div class="node" style="left: 20px; top: 60px">
+                <div class="ntop">
+                  <span class="spill prog">In Progress</span>
+                  <svg
+                    class="drill"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                <div class="nbody">
+                  <span class="tile story"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M5 4h11l3 3v13H5z" />
+                      <path d="M9 12h6" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-809</div>
+                    <div class="ntitle">Motir CLI — terminal dispatch</div>
+                  </div>
+                </div>
+                <div class="meter">
+                  <span class="mtrack"><span class="mfill" style="width: 26%"></span></span>
+                  <span class="mnum">5 / 19</span>
+                </div>
+              </div>
+              <div class="node" style="left: 262px; top: 60px">
+                <div class="ntop">
+                  <span class="spill todo">To Do</span>
+                  <svg
+                    class="drill"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                <div class="nbody">
+                  <span class="tile story"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M5 4h11l3 3v13H5z" />
+                      <path d="M9 12h6" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-1789</div>
+                    <div class="ntitle">Agent runs — the shared run record</div>
+                  </div>
+                </div>
+                <div class="meter">
+                  <span class="mtrack"><span class="mfill" style="width: 0%"></span></span>
+                  <span class="mnum">0 / 6</span>
+                </div>
+              </div>
+              <div class="node" style="left: 141px; top: 172px">
+                <div class="ntop">
+                  <span class="spill todo">To Do</span>
+                  <svg
+                    class="drill"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+                <div class="nbody">
+                  <span class="tile story"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M5 4h11l3 3v13H5z" />
+                      <path d="M9 12h6" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-1803</div>
+                    <div class="ntitle">Roadmap auto-drill</div>
+                  </div>
+                </div>
+                <div class="meter">
+                  <span class="mtrack"><span class="mfill" style="width: 0%"></span></span>
+                  <span class="mnum">0 / 4</span>
+                </div>
+              </div>
+              <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="collbl">E2 · A single NON-drillable leaf</div>
+            <div class="colsub">
+              One node, but <code>drillable === false</code> → there is nothing beneath it. The lone
+              card is <b>correct</b> here.
+            </div>
+            <div class="canvas">
+              <div class="node ready" style="left: 157px; top: 118px">
+                <div class="ntop">
+                  <span class="spill readyp"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M10 8.5l5.5 3.5L10 15.5z" /></svg
+                    >Ready</span
+                  >
+                  <!-- NO drill chevron: this node has no children -->
+                </div>
+                <div class="nbody">
+                  <span class="tile subtask"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="4" y="4" width="16" height="16" rx="3" />
+                      <path d="M8 12h8" /></svg
+                  ></span>
+                  <div>
+                    <div class="nid">MOTIR-1810</div>
+                    <div class="ntitle">7.9.12 motir help — curated top-level help</div>
+                  </div>
+                </div>
+              </div>
+              <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+            </div>
+            <p class="note" style="margin-top: 10px">
+              <b>No breadcrumb.</b> Descending would show an empty level — strictly worse than the
+              one card that IS the sprint. The absence of the drill chevron on the card is the same
+              signal the shipped node already gives.
+            </p>
+          </div>
+        </div>
+
+        <table class="spec">
+          <tr>
+            <th style="width: 260px">Level shape</th>
+            <th style="width: 96px">Descend?</th>
+            <th>Why</th>
+          </tr>
+          <tr>
+            <td>Exactly 1 node, <code>drillable</code></td>
+            <td><span class="yes">YES</span></td>
+            <td>No choice to make; the work is one level down. Panels A / C / D.</td>
+          </tr>
+          <tr>
+            <td>Exactly 1 node, <b>not</b> <code>drillable</code></td>
+            <td><span class="no">NO</span></td>
+            <td>Nothing beneath it — descending would land on an empty level. Panel E2.</td>
+          </tr>
+          <tr>
+            <td>2 or more nodes</td>
+            <td><span class="no">NO</span></td>
+            <td>There is a real branch; the choice is the user's. Panel E1.</td>
+          </tr>
+          <tr>
+            <td>Empty level</td>
+            <td><span class="no">NO</span></td>
+            <td>
+              The shipped <code>emptyRootTitle</code> / <code>emptyDrilled</code> empty states own
+              this; nothing to descend into.
+            </td>
+          </tr>
+          <tr>
+            <td>The user navigated UP to this level</td>
+            <td><span class="no">NO</span></td>
+            <td>An explicit navigation is never fought. Panel F.</td>
+          </tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═════════ PANEL F — the post-navigate-up RESTING state (no re-descend) ══════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>F · After the user climbs back up — the level SITS STILL</b>
+        <span class="cap"
+          >The trap this panel forbids: re-descending would throw the user straight back down and
+          make the breadcrumb root unclickable.</span
+        >
+      </div>
+      <div class="body">
+        <div class="steps">
+          <span class="st">Arrived drilled (panel A)</span>
+          <span class="arr">→</span>
+          <span class="st">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            Click <b>Roadmap</b> in the crumb (or <b>Back</b>)
+          </span>
+          <span class="arr">→</span>
+          <span class="st now">The single-parent level renders — and STAYS</span>
+        </div>
+
+        <div class="canvas short">
+          <!-- NO breadcrumb overlay: crumbs.length === 0 at the root level -->
+          <div class="node" style="left: 157px; top: 88px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="3.5" fill="currentColor" /></svg
+                >In Progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile story"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 4h11l3 3v13H5z" />
+                  <path d="M9 12h6" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-809</div>
+                <div class="ntitle">Motir CLI — terminal dispatch of the work loop</div>
+              </div>
+            </div>
+            <div class="meter">
+              <span class="mtrack"><span class="mfill" style="width: 26%"></span></span>
+              <span class="mnum">5 / 19</span>
+            </div>
+          </div>
+          <div class="zoom"><span>−</span><span>+</span><span>⤢</span></div>
+        </div>
+
+        <table class="spec">
+          <tr>
+            <th style="width: 260px">What happens next</th>
+            <th style="width: 96px">Re-descend?</th>
+            <th>Why</th>
+          </tr>
+          <tr>
+            <td>The user just sits here / pans / zooms</td>
+            <td><span class="no">NO</span></td>
+            <td>
+              They asked to see this level. Showing one card is the honest answer to that ask.
+            </td>
+          </tr>
+          <tr>
+            <td>The user hits the header <b>refresh</b> control (MOTIR-1540)</td>
+            <td><span class="no">NO</span></td>
+            <td>
+              Refresh re-reads the CURRENT level. Re-descending would make Refresh feel like it lost
+              their place — the same in-place contract
+              <code>roadmap-refresh.mock.html</code> panel 2 already draws.
+            </td>
+          </tr>
+          <tr>
+            <td>The user explicitly <b>drills</b> into the card</td>
+            <td><span class="yes">YES</span></td>
+            <td>An explicit drill re-arms the behaviour — a chain below it still compacts.</td>
+          </tr>
+          <tr>
+            <td>The user switches <b>scope</b> (project ↔ sprint)</td>
+            <td><span class="yes">YES</span></td>
+            <td>A scope switch is a fresh arrival, not a navigation within the current tree.</td>
+          </tr>
+        </table>
+
+        <p class="note">
+          <b>No visual difference marks the suppressed state.</b> The resting level is an ordinary
+          root level — the same one card, the same drill chevron, no breadcrumb. Suppression is
+          behaviour, not chrome: drawing a badge for it would tell the user about an internal flag
+          they never set.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ composition provenance ═══════════════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>Composed, not redrawn — provenance</b>
+        <span class="cap">Every surface above with its owning asset + design card.</span>
+      </div>
+      <div class="body">
+        <table class="spec">
+          <tr>
+            <th style="width: 210px">Composed surface</th>
+            <th style="width: 250px">Asset · owning card</th>
+            <th>What this sheet does with it</th>
+          </tr>
+          <tr>
+            <td><b>Canvas engine + layout</b></td>
+            <td><code>roadmap.mock.html</code> · MOTIR-1009 (build MOTIR-1194)</td>
+            <td>Reused as-is. No layout, node, or interaction is redefined here.</td>
+          </tr>
+          <tr>
+            <td><b>Dependency edges</b></td>
+            <td><code>edges.mock.html</code> · MOTIR-1331</td>
+            <td>Depicted only as the neutral firm connector; the legend is unchanged.</td>
+          </tr>
+          <tr>
+            <td><b>Grid + init arrangement</b></td>
+            <td><code>grid-init.mock.html</code> · MOTIR-1333</td>
+            <td>The arrival lands on a normally-arranged level; arrangement is untouched.</td>
+          </tr>
+          <tr>
+            <td><b>Scope toggle + sprint states</b></td>
+            <td><code>scope-toggle.mock.html</code> · MOTIR-1380 (build MOTIR-1382)</td>
+            <td>
+              Reused verbatim as the door in panel A. The single-parent root it can produce
+              (MOTIR-1381's top-in-sprint re-rooting) is the condition this sheet answers.
+            </td>
+          </tr>
+          <tr>
+            <td><b>Refresh control</b></td>
+            <td><code>roadmap-refresh.mock.html</code> · MOTIR-1540</td>
+            <td>Not redrawn; its in-place-refetch contract is honoured in panel F.</td>
+          </tr>
+          <tr>
+            <td><b>Breadcrumb + Back</b></td>
+            <td><code>ProjectRoadmapCanvas.tsx</code> · MOTIR-1194</td>
+            <td>
+              Markup mirrored verbatim. <b>One delta</b>, specified in panel B: the crumb LABEL
+              becomes <code>identifier · title</code> (+ the width bump it needs).
+            </td>
+          </tr>
+          <tr>
+            <td><b>Node cards</b></td>
+            <td><code>WorkItemNode.tsx</code> · MOTIR-1194 / 1013 / 1417 / 1422</td>
+            <td>Reused; status / done / ready / drill chrome all as shipped.</td>
+          </tr>
+        </table>
+      </div>
+    </section>
+  </body>
+</html>
