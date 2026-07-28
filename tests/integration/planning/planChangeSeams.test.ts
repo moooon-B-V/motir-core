@@ -477,9 +477,12 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     // call index: an approve on a project's first plan also fires the one-shot
     // `propose_convention` job (MOTIR-839), which is a submit this seam does not
     // care about.
-    const augments = submitJobMock.mock.calls.filter((call) => call[0] === 'augment');
+    const calls = submitJobMock.mock.calls as unknown as Array<
+      [string, unknown, { prompt: string }]
+    >;
+    const augments = calls.filter((call) => call[0] === 'augment');
     expect(augments).toHaveLength(2);
-    const [, , payload] = augments[1] as unknown as [string, unknown, { prompt: string }];
+    const [, , payload] = augments[1]!;
     expect(payload.prompt).toContain('Add a story');
     expect(payload.prompt).toContain('Now split it');
   });
