@@ -6,6 +6,15 @@ import type { PlanDto, PlanWithItemsDto, UpdateProposalInput } from '@/lib/dto/p
 // `generating` for the live per-level reveal), then approves (materialize) or
 // declines (drop) through the same substrate API — so no client component touches
 // the service layer directly.
+//
+// It is also the ONE seam every AI-planning surface reviews and confirms through
+// (MOTIR-1746/1747): the conversational rail, the `/items` expand/replan dock and
+// the `/ready` expansion nudge all read a run's proposals from its Plan here and
+// approve through `POST /api/plans/[id]/approve` → `materialize`. That is the
+// engine's invariant made concrete — the plan engine adds Plan/PlanItems and ALL
+// planning is the same, whoever pulled the trigger. The helpers those surfaces
+// share on top of these calls (is there a pending proposal? what did an approve
+// land? what does a failed decision mean?) live in `planReview.ts`.
 
 export class PlanRequestError extends Error {
   constructor(

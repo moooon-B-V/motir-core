@@ -198,10 +198,6 @@ export interface RequestEnvelope {
   readBackToken: string;
 }
 
-export interface PlanDelta {
-  operations: unknown[];
-}
-
 /**
  * The sprint-assignment delta's OWN version, independent of `envelopeVersion`
  * (contract §3.2): the persist side switches on it, so the packing shape can
@@ -259,7 +255,13 @@ export interface SprintAssignmentDelta {
 export interface ResultEnvelope {
   envelopeVersion: typeof ENVELOPE_VERSION;
   jobKind: JobKind;
-  planDelta: PlanDelta;
+  // ⚠️ NO `planDelta` (MOTIR-1747). motir-ai still SENDS one — every plan-edit
+  // handler returns a hardcoded `planDelta: { operations: [] }` — but it has
+  // never carried a proposal: the planners write their output as `PlanItem`
+  // rows through the Plan substrate, and that Plan is the only thing core
+  // reviews or approves. Results are read loosely, so the wire field is simply
+  // ignored here; retiring it from the ENVELOPE is a motir-ai change (a
+  // versioned boundary bump), deliberately not made from this side.
   summary: string;
   usage: { model: string | null; inputTokens: number; outputTokens: number };
   // The versioned sprint-assignment proposal (7.13.4 · MOTIR-917) — `plan_sprint`

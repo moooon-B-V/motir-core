@@ -1,33 +1,20 @@
-import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
+import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
-import { parsePlanDelta, PlanDeltaValidationError, type PlanDelta } from '@/lib/ai/planDelta';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
-import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 import { plansService } from '@/lib/services/plansService';
-import { workItemsService } from '@/lib/services/workItemsService';
-import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import type { WorkItemPriorityDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { PlanOriginDto } from '@/lib/dto/plans';
 
-export class PlanDeltaApproveError extends Error {
-  readonly code = 'PLAN_DELTA_APPROVE_ERROR' as const;
-  constructor(detail: string) {
-    super(detail);
-    this.name = 'PlanDeltaApproveError';
-  }
-}
-
-export class PlanDeltaImmutabilityError extends Error {
-  readonly code = 'PLAN_DELTA_IMMUTABLE' as const;
-  constructor(detail: string) {
-    super(detail);
-    this.name = 'PlanDeltaImmutabilityError';
-  }
-}
+// ⚠️ There is NO approve here, by design (MOTIR-1747). A plan edit's proposals
+// land in the run's `Plan` (`addProposals` → `markPlanned`), and the ONE path
+// that turns proposals into work items is `plansService.approvePlan` →
+// `materialize`, behind the 7.12.5 persist gate. This service used to carry a
+// second one — `approveDelta`, reading the job result's `planDelta` — which every
+// planner returned empty, so it could only ever write nothing; it is retired
+// along with its route, its client helper and the delta shape gate.
 
 export class InvalidTargetError extends Error {
   readonly code = 'INVALID_TARGET' as const;
@@ -35,12 +22,6 @@ export class InvalidTargetError extends Error {
     super(detail);
     this.name = 'InvalidTargetError';
   }
-}
-
-export interface ApproveDeltaResult {
-  created: string[];
-  updated: string[];
-  unchanged: string[];
 }
 
 function buildTenant(ctx: ProjectContext, organizationId: string, isMeta: boolean) {
@@ -232,121 +213,5 @@ export const aiPlanEditsService = {
 
   streamReplan(jobId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId);
-  },
-
-  async approveDelta(
-    jobId: string,
-    editedDelta: unknown | undefined,
-    ctx: ProjectContext,
-  ): Promise<ApproveDeltaResult> {
-    let rawDelta: unknown;
-    if (editedDelta !== undefined && editedDelta !== null) {
-      rawDelta = editedDelta;
-    } else {
-      const job = await getJob(jobId);
-      if (!job.result?.planDelta) {
-        throw new PlanDeltaApproveError(
-          `Job ${jobId} has no delta result — job status is ${job.status}`,
-        );
-      }
-      rawDelta = job.result.planDelta;
-    }
-
-    let delta: PlanDelta;
-    try {
-      delta = parsePlanDelta(rawDelta);
-    } catch (err) {
-      if (err instanceof PlanDeltaValidationError) {
-        throw err;
-      }
-      throw new PlanDeltaApproveError(err instanceof Error ? err.message : 'Failed to parse delta');
-    }
-
-    const terminalKeys = await workflowsService.getTerminalStatusKeys(
-      ctx.projectId,
-      ctx.workspaceId,
-    );
-
-    const svcCtx: ServiceContext = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-    const created: string[] = [];
-    const updated: string[] = [];
-    // ref → the CREATED item's DATABASE id (not its identifier): `parentId` on
-    // CreateWorkItemInput is a DB id, so an in-delta `parentRef` must resolve to
-    // one directly.
-    const refToId = new Map<string, string>();
-
-    for (const op of delta.operations) {
-      if (op.op === 'create') {
-        // `parentKey` is an existing item's KEY ("ARP-1", the planDelta
-        // contract), but `createWorkItem` takes a DB id and looks it up with
-        // findById — passing the key straight through made every parented
-        // create throw WorkItemNotFoundError (a 500 on approve), so resolve the
-        // key to its id first.
-        let parentId: string | null = null;
-        if (op.parentKey) {
-          const parent = await workItemRepository.findByIdentifier(ctx.projectId, op.parentKey);
-          if (!parent) {
-            throw new PlanDeltaApproveError(`Parent item ${op.parentKey} not found`);
-          }
-          parentId = parent.id;
-        } else if (op.parentRef) {
-          parentId = refToId.get(op.parentRef) ?? null;
-        }
-        const wi = await workItemsService.createWorkItem(
-          {
-            projectId: ctx.projectId,
-            kind: op.kind,
-            title: op.fields.title,
-            descriptionMd: op.fields.descriptionMd ?? null,
-            type: op.fields.type ?? null,
-            executor: null,
-            estimateMinutes: op.fields.estimateMinutes ?? null,
-            priority: op.fields.priority,
-            parentId,
-          },
-          svcCtx,
-        );
-        created.push(wi.identifier);
-        if (op.ref) refToId.set(op.ref, wi.id);
-      } else if (op.op === 'update') {
-        const targetKey = op.targetKey;
-        const existing = await workItemRepository.findByIdentifier(ctx.projectId, targetKey);
-        if (!existing) {
-          throw new PlanDeltaApproveError(`Target item ${targetKey} not found`);
-        }
-        if (terminalKeys.has(existing.status)) {
-          throw new PlanDeltaImmutabilityError(
-            `Work item ${targetKey} is in a terminal status and cannot be modified`,
-          );
-        }
-
-        const patch: {
-          title?: string;
-          descriptionMd?: string | null;
-          type?: WorkItemTypeDto | null;
-          priority?: WorkItemPriorityDto;
-          estimateMinutes?: number | null;
-        } = {};
-        if (op.fields.title !== undefined) patch.title = op.fields.title;
-        if (op.fields.descriptionMd !== undefined) patch.descriptionMd = op.fields.descriptionMd;
-        if (op.fields.type !== undefined) patch.type = op.fields.type as WorkItemTypeDto | null;
-        if (op.fields.priority !== undefined)
-          patch.priority = op.fields.priority as WorkItemPriorityDto;
-        if (op.fields.estimateMinutes !== undefined) {
-          patch.estimateMinutes = op.fields.estimateMinutes;
-        }
-
-        if (Object.keys(patch).length > 0) {
-          await workItemsService.updateWorkItem(existing.id, patch, svcCtx);
-          updated.push(targetKey);
-        } else {
-          // No fields to update — the op was a no-op, still counts as
-          // "processed" (acceptance: an all-rejected delta is valid no-op).
-          updated.push(targetKey);
-        }
-      }
-    }
-
-    return { created, updated, unchanged: [] };
   },
 };

@@ -286,7 +286,6 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
       result: {
         envelopeVersion: 'v1',
         jobKind: 'plan_sprint',
-        planDelta: { operations: [] },
         summary: 'packed 1 item',
         usage: { model: null, inputTokens: 0, outputTokens: 0 },
         sprintAssignment: packing([[a.identifier]]) as SprintAssignmentDelta,
@@ -314,7 +313,6 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
       result: {
         envelopeVersion: 'v1',
         jobKind: 'plan_sprint',
-        planDelta: { operations: [] },
         summary: 'packed 2 items',
         usage: { model: null, inputTokens: 0, outputTokens: 0 },
         sprintAssignment: packing([[a.identifier, b.identifier]]) as SprintAssignmentDelta,

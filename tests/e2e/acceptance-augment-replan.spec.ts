@@ -17,10 +17,18 @@
 // job path itself is untouched; only the per-surface button is gone.
 //
 // motir-ai is absent from CI, so the browser→ai boundary is STUBBED via
-// `page.route` — the same open-core seam `ai-plan-generation.spec.ts` uses.
-// The approve endpoint (`POST /api/ai/plan-delta/approve`) runs REAL — it
-// creates/updates work items through the shipped `aiPlanEditsService.approveDelta`,
-// so the spec asserts real DB state, not a stub echo.
+// `page.route` — the same open-core seam `ai-plan-generation.spec.ts` uses. Only
+// the SUBMIT and its SSE are stubbed: what a run proposes is seeded as a real
+// `Plan` (the shipped `plansService.createPlan → addProposals → markPlanned`,
+// exactly what the handler's callbacks do), the dock READS it through the real
+// `GET /api/plans/:id`, and the approve runs the real
+// `POST /api/plans/:id/approve → materialize`. So the spec asserts real DB state,
+// not a stub echo.
+//
+// It used to stub a `planDelta` on `GET /api/ai/jobs/:id` and confirm through
+// `POST /api/ai/plan-delta/approve` — a shape the app no longer has (MOTIR-1747):
+// every planner returns an EMPTY delta, so that path could only ever propose
+// nothing, and it is now deleted.
 
 import { test, expect } from './_helpers/acceptance-video';
 import type { Page } from '@playwright/test';
@@ -28,6 +36,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   seedAiAugmentReplan,
+  seedPlanChangeProposal,
   EXPAND_JOB_ID,
   REPLAN_JOB_ID,
 } from './_helpers/ai-augment-replan-seed';
@@ -64,8 +73,14 @@ async function stubAiAccess(page: Page): Promise<void> {
   });
 }
 
-/** Stub both job-submit + SSE endpoints (shared by the expand/replan tests). */
-async function stubEditsJobs(page: Page): Promise<void> {
+/** Stub both job-submit + SSE endpoints (shared by the expand/replan tests).
+ *  The submit echoes the `planId` of the Plan the run's proposals were seeded
+ *  into — the same `{ jobId, planId }` pair the real submit returns since
+ *  MOTIR-1743, and what the dock addresses its review + confirm to. */
+async function stubEditsJobs(
+  page: Page,
+  plans: { expand?: string; replan?: string },
+): Promise<void> {
   // Expand
   await page.route('**/api/ai/expand', async (route) => {
     if (route.request().method() !== 'POST') {
@@ -75,7 +90,7 @@ async function stubEditsJobs(page: Page): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId: EXPAND_JOB_ID }),
+      body: JSON.stringify({ jobId: EXPAND_JOB_ID, planId: plans.expand }),
     });
   });
   await page.route(`**/api/ai/expand/${EXPAND_JOB_ID}/stream`, async (route) => {
@@ -95,7 +110,7 @@ async function stubEditsJobs(page: Page): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId: REPLAN_JOB_ID }),
+      body: JSON.stringify({ jobId: REPLAN_JOB_ID, planId: plans.replan }),
     });
   });
   await page.route(`**/api/ai/replan/${REPLAN_JOB_ID}/stream`, async (route) => {
@@ -105,66 +120,6 @@ async function stubEditsJobs(page: Page): Promise<void> {
       body: doneSse(),
     });
   });
-}
-
-/**
- * Stub a single job-result read. After the SSE `done` event, the hook calls
- * `GET /api/ai/jobs/:jobId` to fetch the plan-delta for the review dock.
- */
-async function stubJobResult(page: Page, jobId: string, delta: object): Promise<void> {
-  await page.route(`**/api/ai/jobs/${encodeURIComponent(jobId)}`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'completed',
-        result: { planDelta: delta },
-      }),
-    });
-  });
-}
-
-// ── Delta factories (the crafted responses motir-ai would return) ────────────
-
-// NOTE on `type`: it is LEAF-ONLY (the 2.7.2 ADR — an epic/story carrying a
-// type is rejected with TypeNotAllowedOnKindError, 422). So the `story` ops
-// in replanDelta set no `type`; only the `task` ops in expandDelta do.
-
-// Expand proposes the stub's CHILDREN, so every op carries `parentKey` — the
-// expanded item's key. (Without it the ops commit as roots, which is not what
-// "expand" means and leaves the stub still childless.)
-function expandDelta(parentKey: string) {
-  return {
-    operations: [
-      {
-        op: 'create',
-        kind: 'task',
-        parentKey,
-        fields: { title: 'In-app notifications', type: 'code' },
-      },
-      {
-        op: 'create',
-        kind: 'task',
-        parentKey,
-        fields: { title: 'Email notifications', type: 'code' },
-      },
-      {
-        op: 'create',
-        kind: 'task',
-        parentKey,
-        fields: { title: 'Push notifications', type: 'code' },
-      },
-    ],
-  };
-}
-
-function replanDelta(parentKey: string) {
-  return {
-    operations: [
-      { op: 'create', kind: 'story', parentKey, fields: { title: 'Billing plans' } },
-      { op: 'create', kind: 'story', parentKey, fields: { title: 'API management' } },
-    ],
-  };
 }
 
 // ── Locator helpers ──────────────────────────────────────────────────────────
@@ -201,8 +156,15 @@ test('expand — click Expand on childless stub, review, approve, children appea
   acceptanceStory('MOTIR-811');
   const seed = await seedAiAugmentReplan(`ai-expand-${Date.now()}@example.com`);
   await stubAiAccess(page);
-  await stubEditsJobs(page);
-  await stubJobResult(page, EXPAND_JOB_ID, expandDelta(seed.notifKey));
+  // What the expand run PROPOSED: the stub's children, seeded as the real Plan
+  // the handler would have appended them to.
+  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: EXPAND_JOB_ID,
+    title: 'Expand Notifications',
+    adds: ['In-app notifications', 'Email notifications', 'Push notifications'],
+    addShape: { kind: 'task', type: 'code', parentRef: seed.notifId },
+  });
+  await stubEditsJobs(page, { expand: planId });
 
   await signIn(page, seed.email, seed.password);
   await page.goto('/items');
@@ -223,9 +185,9 @@ test('expand — click Expand on childless stub, review, approve, children appea
       await expect(page.getByText(title)).toHaveCount(1);
     }
 
-    // Approve.
+    // Approve — the REAL plan approve route (materialize), the one write path.
     const approveResponse = page.waitForResponse(
-      (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
+      (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
     );
     await page.getByRole('button', { name: /Approve — add/ }).click();
     expect((await approveResponse).status()).toBe(200);
@@ -252,8 +214,13 @@ test('re-plan — completion-aware: done leaves locked, not-done portion changes
   acceptanceStory('MOTIR-811');
   const seed = await seedAiAugmentReplan(`ai-replan-${Date.now()}@example.com`);
   await stubAiAccess(page);
-  await stubEditsJobs(page);
-  await stubJobResult(page, REPLAN_JOB_ID, replanDelta(seed.settingsEpicKey));
+  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: REPLAN_JOB_ID,
+    title: 'Re-plan Settings',
+    adds: ['Billing plans', 'API management'],
+    addShape: { parentRef: seed.settingsEpicId },
+  });
+  await stubEditsJobs(page, { replan: planId });
 
   // Snapshot the done leaves so we can assert byte-identity after approve.
   const doneItemsBefore = await db.workItem.findMany({
@@ -275,13 +242,13 @@ test('re-plan — completion-aware: done leaves locked, not-done portion changes
   await expect(page.getByText('Billing plans')).toHaveCount(1);
   await expect(page.getByText('API management')).toHaveCount(1);
 
-  // The delta MUST NOT propose changes to done (terminal) items — no `update`
-  // ops targeting Theme toggle or Profile page. Assert no "Change" badge.
+  // The run MUST NOT propose changes to done (terminal) items — no `modify`
+  // proposals targeting Theme toggle or Profile page. Assert no "Change" chip.
   await expect(page.getByText('Change', { exact: true })).toHaveCount(0);
 
-  // Approve.
+  // Approve — the REAL plan approve route (materialize), the one write path.
   const approveResponse = page.waitForResponse(
-    (r) => r.url().includes('/api/ai/plan-delta/approve') && r.request().method() === 'POST',
+    (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
   );
   await page.getByRole('button', { name: /Approve — add/ }).click();
   expect((await approveResponse).status()).toBe(200);
@@ -329,9 +296,15 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
     });
   });
 
-  // The banner's Expand button calls the real expand job flow. Stub the
-  // submit + SSE + job result so the inline review receives the delta.
-  // (We do NOT stub the approve — the nudge test stops at the review.)
+  // The banner's Expand button drives the real expand flow: only the submit +
+  // SSE are stubbed, and the proposals it then polls for are a real Plan.
+  // (We do NOT approve — the nudge test stops at the review.)
+  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: EXPAND_JOB_ID,
+    title: 'Expand Notifications',
+    adds: ['In-app notifications', 'Email notifications', 'Push notifications'],
+    addShape: { kind: 'task', type: 'code', parentRef: seed.notifId },
+  });
   await stubAiAccess(page);
   await page.route('**/api/ai/expand', async (route) => {
     if (route.request().method() !== 'POST') {
@@ -341,7 +314,7 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId: EXPAND_JOB_ID }),
+      body: JSON.stringify({ jobId: EXPAND_JOB_ID, planId }),
     });
   });
   await page.route(`**/api/ai/expand/${EXPAND_JOB_ID}/stream`, async (route) => {
@@ -351,7 +324,6 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
       body: doneSse(),
     });
   });
-  await stubJobResult(page, EXPAND_JOB_ID, expandDelta(seed.notifKey));
 
   await signIn(page, seed.email, seed.password);
   await page.goto('/ready');

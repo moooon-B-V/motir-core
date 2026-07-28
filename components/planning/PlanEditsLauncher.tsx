@@ -34,7 +34,7 @@ export interface PlanEditsTriggerProps {
  * auto-starts the job, rendering the review dock when results arrive.
  */
 export function PlanEditsTrigger({ kind, itemKey, onDismiss }: PlanEditsTriggerProps) {
-  const { state, startJob, approve, cancel, dismissReview } = usePlanEditsJob();
+  const { state, startJob, approve, discard } = usePlanEditsJob();
   const startedRef = useRef<string | null>(null);
 
   // Auto-start on mount (and re-start if itemKey changes).
@@ -45,37 +45,29 @@ export function PlanEditsTrigger({ kind, itemKey, onDismiss }: PlanEditsTriggerP
     }
   }, [kind, itemKey, startJob]);
 
-  const handleDismiss = () => {
+  // Closing WITH a pending proposal declines its Plan (MOTIR-1747) — abandoning
+  // it client-side would leave the run at `planned` forever, which the auto-plan
+  // pause reads as a proposal still awaiting review. The dock unmounts once the
+  // hook returns to `idle`.
+  const handleClose = () => {
     startedRef.current = null;
-    dismissReview();
+    void discard();
     onDismiss?.();
   };
 
-  if (state.phase !== 'idle' && state.phase !== 'done') {
-    return (
-      <div className={DOCK_SHELL}>
-        <PlanEditsReviewDock
-          state={state}
-          onApprove={approve}
-          onCancel={cancel}
-          onDismiss={handleDismiss}
-        />
-      </div>
-    );
-  }
+  // Idle with an error is a SETTLED failure the dock still has to say out loud
+  // (out of credits / nothing proposed / the job died); idle without one is
+  // nothing running.
+  if (state.phase === 'idle' && !state.errorCode) return null;
 
-  if (state.phase === 'done') {
-    return (
-      <div className={DOCK_SHELL}>
-        <PlanEditsReviewDock
-          state={state}
-          onApprove={approve}
-          onCancel={cancel}
-          onDismiss={handleDismiss}
-        />
-      </div>
-    );
-  }
-
-  return null;
+  return (
+    <div className={DOCK_SHELL}>
+      <PlanEditsReviewDock
+        state={state}
+        onApprove={approve}
+        onDiscard={handleClose}
+        onDismiss={handleClose}
+      />
+    </div>
+  );
 }

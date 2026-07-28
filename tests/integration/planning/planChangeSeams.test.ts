@@ -2,6 +2,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { planningWorkspaceHref, type PlanningLaunchContext } from '@/lib/planning/launcher';
+import { plansService } from '@/lib/services/plansService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -25,12 +28,12 @@ import { truncateAuthTables } from '../../helpers/db';
 //      route → service → repository → Postgres chain is the thing under test;
 //      only motir-ai's boundary client is stubbed.
 //
-//   3. JOB DELTA → APPROVE → THE TREE. The delta the job returns is fed to the
-//      SHIPPED MOTIR-1337 approve substrate and must land as real work items
-//      under the real parents. This is the joint with no coverage at all before
-//      this card: `aiPlanEditsIntegration.test.ts` proves approve from a
-//      hand-built delta, and `planChangeSessionsService.test.ts` proves submit
-//      stops at the job id — nothing joined the two.
+//   3. THE RUN'S PROPOSALS → APPROVE → THE TREE. What a plan-edit job actually
+//      produces is `PlanItem` proposals appended to the run's `Plan` (its
+//      handlers return an always-empty `planDelta` — MOTIR-1747), so the joint is
+//      submit → the engine's proposal callback → `POST /api/plans/[id]/approve` →
+//      materialize. The delta approve this seam used to drive is GONE: there is
+//      exactly one proposal→tree write path now, and this is it.
 //
 // Determinism: no timers, no `waitForTimeout`, no ordering between tests (every
 // test builds its own tenant after a truncate).
@@ -40,6 +43,17 @@ const activeCtx = { current: null as ProjectContext | null };
 
 vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
+// The plan approve/decline routes resolve the WORKSPACE (not the active
+// project); the node test env has no cookies to resolve it from, so it is
+// stubbed to the same tenant the session is in — the one `getSession` mock's
+// sibling, no more.
+vi.mock('@/lib/workspaces', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspaces')>()),
+  getWorkspaceContext: async () =>
+    activeCtx.current
+      ? { userId: activeCtx.current.userId, workspaceId: activeCtx.current.workspaceId }
+      : null,
+}));
 
 // The motir-ai BOUNDARY — the one mock the convention allows. `submitJob`
 // records what the engine would receive; `getJob` replays what it would return.
@@ -85,7 +99,7 @@ vi.mock('next/navigation', () => ({
 const { POST: openSessionRoute } = await import('@/app/api/ai/plan-change/session/route');
 const { POST: appendTurnRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
 const { POST: submitRoute } = await import('@/app/api/ai/plan-change/session/submit/route');
-const { POST: approveRoute } = await import('@/app/api/ai/plan-delta/approve/route');
+const { POST: approvePlanRoute } = await import('@/app/api/plans/[id]/approve/route');
 const { default: PlanningWorkspacePage } = await import('@/app/(planning)/planning/page');
 
 const BASE = 'http://localhost:3000';
@@ -345,13 +359,31 @@ describe('seam · the ACCUMULATED thread is what the plan-edit job receives', ()
     expect(payload.prompt).toBe('Add a payments epic');
   });
 });
+// ────────── Seam 3 — the run's PROPOSALS → approve the plan → the tree ──────────
 
-// ───────────── Seam 3 — the job's delta → approve → the persisted tree ─────────────
+describe('seam · the run’s proposals approve through the 7.21 substrate into the tree', () => {
+  const svcCtx = () => ({ userId: fx.ownerId, workspaceId: fx.workspaceId });
 
-describe('seam · the job’s delta approves through the 7.21 substrate into the tree', () => {
-  it('runs the whole loop: converse → submit → job delta → approve → work items', async () => {
+  /** Play back what motir-ai does with a submitted job: append the run's
+   *  proposals to the Plan the submit opened, then close the frontier. This is
+   *  the REAL seam (`plansService.addProposals` → `markPlanned`, the same calls
+   *  `aiGenerationService.appendProposals` makes on the engine's callback) — only
+   *  the network hop is elided, because motir-ai is absent from CI. */
+  async function engineProposes(
+    planId: string,
+    proposals: Parameters<typeof plansService.addProposals>[1],
+  ): Promise<void> {
+    await plansService.addProposals(planId, proposals, svcCtx());
+    await plansService.markPlanned(planId, svcCtx());
+  }
+
+  const approvePlan = (planId: string) =>
+    approvePlanRoute(post(`/api/plans/${planId}/approve`), {
+      params: Promise.resolve({ id: planId }),
+    });
+
+  it('runs the whole loop: converse → submit → the run’s proposals → approve → work items', async () => {
     const epic = await seedItem({ kind: 'epic', title: 'Billing' });
-    const epicKey = epic.identifier;
 
     await openSessionRoute();
     await appendTurnRoute(
@@ -361,51 +393,44 @@ describe('seam · the job’s delta approves through the 7.21 substrate into the
       post('/api/ai/plan-change/session/turns', { body: 'And retitle the epic' }),
     );
     const submitted = await submitRoute();
-    const { jobId } = (await submitted.json()) as { jobId: string };
+    const { jobId, planId } = (await submitted.json()) as { jobId: string; planId: string };
 
-    // What the engine returns for THAT job — the only stubbed hop. Everything
-    // downstream (parse → terminal-status read → createWorkItem/updateWorkItem →
-    // Postgres) is the shipped code.
-    getJobMock.mockResolvedValue({
-      status: 'succeeded',
-      result: {
-        planDelta: {
-          operations: [
-            {
-              op: 'create',
-              kind: 'story',
-              ref: 'auth-story',
-              parentKey: epicKey,
-              fields: { title: 'Authentication', priority: 'high' },
-            },
-            {
-              op: 'create',
-              kind: 'subtask',
-              parentRef: 'auth-story',
-              fields: { title: 'Session cookies', estimateMinutes: 45 },
-            },
-            {
-              op: 'update',
-              targetKey: epicKey,
-              fields: { title: 'Billing & Auth' },
-            },
-          ],
+    // The submit opened the run's Plan and bound it to the job — the fact the
+    // whole review path turns on (MOTIR-1743/1745). Nothing about a delta.
+    expect(planId).toBeTruthy();
+    const opened = await db.plan.findUnique({ where: { id: planId } });
+    expect(opened?.sourceJobId).toBe(jobId);
+    expect(opened?.status).toBe('generating');
+
+    // Appended in two batches, as the engine really appends them: the second
+    // batch's parent is an intra-plan temp-ref to an item from the first.
+    const first = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Authentication', kind: 'story', priority: 'high' },
+          parentRef: epic.id,
         },
+      ],
+      svcCtx(),
+    );
+    const storyItemId = first.items[0]!.id;
+    await engineProposes(planId, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Session cookies', kind: 'subtask', estimateMinutes: 45 },
+        parentRef: `${TEMP_REF_PREFIX}${storyItemId}`,
       },
-    });
+      { op: 'modify', workItemId: epic.id, patch: { title: 'Billing & Auth' } },
+    ]);
 
-    const approved = await approveRoute(post('/api/ai/plan-delta/approve', { jobId }));
+    const approved = await approvePlan(planId);
     expect(approved.status).toBe(200);
-    const result = (await approved.json()) as { created: string[]; updated: string[] };
 
-    // The job id the CONVERSATION returned is the one the approve resolved.
-    expect(getJobMock).toHaveBeenCalledWith(jobId);
-    expect(result.created).toHaveLength(2);
-    expect(result.updated).toEqual([epicKey]);
-
-    // …and the tree really changed. Read it back through the repository, not
-    // from the approve response — the response is the claim, the rows are the
-    // fact (the read-back-through-the-next-consumer rule).
+    // …and the tree really changed. Read it back from the database, not from the
+    // approve response — the response is the claim, the rows are the fact (the
+    // read-back-through-the-next-consumer rule).
     const rows = await db.workItem.findMany({
       where: { projectId: fx.projectId },
       orderBy: { createdAt: 'asc' },
@@ -413,17 +438,21 @@ describe('seam · the job’s delta approves through the 7.21 substrate into the
     const byTitle = new Map(rows.map((r) => [r.title, r]));
 
     expect(byTitle.get('Billing & Auth')?.id).toBe(epic.id);
-    const story = byTitle.get('Authentication')!;
-    expect(story.kind).toBe('story');
-    expect(story.parentId).toBe(epic.id);
-    expect(story.priority).toBe('high');
+    const authStory = byTitle.get('Authentication')!;
+    expect(authStory.kind).toBe('story');
+    expect(authStory.parentId).toBe(epic.id);
+    expect(authStory.priority).toBe('high');
 
-    // The in-delta `parentRef` resolved to the id of the item created EARLIER IN
-    // THE SAME delta — the ref table only a multi-op approve exercises.
+    // The intra-plan temp-ref resolved to the item created EARLIER IN THE SAME
+    // plan — the ref table only a multi-proposal approve exercises.
     const subtask = byTitle.get('Session cookies')!;
     expect(subtask.kind).toBe('subtask');
-    expect(subtask.parentId).toBe(story.id);
+    expect(subtask.parentId).toBe(authStory.id);
     expect(subtask.estimateMinutes).toBe(45);
+
+    // The run is DECIDED — nothing left at `planned` for the auto-plan pause
+    // (MOTIR-1740) to read as a proposal still awaiting review.
+    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('approved');
   });
 
   it('leaves the CONVERSATION open after an approve — the thread is not consumed', async () => {
@@ -432,134 +461,80 @@ describe('seam · the job’s delta approves through the 7.21 substrate into the
     await openSessionRoute();
     await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Add a story' }));
     const submitted = await submitRoute();
-    const { jobId } = (await submitted.json()) as { jobId: string };
+    const { planId } = (await submitted.json()) as { planId: string };
 
-    getJobMock.mockResolvedValue({
-      status: 'succeeded',
-      result: {
-        planDelta: {
-          operations: [{ op: 'create', kind: 'story', fields: { title: 'Reporting' } }],
-        },
-      },
-    });
-    expect((await approveRoute(post('/api/ai/plan-delta/approve', { jobId }))).status).toBe(200);
+    await engineProposes(planId, [
+      { op: 'add', proposedFields: { title: 'Reporting', kind: 'story' } },
+    ]);
+    expect((await approvePlan(planId)).status).toBe(200);
 
     submitJobMock.mockResolvedValue({ jobId: 'job-augment-2' });
     await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Now split it' }));
     const second = await submitRoute();
     expect(second.status).toBe(200);
 
-    // The refinement still carries the original request.
-    const [, , payload] = submitJobMock.mock.calls[1] as unknown as [
-      string,
-      unknown,
-      { prompt: string },
-    ];
+    // The refinement still carries the original request. Selected by KIND, not by
+    // call index: an approve on a project's first plan also fires the one-shot
+    // `propose_convention` job (MOTIR-839), which is a submit this seam does not
+    // care about.
+    const augments = submitJobMock.mock.calls.filter((call) => call[0] === 'augment');
+    expect(augments).toHaveLength(2);
+    const [, , payload] = augments[1] as unknown as [string, unknown, { prompt: string }];
     expect(payload.prompt).toContain('Add a story');
     expect(payload.prompt).toContain('Now split it');
   });
 
-  it('refuses a delta that would rewrite DONE work, and persists nothing', async () => {
+  it('refuses a proposal that would rewrite DONE work, and persists nothing', async () => {
     // The immutability guard sits between the conversation and the tree. It must
-    // hold when the delta arrives from a conversation, not only from the shipped
-    // one-shot path — and it must be all-or-nothing.
+    // hold when the proposal arrives from a conversation, not only from the
+    // plan-detail surface — and it must be all-or-nothing.
     const shipped = await seedItem({ kind: 'story', title: 'Shipped' });
-    await db.workItem.update({ where: { id: shipped.id }, data: { status: 'done' } });
+    for (const status of ['in_progress', 'in_review', 'done'] as const) {
+      await workItemsService.updateStatus(shipped.id, status, svcCtx());
+    }
 
     await openSessionRoute();
     await appendTurnRoute(
       post('/api/ai/plan-change/session/turns', { body: 'Redo the shipped work' }),
     );
     const submitted = await submitRoute();
-    const { jobId } = (await submitted.json()) as { jobId: string };
+    const { planId } = (await submitted.json()) as { planId: string };
 
-    getJobMock.mockResolvedValue({
-      status: 'succeeded',
-      result: {
-        planDelta: {
-          operations: [
-            { op: 'update', targetKey: shipped.identifier, fields: { title: 'Rewritten' } },
-            { op: 'create', kind: 'story', fields: { title: 'Should not land' } },
-          ],
-        },
-      },
-    });
+    await engineProposes(planId, [
+      { op: 'modify', workItemId: shipped.id, patch: { title: 'Rewritten' } },
+      { op: 'add', proposedFields: { title: 'Should not land', kind: 'story' } },
+    ]);
 
-    const res = await approveRoute(post('/api/ai/plan-delta/approve', { jobId }));
-    expect(res.status).toBe(422);
-    expect(((await res.json()) as { code: string }).code).toBe('PLAN_DELTA_IMMUTABLE');
+    const res = await approvePlan(planId);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('PLAN_TARGET_IMMUTABLE');
 
-    // The DONE item is untouched — the guarantee that actually matters.
+    // The DONE item is untouched — the guarantee that actually matters — and the
+    // refused plan is still `planned`, so it stays decidable.
     const titles = (await db.workItem.findMany({ where: { projectId: fx.projectId } })).map(
       (r) => r.title,
     );
     expect(titles).toEqual(['Shipped']);
+    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
   });
 
-  it('reports a delta the substrate cannot parse as a 400, writing nothing', async () => {
-    await openSessionRoute();
-    await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Do something' }));
-    const submitted = await submitRoute();
-    const { jobId } = (await submitted.json()) as { jobId: string };
-
-    getJobMock.mockResolvedValue({
-      status: 'succeeded',
-      result: { planDelta: { operations: 'not-an-array' } },
-    });
-
-    const res = await approveRoute(post('/api/ai/plan-delta/approve', { jobId }));
-    expect(res.status).toBe(400);
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
-  });
-
-  it('approves the EDITED delta the reviewer sent, not the job’s original', async () => {
-    // The canvas lets the reviewer drop ops before confirming. When an edited
-    // delta is supplied the job must not be re-read at all — otherwise the
-    // rejected ops would land anyway.
-    await openSessionRoute();
-    await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Add two stories' }));
-    const submitted = await submitRoute();
-    const { jobId } = (await submitted.json()) as { jobId: string };
-
-    const res = await approveRoute(
-      post('/api/ai/plan-delta/approve', {
-        jobId,
-        editedDelta: {
-          operations: [{ op: 'create', kind: 'story', fields: { title: 'Only this one' } }],
-        },
-      }),
-    );
-
-    expect(res.status).toBe(200);
-    expect(getJobMock).not.toHaveBeenCalled();
-    const titles = (await db.workItem.findMany({ where: { projectId: fx.projectId } })).map(
-      (r) => r.title,
-    );
-    expect(titles).toEqual(['Only this one']);
-  });
-
-  it('does not reach ANOTHER tenant’s tree with a conversation’s job id', async () => {
-    // The approve resolves against the ACTIVE project context, never the job's
-    // claim about itself. A foreign context must 404 (no existence leak) and
-    // write nothing into either tenant.
+  it('does not approve a conversation’s plan without a caller the workspace knows', async () => {
+    // The approve resolves against the CALLER's workspace, never the plan's claim
+    // about itself. No context → no write, in either tenant.
     await openSessionRoute();
     await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Add a story' }));
     const submitted = await submitRoute();
-    const { jobId } = (await submitted.json()) as { jobId: string };
+    const { planId } = (await submitted.json()) as { planId: string };
 
-    getJobMock.mockResolvedValue({
-      status: 'succeeded',
-      result: {
-        planDelta: {
-          operations: [{ op: 'create', kind: 'story', fields: { title: 'Leaked' } }],
-        },
-      },
-    });
+    await engineProposes(planId, [
+      { op: 'add', proposedFields: { title: 'Leaked', kind: 'story' } },
+    ]);
 
     activeCtx.current = null;
-    const res = await approveRoute(post('/api/ai/plan-delta/approve', { jobId }));
-    expect(res.status).toBe(404);
+    const res = await approvePlan(planId);
+    expect(res.status).toBe(401);
 
     expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
   });
 });

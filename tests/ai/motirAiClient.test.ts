@@ -109,6 +109,10 @@ describe('submitJob', () => {
 
 describe('getJob', () => {
   it('returns a succeeded view with the result and no error', async () => {
+    // The WIRE body motir-ai actually sends — `planDelta` included. Core dropped
+    // that field from its `ResultEnvelope` mirror (MOTIR-1747: it is empty by
+    // construction and nothing reads it), and results are read loosely, so the
+    // extra key must pass through untouched rather than trip the client.
     const result = {
       envelopeVersion: 'v1',
       jobKind: 'noop',

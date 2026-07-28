@@ -1,5 +1,3 @@
-import type { PlanDelta } from '@/lib/ai/planDelta';
-
 export const OUT_OF_CREDITS_CODE = 'MOTIR_AI_OUT_OF_CREDITS';
 
 export class PlanEditsClientError extends Error {
@@ -16,26 +14,6 @@ export class PlanEditsClientError extends Error {
   }
 }
 
-export interface PlanEditJobResult {
-  jobId: string;
-  delta: PlanDelta;
-  locked: PlanDeltaLockedItem[];
-  provenance: PlanDeltaRelatedItem[];
-}
-
-export interface PlanDeltaLockedItem {
-  key: string;
-  kind: string;
-  title: string;
-}
-
-export interface PlanDeltaRelatedItem {
-  key: string;
-  kind: string;
-  title: string;
-  relevance: string;
-}
-
 /**
  * What the three plan-edit submit routes return. `planId` — the `generating`
  * Plan the job's proposals append into (MOTIR-1743) — is OPTIONAL on purpose:
@@ -45,12 +23,6 @@ export interface PlanDeltaRelatedItem {
 export interface PlanEditSubmitResponse {
   jobId: string;
   planId?: string;
-}
-
-export interface ApproveDeltaResult {
-  created: string[];
-  updated: string[];
-  unchanged: string[];
 }
 
 async function readErrorCode(res: Response): Promise<string | null> {
@@ -102,21 +74,6 @@ export async function submitReplanJob(
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
   return (await res.json()) as PlanEditSubmitResponse;
-}
-
-export async function approvePlanDelta(
-  jobId: string,
-  editedDelta: unknown,
-  signal?: AbortSignal,
-): Promise<ApproveDeltaResult> {
-  const res = await fetch('/api/ai/plan-delta/approve', {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId, editedDelta }),
-    signal,
-  });
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  return (await res.json()) as ApproveDeltaResult;
 }
 
 export async function streamAugmentJob(
@@ -236,18 +193,6 @@ async function consumeStream(
 interface SseFrame {
   event: string;
   data: unknown;
-}
-
-export async function fetchJobResult(
-  jobId: string,
-  signal?: AbortSignal,
-): Promise<{ status: string; result: { planDelta: PlanDelta } | null }> {
-  const res = await fetch(`/api/ai/jobs/${encodeURIComponent(jobId)}`, {
-    headers: { Accept: 'application/json' },
-    signal,
-  });
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  return (await res.json()) as { status: string; result: { planDelta: PlanDelta } | null };
 }
 
 function drainLocal(buffer: string): { frames: SseFrame[]; rest: string } {
