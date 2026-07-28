@@ -103,3 +103,88 @@ export class PlanItemTargetMissingError extends Error {
     this.name = 'PlanItemTargetMissingError';
   }
 }
+
+// ── The persist-time confirmation gate (Subtask 7.12.5 · MOTIR-911) ───────────
+// The three rejections `validatePlanProposals` raises BEFORE approve writes
+// anything. They are deliberately distinct from the errors above: those surface
+// a proposal that went bad DURING materialize; these say the approved proposal
+// set may not be persisted AT ALL, and are raised while the tree is still
+// byte-identical.
+
+/** Why a proposal set violates the kind-parent grammar. */
+export type PlanGrammarViolation =
+  /** The proposed (parent kind → child kind) pair the matrix forbids, or a
+   *  top-level placement of a kind that requires a parent. */
+  | 'illegal_parent'
+  /** An `add` proposing a `kind` that is not one of the five issue types. */
+  | 'unknown_kind';
+
+/**
+ * The proposal set does not satisfy the kind-parent grammar
+ * (`lib/issues/parentRules.ts` — the SAME single-source matrix
+ * `workItemsService` enforces), re-validated at persist independently of
+ * whatever the planner self-checked. Raised BEFORE any write, so the tree and
+ * the plan's status are untouched. → 400 (the proposal is malformed; the DB
+ * trigger's raw SQLSTATE 23514 mid-transaction is exactly what this prevents).
+ */
+export class PlanGrammarError extends Error {
+  readonly code = 'PLAN_GRAMMAR_VIOLATION' as const;
+  constructor(
+    readonly reason: PlanGrammarViolation,
+    readonly planItemId: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PlanGrammarError';
+  }
+}
+
+/** Why a plan's `parentRef` / `blockedByRefs` graph cannot be materialized. */
+export type PlanRefGraphViolation =
+  /** A ref resolving to neither a same-plan `add` nor an existing work item. */
+  | 'dangling'
+  /** The same blocker listed twice on one proposal (the `is_blocked_by` edge is
+   *  `@@unique([fromId, toId, kind])`, so materializing it would 500). */
+  | 'duplicate'
+  /** A `parentRef` cycle among the plan's `add`s (no parent-before-child order
+   *  exists), or a proposal blocking/parenting itself. */
+  | 'cycle';
+
+/**
+ * The plan's intra-plan ref graph is not materializable — a dangling ref, a
+ * duplicate blocker, or a cycle. Raised BEFORE any write. → 400
+ */
+export class PlanRefGraphError extends Error {
+  readonly code = 'INVALID_PLAN_REF_GRAPH' as const;
+  constructor(
+    readonly reason: PlanRefGraphViolation,
+    readonly planItemId: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PlanRefGraphError';
+  }
+}
+
+/**
+ * DONE-WORK IMMUTABILITY: a `modify` / `remove` proposal targets a work item in
+ * a TERMINAL status (any `category = done` — resolved through
+ * `workflowsService.getTerminalStatusKeys`, never a hardcoded `'done'`).
+ * Completed work is not rewritten by an approve. Raised before any write, and
+ * re-raised from the locked in-transaction re-read (the verdict taken from a
+ * pre-transaction snapshot goes stale under a concurrent transition —
+ * `notes.html` #35). → 409 (the target moved under the proposal).
+ */
+export class PlanTargetImmutableError extends Error {
+  readonly code = 'PLAN_TARGET_IMMUTABLE' as const;
+  constructor(
+    readonly planItemId: string,
+    readonly workItemId: string,
+    readonly status: string,
+  ) {
+    super(
+      `Work item ${workItemId} is in the terminal status "${status}" — completed work cannot be modified or removed by approving a plan.`,
+    );
+    this.name = 'PlanTargetImmutableError';
+  }
+}

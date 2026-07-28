@@ -19,6 +19,13 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
+import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import {
+  collectReferencedWorkItemIds,
+  validatePlanProposals,
+  type LiveWorkItemState,
+  type ProposalNode,
+} from '@/lib/plans/validateProposals';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import {
   InvalidProposalError,
@@ -74,10 +81,12 @@ function clampLimit(limit: number | undefined): number {
 
 // The intra-plan temp-ref prefix: a `parentRef` / `blockedByRef` of the form
 // `planItem:<planItemId>` points at another `add` in the SAME plan (resolved to
-// the created work-item id at materialize). Exported so the pre-commit
-// projection engine (7.28.1 / planValidityService) resolves refs through the
-// EXACT same contract materialize uses — no second source of truth.
-export const TEMP_REF_PREFIX = 'planItem:';
+// the created work-item id at materialize). It now LIVES in `lib/plans/refs.ts`
+// (so the persist gate can share it without importing this service — that would
+// be a cycle) and is RE-EXPORTED here unchanged, so the pre-commit projection
+// engine (7.28.1 / planValidityService) keeps resolving refs through the EXACT
+// same contract materialize uses — no second source of truth.
+export { TEMP_REF_PREFIX };
 
 /**
  * Validate the leaf SIZING of an `add`'s proposed fields (MOTIR-1433) — the
@@ -196,11 +205,95 @@ function topoOrderAdds(adds: PlanItem[]): PlanItem[] {
   return ordered;
 }
 
+// ── The confirmation gate at PERSIST (Subtask 7.12.5 · MOTIR-911) ─────────────
+//
+// `approvePlan` is the ONLY path from a proposal to a row, and it re-validates
+// the proposal set INDEPENDENTLY before it writes anything — the grammar
+// (`lib/issues/parentRules.ts`) and done-work immutability. The verdict itself
+// lives in the pure `lib/plans/validateProposals` module; these three helpers
+// are its I/O shell: project the Prisma rows onto its shape, resolve the live
+// state it needs, and (inside the transaction) take the row locks first.
+//
+// It runs TWICE, deliberately:
+//   • BEFORE the transaction opens — the cheap typed rejection, with the tree
+//     and the plan status provably untouched (nothing has been read FOR UPDATE,
+//     nothing written).
+//   • INSIDE the transaction, after the plan lock and under the TARGETS' row
+//     locks — because a pre-transaction snapshot goes STALE under a concurrent
+//     transition or `updateProposal` (`notes.html` #35). This is the verdict
+//     that actually gates the write.
+// Both calls run the same pure function, so there is no second code path and no
+// way to reach `materialize` around it.
+
+/** Project a Prisma `PlanItem` row onto the gate's minimal proposal shape. */
+function toProposalNode(item: PlanItem): ProposalNode {
+  return {
+    id: item.id,
+    op: item.op,
+    workItemId: item.workItemId,
+    parentRef: item.parentRef,
+    blockedByRefs: item.blockedByRefs,
+    proposedFields: (item.proposedFields ?? null) as ProposalNode['proposedFields'],
+    patch: (item.patch ?? null) as ProposalNode['patch'],
+  };
+}
+
 /**
- * Apply every PlanItem of a (locked, `planned`) plan inside the caller's
+ * Run the gate over a proposal set: resolve every REAL work item the plan
+ * references in ONE batched, workspace-scoped read, then ask the pure
+ * validator. Throws a typed rejection; writes nothing.
+ */
+async function runPersistGate(
+  items: PlanItem[],
+  ctx: ServiceContext,
+  terminalStatusKeys: ReadonlySet<string>,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  const nodes = items.map(toProposalNode);
+  const rows = await workItemRepository.findByIdsInWorkspace(
+    collectReferencedWorkItemIds(nodes),
+    ctx.workspaceId,
+    tx,
+  );
+  const liveById = new Map<string, LiveWorkItemState>(
+    rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status }]),
+  );
+  validatePlanProposals({ items: nodes, liveById, terminalStatusKeys });
+}
+
+/**
+ * The in-transaction half of the gate: LOCK every `modify`/`remove` target
+ * (`SELECT … FOR UPDATE`) before re-reading it, so the immutability verdict is
+ * taken against state a concurrent transition can no longer move (`notes.html`
+ * #35 — a count/status read before the transaction is not a guarantee). Locks
+ * are taken in a stable id order so two approves touching the same items queue
+ * instead of deadlocking. Runs BEFORE `materialize` writes anything, so a
+ * rejection leaves the tree byte-identical.
+ */
+async function assertProposalsPersistable(
+  items: PlanItem[],
+  ctx: ServiceContext,
+  terminalStatusKeys: ReadonlySet<string>,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const targetIds = [
+    ...new Set(
+      items.filter((i) => i.op !== 'add' && i.workItemId != null).map((i) => i.workItemId!),
+    ),
+  ].sort();
+  for (const id of targetIds) await workItemRepository.lockById(id, tx);
+  await runPersistGate(items, ctx, terminalStatusKeys, tx);
+}
+
+/**
+ * Apply every PlanItem of a (locked, `planned`, GATED) plan inside the caller's
  * approve transaction. `add` → MATERIALIZE a WorkItem (intra-plan refs
  * resolved); `modify` → update the target (same id, ONE revision logged);
  * `remove` → archive the target. Runs entirely on `tx`.
+ *
+ * PRECONDITION: `assertProposalsPersistable` has already passed on `items`
+ * under this same transaction — this function does not re-check the grammar or
+ * done-work immutability, it applies an already-confirmed proposal set.
  */
 async function materialize(
   items: PlanItem[],
@@ -819,6 +912,18 @@ export const plansService = {
    * status re-read first, so two concurrent approves resolve to exactly one
    * materialize — the loser observes `approved` and throws
    * `PlanNotInExpectedStatusError` (the atomic one-shot guard).
+   *
+   * THE CONFIRMATION GATE (7.12.5 · MOTIR-911) runs here, and there is NO path
+   * around it: an explicit human approve of a proposal is the ONLY way a
+   * proposed tree change becomes rows, and that approve RE-VALIDATES the
+   * proposal independently — the kind-parent grammar (via
+   * `lib/issues/parentRules.ts`, the same matrix every human create is gated
+   * on), the intra-plan ref graph, and done-work immutability — BEFORE any
+   * write. The proposal is NOT trusted: the planner's self-check is irrelevant
+   * here (a human may have edited the set through `updateProposal` since), and
+   * the gate is trigger-agnostic by construction — a contextual chat turn, the
+   * `/ready` nudge and the auto-plan cadence all land on this one function.
+   * A rejection leaves the tree and the plan's status byte-identical.
    */
   async approvePlan(
     planId: string,
@@ -828,6 +933,20 @@ export const plansService = {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanEdit(plan.projectId, ctx);
+
+    // The project's TERMINAL statuses — every `category = 'done'` key, never a
+    // hardcoded `'done'`, so `cancelled` is terminal too. Workflow statuses are
+    // project CONFIG (not a row a concurrent approve moves), so this one read
+    // serves both the pre-transaction and the in-transaction gate pass.
+    const terminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+      plan.projectId,
+      ctx.workspaceId,
+    );
+
+    // Pass 1 — reject BEFORE the transaction opens (the card's atomicity point:
+    // a malformed proposal never even starts a write). Pass 2 runs inside, under
+    // the target row locks, and is the verdict that actually gates materialize.
+    await runPersistGate(await planItemRepository.findByPlan(planId), ctx, terminalStatusKeys);
 
     const { row, items, firstOnboarding, projectKey } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -840,6 +959,10 @@ export const plansService = {
           throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
         }
         const proposals = await planItemRepository.findByPlan(planId, tx);
+        // THE GATE, under the plan lock + the targets' row locks, on the FRESH
+        // proposal set — nothing has been written yet, so a rejection here rolls
+        // back a transaction that touched no work-item row.
+        await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, tx);
         await materialize(proposals, fresh, ctx, tx);
         // Read the project ONCE, before `markOnboardingRan` writes: its
         // pre-write `onboardingRanAt` gates the rename below, and its
