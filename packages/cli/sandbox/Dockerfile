@@ -117,6 +117,27 @@ RUN npm install -g /tmp/motir-cli.tgz \
     && rm /tmp/motir-cli.tgz \
     && motir --version
 
+# ── CodeGraph: the coding agent's own navigation graph (7.9.7d / MOTIR-1513) ─
+# The structural code-graph engine the 7.5.3 spike selected, so the agent inside
+# this container can ask `callers` / `impact` / `explore` / `search` instead of
+# grepping its way around an unfamiliar repo.
+#
+# ⚠️ This is the CODING AGENT's per-container graph — NOT motir-ai's planner
+# code graph (7.5.4). Same engine, different consumer and a different store;
+# nothing here talks to motir-ai.
+#
+# It sits BEFORE the agent layer for two reasons: the per-agent seam below wires
+# the codegraph MCP server into each agent and so needs the binary on PATH, and
+# an agent-independent layer stays cached across all eight profile builds.
+#
+# Telemetry is disabled BOTH ways on purpose. The env var is what actually holds
+# in an unattended run — it survives a home directory replaced by a bind mount,
+# which the persisted `telemetry off` state file does not.
+ENV CODEGRAPH_TELEMETRY=0
+RUN npm install -g --no-fund --no-audit @colbymchenry/codegraph \
+    && HOME=/home/node codegraph telemetry off \
+    && codegraph --version
+
 # ── The per-agent layer seam (AGENT build-arg selector) ──────────────────────
 # `--build-arg AGENT=<profile>` selects which coding agent is installed on top
 # of this base; the layer itself is the matching case arm in `install-agent.sh`.
@@ -134,8 +155,14 @@ COPY --chmod=0755 packages/cli/sandbox/entrypoint.sh /usr/local/bin/motir-sandbo
 # Run unprivileged. The node image already ships a `node` user at uid/gid 1000,
 # which is the common host uid — so files the agent writes into the /workspace
 # bind mount stay owned by the invoking user rather than by root.
+#
+# The chown covers the WHOLE home, not just .config: the layers above run as
+# root and write the codegraph MCP wiring into the runtime user's home
+# (~/.claude.json, ~/.codex/config.toml, ~/.cursor/mcp.json, …). Left
+# root-owned, an agent that rewrites its own config file at startup would fail
+# on a home it cannot write.
 RUN mkdir -p /workspace /home/node/.config/motir \
-    && chown -R node:node /workspace /home/node/.config
+    && chown -R node:node /workspace /home/node
 
 USER node
 # HOME is set explicitly because the CLI resolves its config dir from

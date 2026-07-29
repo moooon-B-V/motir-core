@@ -45,6 +45,18 @@ export interface AgentProfile {
   credentialKnown: boolean;
   /** How the user provides the credential (the missing-credential remediation). */
   credentialHint: string;
+  /**
+   * The `codegraph install --target <id>` id that wires the code-graph MCP
+   * server for this agent, or null when codegraph has no target for it
+   * (7.9.7d). Read off `codegraph install --print-config` against the version
+   * the sandbox ships — never assumed: the known set is
+   * `claude, cursor, codex, opencode, hermes, gemini, antigravity, kiro`, which
+   * covers five of the eight profiles here. A profile with no target is left
+   * null rather than pointed at a near-miss id, for the same reason
+   * `credentialKnown` is left false: a wrong id would claim a wiring the image
+   * does not have.
+   */
+  codegraphTarget: string | null;
 }
 
 /**
@@ -63,6 +75,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: ['ANTHROPIC_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `claude` once to sign in, or set ANTHROPIC_API_KEY.',
+    codegraphTarget: 'claude',
   },
   {
     id: 'codex',
@@ -74,6 +87,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: ['OPENAI_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `codex` once to sign in, or set OPENAI_API_KEY.',
+    codegraphTarget: 'codex',
   },
   {
     id: 'opencode',
@@ -85,6 +99,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: true,
     credentialHint: 'Sign in with the OpenCode CLI so it writes its config dir.',
+    codegraphTarget: 'opencode',
   },
   {
     id: 'kimi',
@@ -98,6 +113,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Sign in with the Kimi Code CLI (see its docs for the config dir).',
+    codegraphTarget: null,
   },
   {
     id: 'antigravity',
@@ -109,6 +125,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Sign in with the Antigravity CLI (see its docs for the credential path).',
+    codegraphTarget: 'antigravity',
   },
   {
     id: 'cursor',
@@ -120,6 +137,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Sign in with the Cursor CLI (see its docs for the credential path).',
+    codegraphTarget: 'cursor',
   },
   {
     id: 'aider',
@@ -131,6 +149,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Provide Aider with a model key (see its docs for the config/env it reads).',
+    codegraphTarget: null,
   },
   {
     id: 'goose',
@@ -142,6 +161,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Configure Goose with a provider key (see its docs for the credential path).',
+    codegraphTarget: null,
   },
 ];
 
@@ -194,4 +214,17 @@ export function findAgentProfile(binary: string): AgentProfile | null {
 /** Every profile id, for help text / docs (`claude, codex, …`). */
 export function agentProfileIds(): string[] {
   return AGENT_PROFILES.map((p) => p.id);
+}
+
+/**
+ * The profiles whose agent the sandbox image wires the code-graph MCP server
+ * into at build time (7.9.7d) — i.e. those codegraph has an install target for.
+ * The sandbox suite drives its per-profile guards off this, so a profile that
+ * gains (or loses) a codegraph target cannot leave the image's install seam
+ * behind.
+ */
+export function codegraphWiredProfiles(): { id: string; target: string }[] {
+  return AGENT_PROFILES.filter(
+    (p): p is AgentProfile & { codegraphTarget: string } => p.codegraphTarget !== null,
+  ).map((p) => ({ id: p.id, target: p.codegraphTarget }));
 }

@@ -49,10 +49,51 @@ AGENT_PREFIX=/usr/local/bin
 # discarded, so it can never be mistaken for a runtime credential directory.
 AGENT_STAGE=/tmp/motir-agent-install
 
+# The RUNTIME user's home. This script runs as root, so anything written to the
+# root's own $HOME would be invisible to the `node` user that actually runs the
+# agent — the same trap invariant 1 above describes for binaries, one directory
+# up. The Dockerfile chowns this home to node:node after the layer runs.
+RUNTIME_HOME=/home/node
+
+# Where the resolved codegraph target is recorded for the entrypoint to re-read.
+# The profile -> target mapping lives in the case arms below and NOWHERE else;
+# the entrypoint reads this file rather than carrying a second copy that could
+# drift out of agreement with the arm that actually did the install.
+CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target
+
 # Install an npm-published agent globally. `--no-fund --no-audit` keeps the
 # build log down to the failure that actually matters.
 npm_agent() {
     npm install -g --no-fund --no-audit "$1"
+}
+
+# Wire the codegraph MCP server into the agent just installed (7.9.7d).
+#
+# The argument is codegraph's OWN target id, which is not always the profile id
+# and is not guessable: the set it accepts is
+# `claude, cursor, codex, opencode, hermes, gemini, antigravity, kiro`, so five
+# of the eight profiles here have one and three (kimi, aider, goose) have none.
+# An arm without a target calls `no_codegraph` instead of inventing a near-miss
+# id — the same "leave it UNKNOWN rather than guess" rule the profile table
+# applies to credential paths.
+#
+# `--yes` is what makes this non-interactive AND turns the auto-allow permission
+# list on, which is the half that lets an unattended agent actually CALL the
+# tools rather than stopping to ask. `--location global` writes into
+# $RUNTIME_HOME so the wiring is the image's, not a file dropped in the user's
+# repo.
+wire_codegraph() {
+    HOME="$RUNTIME_HOME" codegraph install --target "$1" --location global --yes
+    mkdir -p "$(dirname "$CODEGRAPH_TARGET_FILE")"
+    printf '%s\n' "$1" > "$CODEGRAPH_TARGET_FILE"
+}
+
+# Record that this profile has NO codegraph MCP wiring. Written explicitly
+# rather than left absent so the entrypoint can tell "no target for this agent"
+# apart from "the build never got this far".
+no_codegraph() {
+    mkdir -p "$(dirname "$CODEGRAPH_TARGET_FILE")"
+    printf 'none\n' > "$CODEGRAPH_TARGET_FILE"
 }
 
 case "$AGENT" in
@@ -61,6 +102,9 @@ case "$AGENT" in
         # CI build/version matrix builds, and it is enough for `motir next
         # --print` workflows where the agent runs outside the container.
         echo "motir-sandbox: base image — no coding agent installed (AGENT=${AGENT})." >&2
+        # codegraph itself IS in the base image; there is simply no agent to
+        # wire it into. The binary and its CLI subcommands still work.
+        no_codegraph
         ;;
 
     # ── Tier 1 — first-class, tested profiles ────────────────────────────────
@@ -70,6 +114,7 @@ case "$AGENT" in
         # --dangerously-skip-permissions.
         npm_agent '@anthropic-ai/claude-code'
         claude --version
+        wire_codegraph claude
         ;;
 
     codex)
@@ -78,6 +123,7 @@ case "$AGENT" in
         # which upstream has deprecated (see the README matrix).
         npm_agent '@openai/codex'
         codex --version
+        wire_codegraph codex
         ;;
 
     opencode)
@@ -87,6 +133,7 @@ case "$AGENT" in
         # platform binary straight onto the global PATH.
         npm_agent 'opencode-ai'
         opencode --version
+        wire_codegraph opencode
         ;;
 
     kimi)
@@ -95,6 +142,9 @@ case "$AGENT" in
         # base image's asserted >= 24.15 already clears.
         npm_agent '@moonshot-ai/kimi-code'
         kimi --version
+        # codegraph has no `kimi` target (checked against the shipped version's
+        # own target list), so this profile gets no MCP wiring.
+        no_codegraph
         ;;
 
     # ── Tier 2 — also-supported profiles ─────────────────────────────────────
@@ -107,6 +157,8 @@ case "$AGENT" in
         curl -fsSL https://antigravity.google/cli/install.sh \
             | bash -s -- --dir "$AGENT_PREFIX"
         agy --version
+        # codegraph's `antigravity` target writes ~/.gemini/antigravity/mcp_config.json.
+        wire_codegraph antigravity
         ;;
 
     cursor)
@@ -129,6 +181,7 @@ case "$AGENT" in
         ln -sf "$cursor_bin" "$AGENT_PREFIX/cursor-agent"
         rm -rf "$AGENT_STAGE"
         agent --version
+        wire_codegraph cursor
         ;;
 
     aider)
@@ -144,6 +197,8 @@ case "$AGENT" in
         /opt/aider/bin/pip install --no-cache-dir aider-chat
         ln -sf /opt/aider/bin/aider "$AGENT_PREFIX/aider"
         aider --version
+        # Aider is not an MCP client and codegraph has no target for it.
+        no_codegraph
         ;;
 
     goose)
@@ -154,6 +209,10 @@ case "$AGENT" in
         curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh \
             | CONFIGURE=false GOOSE_BIN_DIR="$AGENT_PREFIX" bash
         goose --version
+        # Goose speaks MCP via its own extension config, but codegraph ships no
+        # `goose` target — wiring it would mean hand-writing a config format
+        # nothing here verifies, so the profile goes without.
+        no_codegraph
         ;;
 
     *)
