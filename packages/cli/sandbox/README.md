@@ -12,7 +12,8 @@ container is the _recommended_ path, not a requirement.
 > filled its per-agent layer seam with the **profile matrix** below — eight
 > selectable coding agents, each with its own credential mount; 7.9.7d added
 > **CodeGraph** (the binary, the per-agent MCP wiring, and the index + git sync
-> hooks); 7.9.7c added the **validation harness** — every pull request builds
+> hooks), which 7.9.7f keeps clear of the read-only credential mounts;
+> 7.9.7c added the **validation harness** — every pull request builds
 > each profile, runs its liveness check, asserts the confinement claims against
 > the real mount table, and drives `motir auto` end-to-end inside the image with
 > a fake agent (see [Validation](#validation)). This slice **publishes** it: the
@@ -318,25 +319,62 @@ profiles here intersect that set; the other three are left explicitly unwired
 rather than pointed at a near-miss id (the same "leave it UNKNOWN rather than
 guess" rule the credential column follows).
 
-| Profile       | codegraph target | Config the image writes                      |
-| ------------- | ---------------- | -------------------------------------------- |
-| `claude`      | `claude`         | `~/.claude.json` + `~/.claude/settings.json` |
-| `codex`       | `codex`          | `~/.codex/config.toml`                       |
-| `opencode`    | `opencode`       | `~/.config/opencode/opencode.jsonc`          |
-| `cursor`      | `cursor`         | `~/.cursor/mcp.json`                         |
-| `antigravity` | `antigravity`    | `~/.gemini/antigravity/mcp_config.json`      |
-| `kimi`        | — none           | not wired                                    |
-| `aider`       | — none           | not wired (Aider is not an MCP client)       |
-| `goose`       | — none           | not wired (no `goose` target in codegraph)   |
+| Profile       | codegraph target | Config the agent actually reads                                         |
+| ------------- | ---------------- | ----------------------------------------------------------------------- |
+| `claude`      | `claude`         | `~/.claude.json` + `~/.claude/settings.json`                            |
+| `codex`       | `codex`          | `~/.motir-sandbox/agent-config/.codex/config.toml` (redirected, below)  |
+| `opencode`    | `opencode`       | `~/.motir-sandbox/agent-config/.config/opencode/opencode.jsonc` (ditto) |
+| `cursor`      | `cursor`         | `~/.cursor/mcp.json`                                                    |
+| `antigravity` | `antigravity`    | `~/.gemini/antigravity/mcp_config.json`                                 |
+| `kimi`        | — none           | not wired                                                               |
+| `aider`       | — none           | not wired (Aider is not an MCP client)                                  |
+| `goose`       | — none           | not wired (no `goose` target in codegraph)                              |
 
-> **Known interaction — a `:ro` credential mount can mask the wiring.** For
-> `codex` and `opencode` the config file above lives _inside_ the directory the
-> compose/dev-container form mounts read-only from the host, so at run time the
-> host's copy shadows the one the image built in and the agent sees no codegraph
-> tools. The entrypoint detects this and says so on stderr rather than leaving it
-> silent; `claude`, `cursor` and `antigravity` are unaffected (their config sits
-> outside the mounted path). Drop that agent's `:ro` mount to restore the tools.
-> Tracked as a follow-up against the 7.9.7b mount contract.
+The two redirected rows are why the next section exists: codegraph's own default
+for them (`~/.codex/config.toml`, `~/.config/opencode/opencode.jsonc`) falls
+inside that agent's read-only credential mount.
+
+### When the credential mount would mask the wiring (7.9.7f)
+
+For `codex` and `opencode` the config file above lives _inside_ the directory the
+compose/dev-container form mounts read-only from the host — so the host's copy
+shadowed the one the image built in, and those two agents saw no codegraph tools
+at all under the recommended compose path.
+
+Both are now pointed at a config home the **image** owns,
+`~/.motir-sandbox/agent-config`, which sits outside every mounted path and so can
+never be shadowed. The credential mounts are unchanged; nothing needs dropping.
+
+| Profile    | Env var the entrypoint exports | Mechanism                                                                                                                                                                                                               |
+| ---------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codex`    | `CODEX_HOME`                   | `CODEX_HOME` governs `config.toml` **and** `auth.json`, so the redirected home is SEEDED from the read-only mount (credential + your own `config.toml` come along) and codegraph then MERGES its stanza into that copy. |
+| `opencode` | `OPENCODE_CONFIG`              | `OPENCODE_CONFIG` is MERGED over the global config rather than replacing it, so your mounted `~/.config/opencode` still applies and no credential is copied at all. Auth lives in the XDG **data** dir, untouched.      |
+
+Every value in that table was **verified against the real CLIs** — codex 0.146.0,
+opencode 1.18.9, codegraph 1.5.0, each run against a scratch home with the
+credential directory made unwritable to stand in for the `:ro` mount — not read
+off their documentation. That is the same "leave an unverified third-party path
+UNKNOWN rather than guess it" rule the credential column follows.
+
+Two notes on the seam:
+
+- **The codex seed copies a credential to a second path inside the container.**
+  That widens nothing: the container could always read the mounted file. What the
+  read-only mount guarantees — that the container cannot WRITE the host's copy —
+  still holds.
+- **`MOTIR_SANDBOX_CODEGRAPH=0` skips the redirect too**, along with the rest of
+  the block, leaving each agent on its own default config exactly as before.
+
+`claude`, `cursor` and `antigravity` never needed this — their MCP **server**
+config sits outside the mounted path. One narrower gap remains for `claude`: the
+auto-allow permission list `--yes` writes (`~/.claude/settings.json`) IS inside
+its mount, so the agent has the codegraph tools but stops to ask before calling
+them in an unattended run. It is declared in the profile table
+(`codegraphConfig.knownAutoAllowGap`), asserted by `test/sandbox.test.ts` rather
+than left silent, and tracked as **MOTIR-1840**.
+
+The entrypoint keeps its stderr warning as a backstop for any config path that is
+still unwritable; it should no longer fire for a supported profile.
 
 ### Escape hatch
 
@@ -495,23 +533,23 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 
 ## Files
 
-| File                             | What it is                                                                                                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                   |
-| `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs and wiring the codegraph MCP server where codegraph has a target. |
-| `entrypoint.sh`                  | Verifies the mounts, indexes `/workspace` with CodeGraph and installs its git sync hooks, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean.         |
-| `docker-compose.yml`             | The compose form — one service + compose profile per agent, each with its credential mount.                                                                                                       |
-| `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                         |
-| `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                     |
-| `smoke/run.sh`                   | The validation driver: build the image, run it through the documented mount recipe, execute both in-container suites.                                                                             |
-| `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                            |
-| `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                           |
-| `smoke/failure-smoke.sh`         | The failure path: an agent that dies mid-run must still cost nothing — the branch is pushed and the pull request opened, with the store writable and unwritable.                                  |
-| `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call.                                                                                                       |
-| `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                           |
-| `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                     |
-| `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                  |
-| `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                               |
+| File                             | What it is                                                                                                                                                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                                                                                     |
+| `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs and wiring the codegraph MCP server where codegraph has a target.                                                                   |
+| `entrypoint.sh`                  | Verifies the mounts, redirects the two agents whose codegraph config a `:ro` mount would mask, indexes `/workspace` with CodeGraph and installs its git sync hooks, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean. |
+| `docker-compose.yml`             | The compose form — one service + compose profile per agent, each with its credential mount.                                                                                                                                                                         |
+| `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                                                                                           |
+| `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                                                                                       |
+| `smoke/run.sh`                   | The validation driver: build the image, run it through the documented mount recipe, execute all three in-container suites.                                                                                                                                          |
+| `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                                                                                              |
+| `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                                                                                             |
+| `smoke/failure-smoke.sh`         | The failure path: an agent that dies mid-run must still cost nothing — the branch is pushed and the pull request opened, with the store writable and unwritable.                                                                                                    |
+| `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call.                                                                                                                                                                         |
+| `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                                                                                             |
+| `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                                                                                       |
+| `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                    |
+| `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                                                                                                 |
 
 Two workflow files sit outside this directory: the build/smoke/publish matrix
 itself, `.github/workflows/sandbox-images.yml`, and the tagged release lane that

@@ -704,6 +704,7 @@ describe('help — against the BUILT binary', () => {
       'run',
       'auto',
       'batch',
+      'plan',
       'done',
       'help',
     ]) {

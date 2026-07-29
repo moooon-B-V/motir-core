@@ -125,6 +125,118 @@ export interface ExpandSubmitResult {
   planId: string;
 }
 
+// ── the plan-change CONVERSATION (MOTIR-1832) + the plan read (MOTIR-1837) ──
+// The wire shapes `motir plan` renders. Mirrors of the server DTOs
+// (`lib/dto/planChange.ts`, `lib/dto/plans.ts`), kept loose in the same spirit as
+// the read rows above: the CLI renders what the tenant returns, it does not
+// re-validate the server.
+
+/** One turn on the thread, in `seq` order. `jobId` is set only on a `system`
+ *  submission marker; `body` is what was typed on a `user` turn. */
+export interface PlanTurn {
+  id: string;
+  seq: number;
+  role: 'user' | 'system';
+  body: string;
+  jobId: string | null;
+  authorId: string | null;
+  createdAt: string;
+}
+
+/**
+ * A planning CONVERSATION — one per project per anchor set, addressed by SCOPE
+ * and never by a client-held id, which is what makes the terminal and the web
+ * panel the same thread rather than two. `turns` is the FULL ordered thread (the
+ * resume payload). `targetKeys` is empty on the project-wide conversation.
+ */
+export interface PlanSession {
+  id: string;
+  projectId: string;
+  targetKeys: string[];
+  turnCount: number;
+  lastJobId: string | null;
+  lastSubmittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  turns: PlanTurn[];
+}
+
+/** What a submit returns — the job it opened, the `generating` plan bound to it,
+ *  and the thread as it now stands (its new `system` marker turn included). */
+export interface PlanSubmitResult {
+  jobId: string;
+  planId: string;
+  session: PlanSession;
+}
+
+/** The motir-ai job behind a still-`generating` plan. `reachable: false` means
+ *  motir-ai could not be ASKED (and `failure` describes that outage); `true`
+ *  with a failed status means the job itself died. */
+export interface PlanJobState {
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | null;
+  reachable: boolean;
+  failure: { code: string; message: string } | null;
+}
+
+/**
+ * What became of a submitted planning job. `status` is the PLAN's own status
+ * verbatim — there is no synthetic "failed" plan state, because a failed job
+ * leaves its plan at `generating` forever. That distinction lives in `job`,
+ * which is populated ONLY while generating; a bounded watch must read it.
+ */
+export interface PlanOutcome {
+  planId: string;
+  projectId: string;
+  status: 'generating' | 'planned' | 'approved' | 'declined';
+  origin: string;
+  jobId: string | null;
+  itemCount: number;
+  job: PlanJobState | null;
+}
+
+/** The proposed fields of an `add` — the new node's values, which live on the
+ *  proposal because no work item exists yet. */
+export interface PlanProposalFields {
+  title?: string;
+  kind?: string;
+  type?: string | null;
+  priority?: string | null;
+  executor?: string | null;
+  storyPoints?: number | null;
+  estimateMinutes?: number | null;
+  descriptionMd?: string | null;
+}
+
+/**
+ * ONE PROPOSAL — not a work item. `workItemId` stays null on an `add` until the
+ * plan is approved in Motir, which is the only path from a proposal to a row.
+ * `parentRef` / `blockedByRefs` carry either a real work-item id or an
+ * intra-plan `planItem:<id>` temp-ref.
+ */
+export interface PlanProposal {
+  id: string;
+  op: 'add' | 'modify' | 'remove';
+  workItemId: string | null;
+  proposedFields: PlanProposalFields | null;
+  patch: Record<string, unknown> | null;
+  parentRef: string | null;
+  blockedByRefs: string[];
+}
+
+/** A plan WITH the proposals it bundles — what a planning pass proposed, not
+ *  just how many items it produced. */
+export interface PlanWithItems {
+  id: string;
+  projectId: string;
+  status: 'generating' | 'planned' | 'approved' | 'declined';
+  title: string | null;
+  summary: string | null;
+  sourceJobId: string | null;
+  origin: string;
+  itemCount: number;
+  items: PlanProposal[];
+}
+
 /** One item's outcome in a `complete_session` bulk close-out. */
 export interface CompleteSessionOutcome {
   key: string;
@@ -372,6 +484,61 @@ export class MotirClient {
    */
   expandItem(key: string): Promise<ExpandSubmitResult> {
     return this.callStructured<ExpandSubmitResult>('expand_item', { key });
+  }
+
+  /**
+   * Open — or RESUME — the planning conversation for a scope, and read its
+   * thread (MOTIR-1832).
+   *
+   * Addressed by SCOPE (`projectKey` + optional `targetKeys`), never by a
+   * session id: re-opening the same anchor set returns the SAME row the web
+   * panel is looking at, so the CLI cannot fork a second conversation about the
+   * same items. Opening submits nothing and costs nothing.
+   */
+  openPlanSession(args: { projectKey: string; targetKeys?: string[] }): Promise<PlanSession> {
+    return this.callStructured<PlanSession>('open_plan_session', { ...args });
+  }
+
+  /**
+   * Add ONE turn to the conversation. APPENDING IS NOT SUBMITTING — the turn is
+   * server-side the moment this returns (so quitting can never lose it) and no
+   * job starts, no credits are spent, and no work item changes.
+   */
+  appendPlanTurn(args: {
+    projectKey: string;
+    targetKeys?: string[];
+    body: string;
+  }): Promise<PlanSession> {
+    return this.callStructured<PlanSession>('append_plan_turn', { ...args });
+  }
+
+  /**
+   * Send the thread's ACCUMULATED intent — every turn, in order — as ONE change,
+   * returning `{ jobId, planId }` the moment the job is accepted.
+   *
+   * This does NOT create work items: the job produces a plan of PROPOSALS, and
+   * approving that plan in Motir is the only thing that turns one into a work
+   * item. A thread with no turns is refused by the server; a failed submit
+   * leaves the thread intact.
+   */
+  submitPlanSession(args: {
+    projectKey: string;
+    targetKeys?: string[];
+  }): Promise<PlanSubmitResult> {
+    return this.callStructured<PlanSubmitResult>('submit_plan_session', { ...args });
+  }
+
+  /** What became of a submitted planning job (MOTIR-1825) — the plan's status
+   *  AND, while it is still generating, whether the job is alive or already
+   *  dead (a failed job leaves the plan generating forever). */
+  getPlanStatus(args: { planId: string }): Promise<PlanOutcome> {
+    return this.callStructured<PlanOutcome>('get_plan_status', { ...args });
+  }
+
+  /** Read a plan WITH its proposals (MOTIR-1837) — what was proposed, not just
+   *  how many. Still PROPOSALS: nothing here exists in the tree. */
+  getPlan(args: { planId: string }): Promise<PlanWithItems> {
+    return this.callStructured<PlanWithItems>('get_plan', { ...args });
   }
 
   listSprints(args: { projectKey: string }): Promise<SprintList> {
