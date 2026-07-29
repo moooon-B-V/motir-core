@@ -7,11 +7,12 @@ sandbox Motir itself is built in.
 Running `motir auto` in a normal console stays **fully supported** — the
 container is the _recommended_ path, not a requirement.
 
-> **Status (Subtask 7.9.7b).** The base image (Node ≥ 24.15, git, `gh`, the
-> `motir` binary, the `AGENT` build-arg selector) shipped in 7.9.7a; this slice
-> fills its per-agent layer seam with the **profile matrix** below — eight
-> selectable coding agents, each with its own credential mount. The build/smoke
-> CI matrix lands in 7.9.7c, `codegraph` in 7.9.7d, and the published GHCR image
+> **Status (Subtask 7.9.7d).** The base image (Node ≥ 24.15, git, `gh`, the
+> `motir` binary, the `AGENT` build-arg selector) shipped in 7.9.7a; 7.9.7b
+> filled its per-agent layer seam with the **profile matrix** below — eight
+> selectable coding agents, each with its own credential mount; this slice adds
+> **CodeGraph** (the binary, the per-agent MCP wiring, and the index + git sync
+> hooks). The build/smoke CI matrix lands in 7.9.7c and the published GHCR image
 > in 7.9.7e. Until 7.9.7c, the profiles are **built and version-checked at image
 > build time** (each install layer smoke-tests its own binary) but not yet
 > exercised end-to-end by CI.
@@ -194,6 +195,71 @@ and Antigravity CLI (`agy`) is its mandated replacement, so the sunset tool is
 absent from the matrix rather than merely non-default. The sandbox test asserts
 it stays absent.
 
+## CodeGraph — the agent's own navigation graph
+
+The image ships [CodeGraph](https://github.com/colbymchenry/codegraph) (the
+engine the 7.5.3 spike selected) so the agent inside the container can ask
+`callers` / `impact` / `explore` / `search` about the code it is editing instead
+of grepping its way around an unfamiliar repo. Telemetry is off
+(`CODEGRAPH_TELEMETRY=0`).
+
+> ⚠️ This is the **coding agent's own per-container graph**, not `motir-ai`'s
+> planner code graph (7.5.4). Same engine, different consumer, different store —
+> nothing here talks to `motir-ai`.
+
+Three moving parts:
+
+1. **The binary**, in the base image — `codegraph --version` works in every
+   profile, agent or not.
+2. **The MCP server, wired per agent at build time** — `codegraph install
+--target <id> --yes`, which also writes the auto-allow list so an unattended
+   agent can call the tools instead of stopping to ask.
+3. **The entrypoint**, which indexes the mounted `/workspace` on start and
+   installs a `post-merge` + `post-checkout` git hook running `codegraph sync`,
+   so the graph stays current as the branch advances.
+
+### Which profiles get the MCP wiring
+
+CodeGraph installs into the agents **it** has a target for — `claude`, `cursor`,
+`codex`, `opencode`, `hermes`, `gemini`, `antigravity`, `kiro`. Five of the eight
+profiles here intersect that set; the other three are left explicitly unwired
+rather than pointed at a near-miss id (the same "leave it UNKNOWN rather than
+guess" rule the credential column follows).
+
+| Profile       | codegraph target | Config the image writes                      |
+| ------------- | ---------------- | -------------------------------------------- |
+| `claude`      | `claude`         | `~/.claude.json` + `~/.claude/settings.json` |
+| `codex`       | `codex`          | `~/.codex/config.toml`                       |
+| `opencode`    | `opencode`       | `~/.config/opencode/opencode.jsonc`          |
+| `cursor`      | `cursor`         | `~/.cursor/mcp.json`                         |
+| `antigravity` | `antigravity`    | `~/.gemini/antigravity/mcp_config.json`      |
+| `kimi`        | — none           | not wired                                    |
+| `aider`       | — none           | not wired (Aider is not an MCP client)       |
+| `goose`       | — none           | not wired (no `goose` target in codegraph)   |
+
+> **Known interaction — a `:ro` credential mount can mask the wiring.** For
+> `codex` and `opencode` the config file above lives _inside_ the directory the
+> compose/dev-container form mounts read-only from the host, so at run time the
+> host's copy shadows the one the image built in and the agent sees no codegraph
+> tools. The entrypoint detects this and says so on stderr rather than leaving it
+> silent; `claude`, `cursor` and `antigravity` are unaffected (their config sits
+> outside the mounted path). Drop that agent's `:ro` mount to restore the tools.
+> Tracked as a follow-up against the 7.9.7b mount contract.
+
+### Escape hatch
+
+`MOTIR_SANDBOX_CODEGRAPH=0` skips indexing, hook installation and the wiring
+refresh entirely — useful for a `--print`-only workflow or a build-matrix smoke
+test. Nothing in this step can fail a run: the graph is an enhancement to how
+well the agent reads the repo, never a precondition for doing the work, so every
+step warns to stderr and carries on.
+
+The hooks are written into `.git/hooks` (or `core.hooksPath`) of `/workspace` and
+of each repository one level below it. They are **never** written over a hook you
+already have, and because `.git/hooks` is untracked they outlive the container in
+your host repo — so each one self-guards: with no `codegraph` on `PATH` it is a
+silent no-op, and it always exits 0 so it can never fail a merge or a checkout.
+
 ### Tier 3 — any other agent
 
 An agent not in the matrix is still supported, unchanged: build the base image
@@ -211,15 +277,16 @@ sandbox test rather than silently falling through to "unknown AGENT".
 
 ## Files
 
-| File                             | What it is                                                                                                                                                |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint. |
-| `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs.                          |
-| `entrypoint.sh`                  | Verifies the mounts, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean.                                      |
-| `docker-compose.yml`             | The compose form — one service + compose profile per agent, each with its credential mount.                                                               |
-| `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                 |
-| `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                             |
+| File                             | What it is                                                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                   |
+| `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs and wiring the codegraph MCP server where codegraph has a target. |
+| `entrypoint.sh`                  | Verifies the mounts, indexes `/workspace` with CodeGraph and installs its git sync hooks, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean.         |
+| `docker-compose.yml`             | The compose form — one service + compose profile per agent, each with its credential mount.                                                                                                       |
+| `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                         |
+| `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                     |
 
 Their invariants (the read-only PAT mount, the absence of a docker socket, the
-Node floor, the seam covering every agent profile) are asserted by
+Node floor, the seam covering every agent profile, the codegraph wiring and its
+sync hooks) are asserted by
 [`test/sandbox.test.ts`](../test/sandbox.test.ts).

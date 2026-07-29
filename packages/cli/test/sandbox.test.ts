@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { agentProfileIds } from '../src/agentProfiles.js';
+import { agentProfileIds, codegraphWiredProfiles, AGENT_PROFILES } from '../src/agentProfiles.js';
 
 // Structural guards for the sandbox image (base: 7.9.7a, agent profiles:
 // 7.9.7b). These assert the image's CONTRACT — the Node floor, the mounts and
@@ -273,6 +273,186 @@ describe('devcontainer variant', () => {
 // a compose service and a devcontainer that select it and mount its credential,
 // plus a README row a human can act on. These guards are what keep the three
 // surfaces from drifting apart as agents are added.
+
+// ── CodeGraph in the sandbox (Subtask 7.9.7d / MOTIR-1513) ──────────────────
+// The coding agent's OWN navigation graph: the binary in the base image, the
+// MCP server wired per agent at build time, and the entrypoint that indexes the
+// mount and keeps the graph fresh through git hooks. These guards assert the
+// contract from the sources; actually building the image and querying the graph
+// in-container is 7.9.7c's smoke matrix (MOTIR-885).
+
+describe('codegraph in the base image', () => {
+  it('installs the engine the 7.5.3 spike selected and smoke-tests it in the same layer', () => {
+    expect(dockerfile).toContain('npm install -g --no-fund --no-audit @colbymchenry/codegraph');
+    // Same rule the base applies to `motir --version`: an image that cannot run
+    // the binary must fail the BUILD, not the first unattended run.
+    expect(dockerfile).toMatch(/&& codegraph --version/);
+  });
+
+  it('disables telemetry by ENV as well as by the persisted setting', () => {
+    // The env var is the one that actually holds in an unattended run: it
+    // survives a home directory replaced by a bind mount, which the persisted
+    // `telemetry off` state file does not.
+    expect(dockerfile).toMatch(/^ENV CODEGRAPH_TELEMETRY=0$/m);
+    expect(dockerfile).toContain('codegraph telemetry off');
+  });
+
+  it('installs codegraph BEFORE the per-agent seam, which wires MCP with it', () => {
+    // Ordering is load-bearing twice over: install-agent.sh calls the codegraph
+    // binary, and an agent-independent layer stays cached across all eight
+    // profile builds.
+    const codegraphLayer = dockerfile.indexOf('@colbymchenry/codegraph');
+    const agentSeam = dockerfile.indexOf('install-agent.sh "${AGENT}"');
+    expect(codegraphLayer).toBeGreaterThan(-1);
+    expect(agentSeam).toBeGreaterThan(codegraphLayer);
+  });
+
+  it('chowns the whole runtime home, which the root-run seam writes MCP config into', () => {
+    // `codegraph install` writes ~/.claude.json, ~/.codex/config.toml, … as
+    // ROOT. Left root-owned, an agent that rewrites its own config at startup
+    // fails on a home it cannot write.
+    expect(dockerfile).toContain('chown -R node:node /workspace /home/node');
+  });
+});
+
+describe('the per-agent codegraph MCP wiring', () => {
+  // codegraph's OWN accepted target ids, read off `codegraph install
+  // --print-config <id>` against the shipped version — NOT the profile ids, and
+  // not assumable: three of the eight sandbox profiles have no target at all.
+  const CODEGRAPH_TARGETS = [
+    'claude',
+    'cursor',
+    'codex',
+    'opencode',
+    'hermes',
+    'gemini',
+    'antigravity',
+    'kiro',
+  ];
+
+  it('claims a target only from the set codegraph actually accepts', () => {
+    // The mistake this blocks is the #124 shape: carrying an assumed capability
+    // list for a third-party tool instead of the one it reports. A near-miss id
+    // ("claude-code", "codex-cli") is rejected by codegraph at build time, so a
+    // wrong entry here would fail every image build for that profile.
+    for (const { id, target } of codegraphWiredProfiles()) {
+      expect(CODEGRAPH_TARGETS, `codegraph target for ${id}`).toContain(target);
+    }
+  });
+
+  it('wires every profile that HAS a target, inside that profile own arm', () => {
+    const wired = codegraphWiredProfiles();
+    // Five of the eight: claude, codex, opencode, antigravity, cursor.
+    expect(wired.map((p) => p.id).sort()).toEqual([
+      'antigravity',
+      'claude',
+      'codex',
+      'cursor',
+      'opencode',
+    ]);
+    for (const { id, target } of wired) {
+      expect(armOf(id), `codegraph wiring for ${id}`).toContain(`wire_codegraph ${target}`);
+    }
+  });
+
+  it('leaves a profile codegraph has NO target for explicitly unwired', () => {
+    // Same "UNKNOWN rather than guessed" rule the profile table applies to
+    // credential paths: pointing kimi/aider/goose at a near-miss id would claim
+    // a wiring the image does not have.
+    const unwired = AGENT_PROFILES.filter((p) => p.codegraphTarget === null).map((p) => p.id);
+    expect(unwired.sort()).toEqual(['aider', 'goose', 'kimi']);
+    for (const id of unwired) {
+      expect(armOf(id), `${id} must record that it has no wiring`).toContain('no_codegraph');
+      expect(armOf(id), `${id} must not claim a wiring`).not.toContain('wire_codegraph');
+    }
+  });
+
+  it('installs the wiring into the RUNTIME home, not the root that runs the layer', () => {
+    // The same trap invariant 1 describes for binaries, one directory up: the
+    // seam runs as root, so an install left to $HOME lands in /root, invisible
+    // to the `node` user that runs the agent.
+    expect(installAgent).toContain('RUNTIME_HOME=/home/node');
+    expect(installAgent).toMatch(/HOME="\$RUNTIME_HOME" codegraph install/);
+  });
+
+  it('installs non-interactively WITH the auto-allow list, so an unattended agent can call the tools', () => {
+    // `--yes` is what turns the auto-allow permissions on; without it the agent
+    // has the server but stops to ask before every call — useless unattended.
+    // `--no-permissions` would defeat exactly that, so it must not appear.
+    expect(installAgent).toContain('--location global --yes');
+    expect(installAgent).not.toContain('--no-permissions');
+  });
+
+  it('records the resolved target in ONE place for the entrypoint to re-read', () => {
+    // The profile -> target map lives in the case arms and nowhere else; a
+    // second copy in the entrypoint could drift out of agreement with the arm
+    // that actually did the install.
+    expect(installAgent).toContain(
+      'CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target',
+    );
+    expect(entrypoint).toContain(
+      'CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target',
+    );
+  });
+});
+
+describe('the entrypoint codegraph step', () => {
+  it('indexes the mounted workspace on start, and re-syncs an already-indexed one', () => {
+    expect(entrypoint).toMatch(/codegraph init "\$WORKSPACE"/);
+    expect(entrypoint).toMatch(/codegraph sync --quiet "\$WORKSPACE"/);
+  });
+
+  it('installs BOTH the post-merge and post-checkout sync hooks', () => {
+    expect(entrypoint).toMatch(/for hook in post-merge post-checkout; do/);
+    expect(entrypoint).toContain('chmod +x "$hooks/$hook"');
+  });
+
+  it('never clobbers a hook the user already wrote', () => {
+    // .git/hooks is untracked and lives in the HOST repo, so overwriting one
+    // would silently destroy the user's own tooling.
+    expect(entrypoint).toContain('CODEGRAPH_HOOK_MARKER=');
+    expect(entrypoint).toMatch(/grep -qF "\$CODEGRAPH_HOOK_MARKER"/);
+  });
+
+  it('follows core.hooksPath, so the hook is not decoration in a redirected repo', () => {
+    expect(entrypoint).toContain('core.hooksPath');
+  });
+
+  it('writes a hook that is a silent no-op without codegraph and NEVER fails a merge', () => {
+    // The hook OUTLIVES the container inside the host repo, where codegraph
+    // usually is not installed. It must not error on every merge, and a sync
+    // failure must never block one.
+    expect(entrypoint).toContain('command -v codegraph >/dev/null 2>&1 || exit 0');
+    expect(entrypoint).toMatch(/codegraph sync --quiet "\\\$dir" >\/dev\/null 2>&1 \|\| true/);
+  });
+
+  it('treats the graph as an ENHANCEMENT — no codegraph failure aborts the run', () => {
+    // `set -e` is on, so every call needs an explicit guard; an unindexable
+    // workspace must still dispatch work.
+    const block = entrypoint.slice(entrypoint.indexOf('── CodeGraph'));
+    expect(block).toMatch(/codegraph init "\$WORKSPACE" >&2 \|\|/);
+    expect(block).toMatch(/codegraph sync --quiet "\$WORKSPACE" >&2 \|\|/);
+  });
+
+  it('keeps codegraph output OFF stdout, which belongs to the prompt alone', () => {
+    // The echo-only guard above cannot see a SUBPROCESS writing stdout, and
+    // `codegraph init` is chatty.
+    expect(entrypoint).toMatch(/codegraph init "\$WORKSPACE" >&2/);
+    expect(entrypoint).not.toMatch(/^\s*codegraph (init|sync)[^|]*$/m);
+  });
+
+  it('says so out loud when a read-only mount masks the wiring, instead of failing silently', () => {
+    // A credential dir mounted :ro (compose does this for ~/.codex and
+    // ~/.config/opencode) shadows the config the build wrote — the agent would
+    // otherwise just quietly have no code-graph tools.
+    expect(entrypoint).toContain('could not refresh the codegraph MCP wiring');
+    expect(entrypoint).toContain('READ-ONLY');
+  });
+
+  it('can be skipped entirely for a print-only or smoke-test run', () => {
+    expect(entrypoint).toMatch(/\$\{MOTIR_SANDBOX_CODEGRAPH:-1\}/);
+  });
+});
 
 describe.each(PROFILE_IDS)('agent profile: %s', (id) => {
   const service = serviceBlock(`sandbox-${id}`);
