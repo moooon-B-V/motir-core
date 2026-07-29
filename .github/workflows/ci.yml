@@ -97,6 +97,34 @@ jobs:
       - run: pnpm --filter @motir/design-system build
       - run: pnpm --filter @motir/design-system test
 
+  cli:
+    name: CLI package
+    runs-on: ubuntu-latest
+    # Same gap as the design-system job above: `@motir/cli`'s own vitest suite
+    # (config stores, link resolution, dispatch, the agent profile table, and the
+    # 7.9.7a sandbox-image invariants) lives at packages/cli/test/** , which the
+    # root Vitest lane does NOT glob — so until this job existed none of it gated
+    # a merge. Pure unit tests: no server, no Postgres, no built binary needed
+    # (the suite that spawns the built binary against a live MCP endpoint is
+    # 7.9.5's integration lane, and the sandbox's docker build/smoke matrix is
+    # 7.9.7c's).
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      # No node_modules cache here on purpose: the shared cache key covers only
+      # the ROOT node_modules, while a filtered run also needs
+      # packages/cli/node_modules — a cache hit would skip the install that
+      # creates it. `cache: pnpm` above already makes the install store-warm.
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+      - run: pnpm --filter @motir/cli typecheck
+      - run: pnpm --filter @motir/cli test
+
   build:
     name: Next.js build
     runs-on: ubuntu-latest
