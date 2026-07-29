@@ -40,8 +40,9 @@ deterministic half.**
 
 ### What varies, and who decides
 
-All three axes are decided **server-side, from state**. None is a caller input —
-the tool's whole input schema is `{ key }`.
+All three axes are decided **server-side, from state**. The tool's input schema is
+`{ key, sessionBranch? }`, and the optional branch is a fallback rather than a
+selector — see the note under the table.
 
 | Axis           | Source                              | Effect                                                                                                                                                                                                   |
 | -------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,9 +54,20 @@ The lineage is inherited from the item's integrated dependencies via
 `getReadiness` — the single source that ignores a terminal blocker's stale branch
 and collapses the one integrated lineage. An item that was itself already
 integrated falls back to its own recorded branch, so re-printing its prompt keeps
-it where it lives rather than sending it back to `main`. **A caller cannot select
-the variant**: a client that could pick its own lineage could strand a dependency
+it where it lives rather than sending it back to `main`. **A caller cannot
+REDIRECT a lineage**: a client that could pick its own would strand a dependency
 chain across two branches.
+
+**The one caller input, and why it is safe (MOTIR-882).** `dispatch_prompt` takes
+an optional `sessionBranch` that applies ONLY when the item has no lineage at all
+— real lineage always wins, and a manual item ignores it. That narrowness is what
+makes it safe: an item with no integrated dependency has no chain to strand. It
+exists because `motir auto` integrates a whole unattended run onto ONE session
+branch per repo, and the run's first item necessarily has no integrated
+dependency yet; without a seed it would be told to open a pull request of its
+own, breaking the one-PR-per-run contract before the run produced anything. The
+name is validated as a plain git ref at the schema boundary, because it is
+interpolated into prompt text instructing an agent to run `git … origin/<branch>`.
 
 ## The extension point (and what is deliberately NOT built here)
 

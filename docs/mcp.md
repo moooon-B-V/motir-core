@@ -268,9 +268,10 @@ A pure **read**: it does NOT claim the item and does NOT change its status
 (`claim_next_ready` is the tool that does both), and it works on ANY work item,
 not only a ready one — so re-printing an in-progress item's prompt is safe.
 
-| Input | Type   | Required | Notes                                  |
-| ----- | ------ | -------- | -------------------------------------- |
-| `key` | string | yes      | Work item identifier, e.g. `"PROD-7"`. |
+| Input           | Type   | Required | Notes                                                                                                              |
+| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `key`           | string | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                             |
+| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
 
 **Output** — `structuredContent`: `{ key, prompt, targetRepo, workflowMode, sessionBranch }`.
 
@@ -284,8 +285,16 @@ not only a ready one — so re-printing an in-progress item's prompt is safe.
 - **`workflowMode`** — `"per_item_pr"` (branch from `origin/main`, one PR, stop)
   or `"session_lineage"` (branch from / integrate into the inherited session
   branch, then call `mark_integrated`). **Chosen server-side** from the item's
-  inherited lineage — there is no input that lets a caller pick it.
-- **`sessionBranch`** — the branch the prompt instructs, or `null`.
+  inherited lineage. The `sessionBranch` INPUT is a fallback, never an override:
+  an item whose dependencies are already integrated — or that is itself
+  integrated — keeps that branch, so a caller can never redirect a live lineage
+  onto a second branch. What the seed does enable is the FIRST item of an
+  unattended `motir auto` run, which by definition has no integrated dependency
+  yet and would otherwise be told to open a pull request of its own. A manual
+  item ignores the seed entirely. The branch name must be a plain git ref
+  (`[A-Za-z0-9][A-Za-z0-9._-/]*`); it is interpolated into prompt text that
+  instructs an agent to run `git … origin/<branch>`.
+- **`sessionBranch`** (output) — the branch the prompt instructs, or `null`.
 
 **Variants, all decided server-side.** WHAT TO DO varies by the item's `type`
 (`code` / `design` / `test` / `decision` / …). A **manual** item (`type: manual`
@@ -303,9 +312,10 @@ single named extension point enrichment lands on. Scope token: `read`.
 Read one work item by identifier as the full issue-detail aggregate — the same
 shape the detail page reads.
 
-| Input | Type   | Required | Notes                                  |
-| ----- | ------ | -------- | -------------------------------------- |
-| `key` | string | yes      | Work item identifier, e.g. `"PROD-7"`. |
+| Input           | Type   | Required | Notes                                                                                                              |
+| --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `key`           | string | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                             |
+| `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency

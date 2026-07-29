@@ -36,6 +36,26 @@ async function resolveBlockerKeys(workItemId: string): Promise<string[]> {
     .map((r) => r.identifier);
 }
 
+export interface DispatchPromptOptions {
+  /**
+   * A session branch to fall back to when the item carries NO lineage of its own
+   * — the `motir auto` seed (MOTIR-882).
+   *
+   * It is a FALLBACK, never an override. An item whose dependencies are already
+   * integrated somewhere, or that is itself already integrated, keeps THAT
+   * branch: a caller that could redirect a live lineage would strand an
+   * integrated dependency chain across two branches, which is precisely what
+   * {@link DispatchPromptDto.workflowMode} being server-chosen exists to prevent.
+   *
+   * What it DOES enable is the first item of an unattended run. `motir auto`
+   * opens one session branch per repo and integrates every item onto it; without
+   * a seed the run's first item — which by definition has no integrated
+   * dependency yet — would be told to open a pull request of its own, breaking
+   * the one-PR-per-run contract before the run had produced anything.
+   */
+  sessionBranch?: string | null;
+}
+
 export const dispatchPromptService = {
   /**
    * Assemble the canonical dispatch prompt for ONE work item.
@@ -56,6 +76,7 @@ export const dispatchPromptService = {
     projectId: string,
     identifier: string,
     ctx: ServiceContext,
+    opts: DispatchPromptOptions = {},
   ): Promise<DispatchPromptDto> {
     const project = await projectRepository.findById(projectId);
     if (!project || project.workspaceId !== ctx.workspaceId) {
@@ -91,8 +112,11 @@ export const dispatchPromptService = {
       // stale branch and collapses the one integrated lineage). An item that was
       // ITSELF already integrated falls back to its OWN recorded branch, so
       // re-printing its prompt keeps it on the lineage it already lives on
-      // rather than sending it back to `origin/main`.
-      sessionBranch: readiness.inheritedSessionBranch ?? item.sessionBranch,
+      // rather than sending it back to `origin/main`. Only when BOTH are absent
+      // does the caller's seed apply (see {@link DispatchPromptOptions}) — real
+      // lineage always wins, so a seed can never redirect one.
+      sessionBranch:
+        readiness.inheritedSessionBranch ?? item.sessionBranch ?? opts.sessionBranch ?? null,
     });
 
     return {

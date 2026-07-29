@@ -100,6 +100,48 @@ never observed an agent finish) needs `motir done --via in_review <key>`; an
 illegal flip surfaces the server's own allowed-targets error verbatim. A merged
 **session** PR closes out in bulk with `motir done --session <branch>`.
 
+## The loop — `motir auto` (7.9.4)
+
+```sh
+motir auto --agent "<cmd>" [--kinds <list>] [--max <n>] [--keep-going] [--reset]
+```
+
+Drain the ready set unattended. Each iteration asks the server for **exactly one**
+item and runs it through the same single-dispatch pipeline as `motir next`, then
+loops; the run ends when the server has nothing ready left. It never fetches the
+ready list up front — the set CHANGES while the run executes, because integrating
+one item unlocks its dependents, so the loop **cascades through the dependency
+graph** rather than draining a snapshot. An agent is required (`--agent`,
+`MOTIR_AGENT`, or the configured `agentCommand`); `--print` has nobody to paste
+for and is refused with guidance.
+
+**One session branch, one pull request.** The run opens `motir/auto-<run-id>` on
+`origin` in each repo it dispatches into — lazily, on that repo's first item, and
+without touching your working tree or creating a local branch. Every item's work
+is integrated onto it and recorded with `mark_integrated`, which moves the item to
+**In Review** (never Done — `main` does not have the work yet) and is also what
+makes its dependents ready mid-run. At the end the CLI surfaces **one pull request
+per repo**: the run's single human review gate. **`main` is never auto-advanced**,
+by the CLI or by the prompt.
+
+After you merge that pull request, close the whole run out with
+`motir done --session motir/auto-<run-id>`. A rejected pull request leaves the
+items honestly In Review — the summary names every one of them with its branch.
+
+**What it skips, and why.** An unexpanded epic/story in the ready set is a
+_planning_ item, not a dispatchable one — there is no agent prompt for "do the
+planning" — so the loop skips it untouched and lists it under _needs planning_
+(`--include-planning`, which instead triggers its expansion, is 7.9.8). A
+`type: manual` / `executor: human` item is skipped the same way, under _needs a
+human_.
+
+**When an agent fails** the run halts by default and the item is left In Progress
+with nothing reverted; `--keep-going` finishes the rest instead. Either way the
+end-of-run push and pull request still happen, so a late failure never abandons
+the work that already integrated. `--max <n>` caps the dispatches. Ctrl-C stops
+between items (or terminates the agent mid-run), then still lands the pull
+request and prints the summary.
+
 ## Help + topics
 
 `motir`, `motir help` and `motir --help` all print the same curated overview on
@@ -198,6 +240,12 @@ workspace, project, repos? }`. Contains **no secret**, so it is safe to
 ```sh
 pnpm --filter @motir/cli test       # package-local unit tests (no server, no DB)
 ```
+
+`test/auto.test.ts` drives the whole `motir auto` loop against a scripted server,
+agent and git, because its load-bearing properties — that it re-queries every
+iteration, that an integrated item unlocks its dependents mid-run, that `main` is
+never advanced, and that the pull request opens even when the run ended badly —
+are not visible in any single function.
 
 The full integration suite — the built binary driven against a live MCP
 endpoint with a fake agent — is Subtask 7.9.5, which also wires this package
