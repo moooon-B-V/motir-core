@@ -1,8 +1,10 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Command } from 'commander';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autoCommand } from '../src/commands/auto.js';
+import { buildProgram } from '../src/program.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
@@ -154,6 +156,33 @@ describe('motir auto refuses to start without an agent', () => {
       hint: expect.stringContaining('motir next --print'),
     });
     // It failed BEFORE opening a session — nothing was claimed.
+    expect(server.calls).toHaveLength(0);
+  });
+
+  // The guard above is only worth anything if the flag actually REACHES it.
+  // MOTIR-1828: `--print` was never registered on `auto`, so commander rejected
+  // it first with a bare `unknown option '--print'` and the guard — with the
+  // hint that tells the user what to do instead — was dead code from the
+  // command line. Drive the REAL program, the way the binary does, so a
+  // regression that un-registers the option fails here rather than silently
+  // downgrading the message.
+  it('rejects --print through the REAL program, delivering the guard’s hint', async () => {
+    const program = buildProgram();
+    // Without this, an unregistered `--print` would take the test runner down
+    // with commander's own `process.exit` instead of failing the assertion.
+    const noExit = (command: Command): void => {
+      command.exitOverride();
+      command.commands.forEach(noExit);
+    };
+    noExit(program);
+
+    await expect(
+      program.parseAsync(['auto', '--print', '--agent', 'echo'], { from: 'user' }),
+    ).rejects.toMatchObject({
+      name: 'CliError',
+      message: expect.stringContaining('cannot run in --print mode'),
+      hint: expect.stringContaining('motir next --print'),
+    });
     expect(server.calls).toHaveLength(0);
   });
 
