@@ -629,6 +629,22 @@ describe('motir auto — the session-branch run', () => {
   });
 });
 
+describe('motir batch — the frozen snapshot', () => {
+  // `batch` carried the IDENTICAL unregistered-`--print` defect (MOTIR-1830):
+  // it merged after MOTIR-1828's fix, which was applied to `auto` alone. The
+  // package suite now audits the registration for every command
+  // (`optionRegistrationAudit.test.ts`); this is the same refusal proven through
+  // the shipped binary, beside its `auto` twin above.
+  it('`--print` is refused by the GUARD, not as an unknown option', async () => {
+    await linkedProject();
+    const printed = await ws.run(['batch', '--print', '--agent', 'echo']);
+    expect(printed.exitCode).toBe(1);
+    expect(printed.stderr).toContain('`motir batch` cannot run in --print mode.');
+    expect(printed.stderr).toContain('motir next --print');
+    expect(printed.stderr).not.toContain('unknown option');
+  });
+});
+
 // ── the help surface (the 7.9.12 assembled check) ───────────────────────────
 
 describe('help — against the BUILT binary', () => {

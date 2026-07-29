@@ -164,6 +164,13 @@ export function buildProgram(): Command {
     .option('--max <n>', 'Stop after dispatching n work items.')
     .option('--keep-going', 'Continue past a failed agent instead of halting on the first one.')
     .option('--reset', 'Clear this project’s session exclude list before snapshotting.')
+    // Registered PRECISELY so it can be refused properly — the same reason as
+    // `auto` above (MOTIR-1828, missed on this command until MOTIR-1830). The
+    // rule the two share: a command whose module GUARDS a flag must REGISTER
+    // that flag, or commander rejects it first and the guard is dead code from
+    // the command line. `test/optionRegistrationAudit.test.ts` now enforces it
+    // across every command, so this cannot go unswept a third time.
+    .option('--print', 'Not supported — a frozen snapshot has nobody to paste a prompt.')
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `batchCommand`'s injectable-deps parameter.
     .action((opts) => batchCommand(opts));
