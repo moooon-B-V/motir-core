@@ -127,6 +127,16 @@ JSON
     # The run REPORTS failure — that is correct and expected. What must not
     # happen is the run DYING before its close-out.
 
+    # FIRST: did the run get far enough to mean anything? A non-zero exit is
+    # necessary but nowhere near sufficient — a run that dies at startup (no
+    # credential for this port, no stub, a bad link file) also exits non-zero and
+    # would sail through every "it failed" assertion below, reporting some
+    # downstream symptom instead of its actual cause. So assert the run really
+    # dispatched and integrated first, and quote the log when it did not.
+    grep -q 'SMOKE-1: integrated' "$AUTO_LOG" || fail \
+        "leg $label: the run never integrated SMOKE-1 — it did not get as far as the failure this asserts. First lines:
+$(head -5 "$AUTO_LOG")"
+
     [ "$STATUS" -ne 0 ] || fail "leg $label: motir auto exited 0 despite a failed agent"
 
     grep -q "$FAIL_ITEM" "$AUTO_LOG" \

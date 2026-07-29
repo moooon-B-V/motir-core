@@ -3,7 +3,7 @@
 # THE SANDBOX SMOKE DRIVER (Subtask 7.9.7c / MOTIR-885).
 #
 # Build the sandbox image, run the container with EXACTLY the mount recipe the
-# README documents, and execute the two in-container suites inside it:
+# README documents, and execute the three in-container suites inside it:
 #
 #   confinement.sh   — the blast radius (read-only credential mount, unprivileged
 #                      user, no docker socket, no undocumented host bind);
@@ -28,6 +28,7 @@ IMAGE='motir-sandbox:smoke'
 BUILD=1
 KEEP=0
 PORT="${MOTIR_SMOKE_PORT:-8787}"
+FAILURE_PORT="${MOTIR_SMOKE_PORT_FAILURE:-8788}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -88,10 +89,21 @@ chmod a+x "$FIXTURE/.smoke"/*.sh "$FIXTURE/.smoke"/*.mjs "$FIXTURE/.smoke/bin"/*
 # The credential the CLI reads. Its server URL must match the port the stub
 # listens on INSIDE the container — the mount is read-only, so it cannot be
 # rewritten later from a random port.
+#
+# ONE entry per suite, because each suite runs its OWN stub on its OWN port and
+# the CLI looks a credential up BY SERVER URL: a token for 8787 alone makes the
+# failure suite exit "Not logged in to http://127.0.0.1:8788" before it dispatches
+# anything. Separate ports (rather than sharing one) keep the two suites from
+# racing the same socket, and the read-only mount is exactly why both have to be
+# minted up front.
 cat > "$CREDENTIAL/config.json" <<JSON
 {
   "tokens": {
     "http://127.0.0.1:$PORT": {
+      "token": "smoke-not-a-real-token",
+      "user": { "id": "u1", "name": "Smoke User", "email": "smoke@example.invalid" }
+    },
+    "http://127.0.0.1:$FAILURE_PORT": {
       "token": "smoke-not-a-real-token",
       "user": { "id": "u1", "name": "Smoke User", "email": "smoke@example.invalid" }
     }
@@ -112,6 +124,7 @@ docker run --rm \
     -v "$FIXTURE:/workspace" \
     -v "$CREDENTIAL:/home/node/.config/motir:ro" \
     -e "MOTIR_SMOKE_PORT=$PORT" \
+    -e "MOTIR_SMOKE_PORT_FAILURE=$FAILURE_PORT" \
     "$IMAGE" \
     bash -c '/workspace/.smoke/confinement.sh && /workspace/.smoke/loop-smoke.sh && /workspace/.smoke/failure-smoke.sh'
 
