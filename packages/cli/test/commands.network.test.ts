@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authLogin, authLogout, authStatus } from '../src/commands/auth.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from '../src/commands/link.js';
-import { openCommand, readyCommand, statusCommand } from '../src/commands/read.js';
+import {
+  openCommand,
+  readyCommand,
+  sprintCommand,
+  sprintsCommand,
+  statusCommand,
+} from '../src/commands/read.js';
 import { collectReady, openProjectSession, withProjectSession } from '../src/session.js';
 import { resolveServerUrl } from '../src/serverResolve.js';
 import { getCredential, setCredential } from '../src/config/userConfig.js';
@@ -439,5 +445,187 @@ describe('motir ready / status / open', () => {
 
     expect(io.stdout()).toContain('/issues/PROD-7');
     expect(io.stderr()).toContain('Could not open a browser here');
+  });
+});
+
+// ── the sprint reads (7.9.14 · MOTIR-1844) ──────────────────────────────────
+
+/** A `list_sprints` row, with the fields `motir sprints` renders. */
+const sprintRow = (over: Record<string, unknown> = {}) => ({
+  id: 's2',
+  name: 'Journey D',
+  state: 'active',
+  goal: 'Ship the CLI',
+  startDate: '2026-07-20',
+  endDate: '2026-08-03',
+  sequence: 2,
+  issueCount: 2,
+  committedPoints: 21,
+  committedIssueCount: 2,
+  ...over,
+});
+
+/** A `search_work_items` row. */
+const itemRow = (identifier: string) => ({
+  identifier,
+  kind: 'subtask',
+  title: `Work item ${identifier}`,
+  status: 'todo',
+  priority: 'high',
+});
+
+describe('motir sprints / sprint', () => {
+  it('`sprints` tables every sprint, marks the ACTIVE one, and --json emits the rows', async () => {
+    await linked();
+    server.script({
+      list_sprints: {
+        structured: {
+          sprints: [
+            sprintRow({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
+            sprintRow({}),
+          ],
+        },
+      },
+    });
+
+    const table = capture();
+    await sprintsCommand({});
+    expect(table.stdout()).toContain('2 sprints:');
+    expect(table.stdout()).toContain('Journey D');
+    expect(table.stdout()).toContain('Sprint 1');
+
+    vi.restoreAllMocks();
+    const io = capture();
+    await sprintsCommand({ json: true });
+    expect(JSON.parse(io.stdout())).toHaveLength(2);
+  });
+
+  it('`sprints --state` filters, and rejects an unknown state before any network call', async () => {
+    await linked();
+    server.script({
+      list_sprints: {
+        structured: {
+          sprints: [
+            sprintRow({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
+            sprintRow({}),
+          ],
+        },
+      },
+    });
+
+    const io = capture();
+    await sprintsCommand({ state: 'Active', json: true });
+    expect(JSON.parse(io.stdout())).toMatchObject([{ id: 's2' }]);
+
+    server.calls.length = 0;
+    await expect(sprintsCommand({ state: 'nope' })).rejects.toThrow(/Unknown sprint state/);
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it('`sprints` renders the empty case rather than a bare table', async () => {
+    await linked();
+    const io = capture();
+
+    await sprintsCommand({});
+
+    expect(io.stdout().trim()).toBe('No sprints.');
+  });
+
+  it('`sprint` defaults to the ACTIVE sprint and PAGES the whole set via nextCursor', async () => {
+    await linked();
+    server.script({
+      list_sprints: { structured: { sprints: [sprintRow({ issueCount: 3 })] } },
+      // Two pages: the count the CLI prints must equal the tool's own `total`,
+      // which only holds if it followed the cursor instead of stopping at one.
+      search_work_items: (args) =>
+        args.cursor === undefined
+          ? {
+              structured: {
+                items: [itemRow('PROD-1'), itemRow('PROD-2')],
+                total: 3,
+                nextCursor: 'p2',
+              },
+            }
+          : { structured: { items: [itemRow('PROD-3')], total: 3, nextCursor: null } },
+    });
+
+    const io = capture();
+    await sprintCommand(undefined, {});
+
+    const searches = server.calls.filter((c) => c.name === 'search_work_items');
+    expect(searches).toHaveLength(2);
+    expect(searches[0]?.args).toMatchObject({
+      filter: {
+        version: 'v1',
+        combinator: 'and',
+        conditions: [{ field: 'sprint', operator: 'is_any_of', value: ['s2'] }],
+      },
+    });
+    expect(io.stdout()).toContain('Journey D  [active]');
+    expect(io.stdout()).toContain('goal: Ship the CLI');
+    expect(io.stdout()).toContain('3 work items:');
+    for (const key of ['PROD-1', 'PROD-2', 'PROD-3']) expect(io.stdout()).toContain(key);
+    expect(io.stdout()).not.toContain('could not be collected');
+  });
+
+  it('`sprint <name>` resolves case-insensitively; ambiguous and unknown refs error', async () => {
+    await linked();
+    server.script({
+      list_sprints: {
+        structured: {
+          sprints: [
+            sprintRow({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
+            sprintRow({ id: 's10', name: 'Sprint 10', state: 'planned', sequence: 3 }),
+            sprintRow({}),
+          ],
+        },
+      },
+      search_work_items: { structured: { items: [itemRow('PROD-1')], total: 1, nextCursor: null } },
+    });
+
+    const io = capture();
+    await sprintCommand('journey d', { json: true });
+    expect(JSON.parse(io.stdout())).toMatchObject({ sprint: { id: 's2' }, total: 1 });
+
+    await expect(sprintCommand('Sprint', {})).rejects.toThrow(/matches 2 sprints/);
+    await expect(sprintCommand('nope', {})).rejects.toThrow(/No sprint matches "nope"/);
+  });
+
+  it('`sprint` with no active sprint and no ref names the situation instead of an empty table', async () => {
+    await linked();
+    server.script({
+      list_sprints: { structured: { sprints: [sprintRow({ state: 'planned' })] } },
+    });
+    capture();
+
+    await expect(sprintCommand(undefined, {})).rejects.toThrow(/No sprint is active/);
+    // It failed on the sprint READ — it never went looking for items.
+    expect(server.calls.filter((c) => c.name === 'search_work_items')).toHaveLength(0);
+  });
+
+  it('`sprint --kinds` narrows the query, and rejects an unknown kind before any network call', async () => {
+    await linked();
+    server.script({
+      list_sprints: { structured: { sprints: [sprintRow({})] } },
+      search_work_items: { structured: { items: [], total: 0, nextCursor: null } },
+    });
+
+    const io = capture();
+    await sprintCommand(undefined, { kinds: 'Subtask, BUG' });
+    expect(server.calls.find((c) => c.name === 'search_work_items')?.args).toMatchObject({
+      filter: {
+        conditions: [
+          { field: 'sprint', operator: 'is_any_of', value: ['s2'] },
+          { field: 'kind', operator: 'is_any_of', value: ['subtask', 'bug'] },
+        ],
+      },
+    });
+    expect(io.stdout()).toContain('No work items in this sprint.');
+
+    server.calls.length = 0;
+    await expect(sprintCommand(undefined, { kinds: 'widget' })).rejects.toThrow(
+      /Unknown work item kind/,
+    );
+    expect(server.calls).toHaveLength(0);
   });
 });
