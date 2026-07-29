@@ -1,0 +1,23 @@
+{
+  "name": "Motir sandbox (Aider)",
+  "build": {
+    "dockerfile": "../../Dockerfile",
+    "context": "../../../../..",
+    "args": {
+      "AGENT": "aider"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=${localEnv:HOME}/.config/motir,target=/home/node/.config/motir,type=bind,readonly",
+    "source=${localEnv:HOME}/.aider.conf.yml,target=/home/node/.aider.conf.yml,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir --version",
+  "remoteEnv": {
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}"
+  }
+}

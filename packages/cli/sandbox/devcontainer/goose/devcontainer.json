@@ -1,0 +1,23 @@
+{
+  "name": "Motir sandbox (Goose)",
+  "build": {
+    "dockerfile": "../../Dockerfile",
+    "context": "../../../../..",
+    "args": {
+      "AGENT": "goose"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=${localEnv:HOME}/.config/motir,target=/home/node/.config/motir,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/goose,target=/home/node/.config/goose,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir --version",
+  "remoteEnv": {
+    "GOOSE_DISABLE_KEYRING": "1",
+    "GOOSE_MODE": "auto"
+  }
+}
