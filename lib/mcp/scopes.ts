@@ -62,6 +62,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_sprints: 'read',
   validate_sprint: 'read',
   validate_work_item: 'read',
+  // get_plan_status only READS a plan's status + proposal count — it neither
+  // submits a job nor spends a credit.
+  get_plan_status: 'read',
   // work_items:write
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
@@ -69,6 +72,12 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // claim_next_ready flips the claimed item to in_progress — a status write
   claim_next_ready: 'work_items:write',
   add_comment: 'work_items:write',
+  // expand_item writes no work item — the Plan approval gate stands between its
+  // proposals and the tree — but it is emphatically not a read: it submits a
+  // job that spends the owner's AI credits and opens a Plan row. `work_items:write`
+  // is the narrowest shipped scope that admits a plan-mutating, billable submit,
+  // so a read-only token cannot fire one.
+  expand_item: 'work_items:write',
   link_work_items: 'work_items:write',
   unlink_work_items: 'work_items:write',
   move_to_parent: 'work_items:write',

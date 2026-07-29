@@ -6,6 +6,11 @@ import { LIST_READY_TOOL_NAME, registerListReady } from './tools/listReady';
 import { NEXT_READY_TOOL_NAME, registerNextReady } from './tools/nextReady';
 import { CLAIM_NEXT_READY_TOOL_NAME, registerClaimNextReady } from './tools/claimNextReady';
 import { DISPATCH_PROMPT_TOOL_NAME, registerDispatchPrompt } from './tools/dispatchPrompt';
+import {
+  EXPAND_ITEM_TOOL_NAME,
+  GET_PLAN_STATUS_TOOL_NAME,
+  registerExpandItem,
+} from './tools/expandItem';
 import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/createWorkItem';
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
@@ -58,6 +63,8 @@ export const MCP_TOOL_NAMES = [
   NEXT_READY_TOOL_NAME,
   CLAIM_NEXT_READY_TOOL_NAME,
   DISPATCH_PROMPT_TOOL_NAME,
+  EXPAND_ITEM_TOOL_NAME,
+  GET_PLAN_STATUS_TOOL_NAME,
   CREATE_WORK_ITEM_TOOL_NAME,
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
@@ -117,6 +124,11 @@ export function registerMcpTools(
   // The canonical dispatch PROMPT (MOTIR-1802) — the server-generated agent
   // instruction the CLI prints verbatim, so no client assembles its own grammar.
   registerDispatchPrompt(target, resolveContext);
+  // AI plan EXPANSION + its outcome read (MOTIR-1825) — the async planning
+  // trigger an unattended CLI run needs, and the come-back-later status read
+  // that replaces the browser's job stream. Both honour the Plan approval gate:
+  // an expansion proposes, it never writes the tree.
+  registerExpandItem(target, resolveContext);
   // Write tools (7.8.5).
   registerCreateWorkItem(target, resolveContext);
   registerTransitionStatus(target, resolveContext);

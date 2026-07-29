@@ -255,6 +255,9 @@ export default defineConfig({
         'lib/mcp/tools/updateWorkItem.ts',
         'lib/mcp/tools/archiveWorkItem.ts',
         'lib/mcp/tools/deleteWorkItem.ts',
+        // Story 7.9 · MOTIR-1825 — the AI plan-expansion tool + its outcome read
+        // join the same gate (`tests/mcp/expand-item` drives both).
+        'lib/mcp/tools/expandItem.ts',
         // Story 7.10 · Subtask 7.10.8 (MOTIR-896) — the GitHub integration's
         // webhook state machine + installation grant mirror + code-graph feed
         // dispatch + the planning-envelope repo-set producer join the gate.
@@ -507,6 +510,7 @@ export default defineConfig({
         'lib/mcp/tools/updateWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/archiveWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/deleteWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/expandItem.ts': { branches: 90, functions: 90, lines: 90 },
         // These four gate on functions + lines only: each carries DEFENSIVE
         // branches unreachable under shipped invariants, so a 90% BRANCH bar
         // would fail on un-coverable code.
