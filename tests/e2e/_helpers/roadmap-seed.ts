@@ -300,6 +300,126 @@ export async function seedDoneReadyRoadmap(email: string): Promise<DoneReadyRoad
   return { email, password: ROADMAP_SEED_PASSWORD, projectKey, hereTitle, doneTitle, readyTitle };
 }
 
+export interface SingleStorySprintRoadmapSeed {
+  email: string;
+  password: string;
+  /** For the `workspace_id` cookie pin (a `getWorkspaceContext`-gated read resolves
+   *  from the COOKIE, not the active project — see the E2E discipline). */
+  workspaceId: string;
+  projectKey: string;
+  sprintName: string;
+  /** The ONE member story — the sprint scope's single top-in-sprint root. */
+  storyTitle: string;
+  /** Its `MOTIR-<n>`-style key, for the `identifier · title` crumb assertion. */
+  storyIdentifier: string;
+  /** The story's three in-sprint subtasks — the level the canvas must land ON. */
+  subtaskTitles: [string, string, string];
+  /** The story's parent epic — elided in sprint scope, a root in project scope. */
+  epicTitle: string;
+  /** A second root epic — what makes PROJECT scope multi-root (so it never descends). */
+  otherEpicTitle: string;
+}
+
+/**
+ * The SINGLE-STORY-SUBTREE sprint fixture (MOTIR-1809 / Story MOTIR-1803): the
+ * degenerate shape the auto-drill exists for. The active sprint commits to ONE
+ * story plus its three subtasks, so the top-in-sprint predicate (MOTIR-1381 —
+ * members whose parent chain holds no other member) resolves the sprint root to a
+ * SINGLE drillable node, and the whole sprint would otherwise hide one drill
+ * behind it. This is the exact shape of this project's own *Journey D · The Motir
+ * CLI* sprint (14 of 15 items under MOTIR-809), quoted in the story.
+ *
+ * Project scope is deliberately MULTI-root (two epics), so the same fixture also
+ * proves the negative half of step 4: switching back to Whole project renders the
+ * multi-root level with no descend.
+ */
+export async function seedSingleStorySprintRoadmap(
+  email: string,
+): Promise<SingleStorySprintRoadmapSeed> {
+  const { ctx, projectId, projectKey } = await makeTenant(
+    email,
+    'Roadmap E2E — single-story sprint',
+    'Auto Drill Roadmap',
+    'DRIL',
+  );
+
+  const sprintName = 'Sprint 7 · Terminal dispatch';
+  const sprint = await db.sprint.create({
+    data: {
+      workspaceId: ctx.workspaceId,
+      projectId,
+      name: sprintName,
+      goal: 'Ship the terminal dispatch loop.',
+      state: 'active',
+      sequence: 7,
+    },
+  });
+
+  // The epic above the member story — NOT a member, so sprint scope elides it and
+  // the story becomes the topmost in-sprint item.
+  const epicTitle = 'Platform foundation';
+  const epic = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: epicTitle },
+    ctx,
+  );
+  await workItemsService.updateStatus(epic.id, 'in_progress', ctx);
+
+  // THE member story — the sprint's single top-in-sprint root.
+  const storyTitle = 'Terminal dispatch of the work loop';
+  const story = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: storyTitle, parentId: epic.id },
+    ctx,
+  );
+  await db.workItem.update({ where: { id: story.id }, data: { sprintId: sprint.id } });
+
+  // Its three subtasks, all in the sprint — members whose parent chain holds the
+  // member story, so they are NOT roots; they are the level the canvas lands on.
+  const subtaskTitles: [string, string, string] = [
+    'Scaffold the CLI package',
+    'Wire the dispatch command',
+    'Publish the release tag',
+  ];
+  for (const title of subtaskTitles) {
+    const subtask = await workItemsService.createWorkItem(
+      { projectId, kind: 'subtask', title, parentId: story.id },
+      ctx,
+    );
+    await db.workItem.update({ where: { id: subtask.id }, data: { sprintId: sprint.id } });
+  }
+
+  // A second root epic → PROJECT scope is multi-root, so it never auto-descends.
+  const otherEpicTitle = 'Growth experiments';
+  const otherEpic = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: otherEpicTitle },
+    ctx,
+  );
+  await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: 'Referral loops', parentId: otherEpic.id },
+    ctx,
+  );
+
+  // Deliberately NOT onboarded (no `onboardingRanAt`) — the same choice
+  // `seedSprintRoadmap` makes. The planning-origin cluster is pinned at the ROOT
+  // level of an onboarded project (`includeOrigin: parentId === null &&
+  // showPlanningOrigin` in `WorkItemRoadmap`), and it is a NODE: it would make
+  // this sprint's root two nodes, so the level would no longer be the
+  // single-drillable-parent shape under test. The motivating real case — this
+  // project's own manually-built tree — is likewise not onboarded.
+
+  return {
+    email,
+    password: ROADMAP_SEED_PASSWORD,
+    workspaceId: ctx.workspaceId,
+    projectKey,
+    sprintName,
+    storyTitle,
+    storyIdentifier: story.identifier,
+    subtaskTitles,
+    epicTitle,
+    otherEpicTitle,
+  };
+}
+
 export interface SprintRoadmapSeed {
   email: string;
   password: string;
