@@ -1,8 +1,10 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Command } from 'commander';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { batchCommand } from '../src/commands/batch.js';
+import { buildProgram } from '../src/program.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import {
@@ -123,6 +125,34 @@ describe('motir batch refuses to start without an agent', () => {
       hint: expect.stringContaining('motir next --print'),
     });
     // It failed BEFORE opening a session — nothing was read or claimed.
+    expect(server.calls).toHaveLength(0);
+  });
+
+  // The guard above is only worth anything if the flag actually REACHES it.
+  // MOTIR-1830: `--print` was never registered on `batch`, so commander rejected
+  // it first with a bare `unknown option '--print'` and the guard — with the hint
+  // that tells the user what to do instead — was dead code from the command line.
+  // This is the SAME defect MOTIR-1828 fixed on `auto`; it survived here because
+  // `batch` merged after that sweep. Calling `batchCommand({ print: true })`
+  // directly, as the test above does, cannot catch this class: it bypasses the
+  // parser that is doing the rejecting. Drive the REAL program instead.
+  it('rejects --print through the REAL program, delivering the guard’s hint', async () => {
+    const program = buildProgram();
+    // Without this, an unregistered `--print` would take the test runner down
+    // with commander's own `process.exit` instead of failing the assertion.
+    const noExit = (command: Command): void => {
+      command.exitOverride();
+      command.commands.forEach(noExit);
+    };
+    noExit(program);
+
+    await expect(
+      program.parseAsync(['batch', '--print', '--agent', 'echo'], { from: 'user' }),
+    ).rejects.toMatchObject({
+      name: 'CliError',
+      message: expect.stringContaining('cannot run in --print mode'),
+      hint: expect.stringContaining('motir next --print'),
+    });
     expect(server.calls).toHaveLength(0);
   });
 

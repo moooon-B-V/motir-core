@@ -687,99 +687,30 @@ jobs:
           path: out/playwright-report*
           retention-days: 7
 
-  # ── The sandbox image (Story 7.9 · Subtask 7.9.7c · MOTIR-885) ─────────────
+  # ── The sandbox image (Story 7.9 · 7.9.7c MOTIR-885 · 7.9.7e MOTIR-1788) ──
   # The BYOK sandbox (`packages/cli/sandbox/`) is the confined container an
   # unattended `motir auto` runs in. Its two claims — "the loop works in here"
   # and "in here is confined" — are only checkable by BUILDING the image and
-  # RUNNING it, which is what these two jobs do. The unit lane's
+  # RUNNING it, which is what the called workflow's jobs do. The unit lane's
   # `test/sandbox.test.ts` + `test/sandboxCi.test.ts` guard the sources against
   # drift; these guard the artifact.
+  #
+  # The matrix itself lives in `sandbox-images.yml` because the RELEASE lane
+  # (`release-sandbox.yml`, on a `cli-v*` tag) runs the very same one with its
+  # push steps switched on — one definition, two entry points, so nothing can be
+  # published that this gate did not build and smoke-test. `publish: false` and
+  # the absence of `packages: write` here mean the pull-request lane cannot push
+  # even if it tried.
   #
   # Same branch-prefix skip as the Vitest / E2E lanes: a design- or docs-only
   # pull request cannot change what the image does, and a docker matrix is the
   # most expensive thing in this file.
 
-  sandbox-smoke:
-    name: Sandbox smoke (loop + confinement)
-    runs-on: ubuntu-latest
+  sandbox:
+    name: Sandbox images
     if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
-    steps:
-      - uses: actions/checkout@v6
-      # buildx + the gha layer cache: the apt/gh layers are identical across
-      # every run and across the profile matrix below, so only the layers this
-      # commit actually changed are rebuilt.
-      - uses: docker/setup-buildx-action@v3
-      - name: Build the base image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: packages/cli/sandbox/Dockerfile
-          build-args: AGENT=base
-          tags: motir-sandbox:smoke
-          load: true
-          cache-from: type=gha,scope=sandbox-base
-          cache-to: type=gha,scope=sandbox-base,mode=max
-      # Runs the container through the DOCUMENTED mount recipe and executes both
-      # in-container suites: the confinement assertions (read-only credential
-      # mount, unprivileged user, no docker socket, no undocumented host bind)
-      # and `motir auto --agent <fake-agent>` end to end — no LLM, no Motir
-      # deployment, no Postgres, no network.
-      - name: Smoke the image
-        run: packages/cli/sandbox/smoke/run.sh --no-build --image motir-sandbox:smoke
-
-  sandbox-profiles-matrix:
-    name: Sandbox profile matrix (setup)
-    runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
-    outputs:
-      profiles: ${{ steps.read.outputs.profiles }}
-    steps:
-      - uses: actions/checkout@v6
-      # The matrix is READ from the profile table rather than restated here, so
-      # adding an agent to `sandbox/smoke/profiles.json` extends CI on its own —
-      # and `sandboxCi.test.ts` keeps that file honest against AGENT_PROFILES and
-      # the install-agent.sh arms.
-      - id: read
-        run: |
-          profiles=$(node -e "const {profiles}=require('./packages/cli/sandbox/smoke/profiles.json');console.log(JSON.stringify(profiles))")
-          echo "profiles=$profiles" >> "$GITHUB_OUTPUT"
-
-  sandbox-profiles:
-    name: Sandbox profile ${{ matrix.profile.id }} (tier ${{ matrix.profile.tier }})
-    needs: sandbox-profiles-matrix
-    runs-on: ubuntu-latest
-    # Tier 2 is ALLOW-FAIL, not absent. Those installers pull from vendor
-    # endpoints Motir does not control, so a network flake there must not put a
-    # red X on an unrelated pull request — but the build still runs and is still
-    # reported, which is how a profile that broke for real gets noticed.
-    continue-on-error: ${{ matrix.profile.tier == 2 }}
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: ${{ fromJson(needs.sandbox-profiles-matrix.outputs.profiles) }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
-      - name: Build with AGENT=${{ matrix.profile.id }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: packages/cli/sandbox/Dockerfile
-          build-args: AGENT=${{ matrix.profile.id }}
-          tags: motir-sandbox:${{ matrix.profile.id }}
-          load: true
-          # The shared prefix (apt, gh, the packed motir binary) comes from the
-          # base scope; each profile writes only its OWN agent layer.
-          cache-from: |
-            type=gha,scope=sandbox-base
-            type=gha,scope=sandbox-${{ matrix.profile.id }}
-          cache-to: type=gha,scope=sandbox-${{ matrix.profile.id }},mode=max
-      # LIVENESS, not installability. install-agent.sh already runs the agent's
-      # `--version` at BUILD time as root; running it again here — in the
-      # finished image, as the unprivileged `node` user the loop actually runs
-      # as — is what catches an installer that landed its binary somewhere only
-      # root can reach (the /root failure mode 7.9.7b's AGENT_PREFIX exists for).
-      - name: motir --version
-        run: docker run --rm motir-sandbox:${{ matrix.profile.id }} motir --version
-      - name: ${{ matrix.profile.liveness }}
-        run: docker run --rm motir-sandbox:${{ matrix.profile.id }} ${{ matrix.profile.liveness }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sandbox-images.yml
+    with:
+      publish: false
