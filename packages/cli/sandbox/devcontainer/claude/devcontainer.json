@@ -1,0 +1,22 @@
+{
+  "name": "Motir sandbox (Claude Code)",
+  "build": {
+    "dockerfile": "../../Dockerfile",
+    "context": "../../../../..",
+    "args": {
+      "AGENT": "claude"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=${localEnv:HOME}/.config/motir,target=/home/node/.config/motir,type=bind,readonly",
+    "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir --version",
+  "remoteEnv": {
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+  }
+}

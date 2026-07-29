@@ -1,16 +1,18 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { agentProfileIds } from '../src/agentProfiles.js';
 
-// Structural guards for the sandbox image (Subtask 7.9.7a). These assert the
-// image's CONTRACT — the Node floor, the two mounts and their read-only split,
-// the absence of a docker socket, and the per-agent layer seam — from the source
-// files, with no docker daemon involved. Building the image, running the loop
-// inside it and asserting write-confinement for real is 7.9.7c's smoke matrix
-// (MOTIR-885); this suite is what keeps a later edit from quietly widening the
-// blast radius between now and then.
+// Structural guards for the sandbox image (base: 7.9.7a, agent profiles:
+// 7.9.7b). These assert the image's CONTRACT — the Node floor, the mounts and
+// their read-only split, the absence of a docker socket, and the per-agent
+// profile matrix — from the source files, with no docker daemon involved.
+// Building the image, running the loop inside it and asserting write-
+// confinement for real is 7.9.7c's smoke matrix (MOTIR-885); this suite is what
+// keeps a later edit from quietly widening the blast radius between now and
+// then, and from letting the three per-agent surfaces (install layer, compose
+// service, devcontainer) drift apart.
 
 const SANDBOX_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'sandbox');
 const read = (name: string): string => readFileSync(join(SANDBOX_DIR, name), 'utf8');
@@ -30,13 +32,73 @@ const dockerfile = read('Dockerfile');
 const installAgent = read('install-agent.sh');
 const entrypoint = read('entrypoint.sh');
 const compose = read('docker-compose.yml');
+const readme = read('README.md');
 const devcontainerRaw = read(join('devcontainer', 'devcontainer.json'));
+
+const PROFILE_IDS = agentProfileIds();
+
+/**
+ * Split the compose file into its top-level service blocks. A dependency-free
+ * split is enough (and keeps this suite runnable with no YAML parser): service
+ * keys are the only thing at exactly two spaces of indentation.
+ */
+// Comments are KEPT here: a profile that deliberately mounts no credential has
+// to explain itself in the block, and the volume/socket matchers below ignore
+// comment lines anyway.
+const composeServices: Record<string, string> = (() => {
+  const lines = compose.split('\n');
+  const services: Record<string, string> = {};
+  let current = '';
+  for (const line of lines) {
+    const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (header) {
+      current = header[1] ?? '';
+      services[current] = '';
+      continue;
+    }
+    if (current && line.trim()) services[current] += `${line}\n`;
+  }
+  return services;
+})();
+
+/** A compose service block by name — asserted present so callers get a string. */
+const serviceBlock = (name: string): string => {
+  const block = composeServices[name];
+  expect(block, `compose service ${name}`).toBeDefined();
+  return block ?? '';
+};
+
+/** The bind-mount sources of one compose service block, in file order. */
+const volumesOf = (block: string): string[] =>
+  block
+    .split('\n')
+    .filter((line) => /^\s+- \S+:\S/.test(line))
+    .map((line) => line.trim().replace(/^- /, ''));
+
+/**
+ * A profile's case arm in install-agent.sh: everything from its own `<id>)`
+ * label up to the next `;;`. Read as an ARM rather than a substring so the
+ * "profile is named somewhere in the file" drift guard cannot be satisfied by
+ * a comment or by a shared refuse-everything arm.
+ */
+const armOf = (id: string): string => {
+  const start = new RegExp(`^\\s{4}${id}\\)$`, 'm').exec(installAgent);
+  if (!start) return '';
+  const rest = installAgent.slice(start.index);
+  const end = rest.indexOf('\n        ;;');
+  return end === -1 ? rest : rest.slice(0, end);
+};
+
+/** A profile's row in the README's install matrix. */
+const readmeRowOf = (id: string): string =>
+  readme.split('\n').find((line) => line.startsWith(`| \`${id}\``)) ?? '';
 
 describe('sandbox Dockerfile', () => {
   it('bases on the Node line and ASSERTS the >= 24.15 floor rather than trusting the tag', () => {
     expect(dockerfile).toMatch(/^ARG NODE_TAG=24-/m);
     expect(dockerfile).toMatch(/FROM node:\$\{NODE_TAG\}/);
-    // The floor is Kimi's, which is the highest across the supported agents.
+    // Headroom over every supported agent's own floor (the highest being Kimi
+    // Code's Node >= 22.19).
     expect(dockerfile).toContain('maj < 24 || (maj === 24 && min < 15)');
   });
 
@@ -74,12 +136,50 @@ describe('the per-agent layer seam', () => {
     expect(installAgent).toMatch(/^\s*base \| none\)/m);
   });
 
-  it('names EVERY agent profile the CLI knows about', () => {
+  it('gives EVERY agent profile the CLI knows about its own install arm', () => {
     // Drift guard: adding a profile to AGENT_PROFILES without extending the
     // seam would leave that agent falling through to "unknown AGENT".
-    for (const id of agentProfileIds()) {
-      expect(installAgent).toContain(id);
+    for (const id of PROFILE_IDS) {
+      expect(armOf(id), `install arm for ${id}`).not.toBe('');
     }
+  });
+
+  it('installs each agent from a real source instead of claiming one it lacks', () => {
+    // The 7.9.7a placeholder REFUSED a known profile rather than half-building
+    // it. Now every arm must actually fetch something — an arm that only echoes
+    // would produce an image advertising an agent that is not in it.
+    for (const id of PROFILE_IDS) {
+      expect(armOf(id), `install source for ${id}`).toMatch(/npm_agent |curl |pip install/);
+    }
+  });
+
+  it('smoke-tests the binary it installed, so a broken profile fails the BUILD', () => {
+    // Same rule the base applies to `motir --version`: a profile that cannot
+    // execute its agent must fail here, not inside an unattended run.
+    for (const id of PROFILE_IDS) {
+      expect(armOf(id), `version check for ${id}`).toMatch(/^\s+\S+ --version$/m);
+    }
+  });
+
+  it('installs onto the global PATH — the layer runs as root, before USER node', () => {
+    // An installer left to its own default would drop the agent in /root,
+    // invisible to the unprivileged user that actually runs it.
+    for (const id of PROFILE_IDS) {
+      const arm = armOf(id);
+      if (!arm.includes('curl ')) continue;
+      expect(arm, `global install for ${id}`).toMatch(/AGENT_PREFIX/);
+    }
+    expect(installAgent).toContain('AGENT_PREFIX=/usr/local/bin');
+  });
+
+  it('ships NO Gemini CLI profile — Antigravity replaces the retired tool', () => {
+    // Asserted as the absence of a PROFILE, not of the word: the README names
+    // Gemini precisely to say it is deliberately not shipped.
+    expect(PROFILE_IDS).toContain('antigravity');
+    expect(PROFILE_IDS).not.toContain('gemini');
+    expect(armOf('gemini')).toBe('');
+    expect(directivesOf(compose)).not.toContain('AGENT: gemini');
+    expect(existsSync(join(SANDBOX_DIR, 'devcontainer', 'gemini'))).toBe(false);
   });
 
   it('refuses an unknown profile instead of building a half-image', () => {
@@ -126,15 +226,20 @@ describe('sandbox mounts and blast radius', () => {
     expect(devcontainerRaw).not.toContain('docker.sock');
   });
 
-  it('binds no host path beyond the workspace and the PAT config', () => {
-    const volumes = directivesOf(compose)
-      .split('\n')
-      .filter((line) => /^\s+- .*:/.test(line))
-      .map((line) => line.trim());
-    expect(volumes).toEqual([
-      '- ${MOTIR_WORKSPACE:-../../../..}:/workspace',
-      '- ${HOME}/.config/motir:/home/node/.config/motir:ro',
-    ]);
+  it('binds no host path beyond the workspace, the PAT config and the agent credential', () => {
+    // Scoped PER SERVICE rather than over the whole file: every service must
+    // carry the two base mounts FIRST, and anything it adds beyond them has to
+    // be a read-only agent credential path — never a second writable host bind.
+    for (const [name, block] of Object.entries(composeServices)) {
+      const volumes = volumesOf(block);
+      expect(volumes.slice(0, 2), `${name} base mounts`).toEqual([
+        '${MOTIR_WORKSPACE:-../../../..}:/workspace',
+        '${HOME}/.config/motir:/home/node/.config/motir:ro',
+      ]);
+      for (const extra of volumes.slice(2)) {
+        expect(extra, `${name} extra mount`).toMatch(/^\$\{HOME\}\/.+:ro$/);
+      }
+    }
   });
 });
 
@@ -160,5 +265,96 @@ describe('devcontainer variant', () => {
     const configMount = devcontainer.mounts.find((m) => m.includes('.config/motir'));
     expect(configMount).toBeDefined();
     expect(configMount).toContain('readonly');
+  });
+});
+
+// ── The per-agent profile matrix (Subtask 7.9.7b) ───────────────────────────
+// Every profile the CLI knows about must be RUNNABLE, not just installable:
+// a compose service and a devcontainer that select it and mount its credential,
+// plus a README row a human can act on. These guards are what keep the three
+// surfaces from drifting apart as agents are added.
+
+describe.each(PROFILE_IDS)('agent profile: %s', (id) => {
+  const service = serviceBlock(`sandbox-${id}`);
+
+  it('has a compose service selecting its AGENT behind its own compose profile', () => {
+    expect(service).toContain(`profiles: ['${id}']`);
+    expect(service).toContain(`AGENT: ${id}`);
+    expect(service).toContain('dockerfile: packages/cli/sandbox/Dockerfile');
+  });
+
+  it('mounts its own credential path READ-ONLY, or documents why it cannot', () => {
+    const credentialMounts = volumesOf(service).slice(2);
+    if (credentialMounts.length === 0) {
+      // The honest case: no vendor-documented portable credential path (the
+      // agent uses the OS keyring). Guessing one would make docker create an
+      // empty root-owned directory on the host — so the profile must SAY so
+      // rather than mount a path nobody documented.
+      expect(service, `${id} has no credential mount and must explain that`).toMatch(
+        /No agent credential mount/,
+      );
+      return;
+    }
+    for (const mount of credentialMounts) {
+      expect(mount, `${id} credential mount`).toMatch(/:ro$/);
+      // It must be the AGENT's path, not a second copy of the Motir PAT.
+      expect(mount).not.toContain('/.config/motir');
+    }
+  });
+
+  it('has a devcontainer variant carrying the same selector and mounts', () => {
+    const path = join(SANDBOX_DIR, 'devcontainer', id, 'devcontainer.json');
+    expect(existsSync(path), `devcontainer for ${id}`).toBe(true);
+    const variant = JSON.parse(readFileSync(path, 'utf8')) as {
+      build: { args: Record<string, string>; dockerfile: string; context: string };
+      workspaceFolder: string;
+      mounts: string[];
+      remoteUser: string;
+    };
+    expect(variant.build.args['AGENT']).toBe(id);
+    expect(variant.workspaceFolder).toBe('/workspace');
+    expect(variant.remoteUser).toBe('node');
+    // A nested variant sits one directory deeper than the base one.
+    expect(variant.build.dockerfile).toBe('../../Dockerfile');
+    // Every mount is read-only, PAT included — the workspace comes in through
+    // workspaceMount, so nothing here should ever be writable.
+    expect(variant.mounts.some((m) => m.includes('.config/motir'))).toBe(true);
+    for (const mount of variant.mounts) expect(mount).toContain('readonly');
+    // Same credential paths as the compose service, so the two forms cannot
+    // drift into disagreeing about where an agent keeps its credential.
+    const composeTargets = volumesOf(service)
+      .slice(2)
+      .map((mount) => mount.split(':')[1]);
+    for (const target of composeTargets) {
+      expect(variant.mounts.some((m) => m.includes(`target=${target}`))).toBe(true);
+    }
+  });
+
+  it('is documented in the README with an install source and a credential column', () => {
+    const row = readmeRowOf(id);
+    expect(row, `README matrix row for ${id}`).not.toBe('');
+    // Tier, install source, binary, credential — a row that lost a column would
+    // leave the reader without the thing the profile is selected by.
+    expect(row.split('|').filter((cell) => cell.trim()).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('documents a VERIFIED auto-approve mechanism for unattended runs', () => {
+    // These flags drift release-to-release, which is why they are documented
+    // per agent rather than assumed — a profile with no documented unattended
+    // path cannot be used by `motir auto` at all.
+    const flagRows = readme
+      .split('\n')
+      .filter((line) => line.startsWith(`| \`${id}\``))
+      .filter((line) => /--|GOOSE_MODE|auto/.test(line));
+    expect(flagRows.length, `auto-approve row for ${id}`).toBeGreaterThanOrEqual(1);
+  });
+
+  it('has no docker socket anywhere in its variant', () => {
+    const variantRaw = readFileSync(
+      join(SANDBOX_DIR, 'devcontainer', id, 'devcontainer.json'),
+      'utf8',
+    );
+    expect(variantRaw).not.toContain('docker.sock');
+    expect(directivesOf(service)).not.toContain('docker.sock');
   });
 });
