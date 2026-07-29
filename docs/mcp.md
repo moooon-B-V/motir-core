@@ -87,14 +87,14 @@ delete scope still cannot delete in a workspace its owner can't reach.
 
 The scopes and the tools each one gates:
 
-| Scope                | Gates                                                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`                 |
-| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind` |
-| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                |
-| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                  |
-| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                           |
-| `integration`        | `mark_integrated`, `complete_session`                                                                                                               |
+| Scope                | Gates                                                                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`              |
+| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item` |
+| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                   |
+| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                     |
+| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                                                              |
+| `integration`        | `mark_integrated`, `complete_session`                                                                                                                                                  |
 
 **Default grant set.** A token minted without an explicit scope choice gets
 **every scope EXCEPT `work_items:delete`** — full read + write + archive +
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **30 tools**.
+`initialize` handshake and registers **32 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -784,6 +784,72 @@ carry-over disposition is **required** — there is no default.
 | `carryOverTo` | `"backlog"` \| `{ "sprintId": "<id>" }` | yes      | Where unfinished items go: the backlog, or another **planned** sprint in the same project. |
 
 **Output** — `structuredContent`: the updated `SprintDto`.
+
+### AI planning
+
+#### `expand_item`
+
+Submit an **AI expansion** of one container work item — the planner drafts the
+children it should have. This is the MCP surface for the same capability the
+"Expand" action in Motir fires; an unattended CLI run uses it to grow its own
+backlog when the ready set drains.
+
+| Input | Type   | Required | Notes                                                                                |
+| ----- | ------ | -------- | ------------------------------------------------------------------------------------ |
+| `key` | string | yes      | The container's identifier, e.g. `"PROD-7"`. Epic / story / task / bug — not a leaf. |
+
+**Output** — `structuredContent`: `{ jobId, planId }`.
+
+**It submits and returns.** The call resolves the moment motir-ai accepts the
+job — it never streams and never polls. The browser surfaces stream because a
+human is watching a comet fill in; a headless caller has nobody to show it to,
+and an agent blocked on an LLM run is an agent not working. Use
+`get_plan_status` to find out what became of it.
+
+> **⚠️ This does NOT create work items.** The job produces a **`Plan` of
+> proposals**. `approvePlan` — a human decision made in Motir, not on this
+> surface — is the only path from a proposal to a work item, and an `add`
+> proposal's `workItemId` stays `null` until then. Firing this tool, and polling
+> it all the way to `planned`, both leave the tree byte-for-byte unchanged. Do
+> not report proposed children as created.
+
+Errors: a leaf target (or one outside the caller's project) returns
+`INVALID_TARGET` / `NOT_FOUND`; a refused job returns the motir-ai code verbatim
+— `MOTIR_AI_OUT_OF_CREDITS` (buy credits; do not retry) or
+`MOTIR_AI_UNAVAILABLE` (retryable). The job runs on the **token owner's** AI
+credits. Scope token: `work_items:write`.
+
+#### `get_plan_status`
+
+Read what became of a submitted planning job. The come-back-later half of
+`expand_item`, for a client with no stream to hold open.
+
+| Input    | Type   | Required | Notes                                                      |
+| -------- | ------ | -------- | ---------------------------------------------------------- |
+| `planId` | string | one of   | The plan id the submit returned. Pass this **or** `jobId`. |
+| `jobId`  | string | one of   | The job id the submit returned. Pass this **or** `planId`. |
+
+Exactly one of the two — both come out of the same `expand_item` result, and
+passing both (or neither) returns `BAD_REQUEST`.
+
+**Output** — `structuredContent`:
+`{ planId, projectId, status, origin, jobId, itemCount, createdAt, plannedAt, decidedAt, job }`.
+
+- **`status`** — the plan's own status: `generating` · `planned` · `approved` ·
+  `declined`.
+- **`itemCount`** — how many **proposals** the plan bundles. **Not** a count of
+  created work items; see the gate note above.
+- **`job`** — the motir-ai job's state, present **only while `status` is
+  `generating`** (a settled plan's job already delivered, so it is never probed):
+  `{ status, reachable, failure }`. This block exists because **a failed job
+  leaves its plan at `generating` forever** — nothing writes a terminal plan
+  state on failure — so the plan status alone would strand a poller.
+  `reachable: false` means motir-ai itself could not be asked and `failure`
+  describes _that_ outage, not a job failure; the plan read still answers.
+
+A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
+and an unknown job id `NO_PLAN_FOR_JOB` — the same 404-not-403 contract every
+other tool keeps. Scope token: `read`.
 
 ### Identity
 

@@ -1,0 +1,32 @@
+# Build-context excludes. The only image built from this repo today is the
+# `motir auto` sandbox (packages/cli/sandbox/Dockerfile), whose context is this
+# root because `pnpm install --frozen-lockfile` validates the lockfile against
+# every workspace manifest. Keep the context to SOURCE — installed/generated
+# trees are rebuilt inside the image and would otherwise dominate the upload.
+node_modules
+**/node_modules
+.git
+.next
+out
+build
+coverage
+dist
+**/dist
+packages/*/dist
+test-results
+playwright-report
+blob-report
+.turbo
+.vercel
+
+# Local secrets and environment — never part of an image context. The sandbox
+# receives its credential through a read-only mount at run time, not a layer.
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise.
+.DS_Store
+.idea
+.vscode
+*.log

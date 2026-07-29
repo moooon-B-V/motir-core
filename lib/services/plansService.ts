@@ -886,6 +886,27 @@ export const plansService = {
     return plan.id;
   },
 
+  /**
+   * The plan a job produced, by job id — REGARDLESS of decision state
+   * (MOTIR-1825). The OUTCOME-read sibling of
+   * {@link plansService.findPendingPlanIdForJob}, which deliberately hides an
+   * already-decided plan because its caller is offering a CONFIRM. This caller
+   * is asking a different question — "what became of the job I fired?" — and an
+   * approved or declined plan is a perfectly good, in fact final, answer. Hiding
+   * it would report a settled job as missing.
+   *
+   * Takes no `projectId`: a job id addresses one plan, and the read is already
+   * workspace-scoped by the repository plus `canBrowse`-gated on the plan's own
+   * project — so a job from another tenant is an indistinguishable `null`, the
+   * same no-existence-leak contract the pending sibling keeps.
+   */
+  async findPlanIdForJob(jobId: string, ctx: ServiceContext): Promise<string | null> {
+    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    if (!plan) return null;
+    await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+    return plan.id;
+  },
+
   /** A plan + its bundled proposal items (the detail view). The lifecycle
    *  timestamps + decider on the returned plan ARE the history surface. */
   async getPlan(planId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {

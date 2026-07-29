@@ -1,12 +1,15 @@
-import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
+import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { NoPlanForJobError } from '@/lib/plans/errors';
 
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import type { PlanOriginDto } from '@/lib/dto/plans';
+import type { PlanJobStateDto, PlanOriginDto, PlanOutcomeDto } from '@/lib/dto/plans';
 
 // ⚠️ There is NO approve here, by design (MOTIR-1747). A plan edit's proposals
 // land in the run's `Plan` (`addProposals` → `markPlanned`), and the ONE path
@@ -123,7 +126,81 @@ async function submitPlanEditJob(
   return { jobId, planId: plan.id };
 }
 
+/**
+ * How the caller addresses the plan whose outcome it wants — by the `planId` a
+ * submit returned, or by the `jobId` it returned alongside. Both come out of the
+ * SAME `{ jobId, planId }` pair, so a client that persisted either one can ask.
+ */
+export type PlanOutcomeRef = { planId: string } | { jobId: string };
+
+/**
+ * Resolve the motir-ai job behind a still-`generating` plan.
+ *
+ * This is the ONLY way to tell a run that is still working from one that DIED:
+ * a failed job leaves its plan at `generating` forever (nothing writes a
+ * terminal plan state on failure), so a caller polling the plan alone would wait
+ * on it indefinitely. A motir-ai outage is reported as `reachable: false` rather
+ * than thrown, because the PLAN read already succeeded — degrading the job block
+ * beats failing an answer we largely have.
+ */
+async function resolveJobState(jobId: string): Promise<PlanJobStateDto> {
+  try {
+    const job = await getJob(jobId);
+    return {
+      status: job.status,
+      reachable: true,
+      failure: job.error ? { code: job.error.code, message: job.error.message } : null,
+    };
+  } catch (err) {
+    if (err instanceof MotirAiError) {
+      return { status: null, reachable: false, failure: { code: err.code, message: err.message } };
+    }
+    throw err;
+  }
+}
+
 export const aiPlanEditsService = {
+  /**
+   * What became of a submitted plan job (MOTIR-1825) — the companion READ to
+   * every `{ jobId, planId }` submit, for a client with no stream to hold open.
+   *
+   * Reports the PLAN's own status plus its proposal COUNT, and — only while the
+   * plan is still `generating` — the job's state, so "still running" and "died"
+   * are distinguishable (see {@link resolveJobState}).
+   *
+   * Reads nothing into the tree and writes nothing: the count is of PROPOSALS.
+   * `plansService.approvePlan` remains the only path from a proposal to a work
+   * item, so a caller that polls this to completion still has an unchanged tree
+   * until a human approves.
+   */
+  async getOutcome(ref: PlanOutcomeRef, ctx: ServiceContext): Promise<PlanOutcomeDto> {
+    let planId: string;
+    if ('planId' in ref) {
+      planId = ref.planId;
+    } else {
+      const resolved = await plansService.findPlanIdForJob(ref.jobId, ctx);
+      if (!resolved) throw new NoPlanForJobError(ref.jobId);
+      planId = resolved;
+    }
+    const plan = await plansService.getPlan(planId, ctx);
+    const job =
+      plan.status === 'generating' && plan.sourceJobId
+        ? await resolveJobState(plan.sourceJobId)
+        : null;
+    return {
+      planId: plan.id,
+      projectId: plan.projectId,
+      status: plan.status,
+      origin: plan.origin,
+      jobId: plan.sourceJobId,
+      itemCount: plan.itemCount,
+      createdAt: plan.createdAt,
+      plannedAt: plan.plannedAt,
+      decidedAt: plan.decidedAt,
+      job,
+    };
+  },
+
   async submitAugment(prompt: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
     return submitPlanEditJob('augment', { prompt }, ctx);
   },
