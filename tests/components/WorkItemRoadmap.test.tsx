@@ -45,7 +45,11 @@ afterEach(() => {
 });
 
 // The per-level roadmap endpoint, served from a tiny in-memory tree:
-//   roots → [Epic one (drillable)];  E1's children → [Story one (leaf)].
+//   roots → [Epic one (drillable), Epic two (leaf)];  E1's children → [Story one (leaf)].
+// TWO roots on purpose: this adapter opts into AUTO-DRILL (MOTIR-1807), so a root
+// level of exactly ONE drillable node would descend past it and these tests — which
+// are all about acting on the ROOT level by hand — would have nothing to act on. A
+// level with a real choice is also the shape the auto-descend must leave untouched.
 const root = {
   nodes: [
     {
@@ -57,6 +61,16 @@ const root = {
       status: 'in_progress',
       isDone: false,
       hasChildren: true,
+    },
+    {
+      id: 'E2',
+      parentId: null,
+      kind: 'epic',
+      identifier: 'MOTIR-3',
+      title: 'Epic two',
+      status: 'todo',
+      isDone: false,
+      hasChildren: false,
     },
   ],
   edges: [],
