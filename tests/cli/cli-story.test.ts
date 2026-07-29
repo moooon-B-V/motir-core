@@ -701,6 +701,7 @@ describe('help — against the BUILT binary', () => {
       'status',
       'sprints',
       'sprint',
+      'show',
       'open',
       'next',
       'run',

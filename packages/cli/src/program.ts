@@ -5,6 +5,7 @@ import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.
 import {
   openCommand,
   readyCommand,
+  showCommand,
   sprintCommand,
   sprintsCommand,
   statusCommand,
@@ -114,6 +115,14 @@ export function buildProgram(): Command {
     // Arity-2 wrapper: commander appends the Command object, which must not
     // land in `sprintCommand`'s options parameter when `[ref]` is omitted.
     .action((ref: string | undefined, opts) => sprintCommand(ref, opts));
+  // The single-ITEM read, next to `open` (its browser twin) rather than among
+  // the list reads above.
+  program
+    .command('show <key>')
+    .description('Read one work item (e.g. PROD-7): fields, readiness, children, edges, body.')
+    .helpGroup(HELP_GROUP.read)
+    .option('--json', 'Emit the get_work_item payload as JSON.')
+    .action(showCommand);
   // ── doctor ────────────────────────────────────────────────────────────────
   program
     .command('doctor')

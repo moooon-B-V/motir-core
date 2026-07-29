@@ -11,6 +11,7 @@ import {
   renderSprintItems,
   renderSprintsTable,
   renderStatusBlock,
+  renderWorkItemDetail,
   resolveSprintRef,
   type StatusPulse,
 } from '../render.js';
@@ -183,6 +184,51 @@ export async function sprintCommand(ref: string | undefined, opts: SprintOptions
   out(renderSprintHeader(result.sprint));
   out();
   out(renderSprintItems(result.items, result.total));
+}
+
+/** A work item identifier: a project key, a dash, the number (`PROD-7`). The
+ * server upper-cases it, so we do too — `motir show prod-7` is the same read. */
+const ITEM_KEY = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
+
+/**
+ * Validate a `PROD-7`-style key BEFORE any network call, so a typo fails with a
+ * guiding one-liner instead of the server's generic not-found. A key that is
+ * well-FORMED but unknown (or in another tenant) is the server's call — it
+ * answers 404-not-403 by design, and that message is what the user sees.
+ */
+export function parseItemKey(raw: string, command: string): string {
+  const key = raw.trim().toUpperCase();
+  if (!ITEM_KEY.test(key)) {
+    throw new CliError(`"${raw.trim()}" is not a work item key.`, {
+      hint: `Keys look like PROD-7. Run \`motir ${command} PROD-7\`, or \`motir ready\` to list what you can pick up.`,
+    });
+  }
+  return key;
+}
+
+export interface ShowOptions {
+  json?: boolean;
+}
+
+/**
+ * `motir show <key>` — read ONE work item in the terminal: its fields, its
+ * readiness verdict, its lineage + children, its dependency edges, and its raw
+ * Markdown body.
+ *
+ * ONE tool call (`get_work_item`) does all of it — the aggregate already carries
+ * everything, readiness included, so the CLI renders the server's verdict and
+ * never re-derives it. A pure read: `show` never claims, transitions or edits.
+ */
+export async function showCommand(key: string, opts: ShowOptions): Promise<void> {
+  const identifier = parseItemKey(key, 'show');
+  const detail = await withProjectSession(({ client }) => client.getWorkItem(identifier));
+  if (opts.json) {
+    // The tool's own `structuredContent`, unchanged — same contract as
+    // `ready --json` / `status --json`.
+    json(detail);
+    return;
+  }
+  out(renderWorkItemDetail(detail));
 }
 
 export interface OpenOptions {

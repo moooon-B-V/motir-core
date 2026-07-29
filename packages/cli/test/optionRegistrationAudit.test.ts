@@ -50,6 +50,7 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   status: 'StatusOptions',
   sprints: 'SprintsOptions',
   sprint: 'SprintOptions',
+  show: 'ShowOptions',
   doctor: 'DoctorCommandOptions',
   open: 'OpenOptions',
   next: 'NextOptions',

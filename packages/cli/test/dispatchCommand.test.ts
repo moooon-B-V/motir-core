@@ -65,7 +65,28 @@ function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
 
 function workItem(over: Partial<WorkItemDetail> = {}): WorkItemDetail {
   return {
-    item: { id: 'row-7', identifier: 'PROD-7', title: 'Add the thing', status: 'todo' },
+    item: {
+      id: 'row-7',
+      identifier: 'PROD-7',
+      kind: 'subtask',
+      title: 'Add the thing',
+      status: 'todo',
+      priority: 'high',
+      assigneeId: null,
+      type: 'code',
+      executor: 'coding_agent',
+      storyPoints: 3,
+      estimateMinutes: 40,
+      targetRepo: 'motir-core',
+      sprintId: null,
+      descriptionMd: null,
+    },
+    ancestors: [],
+    parent: null,
+    children: [],
+    blockedBy: [],
+    blocks: [],
+    relatesTo: [],
     readiness: { ready: true, openBlockers: [], blockedByAncestor: null },
     ...over,
   };
@@ -317,7 +338,9 @@ describe('motir run <key>', () => {
       detail: workItem({
         readiness: {
           ready: false,
-          openBlockers: [{ identifier: 'PROD-3', title: 'Schema', status: 'todo' }],
+          openBlockers: [
+            { identifier: 'PROD-3', kind: 'subtask', title: 'Schema', status: 'todo' },
+          ],
           blockedByAncestor: null,
         },
       }),
