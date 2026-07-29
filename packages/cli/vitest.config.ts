@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
-// The `@motir/cli` package suite + its COVERAGE GATE (Subtask 7.9.5 · MOTIR-883).
+// The `@motir/cli` package suite + its COVERAGE GATE (Subtask 7.9.5 · MOTIR-883;
+// `motir batch` brought under it by 7.9.5b · MOTIR-1829).
 //
 // These tests run with no Postgres and no Next app, so they stay in the package
 // rather than joining the root vitest lane (which globs only `tests/**`). CI runs
@@ -28,6 +29,7 @@ export default defineConfig({
         'src/agentProfiles.ts': { branches: 90, functions: 90, lines: 90 },
         'src/agentRun.ts': { branches: 90, functions: 90, lines: 90 },
         'src/autoLoop.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/batchPlan.ts': { branches: 90, functions: 90, lines: 90 },
         'src/browser.ts': { branches: 90, functions: 90, lines: 90 },
         'src/dispatch.ts': { branches: 90, functions: 90, lines: 90 },
         'src/doctor.ts': { branches: 90, functions: 90, lines: 90 },
@@ -40,6 +42,7 @@ export default defineConfig({
         'src/sessionExcludes.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/auth.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/auto.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/commands/batch.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/dispatch.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/doctor.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/link.ts': { branches: 90, functions: 90, lines: 90 },
@@ -60,16 +63,6 @@ export default defineConfig({
         //     guard states an invariant rather than handling a reachable case.
         'src/mcpClient.ts': { functions: 90, lines: 90 },
         'src/help.ts': { functions: 90, lines: 90 },
-
-        // ── KNOWN GAP — tracked by MOTIR-1829, not silent ──────────────────
-        // `motir batch` (MOTIR-888) merged while this gate was in flight, so its
-        // two modules arrived after the list above was written and are the ONE
-        // command surface not yet held to the floor:
-        //   src/commands/batch.ts   80.8 stmts · 64.9 branch · 75.0 fn · 82.3 lines
-        //   src/batchPlan.ts        98.4 stmts · 79.5 branch · 100  fn · 98.1 lines
-        // They are named HERE rather than left invisible by absence: growing
-        // `test/batch.test.ts` to clear 90% is that card's own work, and adding a
-        // sub-90 threshold would codify a lower bar instead of closing the gap.
 
         // UNGATED, deliberately — each is proven end-to-end instead, by the
         // story suite that runs the real binary (`tests/cli/cli-story.test.ts`):
