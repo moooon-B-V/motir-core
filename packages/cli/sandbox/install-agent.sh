@@ -55,6 +55,17 @@ AGENT_STAGE=/tmp/motir-agent-install
 # up. The Dockerfile chowns this home to node:node after the layer runs.
 RUNTIME_HOME=/home/node
 
+# The config home the IMAGE owns, for an agent whose codegraph config would
+# otherwise land inside its own read-only credential mount (7.9.7f / MOTIR-1835).
+# It sits under the runtime home but OUTSIDE every mounted path, so a `:ro` bind
+# mount can never shadow what is written here. codegraph resolves each target
+# relative to $HOME, so pointing HOME at this directory is what relocates the
+# file; the entrypoint then points the AGENT at it with that agent's own config
+# env var. Kept in sync with `sandboxAgentConfigHome()` in
+# packages/cli/src/agentProfiles.ts and with the entrypoint — the sandbox test
+# pins all three together.
+SANDBOX_AGENT_HOME="$RUNTIME_HOME/.motir-sandbox/agent-config"
+
 # Where the resolved codegraph target is recorded for the entrypoint to re-read.
 # The profile -> target mapping lives in the case arms below and NOWHERE else;
 # the entrypoint reads this file rather than carrying a second copy that could
@@ -79,13 +90,20 @@ npm_agent() {
 #
 # `--yes` is what makes this non-interactive AND turns the auto-allow permission
 # list on, which is the half that lets an unattended agent actually CALL the
-# tools rather than stopping to ask. `--location global` writes into
-# $RUNTIME_HOME so the wiring is the image's, not a file dropped in the user's
+# tools rather than stopping to ask. `--location global` writes into the home
+# given below so the wiring is the image's, not a file dropped in the user's
 # repo.
+#
+# The optional SECOND argument is the home to write into, defaulting to the
+# runtime home. A profile whose default config path falls inside its own
+# read-only credential mount passes $SANDBOX_AGENT_HOME instead, so the file the
+# agent reads is one the host can never shadow (7.9.7f). Both are under
+# /home/node — never root's home, which is the trap invariant 1 describes.
 wire_codegraph() {
-    HOME="$RUNTIME_HOME" codegraph install --target "$1" --location global --yes
+    local target="$1" home="${2:-$RUNTIME_HOME}"
+    HOME="$home" codegraph install --target "$target" --location global --yes
     mkdir -p "$(dirname "$CODEGRAPH_TARGET_FILE")"
-    printf '%s\n' "$1" > "$CODEGRAPH_TARGET_FILE"
+    printf '%s\n' "$target" > "$CODEGRAPH_TARGET_FILE"
 }
 
 # Record that this profile has NO codegraph MCP wiring. Written explicitly
@@ -123,6 +141,12 @@ case "$AGENT" in
         # which upstream has deprecated (see the README matrix).
         npm_agent '@openai/codex'
         codex --version
+        # Wired into the RUNTIME home on purpose, unlike opencode above: codex
+        # resolves config.toml AND auth.json from the same CODEX_HOME, so the
+        # redirected home has to be SEEDED from the read-only mount before the
+        # stanza is merged in — which can only happen once that mount exists, at
+        # run time. The entrypoint does it; this build-time copy is what a plain
+        # `docker run` with no credential mount gets seeded from (7.9.7f).
         wire_codegraph codex
         ;;
 
@@ -133,7 +157,12 @@ case "$AGENT" in
         # platform binary straight onto the global PATH.
         npm_agent 'opencode-ai'
         opencode --version
-        wire_codegraph opencode
+        # Wired into the IMAGE-OWNED home, not ~/.config/opencode: that path is
+        # bind-mounted read-only from the host, which used to shadow the stanza
+        # entirely (7.9.7f). The entrypoint points OPENCODE_CONFIG here, and
+        # opencode MERGES that file over its global config — so the host's own
+        # config keeps applying and no credential is copied anywhere.
+        wire_codegraph opencode "$SANDBOX_AGENT_HOME"
         ;;
 
     kimi)

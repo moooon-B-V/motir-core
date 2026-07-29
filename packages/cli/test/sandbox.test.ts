@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agentProfileIds,
   codegraphWiredProfiles,
+  sandboxAgentConfigHome,
   AGENT_PROFILES,
   type AgentProfile,
 } from '../src/agentProfiles.js';
@@ -415,9 +416,15 @@ describe('the per-agent codegraph MCP wiring', () => {
   it('installs the wiring into the RUNTIME home, not the root that runs the layer', () => {
     // The same trap invariant 1 describes for binaries, one directory up: the
     // seam runs as root, so an install left to $HOME lands in /root, invisible
-    // to the `node` user that runs the agent.
+    // to the `node` user that runs the agent. Both homes the wiring can target
+    // — the runtime home and the image-owned config home a shadowed profile is
+    // redirected to — are under /home/node, never root's.
     expect(installAgent).toContain('RUNTIME_HOME=/home/node');
-    expect(installAgent).toMatch(/HOME="\$RUNTIME_HOME" codegraph install/);
+    expect(installAgent).toMatch(/local target="\$1" home="\$\{2:-\$RUNTIME_HOME\}"/);
+    expect(installAgent).toMatch(/HOME="\$home" codegraph install/);
+    expect(installAgent).toContain(
+      'SANDBOX_AGENT_HOME="$RUNTIME_HOME/.motir-sandbox/agent-config"',
+    );
   });
 
   it('installs non-interactively WITH the auto-allow list, so an unattended agent can call the tools', () => {
@@ -438,6 +445,131 @@ describe('the per-agent codegraph MCP wiring', () => {
     expect(entrypoint).toContain(
       'CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target',
     );
+  });
+});
+
+// ── The read-only mount must never shadow the wiring (7.9.7f / MOTIR-1835) ───
+// 7.9.7d wired the codegraph MCP server into each agent at BUILD time, writing
+// that agent's own config file. For `codex` and `opencode` that file landed
+// INSIDE the directory 7.9.7b bind-mounts READ-ONLY from the host, so the host's
+// copy shadowed it and those agents saw no code-graph tools at all under the
+// recommended compose path. The fix redirects those two to a config home the
+// image owns; this guard is what stops a future profile reintroducing the
+// shadowing silently — the failure mode is invisible at build time and only
+// shows up as an agent that quietly greps instead of querying the graph.
+
+describe('codegraph config is never shadowed by a read-only credential mount', () => {
+  /** The container-side dirs the sandbox pins (Dockerfile: ENV HOME=/home/node). */
+  const CONTAINER_DIRS = {
+    home: '/home/node',
+    xdgConfigHome: '/home/node/.config',
+    xdgDataHome: '/home/node/.local/share',
+  };
+
+  /** The container paths a profile's compose service mounts READ-ONLY. */
+  const readOnlyMountTargets = (id: string): string[] =>
+    volumesOf(serviceBlock(`sandbox-${id}`))
+      .filter((mount) => mount.endsWith(':ro'))
+      .map((mount) => mount.split(':')[1] ?? '');
+
+  /** Is `path` the mount itself, or anything beneath it? */
+  const shadowedBy = (path: string, mounts: string[]): string | null =>
+    mounts.find((mount) => path === mount || path.startsWith(`${mount}/`)) ?? null;
+
+  it('gives every profile with a codegraph target a placement, and no other profile one', () => {
+    // The two fields answer different questions ("is it wired?" vs "where does
+    // the wiring land?"), so a profile carrying one without the other would
+    // leave this guard with nothing to check.
+    for (const profile of AGENT_PROFILES) {
+      expect(
+        profile.codegraphConfig !== null,
+        `${profile.id}: codegraphConfig must be present iff codegraphTarget is`,
+      ).toBe(profile.codegraphTarget !== null);
+    }
+  });
+
+  it('never lets a profile read its MCP SERVER config from inside its own :ro mount', () => {
+    // THE guard. A shadowed server file is the total failure — the agent has no
+    // code-graph tools at all, which is exactly what shipped for codex and
+    // opencode until 7.9.7f.
+    for (const { id } of codegraphWiredProfiles()) {
+      const placement = profileOf(id).codegraphConfig;
+      expect(placement, `${id} placement`).not.toBeNull();
+      const path = placement?.mcpServers(CONTAINER_DIRS) ?? '';
+      const mounts = readOnlyMountTargets(id);
+      expect(
+        shadowedBy(path, mounts),
+        `${id}: ${path} is shadowed by the read-only mount it sits inside`,
+      ).toBeNull();
+    }
+  });
+
+  it('declares — never hides — an auto-allow list that IS still inside a mount', () => {
+    // The narrower failure: the agent HAS the tools but reads the host's
+    // permission list, so an unattended run stops to ask before calling them.
+    // It may exist, but only as a tracked, named condition.
+    for (const { id } of codegraphWiredProfiles()) {
+      const placement = profileOf(id).codegraphConfig;
+      const autoAllow = placement?.autoAllow?.(CONTAINER_DIRS);
+      const gap = placement?.knownAutoAllowGap ?? null;
+      if (autoAllow && shadowedBy(autoAllow, readOnlyMountTargets(id))) {
+        expect(gap, `${id}: a shadowed auto-allow list must name its tracking item`).toMatch(
+          /^MOTIR-\d+$/,
+        );
+        continue;
+      }
+      // Nothing shadowed — a lingering reference would misreport a fixed gap.
+      expect(gap, `${id} has no shadowed auto-allow list, so it must claim no gap`).toBeNull();
+    }
+  });
+
+  it('redirects exactly the profiles that would otherwise be shadowed, and exports the env var', () => {
+    // A redirect that the entrypoint does not actually export is decoration;
+    // codex and opencode are the two the mount contract shadows today.
+    const redirected = codegraphWiredProfiles()
+      .filter(({ id }) => profileOf(id).codegraphConfig?.redirect)
+      .map(({ id }) => id);
+    expect(redirected.sort()).toEqual(['codex', 'opencode']);
+    for (const id of redirected) {
+      const env = profileOf(id).codegraphConfig?.redirect?.env ?? '';
+      expect(entrypoint, `${id}: entrypoint must export ${env}`).toMatch(
+        new RegExp(`export ${env}=`),
+      );
+    }
+  });
+
+  it('keeps the image-owned config home identical across the table and both shell files', () => {
+    // Three copies of one path is a drift risk; the profile table computes the
+    // paths this suite checks, so a shell file that moved would let the guard
+    // pass against a location the image no longer uses.
+    const home = sandboxAgentConfigHome(CONTAINER_DIRS.home);
+    expect(home).toBe('/home/node/.motir-sandbox/agent-config');
+    expect(installAgent).toContain('.motir-sandbox/agent-config');
+    expect(entrypoint).toContain('SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"');
+    // It must sit outside every profile's mounts, not just the two redirected
+    // ones — that is the property that makes it a safe destination at all.
+    for (const id of PROFILE_IDS) {
+      expect(shadowedBy(home, readOnlyMountTargets(id)), `${id} must not mount over ${home}`).toBe(
+        null,
+      );
+    }
+  });
+
+  it('seeds the redirected codex home from the mount, so the credential survives', () => {
+    // CODEX_HOME governs auth.json as well as config.toml, so a bare redirect
+    // would trade "no code-graph tools" for "not signed in" — a worse bug.
+    const block = entrypoint.slice(entrypoint.indexOf('redirect_codegraph_config() {'));
+    expect(block).toContain('cp -a "$mounted/." "$private/"');
+    expect(block).toMatch(/export CODEX_HOME=/);
+  });
+
+  it('returns the install home through a global, not a subshell capture', () => {
+    // `codegraph_home=$(redirect …)` would run the function in a SUBSHELL,
+    // where the exported CODEX_HOME / OPENCODE_CONFIG die with it — the agent
+    // would then read its unredirected (shadowed) config after all.
+    expect(entrypoint).toContain('redirect_codegraph_config "$codegraph_target" || true');
+    expect(entrypoint).toMatch(/HOME="\$CODEGRAPH_INSTALL_HOME" codegraph install/);
+    expect(entrypoint).not.toMatch(/\$\(redirect_codegraph_config/);
   });
 });
 

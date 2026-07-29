@@ -93,6 +93,59 @@ export interface AgentProfile {
    * does not have.
    */
   codegraphTarget: string | null;
+  /**
+   * Where that wiring LANDS inside the sandbox image, and how it is kept clear
+   * of the profile's own read-only credential mount (7.9.7f). null when the
+   * profile has no codegraph target at all.
+   */
+  codegraphConfig: CodegraphConfigPlacement | null;
+}
+
+/**
+ * The image-owned config home the sandbox redirects a SHADOWED agent to —
+ * `<home>/.motir-sandbox/agent-config`. It is deliberately OUTSIDE every
+ * credential mount (all of which are `~/.<agent>`-shaped or XDG paths), so a
+ * config file written here can never be masked by a `:ro` bind mount.
+ *
+ * `sandbox/install-agent.sh` and `sandbox/entrypoint.sh` carry the same literal
+ * path; `test/sandbox.test.ts` pins the three together.
+ */
+export const sandboxAgentConfigHome = (home: string): string =>
+  join(home, '.motir-sandbox', 'agent-config');
+
+/**
+ * Where a profile's codegraph MCP wiring is written, split by the ROLE each
+ * file plays — because the two roles fail differently when a read-only mount
+ * shadows them. Every path below was read off the REAL `codegraph install`
+ * (v1.5.0) writing into a scratch HOME, not off its documentation.
+ */
+export interface CodegraphConfigPlacement {
+  /**
+   * The file the agent reads the codegraph MCP SERVER from. Shadowing THIS is
+   * the total failure: the agent has no code-graph tools at all. It must never
+   * resolve inside one of the profile's read-only mounts.
+   */
+  mcpServers: (dirs: CredentialDirs) => string;
+  /**
+   * The separate file holding the auto-allow permission list `--yes` writes,
+   * for an agent that keeps it apart from the server list. null when the server
+   * file carries the permissions too (codex's `config.toml`, opencode's
+   * `opencode.jsonc`) — verified, not assumed.
+   */
+  autoAllow: ((dirs: CredentialDirs) => string) | null;
+  /**
+   * The env var the sandbox EXPORTS so the agent reads `mcpServers` from the
+   * image-owned home instead of its default location, with the reason. null
+   * when the default is already clear of every mount this profile takes.
+   */
+  redirect: { env: string; why: string } | null;
+  /**
+   * Set ONLY when `autoAllow` still resolves inside a read-only mount: the
+   * declared, NARROWER gap — the agent HAS the tools but its auto-allow list is
+   * the host's, so an unattended run stops to ask before calling them. Carries
+   * the tracking reference so the condition is visible rather than silent.
+   */
+  knownAutoAllowGap: string | null;
 }
 
 /**
@@ -112,6 +165,16 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: true,
     credentialHint: 'Run `claude` once to sign in, or set ANTHROPIC_API_KEY.',
     codegraphTarget: 'claude',
+    codegraphConfig: {
+      // The server entry is a SIBLING of the mounted ~/.claude directory, so the
+      // `:ro` credential mount cannot reach it — claude keeps its tools.
+      mcpServers: ({ home }) => join(home, '.claude.json'),
+      autoAllow: ({ home }) => join(home, '.claude', 'settings.json'),
+      redirect: null,
+      // ...but the permission list DOES sit inside the mount. Declared, not
+      // silent: the agent has the tools and stops to ask before calling them.
+      knownAutoAllowGap: 'MOTIR-1840',
+    },
   },
   {
     id: 'codex',
@@ -124,6 +187,20 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: true,
     credentialHint: 'Run `codex` once to sign in, or set OPENAI_API_KEY.',
     codegraphTarget: 'codex',
+    codegraphConfig: {
+      // codegraph's default target is ~/.codex/config.toml — INSIDE the `:ro`
+      // mount, so the host copy shadowed it and the agent saw no tools at all.
+      // The entrypoint redirects CODEX_HOME to the image-owned home, seeds it
+      // from the mount and lets codegraph merge its stanza into the copy.
+      mcpServers: ({ home }) => join(sandboxAgentConfigHome(home), '.codex', 'config.toml'),
+      // config.toml carries the server AND its trust/approval settings.
+      autoAllow: null,
+      redirect: {
+        env: 'CODEX_HOME',
+        why: 'CODEX_HOME governs config.toml AND auth.json, so the redirected home is seeded from the read-only mount before codegraph merges into it.',
+      },
+      knownAutoAllowGap: null,
+    },
   },
   {
     id: 'opencode',
@@ -140,6 +217,21 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: true,
     credentialHint: 'Run `opencode auth login` to sign in — it writes auth.json.',
     codegraphTarget: 'opencode',
+    codegraphConfig: {
+      // codegraph's default target is ~/.config/opencode/opencode.jsonc —
+      // INSIDE the `:ro` config mount. OPENCODE_CONFIG is MERGED on top of the
+      // global config rather than replacing it (verified), so pointing it at the
+      // image-owned copy adds the codegraph stanza while the host's own config
+      // keeps applying, and the credential (XDG data dir) is untouched.
+      mcpServers: ({ home }) =>
+        join(sandboxAgentConfigHome(home), '.config', 'opencode', 'opencode.jsonc'),
+      autoAllow: null,
+      redirect: {
+        env: 'OPENCODE_CONFIG',
+        why: 'OPENCODE_CONFIG merges over the global config, so no credential is copied and the host config still applies.',
+      },
+      knownAutoAllowGap: null,
+    },
   },
   {
     id: 'kimi',
@@ -152,6 +244,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: true,
     credentialHint: 'Run `kimi` once to sign in — it writes ~/.kimi-code.',
     codegraphTarget: null,
+    codegraphConfig: null,
   },
   {
     id: 'antigravity',
@@ -169,6 +262,14 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: false,
     credentialHint: 'Sign in with `agy` (its token lives in the OS keyring, not a file).',
     codegraphTarget: 'antigravity',
+    codegraphConfig: {
+      // This profile mounts NO credential directory at all, so nothing can
+      // shadow the wiring.
+      mcpServers: ({ home }) => join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+      autoAllow: null,
+      redirect: null,
+      knownAutoAllowGap: null,
+    },
   },
   {
     id: 'cursor',
@@ -188,6 +289,14 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: true,
     credentialHint: 'Run `cursor-agent login` to sign in, or set CURSOR_API_KEY.',
     codegraphTarget: 'cursor',
+    codegraphConfig: {
+      // Cursor's credential mount is ~/.local/share/cursor-agent, which does not
+      // contain ~/.cursor — the wiring is clear of it without a redirect.
+      mcpServers: ({ home }) => join(home, '.cursor', 'mcp.json'),
+      autoAllow: null,
+      redirect: null,
+      knownAutoAllowGap: null,
+    },
   },
   {
     id: 'aider',
@@ -204,6 +313,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: true,
     credentialHint: 'Give Aider a model key: set ANTHROPIC_API_KEY or OPENAI_API_KEY.',
     codegraphTarget: null,
+    codegraphConfig: null,
   },
   {
     id: 'goose',
@@ -220,6 +330,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialKnown: false,
     credentialHint: 'Run `goose configure` to store a provider key.',
     codegraphTarget: null,
+    codegraphConfig: null,
   },
 ];
 
