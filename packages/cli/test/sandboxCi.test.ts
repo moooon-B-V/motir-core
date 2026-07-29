@@ -100,8 +100,10 @@ describe('the sandbox smoke harness', () => {
   const scripts = [
     'run.sh',
     'loop-smoke.sh',
+    'failure-smoke.sh',
     'confinement.sh',
     'fake-agent.sh',
+    'failing-agent.sh',
     'stub-server.mjs',
     'assert-run.mjs',
     join('bin', 'gh'),
@@ -126,6 +128,34 @@ describe('the sandbox smoke harness', () => {
     expect(runSh).toContain('-v "$CREDENTIAL:/home/node/.config/motir:ro"');
     expect(runSh).toContain('/workspace/.smoke/confinement.sh');
     expect(runSh).toContain('/workspace/.smoke/loop-smoke.sh');
+    // The FAILURE path only reproduces under the real read-only credential
+    // mount (MOTIR-1836), so it has to run in the container too — a driver that
+    // stopped at the happy path is how the defect stayed invisible.
+    expect(runSh).toContain('/workspace/.smoke/failure-smoke.sh');
+  });
+
+  it('gives the failure leg its OWN stub port, and a CREDENTIAL that covers it', () => {
+    // The credential mount is READ-ONLY, so every port any suite will speak to
+    // has to be minted before the container starts. A suite on a port the
+    // credential does not carry dies with "Not logged in to http://127.0.0.1:…"
+    // before it dispatches anything — which is a startup failure wearing the
+    // costume of the thing the suite was meant to assert.
+    const loopPort = /MOTIR_SMOKE_PORT:-(\d+)/.exec(
+      readFileSync(join(SMOKE_DIR, 'loop-smoke.sh'), 'utf8'),
+    )?.[1];
+    const failurePort = /MOTIR_SMOKE_PORT_FAILURE:-(\d+)/.exec(
+      readFileSync(join(SMOKE_DIR, 'failure-smoke.sh'), 'utf8'),
+    )?.[1];
+    expect(loopPort).toBeDefined();
+    expect(failurePort).toBeDefined();
+    expect(failurePort).not.toBe(loopPort);
+
+    // Both ports resolve in run.sh, are carried into the container, and each has
+    // its own entry in the read-only credential.
+    expect(runSh).toContain(`MOTIR_SMOKE_PORT_FAILURE:-${failurePort}`);
+    expect(runSh).toContain('-e "MOTIR_SMOKE_PORT_FAILURE=$FAILURE_PORT"');
+    expect(runSh).toContain('"http://127.0.0.1:$PORT"');
+    expect(runSh).toContain('"http://127.0.0.1:$FAILURE_PORT"');
   });
 
   it('agrees with the loop script about the stub port', () => {

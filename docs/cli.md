@@ -475,9 +475,12 @@ that is the only thing that would move those items to Done.
 would hide that — and **nothing is reverted** in the repo.
 
 - The item is added to a persisted **session exclude list**
-  (`~/.config/motir/session-excludes.json`, scoped per server + project), so the
-  next `motir next` moves past it instead of re-picking the same failure.
+  (`~/.local/state/motir/session-excludes.json`, scoped per server + project), so
+  the next `motir next` moves past it instead of re-picking the same failure.
   `--reset` clears the list; a later success (or `motir done`) drops that entry.
+  It is a convenience, not a correctness mechanism — a failed item is already
+  held out of the ready set by its `in_progress` status — so if that file cannot
+  be written, Motir says so once and carries on rather than failing the run.
 - `motir next` / `motir run` propagate the agent's own exit code, so a script
   wrapping them can tell a failed run from a successful one.
 - `motir auto` and `motir batch` **halt** on the first failure by default;
@@ -655,20 +658,24 @@ Motir keeps exactly **two** files, and only one holds a secret:
 | `~/.config/motir/config.json`  | **Secret — never commit.** The credential store, `chmod 600` inside a `0700` dir, keyed by server URL. Also `agentCommand`. |
 | `.motir.json` (workspace root) | **No secret — safe to commit.** The link: server, workspace, project, plus the optional `repos` override map.               |
 
-A third file, `~/.config/motir/session-excludes.json`, holds the failed-dispatch
-exclude list (ids and keys of your own project — no secret). It lives beside the
-credential store so one config-home relocation moves the whole CLI state.
+A third file, `~/.local/state/motir/session-excludes.json`, holds the
+failed-dispatch exclude list (ids and keys of your own project — no secret). It
+is **state, not a credential**, so it lives in the state home rather than beside
+the PAT: the sandbox image mounts the config dir read-only, which would leave the
+CLI no writable state directory at all. Setting `MOTIR_CONFIG_HOME` still moves
+it too, so one relocation continues to move the whole CLI state.
 
-Five environment variables, none required — each overrides a default
+Six environment variables, none required — each overrides a default
 (`motir help environment` prints this from the shipped code):
 
-| Variable            | Overrides                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------- |
-| `MOTIR_TOKEN`       | The PAT at **login only**, when `--token` is absent. Later commands use the stored one.             |
-| `MOTIR_AGENT`       | The agent command. Precedence: `--agent` > `MOTIR_AGENT` > `agentCommand` in config.                |
-| `MOTIR_CONFIG_HOME` | Where `motir/config.json` lives. Highest-precedence config home.                                    |
-| `XDG_CONFIG_HOME`   | The config home when `MOTIR_CONFIG_HOME` is unset (else `~/.config`).                               |
-| `XDG_DATA_HOME`     | Motir stores nothing here — `doctor` reads it only to find where _your agent_ keeps its credential. |
+| Variable            | Overrides                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `MOTIR_TOKEN`       | The PAT at **login only**, when `--token` is absent. Later commands use the stored one.                             |
+| `MOTIR_AGENT`       | The agent command. Precedence: `--agent` > `MOTIR_AGENT` > `agentCommand` in config.                                |
+| `MOTIR_CONFIG_HOME` | Where `motir/config.json` lives. Highest-precedence config home; also the second-choice state home.                 |
+| `XDG_CONFIG_HOME`   | The config home when `MOTIR_CONFIG_HOME` is unset (else `~/.config`).                                               |
+| `MOTIR_STATE_HOME`  | Where `motir/session-excludes.json` lives. Chain: this > `MOTIR_CONFIG_HOME` > `XDG_STATE_HOME` > `~/.local/state`. |
+| `XDG_DATA_HOME`     | Motir stores nothing here — `doctor` reads it only to find where _your agent_ keeps its credential.                 |
 
 `motir doctor` probes your agent's own key variables (`ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `CURSOR_API_KEY`) for **presence** and never reads a value.

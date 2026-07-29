@@ -57,6 +57,30 @@ export function configPath(): string {
   return join(configDir(), 'config.json');
 }
 
+/**
+ * The STATE home — mutable, non-secret CLI state (the session exclude list).
+ * Separate from `configDir()` because the two have opposite write requirements:
+ * the config dir holds ONE secret the CLI reads and, in the sandbox, is mounted
+ * READ-ONLY on purpose (the container consumes a credential and never mints
+ * one). State that lived beside it therefore had no writable home at all —
+ * which crashed unattended runs (MOTIR-1836).
+ *
+ * The chain is `MOTIR_STATE_HOME` → `MOTIR_CONFIG_HOME` → `XDG_STATE_HOME` →
+ * `~/.local/state`. `MOTIR_CONFIG_HOME` sits ABOVE the XDG variable so the
+ * "one relocation moves the whole CLI state" property the exclude list was
+ * built on still holds — that is what keeps the test suite (which points only
+ * `MOTIR_CONFIG_HOME` at a temp dir) off a real home, and it means an existing
+ * user's relocated state stays exactly where it already is.
+ */
+export function stateDir(): string {
+  const base =
+    process.env['MOTIR_STATE_HOME'] ||
+    process.env['MOTIR_CONFIG_HOME'] ||
+    process.env['XDG_STATE_HOME'] ||
+    join(homedir(), '.local', 'state');
+  return join(base, 'motir');
+}
+
 export function readUserConfig(): UserConfig {
   const path = configPath();
   if (!existsSync(path)) return { tokens: {} };

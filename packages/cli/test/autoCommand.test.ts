@@ -29,6 +29,7 @@ import {
 
 let server: TestMcpServer;
 let root: string;
+let configHome: string;
 let cwd: string;
 let exitCode: typeof process.exitCode;
 
@@ -48,7 +49,8 @@ beforeEach(() => {
   const base = mkdtempSync(join(tmpdir(), 'motir-autocmd-'));
   root = join(base, 'workspace');
   mkdirSync(join(root, 'motir-core'), { recursive: true });
-  vi.stubEnv('MOTIR_CONFIG_HOME', join(base, 'config'));
+  configHome = join(base, 'config');
+  vi.stubEnv('MOTIR_CONFIG_HOME', configHome);
   process.chdir(root);
   setCredential(server.url, { token: TOKEN });
   writeFileSync(
@@ -293,6 +295,49 @@ describe('motir auto — a whole run through the real session', () => {
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     // The failed item was NOT reported as integrated.
     expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(false);
+  });
+
+  // MOTIR-1836. The exclude store used to live in the credential dir, which the
+  // sandbox mounts READ-ONLY by design — so `addExclude`, called on EVERY failed
+  // agent run, threw. The throw escaped `runAutoLoop` before `closeOutRepos()`
+  // ran, and an unattended run that had already integrated work pushed nothing
+  // and opened NO pull request: the exact case `closeOutRepos` exists to prevent.
+  // The item that failed is a footnote; the run's whole output was the damage.
+  it('closes out even when the store is UNWRITABLE and an agent fails (MOTIR-1836)', async () => {
+    server.script(planTools());
+    const git = gitRunner();
+
+    // The sandbox's own shape — an exclude store that cannot be written while
+    // the credential beside it stays readable. Reproduced by making the store
+    // path a DIRECTORY: `writeFileSync` then fails with EISDIR for EVERY uid,
+    // including root, so this asserts the same thing on any runner (a `chmod`
+    // fixture would quietly stop asserting anything as uid 0). The path is the
+    // one the CONFIG home resolves to, which is where the store lived before
+    // this fix and where `stateDir()` still falls back to — so the test bites
+    // on the old code and the new alike.
+    mkdirSync(join(configHome, 'motir', 'session-excludes.json'), { recursive: true });
+
+    // The first item integrates; the second one's agent dies. Without
+    // --keep-going the loop halts there — and must still close out item one.
+    let runs = 0;
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: (runs += 1) === 1 ? 0 : 9, signal: null }),
+      },
+    );
+
+    expect(runs).toBe(2);
+    expect(process.exitCode).toBe(1);
+    // THE regression assertion: the pull request still opened.
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
+    // …carrying the work that landed before the failure, and only that.
+    expect(
+      server.calls.filter((c) => c.name === 'mark_integrated').map((c) => c.args['key']),
+    ).toEqual(['PROD-1']);
   });
 
   it('halts when git fails in a REAL checkout — before the item is touched', async () => {

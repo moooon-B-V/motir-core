@@ -74,6 +74,11 @@ export interface CliRunOptions {
  * One CLI workspace: a temp workspace root (where `.motir.json` lands), a temp
  * config home (the credential store + the session exclude list), and a temp
  * `bin` on PATH holding the fake `gh`.
+ *
+ * `MOTIR_CONFIG_HOME` alone is still enough to keep BOTH off a real home: the
+ * exclude list moved to the state home (MOTIR-1836), but `stateDir()` resolves
+ * `MOTIR_CONFIG_HOME` ahead of `XDG_STATE_HOME` precisely so one relocation
+ * keeps moving all CLI state — this harness is the reason that rung exists.
  */
 export interface CliWorkspace {
   /** The workspace root — the folder `motir link` binds. */
