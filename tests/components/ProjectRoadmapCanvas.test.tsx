@@ -441,4 +441,254 @@ describe('ProjectRoadmapCanvas', () => {
     expect(hl('R3')).toBeTruthy();
     expect(screen.getByTestId('locate-hint').textContent).toBe('1 / 3');
   });
+
+  // ── AUTO-DESCEND a single-drillable-parent level (MOTIR-1807) ───────────────────
+  // Design: `design/roadmap/auto-drill.mock.html` + its `design-notes.md` section
+  // (MOTIR-1805). A level that resolves to exactly ONE drillable node offers no
+  // choice, so the canvas descends into it and the roadmap opens on the WORK rather
+  // than on one card. The prop is OFF by default because this canvas is the shared
+  // foundation behind five consumers.
+  describe('autoDescendSingleParent', () => {
+    // A two-level chain: root → [P] → [C] → [L1, L2] — it compacts in ONE arrival and
+    // stops where the plan actually branches (design panel D).
+    const chain: Record<string, RoadmapLevel> = {
+      __root__: { nodes: [node('P', 'Parent story', true)], deps: [] },
+      P: { nodes: [node('C', 'Child story', true)], deps: [] },
+      C: { nodes: [node('L1', 'Leaf one'), node('L2', 'Leaf two')], deps: [] },
+    };
+    // A single-level version: root → [P] → [S1, S2].
+    const oneDeep: Record<string, RoadmapLevel> = {
+      __root__: { nodes: [node('P', 'Parent story', true)], deps: [] },
+      P: { nodes: [node('S1', 'Story one'), node('S2', 'Story two')], deps: [] },
+    };
+    const serve = (tree: Record<string, RoadmapLevel>) => (parentId: string | null) =>
+      Promise.resolve(tree[parentId ?? '__root__'] ?? { nodes: [], deps: [] });
+
+    const crumbNav = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
+    const noCrumbNav = () => screen.queryByRole('navigation', { name: 'Breadcrumb' });
+    const crumbLabels = () =>
+      within(crumbNav())
+        .getAllByRole('listitem')
+        .map((li) => li.textContent);
+
+    // THE CONTROL. The prop defaults to `false`, so the four consumers that do not opt
+    // in (OnboardingCanvas / PlanReviewCanvas / PlanChangeCanvas / PlanningWorkspaceHost)
+    // are provably unaffected by this whole feature.
+    it('is OFF by default — a single drillable node renders as itself, no descent', async () => {
+      render(<ProjectRoadmapCanvas loadLevel={serve(chain)} />);
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      await act(async () => {}); // flush any pending load before the negatives
+      expect(el('C')).toBeNull();
+      expect(el('L1')).toBeNull();
+      expect(noCrumbNav()).toBeNull();
+    });
+
+    it('ON: descends into the single drillable node and keeps it as the breadcrumb', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serve(oneDeep)}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+        />,
+      );
+      // We land on the CHILDREN; the skipped level itself is never rendered.
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(el('S2')).toBeTruthy();
+      expect(el('P')).toBeNull();
+      expect(crumbLabels()).toEqual(['Roadmap', 'P']);
+    });
+
+    it('ON: Back and the crumb both return to the skipped level', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serve(oneDeep)}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+        />,
+      );
+      await screen.findByText('Story one');
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      expect(noCrumbNav()).toBeNull(); // back at the root level
+
+      cleanup();
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serve(oneDeep)}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+        />,
+      );
+      await screen.findByText('Story one');
+      fireEvent.click(within(crumbNav()).getByText('Roadmap'));
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      expect(noCrumbNav()).toBeNull();
+    });
+
+    it('ON: CHAINS — two nested single-parent levels compact in one arrival, crumbs in descent order', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serve(chain)}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+        />,
+      );
+      expect(await screen.findByText('Leaf one')).toBeTruthy();
+      expect(el('L2')).toBeTruthy();
+      // Neither skipped ancestor was ever painted — the arrival reads as ONE landing.
+      expect(el('P')).toBeNull();
+      expect(el('C')).toBeNull();
+      expect(screen.queryByText('Parent story')).toBeNull();
+      expect(crumbLabels()).toEqual(['Roadmap', 'P', 'C']);
+    });
+
+    // The negative cases, drawn in design panel E so this card cannot guess them.
+    it('does NOT descend when the level has ≥2 nodes (the choice is the user’s)', async () => {
+      render(<ProjectRoadmapCanvas loadLevel={loadLevel} autoDescendSingleParent />);
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+      await act(async () => {});
+      expect(el('E2')).toBeTruthy();
+      expect(el('S1')).toBeNull();
+      expect(noCrumbNav()).toBeNull();
+    });
+
+    it('does NOT descend when the single node is NOT drillable (a childless leaf)', async () => {
+      const lone: RoadmapLevel = { nodes: [node('A', 'Lonely leaf')], deps: [] };
+      render(
+        <ProjectRoadmapCanvas loadLevel={() => Promise.resolve(lone)} autoDescendSingleParent />,
+      );
+      expect(await screen.findByText('Lonely leaf')).toBeTruthy();
+      await act(async () => {});
+      expect(noCrumbNav()).toBeNull();
+    });
+
+    it('does NOT descend when the level is empty', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={() => Promise.resolve({ nodes: [], deps: [] })}
+          autoDescendSingleParent
+        />,
+      );
+      expect(await screen.findByText('Nothing on the roadmap yet')).toBeTruthy();
+      expect(noCrumbNav()).toBeNull();
+    });
+
+    // Design panel F: after an explicit climb the level SITS STILL — including across a
+    // manual refresh, which re-runs the load for the CURRENT level (MOTIR-1542) and
+    // must not lose the user's place. `loadLevel` is spied so the refresh assertion
+    // waits on the REFETCH ACTUALLY HAVING HAPPENED, not on a timer — otherwise the
+    // "still at the root" assertion would pass vacuously.
+    it('SUPPRESSES the re-descend after the user climbs back — across a refresh too — until an explicit drill', async () => {
+      const load = vi.fn(serve(oneDeep));
+      const { rerender } = render(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+          reloadKey="1"
+        />,
+      );
+      await screen.findByText('Story one'); // arrived already drilled
+      await waitFor(() => expect(load).toHaveBeenCalledTimes(2)); // root + the descent
+
+      fireEvent.click(within(crumbNav()).getByText('Roadmap'));
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      await waitFor(() => expect(load).toHaveBeenCalledTimes(3)); // the root reload
+      expect(noCrumbNav()).toBeNull();
+
+      // A MANUAL REFRESH (a `reloadKey` bump) re-reads THIS level and stays put.
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+          reloadKey="2"
+        />,
+      );
+      await waitFor(() => expect(load).toHaveBeenCalledTimes(4));
+      await act(async () => {});
+      expect(el('P')).toBeTruthy();
+      expect(el('S1')).toBeNull();
+      expect(noCrumbNav()).toBeNull();
+
+      // An EXPLICIT drill re-arms the behaviour.
+      fireEvent.keyDown(el('P')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(crumbLabels()).toEqual(['Roadmap', 'P']);
+    });
+
+    // Design panel C: the two routes in are the same state. Both go through the ONE
+    // `applyDrill` transition, so a hand drill and an arrival are indistinguishable.
+    it('produces the SAME state as a hand-drilled view (identical crumbs + level)', async () => {
+      // Route 1 — the user drills P by hand (prop off).
+      render(<ProjectRoadmapCanvas loadLevel={serve(oneDeep)} rootLabel="Roadmap" />);
+      await screen.findByText('Parent story');
+      fireEvent.keyDown(el('P')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      const manualCrumbs = crumbLabels();
+      const manualNodes = [...document.querySelectorAll('[data-node-id]')].map(
+        (n) => (n as HTMLElement).dataset.nodeId,
+      );
+      cleanup();
+
+      // Route 2 — the canvas arrives already drilled.
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serve(oneDeep)}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+        />,
+      );
+      await screen.findByText('Story one');
+      expect(crumbLabels()).toEqual(manualCrumbs);
+      expect(
+        [...document.querySelectorAll('[data-node-id]')].map(
+          (n) => (n as HTMLElement).dataset.nodeId,
+        ),
+      ).toEqual(manualNodes);
+    });
+
+    it('clears the selection and the highlight when it descends', async () => {
+      // Start on a level with a real choice, select + highlight a node, then let the
+      // data change under a refresh so the level now resolves to ONE drillable node.
+      let root: RoadmapLevel = { nodes: [node('A', 'Alpha'), node('B', 'Bravo')], deps: [] };
+      const load = vi.fn((parentId: string | null) =>
+        Promise.resolve(parentId === null ? root : (oneDeep.P as RoadmapLevel)),
+      );
+      const { rerender } = render(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          autoDescendSingleParent
+          searchable
+          rootLabel="Roadmap"
+          reloadKey="1"
+        />,
+      );
+      await screen.findByText('Alpha');
+      fireEvent.keyDown(el('A')!, { key: 'Enter' }); // select
+      fireEvent.change(screen.getByPlaceholderText('Search the roadmap'), {
+        target: { value: 'Alpha' },
+      });
+      fireEvent.submit(screen.getByRole('search')); // highlight
+      expect(el('A')!.querySelector('[data-selected]')).toBeTruthy();
+      expect(el('A')!.querySelector('[data-highlighted]')).toBeTruthy();
+
+      root = { nodes: [node('P', 'Parent story', true)], deps: [] };
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={load}
+          autoDescendSingleParent
+          searchable
+          rootLabel="Roadmap"
+          reloadKey="2"
+        />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(document.querySelector('[data-selected]')).toBeNull();
+      expect(document.querySelector('[data-highlighted]')).toBeNull();
+      expect(crumbLabels()).toEqual(['Roadmap', 'P']);
+    });
+  });
 });

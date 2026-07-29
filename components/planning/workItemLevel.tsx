@@ -133,7 +133,13 @@ export function buildWorkItemLevel(
       id: item.id,
       parentId: item.parentId,
       searchText: `${item.identifier} ${item.title}`,
-      crumbLabel: item.identifier,
+      // `identifier · title`, not the bare key (MOTIR-1805 design DECISION 2). On a
+      // MANUAL drill the key alone sufficed — the user had just read the card they
+      // clicked. On an AUTO-DESCENDED ARRIVAL nobody clicked (MOTIR-1807), and the
+      // breadcrumb is the ONLY thing carrying the skipped level, so a bare key would
+      // reference it without naming it. Applied to manual and auto crumbs identically,
+      // so no special mode is introduced.
+      crumbLabel: `${item.identifier} · ${item.title}`,
       drillable: item.hasChildren,
       // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
       // anchors below are off-level blocker STUBS — they are ALSO viewable now

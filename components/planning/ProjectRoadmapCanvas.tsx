@@ -90,7 +90,29 @@ export interface ProjectRoadmapCanvasProps {
    *  elsewhere" meaning (MOTIR-1568); the sprint-scoped roadmap passes the "not in
    *  sprint" meaning so the legend matches the node flag + anchor (MOTIR-1379). */
   warningLegend?: { label: string; meaning: string };
+  /**
+   * SKIP A LEVEL THAT OFFERS NO CHOICE (MOTIR-1807). When a resolved level holds
+   * EXACTLY ONE node and that node is `drillable`, descend into it instead of
+   * rendering it — repeating while each newly-resolved level is again a single
+   * drillable node, so an `epic → story → subtasks` chain compacts in ONE arrival.
+   * The sprint-scoped read (MOTIR-1381) re-roots at the topmost in-sprint members, so
+   * a sprint committed to one story's subtree hides the whole sprint behind one drill.
+   *
+   * **Defaults to `false`, and that default is load-bearing.** This canvas is the
+   * reusable FOUNDATION (MOTIR-1194) behind five consumers; an onboarding canvas that
+   * silently walked past its single station would be a regression. Only the work-item
+   * roadmap adapter opts in.
+   *
+   * The descent reuses the manual-drill transition EXACTLY, so an arrival is an
+   * ordinary drilled view and nothing downstream can tell the two apart — the design
+   * position drawn side by side in `design/roadmap/auto-drill.*` panel C.
+   */
+  autoDescendSingleParent?: boolean;
 }
+
+// The suppression ref (below) is keyed by LEVEL; the root level has no id.
+const ROOT_LEVEL_KEY = '__root__';
+const levelKey = (id: string | null) => id ?? ROOT_LEVEL_KEY;
 
 interface Crumb {
   id: string;
@@ -116,6 +138,7 @@ export function ProjectRoadmapCanvas({
   rootLabel,
   ariaLabel,
   warningLegend,
+  autoDescendSingleParent = false,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
@@ -152,6 +175,28 @@ export function ProjectRoadmapCanvas({
   // overlay still fills the viewport, so the feature degrades cleanly.
   const [expanded, setExpanded] = useState(false);
   const reqSeq = useRef(0);
+  // AUTO-DESCEND suppression (MOTIR-1807; design `auto-drill.*` panel F). `navigate()`
+  // and `goBack()` are the user EXPLICITLY asking to see a level — if auto-descend then
+  // fired again they'd be thrown straight back down and the breadcrumb root would be
+  // unclickable. So remember WHICH level they climbed to and never descend out of it.
+  // Keyed by level rather than a bare boolean so it SURVIVES A MANUAL REFRESH: the
+  // refresh signal (MOTIR-1542) re-runs the load for that same level, and re-descending
+  // would make Refresh feel like it lost the user's place. An explicit `handleDrill`
+  // clears it (a deliberate drill RE-ARMS the behaviour, so a chain below still
+  // compacts). A SCOPE switch re-arms by construction — `RoadmapView` remounts this
+  // canvas on `key={scope}`, a fresh arrival with fresh refs.
+  const suppressedLevelRef = useRef<string | null>(null);
+  // The ids already on the crumb stack — the auto-descend's CYCLE GUARD. `loadLevel`
+  // is consumer-supplied I/O, so a level that (wrongly) resolves to a node already in
+  // our own descent path would otherwise descend forever, hanging the canvas rather
+  // than failing visibly. Never descend into an ancestor; render the level instead.
+  const crumbIdsRef = useRef<Set<string>>(new Set());
+  // The opt-in flag, held in a ref so the load effect stays keyed strictly on level
+  // identity (`focusId` / `reloadKey`) — toggling the prop must not refetch a level.
+  const autoDescendRef = useRef(autoDescendSingleParent);
+  useEffect(() => {
+    autoDescendRef.current = autoDescendSingleParent;
+  }, [autoDescendSingleParent]);
 
   const enterFullScreen = useCallback(() => {
     setExpanded(true);
@@ -197,6 +242,11 @@ export function ProjectRoadmapCanvas({
   useEffect(() => {
     loadLevelRef.current = loadLevel;
   }, [loadLevel]);
+  // Mirror the crumb ids for the auto-descend's cycle guard (a ref, so the load
+  // effect can read the current path without re-running on every crumb change).
+  useEffect(() => {
+    crumbIdsRef.current = new Set(crumbs.map((c) => c.id));
+  }, [crumbs]);
 
   // `/` focuses the search field (unless already typing into one).
   useEffect(() => {
@@ -213,6 +263,21 @@ export function ProjectRoadmapCanvas({
     return () => window.removeEventListener('keydown', onKey);
   }, [searchable]);
 
+  // THE drill transition — the ONE place a descent happens, shared by the explicit
+  // "Open" affordance (`handleDrill`) and the auto-descend below. Keeping it single is
+  // the point: a second drill path that drifts from the first is exactly how the
+  // breadcrumb and the saved positions get out of sync, and it is what makes an
+  // auto-arrival indistinguishable from a hand-drilled view (design panel C) — Back,
+  // the breadcrumb, search, locate, zoom and full-screen all keep working with no
+  // special case.
+  const applyDrill = useCallback((node: ProjectCanvasNode) => {
+    setCrumbs((c) => [...c, { id: node.id, label: node.crumbLabel ?? node.searchText }]);
+    setLocalPositions({});
+    setSelectedId(null);
+    setFocusId(node.id);
+    setHighlightId(null);
+  }, []);
+
   // Fetch the current level. The PRIOR level stays visible during a refetch (no
   // flicker); a stale response (an out-of-order resolve) is discarded by sequence.
   useEffect(() => {
@@ -221,7 +286,28 @@ export function ProjectRoadmapCanvas({
     void (async () => {
       try {
         const lvl = await loadLevelRef.current(focusId);
-        if (alive && seq === reqSeq.current) setLevel(lvl);
+        // The out-of-order guard stays authoritative: a superseded response neither
+        // renders NOR descends.
+        if (!alive || seq !== reqSeq.current) return;
+        // AUTO-DESCEND (MOTIR-1807) — a level of exactly ONE drillable node offers no
+        // choice, so descend into it instead of rendering it. Deliberately does NOT
+        // publish the skipped level first: `setLevel(lvl)` here would flash a card the
+        // user never gets to act on. Leaving `level` untouched keeps the spinner (first
+        // paint) or the previous level (a refetch) up until the level we actually LAND
+        // on resolves — which is what makes a chained epic → story → subtasks descent
+        // read as ONE arrival. The state change happens in this async CONTINUATION,
+        // never as a synchronous setState in the effect body (the CI lint rule).
+        const only = lvl.nodes.length === 1 ? lvl.nodes[0] : undefined;
+        if (
+          autoDescendRef.current &&
+          only?.drillable === true &&
+          suppressedLevelRef.current !== levelKey(focusId) &&
+          !crumbIdsRef.current.has(only.id) // never descend back into an ancestor
+        ) {
+          applyDrill(only);
+          return;
+        }
+        setLevel(lvl);
       } catch {
         if (alive && seq === reqSeq.current) setLevel({ nodes: [], deps: [] });
       }
@@ -229,7 +315,7 @@ export function ProjectRoadmapCanvas({
     return () => {
       alive = false;
     };
-  }, [focusId, reloadKey]);
+  }, [focusId, reloadKey, applyDrill]);
 
   const nodes = useMemo(() => level?.nodes ?? [], [level]);
   const deps = useMemo(() => level?.deps ?? [], [level]);
@@ -355,17 +441,19 @@ export function ProjectRoadmapCanvas({
     (id: string) => {
       const n = byId.get(id);
       if (!n?.drillable) return;
+      // An explicit drill RE-ARMS auto-descend (design panel F): the user asked to go
+      // down, so a single-parent chain below this node compacts again.
+      suppressedLevelRef.current = null;
       // Drill: fetch the node's children (the load effect fires on focusId change).
-      setCrumbs((c) => [...c, { id, label: n.crumbLabel ?? n.searchText }]);
-      setLocalPositions({});
-      setSelectedId(null);
-      setFocusId(id);
-      setHighlightId(null);
+      applyDrill(n);
     },
-    [byId],
+    [byId, applyDrill],
   );
 
   const navigate = useCallback((crumbId: string | null) => {
+    // The user EXPLICITLY climbed to this level (a crumb click, or Back via `goBack`) —
+    // never auto-descend out of it again, or the breadcrumb root becomes a trap.
+    suppressedLevelRef.current = levelKey(crumbId);
     setLocalPositions({});
     setHighlightId(null);
     setSelectedId(null);
@@ -529,7 +617,9 @@ export function ProjectRoadmapCanvas({
       {drilled && (
         <nav
           aria-label={t('breadcrumb')}
-          className="absolute top-3 left-3 z-10 flex max-w-[min(36rem,calc(100%-1.5rem))] items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
+          // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
+          // design DECISION 2) so a two-crumb chain reads without immediate ellipsis.
+          className="absolute top-3 left-3 z-10 flex max-w-[min(44rem,calc(100%-1.5rem))] items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
         >
           <button
             type="button"
@@ -769,7 +859,11 @@ function Crumb({
       onClick={onClick}
       title={label}
       aria-current={active ? 'page' : undefined}
-      className={`max-w-[12rem] truncate rounded-(--radius-control) px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+      // 18rem (was 12rem) for the `identifier · title` label (MOTIR-1805 DECISION 2).
+      // Overflow stays the shipped answer: `truncate` + the native `title` tooltip — a
+      // long chain ellipsises the last crumb BY DESIGN (not a second line, not a
+      // smaller font).
+      className={`max-w-[18rem] truncate rounded-(--radius-control) px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
         active
           ? 'font-semibold text-(--el-text)'
           : 'text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)'

@@ -31,6 +31,9 @@ vi.mock('next/navigation', () => ({
 // happy-dom + the real `en` catalog (renderWithIntl).
 
 // Per-scope roots so a scope switch is observable in the rendered tree.
+// TWO roots per scope on purpose: `WorkItemRoadmap` opts into AUTO-DRILL
+// (MOTIR-1807), so a root level of exactly ONE drillable node descends past it —
+// these specs assert which ROOT loaded, so each scope needs a real choice.
 const projectRoot = {
   nodes: [
     {
@@ -42,6 +45,16 @@ const projectRoot = {
       status: 'in_progress',
       isDone: false,
       hasChildren: true,
+    },
+    {
+      id: 'E2',
+      parentId: null,
+      kind: 'epic',
+      identifier: 'MOTIR-2',
+      title: 'Second project epic',
+      status: 'todo',
+      isDone: false,
+      hasChildren: false,
     },
   ],
   edges: [],
@@ -57,6 +70,16 @@ const sprintRoot = {
       status: 'in_progress',
       isDone: false,
       hasChildren: true,
+    },
+    {
+      id: 'E8',
+      parentId: null,
+      kind: 'epic',
+      identifier: 'MOTIR-465',
+      title: 'Second in-sprint epic',
+      status: 'todo',
+      isDone: false,
+      hasChildren: false,
     },
   ],
   edges: [],
