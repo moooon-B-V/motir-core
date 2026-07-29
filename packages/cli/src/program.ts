@@ -145,6 +145,13 @@ export function buildProgram(): Command {
       '--include-planning',
       'Trigger an AI expansion for each unexpanded epic/story instead of skipping it. Never waits: the plan needs your approval.',
     )
+    // Registered PRECISELY so it can be refused properly (MOTIR-1828). `auto`
+    // does not support `--print`, but leaving the flag unregistered made
+    // commander reject it first with a generic `unknown option '--print'` —
+    // which told the user nothing and made `autoCommand`'s own guard, the one
+    // carrying the "use `motir next --print` instead" hint, unreachable from the
+    // command line. A rejected flag with guidance beats an unknown flag.
+    .option('--print', 'Not supported — an unattended loop has nobody to paste a prompt.')
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `autoCommand`'s injectable-deps parameter.
     .action((opts) => autoCommand(opts));

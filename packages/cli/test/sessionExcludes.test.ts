@@ -85,3 +85,25 @@ describe('sessionExcludes', () => {
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
   });
 });
+
+// ── coverage gaps closed by 7.9.5 (MOTIR-883) ───────────────────────────────
+
+describe('a corrupt store never wedges dispatch', () => {
+  it('reads as empty and is rewritten cleanly by the next add', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(excludesPath(), 'not json at all');
+
+    // Worst case of treating it as empty is re-picking one item — strictly
+    // better than every `motir next` failing.
+    expect(readExcludes(SERVER, 'PROD')).toEqual([]);
+
+    addExclude(SERVER, 'PROD', { id: 'row-1', key: 'PROD-1' });
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row-1', key: 'PROD-1' }]);
+  });
+
+  it('reads a JSON scalar (not an object) as empty too', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(excludesPath(), '"a string"');
+    expect(readExcludes(SERVER, 'PROD')).toEqual([]);
+  });
+});

@@ -101,13 +101,15 @@ jobs:
     name: CLI package
     runs-on: ubuntu-latest
     # Same gap as the design-system job above: `@motir/cli`'s own vitest suite
-    # (config stores, link resolution, dispatch, the agent profile table, and the
-    # 7.9.7a sandbox-image invariants) lives at packages/cli/test/** , which the
-    # root Vitest lane does NOT glob — so until this job existed none of it gated
-    # a merge. Pure unit tests: no server, no Postgres, no built binary needed
-    # (the suite that spawns the built binary against a live MCP endpoint is
-    # 7.9.5's integration lane, and the sandbox's docker build/smoke matrix is
-    # 7.9.7c's).
+    # (config stores, link resolution, dispatch, the client core, the agent
+    # profile table, and the 7.9.7a sandbox-image invariants) lives at
+    # packages/cli/test/**, which the root Vitest lane does NOT glob — so until
+    # this job existed none of it gated a merge. Since 7.9.5 (MOTIR-883) the run
+    # also enforces the package's per-FILE coverage gate. Pure unit tests: no
+    # Postgres and no Next app (where the suite needs a server it starts a real
+    # MCP one in-process). The suite that spawns the BUILT binary against the
+    # real /api/mcp route lives at `tests/cli/` and rides the Vitest job below,
+    # where Postgres is; the sandbox's docker build/smoke matrix is 7.9.7c's.
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -123,7 +125,11 @@ jobs:
         env:
           HUSKY: '0'
       - run: pnpm --filter @motir/cli typecheck
-      - run: pnpm --filter @motir/cli test
+      # The bundle the story suite spawns is built from THIS commit's source;
+      # building here too catches a broken bundle in this job rather than as a
+      # confusing runtime failure inside a spawned child process over there.
+      - run: pnpm --filter @motir/cli build
+      - run: pnpm --filter @motir/cli test:coverage
 
   build:
     name: Next.js build
@@ -262,6 +268,15 @@ jobs:
           key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
         if: steps.cache-node-modules-test.outputs.cache-hit != 'true'
+      # The CLI story suite (`tests/cli/`) builds and SPAWNS the `motir` binary,
+      # which needs `packages/cli/node_modules` — for tsup, and at run time for
+      # the deps the bundle deliberately externalizes (commander + the MCP SDK).
+      # The node_modules cache above covers the ROOT only, so on a cache hit the
+      # root install is skipped and the package's own tree is absent; this
+      # filtered install restores just that project (~9s warm, a no-op when the
+      # full install already ran). Without it the suite fails with a module-not-
+      # found from inside the child process, which reads like a CLI bug.
+      - run: pnpm install --frozen-lockfile --filter @motir/cli
       - run: pnpm prisma generate
         if: steps.cache-prisma-test.outputs.cache-hit != 'true'
       - run: pnpm prisma migrate deploy

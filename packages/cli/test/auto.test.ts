@@ -744,3 +744,257 @@ describe('the session pull request', () => {
     expect(body).toContain(`motir done --session ${BRANCH}`);
   });
 });
+
+// ── coverage gaps closed by 7.9.5 (MOTIR-883) ───────────────────────────────
+
+describe('the summary reports every pull-request outcome distinctly', () => {
+  const summaryWith = (prs: AutoSummary['prs']): string =>
+    renderAutoSummary({
+      runId: '20260729-010203',
+      records: [],
+      skipped: [],
+      repos: [],
+      // MOTIR-886 added the planning lane to the summary shape; an empty one is
+      // the `motir auto` default (`--include-planning` is what fills it).
+      planning: [],
+      prs,
+      stopReason: 'drained',
+    });
+
+  it('names an ALREADY-OPEN pull request as updated by this run', () => {
+    expect(
+      summaryWith([
+        {
+          repoName: 'motir-core',
+          branch: BRANCH,
+          url: 'https://github.test/pull/1',
+          outcome: 'existing',
+        },
+      ]),
+    ).toContain('already open — updated by this run');
+  });
+
+  it('explains an EMPTY branch rather than implying a pull request exists', () => {
+    expect(
+      summaryWith([{ repoName: 'motir-core', branch: BRANCH, url: null, outcome: 'empty' }]),
+    ).toContain('carries no commits beyond main');
+  });
+
+  it('gives the MANUAL fallback when the pull request could not be opened', () => {
+    const rendered = summaryWith([
+      {
+        repoName: null,
+        branch: BRANCH,
+        url: null,
+        outcome: 'failed',
+        message: 'gh: not found',
+      },
+    ]);
+    expect(rendered).toContain('the checkout: NOT opened. gh: not found');
+    expect(rendered).toContain('The work IS pushed to');
+    expect(rendered).toContain(`motir done --session ${BRANCH}`);
+  });
+
+  it('says plainly when a run dispatched nothing at all', () => {
+    expect(summaryWith([])).toContain('No work items were dispatched.');
+  });
+});
+
+describe('an item with no lineage ships as its own pull request', () => {
+  it('moves to In Review via transition_status, not mark_integrated', async () => {
+    // The root is not a git repository, so an UNPINNED item has nowhere to open a
+    // session branch: the server hands it the per-item-PR prompt and In Review is
+    // the truthful status.
+    const server = new FakeServer([leaf('row-1', 'PROD-1', { targetRepo: null })]);
+    const git = new FakeGit();
+    const rootIsNotARepo: typeof git.runner = (bin, args, cwd) =>
+      bin === 'git' && cwd === root
+        ? { exitCode: 128, stdout: '', stderr: 'not a git repository' }
+        : git.runner(bin, args, cwd);
+
+    const summary = await runAutoLoop({
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260729-010203',
+      branch: BRANCH,
+      run: rootIsNotARepo,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+    });
+
+    expect(summary.records[0]?.outcome).toBe('in_review');
+    expect(summary.records[0]?.detail).toBe('own pull request');
+    expect(server.integrated).toHaveLength(0);
+    expect(server.transitions).toContainEqual({ key: 'PROD-1', status: 'in_review' });
+    // No repo carried a session branch, so there is nothing to close out.
+    expect(summary.repos).toHaveLength(0);
+  });
+});
+
+describe('the close-out survives a git failure', () => {
+  it('reports the repo as failed instead of throwing away a finished run', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    // A local branch exists and is ahead, but the push is rejected — the throw
+    // comes from inside the close-out, after the work is already integrated.
+    const pushRejected: typeof git.runner = (bin, args, cwd) => {
+      if (bin === 'git' && args[0] === 'rev-parse' && (args[3] ?? '').startsWith('refs/heads/')) {
+        return { exitCode: 0, stdout: '', stderr: '' };
+      }
+      if (bin === 'git' && args[0] === 'push' && args[1] === 'origin' && args[2] === BRANCH) {
+        return { exitCode: 1, stdout: '', stderr: 'protected branch' };
+      }
+      return git.runner(bin, args, cwd);
+    };
+
+    const summary = await runAutoLoop({
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260729-010203',
+      branch: BRANCH,
+      run: pushRejected,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+    });
+    closeOutRepos(summary, pushRejected);
+
+    expect(summary.prs[0]).toMatchObject({ outcome: 'failed' });
+    expect(summary.prs[0]?.message).toContain('protected branch');
+    // The item is still recorded as integrated — the failure is downstream of it.
+    expect(server.integrated.map((r) => r.key)).toEqual(['PROD-1']);
+  });
+});
+
+describe('records with missing pieces still render honestly', () => {
+  it('names an untitled item, a record with no branch, and a PR with no URL', () => {
+    const summary: AutoSummary = {
+      runId: '20260729-010203',
+      records: [
+        {
+          key: 'PROD-1',
+          title: null,
+          outcome: 'integrated',
+          durationMs: 1000,
+          sessionBranch: null,
+          repo: null,
+        },
+      ],
+      skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
+      planning: [],
+      repos: [],
+      prs: [
+        { repoName: 'motir-core', branch: BRANCH, url: null, outcome: 'opened' },
+        { repoName: 'motir-ai', branch: BRANCH, url: null, outcome: 'existing' },
+        { repoName: 'motir-gateway', branch: BRANCH, url: null, outcome: 'failed' },
+      ],
+      stopReason: 'drained',
+    };
+
+    const rendered = renderAutoSummary(summary);
+
+    expect(rendered).toContain('(no branch recorded)');
+    // With no URL the branch name is the next-best identifier, never "null".
+    expect(rendered).toContain(`motir-core: ${BRANCH} (opened)`);
+    expect(rendered).toContain(`motir-ai: ${BRANCH} (already open`);
+    expect(rendered).toContain('motir-gateway: NOT opened.');
+    expect(rendered).not.toContain('undefined');
+    expect(rendered).not.toContain('null');
+
+    const body = renderSessionPrBody('20260729-010203', BRANCH, [
+      {
+        key: 'PROD-1',
+        title: null,
+        outcome: 'integrated',
+        durationMs: 0,
+        sessionBranch: BRANCH,
+        repo: null,
+      },
+      {
+        key: 'PROD-2',
+        title: null,
+        outcome: 'failed',
+        durationMs: 0,
+        sessionBranch: null,
+        repo: null,
+      },
+    ]);
+    expect(body).toContain('- PROD-1 — (untitled)');
+    expect(body).toContain('- PROD-2 — (untitled)');
+  });
+});
+
+describe('more of the run’s edges', () => {
+  it('records an agent KILLED by a signal, naming the signal', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const { summary } = await drive(server, git, {
+      agentResults: () => ({ exitCode: 1, signal: 'SIGKILL' }),
+    });
+
+    expect(summary.records[0]).toMatchObject({ outcome: 'failed', detail: 'killed by SIGKILL' });
+  });
+
+  it('reports an interrupt that arrives together with a failure as INTERRUPTED', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1'), leaf('row-2', 'PROD-2')]);
+    const git = new FakeGit();
+    const { summary, dispatched } = await drive(server, git, {
+      onDispatch: () => process.emit('SIGINT'),
+      agentResults: () => ({ exitCode: 1, signal: null }),
+    });
+
+    // Ctrl-C wins the label: the user asked to stop, and the failure is already
+    // listed in its own section.
+    expect(summary.stopReason).toBe('interrupted');
+    expect(dispatched).toEqual(['PROD-1']);
+  });
+
+  it('REUSES a session branch that is already on origin instead of recreating it', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const alreadyThere: typeof git.runner = (bin, args, cwd) => {
+      if (bin === 'git' && args[0] === 'rev-parse' && (args[3] ?? '').includes('refs/remotes/')) {
+        return { exitCode: 0, stdout: '', stderr: '' };
+      }
+      return git.runner(bin, args, cwd);
+    };
+
+    await drive(server, { ...git, runner: alreadyThere } as unknown as FakeGit);
+
+    // A resumed run must not rewind a branch that already carries commits.
+    expect(git.log.some((cmd) => cmd.includes(':refs/heads/'))).toBe(false);
+  });
+
+  it('pushes a session branch the agent left behind locally, then opens the PR', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const localBranchAhead: typeof git.runner = (bin, args, cwd) => {
+      if (bin === 'git' && args[0] === 'rev-parse' && (args[3] ?? '').startsWith('refs/heads/')) {
+        return { exitCode: 0, stdout: '', stderr: '' };
+      }
+      return git.runner(bin, args, cwd);
+    };
+
+    const summary = await runAutoLoop({
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260729-010203',
+      branch: BRANCH,
+      run: localBranchAhead,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+    });
+    closeOutRepos(summary, localBranchAhead);
+
+    expect(git.log).toContain(`git push origin ${BRANCH} @${join(root, 'motir-core')}`);
+    expect(summary.prs[0]?.outcome).toBe('opened');
+  });
+});

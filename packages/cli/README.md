@@ -327,16 +327,35 @@ workspace, project, repos? }`. Contains **no secret**, so it is safe to
 
 ## Tests
 
+Two lanes, because they need different things (7.9.5):
+
 ```sh
-pnpm --filter @motir/cli test       # package-local unit tests (no server, no DB)
+pnpm --filter @motir/cli test           # the package suite — no Postgres, no Next app
+pnpm --filter @motir/cli test:coverage  # the same, with the per-file ≥90% gate
+pnpm vitest run tests/cli/              # the story suite — the BUILT binary, real DB
 ```
 
-`test/auto.test.ts` drives the whole `motir auto` loop against a scripted server,
-agent and git, because its load-bearing properties — that it re-queries every
-iteration, that an integrated item unlocks its dependents mid-run, that `main` is
-never advanced, and that the pull request opens even when the run ended badly —
-are not visible in any single function.
+**The package suite** (`packages/cli/test/**`) covers each module in isolation.
+Where a module talks to a server it is pointed at a REAL MCP server the test
+starts in-process (`test/helpers/mcpTestServer.ts`) with canned tool results —
+the transport, framing and error envelopes are the real ones, only the data is
+scripted. `test/auto.test.ts` drives the whole `motir auto` loop against a
+scripted server, agent and git, because its load-bearing properties — that it
+re-queries every iteration, that an integrated item unlocks its dependents
+mid-run, that `main` is never advanced, and that the pull request opens even when
+the run ended badly — are not visible in any single function.
 
-The full integration suite — the built binary driven against a live MCP
-endpoint with a fake agent — is Subtask 7.9.5, which also wires this package
-into the coverage gate.
+**The story suite** (`tests/cli/cli-story.test.ts`, in the root Vitest lane where
+Postgres is) spawns the BUILT binary as a child process against the real
+`/api/mcp` route, with a scripted fake agent and a recorded fake `gh`. It is what
+proves the assembled tool works: repo routing into real checkouts, the
+session-branch cascade, one pull request per touched repo, a `main` nobody
+advanced, and the help surface of the binary a user actually runs.
+
+**The gate.** `vitest.config.ts` holds per-FILE ≥90% branch/function/line
+thresholds for the client core, the command modules and the pure decision layers.
+Three files are ungated on purpose — `index.ts`, `program.ts` and `prompts.ts` —
+each for a reason written down beside its threshold entry, and `motir batch`'s
+two modules are a KNOWN GAP named in the same file (MOTIR-1829). CI runs the package
+suite + gate as its own job (`CLI package`), the same shape `@motir/design-system`
+uses; the story suite rides the sharded Vitest job.

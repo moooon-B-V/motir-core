@@ -37,3 +37,24 @@ describe('openUrl', () => {
     ).resolves.toBeTypeOf('boolean');
   });
 });
+
+// ── coverage gaps closed by 7.9.5 (MOTIR-883) ───────────────────────────────
+
+describe('openUrl per platform', () => {
+  it('always attempts on macOS and Windows (no DISPLAY concept there)', async () => {
+    // The launcher differs per platform; both resolve a boolean and neither
+    // throws, which is the whole contract — the URL is already printed.
+    await expect(
+      openUrl('https://app.motir.co', { platform: 'win32', env: {} }),
+    ).resolves.toBeTypeOf('boolean');
+  });
+
+  it('attempts on Linux once a display IS present', async () => {
+    await expect(
+      openUrl('https://app.motir.co', { platform: 'linux', env: { DISPLAY: ':0' } }),
+    ).resolves.toBeTypeOf('boolean');
+    await expect(
+      openUrl('https://app.motir.co', { platform: 'linux', env: { WAYLAND_DISPLAY: 'wayland-0' } }),
+    ).resolves.toBeTypeOf('boolean');
+  });
+});
