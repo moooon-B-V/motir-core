@@ -319,28 +319,127 @@ describe('dispatchPromptService — the GIT WORKFLOW variant is chosen SERVER-SI
     expect(dto.sessionBranch).toBe('session/PROD-own');
   });
 
-  it('the variant is NOT selectable by the caller — the tool takes only a key', async () => {
-    // The zod input schema is the contract: one field, `key`. A caller cannot
-    // pass a branch, a mode, or a repo, so it cannot pick its own lineage.
+  it('the caller cannot REDIRECT an inherited lineage — the seed is a fallback only', async () => {
+    // The narrow contract the `motir auto` seed (MOTIR-882) is allowed to have:
+    // an item whose dependency is already integrated somewhere keeps THAT
+    // branch, so no caller can strand an integrated chain across two branches.
+    const fx = await makeWorkItemFixture();
+    const dep = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Integrated dep' },
+      fx.ctx,
+    );
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Consumer' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: item.id, toId: dep.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(dep.id, 'in_progress', fx.ctx);
+    await workItemsService.markIntegrated(dep.id, 'session/PROD-real', fx.ctx);
+
+    const res = await runDispatchPrompt(
+      { key: item.identifier, sessionBranch: 'attacker/branch' },
+      fx.ctx,
+    );
+    expect(struct(res).sessionBranch).toBe('session/PROD-real');
+    expect(struct(res).prompt).not.toContain('attacker/branch');
+  });
+
+  it('the caller cannot redirect an item that is ALREADY integrated on its own branch', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Already on a branch' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.markIntegrated(item.id, 'session/PROD-own', fx.ctx);
+
+    const res = await runDispatchPrompt(
+      { key: item.identifier, sessionBranch: 'attacker/branch' },
+      fx.ctx,
+    );
+    expect(struct(res).sessionBranch).toBe('session/PROD-own');
+  });
+
+  it('the seed DOES apply to an item with no lineage — the unattended run’s first item', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'First of the run', descriptionMd: CARD },
+      fx.ctx,
+    );
+    // Without the seed it is a per-item PR…
+    const unseeded = await runDispatchPrompt({ key: item.identifier }, fx.ctx);
+    expect(struct(unseeded).workflowMode).toBe('per_item_pr');
+
+    // …and with it, the SAME item joins the run's branch instead.
+    const res = await runDispatchPrompt(
+      { key: item.identifier, sessionBranch: 'motir/auto-20260729-010203' },
+      fx.ctx,
+    );
+    expect(struct(res).workflowMode).toBe('session_lineage');
+    expect(struct(res).sessionBranch).toBe('motir/auto-20260729-010203');
+    expect(struct(res).prompt).toContain('inherits the session branch motir/auto-20260729-010203');
+    expect(struct(res).prompt).not.toContain('origin/main');
+  });
+
+  it('a MANUAL item ignores the seed entirely — it has no branch to join', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Human work', type: 'manual' },
+      fx.ctx,
+    );
+    const res = await runDispatchPrompt(
+      { key: item.identifier, sessionBranch: 'motir/auto-20260729-010203' },
+      fx.ctx,
+    );
+    expect(struct(res).workflowMode).toBe('per_item_pr');
+    expect(struct(res).sessionBranch).toBeNull();
+    expect(struct(res).prompt).not.toContain('motir/auto-20260729-010203');
+  });
+
+  it('the MODE and the REPO stay unselectable — only the branch SEED is an input', async () => {
     const fx = await makeWorkItemFixture();
     const item = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'Fixed variant' },
       fx.ctx,
     );
     const res = await runDispatchPrompt(
-      // Extra keys are not part of the schema; they must have no effect.
-      {
-        key: item.identifier,
-        sessionBranch: 'attacker/branch',
-        workflowMode: 'session_lineage',
-      } as {
+      // Neither key is in the schema; they must have no effect.
+      { key: item.identifier, workflowMode: 'session_lineage', targetRepo: 'evil' } as {
         key: string;
       },
       fx.ctx,
     );
     expect(struct(res).workflowMode).toBe('per_item_pr');
     expect(struct(res).sessionBranch).toBeNull();
-    expect(struct(res).prompt).not.toContain('attacker/branch');
+    expect(struct(res).targetRepo).not.toBe('evil');
+  });
+
+  it('rejects a branch seed that is not a safe git ref, at the schema boundary', async () => {
+    // The seed is interpolated into prompt text that instructs an agent to run
+    // `git … origin/<branch>`, so a name carrying whitespace, a shell
+    // metacharacter or a leading dash never reaches the assembler.
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Seed validation' },
+      fx.ctx,
+    );
+    const client = await connectClient(fx.ctx);
+    for (const bad of ['main; rm -rf /', '--upload-pack=evil', 'a branch', '$(whoami)']) {
+      const res = (await client.callTool({
+        name: DISPATCH_PROMPT_TOOL_NAME,
+        arguments: { key: item.identifier, sessionBranch: bad },
+      })) as CallToolResult;
+      expect(res.isError).toBe(true);
+    }
+    // A real branch name passes the same gate.
+    const ok = (await client.callTool({
+      name: DISPATCH_PROMPT_TOOL_NAME,
+      arguments: { key: item.identifier, sessionBranch: 'motir/auto-20260729-010203' },
+    })) as CallToolResult;
+    expect(ok.isError).toBeFalsy();
   });
 });
 

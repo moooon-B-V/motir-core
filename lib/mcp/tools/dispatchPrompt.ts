@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
@@ -24,8 +25,31 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 
 export const DISPATCH_PROMPT_TOOL_NAME = 'dispatch_prompt';
 
+/**
+ * A git ref name, restricted to the characters a branch may safely carry here.
+ * The seed is INTERPOLATED INTO PROMPT TEXT that instructs an agent to run
+ * `git ... origin/<branch>`, so a name containing whitespace, a shell
+ * metacharacter, or a leading `-` would be a command the agent might run on the
+ * caller's behalf. Refusing those is cheaper than escaping them, and every real
+ * branch name passes.
+ */
+const SEED_BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._\-/]*$/;
+
 const inputSchema = {
   key: workItemKeyField,
+  sessionBranch: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(SEED_BRANCH_PATTERN, 'Not a safe branch name.')
+    .optional()
+    .describe(
+      'Optional session branch to FALL BACK to when this item carries no lineage of ' +
+        'its own — the unattended-run seed (`motir auto`). It never overrides: an item ' +
+        'whose dependencies are already integrated, or that is itself integrated, keeps ' +
+        'that branch, so a caller cannot redirect a live lineage.',
+    ),
 };
 
 /** Compact summary for the human watching the session; the prompt itself rides
@@ -46,12 +70,14 @@ function summarize(dto: DispatchPromptDto): string {
 
 /** The adapter: resolve the project from the key prefix, assemble the prompt. */
 export async function runDispatchPrompt(
-  args: { key: string },
+  args: { key: string; sessionBranch?: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const identifier = normalizeIdentifier(args.key);
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
-  const dto = await dispatchPromptService.getDispatchPrompt(project.id, identifier, ctx);
+  const dto = await dispatchPromptService.getDispatchPrompt(project.id, identifier, ctx, {
+    sessionBranch: args.sessionBranch ?? null,
+  });
   return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);
 }
 
@@ -69,7 +95,8 @@ export function registerDispatchPrompt(
         'GIT WORKFLOW sections assembled from the item, its parent, its dependencies and ' +
         'its repo, plus the repo to run it in and which git workflow it carries. A pure ' +
         'read — it does NOT claim the item or change its status. Do not rewrite the prompt: ' +
-        'it is the same text for every agent by design.',
+        'it is the same text for every agent by design. Pass sessionBranch only to seed an ' +
+        'unattended run: it applies solely when the item has no lineage of its own.',
       inputSchema,
     },
     async (args, extra) => {

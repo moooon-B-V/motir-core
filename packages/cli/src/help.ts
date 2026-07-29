@@ -157,6 +157,7 @@ const EXAMPLES = [
   '  $ motir ready --kinds subtask --assignee me        # what can I pick up?',
   '  $ motir status --json                              # the project pulse',
   '  $ motir open MOTIR-7 --print                       # the item’s URL',
+  '  $ motir auto --agent claude --max 5                # drain 5 items unattended',
 ].join('\n');
 
 const LEARN_MORE = [

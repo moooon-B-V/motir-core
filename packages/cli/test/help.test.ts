@@ -119,6 +119,8 @@ describe('the curated overview', () => {
                               its prompt.
         run [options] <key>   Dispatch a SPECIFIC work item (e.g. PROD-7), ready or
                               forced.
+        auto [options]        Drain the ready set unattended: one item at a time onto
+                              a session branch.
         done [options] [key]  Close out a merged item — or a whole merged session
                               branch.
 
@@ -140,6 +142,7 @@ describe('the curated overview', () => {
         $ motir ready --kinds subtask --assignee me        # what can I pick up?
         $ motir status --json                              # the project pulse
         $ motir open MOTIR-7 --print                       # the item’s URL
+        $ motir auto --agent claude --max 5                # drain 5 items unattended
 
       LEARN MORE:
         Use \`motir <command> --help\` for the flags of a single command.
@@ -192,7 +195,7 @@ describe('group membership', () => {
     ]);
     expect(groups.get(HELP_GROUP.setup)).toEqual(['auth', 'link', 'doctor']);
     expect(groups.get(HELP_GROUP.read)).toEqual(['ready', 'status', 'open']);
-    expect(groups.get(HELP_GROUP.workLoop)).toEqual(['next', 'run', 'done']);
+    expect(groups.get(HELP_GROUP.workLoop)).toEqual(['next', 'run', 'auto', 'done']);
     expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files']);
   });
 

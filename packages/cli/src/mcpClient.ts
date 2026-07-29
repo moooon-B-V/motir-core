@@ -305,9 +305,21 @@ export class MotirClient {
    * READ — it never claims the item or moves its status, so re-printing an
    * in-progress item's prompt is safe. The CLI prints this text verbatim; it
    * never assembles a prompt grammar of its own.
+   *
+   * `sessionBranch` is the unattended-run SEED (`motir auto`, MOTIR-882): the
+   * branch to use when the item carries no lineage of its own. The server treats
+   * it as a fallback only — an item already on a lineage keeps that one — so the
+   * CLI can start a run's first item on the run's branch without ever being able
+   * to redirect an existing chain.
    */
-  dispatchPrompt(key: string): Promise<DispatchPrompt> {
-    return this.callStructured<DispatchPrompt>('dispatch_prompt', { key });
+  dispatchPrompt(
+    key: string,
+    opts: { sessionBranch?: string | null } = {},
+  ): Promise<DispatchPrompt> {
+    return this.callStructured<DispatchPrompt>('dispatch_prompt', {
+      key,
+      ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}),
+    });
   }
 
   /** Record an item's work as integrated on a session branch (7.8.11): moves it

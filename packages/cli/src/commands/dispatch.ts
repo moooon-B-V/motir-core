@@ -96,7 +96,7 @@ export function resolveAgent(
  * `motir run` after a failed agent — the documented recovery) would otherwise
  * die on an illegal-transition error before it ever printed a prompt.
  */
-async function ensureInProgress(
+export async function ensureInProgress(
   client: MotirClient,
   key: string,
   currentStatus: string | undefined,
