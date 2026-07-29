@@ -1,0 +1,19 @@
+{
+  "name": "Motir sandbox (Kimi Code CLI)",
+  "build": {
+    "dockerfile": "../../Dockerfile",
+    "context": "../../../../..",
+    "args": {
+      "AGENT": "kimi"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=${localEnv:HOME}/.config/motir,target=/home/node/.config/motir,type=bind,readonly",
+    "source=${localEnv:HOME}/.kimi-code,target=/home/node/.kimi-code,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir --version"
+}

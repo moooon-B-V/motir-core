@@ -108,6 +108,23 @@ export interface DispatchPrompt {
   sessionBranch: string | null;
 }
 
+/**
+ * What an `expand_item` SUBMIT returns (MOTIR-1825's `structuredContent`).
+ *
+ * Both ids address the same expansion: `planId` is the review surface
+ * (`/plans/<id>`), `jobId` is what `get_plan_status` also accepts. The tool
+ * returns them the instant motir-ai accepts the job — it never waits for the
+ * planner — which is the whole reason an unattended loop can fire one.
+ *
+ * NOTE the contract this type does NOT carry: a submitted expansion produces a
+ * Plan of PROPOSALS, never work items. Approval is the only path from a proposal
+ * to a `work_item` row, and it happens in Motir, not here.
+ */
+export interface ExpandSubmitResult {
+  jobId: string;
+  planId: string;
+}
+
 /** One item's outcome in a `complete_session` bulk close-out. */
 export interface CompleteSessionOutcome {
   key: string;
@@ -339,6 +356,22 @@ export class MotirClient {
     implementationHarness?: string;
   }): Promise<CompleteSessionResult> {
     return this.callStructured<CompleteSessionResult>('complete_session', { ...args });
+  }
+
+  /**
+   * Submit an AI expansion of one CONTAINER item (MOTIR-1825) and return the
+   * moment the job is accepted — `{ jobId, planId }`, no streaming, no poll.
+   *
+   * There is deliberately no REST fallback here: expansion also has a
+   * cookie-authed `POST /api/ai/expand`, but the CLI is an MCP client only (the
+   * Story 7.9 header — one auth path), so the tool IS the mechanism.
+   *
+   * Firing this does NOT grow the tree. `motir auto --include-planning` calls it
+   * for an unexpanded epic/story and moves on; what comes back is a plan awaiting
+   * a human's approval in Motir.
+   */
+  expandItem(key: string): Promise<ExpandSubmitResult> {
+    return this.callStructured<ExpandSubmitResult>('expand_item', { key });
   }
 
   listSprints(args: { projectKey: string }): Promise<SprintList> {

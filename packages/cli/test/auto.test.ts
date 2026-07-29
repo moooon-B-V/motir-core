@@ -13,6 +13,7 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
@@ -70,11 +71,18 @@ function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
   };
 }
 
+function story(id: string, key: string): FakeItem {
+  return { ...leaf(id, key), kind: 'story', type: null, executor: null };
+}
+
 class FakeServer {
   readonly transitions: { key: string; status: string }[] = [];
   readonly integrated: { key: string; sessionBranch: string }[] = [];
   readonly promptCalls: { key: string; sessionBranch: string | null }[] = [];
   readonly nextReadyCalls: number[] = [];
+  readonly expandCalls: string[] = [];
+  /** Return a message to make `expand_item` reject for that key. */
+  expandFailure: ((key: string) => string | null) | null = null;
 
   constructor(private readonly items: FakeItem[]) {}
 
@@ -113,6 +121,22 @@ class FakeServer {
         throw new Error(
           '`motir auto` must never materialize the ready list — it asks for ONE item per iteration.',
         );
+      },
+      getPlanStatus: (): never => {
+        throw new Error(
+          '`motir auto` must never POLL a planning job: its output is a plan awaiting a human ' +
+            'approval, so waiting on it in an unattended run is an unbounded wait on nobody.',
+        );
+      },
+      expandItem: async (key: string) => {
+        this.expandCalls.push(key);
+        const failure = this.expandFailure?.(key);
+        if (failure) throw new CliError(failure);
+        const n = this.expandCalls.length;
+        // A submit returns the ids and nothing else — no children, because none
+        // exist: the job writes PROPOSALS into the plan, and approval is what
+        // materializes them.
+        return { jobId: `job-${n}`, planId: `plan-${n}` };
       },
       nextReady: async (args: { excludeIds?: string[] }) => {
         this.nextReadyCalls.push(args.excludeIds?.length ?? 0);
@@ -439,6 +463,160 @@ describe('motir auto — the WHILE loop', () => {
   });
 });
 
+// ── --include-planning (MOTIR-886) ──────────────────────────────────────────
+
+describe('motir auto --include-planning', () => {
+  /** The acceptance fixture: one ready unexpanded story, two ready leaves. */
+  const fixture = (): FakeServer =>
+    new FakeServer([story('idS', 'PROD-5'), leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+
+  it('triggers the story ONCE, dispatches both leaves, and drains without ever polling', async () => {
+    const server = fixture();
+    const { dispatched, summary } = await drive(server, new FakeGit(), {
+      opts: { includePlanning: true },
+    });
+
+    expect(server.expandCalls).toEqual(['PROD-5']);
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
+    expect(summary.stopReason).toBe('drained');
+    // The story is a PLANNING item, never an agent's work: no prompt was
+    // fetched for it and its status was never touched.
+    expect(dispatched).not.toContain('PROD-5');
+    expect(server.promptCalls.map((c) => c.key)).toEqual(['PROD-1', 'PROD-2']);
+    expect(server.transitions.some((t) => t.key === 'PROD-5')).toBe(false);
+    expect(server.byKey('PROD-5').status).toBe('todo');
+    // Triggered, not expanded — the record carries the plan to review and no
+    // claim about children.
+    expect(summary.planning).toEqual([
+      {
+        key: 'PROD-5',
+        title: 'Item PROD-5',
+        outcome: 'triggered',
+        planId: 'plan-1',
+        reviewUrl: 'https://app.motir.co/plans/plan-1',
+      },
+    ]);
+    // It is no longer reported as skipped — the flag is the whole difference.
+    expect(summary.skipped).toEqual([]);
+  });
+
+  it('never re-fires for an item already triggered, even though it stays childless', async () => {
+    // The story is the ONLY item and remains unexpanded, so without the exclude
+    // list `next_ready` would hand it back forever and this test would hang.
+    const server = new FakeServer([story('idS', 'PROD-5')]);
+    const { dispatched, summary } = await drive(server, new FakeGit(), {
+      opts: { includePlanning: true },
+    });
+
+    expect(server.expandCalls).toEqual(['PROD-5']);
+    expect(dispatched).toEqual([]);
+    // Trigger, then ONE more ask that comes back empty. No backoff, no wait.
+    expect(server.nextReadyCalls.length).toBe(2);
+    expect(summary.stopReason).toBe('drained');
+    // A pending expansion does not redden a run whose dispatches all succeeded.
+    expect(autoExitCode(summary)).toBe(0);
+
+    const text = renderAutoSummary(summary);
+    expect(text).toContain('Planning triggered — awaiting your approval (1)');
+    expect(text).toContain('plan plan-1 — https://app.motir.co/plans/plan-1');
+    expect(text).toContain('These are PROPOSALS.');
+  });
+
+  it('a failed expansion is NON-halting: named, skipped over, and irrelevant to the exit code', async () => {
+    const server = fixture();
+    server.expandFailure = (key) => (key === 'PROD-5' ? 'FORBIDDEN: out of AI credits' : null);
+    const { dispatched, summary } = await drive(server, new FakeGit(), {
+      opts: { includePlanning: true },
+    });
+
+    // The loop kept going — unlike an agent failure, which halts by default.
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
+    expect(summary.stopReason).toBe('drained');
+    expect(summary.planning).toEqual([
+      {
+        key: 'PROD-5',
+        title: 'Item PROD-5',
+        outcome: 'failed',
+        planId: null,
+        reviewUrl: null,
+        detail: 'FORBIDDEN: out of AI credits',
+      },
+    ]);
+    expect(autoExitCode(summary)).toBe(0);
+    expect(renderAutoSummary(summary)).toContain('Planning failed — still unexpanded (1)');
+  });
+
+  it('leaves the exit code a function of DISPATCH outcomes alone', async () => {
+    const server = fixture();
+    server.expandFailure = () => 'BAD_REQUEST: nope';
+    const { summary } = await drive(server, new FakeGit(), {
+      opts: { includePlanning: true, keepGoing: true },
+      agentResults: (key) =>
+        key === 'PROD-2' ? { exitCode: 4, signal: null } : { exitCode: 0, signal: null },
+    });
+
+    // Non-zero because a DISPATCH failed, not because the expansion did.
+    expect(summary.records.filter((r) => r.outcome === 'failed').map((r) => r.key)).toEqual([
+      'PROD-2',
+    ]);
+    expect(autoExitCode(summary)).toBe(1);
+  });
+
+  it('WITHOUT the flag reproduces the MOTIR-882 skip behaviour verbatim (the control)', async () => {
+    const server = fixture();
+    const { dispatched, summary } = await drive(server, new FakeGit());
+
+    // No expansion is submitted at all — the flag is opt-in, and an expansion
+    // spends the token owner's AI credits.
+    expect(server.expandCalls).toEqual([]);
+    expect(summary.planning).toEqual([]);
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
+    expect(summary.skipped).toEqual([
+      { key: 'PROD-5', title: 'Item PROD-5', reason: 'needs_planning' },
+    ]);
+    expect(renderAutoSummary(summary)).toContain('Skipped — needs planning (1)');
+  });
+
+  it('renders all three planning outcomes, and links a plan only when it has one', () => {
+    expect(planReviewUrl('https://app.motir.co', 'plan-7')).toBe(
+      'https://app.motir.co/plans/plan-7',
+    );
+    expect(planReviewUrl('not a url', 'plan-7')).toBeNull();
+
+    const text = renderAutoSummary({
+      runId: '20260729-010203',
+      records: [],
+      skipped: [{ key: 'PROD-8', title: 'Skipped one', reason: 'needs_planning' }],
+      planning: [
+        {
+          key: 'PROD-5',
+          title: 'Triggered one',
+          outcome: 'triggered',
+          planId: 'plan-1',
+          reviewUrl: 'https://app.motir.co/plans/plan-1',
+        },
+        {
+          key: 'PROD-6',
+          title: 'Failed one',
+          outcome: 'failed',
+          planId: null,
+          reviewUrl: null,
+          detail: 'RATE_LIMITED',
+        },
+      ],
+      repos: [],
+      prs: [],
+      stopReason: 'drained',
+    });
+
+    expect(text).toContain('Planning triggered — awaiting your approval (1)');
+    expect(text).toContain('PROD-5 — Triggered one');
+    expect(text).toContain('Planning failed — still unexpanded (1)');
+    expect(text).toContain('PROD-6 — RATE_LIMITED');
+    expect(text).toContain('Skipped — needs planning (1)');
+  });
+});
+
 describe('motir auto — failure policy', () => {
   const chain = (): FakeServer =>
     new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2'), leaf('idC', 'PROD-3')]);
@@ -576,6 +754,9 @@ describe('the summary reports every pull-request outcome distinctly', () => {
       records: [],
       skipped: [],
       repos: [],
+      // MOTIR-886 added the planning lane to the summary shape; an empty one is
+      // the `motir auto` default (`--include-planning` is what fills it).
+      planning: [],
       prs,
       stopReason: 'drained',
     });
@@ -705,6 +886,7 @@ describe('records with missing pieces still render honestly', () => {
         },
       ],
       skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
+      planning: [],
       repos: [],
       prs: [
         { repoName: 'motir-core', branch: BRANCH, url: null, outcome: 'opened' },

@@ -141,6 +141,10 @@ export function buildProgram(): Command {
     .option('--max <n>', 'Stop after dispatching n work items.')
     .option('--keep-going', 'Continue past a failed agent instead of halting on the first one.')
     .option('--reset', 'Clear this project’s session exclude list before starting.')
+    .option(
+      '--include-planning',
+      'Trigger an AI expansion for each unexpanded epic/story instead of skipping it. Never waits: the plan needs your approval.',
+    )
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `autoCommand`'s injectable-deps parameter.
     .action((opts) => autoCommand(opts));

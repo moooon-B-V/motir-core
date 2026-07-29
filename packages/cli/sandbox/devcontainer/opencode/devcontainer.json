@@ -1,0 +1,20 @@
+{
+  "name": "Motir sandbox (OpenCode)",
+  "build": {
+    "dockerfile": "../../Dockerfile",
+    "context": "../../../../..",
+    "args": {
+      "AGENT": "opencode"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=${localEnv:HOME}/.config/motir,target=/home/node/.config/motir,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/opencode,target=/home/node/.config/opencode,type=bind,readonly",
+    "source=${localEnv:HOME}/.local/share/opencode,target=/home/node/.local/share/opencode,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir --version"
+}

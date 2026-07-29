@@ -1,0 +1,22 @@
+{
+  "name": "Motir sandbox (Cursor CLI)",
+  "build": {
+    "dockerfile": "../../Dockerfile",
+    "context": "../../../../..",
+    "args": {
+      "AGENT": "cursor"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=${localEnv:HOME}/.config/motir,target=/home/node/.config/motir,type=bind,readonly",
+    "source=${localEnv:HOME}/.local/share/cursor-agent,target=/home/node/.local/share/cursor-agent,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir --version",
+  "remoteEnv": {
+    "CURSOR_API_KEY": "${localEnv:CURSOR_API_KEY}"
+  }
+}

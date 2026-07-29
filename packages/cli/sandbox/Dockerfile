@@ -21,16 +21,19 @@
 # Build (context is the motir-core repo ROOT, not this directory):
 #   docker build -f packages/cli/sandbox/Dockerfile -t motir-sandbox:base .
 #
-# This slice ships the BASE only. The per-agent install layers (claude / codex /
-# opencode / kimi / antigravity / cursor / aider / goose) land in 7.9.7b
-# (MOTIR-1506) by filling the seam in `install-agent.sh`; the build/version
-# matrix + write-confinement smoke tests are 7.9.7c (MOTIR-885); publishing to
-# GHCR with digest pinning is 7.9.7e (MOTIR-1788).
+# Selecting an agent: `--build-arg AGENT=<profile>` layers one of the eight
+# coding-agent profiles (claude / codex / opencode / kimi / antigravity / cursor
+# / aider / goose) on top of this base — see `install-agent.sh` for the layers
+# and README.md for the per-agent credential mount and verified auto-approve
+# flag. The build/version matrix + write-confinement smoke tests are 7.9.7c
+# (MOTIR-885); publishing to GHCR with digest pinning is 7.9.7e (MOTIR-1788).
 
-# The Node base. Floored at >= 24.15 (the Kimi Code CLI's requirement, which is
-# the highest across the supported agents and therefore covers all of them). The
-# tag is an ARG so 7.9.7e can pin a digest at publish time without editing this
-# file; the floor itself is ASSERTED below rather than trusted to the tag.
+# The Node base. Floored at >= 24.15, which clears every supported agent's own
+# requirement with headroom — the highest of those, checked against the
+# published packages while filling the profile matrix (7.9.7b), is Kimi Code's
+# >= 22.19. The tag is an ARG so 7.9.7e can pin a digest at publish time without
+# editing this file; the floor itself is ASSERTED below rather than trusted to
+# the tag.
 ARG NODE_TAG=24-bookworm-slim
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -116,10 +119,11 @@ RUN npm install -g /tmp/motir-cli.tgz \
 
 # ── The per-agent layer seam (AGENT build-arg selector) ──────────────────────
 # `--build-arg AGENT=<profile>` selects which coding agent is installed on top
-# of this base. The SELECTOR is this slice's deliverable; the LAYERS themselves
-# are 7.9.7b's (MOTIR-1506) and are filled into `install-agent.sh`'s case block.
+# of this base; the layer itself is the matching case arm in `install-agent.sh`.
 # The default `base` is a deliberate no-op: the base image ships no agent, which
 # is exactly what the CI build/version matrix and a `--print` workflow want.
+# The layer runs as ROOT and before `USER node` below, which is why every arm
+# installs onto the GLOBAL path rather than into a user's home.
 ARG AGENT=base
 ENV MOTIR_SANDBOX_AGENT=${AGENT}
 COPY --chmod=0755 packages/cli/sandbox/install-agent.sh /usr/local/lib/motir-sandbox/install-agent.sh
