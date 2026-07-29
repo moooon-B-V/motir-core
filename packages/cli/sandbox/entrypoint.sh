@@ -59,6 +59,71 @@ fi
 # a build-matrix smoke test has nothing to gain from indexing).
 CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target
 
+# The config home the IMAGE owns — under $HOME but outside every credential
+# mount, so nothing bind-mounted `:ro` can shadow a file written here. Kept in
+# sync with install-agent.sh's SANDBOX_AGENT_HOME and with
+# `sandboxAgentConfigHome()` in packages/cli/src/agentProfiles.ts.
+SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"
+
+# Point an agent whose codegraph config would land inside its own READ-ONLY
+# credential mount at the image-owned home instead (7.9.7f / MOTIR-1835), and
+# set CODEGRAPH_INSTALL_HOME to the HOME `codegraph install` must run with so
+# the stanza lands where the agent will now look. Anything else keeps its
+# default location.
+#
+# The result comes back through a GLOBAL rather than stdout on purpose: this
+# function EXPORTS the agent's config env var, and a `$(…)` capture would run it
+# in a subshell where that export dies with the subshell.
+#
+# Both mechanisms below were VERIFIED against the real CLIs (codex 0.146.0,
+# opencode 1.18.9, codegraph 1.5.0) rather than read off their docs — the
+# 7.9.7b rule is to leave an unverified third-party path UNKNOWN, so an
+# unverified env var could not have been used here.
+redirect_codegraph_config() {
+    case "$1" in
+        codex)
+            # codex resolves BOTH config.toml and auth.json from CODEX_HOME, so
+            # redirecting it alone would leave the agent unauthenticated. The
+            # redirected home is therefore SEEDED from the read-only mount
+            # first — the credential and the user's own config.toml come along —
+            # and `codegraph install` then MERGES its stanza into that copy,
+            # preserving whatever the user had. Copying the credential to
+            # another path INSIDE the container widens nothing: the container
+            # could always read it. What the mount guarantees — that the
+            # container cannot WRITE the host's copy — still holds.
+            local mounted="$HOME/.codex" private="$SANDBOX_AGENT_HOME/.codex"
+            rm -rf "$private" 2>/dev/null || true
+            # A home it cannot create is a home it must not point codex at:
+            # leave CODEGRAPH_INSTALL_HOME alone and let the caller's warning
+            # fire rather than sending the agent at an unauthenticated path.
+            mkdir -p "$private" 2>/dev/null || return 1
+            if [ -d "$mounted" ]; then
+                cp -a "$mounted/." "$private/" 2>/dev/null || true
+                # The copy inherits the source's mode bits; the mount's
+                # read-only-ness does not follow it, but a 0444 file would.
+                chmod -R u+w "$private" 2>/dev/null || true
+            fi
+            export CODEX_HOME="$private"
+            CODEGRAPH_INSTALL_HOME="$SANDBOX_AGENT_HOME"
+            ;;
+        opencode)
+            # opencode MERGES the file named by OPENCODE_CONFIG over its global
+            # config rather than replacing it, so the image-owned copy adds the
+            # codegraph stanza while the host's mounted ~/.config/opencode
+            # keeps applying — and the credential, which lives in the XDG DATA
+            # dir, is never touched. No copying, no credential handling at all.
+            export OPENCODE_CONFIG="$SANDBOX_AGENT_HOME/.config/opencode/opencode.jsonc"
+            CODEGRAPH_INSTALL_HOME="$SANDBOX_AGENT_HOME"
+            ;;
+        *)
+            # claude, cursor and antigravity keep their MCP server config
+            # outside their mounted paths already. (claude's auto-allow list is
+            # the one narrower exception — MOTIR-1840.)
+            CODEGRAPH_INSTALL_HOME="$HOME"
+            ;;
+    esac
+}
+
 # The marker that makes a hook OURS. A hook file without it belongs to the user
 # and is never touched.
 CODEGRAPH_HOOK_MARKER='motir-sandbox: codegraph incremental sync'
@@ -122,18 +187,24 @@ install_codegraph_hooks() {
 }
 
 if [ "${MOTIR_SANDBOX_CODEGRAPH:-1}" != "0" ] && command -v codegraph >/dev/null 2>&1; then
-    # Re-run the agent wiring the image already did. It is idempotent and cheap,
-    # and it is the only way to tell a shadowed config apart from a live one: a
-    # credential directory bind-mounted READ-ONLY (compose mounts ~/.codex and
-    # ~/.config/opencode that way) masks the config file the build wrote, and the
-    # failure here is what turns that into a sentence instead of an agent that
-    # quietly has no code-graph tools.
+    # Re-run the agent wiring the image already did — idempotent, cheap, and the
+    # step that reconciles it with whatever the host actually mounted.
+    #
+    # A credential directory bind-mounted READ-ONLY (compose mounts ~/.codex and
+    # ~/.config/opencode that way) used to MASK the config file the build wrote,
+    # leaving those two agents with no code-graph tools at all. They are now
+    # redirected to a config home the image owns, which no mount can shadow; the
+    # install below writes into that home, merging with whatever the mount
+    # brought in. The warning is kept as the backstop for any path that is still
+    # unwritable — it should no longer fire for a supported profile.
     codegraph_target=none
     if [ -r "$CODEGRAPH_TARGET_FILE" ]; then
         codegraph_target=$(cat "$CODEGRAPH_TARGET_FILE" 2>/dev/null || echo none)
     fi
     if [ -n "$codegraph_target" ] && [ "$codegraph_target" != "none" ]; then
-        if ! codegraph install --target "$codegraph_target" --location global --yes >/dev/null 2>&1; then
+        CODEGRAPH_INSTALL_HOME="$HOME"
+        redirect_codegraph_config "$codegraph_target" || true
+        if ! HOME="$CODEGRAPH_INSTALL_HOME" codegraph install --target "$codegraph_target" --location global --yes >/dev/null 2>&1; then
             echo "motir-sandbox: could not refresh the codegraph MCP wiring for '${codegraph_target}'." >&2
             echo "motir-sandbox: its config path is most likely a READ-ONLY credential mount, which masks the copy the image built in." >&2
             echo "motir-sandbox: the codegraph CLI still works; the agent just won't see the MCP tools. Drop that agent's :ro mount to restore them." >&2

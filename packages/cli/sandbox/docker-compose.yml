@@ -19,15 +19,16 @@
 # verified auto-approve flags are documented in ./README.md's profile matrix;
 # nothing here is asserted from memory.
 #
-# ⚠️ CodeGraph interaction (7.9.7d): the image wires the codegraph MCP server
-# into each agent that codegraph has a target for, writing that agent's config
-# file. For `codex` (~/.codex/config.toml) and `opencode`
-# (~/.config/opencode/opencode.jsonc) that file sits INSIDE the read-only
-# credential mount below, so the host's copy shadows it and those two agents see
-# no codegraph tools at run time. The entrypoint detects this and says so on
-# stderr rather than leaving it silent; `claude`, `cursor` and `antigravity`
-# keep their config outside the mounted path and are unaffected. Drop the
-# affected agent's mount to restore the tools. See README.md.
+# CodeGraph interaction (7.9.7d, resolved by 7.9.7f): the image wires the
+# codegraph MCP server into each agent that codegraph has a target for, writing
+# that agent's own config file. For `codex` (~/.codex/config.toml) and
+# `opencode` (~/.config/opencode/opencode.jsonc) that file would sit INSIDE the
+# read-only credential mount below, and the host's copy shadowed it — those two
+# agents saw no codegraph tools at run time. The entrypoint now points them at a
+# config home the IMAGE owns (~/.motir-sandbox/agent-config), which no mount can
+# shadow, so the mounts below are unchanged and both agents keep their host
+# credential AND their tools. `claude`, `cursor` and `antigravity` keep their
+# server config outside the mounted path and never needed this. See README.md.
 #
 # Two profiles mount NO credential directory, deliberately:
 #   * antigravity — the CLI stores its token in the OS keyring, and no portable
