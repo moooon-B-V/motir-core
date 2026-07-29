@@ -75,57 +75,88 @@ let served = 0;
 
 // ── the tools the auto loop calls ───────────────────────────────────────────
 //
-// A Map, not an object literal, so a tool name off the wire can only ever
-// resolve to an entry that was PUT here. An object would resolve
-// `TOOLS['constructor']` (or any other inherited member) through the prototype
-// chain and then call it — turning a stray request into a confusing stub crash
-// instead of the honest `unknown_tool` below. CodeQL flags exactly this shape
-// (js/unvalidated-dynamic-method-call), and it is right to.
+// Named functions plus a `switch`, NOT a lookup table indexed by the name off
+// the wire. A table dispatch (`TOOLS[name](args)`) lets a request choose which
+// function runs — `TOOLS['constructor']` resolves through the prototype chain
+// and gets invoked — so a stray request becomes a confusing stub crash instead
+// of the honest `unknown_tool` result below. CodeQL flags that shape
+// (js/unvalidated-dynamic-method-call) and is right to; a switch has no dynamic
+// callee at all, so each arm is a statically known function.
 
-const TOOLS = new Map(
-  Object.entries({
-    whoami: () => ({
-      user: { id: 'u1', name: 'Smoke User', email: 'smoke@example.invalid' },
-      workspace: { id: 'w1', name: 'Smoke', slug: 'smoke' },
-    }),
+function whoami() {
+  return {
+    user: { id: 'u1', name: 'Smoke User', email: 'smoke@example.invalid' },
+    workspace: { id: 'w1', name: 'Smoke', slug: 'smoke' },
+  };
+}
 
-    next_ready: () => {
-      const item = ITEMS[served];
-      if (!item) return { item: null };
-      served += 1;
-      return { item };
-    },
+function nextReady() {
+  const item = ITEMS[served];
+  if (!item) return { item: null };
+  served += 1;
+  return { item };
+}
 
-    transition_status: (args) => ({ key: args.key, status: args.status }),
+function transitionStatus(args) {
+  return { key: args.key, status: args.status };
+}
 
-    // The SEED contract (MOTIR-1802): a `sessionBranch` argument is a fallback an
-    // item with no lineage of its own adopts. The stub mirrors that rather than
-    // inventing a branch, because the whole point of the smoke run is that the
-    // CLI's branch reaches the agent's prompt.
-    dispatch_prompt: (args) => {
-      const branch = args.sessionBranch ?? null;
-      return {
-        key: args.key,
-        prompt: [
-          `You are executing ${args.key}.`,
-          '',
-          'GIT WORKFLOW',
-          branch
-            ? `Integrate your work into the session branch ${branch}. Do NOT open a pull request.`
-            : 'Open a pull request of your own.',
-          '',
-          `MOTIR_SMOKE_ITEM=${args.key}`,
-          branch ? `MOTIR_SMOKE_BRANCH=${branch}` : '',
-        ].join('\n'),
-        targetRepo: 'demo-repo',
-        workflowMode: branch ? 'session_lineage' : 'per_item_pr',
-        sessionBranch: branch,
-      };
-    },
+// The SEED contract (MOTIR-1802): a `sessionBranch` argument is a fallback an
+// item with no lineage of its own adopts. The stub mirrors that rather than
+// inventing a branch, because the whole point of the smoke run is that the
+// CLI's branch reaches the agent's prompt.
+function dispatchPrompt(args) {
+  const branch = args.sessionBranch ?? null;
+  return {
+    key: args.key,
+    prompt: [
+      `You are executing ${args.key}.`,
+      '',
+      'GIT WORKFLOW',
+      branch
+        ? `Integrate your work into the session branch ${branch}. Do NOT open a pull request.`
+        : 'Open a pull request of your own.',
+      '',
+      `MOTIR_SMOKE_ITEM=${args.key}`,
+      branch ? `MOTIR_SMOKE_BRANCH=${branch}` : '',
+    ].join('\n'),
+    targetRepo: 'demo-repo',
+    workflowMode: branch ? 'session_lineage' : 'per_item_pr',
+    sessionBranch: branch,
+  };
+}
 
-    mark_integrated: (args) => ({ key: args.key, sessionBranch: args.sessionBranch }),
-  }),
-);
+function markIntegrated(args) {
+  return { key: args.key, sessionBranch: args.sessionBranch };
+}
+
+/** Advertised in `tools/list`. The auto loop never reads it — it calls the
+ *  tools directly — so this is documentation, not dispatch. */
+const TOOL_NAMES = [
+  'whoami',
+  'next_ready',
+  'transition_status',
+  'dispatch_prompt',
+  'mark_integrated',
+];
+
+/** Dispatch one tool call. Returns null for a name this stub does not serve. */
+function callTool(name, args) {
+  switch (name) {
+    case 'whoami':
+      return whoami();
+    case 'next_ready':
+      return nextReady();
+    case 'transition_status':
+      return transitionStatus(args);
+    case 'dispatch_prompt':
+      return dispatchPrompt(args);
+    case 'mark_integrated':
+      return markIntegrated(args);
+    default:
+      return null;
+  }
+}
 
 // ── JSON-RPC / streamable-HTTP ──────────────────────────────────────────────
 
@@ -146,7 +177,7 @@ function handleMessage(msg) {
   if (method === 'tools/list') {
     record({ method });
     return {
-      tools: [...TOOLS.keys()].map((name) => ({
+      tools: TOOL_NAMES.map((name) => ({
         name,
         description: `smoke stub: ${name}`,
         inputSchema: { type: 'object' },
@@ -157,9 +188,9 @@ function handleMessage(msg) {
   if (method === 'tools/call') {
     const name = params.name;
     const args = params.arguments ?? {};
-    const impl = TOOLS.get(name);
     record({ method, tool: name, args });
-    if (!impl) {
+    const structuredContent = callTool(name, args);
+    if (structuredContent === null) {
       // An UNKNOWN tool is an `isError` result, not a JSON-RPC error — that is
       // how the real server reports a refused call, and the CLI maps the text
       // into a CliError. Getting this wrong would make a CLI regression look
@@ -169,7 +200,6 @@ function handleMessage(msg) {
         content: [{ type: 'text', text: `unknown_tool: ${name}` }],
       };
     }
-    const structuredContent = impl(args);
     return {
       content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
       structuredContent,
