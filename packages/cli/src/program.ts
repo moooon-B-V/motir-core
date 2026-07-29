@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { CLI_VERSION } from './version.js';
 import { authLogin, authLogout, authStatus } from './commands/auth.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
-import { openCommand, readyCommand, statusCommand } from './commands/read.js';
+import { openCommand, readyCommand, showCommand, statusCommand } from './commands/read.js';
 import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
 import { autoCommand } from './commands/auto.js';
@@ -92,6 +92,12 @@ export function buildProgram(): Command {
     .helpGroup(HELP_GROUP.read)
     .option('--json', 'Emit the pulse as JSON.')
     .action(statusCommand);
+  program
+    .command('show <key>')
+    .description('Read one work item (e.g. PROD-7): fields, readiness, children, edges, body.')
+    .helpGroup(HELP_GROUP.read)
+    .option('--json', 'Emit the get_work_item payload as JSON.')
+    .action(showCommand);
   // ── doctor ────────────────────────────────────────────────────────────────
   program
     .command('doctor')

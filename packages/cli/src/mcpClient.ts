@@ -249,14 +249,69 @@ export interface CompleteSessionResult {
   results: CompleteSessionOutcome[];
 }
 
-/** The `get_work_item` slice `motir run` gates on: the current status and the
- * server's own readiness verdict (dependency-only — see the readiness rule). */
+/** A related work item as the detail aggregate carries it (the server's
+ * `WorkItemSummaryDto` — the fields a terminal row renders). Used for the parent
+ * chain, the children, and every dependency edge. */
+export interface WorkItemSummary {
+  identifier: string;
+  kind: string;
+  title: string;
+  status: string;
+}
+
+/** ONE dependency / relationship EDGE (`RelationshipLinkDto`): the linked item
+ * plus the `work_item_link.id` of the edge itself. */
+export interface WorkItemLink {
+  linkId: string;
+  item: WorkItemSummary;
+}
+
+/**
+ * The `get_work_item` aggregate (`IssueDetailDto`) — the item, its lineage, its
+ * dependency edges, and the server's own readiness verdict (dependency-only —
+ * see the readiness rule).
+ *
+ * This mirrors only the fields the terminal renders. It began as the two-field
+ * slice `motir run` gates on (status + readiness) and was widened for `motir
+ * show` (7.9.13), which needed the rest of what the tool already returned — no
+ * server change, just a wider mirror. The groups below are NOT optional: the
+ * tool returns the whole aggregate on every call, so a renderer that defended
+ * against a missing `children` would be defending against a shape the server
+ * cannot produce. Heavier fields the CLI does not render (`workflow`, `labels`,
+ * `components`, `customFields`, `duplicates`, `clones`) are deliberately left
+ * out — `--json` prints the tool payload itself, so nothing is lost by omitting
+ * them here.
+ */
 export interface WorkItemDetail {
-  item: { id: string; identifier: string; title: string; status: string };
+  item: {
+    id: string;
+    identifier: string;
+    kind: string;
+    title: string;
+    status: string;
+    priority: string;
+    assigneeId: string | null;
+    type: string | null;
+    executor: string | null;
+    storyPoints: number | null;
+    estimateMinutes: number | null;
+    targetRepo: string | null;
+    sprintId: string | null;
+    descriptionMd: string | null;
+  };
+  /** The full parent chain, ordered root→self and EXCLUDING the item itself. */
+  ancestors: WorkItemSummary[];
+  parent: WorkItemSummary | null;
+  children: WorkItemSummary[];
+  blockedBy: WorkItemLink[];
+  blocks: WorkItemLink[];
+  relatesTo: WorkItemLink[];
   readiness: {
     ready: boolean;
-    openBlockers: { identifier: string; title: string; status: string }[];
-    blockedByAncestor: { identifier: string } | null;
+    openBlockers: WorkItemSummary[];
+    /** The nearest ancestor whose own blockers are still open — the CASCADE
+     * cause. A cascade-blocked item must never read as a bare "blocked". */
+    blockedByAncestor: WorkItemSummary | null;
   };
 }
 

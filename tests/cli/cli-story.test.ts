@@ -699,6 +699,7 @@ describe('help — against the BUILT binary', () => {
       'doctor',
       'ready',
       'status',
+      'show',
       'open',
       'next',
       'run',

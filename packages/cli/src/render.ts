@@ -1,5 +1,12 @@
 import { normalizeServerUrl } from './config/userConfig.js';
-import type { ReadyItemSummary, SearchFilterEnvelope, SprintSummary } from './mcpClient.js';
+import type {
+  ReadyItemSummary,
+  SearchFilterEnvelope,
+  SprintSummary,
+  WorkItemDetail,
+  WorkItemLink,
+  WorkItemSummary,
+} from './mcpClient.js';
 
 // Pure rendering + query-shaping helpers for the read commands (7.9.2). Kept
 // free of I/O (no MCP, no stdout) so they are directly unit-testable and the
@@ -131,4 +138,129 @@ export function renderStatusBlock(pulse: StatusPulse): string {
     lines.push('Sprint:     (none active)');
   }
   return lines.join('\n');
+}
+
+// ── `motir show <key>` — the item DETAIL block (7.9.13) ─────────────────────
+//
+// The renderers below turn one `get_work_item` aggregate into the terminal
+// read: header → readiness → lineage → children → the three dependency edge
+// groups → the body. Each is pure and separately exported, because the block is
+// assembled from parts that later cards re-arrange rather than rewrite:
+// 7.9.16 sorts the children into build-order WAVES and prepends a column, so
+// the ROW BUILDER (`childRows`) and the TABLE renderer (`renderRelationTable`)
+// are deliberately separate — the rows carry no ordering and the table carries
+// no column set.
+
+/** The columns `motir show` gives a CHILD row. 7.9.16 prepends `WAVE` /
+ * `BLOCKED BY` to a copy of this rather than editing the renderer. */
+export const CHILD_HEADERS = ['KEY', 'KIND', 'STATUS', 'TITLE'];
+
+/** The columns an EDGE row (blocked by / blocks / relates to) gets. */
+export const EDGE_HEADERS = ['KEY', 'STATUS', 'TITLE'];
+
+/** ONE work-item summary as CHILD cells, in {@link CHILD_HEADERS} order. */
+export function childRow(child: WorkItemSummary, titleWidth = 60): string[] {
+  return [child.identifier, child.kind, child.status, truncate(child.title, titleWidth)];
+}
+
+/**
+ * `(children) => rows` — the child list as table cells, in the order given.
+ *
+ * Pure and order-PRESERVING: `motir show` passes the server's source order,
+ * and 7.9.16 passes the same children topologically sorted into dependency
+ * waves. Neither ordering nor the column set is baked in here.
+ */
+export function childRows(children: WorkItemSummary[], titleWidth = 60): string[][] {
+  return children.map((child) => childRow(child, titleWidth));
+}
+
+/** `(links) => rows` — dependency edges as `key · status · title` cells. */
+export function edgeRows(links: WorkItemLink[], titleWidth = 60): string[][] {
+  return links.map(({ item }) => [item.identifier, item.status, truncate(item.title, titleWidth)]);
+}
+
+/**
+ * A named section: `HEADING (n)` and either the table or the empty line. Rows
+ * come in already built (and already ordered), so a caller can re-sort them or
+ * hand a wider `headers` set without touching this.
+ */
+export function renderRelationTable(
+  heading: string,
+  rows: string[][],
+  emptyLine: string,
+  headers: string[] = EDGE_HEADERS,
+): string {
+  const title = `${heading} (${rows.length})`;
+  if (rows.length === 0) return `${title}\n${emptyLine}`;
+  return `${title}\n${formatTable(headers, rows)}`;
+}
+
+/** The item's identity line + its field line. A null field is OMITTED rather
+ * than printed as `null` — an absent estimate reads as absent, not as zero. */
+export function renderItemHeader(item: WorkItemDetail['item']): string {
+  const kindType = item.type ? `${item.kind}/${item.type}` : item.kind;
+  // status + priority are non-null on every work item; the rest are optional and
+  // simply do not appear when unset (never `null`, never a placeholder). A ZERO
+  // story-point estimate is a real value, so the test is `!== null`, not falsy.
+  const fields = [`status ${item.status}`, `priority ${item.priority}`];
+  const add = (label: string, value: string | number | null): void => {
+    if (value !== null) fields.push(`${label} ${value}`);
+  };
+  add('assignee', item.assigneeId);
+  add('type', item.type);
+  add('executor', item.executor);
+  add('points', item.storyPoints);
+  add('estimate', item.estimateMinutes === null ? null : `${item.estimateMinutes}m`);
+  add('sprint', item.sprintId);
+  add('repo', item.targetRepo);
+  return `${item.identifier}  [${kindType}]  ${item.title}\n${fields.join(' · ')}`;
+}
+
+/**
+ * The readiness verdict as one line, in the three shapes the DTO distinguishes:
+ * `ready`, the item's OWN open blockers (named), and the CASCADE case where a
+ * blocked ancestor holds it back. The cascade case names the ancestor precisely
+ * so a cascade-blocked item never reads as a bare "blocked" with nothing to
+ * point at.
+ */
+export function renderReadinessLine(readiness: WorkItemDetail['readiness']): string {
+  if (readiness.ready) return 'ready';
+  if (readiness.openBlockers.length > 0) {
+    return `blocked by ${readiness.openBlockers.map((b) => b.identifier).join(', ')}`;
+  }
+  const ancestor = readiness.blockedByAncestor;
+  if (ancestor) return `blocked by ancestor ${ancestor.identifier} — ${ancestor.title}`;
+  return 'blocked';
+}
+
+/** The parent breadcrumb, root→self. A top-level item has no ancestors, so the
+ * trail is the item alone. */
+export function renderLineage(detail: WorkItemDetail): string {
+  return [...detail.ancestors.map((a) => a.identifier), detail.item.identifier].join(' › ');
+}
+
+/**
+ * The whole `motir show` block. Sections are separated by a blank line and
+ * headed in caps, matching the CLI's own help surface; the DESCRIPTION is the
+ * RAW Markdown, printed verbatim — the terminal is not a Markdown viewer, and
+ * the body is what a human pastes into an agent.
+ */
+export function renderWorkItemDetail(detail: WorkItemDetail, titleWidth = 60): string {
+  const sections = [
+    renderItemHeader(detail.item),
+    `READINESS\n${renderReadinessLine(detail.readiness)}`,
+    `LINEAGE\n${renderLineage(detail)}`,
+    renderRelationTable(
+      'CHILDREN',
+      childRows(detail.children, titleWidth),
+      'no children',
+      CHILD_HEADERS,
+    ),
+    renderRelationTable('BLOCKED BY', edgeRows(detail.blockedBy, titleWidth), 'none'),
+    renderRelationTable('BLOCKS', edgeRows(detail.blocks, titleWidth), 'none'),
+    renderRelationTable('RELATES TO', edgeRows(detail.relatesTo, titleWidth), 'none'),
+  ];
+  const body = detail.item.descriptionMd;
+  if (body) sections.push(`DESCRIPTION\n${body.trimEnd()}`);
+  return sections.join('\n\n');
 }
