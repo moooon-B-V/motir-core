@@ -65,6 +65,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // get_plan_status only READS a plan's status + proposal count — it neither
   // submits a job nor spends a credit.
   get_plan_status: 'read',
+  // get_plan READS the same plan WITH its proposals. Still a pure read: a
+  // proposal is not a work item, and approving the plan (the only thing that
+  // creates one) does not happen on this surface at all.
+  get_plan: 'read',
   // open_plan_session is the planning conversation's MOUNT read — "show me the
   // thread for this scope". It get-or-creates an empty conversation row, which
   // is a write in the narrow sense, but it is idempotent, spends no credit,

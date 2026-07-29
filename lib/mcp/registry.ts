@@ -11,6 +11,7 @@ import {
   GET_PLAN_STATUS_TOOL_NAME,
   registerExpandItem,
 } from './tools/expandItem';
+import { GET_PLAN_TOOL_NAME, registerGetPlan } from './tools/getPlan';
 import {
   APPEND_PLAN_TURN_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
@@ -71,6 +72,7 @@ export const MCP_TOOL_NAMES = [
   DISPATCH_PROMPT_TOOL_NAME,
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
+  GET_PLAN_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
   APPEND_PLAN_TURN_TOOL_NAME,
   SUBMIT_PLAN_SESSION_TOOL_NAME,
@@ -138,6 +140,11 @@ export function registerMcpTools(
   // that replaces the browser's job stream. Both honour the Plan approval gate:
   // an expansion proposes, it never writes the tree.
   registerExpandItem(target, resolveContext);
+  // The plan CONTENT read (MOTIR-1837) — the items behind get_plan_status's
+  // count, so a headless client can SHOW what a planning pass proposed instead
+  // of sending its user to a browser to look. Same proposal gate: it reads
+  // proposals, it does not create work items.
+  registerGetPlan(target, resolveContext);
   // The plan-change CONVERSATION (MOTIR-1832) — open/resume a thread, append a
   // turn, submit the accumulated intent. The substrate `motir plan` talks
   // through, and the same thread the web app's planning rail shows: accumulation
