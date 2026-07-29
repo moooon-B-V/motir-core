@@ -15,11 +15,13 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
   type AutoSummary,
   type DispatchRecord,
+  type PlanningRecord,
   type PrReport,
   type RepoSession,
   type SkipRecord,
@@ -70,6 +72,9 @@ export interface AutoOptions extends DeliveryOptions {
   keepGoing?: boolean;
   /** `--reset` — clear this project's persisted exclude list first. */
   reset?: boolean;
+  /** `--include-planning` — fire an AI expansion for each unexpanded epic/story
+   *  the ready set hands back, instead of skipping it (MOTIR-886). */
+  includePlanning?: boolean;
 }
 
 /** Injectable seams; never overridden in production. */
@@ -255,6 +260,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   const excludeIds = new Set(readExcludes(serverUrl, projectKey).map((e) => e.id));
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
+  const planning: PlanningRecord[] = [];
   const repos = new RepoSessions(branch, run);
 
   let interrupted = false;
@@ -291,6 +297,16 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       }
 
       const disposition = classifyReadyItem(item);
+      if (disposition === 'needs_planning' && opts.includePlanning) {
+        // TRIGGER, NEVER WAIT. Submit the expansion and go straight back to
+        // `next_ready` — the job runs server-side and its output is a plan a
+        // human must approve, so there is nothing here to wait FOR. The item
+        // goes on the exclude list because it stays childless and would
+        // otherwise be handed straight back on the very next iteration.
+        planning.push(await triggerExpansion(client, serverUrl, item));
+        excludeIds.add(item.id);
+        continue;
+      }
       if (disposition !== 'dispatch') {
         // Not dispatched, so NOT transitioned: a planning item and a human item
         // are both left exactly as the loop found them.
@@ -347,7 +363,37 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
     process.off('SIGINT', onSigint);
   }
 
-  return { runId, records, skipped, repos: repos.touched(), prs: [], stopReason };
+  return { runId, records, skipped, planning, repos: repos.touched(), prs: [], stopReason };
+}
+
+/**
+ * Fire ONE expansion and record how the submit went. Never throws.
+ *
+ * A failed expansion is NON-halting, unlike a failed agent: nothing else in the
+ * run depends on it (its output could not have joined this run anyway — it needs
+ * a human's approval first), so the honest response is to name the item and keep
+ * dispatching. That asymmetry is the reason this swallows the error here rather
+ * than letting the loop's failure policy see it.
+ */
+async function triggerExpansion(
+  client: MotirClient,
+  serverUrl: string,
+  item: DispatchItem,
+): Promise<PlanningRecord> {
+  const base = { key: item.key, title: item.title };
+  try {
+    const { planId, jobId } = await client.expandItem(item.key);
+    const reviewUrl = planReviewUrl(serverUrl, planId);
+    info(
+      `${item.key}: planning triggered — job ${jobId}, plan ${planId}. ` +
+        'It produces PROPOSALS awaiting your approval; the loop moves on.',
+    );
+    return { ...base, outcome: 'triggered', planId, reviewUrl };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    info(`${item.key}: planning FAILED — ${detail}. Left unexpanded; the loop continues.`);
+    return { ...base, outcome: 'failed', planId: null, reviewUrl: null, detail };
+  }
 }
 
 interface DispatchOneInput {
