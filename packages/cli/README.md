@@ -103,7 +103,8 @@ illegal flip surfaces the server's own allowed-targets error verbatim. A merged
 ## The loop — `motir auto` (7.9.4)
 
 ```sh
-motir auto --agent "<cmd>" [--kinds <list>] [--max <n>] [--keep-going] [--reset]
+motir auto --agent "<cmd>" [--kinds <list>] [--max <n>] [--keep-going] [--reset] \
+           [--include-planning]
 ```
 
 Drain the ready set unattended. Each iteration asks the server for **exactly one**
@@ -130,10 +131,44 @@ items honestly In Review — the summary names every one of them with its branch
 
 **What it skips, and why.** An unexpanded epic/story in the ready set is a
 _planning_ item, not a dispatchable one — there is no agent prompt for "do the
-planning" — so the loop skips it untouched and lists it under _needs planning_
-(`--include-planning`, which instead triggers its expansion, is 7.9.8). A
-`type: manual` / `executor: human` item is skipped the same way, under _needs a
+planning" — so the loop skips it untouched and lists it under _needs planning_.
+A `type: manual` / `executor: human` item is skipped the same way, under _needs a
 human_.
+
+### `--include-planning` — fire the expansion instead of skipping it (7.9.8)
+
+With the flag, an unexpanded epic/story is not skipped: the CLI submits an AI
+expansion for it (the `expand_item` tool), records it, and asks for the next
+ready item **immediately**.
+
+**It triggers; it never waits.** The tool returns `{ jobId, planId }` the moment
+the job is accepted, and the loop moves straight on. There is no backoff and no
+poll — see the next paragraph for why waiting would be waiting on a person.
+
+**A triggered expansion produces PROPOSALS, not work.** The job writes a plan of
+proposals; **approving that plan in Motir is the only thing that turns a proposal
+into a work item**, so firing it adds nothing to your tree and the epic/story
+stays childless. That is exactly why the item goes on the run's exclude list —
+otherwise the very next `next_ready` would hand it straight back. If you happen
+to approve a plan while the run is still going, its new subtasks surface on a
+later iteration like any other unlock, because the loop never pre-fetches; that
+is a bonus, not something it waits for.
+
+**End of loop.** When `next_ready` comes back empty the run ends, pending
+expansions or not. The summary names each one with its plan id and a link to
+review it, under _planning triggered — awaiting your approval_.
+
+**When an expansion fails** (no credits, a refused target, a typed error) it is
+**non-halting**, unlike a failed agent: nothing in the run depended on it, so the
+item is named under _planning failed — still unexpanded_ and the loop continues
+to the next ready item. Neither a triggered nor a failed expansion changes the
+exit code, which stays a function of dispatch outcomes alone.
+
+Expansions run on the **AI credits of the token owner**, which is why this is
+opt-in rather than the default. Motir also ships a server-side equivalent — the
+auto-plan cadence cron fires the same expansion for a project that opted in when
+its ready set drains; this flag is the terminal-side version for a project that
+has not.
 
 **When an agent fails** the run halts by default and the item is left In Progress
 with nothing reverted; `--keep-going` finishes the rest instead. Either way the
@@ -192,6 +227,7 @@ re-run will pick up.
 | Pull requests         | ONE per repo, opened by the CLI at the end             | **One per item**, opened by the agent                    |
 | Item close-out        | `motir done --session <branch>` (bulk)                 | `motir done <key>` (per item)                            |
 | Integrated-dep items  | Dispatched — that lineage is the whole point           | **Excluded** — their code is not on `main`               |
+| Unexpanded containers | Skipped, or expanded with `--include-planning`         | Skipped — no `--include-planning`                        |
 | Reach for it when     | You want a long unattended run to go as deep as it can | You want a bounded, reviewable batch of independent work |
 
 Both leave `main` untouched: it moves only through a pull request a human merges.

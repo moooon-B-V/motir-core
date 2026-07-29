@@ -76,6 +76,27 @@ export interface SkipRecord {
   reason: 'needs_planning' | 'needs_human';
 }
 
+/** How ONE `--include-planning` expansion trigger ended (MOTIR-886).
+ *
+ *  Note what is NOT here: an `expanded` / `children` outcome. The job produces a
+ *  Plan of PROPOSALS, and approving that plan — in Motir, by a human — is the
+ *  only thing that turns a proposal into a work item. The run's whole job is to
+ *  FIRE the planning and say so; it can never report children it did not create.
+ *  The vocabulary mirrors the shipped server-side cadence trigger (MOTIR-916):
+ *  fired / skipped / failed. */
+export interface PlanningRecord {
+  key: string;
+  title: string | null;
+  /** `triggered` — the job was accepted; `failed` — the submit was refused. */
+  outcome: 'triggered' | 'failed';
+  /** The plan the job writes its proposals into — the thing to review. */
+  planId: string | null;
+  /** Where to review it, when the run knew the server URL. */
+  reviewUrl: string | null;
+  /** Why it failed, verbatim from the server's own typed error. */
+  detail?: string;
+}
+
 /** One repo the run touched: its session branch and the items carried on it. */
 export interface RepoSession {
   repoName: string | null;
@@ -107,9 +128,25 @@ export interface AutoSummary {
   runId: string;
   records: DispatchRecord[];
   skipped: SkipRecord[];
+  /** The expansions `--include-planning` fired. Empty without the flag, in which
+   *  case the planning items appear under {@link AutoSummary.skipped} instead. */
+  planning: PlanningRecord[];
   repos: RepoSession[];
   prs: PrReport[];
   stopReason: StopReason;
+}
+
+/** The review surface for a submitted plan — `<server>/plans/<id>`, the same
+ *  route the in-app generation hand-off links to. Built from the run's own
+ *  server URL so the summary line is clickable rather than a bare id. */
+export function planReviewUrl(serverUrl: string, planId: string): string | null {
+  try {
+    return new URL(`/plans/${encodeURIComponent(planId)}`, serverUrl).toString();
+  } catch {
+    // A server URL the CLI could not parse is not worth failing a run over — the
+    // planId alone still identifies the plan.
+    return null;
+  }
 }
 
 /** `1m 04s` / `12s` — a duration a human reads at a glance. */
@@ -222,6 +259,8 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     );
   }
 
+  blocks.push(...renderPlanningBlocks(summary.planning, titleWidth));
+
   const inReview = summary.records.filter((r) => r.outcome !== 'failed');
   if (inReview.length > 0) {
     blocks.push(
@@ -248,6 +287,46 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
   return blocks.join('\n\n');
 }
 
+/**
+ * The planning section: what `--include-planning` fired, and what it did NOT do.
+ *
+ * The "awaiting your approval" wording is load-bearing, not decoration. A run
+ * that printed "expanded PROD-5" would be claiming work items it never created
+ * — the exact misreading the tool's own description guards against — so every
+ * triggered line says out loud that a human's approval stands between this plan
+ * and any subtask.
+ */
+function renderPlanningBlocks(planning: PlanningRecord[], titleWidth: number): string[] {
+  const blocks: string[] = [];
+  const triggered = planning.filter((p) => p.outcome === 'triggered');
+  const failed = planning.filter((p) => p.outcome === 'failed');
+
+  if (triggered.length > 0) {
+    blocks.push(
+      [
+        `Planning triggered — awaiting your approval (${triggered.length}):`,
+        ...triggered.map(
+          (p) =>
+            `  ${p.key} — ${truncate(p.title ?? '', titleWidth)}\n` +
+            `    plan ${p.planId ?? '(id not returned)'}${p.reviewUrl ? ` — ${p.reviewUrl}` : ''}`,
+        ),
+        '  These are PROPOSALS. Nothing was added to the plan: approve them in Motir',
+        '  and their subtasks join a later run like any other ready work.',
+      ].join('\n'),
+    );
+  }
+
+  if (failed.length > 0) {
+    blocks.push(
+      [
+        `Planning failed — still unexpanded (${failed.length}):`,
+        ...failed.map((p) => `  ${p.key} — ${p.detail ?? 'the expansion was refused'}`),
+      ].join('\n'),
+    );
+  }
+  return blocks;
+}
+
 function prLine(pr: PrReport): string {
   const repo = pr.repoName ?? 'the checkout';
   switch (pr.outcome) {
@@ -267,7 +346,11 @@ function prLine(pr: PrReport): string {
 }
 
 /** The process exit code for a finished run: non-zero when anything needs the
- *  human's attention as a FAILURE (an interrupted run included). */
+ *  human's attention as a FAILURE (an interrupted run included).
+ *
+ *  DISPATCH outcomes only — `summary.planning` is deliberately not read. A failed
+ *  expansion is non-halting (nothing in the run depended on it), so letting it
+ *  redden the exit code would fail a run whose every dispatch succeeded. */
 export function autoExitCode(summary: AutoSummary): number {
   if (summary.records.some((r) => r.outcome === 'failed')) return 1;
   if (summary.stopReason === 'interrupted') return 130;
