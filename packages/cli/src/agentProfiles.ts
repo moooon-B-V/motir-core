@@ -166,14 +166,22 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     credentialHint: 'Run `claude` once to sign in, or set ANTHROPIC_API_KEY.',
     codegraphTarget: 'claude',
     codegraphConfig: {
-      // The server entry is a SIBLING of the mounted ~/.claude directory, so the
-      // `:ro` credential mount cannot reach it — claude keeps its tools.
-      mcpServers: ({ home }) => join(home, '.claude.json'),
-      autoAllow: ({ home }) => join(home, '.claude', 'settings.json'),
-      redirect: null,
-      // ...but the permission list DOES sit inside the mount. Declared, not
-      // silent: the agent has the tools and stops to ask before calling them.
-      knownAutoAllowGap: 'MOTIR-1840',
+      // Claude Code reads its MCP servers from <CLAUDE_CONFIG_DIR>/.claude.json
+      // — by default ~/.claude/.claude.json, INSIDE the `:ro` mount. (The
+      // ~/.claude.json codegraph writes is a legacy path the shipped 2.x CLI no
+      // longer reads at all — verified, which is why this profile had no tools
+      // rather than merely no permission list.) The entrypoint redirects
+      // CLAUDE_CONFIG_DIR to the image-owned home, seeds it from the mount and
+      // merges codegraph's stanza into the copy.
+      mcpServers: ({ home }) => join(sandboxAgentConfigHome(home), '.claude', '.claude.json'),
+      // The auto-allow list is a SEPARATE file from the server list here, and
+      // it moves with the same redirect.
+      autoAllow: ({ home }) => join(sandboxAgentConfigHome(home), '.claude', 'settings.json'),
+      redirect: {
+        env: 'CLAUDE_CONFIG_DIR',
+        why: 'CLAUDE_CONFIG_DIR governs the state file, settings.json, CLAUDE.md AND .credentials.json, so the redirected dir is seeded from the read-only mount before codegraph merges into it.',
+      },
+      knownAutoAllowGap: null,
     },
   },
   {

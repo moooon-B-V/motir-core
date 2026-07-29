@@ -132,7 +132,16 @@ case "$AGENT" in
         # --dangerously-skip-permissions.
         npm_agent '@anthropic-ai/claude-code'
         claude --version
-        wire_codegraph claude
+        # Wired into the IMAGE-OWNED home like opencode, not the runtime home
+        # (7.9.7g / MOTIR-1840). codegraph's claude target writes three files:
+        # the MCP server stanza to <HOME>/.claude.json and the auto-allow list +
+        # the agent memory to <HOME>/.claude/. Claude Code reads all three from
+        # CLAUDE_CONFIG_DIR, which defaults to ~/.claude — INSIDE the read-only
+        # credential mount. Installing under $SANDBOX_AGENT_HOME puts the two
+        # <HOME>/.claude files exactly where the redirected config dir expects
+        # them; the entrypoint seeds that dir from the mount, re-runs this
+        # install and lifts the one remaining file into place.
+        wire_codegraph claude "$SANDBOX_AGENT_HOME"
         ;;
 
     codex)

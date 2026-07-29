@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildProgram } from '../src/program.js';
 import { HELP_GROUP, HELP_TOPICS, findHelpTopic } from '../src/help.js';
 import { CliError } from '../src/errors.js';
+
+const CLI_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The curated help surface (7.9.12). These tests pin the OUTPUT, not the
 // implementation: the overview's section order, that every registered command
@@ -132,8 +137,8 @@ describe('the curated overview', () => {
         help [command...]         Show help for a command, or read a help topic.
         environment               Environment variables Motir reads, and what each one
                                   overrides.
-        files                     The two files Motir keeps: the credential store and
-                                  the project link.
+        files                     The files Motir keeps: the credential store, the
+                                  project link, the exclude list.
 
       FLAGS:
         -v, --version             Print the CLI version.
@@ -329,7 +334,7 @@ describe('help topics', () => {
     // The summaries are wrapped to the help width, so match their opening words
     // rather than the whole line.
     expect(overview).toContain('Environment variables Motir reads');
-    expect(overview).toContain('The two files Motir keeps');
+    expect(overview).toContain('The files Motir keeps');
     expect(overview).toContain('Use `motir help <topic>` for a topic: environment, files.');
   });
 });
@@ -374,5 +379,44 @@ describe('the root footer never leaks into a subcommand', () => {
     expect(sub).not.toContain('EXAMPLES:');
     expect(sub).not.toContain('LEARN MORE:');
     expect(sub).not.toContain('FLAGS:');
+  });
+});
+
+// ── the help topics describe the SHIPPED layout (MOTIR-1836) ────────────────
+//
+// `docs/cli.md` states that its environment table is what `motir help
+// environment` prints "from the shipped code", so the two have to agree. They
+// are separate files with no build step between them, which is exactly how the
+// exclude list's documented home stayed at the pre-move path in three places
+// after the code had moved it. These assert the pairing rather than the prose.
+
+describe('the help topics match where the CLI actually keeps things', () => {
+  const bodyOf = (name: string): string => findHelpTopic(name)?.body() ?? '';
+
+  it('documents every state-home rung, in precedence order', () => {
+    const body = bodyOf('environment');
+    for (const name of ['MOTIR_STATE_HOME', 'MOTIR_CONFIG_HOME', 'XDG_STATE_HOME']) {
+      expect(body, `${name} in the environment topic`).toContain(name);
+    }
+    // The chain the CLI resolves — a reordering here is a behaviour change.
+    expect(body).toMatch(
+      /MOTIR_STATE_HOME\s*>\s*MOTIR_CONFIG_HOME\s*>\s*\n?\s*XDG_STATE_HOME\s*>\s*~\/\.local\/state/,
+    );
+  });
+
+  it('puts the exclude list in the state home, NOT beside the credential', () => {
+    const files = bodyOf('files');
+    expect(files).toContain('~/.local/state/motir/session-excludes.json');
+    // The bug this fixes: state described as living in the read-only config dir.
+    expect(files).not.toContain('~/.config/motir/session-excludes.json');
+    // and the credential is still where it was
+    expect(files).toContain('~/.config/motir/config.json');
+  });
+
+  it('agrees with docs/cli.md about both paths', () => {
+    const guide = readFileSync(join(CLI_DIR, '..', '..', 'docs', 'cli.md'), 'utf8');
+    expect(guide).toContain('~/.local/state/motir/session-excludes.json');
+    expect(guide).not.toContain('~/.config/motir/session-excludes.json');
+    expect(guide).toContain('MOTIR_STATE_HOME');
   });
 });
