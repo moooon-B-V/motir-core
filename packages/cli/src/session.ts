@@ -1,4 +1,5 @@
-import { MotirClient, type ReadyItemSummary } from './mcpClient.js';
+import { MotirClient, type ReadyItemSummary, type SearchItemSummary } from './mcpClient.js';
+import { sprintFilter } from './render.js';
 import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
 import { getCredential, normalizeServerUrl } from './config/userConfig.js';
@@ -79,4 +80,47 @@ export async function collectReady(
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
   return all;
+}
+
+/** The `search_work_items` page size cap (the List's own server cap — the tool
+ * clamps `limit` to 50). Paging at the cap costs the fewest round-trips. */
+export const SEARCH_PAGE_SIZE = 50;
+
+export interface SprintItemsResult {
+  items: SearchItemSummary[];
+  /** The server's total for the query — what the collected count is checked
+   * against, so an early stop is visible rather than silent. */
+  total: number;
+}
+
+/**
+ * Page through ONE sprint's ENTIRE work-item set with the tool's cursor.
+ *
+ * A sprint is a BOUNDED set (tens to low hundreds), so collecting it fully is
+ * the correct read: stopping at one page and printing 50 of 120 rows would be
+ * a silent truncation, which the completeness rule forbids. The `total` comes
+ * back with the rows so the caller can state the collected count against it —
+ * any cap this ever grows must be VISIBLE in the output, never silent.
+ */
+export async function collectSprintItems(
+  client: MotirClient,
+  projectKey: string,
+  sprintId: string,
+  filter: { kinds?: string[] } = {},
+): Promise<SprintItemsResult> {
+  const items: SearchItemSummary[] = [];
+  let cursor: string | undefined;
+  let total = 0;
+  do {
+    const page = await client.searchWorkItems({
+      projectKey,
+      filter: sprintFilter(sprintId, filter.kinds),
+      cursor,
+      limit: SEARCH_PAGE_SIZE,
+    });
+    items.push(...page.items);
+    total = page.total;
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return { items, total };
 }

@@ -1,23 +1,28 @@
 import { CliError } from '../errors.js';
 import { info, json, out } from '../output.js';
 import { requireLink } from '../config/linkConfig.js';
-import { collectReady, withProjectSession } from '../session.js';
+import { collectReady, collectSprintItems, withProjectSession } from '../session.js';
 import { openUrl } from '../browser.js';
 import {
   inFlightFilter,
   issueUrl,
   renderReadyTable,
+  renderSprintHeader,
+  renderSprintItems,
+  renderSprintsTable,
   renderStatusBlock,
   renderWorkItemDetail,
+  resolveSprintRef,
   type StatusPulse,
 } from '../render.js';
-import type { MotirClient } from '../mcpClient.js';
+import type { MotirClient, SprintSummary } from '../mcpClient.js';
 
 // `motir ready` / `motir status` / `motir open <key>` — the read surface a user
-// checks before and between dispatches (Story 7.9 · Subtask 7.9.2). Every read
-// rides the existing MCP tools (list_ready / search_work_items / list_sprints):
-// NO new server surface, so the CLI can never disagree with the web app on what
-// "ready" or "in flight" means.
+// checks before and between dispatches (Story 7.9 · Subtask 7.9.2), joined by
+// `motir sprints` / `motir sprint [ref]` (7.9.14). Every read rides the existing
+// MCP tools (list_ready / search_work_items / list_sprints): NO new server
+// surface, so the CLI can never disagree with the web app on what "ready", "in
+// flight", or "in this sprint" means.
 
 const WORK_ITEM_KINDS = new Set(['epic', 'story', 'task', 'bug', 'subtask']);
 
@@ -107,6 +112,78 @@ export async function statusCommand(opts: StatusOptions): Promise<void> {
     return;
   }
   out(renderStatusBlock(pulse));
+}
+
+/** The sprint states `--state` accepts (the `SprintStateDto` union). */
+const SPRINT_STATES = new Set(['planned', 'active', 'complete']);
+
+/** Parse a `--state active` filter into a validated state, or undefined. */
+export function parseSprintState(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const state = raw.trim().toLowerCase();
+  if (state === '') return undefined;
+  if (!SPRINT_STATES.has(state)) {
+    throw new CliError(`Unknown sprint state: ${raw.trim()}.`, {
+      hint: `Valid states: ${[...SPRINT_STATES].join(', ')}.`,
+    });
+  }
+  return state;
+}
+
+export interface SprintsOptions {
+  state?: string;
+  json?: boolean;
+}
+
+/** `motir sprints` — the project's sprints, the drill-down behind `motir
+ *  status`'s one-line active-sprint block. */
+export async function sprintsCommand(opts: SprintsOptions): Promise<void> {
+  const state = parseSprintState(opts.state);
+  const sprints = await withProjectSession(async ({ client, projectKey }) => {
+    const list = await client.listSprints({ projectKey });
+    return state ? list.sprints.filter((s) => s.state === state) : list.sprints;
+  });
+
+  if (opts.json) {
+    // The tool's own rows, verbatim — filtered, never reshaped.
+    json(sprints);
+    return;
+  }
+  out(renderSprintsTable(sprints));
+}
+
+export interface SprintOptions {
+  kinds?: string;
+  json?: boolean;
+}
+
+/**
+ * `motir sprint [ref]` — ONE sprint's work items, defaulting to the active
+ * sprint. `ref` resolves as an id, then a case-insensitive name / name prefix
+ * (`resolveSprintRef`); an ambiguous or unknown ref is an error, never a
+ * silent pick.
+ */
+export async function sprintCommand(ref: string | undefined, opts: SprintOptions): Promise<void> {
+  const kinds = parseKinds(opts.kinds);
+  const result = await withProjectSession(async ({ client, projectKey }) => {
+    const { sprints } = await client.listSprints({ projectKey });
+    // Resolution happens BEFORE the item read, so a bad ref costs one call and
+    // fails with the candidate list rather than an empty table.
+    const sprint: SprintSummary = resolveSprintRef(sprints, ref);
+    const { items, total } = await collectSprintItems(client, projectKey, sprint.id, { kinds });
+    return { sprint, items, total };
+  });
+
+  if (opts.json) {
+    // The sprint row and the item rows exactly as the tools returned them; the
+    // pages are concatenated (a paged read cannot be one payload) and `total`
+    // is the server's own count for the query.
+    json(result);
+    return;
+  }
+  out(renderSprintHeader(result.sprint));
+  out();
+  out(renderSprintItems(result.items, result.total));
 }
 
 /** A work item identifier: a project key, a dash, the number (`PROD-7`). The

@@ -116,6 +116,10 @@ describe('the curated overview', () => {
                                   dependency satisfied).
         status [options]          Show the project pulse: ready / in-flight counts +
                                   the active sprint.
+        sprints [options]         List the project’s sprints: state, item count,
+                                  points, window.
+        sprint [options] [ref]    List ONE sprint’s work items (defaults to the active
+                                  sprint).
         show [options] <key>      Read one work item (e.g. PROD-7): fields, readiness,
                                   children, edges, body.
         open [options] <key>      Open a work item (e.g. PROD-7) in the browser;
@@ -152,6 +156,7 @@ describe('the curated overview', () => {
         $ motir doctor                                     # preflight the setup
         $ motir ready --kinds subtask --assignee me        # what can I pick up?
         $ motir status --json                              # the project pulse
+        $ motir sprint                                     # what’s in the active sprint
         $ motir show MOTIR-7                               # the item, its edges, its body
         $ motir open MOTIR-7 --print                       # the item’s URL
         $ motir auto --agent claude --max 5                # drain 5 items unattended
@@ -208,7 +213,14 @@ describe('group membership', () => {
       HELP_GROUP.topics,
     ]);
     expect(groups.get(HELP_GROUP.setup)).toEqual(['auth', 'link', 'doctor']);
-    expect(groups.get(HELP_GROUP.read)).toEqual(['ready', 'status', 'show', 'open']);
+    expect(groups.get(HELP_GROUP.read)).toEqual([
+      'ready',
+      'status',
+      'sprints',
+      'sprint',
+      'show',
+      'open',
+    ]);
     expect(groups.get(HELP_GROUP.workLoop)).toEqual([
       'next',
       'run',

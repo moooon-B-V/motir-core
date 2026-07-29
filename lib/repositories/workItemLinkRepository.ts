@@ -237,12 +237,28 @@ export const workItemLinkRepository = {
    * sprint. The blocker's `projectId` rides along because a block can be
    * cross-project, so "done" is judged against the blocker's OWN project's
    * terminal set. Read-only → `db` singleton.
+   *
+   * `blockerTitle` (MOTIR-1842) rides along so a caller can NAME the far end
+   * without a second read — the edge PROJECTION the MCP list reads attach to
+   * every row (`{ key, title, status }`). Additive: the readiness / sprint
+   * callers select what they need and ignore it.
+   *
+   * `workspaceId`, when supplied, scopes the read to that tenant via the link
+   * row's own indexed `workspaceId` column (MOTIR-1842). The DB triggers already
+   * keep a link's two endpoints in ONE workspace, so this is defence in depth
+   * rather than a correction — but it makes the tenancy guarantee local to the
+   * query instead of resting on a trigger. Optional so the pre-existing
+   * readiness / sprint callers (already workspace-gated upstream) are unchanged.
    */
-  async findBlockerEdgesForItems(fromIds: string[]): Promise<
+  async findBlockerEdgesForItems(
+    fromIds: string[],
+    workspaceId?: string,
+  ): Promise<
     Array<{
       fromId: string;
       blockerId: string;
       blockerKey: string;
+      blockerTitle: string;
       blockerStatus: string;
       blockerSprintId: string | null;
       blockerProjectId: string;
@@ -250,11 +266,23 @@ export const workItemLinkRepository = {
   > {
     if (fromIds.length === 0) return [];
     const rows = await db.workItemLink.findMany({
-      where: { fromId: { in: fromIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
+      where: {
+        fromId: { in: fromIds },
+        kind: 'is_blocked_by',
+        toItem: { archivedAt: null },
+        ...(workspaceId ? { workspaceId } : {}),
+      },
       select: {
         fromId: true,
         toItem: {
-          select: { id: true, identifier: true, status: true, sprintId: true, projectId: true },
+          select: {
+            id: true,
+            identifier: true,
+            title: true,
+            status: true,
+            sprintId: true,
+            projectId: true,
+          },
         },
       },
     });
@@ -262,9 +290,75 @@ export const workItemLinkRepository = {
       fromId: r.fromId,
       blockerId: r.toItem.id,
       blockerKey: r.toItem.identifier,
+      blockerTitle: r.toItem.title,
       blockerStatus: r.toItem.status,
       blockerSprintId: r.toItem.sprintId,
       blockerProjectId: r.toItem.projectId,
+    }));
+  },
+
+  /**
+   * The REVERSE-direction sibling of {@link findBlockerEdgesForItems} (MOTIR-1842):
+   * for a set of items, the `is_blocked_by` edges that point AT them — i.e. what
+   * each item BLOCKS. Same shape, mirrored: keyed by `toId` (the item in the
+   * page, the blocker end) and carrying the BLOCKED item's `id` / `identifier` /
+   * `title` / `status` / `sprintId` / `projectId`.
+   *
+   * Together the two reads are the whole per-row dependency projection the MCP
+   * list tools attach (`list_ready` / `search_work_items`): TWO queries for a
+   * page of any size, never one per row.
+   *
+   * ONE query. Empty `toIds` short-circuits to `[]` WITHOUT a query. ARCHIVED
+   * items on the far end are EXCLUDED (`fromItem.archivedAt IS NULL`) — the
+   * mirror of the MOTIR-1328 rule its sibling applies to `toItem`: a stale edge
+   * from a soft-removed item must not show up as something this item blocks.
+   * `workspaceId` scopes the read to one tenant exactly as the sibling does.
+   * Read-only → `db` singleton.
+   */
+  async findBlockedEdgesForItems(
+    toIds: string[],
+    workspaceId?: string,
+  ): Promise<
+    Array<{
+      toId: string;
+      blockedId: string;
+      blockedKey: string;
+      blockedTitle: string;
+      blockedStatus: string;
+      blockedSprintId: string | null;
+      blockedProjectId: string;
+    }>
+  > {
+    if (toIds.length === 0) return [];
+    const rows = await db.workItemLink.findMany({
+      where: {
+        toId: { in: toIds },
+        kind: 'is_blocked_by',
+        fromItem: { archivedAt: null },
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+      select: {
+        toId: true,
+        fromItem: {
+          select: {
+            id: true,
+            identifier: true,
+            title: true,
+            status: true,
+            sprintId: true,
+            projectId: true,
+          },
+        },
+      },
+    });
+    return rows.map((r) => ({
+      toId: r.toId,
+      blockedId: r.fromItem.id,
+      blockedKey: r.fromItem.identifier,
+      blockedTitle: r.fromItem.title,
+      blockedStatus: r.fromItem.status,
+      blockedSprintId: r.fromItem.sprintId,
+      blockedProjectId: r.fromItem.projectId,
     }));
   },
 

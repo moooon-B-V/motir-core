@@ -42,8 +42,12 @@ export interface ReadyPage {
   nextCursor: string | null;
 }
 
-/** A sprint row (the `list_sprints` `SprintDto`, the fields `motir status`
- * renders). */
+/** A sprint row (the `list_sprints` `SprintDto`, the fields `motir status` and
+ * `motir sprints` render). `sequence` is the sprint's authored order — the
+ * table's sort key. `committedPoints` / `committedIssueCount` are the
+ * scope-lock baseline stamped at activation (Story 4.4.2), so both are `null`
+ * on a sprint that was never started, and `committedPoints` is `null` on a
+ * started-but-wholly-unestimated one. */
 export interface SprintSummary {
   id: string;
   name: string;
@@ -51,7 +55,10 @@ export interface SprintSummary {
   goal: string | null;
   startDate: string | null;
   endDate: string | null;
+  sequence: number;
   issueCount: number;
+  committedPoints: number | null;
+  committedIssueCount: number | null;
 }
 
 export interface SprintList {

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseItemKey, parseKinds, showCommand } from '../src/commands/read.js';
+import { parseItemKey, parseKinds, parseSprintState, showCommand } from '../src/commands/read.js';
 import { openUrl } from '../src/browser.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
@@ -22,6 +22,26 @@ describe('parseKinds', () => {
       parseKinds('widget');
     } catch (err) {
       expect((err as CliError).hint).toMatch(/epic, story, task, bug, subtask/);
+    }
+  });
+});
+
+describe('parseSprintState', () => {
+  it('returns undefined for an absent / empty filter (every state)', () => {
+    expect(parseSprintState(undefined)).toBeUndefined();
+    expect(parseSprintState('   ')).toBeUndefined();
+  });
+  it('lower-cases, trims, and accepts the three sprint states', () => {
+    expect(parseSprintState(' Active ')).toBe('active');
+    expect(parseSprintState('PLANNED')).toBe('planned');
+    expect(parseSprintState('complete')).toBe('complete');
+  });
+  it('throws a guiding CliError on an unknown state', () => {
+    expect(() => parseSprintState('closed')).toThrow(CliError);
+    try {
+      parseSprintState('closed');
+    } catch (err) {
+      expect((err as CliError).hint).toMatch(/planned, active, complete/);
     }
   });
 });

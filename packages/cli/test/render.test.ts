@@ -16,13 +16,20 @@ import {
   renderReadinessLine,
   renderReadyTable,
   renderRelationTable,
+  renderSprintHeader,
+  renderSprintItems,
+  renderSprintsTable,
   renderStatusBlock,
   renderWorkItemDetail,
+  resolveSprintRef,
+  sprintFilter,
   truncate,
   type StatusPulse,
 } from '../src/render.js';
+import { CliError } from '../src/errors.js';
 import type {
   ReadyItemSummary,
+  SearchItemSummary,
   SprintSummary,
   WorkItemDetail,
   WorkItemSummary,
@@ -122,7 +129,10 @@ const sprint = (over: Partial<SprintSummary>): SprintSummary => ({
   goal: 'Ship the CLI',
   startDate: '2026-06-10',
   endDate: '2026-06-24',
+  sequence: 3,
   issueCount: 8,
+  committedPoints: 21,
+  committedIssueCount: 8,
   ...over,
 });
 
@@ -196,7 +206,10 @@ describe('table + status formatting edges', () => {
       goal: null,
       startDate: null,
       endDate: null,
+      sequence: 1,
       issueCount: 0,
+      committedPoints: null,
+      committedIssueCount: null,
     };
     expect(formatSprintWindow(sprint)).toBe('');
     expect(formatSprintWindow({ ...sprint, startDate: '2026-07-28' })).toBe('2026-07-28 → —');
@@ -224,7 +237,10 @@ describe('table + status formatting edges', () => {
         goal: 'Ship the CLI',
         startDate: '2026-07-28',
         endDate: null,
+        sequence: 2,
         issueCount: 1,
+        committedPoints: null,
+        committedIssueCount: 1,
       },
     });
     expect(active).toContain('[active, 1 issue]');
@@ -514,6 +530,202 @@ describe('renderWorkItemDetail', () => {
     );
 
     expect(block).toContain('READINESS\nblocked by PROD-2');
+  });
+});
+
+// ── the sprint reads (7.9.14 · MOTIR-1844) ──────────────────────────────────
+
+describe('sprintFilter', () => {
+  it('is a v1 envelope selecting ONE sprint by id', () => {
+    expect(sprintFilter('s1')).toEqual({
+      version: FILTER_VERSION,
+      combinator: 'and',
+      conditions: [{ field: 'sprint', operator: 'is_any_of', value: ['s1'] }],
+    });
+  });
+  it('ANDs a kind condition when kinds are given, and ignores an empty list', () => {
+    expect(sprintFilter('s1', ['subtask', 'bug']).conditions).toEqual([
+      { field: 'sprint', operator: 'is_any_of', value: ['s1'] },
+      { field: 'kind', operator: 'is_any_of', value: ['subtask', 'bug'] },
+    ]);
+    expect(sprintFilter('s1', []).conditions).toHaveLength(1);
+  });
+});
+
+describe('renderSprintsTable', () => {
+  it('names the empty case instead of drawing an empty table', () => {
+    expect(renderSprintsTable([])).toBe('No sprints.');
+  });
+
+  it('orders by SEQUENCE (not wire order) and marks the active row with *', () => {
+    const out = renderSprintsTable([
+      sprint({ id: 's3', name: 'Sprint 3', state: 'planned', sequence: 3 }),
+      sprint({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
+      sprint({ id: 's2', name: 'Journey D', state: 'active', sequence: 2 }),
+    ]);
+    const rows = out.split('\n').slice(3); // count line, header, underline
+
+    expect(out).toContain('3 sprints:');
+    expect(rows[0]).toContain('Sprint 1');
+    expect(rows[1]).toContain('Journey D');
+    expect(rows[2]).toContain('Sprint 3');
+    // Exactly one marked row — the active one.
+    expect(rows.filter((r) => r.startsWith('*'))).toEqual([rows[1]]);
+  });
+
+  it('renders an unstarted sprint’s points and open window as em-dashes', () => {
+    const out = renderSprintsTable([
+      sprint({
+        state: 'planned',
+        committedPoints: null,
+        startDate: null,
+        endDate: null,
+        issueCount: 0,
+      }),
+    ]);
+    expect(out).toContain('1 sprint:');
+    expect(out.split('\n')[3]).toMatch(/planned\s+Sprint 3\s+0\s+—\s+—/);
+  });
+
+  it('truncates a long name without breaking the columns', () => {
+    const out = renderSprintsTable([sprint({ name: 'S'.repeat(80) })], 20);
+    const [, , underline, row] = out.split('\n');
+
+    expect(row).toContain('…');
+    // The NAME column is capped at the truncation width, so ITEMS / POINTS /
+    // WINDOW stay where the header puts them instead of being shoved off-screen.
+    expect(underline?.split('  ')[2]).toHaveLength(20);
+  });
+});
+
+describe('renderSprintHeader', () => {
+  it('carries name, state, window, goal and the activation baseline', () => {
+    const out = renderSprintHeader(sprint({ name: 'Journey D' }));
+    expect(out.split('\n')).toEqual([
+      'Journey D  [active]',
+      '2026-06-10 → 2026-06-24',
+      'goal: Ship the CLI',
+      'committed: 8 issues · 21 points',
+    ]);
+  });
+
+  it('omits an absent goal, an open window, and an unstarted sprint’s baseline', () => {
+    const out = renderSprintHeader(
+      sprint({
+        name: 'Sprint 9',
+        state: 'planned',
+        goal: null,
+        startDate: null,
+        endDate: null,
+        committedPoints: null,
+        committedIssueCount: null,
+      }),
+    );
+    expect(out).toBe('Sprint 9  [planned]');
+  });
+
+  it('em-dashes a started-but-unestimated sprint’s points rather than dropping the line', () => {
+    const out = renderSprintHeader(sprint({ committedPoints: null, committedIssueCount: 8 }));
+    expect(out).toContain('committed: 8 issues · — points');
+  });
+});
+
+const searchItem = (over: Partial<SearchItemSummary>): SearchItemSummary => ({
+  identifier: 'PROD-7',
+  kind: 'subtask',
+  title: 'Read commands',
+  status: 'in_progress',
+  priority: 'high',
+  ...over,
+});
+
+describe('renderSprintItems', () => {
+  it('names an empty sprint instead of drawing an empty table', () => {
+    expect(renderSprintItems([], 0)).toBe('No work items in this sprint.');
+  });
+
+  it('renders key / kind / status / priority / title with a count that matches the total', () => {
+    const out = renderSprintItems([searchItem({}), searchItem({ identifier: 'PROD-9' })], 2);
+    expect(out).toContain('2 work items:');
+    expect(out.split('\n')[1]).toBe('KEY     KIND     STATUS       PRIORITY  TITLE');
+    expect(out).toContain('PROD-9');
+  });
+
+  it('singularizes a one-item sprint', () => {
+    expect(renderSprintItems([searchItem({})], 1)).toContain('1 work item:');
+  });
+
+  it('SAYS SO when fewer rows were collected than the server counted', () => {
+    // The silent-truncation failure, made visible: a short table can never read
+    // as a complete one.
+    const out = renderSprintItems([searchItem({})], 120);
+    expect(out).toContain('1 of 120 work items (the rest could not be collected):');
+  });
+
+  it('truncates a long title without breaking the alignment', () => {
+    const out = renderSprintItems([searchItem({ title: 'x'.repeat(200) })], 1, 30);
+    const [, header, , row] = out.split('\n');
+    expect(row).toContain('…');
+    expect(row?.indexOf('x')).toBe(header?.indexOf('TITLE'));
+  });
+});
+
+describe('resolveSprintRef', () => {
+  const sprints = [
+    sprint({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
+    sprint({ id: 's2', name: 'Journey D', state: 'active', sequence: 2 }),
+    sprint({ id: 's10', name: 'Sprint 10', state: 'planned', sequence: 3 }),
+  ];
+
+  it('defaults to the ACTIVE sprint when no ref is given', () => {
+    expect(resolveSprintRef(sprints).id).toBe('s2');
+    expect(resolveSprintRef(sprints, '   ').id).toBe('s2');
+  });
+
+  it('errors with a hint when nothing is active and no ref is given', () => {
+    const planned = sprints.map((s) => ({ ...s, state: 'planned' as const }));
+    expect(() => resolveSprintRef(planned)).toThrow(CliError);
+    try {
+      resolveSprintRef(planned);
+    } catch (err) {
+      expect((err as CliError).message).toContain('No sprint is active');
+      expect((err as CliError).hint).toContain('motir sprints');
+    }
+    expect(() => resolveSprintRef([])).toThrow(/No sprint is active/);
+  });
+
+  it('resolves an id, then an exact name case-insensitively', () => {
+    expect(resolveSprintRef(sprints, 's10').name).toBe('Sprint 10');
+    expect(resolveSprintRef(sprints, 'journey d').id).toBe('s2');
+    expect(resolveSprintRef(sprints, '  JOURNEY D  ').id).toBe('s2');
+  });
+
+  it('resolves an unambiguous name PREFIX', () => {
+    expect(resolveSprintRef(sprints, 'jour').id).toBe('s2');
+    expect(resolveSprintRef(sprints, 'Sprint 10').id).toBe('s10');
+  });
+
+  it('prefers an EXACT name over a prefix, so "Sprint 1" is not ambiguous with "Sprint 10"', () => {
+    expect(resolveSprintRef(sprints, 'Sprint 1').id).toBe('s1');
+  });
+
+  it('never silently picks: an ambiguous prefix errors WITH the candidates', () => {
+    expect(() => resolveSprintRef(sprints, 'Sprint')).toThrow(CliError);
+    try {
+      resolveSprintRef(sprints, 'Sprint');
+    } catch (err) {
+      expect((err as CliError).message).toContain('matches 2 sprints');
+      expect((err as CliError).hint).toContain('Sprint 1, Sprint 10');
+    }
+  });
+
+  it('errors with a hint on an unknown ref', () => {
+    expect(() => resolveSprintRef(sprints, 'nope')).toThrow(/No sprint matches "nope"/);
+    try {
+      resolveSprintRef(sprints, 'nope');
+    } catch (err) {
+      expect((err as CliError).hint).toContain('motir sprints');
+    }
   });
 });
 
