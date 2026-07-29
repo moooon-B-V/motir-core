@@ -116,8 +116,9 @@ export async function startMcpHttpServer(): Promise<McpTestServer> {
       } catch (err) {
         // A handler crash must surface as a 500 the CLI reports, never as an
         // unhandled rejection that takes the whole worker down mid-suite.
+        console.error('MCP test server handler error:', err);
         if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        res.end(JSON.stringify({ error: 'Internal server error' }));
       }
     })();
   });
