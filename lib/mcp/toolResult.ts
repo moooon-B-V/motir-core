@@ -46,6 +46,9 @@ import {
   SprintNotStartableError,
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
+import { NoPlanForJobError, PlanNotFoundError } from '@/lib/plans/errors';
+import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
+import { MotirAiError } from '@/lib/ai/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
@@ -215,6 +218,21 @@ export function toToolError(err: unknown): CallToolResult {
     // `search_work_items` (7.8.6): the registry's typed 422 — an unknown
     // field/operator id or a value that fails its (field, operator) arity —
     // surfaced as a clean tool error, the MCP analogue of the route's 422.
+    return toolError(err.code, err.message);
+  }
+  // AI plan-expansion tools (MOTIR-1825). `InvalidTargetError` is the leaf /
+  // wrong-project rejection `submitExpand` already throws (a subtask cannot be
+  // expanded); the plan-lookup misses keep the 404-not-403 contract. Every
+  // motir-ai failure — out of credits, unconfigured, unreachable, a 4xx from the
+  // service — is a `MotirAiError` subclass carrying its own code, so the agent
+  // reads "OUT_OF_CREDITS" or "AI_UNAVAILABLE" and self-corrects (or gives up
+  // honestly) instead of seeing an opaque JSON-RPC internal error.
+  if (
+    err instanceof InvalidTargetError ||
+    err instanceof PlanNotFoundError ||
+    err instanceof NoPlanForJobError ||
+    err instanceof MotirAiError
+  ) {
     return toolError(err.code, err.message);
   }
   if (err instanceof McpMissingContextError) {
