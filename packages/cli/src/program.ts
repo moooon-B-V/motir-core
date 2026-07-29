@@ -6,6 +6,7 @@ import { openCommand, readyCommand, statusCommand } from './commands/read.js';
 import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
 import { autoCommand } from './commands/auto.js';
+import { batchCommand } from './commands/batch.js';
 import { HELP_GROUP, applyHelpConfiguration, registerHelpSurface } from './help.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
@@ -143,6 +144,18 @@ export function buildProgram(): Command {
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `autoCommand`'s injectable-deps parameter.
     .action((opts) => autoCommand(opts));
+  program
+    .command('batch')
+    .description('Implement a FROZEN snapshot of the ready set: one pull request per item.')
+    .helpGroup(HELP_GROUP.workLoop)
+    .option('--agent <cmd>', 'Run THIS agent command on every prompt (overrides MOTIR_AGENT).')
+    .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
+    .option('--max <n>', 'Stop after dispatching n work items.')
+    .option('--keep-going', 'Continue past a failed agent instead of halting on the first one.')
+    .option('--reset', 'Clear this project’s session exclude list before snapshotting.')
+    // Arity-1 wrapper: commander appends the Command object, which must not land
+    // in `batchCommand`'s injectable-deps parameter.
+    .action((opts) => batchCommand(opts));
   program
     .command('done [key]')
     .description('Close out a merged item — or a whole merged session branch.')

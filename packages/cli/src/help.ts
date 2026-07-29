@@ -158,6 +158,7 @@ const EXAMPLES = [
   '  $ motir status --json                              # the project pulse',
   '  $ motir open MOTIR-7 --print                       # the item’s URL',
   '  $ motir auto --agent claude --max 5                # drain 5 items unattended',
+  '  $ motir batch --agent claude                      # snapshot now, one PR each',
 ].join('\n');
 
 const LEARN_MORE = [
