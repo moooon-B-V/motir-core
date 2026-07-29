@@ -151,6 +151,15 @@ export function WorkItemRoadmap({
         searchable
         fullScreenable
         locatable
+        // AUTO-DRILL (MOTIR-1807): a level that resolves to exactly ONE drillable node
+        // offers no choice, so the canvas descends into it and the roadmap opens on the
+        // WORK rather than on one card. Opted in for BOTH scopes, not sprint-only — the
+        // sprint read (MOTIR-1381) creates the degenerate root most often, but a
+        // single-epic project has the same shape in project scope, and the rung-1
+        // precedent (VS Code's compact folders) compacts every single-child chain rather
+        // than one special case. This adapter is the only opt-in: the other four
+        // consumers of the shared canvas keep the `false` default.
+        autoDescendSingleParent
         rootLabel={t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? t('ariaWorkItem')}
         warningLegend={

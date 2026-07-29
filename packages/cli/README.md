@@ -100,6 +100,44 @@ never observed an agent finish) needs `motir done --via in_review <key>`; an
 illegal flip surfaces the server's own allowed-targets error verbatim. A merged
 **session** PR closes out in bulk with `motir done --session <branch>`.
 
+## Help + topics
+
+`motir`, `motir help` and `motir --help` all print the same curated overview on
+**stdout** and exit **0** — the front door a newcomer reads top to bottom:
+
+```
+Usage: motir [options] [command]
+
+SETUP COMMANDS:      auth · link · doctor
+READ COMMANDS:       ready · status · open
+WORK LOOP COMMANDS:  next · run · done
+HELP TOPICS:         help · environment · files
+FLAGS:               -v, --version · -h, --help
+EXAMPLES:            …
+LEARN MORE:          …
+```
+
+Commands are grouped with commander's native `.helpGroup()` (see `src/help.ts`);
+group ORDER is the registration order in `src/program.ts`. **A command
+registered without an explicit group falls into `ADDITIONAL COMMANDS`**, so a
+later subtask adds a command — and, with one `.helpGroup(...)` line, files it
+under `SETUP` / `READ` / `WORK LOOP COMMANDS` — without ever rewriting the help
+surface. (7.9.3 was the first to exercise that: `next` / `run` / `done` joined
+the reserved work-loop group with one line each, and `auto` / `batch` will do
+the same.)
+
+Two **topics** answer what a command list cannot:
+
+```sh
+motir help environment   # the 4 env vars Motir reads, and what each overrides
+motir help files         # ~/.config/motir/config.json + .motir.json
+```
+
+Per-command help is unchanged (`motir help <command>`, `motir <command> --help`,
+nested: `motir help auth login`, `motir link add --help`). An unknown topic
+fails like every other CLI error — one line plus a hint on **stderr**, exit
+**1**, no stack trace — so `motir help | head` stays clean for piping.
+
 ## `motir doctor` — the BYOK preflight
 
 Motir is **BYOK**: you bring your own coding agent and your own model key. So

@@ -5,11 +5,18 @@ import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.
 import { openCommand, readyCommand, statusCommand } from './commands/read.js';
 import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
+import { HELP_GROUP, applyHelpConfiguration, registerHelpSurface } from './help.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
 // (`ready` / `status` / `open`) are 7.9.2, single dispatch (`next` / `run` /
 // `done`) is 7.9.3, and the loop (`auto` / `batch`) is 7.9.4+ — they register
 // onto this same program as they land.
+//
+// Each command carries a `.helpGroup(...)` so it renders under a heading in the
+// curated overview (help.ts). REGISTRATION ORDER IS THE RENDER ORDER — commander
+// builds the group map in the order groups first appear in `program.commands` —
+// so a new command joins its group by being registered next to its peers, or
+// falls into ADDITIONAL COMMANDS if it declares none.
 export function buildProgram(): Command {
   const program = new Command();
   program
@@ -19,8 +26,15 @@ export function buildProgram(): Command {
     )
     .version(CLI_VERSION, '-v, --version', 'Print the CLI version.');
 
+  // Before ANY command is registered: commander applies the default command
+  // group at registration time.
+  applyHelpConfiguration(program);
+
   // ── auth ──────────────────────────────────────────────────────────────────
-  const auth = program.command('auth').description('Authenticate to a Motir server with a PAT.');
+  const auth = program
+    .command('auth')
+    .description('Authenticate to a Motir server with a PAT.')
+    .helpGroup(HELP_GROUP.setup);
   auth
     .command('login')
     .description('Validate and store a personal access token for a server.')
@@ -42,6 +56,7 @@ export function buildProgram(): Command {
   const link = program
     .command('link')
     .description('Bind this workspace-root folder to a server + workspace + project.')
+    .helpGroup(HELP_GROUP.setup)
     .option('--server <url>', 'Server base URL (defaults to the existing link / single server).')
     .option('--workspace <slug>', 'Workspace slug (defaults to the token’s active workspace).')
     .option('--project <key>', 'Project key, e.g. PROD.')
@@ -63,6 +78,7 @@ export function buildProgram(): Command {
   program
     .command('ready')
     .description('List the linked project’s ready set (every dependency satisfied).')
+    .helpGroup(HELP_GROUP.read)
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
     .option('--assignee <id>', 'Filter by assignee: a user id, "me", or "unassigned".')
     .option('--json', 'Emit the ready items as JSON.')
@@ -70,6 +86,7 @@ export function buildProgram(): Command {
   program
     .command('status')
     .description('Show the project pulse: ready / in-flight counts + the active sprint.')
+    .helpGroup(HELP_GROUP.read)
     .option('--json', 'Emit the pulse as JSON.')
     .action(statusCommand);
   // ── doctor ────────────────────────────────────────────────────────────────
@@ -78,6 +95,7 @@ export function buildProgram(): Command {
     .description(
       'Preflight your BYOK setup: auth, project link, agent binary, credential presence.',
     )
+    .helpGroup(HELP_GROUP.setup)
     .option('--agent <cmd>', 'Check THIS agent command instead of the configured one.')
     .option('--json', 'Emit the check results as JSON.')
     // Arity-1 wrapper: commander passes the Command as a second argument, which
@@ -87,15 +105,18 @@ export function buildProgram(): Command {
   program
     .command('open <key>')
     .description('Open a work item (e.g. PROD-7) in the browser; prints the URL.')
+    .helpGroup(HELP_GROUP.read)
     .option('--print', 'Print the URL only; do not launch a browser.')
     .action(openCommand);
 
-  // ── dispatch ───────────────────────────────────────────────────────────────
+  // ── dispatch (the work loop) ───────────────────────────────────────────────
   // The prompt each of these delivers is generated SERVER-SIDE (dispatch_prompt)
-  // and printed verbatim — the CLI never assembles prompt text.
+  // and printed verbatim — the CLI never assembles prompt text. These are the
+  // first members of the reserved WORK LOOP group (`auto` / `batch` join them).
   program
     .command('next')
     .description('Dispatch the next ready work item: claim it and deliver its prompt.')
+    .helpGroup(HELP_GROUP.workLoop)
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
     .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
@@ -104,6 +125,7 @@ export function buildProgram(): Command {
   program
     .command('run <key>')
     .description('Dispatch a SPECIFIC work item (e.g. PROD-7), ready or forced.')
+    .helpGroup(HELP_GROUP.workLoop)
     .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
     .option('--force', 'Dispatch even though the item is not ready (dependencies unmet).')
@@ -111,11 +133,15 @@ export function buildProgram(): Command {
   program
     .command('done [key]')
     .description('Close out a merged item — or a whole merged session branch.')
+    .helpGroup(HELP_GROUP.workLoop)
     .option('--session <branch>', 'Bulk close-out: flip every item on this session branch.')
     .option('--via <status>', 'Move through this status first (e.g. in_review).')
     // Arity-2 wrapper: commander appends the Command object, which must not
     // land in `doneCommand`'s options parameter when `[key]` is omitted.
     .action((key: string | undefined, opts) => doneCommand(key, opts));
+
+  // After the real commands, so HELP TOPICS renders below them.
+  registerHelpSurface(program);
 
   return program;
 }
