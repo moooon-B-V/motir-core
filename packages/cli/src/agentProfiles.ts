@@ -6,42 +6,78 @@ import { basename, join } from 'node:path';
 // source), and WHERE the agent keeps its own credential (so `motir doctor` can
 // assert the credential is PRESENT without ever reading it).
 //
-// The table mirrors the sandbox profile matrix (7.9.7b). Tier-1 profiles are
-// pinned by that matrix — install source AND credential location. Tier-2
-// profiles carry their install source only: their credential location is
-// deliberately left UNKNOWN rather than guessed, because an unverified path
-// would make `doctor` FAIL a correctly-configured machine — strictly worse than
-// reporting "verify this one yourself". (Same reason 7.9.7b treats the agents'
-// auto-approve flags as verify-at-build rather than asserted-from-memory.)
+// `sandbox/README.md`'s profile matrix is the VERIFIED SOURCE for both columns
+// this table restates — the binary each agent installs as, and where that agent
+// keeps its credential. Every value here was re-checked against that matrix (and
+// against `sandbox/install-agent.sh`, which does the installing);
+// `test/sandbox.test.ts` pins the two together so they cannot drift apart again.
+// A profile whose credential the matrix does not pin is left UNKNOWN rather than
+// guessed, because an unverified path would make `doctor` FAIL a correctly-
+// configured machine. (Same reason 7.9.7b treats the agents' auto-approve flags
+// as verify-at-build rather than asserted-from-memory.)
 //
-// `binary` is a LOOKUP KEY, not a claim: the binary actually probed always comes
-// from the user's own agent command (`--agent` / `MOTIR_AGENT` / config), and a
-// name that matches nothing here simply falls through to the tier-3 generic
-// path. Motir is agent-agnostic — an unlisted agent is supported, just not
-// enriched with a remediation hint.
+// The matrix pins a MOUNT, which is not always proof of AUTH — the two diverge
+// wherever the mounted location also exists on a machine that never signed in.
+// Where they diverge the profile tests the narrower thing (opencode's `auth.json`
+// rather than its config dir) or declines to test a path at all (cursor, whose
+// matrix path is also the install tree), with the reason written beside the
+// entry. **A false PASS is worse than a false FAIL**: it tells the user their
+// unattended run is ready when it will stop at a sign-in prompt.
+//
+// `binaries` is a LOOKUP KEY LIST, not a claim: the binary actually probed always
+// comes from the user's own agent command (`--agent` / `MOTIR_AGENT` / config),
+// and a name that matches nothing here simply falls through to the tier-3
+// generic path. Motir is agent-agnostic — an unlisted agent is supported, just
+// not enriched with a remediation hint.
+
+/**
+ * The directories a credential path is resolved against. Passed as one object
+ * so a profile names the dir it means (`xdgDataHome`) instead of depending on
+ * argument order — the shape the opencode entry got wrong when the data dir and
+ * the config dir were conflated.
+ */
+export interface CredentialDirs {
+  /** The user's home directory. */
+  home: string;
+  /** `XDG_CONFIG_HOME`, or `~/.config`. Configuration — not always credentials. */
+  xdgConfigHome: string;
+  /** `XDG_DATA_HOME`, or `~/.local/share`. Where opencode + cursor keep auth. */
+  xdgDataHome: string;
+}
 
 export interface AgentProfile {
-  /** Profile id — also the command name a user would type. */
+  /** Profile id — also the sandbox `AGENT=` selector and the docs' name for it. */
   id: string;
   /** Human label used in report lines. */
   label: string;
-  /** 1 = pinned by the sandbox matrix; 2 = also-supported, credential unpinned. */
+  /** 1 = pinned by the sandbox matrix; 2 = also-supported. */
   tier: 1 | 2;
-  /** The binary name this profile is matched by. */
-  binary: string;
+  /**
+   * Every binary name this profile is matched by, canonical one FIRST. A list
+   * rather than a single name because an agent's own installer can link several
+   * (Cursor links both `agent` and `cursor-agent`), and because a user may have
+   * aliased the profile id — matching only one name silently drops such a user
+   * onto the tier-3 generic path, with no remediation hint.
+   */
+  binaries: readonly string[];
   /** Where the agent's own CLI comes from (the missing-binary remediation). */
   installSource: string;
   /**
-   * Credential directories to test for PRESENCE. Resolved from the home +
-   * XDG config dirs so the check honours a relocated config home.
+   * Credential locations to test for PRESENCE — a directory the agent creates
+   * on sign-in, or the credential FILE itself where the directory alone would
+   * not prove authentication.
    */
-  credentialPaths: (home: string, xdgConfigHome: string) => string[];
+  credentialPaths: (dirs: CredentialDirs) => string[];
   /**
    * Env vars whose PRESENCE also satisfies the credential check. Only ever
    * passed to a presence predicate — the VALUE is never read (see doctor.ts).
    */
   credentialEnv: string[];
-  /** False when the matrix does not pin this agent's credential location. */
+  /**
+   * False when this profile has nowhere it can honestly look — no pinned path
+   * and no env var. It is NOT "the matrix has no row": a matrix mount that
+   * proves installation rather than authentication buys nothing.
+   */
   credentialKnown: boolean;
   /** How the user provides the credential (the missing-credential remediation). */
   credentialHint: string;
@@ -60,18 +96,18 @@ export interface AgentProfile {
 }
 
 /**
- * Tier-1: the four profiles the sandbox matrix pins (install source AND
- * credential mount). Tier-2: also-supported agents whose credential location
- * the matrix does not pin.
+ * Tier-1: the four profiles the sandbox matrix makes first-class. Tier-2:
+ * also-supported agents. Every `binaries` and `credentialPaths` value below is
+ * the sandbox matrix's, narrowed only where a mount is not proof of auth.
  */
 export const AGENT_PROFILES: readonly AgentProfile[] = [
   {
     id: 'claude',
     label: 'Claude Code',
     tier: 1,
-    binary: 'claude',
+    binaries: ['claude'],
     installSource: 'npm install -g @anthropic-ai/claude-code',
-    credentialPaths: (home) => [join(home, '.claude')],
+    credentialPaths: ({ home }) => [join(home, '.claude')],
     credentialEnv: ['ANTHROPIC_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `claude` once to sign in, or set ANTHROPIC_API_KEY.',
@@ -81,9 +117,9 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     id: 'codex',
     label: 'Codex CLI',
     tier: 1,
-    binary: 'codex',
+    binaries: ['codex'],
     installSource: 'npm install -g @openai/codex',
-    credentialPaths: (home) => [join(home, '.codex')],
+    credentialPaths: ({ home }) => [join(home, '.codex')],
     credentialEnv: ['OPENAI_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `codex` once to sign in, or set OPENAI_API_KEY.',
@@ -93,74 +129,96 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     id: 'opencode',
     label: 'OpenCode',
     tier: 1,
-    binary: 'opencode',
+    binaries: ['opencode'],
     installSource: 'npm, or the OpenCode install script (opencode.ai)',
-    credentialPaths: (_home, xdgConfigHome) => [join(xdgConfigHome, 'opencode')],
+    // OpenCode SPLITS the two: `~/.config/opencode` holds configuration, while
+    // the credential is `auth.json` under the XDG DATA home — which is why the
+    // sandbox mounts both dirs. Testing the config dir passed on any machine
+    // that had ever run opencode, signed in or not; the check is the auth FILE.
+    credentialPaths: ({ xdgDataHome }) => [join(xdgDataHome, 'opencode', 'auth.json')],
     credentialEnv: [],
     credentialKnown: true,
-    credentialHint: 'Sign in with the OpenCode CLI so it writes its config dir.',
+    credentialHint: 'Run `opencode auth login` to sign in — it writes auth.json.',
     codegraphTarget: 'opencode',
   },
   {
     id: 'kimi',
     label: 'Kimi Code CLI',
     tier: 1,
-    binary: 'kimi',
-    installSource: 'npm (MoonshotAI/kimi-code) — needs Node ≥ 24.15',
-    // The matrix names "the Kimi config dir" without pinning the path; we do
-    // not guess one (a wrong path would FAIL a working setup).
-    credentialPaths: () => [],
+    binaries: ['kimi'],
+    installSource: 'npm (@moonshot-ai/kimi-code) — needs Node ≥ 22.19',
+    credentialPaths: ({ home }) => [join(home, '.kimi-code')],
     credentialEnv: [],
-    credentialKnown: false,
-    credentialHint: 'Sign in with the Kimi Code CLI (see its docs for the config dir).',
+    credentialKnown: true,
+    credentialHint: 'Run `kimi` once to sign in — it writes ~/.kimi-code.',
     codegraphTarget: null,
   },
   {
     id: 'antigravity',
     label: 'Antigravity CLI',
     tier: 2,
-    binary: 'antigravity',
+    // The installer links `agy`, not `antigravity`; the profile id is kept as a
+    // tolerated alias for anyone who aliased it that way.
+    binaries: ['agy', 'antigravity'],
     installSource: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    // `agy` keeps its token in the OS KEYRING, with no documented portable
+    // file — the one profile with genuinely nowhere to look (the sandbox
+    // mounts no credential for it either).
     credentialPaths: () => [],
     credentialEnv: [],
     credentialKnown: false,
-    credentialHint: 'Sign in with the Antigravity CLI (see its docs for the credential path).',
+    credentialHint: 'Sign in with `agy` (its token lives in the OS keyring, not a file).',
     codegraphTarget: 'antigravity',
   },
   {
     id: 'cursor',
     label: 'Cursor CLI',
     tier: 2,
-    binary: 'cursor',
-    installSource: 'the Cursor CLI installer (Anysphere)',
+    // The installer symlinks the executable as `agent`, keeping `cursor-agent`
+    // as the legacy alias — `cursor` is neither, and matched nothing until the
+    // list arrived. It stays last so a user who aliased it keeps a profile.
+    binaries: ['agent', 'cursor-agent', 'cursor'],
+    installSource: 'curl https://cursor.com/install -fsS | bash',
+    // The matrix's `~/.local/share/cursor-agent` mount is also where the
+    // installer unpacks the CLI itself, so its presence proves an INSTALL, not
+    // a sign-in. The API key is the one unambiguous signal, so it is the only
+    // one tested.
     credentialPaths: () => [],
-    credentialEnv: [],
-    credentialKnown: false,
-    credentialHint: 'Sign in with the Cursor CLI (see its docs for the credential path).',
+    credentialEnv: ['CURSOR_API_KEY'],
+    credentialKnown: true,
+    credentialHint: 'Run `cursor-agent login` to sign in, or set CURSOR_API_KEY.',
     codegraphTarget: 'cursor',
   },
   {
     id: 'aider',
     label: 'Aider',
     tier: 2,
-    binary: 'aider',
-    installSource: 'pip (Python)',
+    binaries: ['aider'],
+    installSource: 'pip (Python) — PyPI `aider-chat`',
+    // Aider's credential IS the model key it reads from the environment. Its
+    // `~/.aider.conf.yml` is configuration, and the sandbox asks the user to
+    // create it (even empty) so docker can bind it — so its presence would
+    // prove nothing at all.
     credentialPaths: () => [],
-    credentialEnv: [],
-    credentialKnown: false,
-    credentialHint: 'Provide Aider with a model key (see its docs for the config/env it reads).',
+    credentialEnv: ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'],
+    credentialKnown: true,
+    credentialHint: 'Give Aider a model key: set ANTHROPIC_API_KEY or OPENAI_API_KEY.',
     codegraphTarget: null,
   },
   {
     id: 'goose',
     label: 'Goose',
     tier: 2,
-    binary: 'goose',
+    binaries: ['goose'],
     installSource: 'the Goose installer (Block)',
+    // Goose stores provider secrets in the OS KEYRING by default and only falls
+    // back to a file under `~/.config/goose` when the keyring is disabled (as
+    // the sandbox does). Neither state is testable from outside: an existing
+    // config dir need not hold a key, and a keyring-backed key leaves no file.
     credentialPaths: () => [],
     credentialEnv: [],
     credentialKnown: false,
-    credentialHint: 'Configure Goose with a provider key (see its docs for the credential path).',
+    credentialHint: 'Run `goose configure` to store a provider key.',
     codegraphTarget: null,
   },
 ];
@@ -200,15 +258,17 @@ export function parseAgentCommand(command: string | undefined): ParsedAgentComma
 }
 
 /**
- * Find the profile for a binary. Matches on the basename (so an absolute path
- * like `/usr/local/bin/claude` still resolves), case-insensitively, ignoring a
- * Windows `.exe`/`.cmd` suffix. An unmatched binary is the tier-3 case → null.
+ * Find the profile for a binary, matching ANY of its names (`agent` resolves
+ * Cursor just as `cursor-agent` does). Matches on the basename (so an absolute
+ * path like `/usr/local/bin/claude` still resolves), case-insensitively,
+ * ignoring a Windows `.exe`/`.cmd` suffix. An unmatched binary is the tier-3
+ * case → null.
  */
 export function findAgentProfile(binary: string): AgentProfile | null {
   const name = basename(binary)
     .toLowerCase()
     .replace(/\.(exe|cmd|bat|ps1)$/, '');
-  return AGENT_PROFILES.find((p) => p.binary === name) ?? null;
+  return AGENT_PROFILES.find((p) => p.binaries.includes(name)) ?? null;
 }
 
 /** Every profile id, for help text / docs (`claude, codex, …`). */

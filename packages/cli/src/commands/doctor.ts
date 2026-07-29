@@ -198,6 +198,7 @@ export function defaultDoctorProbe(): DoctorProbe {
     },
     home: () => homedir(),
     xdgConfigHome: () => process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config'),
+    xdgDataHome: () => process.env['XDG_DATA_HOME'] || join(homedir(), '.local', 'share'),
   };
 }
 

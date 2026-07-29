@@ -274,6 +274,7 @@ describe('doctorCommand', () => {
       hasEnv: () => false,
       home: () => '/home/tester',
       xdgConfigHome: () => '/home/tester/.config',
+      xdgDataHome: () => '/home/tester/.local/share',
     };
   }
 
@@ -335,7 +336,14 @@ describe('the real probe, against a temp home', () => {
   // Restore the touched keys INDIVIDUALLY — reassigning `process.env` wholesale
   // detaches it from the native environment, and `os.homedir()` reads that, so
   // the next test would keep seeing a stale HOME.
-  const TOUCHED = ['HOME', 'XDG_CONFIG_HOME', 'MOTIR_CONFIG_HOME', 'PATH', 'MOTIR_AGENT'] as const;
+  const TOUCHED = [
+    'HOME',
+    'XDG_CONFIG_HOME',
+    'XDG_DATA_HOME',
+    'MOTIR_CONFIG_HOME',
+    'PATH',
+    'MOTIR_AGENT',
+  ] as const;
   const savedEnv = new Map(TOUCHED.map((key) => [key, process.env[key]]));
   const savedExitCode = process.exitCode;
   let home: string;
@@ -471,5 +479,14 @@ describe('the real probe, against a temp home', () => {
   it('falls back to ~/.config when XDG_CONFIG_HOME is unset', () => {
     delete process.env['XDG_CONFIG_HOME'];
     expect(defaultDoctorProbe().xdgConfigHome()).toBe(join(home, '.config'));
+  });
+
+  it('resolves the XDG DATA home, honouring an override', () => {
+    // Where OpenCode signs in (auth.json) — a different dir from the config
+    // home, which is the distinction the profile table used to miss.
+    delete process.env['XDG_DATA_HOME'];
+    expect(defaultDoctorProbe().xdgDataHome()).toBe(join(home, '.local', 'share'));
+    process.env['XDG_DATA_HOME'] = join(home, 'relocated-data');
+    expect(defaultDoctorProbe().xdgDataHome()).toBe(join(home, 'relocated-data'));
   });
 });

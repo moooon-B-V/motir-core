@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { agentProfileIds, codegraphWiredProfiles, AGENT_PROFILES } from '../src/agentProfiles.js';
+import {
+  agentProfileIds,
+  codegraphWiredProfiles,
+  AGENT_PROFILES,
+  type AgentProfile,
+} from '../src/agentProfiles.js';
 
 // Structural guards for the sandbox image (base: 7.9.7a, agent profiles:
 // 7.9.7b). These assert the image's CONTRACT — the Node floor, the mounts and
@@ -92,6 +97,30 @@ const armOf = (id: string): string => {
 /** A profile's row in the README's install matrix. */
 const readmeRowOf = (id: string): string =>
   readme.split('\n').find((line) => line.startsWith(`| \`${id}\``)) ?? '';
+
+/**
+ * That row's cells: profile, tier, installed-from, binary, credential mount.
+ * Split on unescaped pipes only — an install command may contain a `\|`.
+ */
+const readmeMatrixCells = (id: string): string[] =>
+  readmeRowOf(id)
+    .split(/(?<!\\)\|/)
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+
+/** The dirs the profile table's credential paths are resolved against here. */
+const TEST_DIRS = {
+  home: '/home/tester',
+  xdgConfigHome: '/home/tester/.config',
+  xdgDataHome: '/home/tester/.local/share',
+};
+
+/** A profile by id — asserted present so callers get a profile, not undefined. */
+const profileOf = (id: string): AgentProfile => {
+  const profile = AGENT_PROFILES.find((p) => p.id === id);
+  expect(profile, `profile ${id}`).toBeDefined();
+  return profile as AgentProfile;
+};
 
 describe('sandbox Dockerfile', () => {
   it('bases on the Node line and ASSERTS the >= 24.15 floor rather than trusting the tag', () => {
@@ -532,6 +561,51 @@ describe.each(PROFILE_IDS)('agent profile: %s', (id) => {
     // Tier, install source, binary, credential — a row that lost a column would
     // leave the reader without the thing the profile is selected by.
     expect(row.split('|').filter((cell) => cell.trim()).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('matches the README matrix on the BINARY the agent actually installs as', () => {
+    // The README matrix is the VERIFIED source for this column (re-checked
+    // against each vendor's installer). The CLI's profile table restates it, and
+    // a restatement drifts: `cursor` sat in the table as the binary name for a
+    // CLI whose installer links `agent`, so it matched nothing at all and the
+    // profile was dead code nobody could reach.
+    const readmeBinaries = [...(readmeMatrixCells(id)[3] ?? '').matchAll(/`([^`]+)`/g)].map(
+      (match) => match[1],
+    );
+    expect(readmeBinaries.length, `README binary column for ${id}`).toBeGreaterThan(0);
+    const profile = profileOf(id);
+    for (const binary of readmeBinaries) {
+      expect(profile.binaries, `${id} must match its documented binary`).toContain(binary);
+    }
+    // Any name BEYOND the documented ones may only be the profile id itself —
+    // the alias a user might have made. The table may not invent a third name.
+    for (const binary of profile.binaries) {
+      if (readmeBinaries.includes(binary)) continue;
+      expect(binary, `${id} extra alias`).toBe(id);
+    }
+  });
+
+  it('tests a credential only WITHIN a path the README matrix pins', () => {
+    // The matrix pins the MOUNT; `doctor` may narrow it (opencode's auth.json
+    // inside the data dir) or decline it, but it may never test a path the
+    // sandbox does not mount — that would report a credential the container
+    // never receives.
+    const readmePaths = [...(readmeMatrixCells(id)[4] ?? '').matchAll(/~\/[^\s`*]+/g)].map(
+      (match) => match[0].replace('~', TEST_DIRS.home),
+    );
+    const profilePaths = profileOf(id).credentialPaths(TEST_DIRS);
+    if (readmePaths.length === 0) {
+      // No documented portable credential (the OS-keyring agents) — so there is
+      // nothing legitimate to look for either.
+      expect(profilePaths, `${id} has no documented credential path`).toEqual([]);
+      return;
+    }
+    for (const path of profilePaths) {
+      expect(
+        readmePaths.some((mount) => path === mount || path.startsWith(`${mount}/`)),
+        `${id}: ${path} is outside the documented mounts ${readmePaths.join(', ')}`,
+      ).toBe(true);
+    }
   });
 
   it('documents a VERIFIED auto-approve mechanism for unattended runs', () => {

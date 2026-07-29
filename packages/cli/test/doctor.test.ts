@@ -49,6 +49,7 @@ function fakeProbe(over: Partial<DoctorProbe> = {}): DoctorProbe {
     hasEnv: () => false,
     home: () => HOME,
     xdgConfigHome: () => `${HOME}/.config`,
+    xdgDataHome: () => `${HOME}/.local/share`,
     ...over,
   };
 }
@@ -369,11 +370,64 @@ describe('runDoctor — credential (presence only)', () => {
     expect(doctorExitCode(report)).toBe(1);
   });
 
-  it('WARNS for an agent whose credential location the matrix does not pin', async () => {
+  it('WARNS for an agent whose credential lives in the OS keyring', async () => {
     const report = await runDoctor({ agent: 'goose' }, fakeProbe({ pathExists: () => false }));
     expect(check(report, 'credential').status).toBe('warn');
     expect(check(report, 'credential').detail).toContain('not pinned');
     expect(report.ok).toBe(true);
+  });
+
+  it('FAILS OpenCode on a config dir with no auth.json — the former false PASS', async () => {
+    // The defect this suite pins: the profile tested `~/.config/opencode`, which
+    // exists on any machine that has ever RUN opencode. Reporting the credential
+    // present there told a user their unattended run was ready when it would
+    // stop at a sign-in prompt.
+    const configDirOnly = fakeProbe({
+      pathExists: (path) => path === `${HOME}/.config/opencode`,
+    });
+    const report = await runDoctor({ agent: 'opencode run --auto' }, configDirOnly);
+    const credential = check(report, 'credential');
+    expect(credential.status).toBe('fail');
+    expect(credential.detail).toContain('OpenCode');
+    expect(credential.remediation).toContain('opencode auth login');
+    expect(credential.remediation).toContain(`${HOME}/.local/share/opencode/auth.json`);
+    expect(doctorExitCode(report)).toBe(1);
+  });
+
+  it('PASSES OpenCode on the auth.json under the XDG DATA home', async () => {
+    const report = await runDoctor(
+      { agent: 'opencode' },
+      fakeProbe({ pathExists: (path) => path === `${HOME}/.local/share/opencode/auth.json` }),
+    );
+    const credential = check(report, 'credential');
+    expect(credential.status).toBe('pass');
+    expect(credential.detail).toContain(`${HOME}/.local/share/opencode/auth.json`);
+  });
+
+  it('enriches the Cursor profile for `agent`, the binary its installer links', async () => {
+    // The documented headless invocation. Before the alias list this fell to the
+    // tier-3 generic path, losing both the install source and the credential
+    // remediation — silently, since a tier-3 result is a plausible-looking WARN.
+    const report = await runDoctor(
+      { agent: 'agent -p --force' },
+      fakeProbe({ probeAgent: async () => ({ onPath: false }), pathExists: () => false }),
+    );
+    expect(check(report, 'agent').remediation).toContain('Cursor CLI');
+    expect(check(report, 'agent').remediation).toContain('cursor.com/install');
+    const credential = check(report, 'credential');
+    expect(credential.status).toBe('fail');
+    expect(credential.detail).toContain('Cursor CLI');
+    expect(credential.remediation).toContain('the CURSOR_API_KEY env var');
+    expect(credential.detail).not.toContain('No credential profile');
+  });
+
+  it('PASSES Cursor on CURSOR_API_KEY alone', async () => {
+    const report = await runDoctor(
+      { agent: 'cursor-agent -p' },
+      fakeProbe({ pathExists: () => false, hasEnv: (name) => name === 'CURSOR_API_KEY' }),
+    );
+    expect(check(report, 'credential').status).toBe('pass');
+    expect(check(report, 'credential').detail).toContain('CURSOR_API_KEY');
   });
 
   it('WARNS for an agent with no profile at all (tier 3)', async () => {

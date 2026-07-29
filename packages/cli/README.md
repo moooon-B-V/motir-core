@@ -277,14 +277,14 @@ before `motir next` / `motir auto`, `motir doctor` answers "is my setup
 correct?" in one read-only pass instead of letting a missing agent or an
 unsigned-in key surface halfway through a dispatch:
 
-| Check                   | PASS means                                                   | FAIL means                                                                       |
-| ----------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| **Auth**                | the stored PAT connects, lists tools, and identifies you     | no token, or it is invalid/expired → `motir auth login`                          |
-| **Project link**        | `.motir.json` resolved (walking up from the cwd)             | no link here or above → `motir link`                                             |
-| **Workspace + project** | the linked project is reachable _for this token_             | wrong key, or your user is not a member                                          |
-| **Repo checkouts**      | every override path resolves                                 | — (a not-yet-cloned **convention** path is fine, and only WARNs for an override) |
-| **Coding agent**        | the binary is on PATH and answers `--version`                | it is not on PATH → the profile's install source                                 |
-| **Agent credential**    | the agent's credential dir exists, or its key env var is set | neither → where to sign in                                                       |
+| Check                   | PASS means                                               | FAIL means                                                                       |
+| ----------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Auth**                | the stored PAT connects, lists tools, and identifies you | no token, or it is invalid/expired → `motir auth login`                          |
+| **Project link**        | `.motir.json` resolved (walking up from the cwd)         | no link here or above → `motir link`                                             |
+| **Workspace + project** | the linked project is reachable _for this token_         | wrong key, or your user is not a member                                          |
+| **Repo checkouts**      | every override path resolves                             | — (a not-yet-cloned **convention** path is fine, and only WARNs for an override) |
+| **Coding agent**        | the binary is on PATH and answers `--version`            | it is not on PATH → the profile's install source                                 |
+| **Agent credential**    | the agent's credential exists, or its key env var is set | neither → where to sign in                                                       |
 
 It exits **non-zero** when any hard check fails, so `motir doctor && motir auto`
 is a usable gate. `--json` emits the same report machine-readably. WARN rows
@@ -302,12 +302,17 @@ or an env var's value, so nothing sensitive can be printed or logged. Nor does
 `doctor` write anything: its only server calls are the handshake, `whoami`, and
 a one-row search that proves the project is reachable.
 
-**Known agent profiles** (the sandbox matrix, 7.9.7b) — Tier 1 pins both the
-install source and the credential mount: `claude` (`~/.claude`), `codex`
-(`~/.codex`), `opencode` (`~/.config/opencode`), `kimi`. Tier 2 —
-`antigravity`, `cursor`, `aider`, `goose` — pins the install source only; where
-those keep credentials is deliberately **not guessed**, so they report a WARN
-("verify this one yourself") rather than a false FAIL. Any other agent works
+**Known agent profiles** (the sandbox matrix, 7.9.7b). A profile is matched by
+**every** binary its installer links, so the name you actually type resolves it —
+Cursor's executable is `agent`, with `cursor-agent` as the legacy alias. Where a
+credential can be checked honestly, `doctor` checks it: `claude` (`~/.claude`),
+`codex` (`~/.codex`), `opencode` (`~/.local/share/opencode/auth.json` — the XDG
+**data** dir; `~/.config/opencode` holds configuration, not the credential),
+`kimi` (`~/.kimi-code`), `cursor` (`CURSOR_API_KEY`), `aider`
+(`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`). `antigravity` and `goose` keep their
+secret in the OS **keyring**, with no portable file to look for, so they report a
+WARN ("verify this one yourself") rather than a false FAIL — and no profile
+tests a path that merely proves the agent is _installed_. Any other agent works
 too (`--agent "<cmd> <flag>"`): its binary is still checked, its credential is
 yours to confirm.
 
