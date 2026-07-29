@@ -54,6 +54,7 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   run: 'RunOptions',
   auto: 'AutoOptions',
   batch: 'BatchOptions',
+  plan: 'PlanOptions',
   done: 'DoneOptions',
 };
 
