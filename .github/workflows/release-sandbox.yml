@@ -1,0 +1,80 @@
+# Publishes the Motir sandbox images to GHCR (Subtask 7.9.7e · MOTIR-1788).
+#
+# Trigger: push the PACKAGE-SCOPED tag `cli-v<x.y.z>` — the same tag that
+# releases `@motir/cli` itself (8.7.9), so the `motir` binary baked into the
+# image and the one on npm are the same version by construction. A monorepo
+# must scope its release tags per package (`design-system-v*` is the existing
+# precedent); a bare `v*` would fire for the app too.
+#
+# There is deliberately NO push-to-main trigger. A `:latest` that moves on every
+# merge is not a sandbox anyone can reproduce a run in — the whole point of the
+# immutable `:<profile>-<version>` tag and the recorded digest is that a BYOK
+# user can pin the exact image Motir itself was run in.
+#
+# Release procedure (see packages/cli/sandbox/README.md → "Publishing"):
+#   1. bump packages/cli/package.json `version`
+#   2. open + merge the PR
+#   3. git tag cli-v<x.y.z> && git push origin cli-v<x.y.z>
+#   4. this workflow builds, smoke-tests, publishes, then pulls each image back
+#      by digest; copy its digest table into the sandbox README.
+#
+# `workflow_dispatch` with `dry_run: true` runs the whole lane WITHOUT pushing —
+# how you validate a change to the release path without minting a version.
+
+name: Release sandbox images
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build + smoke only; skip the GHCR push'
+        type: boolean
+        default: false
+
+# Never let two releases of the same tag run concurrently, and never cancel one
+# in flight — a half-cancelled multi-arch push leaves a tag pointing at a
+# manifest whose layers were never all uploaded.
+concurrency:
+  group: release-sandbox-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Fail fast if the tag and the package version disagree: the tag is the human
+  # intent, package.json is what actually gets baked into the image tags. A
+  # mismatch means someone forgot to bump (or retagged wrong), and it would ship
+  # `:claude-0.1.0` off a `cli-v0.2.0` tag. Same guard as
+  # release-design-system.yml.
+  guard:
+    name: Guard — tag version must equal the @motir/cli version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compare the tag against packages/cli/package.json
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
+          PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          echo "Tag version: $TAG_VERSION  ·  package.json version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version '$TAG_VERSION' but packages/cli/package.json is '$PKG_VERSION'. Bump the package version to match the tag, or retag."
+            exit 1
+          fi
+
+  # The SAME matrix `ci.yml` runs on every pull request — build, liveness, smoke
+  # — with the push steps switched on. Auth is the workflow's own GITHUB_TOKEN
+  # under `packages: write`: no new account, no long-lived secret, nothing
+  # provisioned out of band. `packages: write` is granted HERE, on the release
+  # lane only, so the pull-request lane physically cannot push.
+  images:
+    name: Sandbox images
+    needs: guard
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/sandbox-images.yml
+    with:
+      publish: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}

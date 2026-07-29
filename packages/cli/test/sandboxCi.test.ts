@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { AGENT_PROFILES } from '../src/agentProfiles.js';
 
 // Drift guards for the sandbox VALIDATION harness (7.9.7c / MOTIR-885) — the
-// smoke scripts, the profile/liveness matrix, and the two CI jobs that run them.
+// smoke scripts, the profile/liveness matrix, and the workflow that runs them —
+// plus the RELEASE lane that publishes what that matrix built (7.9.7e /
+// MOTIR-1788). Both callers are asserted here because the publish gate IS the
+// shared matrix: an image nothing smoke-tested must not be able to reach GHCR.
 //
 // The harness itself is a docker build plus a container run: 15+ minutes, and
 // unavailable to anyone without a daemon. So the expensive lane checks the
@@ -20,12 +23,17 @@ import { AGENT_PROFILES } from '../src/agentProfiles.js';
 
 const CLI_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SMOKE_DIR = join(CLI_DIR, 'sandbox', 'smoke');
-const WORKFLOW = join(CLI_DIR, '..', '..', '.github', 'workflows', 'ci.yml');
+const WORKFLOW_DIR = join(CLI_DIR, '..', '..', '.github', 'workflows');
 
 const read = (path: string): string => readFileSync(path, 'utf8');
 
 const installAgent = read(join(CLI_DIR, 'sandbox', 'install-agent.sh'));
-const ci = read(WORKFLOW);
+const ci = read(join(WORKFLOW_DIR, 'ci.yml'));
+// The matrix itself (7.9.7c) and the tagged lane that publishes what it built
+// (7.9.7e). One matrix, two callers — which is the property this file guards.
+const images = read(join(WORKFLOW_DIR, 'sandbox-images.yml'));
+const release = read(join(WORKFLOW_DIR, 'release-sandbox.yml'));
+const readme = read(join(CLI_DIR, 'sandbox', 'README.md'));
 const runSh = read(join(SMOKE_DIR, 'run.sh'));
 const loopSh = read(join(SMOKE_DIR, 'loop-smoke.sh'));
 const confinementSh = read(join(SMOKE_DIR, 'confinement.sh'));
@@ -179,40 +187,171 @@ describe('the CI jobs that run all of it', () => {
     // notes.html #49: an inherited workflow with `on: push: main` LOOKS like CI
     // and gates nothing. Assert the trigger, never the file's existence.
     expect(ci).toMatch(/^on:\n\s+pull_request:/m);
+    // The matrix is reusable, so it has no trigger of its own — the caller's
+    // does. A `uses:` that pointed somewhere else would take the whole lane
+    // with it.
+    expect(ci).toContain('uses: ./.github/workflows/sandbox-images.yml');
+    expect(images).toMatch(/^on:\n\s+workflow_call:/m);
   });
 
   it('build the image and run the smoke driver', () => {
-    expect(ci).toContain('sandbox-smoke:');
-    expect(ci).toContain('file: packages/cli/sandbox/Dockerfile');
-    expect(ci).toContain('packages/cli/sandbox/smoke/run.sh --no-build');
+    expect(images).toContain('sandbox-smoke:');
+    expect(images).toContain('file: packages/cli/sandbox/Dockerfile');
+    expect(images).toContain('packages/cli/sandbox/smoke/run.sh --no-build');
   });
 
   it('derive the profile matrix from profiles.json instead of restating it', () => {
     // Restating the agent list in YAML is the drift this whole suite exists to
     // prevent; reading the file means adding an agent extends CI by itself.
-    expect(ci).toContain('packages/cli/sandbox/smoke/profiles.json');
-    expect(ci).toContain('fromJson(needs.sandbox-profiles-matrix.outputs.profiles)');
+    expect(images).toContain('packages/cli/sandbox/smoke/profiles.json');
+    expect(images).toContain('fromJson(needs.sandbox-profiles-matrix.outputs.profiles)');
   });
 
   it('run BOTH `motir --version` and the agent liveness check per profile', () => {
-    expect(ci).toContain('docker run --rm motir-sandbox:${{ matrix.profile.id }} motir --version');
-    expect(ci).toContain(
+    expect(images).toContain(
+      'docker run --rm motir-sandbox:${{ matrix.profile.id }} motir --version',
+    );
+    expect(images).toContain(
       'docker run --rm motir-sandbox:${{ matrix.profile.id }} ${{ matrix.profile.liveness }}',
     );
   });
 
-  it('allow-fails Tier 2 only — Tier 1 gates', () => {
-    // "Allow-fail, not removed" is the card's own posture: a vendor endpoint
-    // flaking must not red-X an unrelated pull request, but the leg still runs
-    // and still reports.
-    expect(ci).toContain('continue-on-error: ${{ matrix.profile.tier == 2 }}');
-    expect(ci).toContain('fail-fast: false');
+  it('allow-fails Tier 2 on the PR lane only — a release gates on every tier', () => {
+    // "Allow-fail, not removed" is 7.9.7c's posture: a vendor endpoint flaking
+    // must not red-X an unrelated pull request, but the leg still runs and still
+    // reports. A RELEASE that shipped six of eight images, green, is worse than
+    // one that failed — so the exemption is scoped to the non-publish lane.
+    expect(images).toContain(
+      'continue-on-error: ${{ matrix.profile.tier == 2 && !inputs.publish }}',
+    );
+    expect(images).toContain('fail-fast: false');
   });
 
   it('skip on the design/ and docs/ branch prefixes, like the other heavy lanes', () => {
-    const sandboxJobs = ci.slice(ci.indexOf('  sandbox-smoke:'));
-    const skips = sandboxJobs.match(/!startsWith\(github\.head_ref, 'design\/'\)/g) ?? [];
-    // One for the smoke job, one for the matrix-setup job the profile legs need.
-    expect(skips.length).toBe(2);
+    const call = ci.slice(ci.indexOf('  sandbox:'));
+    for (const prefix of ['seed/', 'design/', 'docs/']) {
+      expect(call, `${prefix} skip on the sandbox call job`).toContain(
+        `!startsWith(github.head_ref, '${prefix}')`,
+      );
+    }
+  });
+});
+
+describe('the release lane that publishes the images (7.9.7e)', () => {
+  it('is TAG-triggered on the @motir/cli release tag — never a push to main', () => {
+    // Same notes.html #49 discipline as above, pointed the other way: a
+    // `:latest` that moves on every merge is not a reproducible sandbox, so the
+    // ABSENCE of a branch trigger is the load-bearing assertion.
+    expect(release).toMatch(/^on:\n\s+push:\n\s+tags:\n\s+- 'cli-v\*'/m);
+    expect(release).not.toMatch(/^\s+branches:/m);
+  });
+
+  it('guards the tag against the packages/cli version, so image and npm agree', () => {
+    expect(release).toContain('${GITHUB_REF_NAME#cli-v}');
+    expect(release).toContain("require('./packages/cli/package.json').version");
+  });
+
+  it('runs the SAME matrix, with publishing switched on', () => {
+    // The whole gating argument depends on this being one workflow, not two: a
+    // release-only matrix could build the image its own way and ship something
+    // no smoke test ever ran.
+    expect(release).toContain('uses: ./.github/workflows/sandbox-images.yml');
+    expect(ci).toContain('publish: false');
+    expect(release).toMatch(/publish: \$\{\{ !\(github\.event_name == 'workflow_dispatch'/);
+  });
+
+  it('pushes only AFTER the smoke and liveness checks, in the same job', () => {
+    // The publish gate is step ORDER inside one job: a failed check stops the
+    // job before anything leaves the runner. Assert the order, because a
+    // re-shuffle would silently publish an unverified image.
+    const smoked = images.indexOf('- name: Smoke the image');
+    const pushedBase = images.indexOf('- name: Push the base image');
+    expect(smoked).toBeGreaterThan(-1);
+    expect(pushedBase).toBeGreaterThan(smoked);
+
+    const liveness = images.indexOf('- name: ${{ matrix.profile.liveness }}');
+    const pushedProfile = images.indexOf('- name: Push ${{ matrix.profile.id }}');
+    expect(liveness).toBeGreaterThan(-1);
+    expect(pushedProfile).toBeGreaterThan(liveness);
+  });
+
+  it('authenticates with GITHUB_TOKEN under packages: write — no new secret', () => {
+    expect(release).toContain('packages: write');
+    expect(images).toContain('password: ${{ secrets.GITHUB_TOKEN }}');
+    // Any OTHER secret reference would mean an out-of-band credential someone
+    // has to provision and rotate — exactly what GHCR + the job token avoids.
+    const secrets = [...images.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]);
+    expect([...new Set(secrets)]).toEqual(['GITHUB_TOKEN']);
+    // ...and the pull-request lane must not be able to push at all.
+    expect(ci.slice(ci.indexOf('  sandbox:'))).not.toContain('packages: write');
+  });
+
+  it('tags each profile both movably and immutably, for both architectures', () => {
+    expect(images).toContain('${{ env.IMAGE }}:${{ matrix.profile.id }}');
+    expect(images).toContain(
+      '${{ env.IMAGE }}:${{ matrix.profile.id }}-${{ steps.ver.outputs.version }}',
+    );
+    expect(images).toContain('${{ env.IMAGE }}:base');
+    expect(images).toContain('${{ env.IMAGE }}:base-${{ steps.ver.outputs.version }}');
+    expect(images).toContain('platforms: linux/amd64,linux/arm64');
+  });
+
+  it('names the registry in LOWERCASE, the only form docker will pull', () => {
+    // `ghcr.io/moooon-B-V/...` is not a reference docker will even resolve —
+    // OCI repository names are lowercase-only, and it fails before any network
+    // call. The org is spelled `moooon-B-V` everywhere else, so this is a real
+    // trap rather than a style point.
+    expect(images).toContain('IMAGE: ghcr.io/moooon-b-v/motir-sandbox');
+    // Comments are exempt — the header explains the trap by SPELLING the
+    // uppercase form out. Only references the workflow would actually push to
+    // or pull from have to be lowercase.
+    const yamlOnly = images
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+    expect(yamlOnly).not.toMatch(/ghcr\.io\/\S*[A-Z]/);
+    expect(readme).not.toMatch(/ghcr\.io\/\S*[A-Z]/);
+  });
+
+  it('verifies the published images by PULLING them back, by digest', () => {
+    // "The push exited 0" and "a user can pull this and run it" are different
+    // claims. The digest is the only reference that names the exact bytes the
+    // moving tag pointed at.
+    expect(images).toContain('sandbox-published:');
+    expect(images).toContain('docker run --rm "${IMAGE}@${digest}" motir --version');
+    expect(images).toContain('needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]');
+    // A profile whose leg was dropped uploads no digest — that must fail the
+    // release rather than pass as a smaller one.
+    expect(images).toContain('No digest was published for');
+  });
+});
+
+describe('the README, as the adoption path', () => {
+  it('leads with `docker run` on the published image, not a git clone', () => {
+    const run = readme.indexOf('## Run');
+    const build = readme.indexOf('## Build it yourself');
+    expect(run).toBeGreaterThan(-1);
+    expect(build).toBeGreaterThan(run);
+    expect(readme).toContain('ghcr.io/moooon-b-v/motir-sandbox:claude');
+  });
+
+  it('documents the three mounts the run contract is made of', () => {
+    expect(readme).toContain('-v "$PWD:/workspace"');
+    expect(readme).toContain('-v "$HOME/.config/motir:/home/node/.config/motir:ro"');
+    expect(readme).toContain('-v "$HOME/.claude:/home/node/.claude:ro"');
+  });
+
+  it('records a digest per published tag and shows how to pin one', () => {
+    expect(readme).toContain('ghcr.io/moooon-b-v/motir-sandbox@sha256:');
+    for (const profile of matrix) {
+      expect(readme, `a published-image row for ${profile.id}`).toContain(
+        `| \`ghcr.io/moooon-b-v/motir-sandbox:${profile.id}\``,
+      );
+    }
+    expect(readme).toContain('| `ghcr.io/moooon-b-v/motir-sandbox:base`');
+  });
+
+  it('keeps the build-from-source path for anyone customising a profile', () => {
+    expect(readme).toContain('docker build -f packages/cli/sandbox/Dockerfile');
   });
 });
