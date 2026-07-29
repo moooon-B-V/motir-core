@@ -613,16 +613,15 @@ describe('motir auto — the session-branch run', () => {
     expect(bad.stderr).toContain('--max must be a positive whole number');
 
     // `--print` is refused — an unattended loop has nobody to paste a prompt.
-    // NOTE what the refusal actually IS: commander rejects the flag as unknown,
-    // because `auto` never registers `--print` (program.ts). `autoCommand`'s own
-    // `--print` guard (with its "use `motir next --print`" hint) is therefore
-    // UNREACHABLE from the command line — logged as MOTIR-1828, not fixed here:
-    // registering the flag is a change to MOTIR-882's command surface, not this
-    // test card's. Asserted as it ships, so the day the flag is registered this
-    // line fails and gets updated deliberately.
+    // The flag IS registered on `auto` (program.ts) precisely so commander hands
+    // it to `autoCommand`'s guard rather than rejecting it as unknown: the user
+    // gets the sentence that says what to do instead, not a generic parse error
+    // (MOTIR-1828). This asserts the guard's own text end-to-end through the
+    // built binary, which is the only place the registration can be proven.
     const printed = await ws.run(['auto', '--print', '--agent', agent.command]);
     expect(printed.exitCode).toBe(1);
-    expect(printed.stderr).toContain("unknown option '--print'");
+    expect(printed.stderr).toContain('`motir auto` cannot run in --print mode.');
+    expect(printed.stderr).toContain('motir next --print');
 
     const agentless = await ws.run(['auto']);
     expect(agentless.exitCode).toBe(1);
