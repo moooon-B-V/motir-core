@@ -49,6 +49,41 @@ motir link remove <repo>                              # remove an override
 motir doctor [--agent <cmd>] [--json]                 # BYOK preflight (read-only)
 ```
 
+## Help + topics
+
+`motir`, `motir help` and `motir --help` all print the same curated overview on
+**stdout** and exit **0** — the front door a newcomer reads top to bottom:
+
+```
+Usage: motir [options] [command]
+
+SETUP COMMANDS:      auth · link · doctor
+READ COMMANDS:       ready · status · open
+HELP TOPICS:         help · environment · files
+FLAGS:               -v, --version · -h, --help
+EXAMPLES:            …
+LEARN MORE:          …
+```
+
+Commands are grouped with commander's native `.helpGroup()` (see `src/help.ts`);
+group ORDER is the registration order in `src/program.ts`. **A command
+registered without an explicit group falls into `ADDITIONAL COMMANDS`**, so a
+later subtask adds a command — and, with one `.helpGroup(...)` line, files it
+under `SETUP` / `READ` / the reserved `WORK LOOP COMMANDS` — without ever
+rewriting the help surface.
+
+Two **topics** answer what a command list cannot:
+
+```sh
+motir help environment   # the 4 env vars Motir reads, and what each overrides
+motir help files         # ~/.config/motir/config.json + .motir.json
+```
+
+Per-command help is unchanged (`motir help <command>`, `motir <command> --help`,
+nested: `motir help auth login`, `motir link add --help`). An unknown topic
+fails like every other CLI error — one line plus a hint on **stderr**, exit
+**1**, no stack trace — so `motir help | head` stays clean for piping.
+
 ## `motir doctor` — the BYOK preflight
 
 Motir is **BYOK**: you bring your own coding agent and your own model key. So
