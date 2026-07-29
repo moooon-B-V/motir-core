@@ -97,6 +97,40 @@ jobs:
       - run: pnpm --filter @motir/design-system build
       - run: pnpm --filter @motir/design-system test
 
+  cli:
+    name: CLI package
+    runs-on: ubuntu-latest
+    # `@motir/cli` ships its own vitest suite + per-file coverage gate that the
+    # root Vitest lane does NOT run — its `include` globs only `tests/**`
+    # (Subtask 7.9.5 · MOTIR-883). Run it here, the same shape the design-system
+    # job uses, so a regression in the CLI's client core or command modules
+    # actually gates merges. No DB and no Next app needed: the suite talks to a
+    # real MCP server it starts in-process. (The story-closing suite that spawns
+    # the BUILT binary against the real /api/mcp route lives in `tests/cli/` and
+    # runs in the Vitest job below, where Postgres is.)
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-cli
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-cli.outputs.cache-hit != 'true'
+        env:
+          HUSKY: '0'
+      # The bundle the story suite spawns is built from THIS commit's source;
+      # building here too keeps a broken bundle from reaching that job as a
+      # confusing runtime failure.
+      - run: pnpm --filter @motir/cli build
+      - run: pnpm --filter @motir/cli test:coverage
+
   build:
     name: Next.js build
     runs-on: ubuntu-latest
@@ -234,6 +268,15 @@ jobs:
           key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
       - run: pnpm install --frozen-lockfile
         if: steps.cache-node-modules-test.outputs.cache-hit != 'true'
+      # The CLI story suite (`tests/cli/`) builds and SPAWNS the `motir` binary,
+      # which needs `packages/cli/node_modules` — for tsup, and at run time for
+      # the deps the bundle deliberately externalizes (commander + the MCP SDK).
+      # The node_modules cache above covers the ROOT only, so on a cache hit the
+      # root install is skipped and the package's own tree is absent; this
+      # filtered install restores just that project (~9s warm, a no-op when the
+      # full install already ran). Without it the suite fails with a module-not-
+      # found from inside the child process, which reads like a CLI bug.
+      - run: pnpm install --frozen-lockfile --filter @motir/cli
       - run: pnpm prisma generate
         if: steps.cache-prisma-test.outputs.cache-hit != 'true'
       - run: pnpm prisma migrate deploy

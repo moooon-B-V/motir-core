@@ -348,3 +348,18 @@ describe('failure paths go through CliError (stderr + exit 1, no stack)', () => 
     ).rejects.toMatchObject({ message: 'No help topic or command named "auth bogus".' });
   });
 });
+
+// ── coverage gaps closed by 7.9.5 (MOTIR-883) ───────────────────────────────
+
+describe('the root footer never leaks into a subcommand', () => {
+  it('renders EXAMPLES / LEARN MORE only for the root command', () => {
+    // `addHelpText('after')` is registered on the program, and its handler runs
+    // for a subcommand's help too — the guard is what keeps the root-only footer
+    // (and the re-positioned FLAGS block) off `motir ready --help`.
+    const sub = render(buildProgram(), ['ready', '--help']);
+    expect(sub).toContain('Usage: motir ready');
+    expect(sub).not.toContain('EXAMPLES:');
+    expect(sub).not.toContain('LEARN MORE:');
+    expect(sub).not.toContain('FLAGS:');
+  });
+});
