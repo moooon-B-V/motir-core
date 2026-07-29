@@ -89,7 +89,7 @@ The scopes and the tools each one gates:
 
 | Scope                | Gates                                                                                                                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`              |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`  |
 | `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item` |
 | `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                   |
 | `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                     |
@@ -850,6 +850,50 @@ passing both (or neither) returns `BAD_REQUEST`.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 and an unknown job id `NO_PLAN_FOR_JOB` — the same 404-not-403 contract every
 other tool keeps. Scope token: `read`.
+
+#### `get_plan`
+
+Read a plan **with the proposals it bundles** — what the planning pass actually
+proposed, not just how many items it produced.
+
+| Input    | Type   | Required | Notes                                                                    |
+| -------- | ------ | -------- | ------------------------------------------------------------------------ |
+| `planId` | string | yes      | The plan id — from an `expand_item` submit, `get_plan_status`, or Motir. |
+
+**Which one to reach for:** `get_plan_status` answers _"what became of the job I
+fired?"_ — a status, a count, and (while generating) whether the job died. It is
+the poll. **`get_plan` answers _"what did it propose?"_** — the items themselves,
+so a headless client can SHOW or judge the content instead of sending its user to
+a browser. Neither takes a decision on the plan.
+
+**Output** — `structuredContent`: the `PlanWithItemsDto` — the plan
+(`id, projectId, status, title, summary, sourceJobId, origin, itemCount, createdAt, plannedAt, decidedAt, decidedById`)
+plus `items[]`, one entry per proposal:
+
+- **`op`** — `add` · `modify` · `remove`.
+- **`proposedFields`** (`add`) — the new node's values: `title`, `kind`, `type`,
+  `priority`, `executor`, `storyPoints`, `estimateMinutes`, `descriptionMd`,
+  `explanationMd`.
+- **`patch`** (`modify`) — only the CHANGED fields.
+- **`workItemId`** — the target of a `modify` / `remove`; **`null` for an
+  un-materialized `add`**.
+- **`parentRef`** / **`blockedByRefs`** — each a real `work_item.id` **or** an
+  intra-plan temp-ref `planItem:<planItemId>` pointing at another `add` in the
+  same plan. Resolve the temp-refs against `items[].id` to rebuild the proposed
+  tree and its dependency edges; the text block renders exactly that, indented.
+
+A plan still `generating` returns the proposals that have arrived **so far**
+rather than erroring — proposals stream in, so a caller polling the content sees
+it fill.
+
+> **⚠️ These are PROPOSALS, not work items.** Nothing in `items[]` exists in the
+> tree. Approving the plan in Motir is the only path from a proposal to a
+> `work_item` row, and an `add`'s `workItemId` stays `null` until then. Titles and
+> sizing that read like work items are still proposals — do not report them as
+> created.
+
+A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
+(404-not-403, no existence leak). Scope token: `read`.
 
 ### Identity
 

@@ -258,6 +258,9 @@ export default defineConfig({
         // Story 7.9 · MOTIR-1825 — the AI plan-expansion tool + its outcome read
         // join the same gate (`tests/mcp/expand-item` drives both).
         'lib/mcp/tools/expandItem.ts',
+        // Story 7.9 · MOTIR-1837 — the plan CONTENT read (the proposals behind
+        // that outcome's count); `tests/mcp/get-plan` drives it.
+        'lib/mcp/tools/getPlan.ts',
         // Story 7.10 · Subtask 7.10.8 (MOTIR-896) — the GitHub integration's
         // webhook state machine + installation grant mirror + code-graph feed
         // dispatch + the planning-envelope repo-set producer join the gate.
