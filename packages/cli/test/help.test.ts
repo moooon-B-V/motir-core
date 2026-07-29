@@ -100,42 +100,44 @@ describe('the curated overview', () => {
       server).
 
       SETUP COMMANDS:
-        auth                  Authenticate to a Motir server with a PAT.
-        link [options]        Bind this workspace-root folder to a server + workspace
-                              + project.
-        doctor [options]      Preflight your BYOK setup: auth, project link, agent
-                              binary, credential presence.
+        auth                      Authenticate to a Motir server with a PAT.
+        link [options]            Bind this workspace-root folder to a server +
+                                  workspace + project.
+        doctor [options]          Preflight your BYOK setup: auth, project link, agent
+                                  binary, credential presence.
 
       READ COMMANDS:
-        ready [options]       List the linked project’s ready set (every dependency
-                              satisfied).
-        status [options]      Show the project pulse: ready / in-flight counts + the
-                              active sprint.
-        open [options] <key>  Open a work item (e.g. PROD-7) in the browser; prints
-                              the URL.
+        ready [options]           List the linked project’s ready set (every
+                                  dependency satisfied).
+        status [options]          Show the project pulse: ready / in-flight counts +
+                                  the active sprint.
+        open [options] <key>      Open a work item (e.g. PROD-7) in the browser;
+                                  prints the URL.
 
       WORK LOOP COMMANDS:
-        next [options]        Dispatch the next ready work item: claim it and deliver
-                              its prompt.
-        run [options] <key>   Dispatch a SPECIFIC work item (e.g. PROD-7), ready or
-                              forced.
-        auto [options]        Drain the ready set unattended: one item at a time onto
-                              a session branch.
-        batch [options]       Implement a FROZEN snapshot of the ready set: one pull
-                              request per item.
-        done [options] [key]  Close out a merged item — or a whole merged session
-                              branch.
+        next [options]            Dispatch the next ready work item: claim it and
+                                  deliver its prompt.
+        run [options] <key>       Dispatch a SPECIFIC work item (e.g. PROD-7), ready
+                                  or forced.
+        auto [options]            Drain the ready set unattended: one item at a time
+                                  onto a session branch.
+        batch [options]           Implement a FROZEN snapshot of the ready set: one
+                                  pull request per item.
+        plan [options] [args...]  Plan by talking: resume the project’s planning
+                                  conversation, add turns, submit.
+        done [options] [key]      Close out a merged item — or a whole merged session
+                                  branch.
 
       HELP TOPICS:
-        help [command...]     Show help for a command, or read a help topic.
-        environment           Environment variables Motir reads, and what each one
-                              overrides.
-        files                 The two files Motir keeps: the credential store and the
-                              project link.
+        help [command...]         Show help for a command, or read a help topic.
+        environment               Environment variables Motir reads, and what each one
+                                  overrides.
+        files                     The two files Motir keeps: the credential store and
+                                  the project link.
 
       FLAGS:
-        -v, --version         Print the CLI version.
-        -h, --help            display help for command
+        -v, --version             Print the CLI version.
+        -h, --help                display help for command
 
       EXAMPLES:
         $ motir auth login --server https://app.motir.co   # store a token
@@ -146,6 +148,7 @@ describe('the curated overview', () => {
         $ motir open MOTIR-7 --print                       # the item’s URL
         $ motir auto --agent claude --max 5                # drain 5 items unattended
         $ motir batch --agent claude                      # snapshot now, one PR each
+        $ motir plan "split the billing epic"              # plan by talking; prints proposals
 
       LEARN MORE:
         Use \`motir <command> --help\` for the flags of a single command.
@@ -198,7 +201,14 @@ describe('group membership', () => {
     ]);
     expect(groups.get(HELP_GROUP.setup)).toEqual(['auth', 'link', 'doctor']);
     expect(groups.get(HELP_GROUP.read)).toEqual(['ready', 'status', 'open']);
-    expect(groups.get(HELP_GROUP.workLoop)).toEqual(['next', 'run', 'auto', 'batch', 'done']);
+    expect(groups.get(HELP_GROUP.workLoop)).toEqual([
+      'next',
+      'run',
+      'auto',
+      'batch',
+      'plan',
+      'done',
+    ]);
     expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files']);
   });
 

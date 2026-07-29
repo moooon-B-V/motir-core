@@ -22,6 +22,31 @@ export function promptLine(question: string, defaultValue?: string): Promise<str
   });
 }
 
+/**
+ * Read one line, distinguishing END OF INPUT from an empty line.
+ *
+ * `promptLine` cannot: on Ctrl-D (or a closed pipe) readline emits `close`
+ * WITHOUT ever calling the question callback, so its promise never settles. A
+ * one-shot prompt gets away with that — the process is exiting anyway — but a
+ * REPL that re-prompts in a loop would hang forever on the first Ctrl-D. So the
+ * conversation loop (`motir plan`) reads through this instead: `null` means the
+ * stream ended, which the loop treats as "leave, submit nothing".
+ */
+export function promptLineOrNull(question: string): Promise<string | null> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  return new Promise<string | null>((resolve) => {
+    let answered = false;
+    rl.question(`${question}`, (answer) => {
+      answered = true;
+      rl.close();
+      resolve(answer);
+    });
+    rl.on('close', () => {
+      if (!answered) resolve(null);
+    });
+  });
+}
+
 interface MutableInterface {
   _writeToOutput?: (s: string) => void;
 }
