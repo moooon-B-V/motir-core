@@ -206,6 +206,16 @@ case "$AGENT" in
         # GOOSE_BIN_DIR, and CONFIGURE=false is REQUIRED: it otherwise finishes
         # by running `goose configure` interactively, which has no TTY to answer
         # it and would hang the build.
+        #
+        # Goose ships its release as a `.tar.bz2`, and the slim Debian base has
+        # no bzip2 — the installer then dies with "'bzip2' is required but not
+        # installed". Installed HERE rather than in the base for the same reason
+        # aider's Python layer is: no other profile should pay for it. (Found by
+        # 7.9.7c's build matrix on its first run — a DETERMINISTIC break, not the
+        # network flake Tier 2 is allowed to have.)
+        apt-get update
+        apt-get install -y --no-install-recommends bzip2
+        rm -rf /var/lib/apt/lists/*
         curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh \
             | CONFIGURE=false GOOSE_BIN_DIR="$AGENT_PREFIX" bash
         goose --version

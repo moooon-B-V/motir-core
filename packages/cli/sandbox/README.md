@@ -7,15 +7,16 @@ sandbox Motir itself is built in.
 Running `motir auto` in a normal console stays **fully supported** — the
 container is the _recommended_ path, not a requirement.
 
-> **Status (Subtask 7.9.7d).** The base image (Node ≥ 24.15, git, `gh`, the
+> **Status (Subtask 7.9.7c).** The base image (Node ≥ 24.15, git, `gh`, the
 > `motir` binary, the `AGENT` build-arg selector) shipped in 7.9.7a; 7.9.7b
 > filled its per-agent layer seam with the **profile matrix** below — eight
-> selectable coding agents, each with its own credential mount; this slice adds
+> selectable coding agents, each with its own credential mount; 7.9.7d added
 > **CodeGraph** (the binary, the per-agent MCP wiring, and the index + git sync
-> hooks). The build/smoke CI matrix lands in 7.9.7c and the published GHCR image
-> in 7.9.7e. Until 7.9.7c, the profiles are **built and version-checked at image
-> build time** (each install layer smoke-tests its own binary) but not yet
-> exercised end-to-end by CI.
+> hooks). This slice adds the **validation harness**: every pull request now
+> builds each profile, runs its liveness check, asserts the confinement claims
+> against the real mount table, and drives `motir auto` end-to-end inside the
+> image with a fake agent (see [Validation](#validation)). The published GHCR
+> image is 7.9.7e.
 
 ## What it confines — and what it does not
 
@@ -275,6 +276,60 @@ If the agent needs to be _inside_ the image, add a case arm to
 extension surface. Adding it to `AGENT_PROFILES` without an arm fails the
 sandbox test rather than silently falling through to "unknown AGENT".
 
+## Validation
+
+Two CI jobs (`.github/workflows/ci.yml`) run on every pull request. They are the
+reason the claims on this page can be believed rather than merely written down.
+
+### `Sandbox smoke (loop + confinement)`
+
+Builds the base image, then starts it with **exactly** the mount recipe from
+[Run](#run) and executes two suites inside it:
+
+- **`confinement.sh`** — asserts the blast radius against `/proc/self/mounts`,
+  the ground truth: `/workspace` is the one writable host bind, every credential
+  bind is `ro`, **no other host path is mounted at all**, the container is
+  unprivileged, and there is no docker socket or docker client. It also proves
+  the system tree (`/`, `/etc`, `/usr/local/*`, `/opt`, `/var`) is not writable
+  by the user the agent runs as.
+
+  > **What "writes outside `/workspace` fail" does and does not mean.** `$HOME`
+  > and `/tmp` **are** writable inside the container — every coding agent writes
+  > caches, logs and sessions there, and an image that forbade it would run no
+  > agent at all. Those writes are confined because they land in the container's
+  > ephemeral layer and die with `--rm`, not because permissions stop them. The
+  > host-blast-radius claim is the mount-table one, and that is what is asserted.
+
+- **`loop-smoke.sh`** — runs `motir auto --agent <fake-agent>` end to end with
+  **no LLM, no Motir deployment, no Postgres and no network**: a zero-dependency
+  stub MCP server scripts the ready set, a fake agent does the integration, and
+  every MCP call is recorded so `assert-run.mjs` can check the SEQUENCE — one
+  `next_ready` per iteration (never a batch read-ahead), each item flipped to In
+  Progress before its prompt is fetched, each dispatched with the run's session
+  branch as the seed, each recorded through `mark_integrated` on that branch, and
+  exactly ONE pull request at the end. A run that exited 0 having skipped
+  `mark_integrated` fails this test.
+
+Run it yourself — it needs nothing but docker:
+
+```sh
+packages/cli/sandbox/smoke/run.sh            # build + smoke
+packages/cli/sandbox/smoke/run.sh --keep     # keep the fixture for inspection
+```
+
+### `Sandbox profile <id>`
+
+One leg per profile, read from `smoke/profiles.json`: `docker build
+--build-arg AGENT=<id>` from a clean checkout, then `motir --version` **and** the
+agent's own liveness check, run in the finished image as the unprivileged `node`
+user — which is what catches an installer that landed its binary somewhere only
+root can reach.
+
+**Tier 1 gates; Tier 2 is allow-fail.** Tier-2 installers pull from vendor
+endpoints Motir does not control, so a network flake there must not put a red X
+on an unrelated pull request — but the leg still runs and is still reported, so a
+profile that broke for real still gets noticed.
+
 ## Files
 
 | File                             | What it is                                                                                                                                                                                        |
@@ -285,8 +340,17 @@ sandbox test rather than silently falling through to "unknown AGENT".
 | `docker-compose.yml`             | The compose form — one service + compose profile per agent, each with its credential mount.                                                                                                       |
 | `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                         |
 | `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                     |
+| `smoke/run.sh`                   | The validation driver: build the image, run it through the documented mount recipe, execute both in-container suites.                                                                             |
+| `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                            |
+| `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                           |
+| `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call.                                                                                                       |
+| `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                           |
+| `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                  |
+| `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                               |
 
-Their invariants (the read-only PAT mount, the absence of a docker socket, the
-Node floor, the seam covering every agent profile, the codegraph wiring and its
-sync hooks) are asserted by
-[`test/sandbox.test.ts`](../test/sandbox.test.ts).
+The image sources' invariants (the read-only PAT mount, the absence of a docker
+socket, the Node floor, the seam covering every agent profile, the codegraph
+wiring and its sync hooks) are asserted by
+[`test/sandbox.test.ts`](../test/sandbox.test.ts); the validation harness itself
+is guarded against drift by
+[`test/sandboxCi.test.ts`](../test/sandboxCi.test.ts).

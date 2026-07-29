@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# A STUB `gh` for the sandbox smoke test (Subtask 7.9.7c / MOTIR-885).
+#
+# The image ships the REAL GitHub CLI — it is part of the dispatch contract — but
+# it is unauthenticated in CI and points at no repository, so the run's final
+# step (ONE pull request per repo) would report a tooling failure and the smoke
+# test would stop one move short of the end. This shim stands in for exactly the
+# two invocations `openSessionPr` makes, so the loop's close-out is exercised for
+# real: the branch is pushed, the PR is opened, the summary carries its URL.
+#
+# It is put on PATH by loop-smoke.sh and lives only for that run — the image
+# itself is never modified.
+#
+# Every invocation is appended to $MOTIR_SMOKE_GH_LOG so the smoke test can
+# assert WHAT the CLI asked for, not merely that it exited 0.
+set -euo pipefail
+
+if [ -n "${MOTIR_SMOKE_GH_LOG:-}" ]; then
+    # ONE line per invocation. The `--body` argument is a multi-line pull-request
+    # body, so newlines are folded to spaces — otherwise a single `gh pr create`
+    # would read back as twenty separate calls.
+    printf '%s\n' "$(printf '%s ' "$@" | tr '\n' ' ')" >> "$MOTIR_SMOKE_GH_LOG"
+fi
+
+if [ "${1:-}" = 'pr' ] && [ "${2:-}" = 'list' ]; then
+    # No existing pull request for the branch — empty stdout, exit 0, which is
+    # what sends `openSessionPr` down its create path.
+    exit 0
+fi
+
+if [ "${1:-}" = 'pr' ] && [ "${2:-}" = 'create' ]; then
+    # `gh pr create` prints the URL as its last line; the CLI parses exactly that.
+    echo 'https://github.example.invalid/smoke/demo-repo/pull/1'
+    exit 0
+fi
+
+echo "stub gh: unexpected invocation: $*" >&2
+exit 1

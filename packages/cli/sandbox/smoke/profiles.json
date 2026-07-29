@@ -1,0 +1,30 @@
+{
+  "$comment": [
+    "The CI BUILD + LIVENESS MATRIX for the sandbox image (7.9.7c / MOTIR-885).",
+    "One entry per agent profile: which AGENT build-arg to build, and the command",
+    "that proves the agent is actually RUNNABLE in the finished image — as the",
+    "unprivileged `node` user, which is what catches an installer that dropped its",
+    "binary somewhere only root can see.",
+    "",
+    "`liveness` is NOT the profile id and NOT agentProfiles.ts's `binary` lookup",
+    "key: `antigravity` installs `agy` and `cursor` installs `agent`. It is the",
+    "command install-agent.sh's own arm smoke-tests, and packages/cli/test/",
+    "sandboxCi.test.ts asserts the two stay identical — a renamed binary in one",
+    "place fails the unit lane rather than the 20-minute docker matrix.",
+    "",
+    "`tier` mirrors AGENT_PROFILES (also drift-guarded). Tier 2 is allow-fail in",
+    "CI: those installs pull from vendor endpoints Motir does not control, and a",
+    "network flake there must not turn a red X on somebody's unrelated pull",
+    "request — the honest posture is 'built, reported, not gating'."
+  ],
+  "profiles": [
+    { "id": "claude", "tier": 1, "liveness": "claude --version" },
+    { "id": "codex", "tier": 1, "liveness": "codex --version" },
+    { "id": "opencode", "tier": 1, "liveness": "opencode --version" },
+    { "id": "kimi", "tier": 1, "liveness": "kimi --version" },
+    { "id": "antigravity", "tier": 2, "liveness": "agy --version" },
+    { "id": "cursor", "tier": 2, "liveness": "agent --version" },
+    { "id": "aider", "tier": 2, "liveness": "aider --version" },
+    { "id": "goose", "tier": 2, "liveness": "goose --version" }
+  ]
+}
