@@ -14,6 +14,8 @@
 // fall back to this parse for free-form descriptions that don't follow the
 // section convention.
 
+import { splitPlanBody } from './planBody';
+
 /**
  * Pull the file paths an agent should read out of the body's `## Context refs`
  * section. Every bullet under that heading (until the next heading) contributes
@@ -21,24 +23,13 @@
  * bullet text up to the first ` — ` / ` - ` separator. Returns `[]` when the
  * body is empty or has no such section. Case-insensitive on the heading;
  * tolerant of `##`/`###` levels.
+ *
+ * The parse itself lives in `splitPlanBody` (MOTIR-1802), which partitions the
+ * SAME body into narrative + acceptance criteria + refs for the dispatch-prompt
+ * assembly. This stays the named entry point every refs consumer already
+ * imports; delegating keeps the two readers from ever disagreeing on where the
+ * section starts and ends.
  */
 export function extractContextRefs(md: string | null | undefined): string[] {
-  if (!md) return [];
-  const refs: string[] = [];
-  let inSection = false;
-  for (const line of md.split('\n')) {
-    const heading = line.match(/^#{2,}\s+(.*)$/);
-    if (heading) {
-      inSection = /context\s+refs?/i.test(heading[1] ?? '');
-      continue;
-    }
-    if (!inSection) continue;
-    const bullet = line.match(/^\s*[-*+]\s+(.*)$/);
-    if (!bullet) continue;
-    const item = (bullet[1] ?? '').trim();
-    const backtick = item.match(/`([^`]+)`/);
-    const ref = backtick ? (backtick[1] ?? '').trim() : (item.split(/\s[—–-]\s/)[0] ?? '').trim();
-    if (ref) refs.push(ref);
-  }
-  return refs;
+  return splitPlanBody(md).contextRefs;
 }
