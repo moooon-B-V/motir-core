@@ -114,6 +114,14 @@ describe('the curated overview', () => {
         open [options] <key>  Open a work item (e.g. PROD-7) in the browser; prints
                               the URL.
 
+      WORK LOOP COMMANDS:
+        next [options]        Dispatch the next ready work item: claim it and deliver
+                              its prompt.
+        run [options] <key>   Dispatch a SPECIFIC work item (e.g. PROD-7), ready or
+                              forced.
+        done [options] [key]  Close out a merged item — or a whole merged session
+                              branch.
+
       HELP TOPICS:
         help [command...]     Show help for a command, or read a help topic.
         environment           Environment variables Motir reads, and what each one
@@ -176,9 +184,15 @@ describe('group membership', () => {
   it('puts the shipped commands in their authored groups, in authored order', () => {
     const groups = commandGroups(render(buildProgram()));
 
-    expect([...groups.keys()]).toEqual([HELP_GROUP.setup, HELP_GROUP.read, HELP_GROUP.topics]);
+    expect([...groups.keys()]).toEqual([
+      HELP_GROUP.setup,
+      HELP_GROUP.read,
+      HELP_GROUP.workLoop,
+      HELP_GROUP.topics,
+    ]);
     expect(groups.get(HELP_GROUP.setup)).toEqual(['auth', 'link', 'doctor']);
     expect(groups.get(HELP_GROUP.read)).toEqual(['ready', 'status', 'open']);
+    expect(groups.get(HELP_GROUP.workLoop)).toEqual(['next', 'run', 'done']);
     expect(groups.get(HELP_GROUP.topics)).toEqual(['help', 'environment', 'files']);
   });
 
@@ -196,8 +210,14 @@ describe('group membership', () => {
     expect(groups.get(HELP_GROUP.additional)).toEqual(['throwaway']);
   });
 
-  it('renders no heading for the empty WORK LOOP group', () => {
-    expect(render(buildProgram())).not.toContain(HELP_GROUP.workLoop);
+  it('renders the WORK LOOP heading now that the dispatch commands have landed', () => {
+    // 7.9.3 populated the group that 7.9.2 reserved — the guarantee it was
+    // reserved FOR. It renders after READ and before HELP TOPICS, which is the
+    // registration order in program.ts (`auto` / `batch` join it in 7.9.4+).
+    const overview = render(buildProgram());
+    expect(overview).toContain(HELP_GROUP.workLoop);
+    expect(overview.indexOf(HELP_GROUP.read)).toBeLessThan(overview.indexOf(HELP_GROUP.workLoop));
+    expect(overview.indexOf(HELP_GROUP.workLoop)).toBeLessThan(overview.indexOf(HELP_GROUP.topics));
   });
 });
 

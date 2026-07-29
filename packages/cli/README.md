@@ -49,6 +49,57 @@ motir link remove <repo>                              # remove an override
 motir doctor [--agent <cmd>] [--json]                 # BYOK preflight (read-only)
 ```
 
+## Dispatch — `motir next` / `motir run` / `motir done` (7.9.3)
+
+```sh
+motir next [--kinds <list>] [--print | --agent <cmd>] [--reset]
+motir run <key> [--print | --agent <cmd>] [--force]
+motir done <key> [--via <status>]
+motir done --session <branch>
+```
+
+`next` picks the next ready item; `run` takes an explicit key. Both then follow
+the same pipeline:
+
+```
+select → transition_status(in_progress) → dispatch_prompt → deliver
+```
+
+**The prompt is generated SERVER-SIDE** (`dispatch_prompt`, MOTIR-1802) and
+printed byte-identical. The CLI never assembles prompt text, so every harness —
+Claude Code, Codex, opencode, or a human reading it — receives the same
+instruction and the grammar versions with the product.
+
+**Two delivery modes.** `--print` (the default, and what you get whenever no
+agent is configured) writes the prompt to **stdout** and everything else to
+**stderr**, so `motir next --print | pbcopy` copies the prompt alone while you
+still see the target repo and resolved path on screen. `--agent "<cmd>"` — or
+`MOTIR_AGENT`, or `agentCommand` in the user config, in that precedence — runs
+your agent on it, handing the prompt over **both** stdin **and**
+`$MOTIR_PROMPT_FILE` (a 0600 temp file), streaming its output through live.
+
+**Repo routing.** The dispatch payload names the item's repo (`targetRepo`);
+the CLI maps that name to a checkout via the `.motir.json` override map or the
+`<root>/<repoName>` convention, and runs the agent there — so dispatching a
+`motir-ai` item while standing in `motir-core` just works. If the checkout is
+**missing**, the agent runs at the workspace root so the prompt's GIT WORKFLOW
+can create it, and the CLI verifies afterwards (reporting a suspect dispatch
+with a `motir link add` hint if it did not appear). An item is **never** run in
+some other existing checkout — an unpinned item falls back to the root.
+
+**After the agent exits.** Exit 0 lands the item at **In Review**: a per-item-PR
+item via `transition_status`, a session-lineage item via `mark_integrated` on
+its inherited branch. A non-zero exit leaves the item **In Progress** (work was
+started — nothing is reverted), propagates the agent's exit code, and records
+the item in the session exclude list so the next `motir next` moves past it;
+`--reset` clears that list.
+
+**Closing out.** After you merge, `motir done <key>`. The default workflow has
+no direct `in_progress → done` edge, so an item dispatched with `--print` (which
+never observed an agent finish) needs `motir done --via in_review <key>`; an
+illegal flip surfaces the server's own allowed-targets error verbatim. A merged
+**session** PR closes out in bulk with `motir done --session <branch>`.
+
 ## Help + topics
 
 `motir`, `motir help` and `motir --help` all print the same curated overview on
@@ -59,6 +110,7 @@ Usage: motir [options] [command]
 
 SETUP COMMANDS:      auth · link · doctor
 READ COMMANDS:       ready · status · open
+WORK LOOP COMMANDS:  next · run · done
 HELP TOPICS:         help · environment · files
 FLAGS:               -v, --version · -h, --help
 EXAMPLES:            …
@@ -69,8 +121,10 @@ Commands are grouped with commander's native `.helpGroup()` (see `src/help.ts`);
 group ORDER is the registration order in `src/program.ts`. **A command
 registered without an explicit group falls into `ADDITIONAL COMMANDS`**, so a
 later subtask adds a command — and, with one `.helpGroup(...)` line, files it
-under `SETUP` / `READ` / the reserved `WORK LOOP COMMANDS` — without ever
-rewriting the help surface.
+under `SETUP` / `READ` / `WORK LOOP COMMANDS` — without ever rewriting the help
+surface. (7.9.3 was the first to exercise that: `next` / `run` / `done` joined
+the reserved work-loop group with one line each, and `auto` / `batch` will do
+the same.)
 
 Two **topics** answer what a command list cannot:
 
