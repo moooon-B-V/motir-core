@@ -16,6 +16,7 @@ import {
   type BatchSummary,
 } from '../src/batchPlan.js';
 import { parseMax } from '../src/commands/auto.js';
+import { addExclude, readExcludes } from '../src/sessionExcludes.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/mcpClient.js';
@@ -75,6 +76,13 @@ class FakeServer {
   readonly nextReadyCalls: { kinds?: string[]; excluded: number }[] = [];
   /** Set to make every write fail the way a read-only PAT does. */
   readOnly = false;
+  /** Model a server that IGNORES `excludeIds` — it keeps answering with the
+   *  same item. The enumeration must still terminate. */
+  ignoreExcludes = false;
+  /** Keys the server reports as `session_lineage` WITHOUT naming the branch.
+   *  `sessionBranch` is nullable on the dispatch payload, so the refusal has to
+   *  read without a name rather than printing `null`. */
+  readonly unnamedLineage = new Set<string>();
 
   constructor(private readonly items: FakeItem[]) {}
 
@@ -122,7 +130,7 @@ class FakeServer {
           ...(args.kinds ? { kinds: args.kinds } : {}),
           excluded: args.excludeIds?.length ?? 0,
         });
-        const excluded = new Set(args.excludeIds ?? []);
+        const excluded = new Set(this.ignoreExcludes ? [] : (args.excludeIds ?? []));
         const item = this.items.find(
           (i) =>
             i.status === 'todo' &&
@@ -151,6 +159,15 @@ class FakeServer {
       ): Promise<DispatchPrompt> => {
         const item = this.byKey(key);
         this.promptCalls.push({ key, seeded: opts.sessionBranch !== undefined });
+        if (this.unnamedLineage.has(key)) {
+          return {
+            key,
+            prompt: `PROMPT ${key}`,
+            targetRepo: item.targetRepo,
+            workflowMode: 'session_lineage',
+            sessionBranch: null,
+          };
+        }
         // The server rule: the item's real lineage decides the workflow mode.
         const branch = this.inherited(item) ?? item.sessionBranch ?? opts.sessionBranch ?? null;
         return {
@@ -238,6 +255,13 @@ async function drive(
   };
   const summary = await runBatch(input);
   return { summary, dispatched };
+}
+
+/** Everything the run wrote to stderr — the sink `info()` prints to. */
+function printed(): string {
+  const chunks: string[] = [];
+  for (const call of stderrSpy.mock.calls) chunks.push(String(call[0]));
+  return chunks.join('');
 }
 
 // ── the snapshot filter ─────────────────────────────────────────────────────
@@ -501,6 +525,72 @@ describe('motir batch — exclusions', () => {
   });
 });
 
+// ── the persisted exclude list ──────────────────────────────────────────────
+
+describe('motir batch — previously-failed items', () => {
+  it('holds a persisted exclude OUT of the snapshot and says how many', async () => {
+    // An item a previous run's agent failed on is excluded at ENUMERATION time,
+    // so it is not merely skipped later — it never enters the frozen list, and
+    // so can never be counted as "newly ready" either.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    addExclude('https://app.motir.co', 'PROD', { id: 'idA', key: 'PROD-1' });
+
+    const { dispatched, summary } = await drive(server);
+
+    expect(dispatched).toEqual(['PROD-2']);
+    expect(summary.newlyReady).toEqual([]);
+    expect(printed()).toContain('Skipping 1 previously-failed item(s) — `--reset` retries them.');
+  });
+
+  it('--reset clears the list first, counting it in singular and plural', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    addExclude('https://app.motir.co', 'PROD', { id: 'idX', key: 'PROD-90' });
+    addExclude('https://app.motir.co', 'PROD', { id: 'idY', key: 'PROD-91' });
+
+    await drive(server, { opts: { reset: true } });
+    expect(printed()).toContain('Cleared 2 excluded items.');
+    expect(readExcludes('https://app.motir.co', 'PROD')).toEqual([]);
+
+    // …and again with exactly one held back, so the singular arm is real copy
+    // rather than a plural with an `s` a reader has to forgive.
+    stderrSpy.mockClear();
+    server.byKey('PROD-1').status = 'todo';
+    addExclude('https://app.motir.co', 'PROD', { id: 'idZ', key: 'PROD-92' });
+    await drive(server, { opts: { reset: true } });
+    expect(printed()).toContain('Cleared 1 excluded item.');
+  });
+
+  it('records a failure in the exclude list and drops it again on a later success', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server, { agentResults: () => ({ exitCode: 4, signal: null }) });
+    expect(readExcludes('https://app.motir.co', 'PROD').map((e) => e.key)).toEqual(['PROD-1']);
+
+    // The re-run has to be told to retry it, which is what `--reset` is for.
+    server.byKey('PROD-1').status = 'todo';
+    await drive(server, { opts: { reset: true } });
+    expect(readExcludes('https://app.motir.co', 'PROD')).toEqual([]);
+  });
+});
+
+// ── the enumeration terminates, whatever the server does ────────────────────
+
+describe('motir batch — the enumeration', () => {
+  it('stops on a repeat rather than looping forever when the server ignores excludeIds', async () => {
+    // `enumerateReady` advances by EXCLUDING each answer from the next question.
+    // A server that ignored `excludeIds` would answer with the same item every
+    // time, and an unattended command would spin until it was killed. Seeing the
+    // same id twice ends the enumeration instead.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    server.ignoreExcludes = true;
+
+    const { dispatched, summary } = await drive(server);
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(summary.stopReason).toBe('completed');
+    expect(printed()).toContain('Snapshot: 1 work item');
+  });
+});
+
 // ── shared loop mechanics (7.9.4) ───────────────────────────────────────────
 
 describe('motir batch — failure policy and caps', () => {
@@ -570,6 +660,108 @@ describe('motir batch — failure policy and caps', () => {
     expect(summary.notReached.map((e) => e.key)).toEqual(['PROD-2', 'PROD-3']);
     expect(batchExitCode(summary)).toBe(130);
   });
+
+  it('reports an interrupt that arrives DURING a failing agent as interrupted, not halted', async () => {
+    // Both stop conditions fire on the same item: the agent failed (which halts
+    // without --keep-going) and a Ctrl-C landed while it ran. The interrupt is
+    // the more truthful reason — the human stopped the run, and saying "halted
+    // on the first agent failure (--keep-going continues past one)" would offer
+    // a flag that would not have changed anything.
+    const server = three();
+    const { dispatched, summary } = await drive(server, {
+      onDispatch: (key) => {
+        if (key === 'PROD-1') process.emit('SIGINT');
+      },
+      agentResults: () => ({ exitCode: 2, signal: null }),
+    });
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(summary.stopReason).toBe('interrupted');
+    expect(summary.notReached.map((e) => e.key)).toEqual(['PROD-2', 'PROD-3']);
+    // A failure outranks the interrupt in the EXIT CODE — something needs fixing.
+    expect(batchExitCode(summary)).toBe(1);
+    expect(renderBatchSummary(summary)).toContain('interrupted (Ctrl-C)');
+  });
+
+  it('a SECOND Ctrl-C exits immediately instead of finishing the item in flight', async () => {
+    const server = three();
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    try {
+      await drive(server, {
+        onDispatch: (_key, index) => {
+          if (index !== 0) return;
+          process.emit('SIGINT');
+          process.emit('SIGINT');
+        },
+      });
+      expect(exitSpy).toHaveBeenCalledWith(130);
+    } finally {
+      exitSpy.mockRestore();
+    }
+    // The first interrupt still printed the "press again" contract it offered.
+    expect(printed()).toContain('Press Ctrl-C again to exit immediately.');
+  });
+});
+
+// ── how one item can end ────────────────────────────────────────────────────
+
+describe('motir batch — a single item’s outcomes', () => {
+  it('reports an agent killed by a SIGNAL with the signal, not a bare exit code', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    const { summary } = await drive(server, {
+      agentResults: () => ({ exitCode: 1, signal: 'SIGKILL' }),
+    });
+
+    expect(summary.records).toEqual([
+      expect.objectContaining({ key: 'PROD-1', outcome: 'failed', detail: 'killed by SIGKILL' }),
+    ]);
+    expect(renderBatchSummary(summary)).toContain('FAILED (killed by SIGKILL)');
+    // Killed is still failed: In Progress, nothing reverted.
+    expect(server.byKey('PROD-1').status).toBe('in_progress');
+  });
+
+  it('counts a bootstrap dispatch that never produced its checkout as FAILED', async () => {
+    // `motir-ai` has no checkout under the root, so the item routes to the
+    // workspace root for the prompt to CREATE it. The agent exits 0 without
+    // creating anything — the dispatch did not do its job, so a clean exit code
+    // must not be read as success, and the item must not go to In Review.
+    const server = new FakeServer([leaf('idA', 'PROD-1', { targetRepo: 'motir-ai' })]);
+    const { summary } = await drive(server);
+
+    expect(summary.records).toEqual([
+      expect.objectContaining({
+        key: 'PROD-1',
+        outcome: 'failed',
+        detail: 'bootstrap checkout missing',
+        repo: 'motir-ai',
+      }),
+    ]);
+    expect(server.transitions).toEqual([{ key: 'PROD-1', status: 'in_progress' }]);
+    expect(printed()).toContain('still has no checkout');
+    expect(printed()).toContain('motir link add motir-ai');
+  });
+
+  it('names the refusal readably when the server reports lineage without a branch name', async () => {
+    // `sessionBranch` is nullable on the dispatch payload, so the refusal cannot
+    // assume a name to print. It must still say what happened rather than
+    // interpolating `null` into the sentence.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    server.unnamedLineage.add('PROD-1');
+
+    const { dispatched, summary } = await drive(server);
+
+    expect(dispatched).toEqual(['PROD-2']);
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-1',
+      title: 'Item PROD-1',
+      reason: 'integrated_dep',
+    });
+    expect(printed()).toContain(
+      'PROD-1: skipped — a dependency was integrated on a session branch after the snapshot was taken.',
+    );
+    // Refused UNTOUCHED — the refusal precedes the status flip.
+    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-2', 'PROD-2']);
+  });
 });
 
 // ── rendering ───────────────────────────────────────────────────────────────
@@ -598,5 +790,66 @@ describe('the snapshot plan block', () => {
     expect(text).toContain('PROD-1');
     expect(text).toContain('motir-core');
     expect(text).toContain('Not in the snapshot — needs planning (1)');
+  });
+
+  it('renders an unpinned repo and an absent title as placeholders, never "null"', () => {
+    // `targetRepo` and `title` are both nullable on a work item, and this table
+    // is the first thing a human reads before deciding to let the run proceed.
+    const text = renderSnapshotPlan({
+      taken: [{ id: 'i1', key: 'PROD-1', title: null, kind: 'subtask', targetRepo: null }],
+      skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
+    });
+    expect(text).toContain('—');
+    expect(text).toContain('Not in the snapshot — needs a human (1)');
+    expect(text).not.toContain('null');
+  });
+});
+
+describe('the end-of-run summary block', () => {
+  const summary = (over: Partial<BatchSummary> = {}): BatchSummary => ({
+    records: [],
+    skipped: [],
+    notReached: [],
+    newlyReady: [],
+    stopReason: 'completed',
+    ...over,
+  });
+
+  it('says plainly when nothing was dispatched', () => {
+    const text = renderBatchSummary(summary());
+    expect(text).toContain('Batch finished — stopped: the whole snapshot was attempted.');
+    expect(text).toContain('No work items were dispatched.');
+    // Nothing is In Review, so the merge-these block is absent rather than empty.
+    expect(text).not.toContain('OWN pull request to merge');
+  });
+
+  it('tables a run where everything FAILED, with no In Review block', () => {
+    const text = renderBatchSummary(
+      summary({
+        records: [{ key: 'PROD-1', title: null, outcome: 'failed', durationMs: 1000, repo: null }],
+        stopReason: 'halted',
+      }),
+    );
+    expect(text).toContain('halted on the first agent failure');
+    expect(text).toContain('Failed — still In Progress, nothing reverted (1)');
+    expect(text).toContain('motir run PROD-1');
+    expect(text).not.toContain('OWN pull request to merge');
+    expect(text).not.toContain('null');
+  });
+
+  it('names a not-reached and a newly-ready item that carry no title', () => {
+    const text = renderBatchSummary(
+      summary({
+        notReached: [{ id: 'i2', key: 'PROD-2', title: null, kind: 'subtask', targetRepo: null }],
+        newlyReady: [{ key: 'PROD-3', title: null }],
+        stopReason: 'max',
+      }),
+    );
+    expect(text).toContain('--max reached');
+    expect(text).toContain('Not reached — still in the snapshot, never started (1)');
+    expect(text).toContain('PROD-2');
+    expect(text).toContain('1 became ready during the run — NOT dispatched');
+    expect(text).toContain('PROD-3');
+    expect(text).not.toContain('null');
   });
 });
