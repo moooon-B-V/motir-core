@@ -7,16 +7,93 @@ sandbox Motir itself is built in.
 Running `motir auto` in a normal console stays **fully supported** — the
 container is the _recommended_ path, not a requirement.
 
-> **Status (Subtask 7.9.7c).** The base image (Node ≥ 24.15, git, `gh`, the
+> **Status (Subtask 7.9.7e).** The base image (Node ≥ 24.15, git, `gh`, the
 > `motir` binary, the `AGENT` build-arg selector) shipped in 7.9.7a; 7.9.7b
 > filled its per-agent layer seam with the **profile matrix** below — eight
 > selectable coding agents, each with its own credential mount; 7.9.7d added
 > **CodeGraph** (the binary, the per-agent MCP wiring, and the index + git sync
-> hooks). This slice adds the **validation harness**: every pull request now
-> builds each profile, runs its liveness check, asserts the confinement claims
-> against the real mount table, and drives `motir auto` end-to-end inside the
-> image with a fake agent (see [Validation](#validation)). The published GHCR
-> image is 7.9.7e.
+> hooks); 7.9.7c added the **validation harness** — every pull request builds
+> each profile, runs its liveness check, asserts the confinement claims against
+> the real mount table, and drives `motir auto` end-to-end inside the image with
+> a fake agent (see [Validation](#validation)). This slice **publishes** it: the
+> smoke-tested images go to GHCR on a `cli-v*` tag, so adopting the sandbox is a
+> `docker run`, not a `git clone` (see [Publishing](#publishing)).
+
+## Run
+
+Pull and go — no checkout, no build:
+
+```sh
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.config/motir:/home/node/.config/motir:ro" \
+  -v "$HOME/.claude:/home/node/.claude:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox:claude \
+  motir auto --agent "claude --dangerously-skip-permissions"
+```
+
+Three mounts, and they are the whole host contract:
+
+| Mount                      | Why                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `$PWD:/workspace`          | Writable. Your `.motir.json` tree — the only host path the agent can change.                                 |
+| `$HOME/.config/motir:…:ro` | Read-only. The Motir PAT: `motir auth login` runs on the **host**, the container only consumes the result.   |
+| `$HOME/.claude:…:ro`       | Read-only. The agent's own credential — swap it for your profile's row in [the matrix](#the-profile-matrix). |
+
+Run it from your **workspace root** (the directory holding `.motir.json`), not
+from inside a single checkout — `motir auto` dispatches across every repo in the
+workspace. With no command, you get an interactive shell in `/workspace`
+instead.
+
+> The `base` image ships **no** coding agent, so `motir auto --agent …` has
+> nothing to launch there. Use it for `motir next --print` workflows — the
+> entrypoint keeps stdout clean, so piping the prompt straight out of
+> `docker run` works — and run your agent on the host. For an unattended loop,
+> pull one of the agent profiles below.
+
+## Published images
+
+`ghcr.io/moooon-b-v/motir-sandbox`, one tag per profile plus the agent-less
+base, built for **linux/amd64 + linux/arm64** (Apple Silicon is a first-class
+BYOK dev machine). Each tag exists in two forms:
+
+- `:<profile>` — **moving**. Points at the latest release. Convenient, not
+  reproducible.
+- `:<profile>-<version>` — **immutable**, where `<version>` is the
+  [`@motir/cli`](../package.json) version the image was cut from, so the `motir`
+  inside the image and the one on npm are the same build.
+
+**Pin the digest for anything you need to reproduce.** A moving tag is not a
+sandbox you can re-enter — the same argument 7.9.7a makes for the base image:
+
+```sh
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.config/motir:/home/node/.config/motir:ro" \
+  -v "$HOME/.claude:/home/node/.claude:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox@sha256:<digest> \
+  motir auto --agent "claude --dangerously-skip-permissions"
+```
+
+| Tag                                            | Digest                                 |
+| ---------------------------------------------- | -------------------------------------- |
+| `ghcr.io/moooon-b-v/motir-sandbox:base`        | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | _no release published yet — see below_ |
+| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | _no release published yet — see below_ |
+
+The digests are filled in from the release run's job summary at each `cli-v*`
+tag (see [Publishing](#publishing)) — this table is the record, but it is a
+transcription, so the registry is always the authority:
+
+```sh
+docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
+```
 
 ## What it confines — and what it does not
 
@@ -29,18 +106,19 @@ container is the _recommended_ path, not a requirement.
 The PAT mount is read-only because the container _consumes_ a credential and
 never mints or rotates one: run `motir auth login` on the **host**.
 
-## Build
+## Build it yourself
 
-The build context is the motir-core repo **root** (the image builds the `motir`
-binary from your checkout — `@motir/cli` is not on npm yet):
+Everything below still works from a checkout — that is the path to take when you
+are **customising a profile**, adding an agent, or running the image off an
+unreleased commit. The build context is the motir-core repo **root** (the image
+builds the `motir` binary from your checkout):
 
 ```sh
 docker build -f packages/cli/sandbox/Dockerfile -t motir-sandbox:base .
 ```
 
-## Run
-
-The entrypoint drops into `/workspace`, so a full unattended run is a one-liner:
+A locally built image runs exactly like a pulled one — same mounts, same
+entrypoint; only the image reference changes:
 
 ```sh
 docker run --rm -it \
@@ -49,17 +127,6 @@ docker run --rm -it \
   -v "$HOME/.claude:/home/node/.claude:ro" \
   motir-sandbox:claude motir auto --agent "claude --dangerously-skip-permissions"
 ```
-
-Run it from your **workspace root** (the directory holding `.motir.json`), not
-from inside a single checkout — `motir auto` dispatches across every repo in the
-workspace. With no command, you get an interactive shell in `/workspace`
-instead.
-
-> The `base` image ships **no** coding agent, so `motir auto --agent …` has
-> nothing to launch there. Use it for `motir next --print` workflows — the
-> entrypoint keeps stdout clean, so piping the prompt straight out of
-> `docker run` works — and run your agent on the host. For an unattended loop,
-> build one of the agent profiles below.
 
 ## Compose
 
@@ -90,8 +157,18 @@ devcontainer up --workspace-folder . \
 
 To use one for your own workspace, copy the file to
 `<your-workspace>/.devcontainer/devcontainer.json` and repoint `build.context` /
-`build.dockerfile` at your motir-core checkout. Once 7.9.7e publishes the image,
-the whole `build` block collapses to a pinned `"image": "ghcr.io/…"`.
+`build.dockerfile` at your motir-core checkout — **or** drop the whole `build`
+block and pin the published image instead, which needs no checkout at all:
+
+```jsonc
+{
+  "image": "ghcr.io/moooon-b-v/motir-sandbox@sha256:<digest>",
+  // …the same mounts / workspaceFolder the committed file carries
+}
+```
+
+The committed files keep the `build` block because they are the _repo's_ dev
+containers, and a checkout is exactly what those are for.
 
 ## Selecting an agent (`AGENT`)
 
@@ -278,8 +355,12 @@ sandbox test rather than silently falling through to "unknown AGENT".
 
 ## Validation
 
-Two CI jobs (`.github/workflows/ci.yml`) run on every pull request. They are the
-reason the claims on this page can be believed rather than merely written down.
+The build/smoke matrix lives in `.github/workflows/sandbox-images.yml` and runs
+on every pull request (`ci.yml` calls it). It is the reason the claims on this
+page can be believed rather than merely written down — and, because
+[Publishing](#publishing) calls the very same workflow, it is also the release
+gate: the push step is a later step of the job that just proved the image works,
+so an image no smoke test touched cannot reach the registry.
 
 ### `Sandbox smoke (loop + confinement)`
 
@@ -325,10 +406,66 @@ agent's own liveness check, run in the finished image as the unprivileged `node`
 user — which is what catches an installer that landed its binary somewhere only
 root can reach.
 
-**Tier 1 gates; Tier 2 is allow-fail.** Tier-2 installers pull from vendor
-endpoints Motir does not control, so a network flake there must not put a red X
-on an unrelated pull request — but the leg still runs and is still reported, so a
-profile that broke for real still gets noticed.
+**Tier 1 gates; Tier 2 is allow-fail — on the pull-request lane.** Tier-2
+installers pull from vendor endpoints Motir does not control, so a network flake
+there must not put a red X on an unrelated pull request — but the leg still runs
+and is still reported, so a profile that broke for real still gets noticed. **On
+the release lane every tier gates**: a release that quietly shipped six of eight
+images, green, is worse than one that failed.
+
+## Publishing
+
+`.github/workflows/release-sandbox.yml`, on a `cli-v<x.y.z>` **tag** — the same
+tag that releases [`@motir/cli`](../package.json) to npm, so the binary in the
+image and the published package are the same version by construction. There is
+deliberately no push-to-`main` trigger: a `:latest` that moves on every merge is
+not a sandbox anyone can reproduce a run in.
+
+```sh
+# 1. bump packages/cli/package.json `version`, open + merge the PR
+# 2. tag the merge commit
+git tag cli-v0.2.0 && git push origin cli-v0.2.0
+```
+
+The tag fires the guard (tag version must equal `packages/cli/package.json`), then
+the [validation](#validation) matrix with its push steps on, then a
+**post-deploy verification** job that pulls every image back **by digest** and
+runs `motir --version` in it — because "the push exited 0" and "a user can pull
+this and run it" are different claims. That job's summary prints the digest
+table; paste it into [Published images](#published-images).
+
+Auth is the workflow's own `GITHUB_TOKEN` under a `packages: write` permission
+block, granted on the release lane only. **No repository secret, no registry
+account, nothing provisioned out of band** — and the pull-request lane, which has
+no such block, cannot push even if it tried.
+
+Four things worth knowing before your first release:
+
+- **Package visibility.** A GHCR package starts private. After the first
+  successful release, make it public once at
+  `https://github.com/orgs/moooon-B-V/packages/container/motir-sandbox/settings`,
+  or the `docker run` at the top of this page will ask a stranger for
+  credentials.
+- **`workflow_dispatch` with `dry_run: true`** runs the whole lane without
+  pushing — how to validate a change to the release path without minting a
+  version.
+- **What "arm64 works" is actually backed by.** The runner is amd64, so that is
+  the arch the liveness and smoke checks EXECUTE. The arm64 half is built under
+  QEMU, where each install arm still runs its own `<agent> --version` at build
+  time — a strong build-time check, not a run-time one. An agent whose vendor
+  ships no arm64 binary therefore fails the RELEASE build rather than shipping a
+  broken arm64 layer.
+- **A Tier-2 vendor can block a release, on purpose.** Since every tier gates
+  here, a vendor endpoint that is down at tag time fails the run. Re-run the
+  failed job once the vendor recovers (the guard is idempotent — re-tagging is
+  not needed), or drop that profile from `smoke/profiles.json` and
+  `AGENT_PROFILES` if it is gone for good. Do not "fix" it by publishing a
+  partial set: the verification job fails on a missing digest precisely so a
+  short release cannot pass as a complete one.
+
+Not in scope here, deliberately: signing / SBOM / provenance attestation (a real
+hardening concern, and its own decision — half of it would be worse than none),
+and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 
 ## Files
 
@@ -348,9 +485,13 @@ profile that broke for real still gets noticed.
 | `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                  |
 | `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                               |
 
+Two workflow files sit outside this directory: the build/smoke/publish matrix
+itself, `.github/workflows/sandbox-images.yml`, and the tagged release lane that
+calls it with publishing on, `.github/workflows/release-sandbox.yml`.
+
 The image sources' invariants (the read-only PAT mount, the absence of a docker
 socket, the Node floor, the seam covering every agent profile, the codegraph
 wiring and its sync hooks) are asserted by
-[`test/sandbox.test.ts`](../test/sandbox.test.ts); the validation harness itself
-is guarded against drift by
+[`test/sandbox.test.ts`](../test/sandbox.test.ts); the validation harness and the
+release lane are guarded against drift by
 [`test/sandboxCi.test.ts`](../test/sandboxCi.test.ts).
