@@ -232,6 +232,56 @@ re-run will pick up.
 
 Both leave `main` untouched: it moves only through a pull request a human merges.
 
+## Planning — `motir plan` (7.9.9)
+
+```sh
+motir plan                       # resume the PROJECT-WIDE planning conversation
+motir plan MOTIR-42 [MOTIR-9]    # resume the conversation ANCHORED at those items
+motir plan "<what to change>"    # append one turn and submit it
+motir plan MOTIR-42 "<text>" --detach
+```
+
+Where `next` / `auto` / `batch` implement the plan, `plan` **changes** it — and it
+does that the way Motir actually models planning: as a **conversation**, not a
+one-shot description.
+
+**One thread, two surfaces.** A planning conversation is a persisted, resumable
+thread — one per project per anchor set — and this command is a CLIENT of it, never
+the owner of a parallel one. It addresses the thread by SCOPE (the project, plus any
+anchor keys), which is the thread's identity, so **a turn typed in the terminal
+appears in the web planning workspace and vice versa**. `motir plan` opens it,
+prints every turn already on it, and then reads more.
+
+**Appending is not submitting.** Turns ACCUMULATE. `/submit` sends them as ONE
+change, framed so later turns REFINE earlier ones — "add auth to the billing epic"
+then "keep them under 3 points" go out together. `/exit` leaves; **quitting can
+never lose a turn**, because each one is server-side the moment you press Enter.
+Ctrl-D reads as `/exit`, never as a submit.
+
+**What comes back is PROPOSALS.** After a submit the command waits for the planner
+(bounded — 10 minutes, and `--detach` skips the wait entirely), then prints the
+proposed tree: indented under each proposal's proposed parent, with an op marker
+(`+` add / `~` modify / `-` remove), kind/type and leaf sizing. Nothing there
+exists in your tree: **approving the plan in Motir is the only thing that creates a
+work item**, so the output says so and never reports "created N items". Then it
+offers the loop's real next step — add another turn to refine, or open the review
+URL to approve.
+
+**Leading `KEY` arguments anchor; the rest is text.** `motir plan MOTIR-42 size
+these` opens the thread anchored at MOTIR-42 and appends "size these". A different
+key set is a different thread. The CLI never picks the job kind — motir-ai
+classifies expand / augment / re-plan from the thread's own scope.
+
+**A fresh project is refused, with a pointer.** The submit path reaches
+`augment` / contextual, never generation: generating a first plan is the onboarding
+discovery interview's job, a guided web flow. So a project with no work items is
+detected **before any turn is appended** and the command exits with the
+`/onboarding` URL, having appended and submitted nothing.
+
+**Unattended.** The quoted-text form is the scriptable one; add `--detach` to get
+the job/plan ids and the review URL without waiting. A non-TTY invocation with no
+text is an **error naming that shorthand** — never a prompt that hangs.
+
 ## Help + topics
 
 `motir`, `motir help` and `motir --help` all print the same curated overview on

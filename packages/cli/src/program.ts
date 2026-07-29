@@ -7,6 +7,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
 import { autoCommand } from './commands/auto.js';
 import { batchCommand } from './commands/batch.js';
+import { planCommand } from './commands/plan.js';
 import { HELP_GROUP, applyHelpConfiguration, registerHelpSurface } from './help.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
@@ -167,6 +168,33 @@ export function buildProgram(): Command {
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `batchCommand`'s injectable-deps parameter.
     .action((opts) => batchCommand(opts));
+  // The planning front door. NOT a dispatch command: it changes the PLAN (a
+  // conversation whose submit produces proposals awaiting approval in Motir),
+  // which is why it sits at the end of the work-loop group rather than among
+  // `next` / `run` / `auto`.
+  program
+    .command('plan [args...]')
+    .description('Plan by talking: resume the project’s planning conversation, add turns, submit.')
+    .helpGroup(HELP_GROUP.workLoop)
+    .option('--detach', 'Submit and return with the job/plan ids; do not wait for the planner.')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Leading MOTIR-<n> arguments ANCHOR the conversation at those items; the rest is a turn.',
+        '',
+        '  $ motir plan                       # resume the project-wide conversation',
+        '  $ motir plan MOTIR-42              # resume the conversation anchored at MOTIR-42',
+        '  $ motir plan "split the billing epic"   # one turn, submitted, proposals printed',
+        '  $ motir plan MOTIR-42 "size these" --detach',
+        '',
+        'In the conversation: /submit sends every turn as ONE change, /exit leaves it saved.',
+        'A submit produces PROPOSALS — approving the plan in Motir is what creates work items.',
+      ].join('\n'),
+    )
+    // Arity-2 wrapper: commander appends the Command object, which must not land
+    // in `planCommand`'s injectable-deps parameter.
+    .action((args: string[], opts) => planCommand(args, opts));
   program
     .command('done [key]')
     .description('Close out a merged item — or a whole merged session branch.')
