@@ -228,7 +228,23 @@ describe('EstimateBadge — signals onEstimateChanged after a committed point ed
     // A rejected write must NOT signal a refresh (the roll-up did not change).
     onChanged.mockClear();
     fetchSpy.mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'nope' }) });
-    fireEvent.click(screen.getByRole('button', { name: 'Story points: 8 — edit' }));
+
+    // WAIT FOR THE TRIGGER TO BE RE-ENABLED before re-opening the picker
+    // (MOTIR-1839). `EstimateBadge` runs its write inside `startTransition` and
+    // renders the trigger `disabled={isPending}`, but calls `onEstimateChanged`
+    // INSIDE that transition — so the `onChanged` assertion above resolves while
+    // the transition may still be pending. A `fireEvent.click` landing in that
+    // window hits a DISABLED button and is silently dropped: the picker never
+    // opens, and the `3 story points` option below is never mounted. Confirmed
+    // by construction — clicking during a deliberately slow write reproduces the
+    // CI failure exactly (`data-state="closed"`, `aria-expanded="false"`).
+    // The pending window is sub-millisecond locally and only opens under a
+    // loaded runner, which is why this passed for weeks before shard 1 got
+    // heavier.
+    const reopenTrigger = (): HTMLButtonElement =>
+      screen.getByRole('button', { name: 'Story points: 8 — edit' }) as HTMLButtonElement;
+    await waitFor(() => expect(reopenTrigger().disabled).toBe(false));
+    fireEvent.click(reopenTrigger());
     fireEvent.click(await screen.findByRole('button', { name: '3 story points' }));
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
     await new Promise((r) => setTimeout(r, 0));
