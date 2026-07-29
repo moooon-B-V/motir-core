@@ -4,6 +4,7 @@ import { authLogin, authLogout, authStatus } from './commands/auth.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
 import { openCommand, readyCommand, statusCommand } from './commands/read.js';
 import { doctorCommand } from './commands/doctor.js';
+import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
 // (`ready` / `status` / `open`) are 7.9.2, single dispatch (`next` / `run` /
@@ -88,6 +89,33 @@ export function buildProgram(): Command {
     .description('Open a work item (e.g. PROD-7) in the browser; prints the URL.')
     .option('--print', 'Print the URL only; do not launch a browser.')
     .action(openCommand);
+
+  // ── dispatch ───────────────────────────────────────────────────────────────
+  // The prompt each of these delivers is generated SERVER-SIDE (dispatch_prompt)
+  // and printed verbatim — the CLI never assembles prompt text.
+  program
+    .command('next')
+    .description('Dispatch the next ready work item: claim it and deliver its prompt.')
+    .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
+    .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
+    .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
+    .option('--reset', 'Clear this project’s session exclude list before picking.')
+    .action(nextCommand);
+  program
+    .command('run <key>')
+    .description('Dispatch a SPECIFIC work item (e.g. PROD-7), ready or forced.')
+    .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
+    .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
+    .option('--force', 'Dispatch even though the item is not ready (dependencies unmet).')
+    .action(runCommand);
+  program
+    .command('done [key]')
+    .description('Close out a merged item — or a whole merged session branch.')
+    .option('--session <branch>', 'Bulk close-out: flip every item on this session branch.')
+    .option('--via <status>', 'Move through this status first (e.g. in_review).')
+    // Arity-2 wrapper: commander appends the Command object, which must not
+    // land in `doneCommand`'s options parameter when `[key]` is omitted.
+    .action((key: string | undefined, opts) => doneCommand(key, opts));
 
   return program;
 }

@@ -74,6 +74,63 @@ export interface SearchPage {
   nextCursor: string | null;
 }
 
+/**
+ * The `next_ready` dispatch payload (`ReadyItemDispatchDto`, the fields the CLI
+ * actually routes on). `id` is the row id `excludeIds` takes; `key` is the
+ * `PROD-<n>` identifier every other tool takes. `status.key` lets dispatch skip
+ * a redundant `todo → in_progress` flip when the item is already in progress.
+ */
+export interface DispatchItem {
+  id: string;
+  key: string;
+  kind: string;
+  title: string;
+  priority: string;
+  status: { key: string; category: string };
+  type: string | null;
+  executor: string | null;
+  targetRepo: string | null;
+  sessionBranch: string | null;
+}
+
+/** WHICH `GIT WORKFLOW` variant the server-assembled prompt carries — chosen
+ * server-side from the item's inherited lineage, never selectable by the CLI
+ * (`DispatchWorkflowMode`, lib/dto/dispatch.ts). */
+export type DispatchWorkflowMode = 'per_item_pr' | 'session_lineage';
+
+/** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt
+ * text plus the facts the CLI routes on before it runs the agent. */
+export interface DispatchPrompt {
+  key: string;
+  prompt: string;
+  targetRepo: string | null;
+  workflowMode: DispatchWorkflowMode;
+  sessionBranch: string | null;
+}
+
+/** One item's outcome in a `complete_session` bulk close-out. */
+export interface CompleteSessionOutcome {
+  key: string;
+  outcome: 'completed' | 'already_done' | 'failed';
+  reason?: string | null;
+}
+
+export interface CompleteSessionResult {
+  sessionBranch: string;
+  results: CompleteSessionOutcome[];
+}
+
+/** The `get_work_item` slice `motir run` gates on: the current status and the
+ * server's own readiness verdict (dependency-only — see the readiness rule). */
+export interface WorkItemDetail {
+  item: { id: string; identifier: string; title: string; status: string };
+  readiness: {
+    ready: boolean;
+    openBlockers: { identifier: string; title: string; status: string }[];
+    blockedByAncestor: { identifier: string } | null;
+  };
+}
+
 /** One FilterAST condition in the tool's self-documenting expanded form. */
 export interface SearchFilterCondition {
   field: string;
@@ -231,16 +288,45 @@ export class MotirClient {
     projectKey: string;
     kinds?: string[];
     excludeIds?: string[];
-  }): Promise<{ item: unknown | null }> {
+  }): Promise<{ item: DispatchItem | null }> {
     return this.callStructured('next_ready', { ...args });
   }
 
-  getWorkItem(key: string): Promise<unknown> {
-    return this.callStructured('get_work_item', { key });
+  getWorkItem(key: string): Promise<WorkItemDetail> {
+    return this.callStructured<WorkItemDetail>('get_work_item', { key });
   }
 
   transitionStatus(args: { key: string; status: string }): Promise<unknown> {
     return this.callStructured('transition_status', { ...args });
+  }
+
+  /**
+   * The CANONICAL, server-generated prompt for one item (MOTIR-1802). A pure
+   * READ — it never claims the item or moves its status, so re-printing an
+   * in-progress item's prompt is safe. The CLI prints this text verbatim; it
+   * never assembles a prompt grammar of its own.
+   */
+  dispatchPrompt(key: string): Promise<DispatchPrompt> {
+    return this.callStructured<DispatchPrompt>('dispatch_prompt', { key });
+  }
+
+  /** Record an item's work as integrated on a session branch (7.8.11): moves it
+   * to `in_review` AND stamps `session_branch` in one transaction. */
+  markIntegrated(args: {
+    key: string;
+    sessionBranch: string;
+    implementationHarness?: string;
+  }): Promise<unknown> {
+    return this.callStructured('mark_integrated', { ...args });
+  }
+
+  /** Bulk close-out for a merged session PR (7.8.11): every item recorded on
+   * the branch → done, `session_branch` cleared, with per-item outcomes. */
+  completeSession(args: {
+    sessionBranch: string;
+    implementationHarness?: string;
+  }): Promise<CompleteSessionResult> {
+    return this.callStructured<CompleteSessionResult>('complete_session', { ...args });
   }
 
   listSprints(args: { projectKey: string }): Promise<SprintList> {
