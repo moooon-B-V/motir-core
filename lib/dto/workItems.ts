@@ -260,6 +260,42 @@ export interface RelationshipLinkDto {
   item: WorkItemSummaryDto;
 }
 
+/**
+ * ONE end of a dependency edge, as a LIST row renders it (Subtask 7.9.0f /
+ * MOTIR-1842). Deliberately thinner than {@link RelationshipLinkDto}: a list
+ * projection names the far end and shows whether it is still open — it never
+ * offers the inline remove, so it carries no `linkId`, and it never renders a
+ * full summary card, so it carries no assignee / dates / points.
+ *
+ * `key` is the `PROD-<n>` IDENTIFIER string, matching the Ready surface's
+ * agent-facing vocabulary (see `lib/dto/ready.ts`'s naming note) rather than the
+ * core DTOs' numeric `key` — an agent renders `blocked by PROD-3`, never
+ * `blocked by 3`. `status` is the raw workflow status key (`todo` / `done` / …),
+ * the same string `WorkItemListItemDto.status` carries.
+ */
+export interface WorkItemEdgeSummaryDto {
+  /** The `PROD-<n>` identifier of the item at the far end of the edge. */
+  key: string;
+  title: string;
+  /** The far end's raw workflow status key (e.g. `todo`, `in_progress`, `done`). */
+  status: string;
+}
+
+/**
+ * The per-row dependency projection the MCP list reads attach (Subtask 7.9.0f /
+ * MOTIR-1842) — BOTH directions of the `is_blocked_by` graph around one item:
+ * `blockedBy` = what gates it, `blocks` = what it gates.
+ *
+ * TOTAL by construction: an item with no edges carries two EMPTY arrays, never a
+ * missing key, so a renderer never branches on presence. The whole page's
+ * projection comes from TWO batched queries regardless of page size
+ * (`workItemsService.getDependencyEdgesForItems`) — never one read per row.
+ */
+export interface WorkItemDependencyEdgesDto {
+  blockedBy: WorkItemEdgeSummaryDto[];
+  blocks: WorkItemEdgeSummaryDto[];
+}
+
 export interface IssueDetailDto {
   item: WorkItemDto;
   ancestors: WorkItemSummaryDto[];

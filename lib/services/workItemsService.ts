@@ -123,7 +123,9 @@ import type {
   RelationshipLinkDto,
   UpdateWorkItemInput,
   WorkItemDeletePreviewDto,
+  WorkItemDependencyEdgesDto,
   WorkItemDto,
+  WorkItemEdgeSummaryDto,
   WorkItemKindDto,
   WorkItemTypeDto,
   PagedIssueListDto,
@@ -3533,6 +3535,67 @@ export const workItemsService = {
         ? encodeReadyCursor({ kind: last.kind, priority: last.priority, key: last.key })
         : null;
     return { items: window.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
+  },
+
+  /**
+   * The per-row DEPENDENCY-EDGE projection for a PAGE of work items (Subtask
+   * 7.9.0f / MOTIR-1842) — for each requested id, `{ blockedBy, blocks }` as
+   * {@link WorkItemEdgeSummaryDto} lists (`{ key, title, status }`).
+   *
+   * TWO queries for the whole page, never one per row: the two batched link
+   * reads, one per direction (`findBlockerEdgesForItems` /
+   * `findBlockedEdgesForItems`), issued in parallel and grouped here. That is the
+   * whole point of the method — a terminal rendering a 33-row sprint with edges
+   * must not make 33 `get_work_item` round-trips.
+   *
+   * TOTAL: the result carries an entry for EVERY requested id, with empty arrays
+   * where there are no edges — so a renderer never branches on presence. Empty
+   * input short-circuits to `{}` without touching the DB.
+   *
+   * TENANCY: both reads are scoped to `ctx.workspaceId`, so a far end outside the
+   * caller's tenant can never appear. Cross-PROJECT edges inside the workspace DO
+   * resolve — `link_work_items` allows them, and the item detail read
+   * (`getIssueDetail`) has always surfaced them; this list projection matches
+   * that shipped behaviour rather than inventing a narrower rule. The caller
+   * supplies ids it has already gated (`listReady` / `getProjectIssuesList` both
+   * run the workspace check + `assertCanBrowse` first).
+   */
+  async getDependencyEdgesForItems(
+    itemIds: string[],
+    ctx: ServiceContext,
+  ): Promise<Record<string, WorkItemDependencyEdgesDto>> {
+    const edges: Record<string, WorkItemDependencyEdgesDto> = {};
+    for (const id of itemIds) edges[id] = { blockedBy: [], blocks: [] };
+    if (itemIds.length === 0) return edges;
+
+    const [blockerRows, blockedRows] = await Promise.all([
+      workItemLinkRepository.findBlockerEdgesForItems(itemIds, ctx.workspaceId),
+      workItemLinkRepository.findBlockedEdgesForItems(itemIds, ctx.workspaceId),
+    ]);
+
+    for (const row of blockerRows) {
+      edges[row.fromId]?.blockedBy.push({
+        key: row.blockerKey,
+        title: row.blockerTitle,
+        status: row.blockerStatus,
+      });
+    }
+    for (const row of blockedRows) {
+      edges[row.toId]?.blocks.push({
+        key: row.blockedKey,
+        title: row.blockedTitle,
+        status: row.blockedStatus,
+      });
+    }
+    // Stable, key-ordered edges so two calls (and the two tools) render the same
+    // list — the link reads have no inherent ordering.
+    const byKey = (a: WorkItemEdgeSummaryDto, b: WorkItemEdgeSummaryDto) =>
+      a.key.localeCompare(b.key, 'en', { numeric: true });
+    for (const entry of Object.values(edges)) {
+      entry.blockedBy.sort(byKey);
+      entry.blocks.sort(byKey);
+    }
+    return edges;
   },
 
   /**

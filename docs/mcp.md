@@ -197,7 +197,37 @@ view shows.
 **Output** — `structuredContent`: `{ items: ReadyItemDto[], nextCursor: string | null }`.
 Each `ReadyItemDto` has `id`, `key` (the `PROD-<n>` identifier), `kind`, `title`,
 `priority`, `status: { key, category }`, `assignee` (or null), and
-`descriptionExcerpt`.
+`descriptionExcerpt` — **plus the `dependencies` block** below.
+
+##### The `dependencies` block (list reads)
+
+Both LIST reads — `list_ready` and `search_work_items` — attach the **same**
+per-row dependency projection, so one client renderer covers both:
+
+```jsonc
+"dependencies": {
+  "blockedBy": [{ "key": "PROD-3", "title": "Ship the schema", "status": "done" }],
+  "blocks": [{ "key": "PROD-9", "title": "Wire the UI", "status": "todo" }]
+}
+```
+
+- `blockedBy` — what gates this item; `blocks` — what this item gates.
+- Each entry is `{ key, title, status }`: `key` is the `PROD-<n>` identifier,
+  `status` the raw workflow status key.
+- **Both arrays are ALWAYS present** — empty when the item has no edge in that
+  direction, so a renderer never branches on presence.
+- Archived items on the far end are excluded (the MOTIR-1328 rule), and a
+  cross-**project** edge inside the workspace resolves normally (links may cross
+  projects); a far end in another tenant never appears.
+- Ordered by `key` (numeric-aware), so repeated calls render identically.
+- The whole page costs **two** queries regardless of page size — never one read
+  per row. For a single item's full relationship set (including `relates_to` /
+  `duplicates` / `clones` and the link ids the inline remove needs), use
+  `get_work_item`.
+
+The human-readable text block carries the same graph in compact form, appended
+to each row's line: `PROD-7 [task/high] Wire the dispatch — unassigned · blocked
+by PROD-3 · blocks PROD-9`.
 
 #### `next_ready`
 
@@ -627,6 +657,8 @@ validation error.
 
 **Output** — `structuredContent`:
 `{ items: WorkItemListItemDto[], total: number, nextCursor: string | null }`.
+Each row also carries the same [`dependencies` block](#the-dependencies-block-list-reads)
+`list_ready` returns — identical shape, so one renderer covers both lists.
 
 ### Sprints
 
