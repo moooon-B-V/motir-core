@@ -4,6 +4,7 @@
 // string unions, the `proposed_fields` / `patch` JSON columns become typed
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
+import type { JobStatus } from '@/lib/ai/types';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 
 /** Wire form of the Prisma `PlanStatus` enum. */
@@ -323,4 +324,67 @@ export interface AutoPlanPauseDto {
   stale: boolean;
   /** How many have — the drift sentence's count. `0` when not stale. */
   staleCount: number;
+}
+
+// --- Plan-job OUTCOME (Story 7.9 · MOTIR-1825) ------------------------------
+// The read a NON-INTERACTIVE client needs after it FIRES a plan-edit job and
+// walks away. The browser surfaces stream the job (`usePlanEditsJob`) and watch
+// the plan appear; a CLI or agent has no stream to hold open — it submits,
+// returns, and comes back later asking "what became of it?". These shapes are
+// that answer.
+
+/** Why a plan's job did not (or may not) finish — the service's typed error
+ *  code + message, verbatim. */
+export interface PlanJobFailureDto {
+  code: string;
+  message: string;
+}
+
+/**
+ * The motir-ai job behind a plan, resolved ONLY while the plan is still
+ * `generating` — a `planned` / `approved` / `declined` plan's job is already
+ * known to have delivered, so there is nothing to ask.
+ *
+ * `reachable` disambiguates the two ways `failure` can be non-null: `true` means
+ * the job itself failed (and `failure` is ITS error), `false` means motir-ai
+ * could not be asked (and `failure` describes THAT). Without the flag a caller
+ * cannot tell "your expansion died" from "we couldn't check".
+ */
+export interface PlanJobStateDto {
+  /** The job's own state, or `null` when motir-ai could not be reached. */
+  status: JobStatus | null;
+  /** False ⟺ motir-ai could not be asked; `failure` then describes the outage. */
+  reachable: boolean;
+  failure: PlanJobFailureDto | null;
+}
+
+/**
+ * What became of a submitted plan job — the companion read to every
+ * `{ jobId, planId }` submit (`aiPlanEditsService.submitExpand` and friends).
+ *
+ * `status` is the PLAN's own status, verbatim — there is no synthetic "failed"
+ * plan state, because a failed job leaves its plan sitting at `generating`
+ * forever. That distinction lives in {@link PlanJobStateDto} instead, so the
+ * plan substrate's four-state enum is not widened by a transport concern.
+ *
+ * `itemCount` is how many PROPOSALS the plan bundles — NOT how many work items
+ * exist. Nothing here has touched the tree: `plansService.approvePlan` is the
+ * only path from a proposal to a row.
+ */
+export interface PlanOutcomeDto {
+  planId: string;
+  projectId: string;
+  status: PlanStatusDto;
+  origin: PlanOriginDto;
+  /** The motir-ai job that produced it (a plan is always bound to one here). */
+  jobId: string | null;
+  /** Proposals bundled in the plan — proposals, not created work items. */
+  itemCount: number;
+  createdAt: string;
+  /** When generation finished; `null` while still `generating`. */
+  plannedAt: string | null;
+  /** When it was approved / declined; `null` while undecided. */
+  decidedAt: string | null;
+  /** The job's state — present ONLY while `status === 'generating'`. */
+  job: PlanJobStateDto | null;
 }

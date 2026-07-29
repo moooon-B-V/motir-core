@@ -688,6 +688,7 @@ describe('help — against the BUILT binary', () => {
       'next',
       'run',
       'auto',
+      'batch',
       'done',
       'help',
     ]) {

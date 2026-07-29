@@ -142,6 +142,60 @@ the work that already integrated. `--max <n>` caps the dispatches. Ctrl-C stops
 between items (or terminates the agent mid-run), then still lands the pull
 request and prints the summary.
 
+## The snapshot — `motir batch` (7.9.10)
+
+```sh
+motir batch --agent "<cmd>" [--kinds <list>] [--max <n>] [--keep-going] [--reset]
+```
+
+The snapshot complement of `motir auto`. Where `auto` follows the ready set as it
+changes, `batch` **freezes it once** — it reads the whole ready set up front,
+**prints the exact list it will implement**, and then runs those items one at a
+time. An item that becomes ready during the run is **not** picked up; the summary
+counts and names it, so you can re-run `batch` or reach for `auto`. Printing the
+plan before the first agent starts is the point: you can Ctrl-C out of a run you
+did not want while nothing has been touched.
+
+**One pull request per item, and no session branch anywhere.** A strictly
+main-ready snapshot is mutually independent by construction — an item is in it
+only when every dependency is done **on main**, so no snapshot item can depend on
+another (it would not have been ready). Each item therefore rides the `motir next`
+per-item flow unchanged: its own branch off `origin/main` in its own repo, its own
+pull request targeting `main`, and **In Review** once the agent's pull request is
+open. Close each one out with `motir done <key>` after you merge it. Two snapshot
+items in the same repo simply open two independent pull requests; `mark_integrated`
+is never called and no session branch is created.
+
+**Strict main-readiness.** An item that is ready **only** because a dependency is
+integrated-awaiting-review (the 7.8.11 rule) is excluded and named: that
+dependency's code is not on `main`, so a pull request of its own against `main`
+could not even build. That lineage is `auto`'s territory. Unexpanded epics/stories
+(_needs planning_) and `type: manual` / `executor: human` items (_needs a human_)
+are excluded by the same rule `auto` uses. There is no `--include-planning` here —
+an expansion's output could never join a frozen snapshot, so that flag stays
+`auto`-only.
+
+**Shared loop mechanics.** An agent is required; a failed agent halts the run by
+default (the item stays In Progress, nothing reverted) and `--keep-going` finishes
+the rest of the snapshot; `--kinds` and `--max` narrow it; Ctrl-C stops between
+items and prints the summary so far, with any pull requests the agents already
+opened standing. Snapshot items the run never reached are named so you know what a
+re-run will pick up.
+
+### `auto` vs `batch`
+
+|                       | `motir auto`                                           | `motir batch`                                            |
+| --------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| Work list             | **Live** — one `next_ready` per iteration              | **Frozen** — the ready set snapshotted once, up front    |
+| Becomes ready mid-run | Picked up (the loop cascades the dependency graph)     | **Not** picked up — counted and named in the summary     |
+| Git lineage           | ONE session branch per repo, `motir/auto-<run-id>`     | **None** — each item branches off `origin/main`          |
+| Pull requests         | ONE per repo, opened by the CLI at the end             | **One per item**, opened by the agent                    |
+| Item close-out        | `motir done --session <branch>` (bulk)                 | `motir done <key>` (per item)                            |
+| Integrated-dep items  | Dispatched — that lineage is the whole point           | **Excluded** — their code is not on `main`               |
+| Reach for it when     | You want a long unattended run to go as deep as it can | You want a bounded, reviewable batch of independent work |
+
+Both leave `main` untouched: it moves only through a pull request a human merges.
+
 ## Help + topics
 
 `motir`, `motir help` and `motir --help` all print the same curated overview on
@@ -265,6 +319,7 @@ advanced, and the help surface of the binary a user actually runs.
 **The gate.** `vitest.config.ts` holds per-FILE ≥90% branch/function/line
 thresholds for the client core, the command modules and the pure decision layers.
 Three files are ungated on purpose — `index.ts`, `program.ts` and `prompts.ts` —
-each for a reason written down beside its threshold entry. CI runs the package
+each for a reason written down beside its threshold entry, and `motir batch`'s
+two modules are a KNOWN GAP named in the same file (MOTIR-1829). CI runs the package
 suite + gate as its own job (`CLI package`), the same shape `@motir/design-system`
 uses; the story suite rides the sharded Vitest job.

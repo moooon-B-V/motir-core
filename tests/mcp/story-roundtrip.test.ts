@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { plansService } from '@/lib/services/plansService';
 import { TOKEN_SCOPES, DEFAULT_TOKEN_SCOPES, toolScope, type TokenScope } from '@/lib/mcp/scopes';
 import { SCOPE_NOT_GRANTED_CODE } from '@/lib/mcp/scopeGate';
 import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
@@ -203,6 +204,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const item2 = await makeTask(a, 'A-2');
       // a planned sprint via the service the create-sprint tool calls
       const sprint = await sprintsService.createSprint(a.projectId, { name: 'S1' }, a.ctx);
+      // A settled expansion plan of A's (MOTIR-1825) — the target `get_plan_status`
+      // aims at. `planned`, so reading it never reaches out to motir-ai.
+      const plan = await plansService.createPlan(
+        a.projectId,
+        { title: null, summary: null, sourceJobId: 'job_parity_a' },
+        a.ctx,
+      );
+      await plansService.markPlanned(plan.id, a.ctx);
 
       // A NON-MEMBER: their own workspace + a DIFFERENT project key, full-scope
       // token. They can authenticate, but A's PROD project / items / sprint are
@@ -221,11 +230,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         next_ready: { projectKey: 'PROD' },
         claim_next_ready: { projectKey: 'PROD' },
         dispatch_prompt: { key: item1 },
+        get_plan_status: { planId: plan.id },
         search_work_items: { projectKey: 'PROD' },
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
         create_work_item: { projectKey: 'PROD', kind: 'task', title: 'x' },
+        expand_item: { key: item1 },
         update_work_item: { key: item1, title: 'hijacked' },
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
@@ -546,6 +557,15 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         { name: 'Scope sprint' },
         fx.ctx,
       );
+      // A `planned` expansion plan in the caller's OWN project, so the read-only
+      // token's `get_plan_status` call actually EXECUTES (the loop asserts every
+      // read-scoped tool succeeds) and never reaches out to motir-ai for a job.
+      const plan = await plansService.createPlan(
+        fx.projectId,
+        { title: null, summary: null, sourceJobId: 'job_scope_own' },
+        fx.ctx,
+      );
+      await plansService.markPlanned(plan.id, fx.ctx);
       const argFor: Record<McpToolName, Record<string, unknown>> = {
         whoami: {},
         get_work_item: { key: item1 },
@@ -553,11 +573,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         next_ready: { projectKey: 'PROD' },
         claim_next_ready: { projectKey: 'PROD' },
         dispatch_prompt: { key: item1 },
+        get_plan_status: { planId: plan.id },
         search_work_items: { projectKey: 'PROD' },
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
         create_work_item: { projectKey: 'PROD', kind: 'task', title: 'scoped create' },
+        expand_item: { key: item1 },
         update_work_item: { key: item1, title: 'scoped edit' },
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },

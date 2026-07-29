@@ -1,0 +1,65 @@
+# The Motir sandbox — compose form (Subtask 7.9.7a).
+#
+# One service per agent PROFILE, selected with a compose profile so that
+# `docker compose --profile base run --rm sandbox` builds and runs exactly the
+# variant you asked for and nothing else. This slice ships the BASE service and
+# the profile structure; 7.9.7b (MOTIR-1506) adds a service per coding agent
+# plus that agent's own read-only credential mount.
+#
+#   cd packages/cli/sandbox
+#   docker compose --profile base build
+#   docker compose --profile base run --rm sandbox motir auto --agent "<cmd>"
+#
+# MOTIR_WORKSPACE overrides which host directory is mounted as /workspace; the
+# default is the parent of this motir-core checkout, i.e. the usual workspace
+# root holding the `.motir.json` tree.
+
+services:
+  sandbox:
+    profiles: ['base']
+    image: motir-sandbox:base
+    build:
+      # The build context is the motir-core repo root — the image builds the
+      # `motir` binary from this checkout (see the Dockerfile's builder stage).
+      context: ../../..
+      dockerfile: packages/cli/sandbox/Dockerfile
+      args:
+        AGENT: base
+    working_dir: /workspace
+    # Reap zombie processes: an unattended run spawns a coding agent that spawns
+    # git/gh, and PID 1 here is a shell, not an init.
+    init: true
+    stdin_open: true
+    tty: true
+    volumes:
+      # The ONLY writable host surface.
+      - ${MOTIR_WORKSPACE:-../../../..}:/workspace
+      # The PAT, READ-ONLY: the container consumes the credential and never
+      # mints or rotates one (`motir auth login` is a HOST command).
+      - ${HOME}/.config/motir:/home/node/.config/motir:ro
+    # Deliberately absent, and asserted absent by the sandbox test:
+    #   * no /var/run/docker.sock — the container must not be able to escape by
+    #     driving the host daemon;
+    #   * no other host bind mounts — the filesystem blast radius is the two
+    #     mounts above.
+    # NOT absent: network access. It is open by default and stays open — every
+    # coding agent needs its provider API, and every dispatched item needs git
+    # remotes plus the Motir server. This image confines the FILESYSTEM, not
+    # egress; use docker's own network controls if you need more.
+
+  # ── 7.9.7b (MOTIR-1506) FILLS THE SEAM HERE ────────────────────────────────
+  # One service per agent profile, each pinning its own profile name, build arg
+  # and read-only credential mount, e.g.:
+  #
+  #   sandbox-claude:
+  #     profiles: ['claude']
+  #     image: motir-sandbox:claude
+  #     build:
+  #       context: ../../..
+  #       dockerfile: packages/cli/sandbox/Dockerfile
+  #       args:
+  #         AGENT: claude
+  #     volumes:
+  #       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
+  #       - ${HOME}/.config/motir:/home/node/.config/motir:ro
+  #       - ${HOME}/.claude:/home/node/.claude:ro
