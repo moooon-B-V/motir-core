@@ -174,7 +174,8 @@ Vercel preview deploy.
 
 - [`docs/cli.md`](./docs/cli.md) — the `motir` CLI guide: install, authenticate,
   link a workspace, the work loop (`next` / `run` / `auto` / `batch` / `done`),
-  session-branch semantics, agent wiring, the sandbox, and troubleshooting.
+  terminal planning (`plan`), session-branch semantics, agent wiring, the
+  sandbox, and troubleshooting.
 - [`docs/mcp.md`](./docs/mcp.md) — the MCP server: minting a personal access
   token, token scopes, wiring an agent, and the full tool catalog.
 - [`docs/design-system.md`](./docs/design-system.md) — canonical reference

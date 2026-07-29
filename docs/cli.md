@@ -18,6 +18,7 @@ code. It never reads the agent's credential and never inspects its output.
 [Link](#link-a-workspace-root) · [Preflight](#preflight) ·
 [Your first run](#your-first-run) · [Command reference](#command-reference) ·
 [The three run shapes](#the-three-run-shapes) ·
+[Planning](#planning-from-the-terminal) ·
 [Session branches](#session-branches-what-motir-auto-actually-does) ·
 [Failure policy](#failure-policy) · [Agent wiring](#agent-wiring) ·
 [The sandbox](#the-sandbox) · [Files and environment](#files-and-environment) ·
@@ -228,13 +229,14 @@ explanation of what "ready" means.
 
 ### Work loop
 
-| Command            | Flags                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| `motir next`       | `--kinds <list>` · `--print` · `--agent <cmd>` · `--reset`                                           |
-| `motir run <key>`  | `--print` · `--agent <cmd>` · `--force`                                                              |
-| `motir auto`       | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` |
-| `motir batch`      | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset`                        |
-| `motir done [key]` | `--session <branch>` · `--via <status>`                                                              |
+| Command                | Flags                                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `motir next`           | `--kinds <list>` · `--print` · `--agent <cmd>` · `--reset`                                           |
+| `motir run <key>`      | `--print` · `--agent <cmd>` · `--force`                                                              |
+| `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` |
+| `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset`                        |
+| `motir plan [args...]` | `--detach`                                                                                           |
+| `motir done [key]`     | `--session <branch>` · `--via <status>`                                                              |
 
 ```sh
 motir next --kinds subtask --print
@@ -244,6 +246,8 @@ motir run MOTIR-42 --force                  # dispatch it even though it isn't r
 motir auto --agent "claude --dangerously-skip-permissions" --max 5 --keep-going
 motir auto --agent "…" --include-planning   # also fire expansions for unexpanded containers
 motir batch --agent "codex exec --sandbox workspace-write --ask-for-approval never"
+motir plan                                  # resume the project-wide conversation
+motir plan MOTIR-42 "size these" --detach   # anchored, one turn, don't wait
 motir done MOTIR-42                         # after you merge its pull request
 motir done --via in_review MOTIR-42         # …when the CLI never saw the agent finish
 motir done --session motir/auto-20260729-011830
@@ -330,6 +334,64 @@ a failed agent): nothing in the run depended on it. Expansions spend the **AI
 credits of the token owner**, which is why the flag is opt-in. There is no
 `--include-planning` on `batch` — an expansion's output could never join a
 frozen snapshot.
+
+---
+
+## Planning from the terminal
+
+`motir plan` is the planning front door, not a dispatch command: it changes the
+**plan** rather than implementing an item, which is why it takes no agent.
+
+```sh
+motir plan                                # resume the project-wide conversation
+motir plan MOTIR-42                       # resume it anchored at MOTIR-42
+motir plan "split the billing epic"       # one turn, submitted, proposals printed
+motir plan MOTIR-42 "size these" --detach # anchored, submitted, ids returned
+```
+
+Leading `MOTIR-<n>` arguments **anchor** the conversation at those items; the
+rest of the arguments are a turn.
+
+**It is a conversation, and it is the same conversation the web app shows.** The
+thread is persisted and resumable, addressed by its scope (the project, or the
+project plus the anchor keys) — so a turn typed in the terminal appears in the
+web planning panel and vice versa. One conversation, two surfaces.
+
+Interactively, turns **accumulate** and nothing reaches the planner until you
+submit:
+
+```
+/submit   send every turn on this thread as ONE change
+/exit     leave; the thread and its turns stay saved
+/help     this list
+```
+
+Two things follow, and they are the contracts to hold onto:
+
+- **Appending is not submitting.** A turn is server-side the moment you press
+  Enter, so `/exit`, Ctrl-D, or a crash can never lose one. Only `/submit`
+  spends the token owner's AI credits.
+- **A submit PROPOSES; it does not write your tree.** What comes back is a plan
+  of **proposals** — approving it in Motir is what turns a proposal into a work
+  item. Nothing the CLI prints means "created N items".
+
+By default `motir plan` waits for the planner and prints the proposal tree;
+`--detach` returns the job id, plan id, and a review URL instead. Non-interactive
+invocations must pass the turn as text — `motir plan` with no text and no TTY is
+refused up front, because a prompt nobody can answer is the one failure mode
+with no diagnosis.
+
+**It does not onboard a fresh project.** A project with no work items is refused
+with a pointer at the web onboarding interview: generating a _first_ plan is a
+guided discovery flow, and `motir plan` joins the conversation once there is a
+tree to evolve. (`motir auto --include-planning` is the other planning trigger —
+it fires an expansion for an unexpanded container mid-run, and produces
+proposals the same way.)
+
+Streams split the same way the rest of the CLI splits them: **stdout carries the
+result** (the proposal tree, or the detached ids), **stderr carries the
+conversation** — so `motir plan "…" > plan.txt` keeps the proposals and leaves
+the chatter on your terminal.
 
 ---
 
@@ -647,6 +709,15 @@ isn't narrowing the set, and that the token's user can actually see the project
 **`` `motir auto` needs an agent to run. ``** — an unattended loop cannot run in
 `--print` mode. Pass `--agent "<cmd>"`, set `MOTIR_AGENT`, or configure
 `agentCommand`; `motir doctor` verifies it before the run.
+
+**`` `motir plan` needs a terminal to converse in. ``** — a non-interactive
+invocation with no turn text would sit on a prompt nobody can answer. Pass the
+turn as an argument: `motir plan "<what to change>"`, plus `--detach` to skip
+the wait.
+
+**`<PROJECT> has no work items yet — there is no plan here to change.`** — the
+project has never been planned. `motir plan` evolves an existing tree; the first
+plan comes from the web onboarding interview the hint links to.
 
 **A `transition_status` failure naming allowed targets.** The workflow refused
 the move. For a merged item still sitting In Progress, that is the missing In
