@@ -47,6 +47,13 @@ import {
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
 import { NoPlanForJobError, PlanNotFoundError } from '@/lib/plans/errors';
+import {
+  EmptyPlanChangeIntentError,
+  EmptyPlanChangeTurnError,
+  PlanChangeSessionNotFoundError,
+  PlanChangeTurnConflictError,
+  TooManyPlanChangeTargetsError,
+} from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
@@ -232,6 +239,22 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof PlanNotFoundError ||
     err instanceof NoPlanForJobError ||
     err instanceof MotirAiError
+  ) {
+    return toolError(err.code, err.message);
+  }
+  // Plan-change CONVERSATION tools (MOTIR-1832) — the same typed errors the
+  // cookie routes map to 404 / 400 / 409, surfaced verbatim so the agent can
+  // self-correct in one hop: submit a thread that was never opened
+  // (PLAN_CHANGE_SESSION_NOT_FOUND — open it and add a turn), submit one with no
+  // turns yet (PLAN_CHANGE_EMPTY_INTENT — say what to change first), an empty
+  // turn body, too many anchors, or a lost `seq` race (retryable). The submit
+  // path's motir-ai failures are `MotirAiError`s, already mapped above.
+  if (
+    err instanceof PlanChangeSessionNotFoundError ||
+    err instanceof EmptyPlanChangeIntentError ||
+    err instanceof EmptyPlanChangeTurnError ||
+    err instanceof TooManyPlanChangeTargetsError ||
+    err instanceof PlanChangeTurnConflictError
   ) {
     return toolError(err.code, err.message);
   }

@@ -87,14 +87,14 @@ delete scope still cannot delete in a workspace its owner can't reach.
 
 The scopes and the tools each one gates:
 
-| Scope                | Gates                                                                                                                                                                                  |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`  |
-| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item` |
-| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                   |
-| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                     |
-| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                                                              |
-| `integration`        | `mark_integrated`, `complete_session`                                                                                                                                                  |
+| Scope                | Gates                                                                                                                                                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`, `open_plan_session`                        |
+| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item`, `append_plan_turn`, `submit_plan_session` |
+| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                                                              |
+| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                                                                |
+| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                                                                                                         |
+| `integration`        | `mark_integrated`, `complete_session`                                                                                                                                                                                             |
 
 **Default grant set.** A token minted without an explicit scope choice gets
 **every scope EXCEPT `work_items:delete`** — full read + write + archive +
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **32 tools**.
+`initialize` handshake and registers **36 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -894,6 +894,68 @@ it fill.
 
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Scope token: `read`.
+
+#### Planning as a CONVERSATION — `open_plan_session` · `append_plan_turn` · `submit_plan_session`
+
+Changing a plan in Motir is not a one-shot prompt: it is a **persisted,
+resumable, multi-turn conversation** that ACCUMULATES intent and is SUBMITTED
+when you are ready. These three tools are that conversation over MCP — the same
+substrate the Motir web app's planning rail talks through, so a terminal client
+and a browser are two views of one thread.
+
+**One thread per scope, addressed by scope.** A thread's identity is
+`(project, anchor set)`, so every one of these tools takes `projectKey` plus an
+optional `targetKeys` and never a session id:
+
+| Input        | Type     | Required | Notes                                                                                                                                                                                |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `projectKey` | string   | yes      | The project key, e.g. `"PROD"` (case-insensitive).                                                                                                                                   |
+| `targetKeys` | string[] | no       | Work-item identifiers to ANCHOR the conversation at (max 20, case-insensitive). Omit for the **project-wide** thread. The SET is the identity — order and duplicates are irrelevant. |
+| `body`       | string   | yes\*    | `append_plan_turn` only — what you want changed about the plan.                                                                                                                      |
+
+Re-opening a scope **RESUMES** its conversation (same row, every turn already on
+it); a different anchor set is a different conversation. Anchors are resolved
+and permission-checked before they become a scope, so an item you cannot see is
+a `NOT_FOUND`, never a silent anchor.
+
+- **`open_plan_session`** — open or resume the thread and read it.
+  **Output** — `structuredContent`: the session DTO
+  `{ id, projectId, targetKeys, turnCount, lastJobId, lastSubmittedAt, createdAt, updatedAt, turns }`,
+  where `turns` is the FULL ordered thread (`user` turns are what was typed,
+  `system` turns are submission markers carrying their `jobId`). Submits
+  nothing and costs nothing. Scope token: `read`.
+- **`append_plan_turn`** — add one turn. **Output**: the updated session DTO.
+  **⚠️ Appending does NOT submit.** Turns accumulate until you call
+  `submit_plan_session`; that separation is the point — a later turn **refines**
+  the earlier ones rather than replacing them, so _"add auth to the billing
+  epic"_ then _"keep every subtask under 3 points"_ go out as ONE coherent
+  change. A first turn opens the thread on its own, so no separate `open` call
+  is required to start talking. Scope token: `work_items:write`.
+- **`submit_plan_session`** — send the accumulated intent as ONE job.
+  **Output** — `structuredContent`: `{ jobId, planId, session }`. It **submits
+  and returns** exactly like `expand_item` — poll `get_plan_status` for the
+  outcome, then `get_plan` to SHOW what was proposed. A single-turn thread is sent verbatim; a multi-turn thread is sent as
+  the numbered accumulated intent. The submission is recorded on the thread as a
+  `system` marker turn carrying the job id, and the thread stays open for
+  further refinement.
+
+> **⚠️ Submitting does NOT create work items.** The job produces a **`Plan` of
+> proposals** — approving that plan, a decision made in Motir and not on this
+> surface, is the only path from a proposal to a work item. Do not report
+> proposed work as created.
+
+Errors: a thread that was never opened returns `PLAN_CHANGE_SESSION_NOT_FOUND`;
+one with no turns yet returns `PLAN_CHANGE_EMPTY_INTENT` (say what to change
+first); an empty body returns `PLAN_CHANGE_EMPTY_TURN`; more than 20 anchors
+returns `PLAN_CHANGE_TOO_MANY_TARGETS`. A refused job returns the motir-ai code
+verbatim — `MOTIR_AI_OUT_OF_CREDITS` (do not retry) or `MOTIR_AI_UNAVAILABLE`
+(retryable) — and **leaves the thread intact**, so your turns are never lost and
+no orphan `Plan` is opened. The job runs on the **token owner's** AI credits.
+
+> **Fresh projects.** These tools drive plan CHANGE (augment / contextual
+> re-plan) against an existing tree. Generating a plan for an empty project is
+> driven by the onboarding interview in Motir, a different conversation — this
+> surface does not reach it.
 
 ### Identity
 
