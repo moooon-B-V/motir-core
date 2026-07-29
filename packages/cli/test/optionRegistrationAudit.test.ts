@@ -55,6 +55,7 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   auto: 'AutoOptions',
   batch: 'BatchOptions',
   done: 'DoneOptions',
+  plan: 'PlanOptions',
 };
 
 /** The help surface registers pseudo-commands that carry no options. */

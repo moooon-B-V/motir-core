@@ -166,7 +166,7 @@ COPY --chmod=0755 packages/cli/sandbox/entrypoint.sh /usr/local/bin/motir-sandbo
 #
 # The chown covers the WHOLE home, not just .config: the layers above run as
 # root and write the codegraph MCP wiring into the runtime user's home
-# (~/.claude.json, ~/.codex/config.toml, ~/.cursor/mcp.json, …). Left
+# (~/.cursor/mcp.json, ~/.motir-sandbox/agent-config/…, …). Left
 # root-owned, an agent that rewrites its own config file at startup would fail
 # on a home it cannot write.
 RUN mkdir -p /workspace /home/node/.config/motir \

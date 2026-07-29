@@ -65,6 +65,19 @@ CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target
 # `sandboxAgentConfigHome()` in packages/cli/src/agentProfiles.ts.
 SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"
 
+# What the claude redirect below copies out of the read-only ~/.claude mount:
+# the CONFIG surface and nothing else — the credential, the state file holding
+# the user's own MCP servers, their settings, their memory, and the three small
+# customization dirs.
+#
+# Deliberately NOT carried: projects/, file-history/, sessions/, history.jsonl,
+# shell-snapshots/, cache/, backups/, telemetry/ and the rest. That is
+# per-machine session state, not configuration; it is regenerated inside the
+# container, and it is the bulk of the directory (~850 MB against ~50 MB of
+# config on a working machine), so copying it would tax every container start
+# for nothing. plugins/ IS carried — a plugin can change how the agent behaves.
+CLAUDE_SEED_ENTRIES='.credentials.json .claude.json settings.json settings.local.json CLAUDE.md agents commands skills plugins'
+
 # Point an agent whose codegraph config would land inside its own READ-ONLY
 # credential mount at the image-owned home instead (7.9.7f / MOTIR-1835), and
 # set CODEGRAPH_INSTALL_HOME to the HOME `codegraph install` must run with so
@@ -75,12 +88,46 @@ SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"
 # function EXPORTS the agent's config env var, and a `$(…)` capture would run it
 # in a subshell where that export dies with the subshell.
 #
-# Both mechanisms below were VERIFIED against the real CLIs (codex 0.146.0,
-# opencode 1.18.9, codegraph 1.5.0) rather than read off their docs — the
-# 7.9.7b rule is to leave an unverified third-party path UNKNOWN, so an
-# unverified env var could not have been used here.
+# Every mechanism below was VERIFIED against the real CLIs (claude 2.1.220,
+# codex 0.146.0, opencode 1.18.9, codegraph 1.5.0) rather than read off their
+# docs — the 7.9.7b rule is to leave an unverified third-party path UNKNOWN, so
+# an unverified env var could not have been used here.
 redirect_codegraph_config() {
     case "$1" in
+        claude)
+            # Claude Code resolves its WHOLE config from CLAUDE_CONFIG_DIR —
+            # verified against 2.1.220: the state file it reads MCP servers from
+            # (<dir>/.claude.json), the user settings carrying codegraph's
+            # auto-allow list and prompt hook (<dir>/settings.json), the user
+            # memory (<dir>/CLAUDE.md) and the CREDENTIAL (<dir>/.credentials.json)
+            # all move together. So, exactly like codex, the redirected dir is
+            # SEEDED from the read-only mount first or the agent would trade "no
+            # code-graph tools" for "not signed in".
+            #
+            # Only the CONFIG surface is copied — see CLAUDE_SEED_ENTRIES. A
+            # blanket `cp -a` would drag the session archives along, which run to
+            # hundreds of MB on a real machine and are per-machine state the
+            # container has no use for.
+            #
+            # Copying the credential to another path INSIDE the container widens
+            # nothing: the container could always read the mounted file. What the
+            # mount guarantees — that the container cannot WRITE the host's copy —
+            # still holds.
+            local mounted="$HOME/.claude" private="$SANDBOX_AGENT_HOME/.claude" entry
+            rm -rf "$private" 2>/dev/null || true
+            mkdir -p "$private" 2>/dev/null || return 1
+            if [ -d "$mounted" ]; then
+                for entry in $CLAUDE_SEED_ENTRIES; do
+                    [ -e "$mounted/$entry" ] || continue
+                    cp -a "$mounted/$entry" "$private/" 2>/dev/null || true
+                done
+                # The copy inherits the source's mode bits; the mount's
+                # read-only-ness does not follow it, but a 0444 file would.
+                chmod -R u+w "$private" 2>/dev/null || true
+            fi
+            export CLAUDE_CONFIG_DIR="$private"
+            CODEGRAPH_INSTALL_HOME="$SANDBOX_AGENT_HOME"
+            ;;
         codex)
             # codex resolves BOTH config.toml and auth.json from CODEX_HOME, so
             # redirecting it alone would leave the agent unauthenticated. The
@@ -116,12 +163,44 @@ redirect_codegraph_config() {
             CODEGRAPH_INSTALL_HOME="$SANDBOX_AGENT_HOME"
             ;;
         *)
-            # claude, cursor and antigravity keep their MCP server config
-            # outside their mounted paths already. (claude's auto-allow list is
-            # the one narrower exception — MOTIR-1840.)
+            # cursor and antigravity keep their MCP server config outside their
+            # mounted paths already, so nothing can shadow it.
             CODEGRAPH_INSTALL_HOME="$HOME"
             ;;
     esac
+}
+
+# Reconcile the ONE file codegraph and the agent disagree about (7.9.7g /
+# MOTIR-1840), after `codegraph install` has run.
+#
+# For the claude target codegraph writes its MCP server stanza to
+# <HOME>/.claude.json, which is one level ABOVE the file Claude Code 2.1.220
+# actually reads it from — <CLAUDE_CONFIG_DIR>/.claude.json. (Verified: the
+# legacy ~/.claude.json is not read at all by the shipped CLI, redirect or no
+# redirect, which is why this profile had no code-graph tools rather than merely
+# no auto-allow list.) Its other two outputs — settings.json and CLAUDE.md —
+# land under <HOME>/.claude, which IS the redirected config dir, so codegraph
+# merges those into the seeded copies by itself and only this key is left over.
+#
+# Merging is deliberately a MERGE of one key: the seeded state file carries the
+# user's own MCP servers and the rest of Claude Code's state, none of which may
+# be dropped on the way past.
+reconcile_codegraph_config() {
+    [ "$1" = claude ] || return 0
+    [ -n "${CLAUDE_CONFIG_DIR:-}" ] || return 0
+    local written="$SANDBOX_AGENT_HOME/.claude.json"
+    [ -f "$written" ] || return 0
+    node -e '
+const fs = require("node:fs");
+const [src, dst] = process.argv.slice(1);
+const servers = (JSON.parse(fs.readFileSync(src, "utf8")).mcpServers) || {};
+if (Object.keys(servers).length === 0) process.exit(0);
+// A state file that exists but will not parse is NOT overwritten: it is the
+// user own config, and a clobber would cost them more than the missing tools.
+const state = fs.existsSync(dst) ? JSON.parse(fs.readFileSync(dst, "utf8")) : {};
+state.mcpServers = { ...(state.mcpServers || {}), ...servers };
+fs.writeFileSync(dst, JSON.stringify(state, null, 2));
+' "$written" "$CLAUDE_CONFIG_DIR/.claude.json" 2>/dev/null || return 1
 }
 
 # The marker that makes a hook OURS. A hook file without it belongs to the user
@@ -208,6 +287,10 @@ if [ "${MOTIR_SANDBOX_CODEGRAPH:-1}" != "0" ] && command -v codegraph >/dev/null
             echo "motir-sandbox: could not refresh the codegraph MCP wiring for '${codegraph_target}'." >&2
             echo "motir-sandbox: its config path is most likely a READ-ONLY credential mount, which masks the copy the image built in." >&2
             echo "motir-sandbox: the codegraph CLI still works; the agent just won't see the MCP tools. Drop that agent's :ro mount to restore them." >&2
+        elif ! reconcile_codegraph_config "$codegraph_target"; then
+            echo "motir-sandbox: wired the codegraph MCP server but could not merge it into '${codegraph_target}'s own config file." >&2
+            echo "motir-sandbox: that file is present and unparseable, and overwriting your config would cost more than the missing tools." >&2
+            echo "motir-sandbox: the codegraph CLI still works; the agent just won't see the MCP tools." >&2
         fi
     fi
 

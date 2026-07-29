@@ -448,15 +448,16 @@ describe('the per-agent codegraph MCP wiring', () => {
   });
 });
 
-// ── The read-only mount must never shadow the wiring (7.9.7f / MOTIR-1835) ───
+// ── The read-only mount must never shadow the wiring (7.9.7f + 7.9.7g) ───────
 // 7.9.7d wired the codegraph MCP server into each agent at BUILD time, writing
-// that agent's own config file. For `codex` and `opencode` that file landed
-// INSIDE the directory 7.9.7b bind-mounts READ-ONLY from the host, so the host's
-// copy shadowed it and those agents saw no code-graph tools at all under the
-// recommended compose path. The fix redirects those two to a config home the
-// image owns; this guard is what stops a future profile reintroducing the
-// shadowing silently — the failure mode is invisible at build time and only
-// shows up as an agent that quietly greps instead of querying the graph.
+// that agent's own config file. For `codex` and `opencode` (MOTIR-1835) and then
+// `claude` (MOTIR-1840) that file landed INSIDE the directory 7.9.7b bind-mounts
+// READ-ONLY from the host, so the host's copy shadowed it and those agents saw
+// no code-graph tools at all under the recommended compose path. The fix
+// redirects all three to a config home the image owns; this guard is what stops
+// a future profile reintroducing the shadowing silently — the failure mode is
+// invisible at build time and only shows up as an agent that quietly greps
+// instead of querying the graph.
 
 describe('codegraph config is never shadowed by a read-only credential mount', () => {
   /** The container-side dirs the sandbox pins (Dockerfile: ENV HOME=/home/node). */
@@ -523,13 +524,23 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     }
   });
 
+  it('leaves NO declared gap standing — claude was the last one (7.9.7g)', () => {
+    // The stronger form of the guard above: not "every gap is declared" but
+    // "there is nothing left to declare". Until 7.9.7g claude carried
+    // MOTIR-1840 here, which is the whole reason the field exists.
+    const declared = AGENT_PROFILES.filter((p) => p.codegraphConfig?.knownAutoAllowGap).map(
+      (p) => p.id,
+    );
+    expect(declared).toEqual([]);
+  });
+
   it('redirects exactly the profiles that would otherwise be shadowed, and exports the env var', () => {
     // A redirect that the entrypoint does not actually export is decoration;
-    // codex and opencode are the two the mount contract shadows today.
+    // claude, codex and opencode are the three the mount contract shadows.
     const redirected = codegraphWiredProfiles()
       .filter(({ id }) => profileOf(id).codegraphConfig?.redirect)
       .map(({ id }) => id);
-    expect(redirected.sort()).toEqual(['codex', 'opencode']);
+    expect(redirected.sort()).toEqual(['claude', 'codex', 'opencode']);
     for (const id of redirected) {
       const env = profileOf(id).codegraphConfig?.redirect?.env ?? '';
       expect(entrypoint, `${id}: entrypoint must export ${env}`).toMatch(
@@ -561,6 +572,50 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     const block = entrypoint.slice(entrypoint.indexOf('redirect_codegraph_config() {'));
     expect(block).toContain('cp -a "$mounted/." "$private/"');
     expect(block).toMatch(/export CODEX_HOME=/);
+  });
+
+  it('seeds the redirected claude dir too — CLAUDE_CONFIG_DIR governs the credential', () => {
+    // Same trap as codex, one profile over: CLAUDE_CONFIG_DIR moves
+    // .credentials.json along with the settings and the state file, so a bare
+    // redirect would sign the agent out.
+    const block = entrypoint.slice(entrypoint.indexOf('redirect_codegraph_config() {'));
+    expect(block).toMatch(/local mounted="\$HOME\/\.claude"/);
+    expect(block).toMatch(/export CLAUDE_CONFIG_DIR=/);
+    expect(block).toContain('cp -a "$mounted/$entry" "$private/"');
+  });
+
+  it('seeds only the claude CONFIG surface, never the session archives', () => {
+    // ~/.claude is ~850 MB on a working machine and all but ~50 MB of it is
+    // per-machine session state the container regenerates. A blanket `cp -a`
+    // here would tax every container start to copy transcripts nothing reads.
+    const seeded = (/^CLAUDE_SEED_ENTRIES='([^']*)'/m.exec(entrypoint)?.[1] ?? '').split(' ');
+    expect(seeded).toContain('.credentials.json'); // the credential itself
+    expect(seeded).toContain('.claude.json'); // the state file the lift targets
+    expect(seeded).toContain('settings.json'); // where the auto-allow list lands
+    expect(seeded).toContain('CLAUDE.md');
+    for (const bulk of ['projects', 'file-history', 'history.jsonl', 'shell-snapshots']) {
+      expect(seeded, `${bulk} is session state, not config`).not.toContain(bulk);
+    }
+  });
+
+  it('lifts the one file codegraph and Claude Code disagree about, MERGING not replacing', () => {
+    // codegraph writes the claude server stanza to <HOME>/.claude.json; the
+    // shipped CLI reads <CLAUDE_CONFIG_DIR>/.claude.json and ignores the legacy
+    // sibling entirely. The seeded target holds the user's OWN servers plus the
+    // rest of Claude Code's state, so the lift merges a single key into it.
+    const block = entrypoint.slice(entrypoint.indexOf('reconcile_codegraph_config() {'));
+    expect(block).toMatch(/\[ "\$1" = claude \] \|\| return 0/); // claude-only
+    expect(block).toContain('state.mcpServers = { ...(state.mcpServers || {}), ...servers };');
+    expect(block).toContain('"$CLAUDE_CONFIG_DIR/.claude.json"');
+    // Running it is part of the install step, not a function nobody calls.
+    expect(entrypoint).toContain('elif ! reconcile_codegraph_config "$codegraph_target"; then');
+  });
+
+  it('wires claude into the image-owned home, where the redirected config dir looks', () => {
+    // Two of codegraph's three claude outputs land under <HOME>/.claude, which
+    // IS the redirected config dir — so installing under $SANDBOX_AGENT_HOME is
+    // what puts settings.json and CLAUDE.md where the agent reads them.
+    expect(armOf('claude')).toContain('wire_codegraph claude "$SANDBOX_AGENT_HOME"');
   });
 
   it('returns the install home through a global, not a subshell capture', () => {
