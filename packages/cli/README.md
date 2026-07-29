@@ -94,6 +94,14 @@ started — nothing is reverted), propagates the agent's exit code, and records
 the item in the session exclude list so the next `motir next` moves past it;
 `--reset` clears that list.
 
+> The exclude list is CLI **state**, not a credential, so it lives in the state
+> home — `MOTIR_STATE_HOME` → `MOTIR_CONFIG_HOME` → `XDG_STATE_HOME` →
+> `~/.local/state/motir` — and never beside the PAT, which the sandbox image
+> mounts read-only (MOTIR-1836). It is a convenience, not a correctness
+> mechanism: a failed item is already held out of the ready set by its
+> `in_progress` status, so if the store cannot be written the CLI warns once and
+> the run continues rather than aborting.
+
 **Closing out.** After you merge, `motir done <key>`. The default workflow has
 no direct `in_progress → done` edge, so an item dispatched with `--print` (which
 never observed an agent finish) needs `motir done --via in_review <key>`; an

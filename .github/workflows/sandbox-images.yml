@@ -47,7 +47,7 @@ env:
 jobs:
   # ── The base image + the two in-container suites ───────────────────────────
   sandbox-smoke:
-    name: Sandbox smoke (loop + confinement)
+    name: Sandbox smoke (loop + failure + confinement)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

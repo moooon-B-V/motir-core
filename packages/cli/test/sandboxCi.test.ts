@@ -100,8 +100,10 @@ describe('the sandbox smoke harness', () => {
   const scripts = [
     'run.sh',
     'loop-smoke.sh',
+    'failure-smoke.sh',
     'confinement.sh',
     'fake-agent.sh',
+    'failing-agent.sh',
     'stub-server.mjs',
     'assert-run.mjs',
     join('bin', 'gh'),
@@ -126,6 +128,22 @@ describe('the sandbox smoke harness', () => {
     expect(runSh).toContain('-v "$CREDENTIAL:/home/node/.config/motir:ro"');
     expect(runSh).toContain('/workspace/.smoke/confinement.sh');
     expect(runSh).toContain('/workspace/.smoke/loop-smoke.sh');
+    // The FAILURE path only reproduces under the real read-only credential
+    // mount (MOTIR-1836), so it has to run in the container too — a driver that
+    // stopped at the happy path is how the defect stayed invisible.
+    expect(runSh).toContain('/workspace/.smoke/failure-smoke.sh');
+  });
+
+  it('gives the failure leg its OWN stub port, so the two legs cannot race', () => {
+    const loopPort = /MOTIR_SMOKE_PORT:-(\d+)/.exec(
+      readFileSync(join(SMOKE_DIR, 'loop-smoke.sh'), 'utf8'),
+    )?.[1];
+    const failurePort = /MOTIR_SMOKE_PORT_FAILURE:-(\d+)/.exec(
+      readFileSync(join(SMOKE_DIR, 'failure-smoke.sh'), 'utf8'),
+    )?.[1];
+    expect(loopPort).toBeDefined();
+    expect(failurePort).toBeDefined();
+    expect(failurePort).not.toBe(loopPort);
   });
 
   it('agrees with the loop script about the stub port', () => {

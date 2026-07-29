@@ -5,9 +5,11 @@
 # Build the sandbox image, run the container with EXACTLY the mount recipe the
 # README documents, and execute the two in-container suites inside it:
 #
-#   confinement.sh — the blast radius (read-only credential mount, unprivileged
-#                    user, no docker socket, no undocumented host bind);
-#   loop-smoke.sh  — `motir auto --agent <fake-agent>` end to end, with no LLM.
+#   confinement.sh   — the blast radius (read-only credential mount, unprivileged
+#                      user, no docker socket, no undocumented host bind);
+#   loop-smoke.sh    — `motir auto --agent <fake-agent>` end to end, with no LLM;
+#   failure-smoke.sh — the same loop with an agent that FAILS mid-run, which must
+#                      still push and open its pull request (MOTIR-1836).
 #
 # Running the assertions THROUGH the real mount recipe is the point. Every one of
 # them is about how the container is launched — a suite that ran the scripts on
@@ -111,6 +113,6 @@ docker run --rm \
     -v "$CREDENTIAL:/home/node/.config/motir:ro" \
     -e "MOTIR_SMOKE_PORT=$PORT" \
     "$IMAGE" \
-    bash -c '/workspace/.smoke/confinement.sh && /workspace/.smoke/loop-smoke.sh'
+    bash -c '/workspace/.smoke/confinement.sh && /workspace/.smoke/loop-smoke.sh && /workspace/.smoke/failure-smoke.sh'
 
 echo '== sandbox smoke PASSED'

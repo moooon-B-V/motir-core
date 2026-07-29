@@ -106,6 +106,20 @@ docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 The PAT mount is read-only because the container _consumes_ a credential and
 never mints or rotates one: run `motir auth login` on the **host**.
 
+> **The CLI's own mutable state does not live beside the PAT.** The session
+> exclude list (the ids `motir auto` skips after a failed agent) resolves from
+> `MOTIR_STATE_HOME` → `MOTIR_CONFIG_HOME` → `XDG_STATE_HOME` →
+> `~/.local/state/motir` — deliberately NOT the read-only config dir, which
+> would give the CLI no writable state directory at all inside this image. That
+> is not a hypothetical: it used to live there, and the write on the failure
+> path aborted whole runs before their close-out (MOTIR-1836). Inside the
+> container `~/.local/state` is the ephemeral layer, so the list is per-run;
+> mount a writable path and point `MOTIR_STATE_HOME` at it if you want it to
+> survive `--rm`. Nothing is lost if you don't — the list only avoids
+> re-picking an item that just failed, and a failed item is already held out of
+> the ready set by its status. If the store is unwritable wherever it lands, the
+> CLI says so once and carries on.
+
 ## Build it yourself
 
 Everything below still works from a checkout — that is the path to take when you
@@ -362,10 +376,10 @@ page can be believed rather than merely written down — and, because
 gate: the push step is a later step of the job that just proved the image works,
 so an image no smoke test touched cannot reach the registry.
 
-### `Sandbox smoke (loop + confinement)`
+### `Sandbox smoke (loop + failure + confinement)`
 
 Builds the base image, then starts it with **exactly** the mount recipe from
-[Run](#run) and executes two suites inside it:
+[Run](#run) and executes three suites inside it:
 
 - **`confinement.sh`** — asserts the blast radius against `/proc/self/mounts`,
   the ground truth: `/workspace` is the one writable host bind, every credential
@@ -390,6 +404,18 @@ Builds the base image, then starts it with **exactly** the mount recipe from
   branch as the seed, each recorded through `mark_integrated` on that branch, and
   exactly ONE pull request at the end. A run that exited 0 having skipped
   `mark_integrated` fails this test.
+
+- **`failure-smoke.sh`** — the same loop with an agent that **fails** partway
+  through, which the happy path structurally cannot cover: the exclude store is
+  only written on the failure path, so only a failing agent, under the real
+  read-only credential mount, exercises it. It asserts that a run which
+  integrated work and _then_ hit a failing agent still pushes its branch and
+  opens its ONE pull request, reporting the failed item — the case
+  `closeOutRepos` exists to guarantee and that MOTIR-1836 broke. Two legs: one
+  with the state home writable (the store lands in `~/.local/state/motir` and
+  the credential mount is never touched), one with `MOTIR_STATE_HOME` forced
+  back onto the read-only mount (the run still closes out, warning instead of
+  dying).
 
 Run it yourself — it needs nothing but docker:
 
@@ -480,8 +506,10 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 | `smoke/run.sh`                   | The validation driver: build the image, run it through the documented mount recipe, execute both in-container suites.                                                                             |
 | `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                            |
 | `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                           |
+| `smoke/failure-smoke.sh`         | The failure path: an agent that dies mid-run must still cost nothing — the branch is pushed and the pull request opened, with the store writable and unwritable.                                  |
 | `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call.                                                                                                       |
 | `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                           |
+| `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                     |
 | `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                  |
 | `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                               |
 

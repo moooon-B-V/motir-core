@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  configDir,
   configPath,
   displayTokenPrefix,
   getAgentCommand,
@@ -12,6 +13,7 @@ import {
   readUserConfig,
   removeCredential,
   setCredential,
+  stateDir,
   writeUserConfig,
 } from '../src/config/userConfig.js';
 
@@ -88,6 +90,60 @@ describe('userConfig', () => {
     process.env['XDG_CONFIG_HOME'] = home;
     expect(configPath()).toBe(join(home, 'motir', 'config.json'));
     delete process.env['XDG_CONFIG_HOME'];
+  });
+
+  it('defaults the config home to ~/.config when no env var points anywhere', () => {
+    delete process.env['MOTIR_CONFIG_HOME'];
+    delete process.env['XDG_CONFIG_HOME'];
+    expect(configPath()).toBe(join(homedir(), '.config', 'motir', 'config.json'));
+  });
+});
+
+// ── the STATE home (MOTIR-1836) ─────────────────────────────────────────────
+//
+// Mutable CLI state is resolved SEPARATELY from the credential, because the
+// sandbox mounts the config dir read-only on purpose — state that lived beside
+// the PAT had no writable home there at all, and the write took whole runs down
+// with it. Each rung is asserted because each exists for a different caller.
+
+describe('stateDir', () => {
+  afterEach(() => {
+    delete process.env['MOTIR_STATE_HOME'];
+    delete process.env['XDG_STATE_HOME'];
+  });
+
+  it('prefers MOTIR_STATE_HOME — the explicit "put state here" knob', () => {
+    process.env['MOTIR_STATE_HOME'] = '/somewhere/state';
+    expect(stateDir()).toBe(join('/somewhere/state', 'motir'));
+  });
+
+  it('falls back to MOTIR_CONFIG_HOME, so ONE relocation still moves all state', () => {
+    // The property the exclude list was built on, and what keeps this very test
+    // suite (which only ever sets MOTIR_CONFIG_HOME) off a real home.
+    expect(stateDir()).toBe(join(home, 'motir'));
+  });
+
+  it('ranks MOTIR_CONFIG_HOME ABOVE XDG_STATE_HOME', () => {
+    // Deliberate: a developer machine with XDG_STATE_HOME exported globally
+    // would otherwise leak every test's state into a real directory.
+    process.env['XDG_STATE_HOME'] = '/somewhere/xdg-state';
+    expect(stateDir()).toBe(join(home, 'motir'));
+  });
+
+  it('uses XDG_STATE_HOME when no Motir variable is set', () => {
+    delete process.env['MOTIR_CONFIG_HOME'];
+    process.env['XDG_STATE_HOME'] = '/somewhere/xdg-state';
+    expect(stateDir()).toBe(join('/somewhere/xdg-state', 'motir'));
+  });
+
+  it('defaults to ~/.local/state/motir — the XDG state location', () => {
+    delete process.env['MOTIR_CONFIG_HOME'];
+    expect(stateDir()).toBe(join(homedir(), '.local', 'state', 'motir'));
+  });
+
+  it('is NOT the config dir by default — that is the whole point', () => {
+    delete process.env['MOTIR_CONFIG_HOME'];
+    expect(stateDir()).not.toBe(configDir());
   });
 });
 
