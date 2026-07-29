@@ -65,6 +65,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // get_plan_status only READS a plan's status + proposal count — it neither
   // submits a job nor spends a credit.
   get_plan_status: 'read',
+  // open_plan_session is the planning conversation's MOUNT read — "show me the
+  // thread for this scope". It get-or-creates an empty conversation row, which
+  // is a write in the narrow sense, but it is idempotent, spends no credit,
+  // opens no Plan and changes nothing about the plan or the tree; the acts that
+  // do — accumulating intent and sending it — are the two below. Opening the
+  // door is not starting a conversation.
+  open_plan_session: 'read',
   // work_items:write
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
@@ -78,6 +85,14 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // is the narrowest shipped scope that admits a plan-mutating, billable submit,
   // so a read-only token cannot fire one.
   expand_item: 'work_items:write',
+  // append_plan_turn writes the user's intent onto a persisted thread that a
+  // later submit sends to the planner; submit_plan_session spends the owner's
+  // AI credits and opens a Plan row. Same reasoning as expand_item: neither
+  // writes a work item (the Plan approval gate stands in the way), and neither
+  // is a read. `work_items:write` is the narrowest shipped scope that admits
+  // them, so a read-only token can look at a thread but never extend or fire one.
+  append_plan_turn: 'work_items:write',
+  submit_plan_session: 'work_items:write',
   link_work_items: 'work_items:write',
   unlink_work_items: 'work_items:write',
   move_to_parent: 'work_items:write',
