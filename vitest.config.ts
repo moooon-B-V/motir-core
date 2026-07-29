@@ -328,6 +328,16 @@ export default defineConfig({
         'lib/projectAiSettings/limits.ts',
         'lib/projectAiSettings/plannerModels.ts',
         'lib/jobs/definitions/autoPlanCadenceTick.ts',
+        // Story MOTIR-1803 (roadmap auto-drill) · Subtask MOTIR-1808 — the
+        // story's changed surface joins the gate once its code card (MOTIR-1807)
+        // merged and the numbers are real. Both files are CLIENT components with
+        // no service behind them: the descend predicate, the per-level suppression
+        // ref and the adapter's cache/refresh generations are decided here and
+        // reach the browser with nothing else in the way, so an untested branch
+        // is an unproven one. `tests/components/roadmapAutoDrillGate.test.tsx`
+        // carries the top-up + the DTO→adapter→canvas seam.
+        'components/planning/ProjectRoadmapCanvas.tsx',
+        'components/planning/WorkItemRoadmap.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -564,6 +574,13 @@ export default defineConfig({
         'lib/projectAiSettings/limits.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/projectAiSettings/plannerModels.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/autoPlanCadenceTick.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask MOTIR-1808 — the roadmap auto-drill surface at the same floor.
+        'components/planning/ProjectRoadmapCanvas.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'components/planning/WorkItemRoadmap.tsx': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
