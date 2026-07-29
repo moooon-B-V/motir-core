@@ -117,6 +117,22 @@ describe('sandbox Dockerfile', () => {
     expect(dockerfile).toMatch(/&& motir --version/);
   });
 
+  it('creates the pack destination before packing into it', () => {
+    // `npm pack --pack-destination` does NOT create the directory, and the
+    // failure is a bare ENOENT on the .tgz that reads like a missing INPUT.
+    // Caught by 7.9.7c's build matrix on its first run — until then nothing had
+    // ever built this file. The real guard is now that CI build; this one keeps
+    // the line from being tidied away as redundant.
+    // Anchored on the DIRECTIVE, not the word: the header comment mentions
+    // `npm pack` a hundred lines earlier, and matching that would compare the
+    // mkdir against a comment and pass or fail for the wrong reason.
+    const packAt = dockerfile.indexOf('npm pack --pack-destination /pkg');
+    const mkdirAt = dockerfile.indexOf('mkdir -p /pkg');
+    expect(packAt).toBeGreaterThan(-1);
+    expect(mkdirAt).toBeGreaterThan(-1);
+    expect(mkdirAt).toBeLessThan(packAt);
+  });
+
   it('exposes the AGENT selector with a base-only default and routes it through the seam', () => {
     expect(dockerfile).toMatch(/^ARG AGENT=base$/m);
     expect(dockerfile).toContain('install-agent.sh "${AGENT}"');

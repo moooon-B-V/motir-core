@@ -64,8 +64,16 @@ COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @motir/cli...
 # `npm pack` is run from the package directory, not via `--workspace`: this repo
 # declares its workspace in pnpm-workspace.yaml, which npm does not read.
+#
+# `mkdir -p /pkg` is REQUIRED, not tidiness: `npm pack --pack-destination` does
+# NOT create its destination, and fails with a bare
+# `ENOENT … open '/pkg/motir-cli-0.1.0.tgz'` that reads like a missing INPUT
+# rather than a missing output directory. This is what the first run of 7.9.7c's
+# build matrix caught — the image had never been built by CI, so the whole
+# Dockerfile was unverified.
 RUN pnpm --filter @motir/cli build \
     && cd packages/cli \
+    && mkdir -p /pkg \
     && npm pack --pack-destination /pkg
 
 # ─────────────────────────────────────────────────────────────────────────────
