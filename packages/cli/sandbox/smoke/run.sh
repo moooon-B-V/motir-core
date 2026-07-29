@@ -58,10 +58,21 @@ cleanup() {
         echo "== kept: workspace $FIXTURE, credential $CREDENTIAL"
         return
     fi
-    # The container writes as uid 1000, which may not be this user; make the tree
-    # removable before deleting it.
-    chmod -R u+rwX "$FIXTURE" "$CREDENTIAL" 2>/dev/null || true
-    rm -rf "$FIXTURE" "$CREDENTIAL"
+    # The container writes into /workspace as uid 1000, which is very often NOT
+    # the uid running this script (GitHub's runner is 1001). Those files cannot
+    # be chmod'ed from here — chmod needs OWNERSHIP, which is exactly what we do
+    # not have — and their parent directories were created by the container too,
+    # so plain `rm -rf` fails with "Permission denied" and takes the whole run
+    # down with it in the trap.
+    #
+    # So hand the tree back with a throwaway root container, which is the only
+    # party that can chown it. `--entrypoint chown` bypasses the image's own
+    # entrypoint (this is housekeeping, not a sandbox run).
+    docker run --rm --user 0:0 \
+        -v "$FIXTURE:/workspace" --entrypoint chown "$IMAGE" \
+        -R "$(id -u):$(id -g)" /workspace >/dev/null 2>&1 || true
+    rm -rf "$FIXTURE" "$CREDENTIAL" 2>/dev/null ||
+        echo "== note: could not fully remove $FIXTURE — remove it by hand." >&2
 }
 trap cleanup EXIT
 
