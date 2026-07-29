@@ -1,5 +1,10 @@
 import { CliError } from './errors.js';
-import { findAgentProfile, parseAgentCommand, type AgentProfile } from './agentProfiles.js';
+import {
+  findAgentProfile,
+  parseAgentCommand,
+  type AgentProfile,
+  type CredentialDirs,
+} from './agentProfiles.js';
 import type { FoundLink, ResolvedRepo } from './config/linkConfig.js';
 
 // The BYOK preflight engine — `motir doctor`'s checks, verdict, and report,
@@ -91,6 +96,17 @@ export interface DoctorProbe {
   hasEnv(name: string): boolean;
   home(): string;
   xdgConfigHome(): string;
+  /** `XDG_DATA_HOME` (or `~/.local/share`) — where opencode keeps auth.json. */
+  xdgDataHome(): string;
+}
+
+/** The dirs a profile resolves its credential paths against. */
+function credentialDirs(probe: DoctorProbe): CredentialDirs {
+  return {
+    home: probe.home(),
+    xdgConfigHome: probe.xdgConfigHome(),
+    xdgDataHome: probe.xdgDataHome(),
+  };
 }
 
 export interface DoctorOptions {
@@ -128,7 +144,7 @@ export function resolveAgentCommand(
 
 /** Every credential location a profile pins: its dirs plus its env vars. */
 function credentialLocations(profile: AgentProfile, probe: DoctorProbe): string[] {
-  const paths = profile.credentialPaths(probe.home(), probe.xdgConfigHome());
+  const paths = profile.credentialPaths(credentialDirs(probe));
   return [...paths, ...profile.credentialEnv.map((name) => `the ${name} env var`)];
 }
 
@@ -391,7 +407,7 @@ function credentialCheck(input: {
       remediation: profile.credentialHint,
     };
   }
-  const paths = profile.credentialPaths(probe.home(), probe.xdgConfigHome());
+  const paths = profile.credentialPaths(credentialDirs(probe));
   const foundPath = paths.find((p) => probe.pathExists(p));
   if (foundPath) {
     return {
