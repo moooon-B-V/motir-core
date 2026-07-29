@@ -48,6 +48,8 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   'link remove': null,
   ready: 'ReadyOptions',
   status: 'StatusOptions',
+  sprints: 'SprintsOptions',
+  sprint: 'SprintOptions',
   doctor: 'DoctorCommandOptions',
   open: 'OpenOptions',
   next: 'NextOptions',

@@ -2,7 +2,13 @@ import { Command } from 'commander';
 import { CLI_VERSION } from './version.js';
 import { authLogin, authLogout, authStatus } from './commands/auth.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
-import { openCommand, readyCommand, statusCommand } from './commands/read.js';
+import {
+  openCommand,
+  readyCommand,
+  sprintCommand,
+  sprintsCommand,
+  statusCommand,
+} from './commands/read.js';
 import { doctorCommand } from './commands/doctor.js';
 import { doneCommand, nextCommand, runCommand } from './commands/dispatch.js';
 import { autoCommand } from './commands/auto.js';
@@ -92,6 +98,22 @@ export function buildProgram(): Command {
     .helpGroup(HELP_GROUP.read)
     .option('--json', 'Emit the pulse as JSON.')
     .action(statusCommand);
+  program
+    .command('sprints')
+    .description('List the project’s sprints: state, item count, points, window.')
+    .helpGroup(HELP_GROUP.read)
+    .option('--state <state>', 'Only sprints in this state: planned, active, or complete.')
+    .option('--json', 'Emit the sprint rows as JSON.')
+    .action(sprintsCommand);
+  program
+    .command('sprint [ref]')
+    .description('List ONE sprint’s work items (defaults to the active sprint).')
+    .helpGroup(HELP_GROUP.read)
+    .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
+    .option('--json', 'Emit the sprint and its items as JSON.')
+    // Arity-2 wrapper: commander appends the Command object, which must not
+    // land in `sprintCommand`'s options parameter when `[ref]` is omitted.
+    .action((ref: string | undefined, opts) => sprintCommand(ref, opts));
   // ── doctor ────────────────────────────────────────────────────────────────
   program
     .command('doctor')
