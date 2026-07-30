@@ -1,0 +1,313 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { User } from '@prisma/client';
+
+// Same reason as the service suite: every approve test signs in for real, and
+// Better-Auth's IP-keyed sign-in bucket (10s / 3) would 429 the fourth one under
+// vitest, where there is no client IP to spread them across. Set in `vi.hoisted` so
+// it lands before `lib/auth` freezes its config. Production never sets it.
+vi.hoisted(() => {
+  process.env['E2E_DISABLE_RATE_LIMIT'] = '1';
+});
+
+const session = { current: null as { user: { id: string; email: string } } | null };
+// Stub ONLY `getSession` — `importOriginal` keeps the real `auth` instance, which
+// cliDeviceService needs (it drives the plugin's endpoints through `auth.api.*`) and
+// which the approve path reads the session from a second time, off the request's own
+// cookies. A wholesale module mock would replace the plugin with nothing.
+vi.mock('@/lib/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth')>()),
+  getSession: async () => session.current,
+}));
+
+const { db } = await import('@/lib/db');
+const { auth } = await import('@/lib/auth');
+const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
+const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
+const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
+const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
+const { truncateAuthTables } = await import('../helpers/db');
+
+// Import the handlers AFTER the mock is registered.
+const { POST: START } = await import('@/app/api/cli/device/start/route');
+const { POST: APPROVE } = await import('@/app/api/cli/device/approve/route');
+const { POST: TOKEN } = await import('@/app/api/cli/device/token/route');
+
+// Transport tests for `/api/cli/device/*` (Story MOTIR-1863 · Subtask MOTIR-1865) —
+// the three routes `motir login` and the /device page drive. Real Postgres, real
+// Better-Auth plugin; only `getSession` is stubbed (the cookie the test env cannot
+// supply — the sanctioned exception).
+//
+// What these assert that the service suite cannot: the WIRE CONTRACT. The poll speaks
+// RFC 8628 (`{ error, error_description }` at HTTP 400, `no-store`), not Motir's
+// `{ code }` convention, because its consumer is an OAuth client; start is
+// deliberately unauthenticated; approve is deliberately session-only.
+
+const BASE = 'http://localhost:3000/api/cli/device';
+const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
+
+beforeEach(async () => {
+  await truncateAuthTables();
+  session.current = null;
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+});
+
+function jsonReq(path: string, body: unknown, headers: Record<string, string> = {}) {
+  return new Request(`${BASE}/${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+function pollReq(deviceCode: string, clientId: string = CLI_CLIENT_ID) {
+  return jsonReq('token', {
+    grant_type: DEVICE_CODE_GRANT_TYPE,
+    device_code: deviceCode,
+    client_id: clientId,
+  });
+}
+
+/** Sign in for real; returns the cookie header string the plugin's session read needs. */
+async function signInCookie(user: User): Promise<string> {
+  const res = await auth.api.signInEmail({
+    body: { email: user.email, password: TEST_PASSWORD },
+    headers: new Headers({ origin: 'http://localhost:3000' }),
+    asResponse: true,
+  });
+  return res.headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0])
+    .join('; ');
+}
+
+function signInAs(user: { id: string; email: string }) {
+  session.current = { user: { id: user.id, email: user.email } };
+}
+
+async function startedGrant(hostname = 'workbox') {
+  return cliDeviceService.start({ hostname });
+}
+
+async function claim(userCode: string, cookie: string) {
+  await auth.api.deviceVerify({
+    query: { user_code: userCode },
+    headers: new Headers({ cookie }),
+  });
+}
+
+/** Clear the per-grant throttle so a test can poll twice without a real 5s wait. */
+async function clearPollThrottle(deviceCode: string) {
+  await db.deviceCode.update({ where: { deviceCode }, data: { lastPolledAt: null } });
+}
+
+describe('POST /api/cli/device/start', () => {
+  it('issues a grant with NO credential of any kind (the terminal has none yet)', async () => {
+    const res = await START(jsonReq('start', { hostname: 'workbox' }));
+    expect(res.status).toBe(200);
+    // Single-use codes must never be cached by a proxy (RFC 8628 §3.2).
+    expect(res.headers.get('cache-control')).toBe('no-store');
+
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual([
+      'device_code',
+      'expires_in',
+      'interval',
+      'user_code',
+      'verification_uri',
+      'verification_uri_complete',
+    ]);
+    expect(body['expires_in']).toBe(900);
+    expect(body['interval']).toBe(5);
+    expect(await db.deviceCode.count()).toBe(1);
+  });
+
+  it('accepts a bodyless start — hostname is optional', async () => {
+    const res = await START(new Request(`${BASE}/start`, { method: 'POST' }));
+    expect(res.status).toBe(200);
+    expect((await db.deviceCode.findFirstOrThrow()).hostname).toBe('unknown host');
+  });
+});
+
+describe('POST /api/cli/device/token — the five states on the wire', () => {
+  it('400 invalid_request for a wrong grant_type, a missing device_code, or a missing client_id', async () => {
+    const cases = [
+      { grant_type: 'authorization_code', device_code: 'x', client_id: CLI_CLIENT_ID },
+      { grant_type: DEVICE_CODE_GRANT_TYPE, client_id: CLI_CLIENT_ID },
+      { grant_type: DEVICE_CODE_GRANT_TYPE, device_code: 'x' },
+    ];
+    for (const body of cases) {
+      const res = await TOKEN(jsonReq('token', body));
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe('invalid_request');
+    }
+  });
+
+  it('400 authorization_pending while the human has not approved yet', async () => {
+    const grant = await startedGrant();
+    const res = await TOKEN(pollReq(grant.device_code));
+    expect(res.status).toBe(400);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = (await res.json()) as { error: string; error_description: string };
+    expect(body.error).toBe('authorization_pending');
+    expect(body.error_description).toBeTruthy();
+  });
+
+  it('400 slow_down when polled inside the interval', async () => {
+    const grant = await startedGrant();
+    await TOKEN(pollReq(grant.device_code));
+    const res = await TOKEN(pollReq(grant.device_code));
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('slow_down');
+  });
+
+  it('400 invalid_grant for an unknown device_code or a foreign client_id', async () => {
+    const unknown = await TOKEN(pollReq('nope'));
+    expect(unknown.status).toBe(400);
+    expect(((await unknown.json()) as { error: string }).error).toBe('invalid_grant');
+
+    const grant = await startedGrant();
+    const foreign = await TOKEN(pollReq(grant.device_code, 'not-the-cli'));
+    expect(foreign.status).toBe(400);
+    expect(((await foreign.json()) as { error: string }).error).toBe('invalid_grant');
+  });
+
+  it('400 expired_token once the code has aged out', async () => {
+    const grant = await startedGrant();
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const res = await TOKEN(pollReq(grant.device_code));
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('expired_token');
+  });
+
+  it('400 access_denied after the human denies, writing nothing', async () => {
+    const { owner } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    const grant = await startedGrant();
+    await claim(grant.user_code, cookie);
+    await auth.api.deviceDeny({
+      body: { userCode: grant.user_code },
+      headers: new Headers({ cookie }),
+    });
+
+    const res = await TOKEN(pollReq(grant.device_code));
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('access_denied');
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('200 with the PAT once approved — then 400 invalid_grant on the next poll', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const grant = await startedGrant('workbox');
+    await claim(grant.user_code, cookie);
+
+    const approved = await APPROVE(
+      jsonReq('approve', { userCode: grant.user_code, workspaceId: workspace.id }, { cookie }),
+    );
+    expect(approved.status).toBe(200);
+
+    await clearPollThrottle(grant.device_code);
+    const res = await TOKEN(pollReq(grant.device_code));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = (await res.json()) as {
+      access_token: string;
+      token_type: string;
+      scope: string;
+      expires_in: number;
+      user: { id: string };
+      workspace: { id: string; name: string; slug: string };
+    };
+    expect(body.access_token.startsWith('motir_pat_')).toBe(true);
+    expect(body.token_type).toBe('Bearer');
+    expect(body.scope).toBe('read work_items:write integration');
+    expect(body.user.id).toBe(owner.id);
+    expect(body.workspace).toEqual({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+    });
+
+    // The plaintext appears exactly once on the wire: the grant is consumed, so the
+    // next poll never even reaches the throttle check — there is no row to throttle.
+    const again = await TOKEN(pollReq(grant.device_code));
+    expect(again.status).toBe(400);
+    expect(((await again.json()) as { error: string }).error).toBe('invalid_grant');
+    expect(await db.apiToken.count()).toBe(1);
+  });
+});
+
+describe('POST /api/cli/device/approve', () => {
+  it('401 when signed out — the mint is authorized by a browser session, nothing else', async () => {
+    const grant = await startedGrant();
+    const res = await APPROVE(jsonReq('approve', { userCode: grant.user_code, workspaceId: 'w' }));
+    expect(res.status).toBe(401);
+  });
+
+  it('400 on a missing userCode or workspaceId', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    signInAs(owner);
+    expect((await APPROVE(jsonReq('approve', { workspaceId: workspace.id }))).status).toBe(400);
+    expect((await APPROVE(jsonReq('approve', { userCode: 'ABCDEFGH' }))).status).toBe(400);
+  });
+
+  it('403 for a workspace the approver is not a member of', async () => {
+    const { owner } = await createTestWorkspace();
+    const { workspace: foreign } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const grant = await startedGrant();
+    await claim(grant.user_code, cookie);
+
+    const res = await APPROVE(
+      jsonReq('approve', { userCode: grant.user_code, workspaceId: foreign.id }, { cookie }),
+    );
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe('WORKSPACE_FORBIDDEN');
+  });
+
+  it('409 when the page never claimed the code first', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const grant = await startedGrant();
+    // No claim — GET /api/auth/device?user_code=… was skipped.
+
+    const res = await APPROVE(
+      jsonReq('approve', { userCode: grant.user_code, workspaceId: workspace.id }, { cookie }),
+    );
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('DEVICE_GRANT_NOT_CLAIMED');
+  });
+
+  it('404 for a user code that does not exist', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const res = await APPROVE(
+      jsonReq('approve', { userCode: 'ZZZZZZZZ', workspaceId: workspace.id }, { cookie }),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('409 on re-approving an already-approved grant', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const grant = await startedGrant();
+    await claim(grant.user_code, cookie);
+    const body = { userCode: grant.user_code, workspaceId: workspace.id };
+    expect((await APPROVE(jsonReq('approve', body, { cookie }))).status).toBe(200);
+
+    const res = await APPROVE(jsonReq('approve', body, { cookie }));
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('DEVICE_GRANT_NOT_PENDING');
+  });
+});
