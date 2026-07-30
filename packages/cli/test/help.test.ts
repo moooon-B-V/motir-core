@@ -296,19 +296,34 @@ describe('help topics', () => {
     expect(findHelpTopic('nope')).toBeUndefined();
   });
 
-  it('`environment` documents the four variables the CLI reads, with precedence', () => {
+  it('`environment` documents the variables the CLI reads, with precedence', () => {
     const body = findHelpTopic('environment')?.body() ?? '';
 
-    for (const name of ['MOTIR_TOKEN', 'MOTIR_AGENT', 'MOTIR_CONFIG_HOME', 'XDG_CONFIG_HOME']) {
+    for (const name of [
+      'MOTIR_TOKEN',
+      'MOTIR_SERVER',
+      'MOTIR_AGENT',
+      'MOTIR_CONFIG_HOME',
+      'XDG_CONFIG_HOME',
+    ]) {
       expect(body).toContain(name);
     }
-    expect(body).toContain('--token <pat>  >  MOTIR_TOKEN  >  interactive prompt');
+    // The credential precedence is the ladder EVERY command applies, not the
+    // login-only shortcut it used to describe (MOTIR-1876) — the topic would
+    // otherwise document behaviour the CLI no longer has.
+    expect(body).toContain('--token <pat>  >  MOTIR_TOKEN  >  config.json');
+    expect(body).not.toContain('MOTIR_TOKEN  >  interactive prompt');
+    expect(body).toContain('honoured by EVERY command');
+    // …and the server ladder, rung for rung, ending at the hosted default.
+    expect(body).toContain('--server <url>  >  MOTIR_SERVER  >  .motir.json  >');
+    expect(body).toContain('the single stored server  >  https://app.motir.co');
     expect(body).toContain('--agent <cmd>  >  MOTIR_AGENT  >  agentCommand in config.json');
     expect(body).toContain('MOTIR_CONFIG_HOME  >  XDG_CONFIG_HOME  >  ~/.config');
   });
 
   it('`environment` prints NAMES only — never a variable’s value', () => {
     vi.stubEnv('MOTIR_TOKEN', 'pat_do_not_print_me');
+    vi.stubEnv('MOTIR_SERVER', 'https://do_not_print_me.motir.test');
     vi.stubEnv('MOTIR_AGENT', 'agent_do_not_print_me');
     vi.stubEnv('MOTIR_CONFIG_HOME', '/tmp/do_not_print_me');
     vi.stubEnv('XDG_CONFIG_HOME', '/tmp/do_not_print_me_either');

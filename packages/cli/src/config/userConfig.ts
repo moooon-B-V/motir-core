@@ -112,6 +112,94 @@ export function getCredential(serverUrl: string): StoredCredential | undefined {
   return readUserConfig().tokens[normalizeServerUrl(serverUrl)];
 }
 
+// ── the env tier ────────────────────────────────────────────────────────────
+//
+// `MOTIR_TOKEN` / `MOTIR_SERVER` are the CI / container / ephemeral-box tier —
+// `GH_TOKEN` / `GH_HOST` one-for-one. They are read by EVERY command, not just
+// `auth login`, which is what gives a machine that never ran a login a route in
+// at all: the sandbox mounts the config dir READ-ONLY on purpose (it consumes a
+// credential, it never mints one), and a CI runner has no home to write to.
+//
+// An env credential is deliberately NEVER persisted — no `setCredential`, no
+// config file created, nothing to clean up afterwards. That is what makes it
+// work on a read-only mount, and it is why `resolveCredential` is a pure read.
+
+/** The env var names of the credential tier, in the order they are consulted. */
+export const TOKEN_ENV_VAR = 'MOTIR_TOKEN';
+export const SERVER_ENV_VAR = 'MOTIR_SERVER';
+
+/**
+ * Read an env var as a VALUE, treating empty/whitespace as ABSENT.
+ *
+ * The empty-string case is load-bearing, not defensive tidiness: `FOO=` in a
+ * compose file, a CI secret that did not resolve, and an unset-by-blanking shell
+ * export all arrive as `''`, and taking that as a token turns "no credential" into
+ * a 401 far from its cause. `gh` shipped exactly that bug (cli/cli#7800) — an
+ * empty `GH_TOKEN` beat a perfectly good stored credential — so we treat it as
+ * unset here, at the single read point, rather than at each call site.
+ */
+function envValue(name: string): string | undefined {
+  const raw = process.env[name];
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/** `MOTIR_TOKEN`, or undefined when unset / empty. */
+export function envToken(): string | undefined {
+  return envValue(TOKEN_ENV_VAR);
+}
+
+/** `MOTIR_SERVER`, normalized, or undefined when unset / empty. */
+export function envServerUrl(): string | undefined {
+  const value = envValue(SERVER_ENV_VAR);
+  return value ? normalizeServerUrl(value) : undefined;
+}
+
+/** Where a resolved credential came from. */
+export type CredentialSource = 'environment' | 'config';
+
+export interface ResolvedCredential extends StoredCredential {
+  source: CredentialSource;
+  /**
+   * A human-readable origin for `auth status` / `doctor` — the env var's NAME or
+   * the config file's path. Never the token itself.
+   */
+  origin: string;
+}
+
+/** How a source is named in output: `environment (MOTIR_TOKEN)` / the path. */
+export function credentialOriginLabel(source: CredentialSource): string {
+  return source === 'environment' ? `environment (${TOKEN_ENV_VAR})` : configPath();
+}
+
+/**
+ * THE credential ladder — `MOTIR_TOKEN` above the stored config entry — and the
+ * single resolver every command routes through (`session.ts`, `doctor.ts`,
+ * `link.ts`). {@link getCredential} stays the pure config reader beneath it, so
+ * nothing gains a second path to the file.
+ *
+ * The env tier is NOT server-scoped (again: `GH_TOKEN`). One exported variable is
+ * the credential for whatever server the run resolves to — which is the only
+ * shape that works where the env tier is needed, since a container knows its
+ * token but not necessarily the URL it will be pointed at.
+ *
+ * The sharp edge, and the reason the source is part of the return value rather
+ * than an implementation detail: a stale `MOTIR_TOKEN` left in a shell profile
+ * silently outranks a fresh `motir auth login`, and the failure surfaces as a 401
+ * deep inside an unattended run. `auth status` and `doctor` NAME the tier that
+ * supplied the credential so that is one line of output away, not a debugging
+ * session.
+ */
+export function resolveCredential(serverUrl: string): ResolvedCredential | undefined {
+  const token = envToken();
+  if (token) return { token, source: 'environment', origin: credentialOriginLabel('environment') };
+
+  const stored = getCredential(serverUrl);
+  if (!stored) return undefined;
+  return { ...stored, source: 'config', origin: credentialOriginLabel('config') };
+}
+
 export function setCredential(serverUrl: string, credential: StoredCredential): void {
   const config = readUserConfig();
   config.tokens[normalizeServerUrl(serverUrl)] = credential;

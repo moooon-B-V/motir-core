@@ -78,8 +78,17 @@ export interface DoctorProbe {
   findLink(): FoundLink | null;
   /** The server this run targets. Throws {@link CliError} when ambiguous. */
   resolveServerUrl(): string;
-  /** The stored PAT for a server, if any. */
-  hasCredential(serverUrl: string): boolean;
+  /**
+   * WHERE this run's Motir credential comes from — `environment (MOTIR_TOKEN)`
+   * or the config path — or null when there is none. Presence is `!== null`.
+   *
+   * One method rather than a `hasCredential` boolean plus a separate label,
+   * because two methods reading the same ladder can disagree, and the whole
+   * point of the label is to be trustworthy when an account looks wrong. It is
+   * still a presence-and-origin predicate: the token's VALUE is never returned,
+   * exactly as with the agent-credential checks below.
+   */
+  credentialOrigin(serverUrl: string): string | null;
   /** One read-only server round-trip: handshake + whoami + project reachability. */
   probeServer(input: { serverUrl: string; projectKey?: string }): Promise<ServerProbe>;
   /** Where each repo named by the link resolves (override or convention). */
@@ -183,8 +192,9 @@ export async function runDoctor(opts: DoctorOptions, probe: DoctorProbe): Promis
         : { message: err instanceof Error ? err.message : String(err) };
   }
 
+  const credentialOrigin = serverUrl ? probe.credentialOrigin(serverUrl) : null;
   let server: ServerProbe | null = null;
-  if (serverUrl && probe.hasCredential(serverUrl)) {
+  if (serverUrl && credentialOrigin) {
     const projectKey = link?.config.project;
     server = await probe.probeServer({
       serverUrl,
@@ -192,7 +202,7 @@ export async function runDoctor(opts: DoctorOptions, probe: DoctorProbe): Promis
     });
   }
 
-  checks.push(authCheck({ serverUrl, serverError, server }));
+  checks.push(authCheck({ serverUrl, serverError, server, credentialOrigin }));
   checks.push(projectCheck({ link, server }));
 
   // ── repo checkouts (local) ───────────────────────────────────────────────
@@ -234,8 +244,9 @@ function authCheck(input: {
   serverUrl: string | null;
   serverError: { message: string; hint?: string } | null;
   server: ServerProbe | null;
+  credentialOrigin: string | null;
 }): DoctorCheck {
-  const { serverUrl, serverError, server } = input;
+  const { serverUrl, serverError, server, credentialOrigin } = input;
   const base = { id: 'auth', label: 'Auth' } as const;
   if (!serverUrl) {
     return {
@@ -250,7 +261,9 @@ function authCheck(input: {
       ...base,
       status: 'fail',
       detail: `Not logged in to ${serverUrl}.`,
-      remediation: 'Run `motir auth login` to store a personal access token.',
+      remediation:
+        'Run `motir auth login` to store a personal access token, or set MOTIR_TOKEN ' +
+        '(no file needed — the tier CI and the sandbox use).',
     };
   }
   if (!server.ok) {
@@ -264,7 +277,10 @@ function authCheck(input: {
   const who = server.user ? `${server.user.email}` : 'unknown user';
   const ws = server.workspace ? ` · workspace ${server.workspace.slug}` : '';
   const tools = server.toolCount === undefined ? '' : ` · ${server.toolCount} tools`;
-  return { ...base, status: 'pass', detail: `${who} on ${serverUrl}${ws}${tools}` };
+  // The credential's SOURCE rides on the passing row too — that is the row an
+  // operator reads when the account is right but unexpected.
+  const via = credentialOrigin ? ` · via ${credentialOrigin}` : '';
+  return { ...base, status: 'pass', detail: `${who} on ${serverUrl}${ws}${tools}${via}` };
 }
 
 function projectCheck(input: { link: FoundLink | null; server: ServerProbe | null }): DoctorCheck {
