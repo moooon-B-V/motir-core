@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  BLOCKER_KEYS_BUDGET,
   CHILD_HEADERS,
   EDGE_HEADERS,
+  EDGE_KEYS_BUDGET,
   FILTER_VERSION,
   IN_FLIGHT_STATUS_KEYS,
   TERMINAL_STATUS_KEYS,
@@ -13,12 +13,15 @@ import {
   childRows,
   cycleMembers,
   detailWithWaves,
+  edgeCell,
   edgeRows,
   formatSprintWindow,
   formatTable,
   inFlightFilter,
   isSatisfiedBlocker,
   issueUrl,
+  markLegend,
+  overflowKeys,
   renderChildrenSection,
   renderItemHeader,
   renderLineage,
@@ -42,6 +45,7 @@ import type {
   SearchItemSummary,
   SprintSummary,
   WorkItemChild,
+  WorkItemDependencyEdges,
   WorkItemDetail,
   WorkItemSummary,
 } from '../src/mcpClient.js';
@@ -130,6 +134,159 @@ describe('renderReadyTable', () => {
   });
   it('singularizes the count for one row', () => {
     expect(renderReadyTable([readyItem({})])).toContain('1 ready work item:');
+  });
+});
+
+// ── dependency-edge cells (7.9.16 · MOTIR-1845) ─────────────────────────────
+
+/** A `dependencies` block from `[key, status]` pairs; `status` defaults to todo. */
+const edges = (over: {
+  blockedBy?: (string | [string, string])[];
+  blocks?: (string | [string, string])[];
+}): WorkItemDependencyEdges => {
+  const far = (e: string | [string, string]) => {
+    const [key, status] = typeof e === 'string' ? [e, 'todo'] : e;
+    return { key, title: `Far end ${key}`, status: status as string };
+  };
+  return { blockedBy: (over.blockedBy ?? []).map(far), blocks: (over.blocks ?? []).map(far) };
+};
+
+describe('overflowKeys', () => {
+  it('renders BLANK for an empty list — never a zero', () => {
+    expect(overflowKeys([], 3)).toBe('');
+  });
+
+  it('renders up to and including the budget in full', () => {
+    expect(EDGE_KEYS_BUDGET).toBe(3);
+    expect(overflowKeys(['A'], 3)).toBe('A');
+    expect(overflowKeys(['A', 'B', 'C'], 3)).toBe('A, B, C');
+  });
+
+  it('collapses everything past the budget to +n', () => {
+    expect(overflowKeys(['A', 'B', 'C', 'D'], 3)).toBe('A, B, C +1');
+    expect(overflowKeys(['A', 'B', 'C', 'D', 'E'], 2)).toBe('A, B +3');
+  });
+});
+
+describe('edgeCell', () => {
+  it('renders blank for no edges AND for a server that sent none at all', () => {
+    expect(edgeCell([])).toBe('');
+    expect(edgeCell(undefined)).toBe('');
+  });
+
+  it('renders one live edge as its bare key', () => {
+    expect(edgeCell(edges({ blocks: ['PROD-8'] }).blocks)).toBe('PROD-8');
+  });
+
+  it('renders exactly the budget without an overflow marker, and past it with +n', () => {
+    const five = ['PROD-1', 'PROD-2', 'PROD-3', 'PROD-4', 'PROD-5'];
+    expect(edgeCell(edges({ blocks: five.slice(0, 3) }).blocks)).toBe('PROD-1, PROD-2, PROD-3');
+    expect(edgeCell(edges({ blocks: five }).blocks)).toBe('PROD-1, PROD-2, PROD-3 +2');
+  });
+
+  it('marks a TERMINAL far end and sorts it after the live ones', () => {
+    // The live edges are what the row is waiting on / holding up, so they lead;
+    // a done one carries `✓` because it no longer gates.
+    const mixed = edges({
+      blockedBy: [['PROD-1', 'done'], 'PROD-2', ['PROD-3', 'cancelled'], 'PROD-4'],
+    });
+    expect(edgeCell(mixed.blockedBy, 9)).toBe('PROD-2, PROD-4, PROD-1✓, PROD-3✓');
+  });
+
+  it('counts a terminal far end against the budget like any other key', () => {
+    const mixed = edges({ blockedBy: ['PROD-1', 'PROD-2', ['PROD-3', 'done'], 'PROD-4'] });
+    expect(edgeCell(mixed.blockedBy)).toBe('PROD-1, PROD-2, PROD-4 +1');
+  });
+
+  it('makes an all-done row distinguishable from a genuinely blocked one', () => {
+    const settled = edgeCell(edges({ blockedBy: [['PROD-1', 'done']] }).blockedBy);
+    const live = edgeCell(edges({ blockedBy: ['PROD-1'] }).blockedBy);
+    expect(settled).toBe('PROD-1✓');
+    expect(live).toBe('PROD-1');
+    expect(settled).not.toBe(live);
+  });
+});
+
+describe('markLegend', () => {
+  it('is null when the cells show no mark — a legend for an absent symbol is noise', () => {
+    expect(markLegend([])).toBeNull();
+    expect(markLegend(['PROD-1, PROD-2'])).toBeNull();
+  });
+
+  it('explains only the marks actually present, in a stable order', () => {
+    expect(markLegend(['PROD-1✓'])).toBe('✓ = already done');
+    expect(markLegend(['PROD-1↗'])).toBe('↗ = blocker outside this parent');
+    expect(markLegend(['PROD-1↗', 'PROD-2✓'])).toBe(
+      '✓ = already done · ↗ = blocker outside this parent',
+    );
+  });
+});
+
+describe('renderReadyTable — the BLOCKS column', () => {
+  it('adds BLOCKS before TITLE and keeps every column aligned', () => {
+    const out = renderReadyTable([
+      readyItem({ key: 'PROD-7', title: 'Alpha', dependencies: edges({ blocks: ['PROD-8'] }) }),
+      readyItem({
+        key: 'PROD-90',
+        title: 'Beta',
+        priority: 'low',
+        assignee: null,
+        dependencies: edges({}),
+      }),
+    ]);
+    const lines = out.split('\n');
+
+    expect(lines[1]).toBe('KEY      KIND     PRIORITY  ASSIGNEE    BLOCKS  TITLE');
+    // Alignment: the padded TITLE column starts at the same offset on the header
+    // and on BOTH rows — including the one whose BLOCKS cell is empty.
+    const titleAt = lines[1]!.indexOf('TITLE');
+    expect(lines[3]!.indexOf('Alpha')).toBe(titleAt);
+    expect(lines[4]!.indexOf('Beta')).toBe(titleAt);
+    expect(lines[3]).toContain('PROD-8');
+  });
+
+  it('renders BLANK for a ready item that unblocks nothing — not a zero', () => {
+    const out = renderReadyTable([readyItem({ title: 'Alpha', dependencies: edges({}) })]);
+    expect(out).toContain('BLOCKS');
+    expect(out).not.toMatch(/\b0\b/);
+  });
+
+  it('collapses a big fan-out to +n', () => {
+    const out = renderReadyTable([
+      readyItem({
+        dependencies: edges({ blocks: ['PROD-1', 'PROD-2', 'PROD-3', 'PROD-4', 'PROD-5'] }),
+      }),
+    ]);
+    expect(out).toContain('PROD-1, PROD-2, PROD-3 +2');
+  });
+
+  it('explains the ✓ mark only when a row actually shows one', () => {
+    const withDone = renderReadyTable([
+      readyItem({ dependencies: edges({ blocks: [['PROD-8', 'done']] }) }),
+    ]);
+    expect(withDone).toContain('PROD-8✓');
+    expect(withDone).toContain('✓ = already done');
+    // …and never the wave view's parent-scoped mark, which means nothing here.
+    expect(withDone).not.toContain('outside this parent');
+
+    const noMarks = renderReadyTable([readyItem({ dependencies: edges({ blocks: ['PROD-8'] }) })]);
+    expect(noMarks).not.toContain('already done');
+  });
+
+  it('DEGRADES to the pre-7.9.16 columns against a server with no edge block', () => {
+    // The whole page or nothing: the block comes from one batched read, so a
+    // server that predates it sends none — and gets exactly its old table.
+    const out = renderReadyTable([readyItem({ title: 'Alpha' })]);
+    expect(out.split('\n')[1]).toBe('KEY     KIND     PRIORITY  ASSIGNEE  TITLE');
+    expect(out).not.toContain('BLOCKS');
+  });
+
+  it('degrades when only SOME rows carry the block, rather than printing false blanks', () => {
+    const out = renderReadyTable([
+      readyItem({ key: 'PROD-7', dependencies: edges({ blocks: ['PROD-8'] }) }),
+      readyItem({ key: 'PROD-9' }),
+    ]);
+    expect(out).not.toContain('BLOCKS');
   });
 });
 
@@ -643,7 +800,7 @@ describe('blockedByCell', () => {
   });
 
   it('renders exactly the budget without an overflow marker', () => {
-    expect(BLOCKER_KEYS_BUDGET).toBe(3);
+    expect(EDGE_KEYS_BUDGET).toBe(3);
     expect(cellFor(gatedBy(1, 2, 3))).toBe('PROD-1, PROD-2, PROD-3');
   });
 
@@ -1042,6 +1199,90 @@ describe('renderSprintItems', () => {
     const [, header, , row] = out.split('\n');
     expect(row).toContain('…');
     expect(row?.indexOf('x')).toBe(header?.indexOf('TITLE'));
+  });
+});
+
+describe('renderSprintItems — the BLOCKED BY + BLOCKS columns (7.9.16 · MOTIR-1845)', () => {
+  it('adds BOTH directions before TITLE, blockers first, aligned', () => {
+    const out = renderSprintItems(
+      [
+        searchItem({
+          identifier: 'PROD-7',
+          title: 'Alpha',
+          status: 'blocked',
+          dependencies: edges({ blockedBy: ['PROD-2'], blocks: ['PROD-9'] }),
+        }),
+        searchItem({ identifier: 'PROD-8', title: 'Beta', dependencies: edges({}) }),
+      ],
+      2,
+    );
+    const lines = out.split('\n');
+
+    expect(lines[1]).toBe('KEY     KIND     STATUS       PRIORITY  BLOCKED BY  BLOCKS  TITLE');
+    const titleAt = lines[1]!.indexOf('TITLE');
+    expect(lines[3]!.indexOf('Alpha')).toBe(titleAt);
+    expect(lines[4]!.indexOf('Beta')).toBe(titleAt);
+    expect(lines[3]).toContain('PROD-2');
+    expect(lines[3]).toContain('PROD-9');
+  });
+
+  it('does NOT read as blocked when every blocker is already done', () => {
+    // The load-bearing case for a mixed-status sprint: a row whose blockers are
+    // all terminal is not waiting on anything, and the ✓ says so.
+    const out = renderSprintItems(
+      [
+        searchItem({
+          identifier: 'PROD-7',
+          dependencies: edges({
+            blockedBy: [
+              ['PROD-2', 'done'],
+              ['PROD-3', 'cancelled'],
+            ],
+          }),
+        }),
+      ],
+      1,
+    );
+    expect(out).toContain('PROD-2✓, PROD-3✓');
+    expect(out).toContain('✓ = already done');
+  });
+
+  it('NAMES the not-done blockers of a row that IS gated', () => {
+    const out = renderSprintItems(
+      [
+        searchItem({
+          identifier: 'PROD-7',
+          status: 'blocked',
+          dependencies: edges({ blockedBy: [['PROD-2', 'done'], 'PROD-3'] }),
+        }),
+      ],
+      1,
+    );
+    // The live blocker leads; the satisfied one is visible but marked.
+    expect(out).toContain('PROD-3, PROD-2✓');
+  });
+
+  it('collapses a big fan-in to +n and keeps the count line intact', () => {
+    const out = renderSprintItems(
+      [
+        searchItem({
+          dependencies: edges({ blockedBy: ['PROD-1', 'PROD-2', 'PROD-3', 'PROD-4'] }),
+        }),
+      ],
+      1,
+    );
+    expect(out).toContain('1 work item:');
+    expect(out).toContain('PROD-1, PROD-2, PROD-3 +1');
+  });
+
+  it('renders blank cells for an edge-free row, and DEGRADES with no edge block', () => {
+    const edgeFree = renderSprintItems([searchItem({ dependencies: edges({}) })], 1);
+    expect(edgeFree).toContain('BLOCKED BY');
+    expect(edgeFree).not.toMatch(/\b0\b/);
+
+    const older = renderSprintItems([searchItem({})], 1);
+    expect(older.split('\n')[1]).toBe('KEY     KIND     STATUS       PRIORITY  TITLE');
+    expect(older).not.toContain('BLOCKED BY');
   });
 });
 
