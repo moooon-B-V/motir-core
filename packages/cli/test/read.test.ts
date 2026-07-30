@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseItemKey, parseKinds, parseSprintState, showCommand } from '../src/commands/read.js';
+import {
+  parseItemKey,
+  parseKinds,
+  parseSprintState,
+  readyCommand,
+  showCommand,
+  sprintCommand,
+} from '../src/commands/read.js';
 import { openUrl } from '../src/browser.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
@@ -319,5 +326,186 @@ describe('motir show', () => {
 
     await expect(showCommand('not-a-key!', {})).rejects.toThrow(CliError);
     expect(server.calls).toHaveLength(0);
+  });
+});
+
+// ── the edge columns' machine view (7.9.16 · MOTIR-1845) ────────────────────
+//
+// The terminal cells abbreviate (a keys budget + `+n`); `--json` must NOT. These
+// drive the real command modules against the test MCP server, so what is asserted
+// is the payload a script actually receives — not a renderer's return value.
+
+describe('motir ready / sprint — the edge columns and their --json fidelity', () => {
+  let server: TestMcpServer;
+  let cwd: string;
+  let root: string;
+  const TOKEN = 'pat_edge_token';
+
+  /** Five `blocks` edges — two past the display budget — plus one already done. */
+  const fanOut = {
+    blockedBy: [{ key: 'PROD-2', title: 'A done blocker', status: 'done' }],
+    blocks: [1, 2, 3, 4, 5].map((n) => ({
+      key: `PROD-1${n}`,
+      title: `Dependent ${n}`,
+      status: 'todo',
+    })),
+  };
+
+  const readyPage = {
+    items: [
+      {
+        key: 'PROD-7',
+        kind: 'subtask',
+        title: 'The unblocker',
+        priority: 'high',
+        assignee: null,
+        dependencies: fanOut,
+      },
+    ],
+    nextCursor: null,
+  };
+
+  const sprintPage = {
+    items: [
+      {
+        identifier: 'PROD-7',
+        kind: 'subtask',
+        title: 'The gated one',
+        status: 'blocked',
+        priority: 'high',
+        dependencies: fanOut,
+      },
+    ],
+    total: 1,
+    nextCursor: null,
+  };
+
+  const sprints = {
+    sprints: [
+      {
+        id: 'sp-1',
+        name: 'Journey D',
+        state: 'active',
+        goal: null,
+        startDate: null,
+        endDate: null,
+        sequence: 1,
+        issueCount: 1,
+        committedPoints: null,
+        committedIssueCount: null,
+      },
+    ],
+  };
+
+  function capture(): () => string {
+    const chunks: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      chunks.push(String(chunk));
+      return true;
+    });
+    vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    return () => chunks.join('');
+  }
+
+  beforeAll(async () => {
+    cwd = process.cwd();
+    server = await startTestMcpServer({ token: TOKEN, tools: { ...DEFAULT_TOOLS } });
+  });
+
+  afterAll(async () => {
+    process.chdir(cwd);
+    await server.close();
+  });
+
+  beforeEach(() => {
+    const base = mkdtempSync(join(tmpdir(), 'motir-edges-'));
+    const home = join(base, 'config');
+    root = join(base, 'workspace');
+    mkdirSync(home, { recursive: true });
+    mkdirSync(root, { recursive: true });
+    vi.stubEnv('MOTIR_CONFIG_HOME', home);
+    process.chdir(root);
+    setCredential(server.url, { token: TOKEN });
+    writeFileSync(
+      join(root, '.motir.json'),
+      JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }) + '\n',
+    );
+    server.calls.length = 0;
+    server.script({
+      list_ready: { structured: readyPage },
+      list_sprints: { structured: sprints },
+      search_work_items: { structured: sprintPage },
+    });
+  });
+
+  afterEach(() => {
+    process.chdir(cwd);
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('`ready` prints the BLOCKS column, abbreviated to the budget', async () => {
+    const stdout = capture();
+
+    await readyCommand({});
+    const printed = stdout();
+
+    expect(printed).toContain('BLOCKS');
+    expect(printed).toContain('PROD-11, PROD-12, PROD-13 +2');
+    // The blocked-by direction is dead on a ready row and is not printed.
+    expect(printed).not.toContain('BLOCKED BY');
+  });
+
+  it('`ready --json` carries the FULL dependencies block, untruncated', async () => {
+    const stdout = capture();
+
+    await readyCommand({ json: true });
+    const payload = JSON.parse(stdout()) as { dependencies: typeof fanOut }[];
+
+    // Both directions, every edge, verbatim — the terminal abbreviates, the
+    // machine view never lies.
+    expect(payload[0]?.dependencies).toEqual(fanOut);
+    expect(payload[0]?.dependencies.blocks).toHaveLength(5);
+  });
+
+  it('`sprint` prints BOTH directions, with the done blocker marked rather than counted', async () => {
+    const stdout = capture();
+
+    await sprintCommand(undefined, {});
+    const printed = stdout();
+
+    expect(printed).toContain('BLOCKED BY');
+    expect(printed).toContain('PROD-2✓');
+    expect(printed).toContain('✓ = already done');
+    expect(printed).toContain('PROD-11, PROD-12, PROD-13 +2');
+  });
+
+  it('`sprint --json` carries the FULL dependencies block, untruncated', async () => {
+    const stdout = capture();
+
+    await sprintCommand(undefined, { json: true });
+    const payload = JSON.parse(stdout()) as { items: { dependencies: typeof fanOut }[] };
+
+    expect(payload.items[0]?.dependencies).toEqual(fanOut);
+    expect(payload.items[0]?.dependencies.blocks).toHaveLength(5);
+  });
+
+  it('degrades to the pre-7.9.16 tables against a server with no edge projection', async () => {
+    const stdout = capture();
+    server.script({
+      list_ready: {
+        structured: {
+          items: [{ key: 'PROD-7', kind: 'subtask', title: 'Older server', priority: 'high' }],
+          nextCursor: null,
+        },
+      },
+    });
+
+    await readyCommand({});
+    const printed = stdout();
+
+    expect(printed).toContain('1 ready work item:');
+    expect(printed).toContain('Older server');
+    expect(printed).not.toContain('BLOCKS');
   });
 });
