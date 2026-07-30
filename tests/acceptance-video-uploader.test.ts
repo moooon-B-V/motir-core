@@ -478,6 +478,12 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     'ACCEPTANCE_FALLBACK_STORY_KEY',
     'ACTIONS_ID_TOKEN_REQUEST_URL',
     'ACTIONS_ID_TOKEN_REQUEST_TOKEN',
+    // MOTIR-1905 — the two CI reporting channels. Cleared per test so the
+    // annotation assertion is explicit about turning them ON, and so a real
+    // `GITHUB_STEP_SUMMARY` (this suite DOES run under Actions) is never
+    // appended to by the tests.
+    'GITHUB_ACTIONS',
+    'GITHUB_STEP_SUMMARY',
   ] as const;
   const saved: Record<string, string | undefined> = {};
 
@@ -554,6 +560,62 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // NOTHING was published — not even a token mint.
     expect(fetchMock).not.toHaveBeenCalled();
     expect(putBlobMock).not.toHaveBeenCalled();
+  });
+
+  // MOTIR-1905 — the blast radius of ONE unwatchable clip.
+  //
+  // The gate used to `process.exit(1)` before publishing anything, so a single
+  // unpaced spec suppressed EVERY story's receipt in the lane. That is exactly
+  // what shipped: `acceptance-augment-replan` recorded ~9.5s and, from the day
+  // the floor landed, no story got a video on `main` or on any PR — while the
+  // step read green behind `continue-on-error`.
+  it('an UNWATCHABLE recording costs only its OWN story — the others still publish (MOTIR-1905)', async () => {
+    const dir = tmpDir();
+    writeRecording(dir, 'acceptance-good-a-chromium', { storyKey: 'MOTIR-1863' });
+    writeRecording(dir, 'acceptance-raced-chromium', {
+      storyKey: 'MOTIR-811',
+      chapters: JSON.stringify([
+        { label: 'one', tSeconds: 0.5 },
+        { label: 'two', tSeconds: 3.0 },
+      ]),
+      totalSeconds: 9.5, // the real regression's duration
+    });
+    writeRecording(dir, 'acceptance-good-b-chromium', { storyKey: 'MOTIR-1627' });
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const fetchMock = stubFetch();
+
+    await main();
+
+    // The two watchable recordings published; the raced one did NOT.
+    expect(publishedStories(fetchMock)).toEqual(['MOTIR-1863', 'MOTIR-1627']);
+    expect(publishedStories(fetchMock)).not.toContain('MOTIR-811');
+    // …and the step still fails, so a partial publish is never silently green.
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('MOTIR-811'));
+  });
+
+  it('emits a CI annotation for an unwatchable clip, so continue-on-error cannot hide it (MOTIR-1905)', async () => {
+    const dir = tmpDir();
+    writeRecording(dir, 'acceptance-good-chromium', { storyKey: 'MOTIR-1863' });
+    writeRecording(dir, 'acceptance-raced-chromium', {
+      storyKey: 'MOTIR-811',
+      chapters: JSON.stringify([{ label: 'one', tSeconds: 0.5 }]),
+      totalSeconds: 9.5,
+    });
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    process.env['GITHUB_ACTIONS'] = 'true';
+    vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    // Re-spy and hold the reference, rather than asserting on `console.log`
+    // directly — naming it is what trips the no-console lint rule.
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    stubFetch();
+
+    await main();
+
+    // The `::error::` workflow command is the channel `continue-on-error` does
+    // NOT rewrite — the step's own conclusion is reported as `success`.
+    expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/^::error::.*MOTIR-811/));
   });
 
   it('still publishes a legacy recording with no meta sidecar (the guard abstains)', async () => {

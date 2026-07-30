@@ -151,6 +151,7 @@ test.afterAll(async () => {
 test('expand — click Expand on childless stub, review, approve, children appear', async ({
   page,
   chapter,
+  beat,
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-811');
@@ -169,22 +170,40 @@ test('expand — click Expand on childless stub, review, approve, children appea
   await signIn(page, seed.email, seed.password);
   await page.goto('/items');
 
+  // PACED FOR A HUMAN (MOTIR-1905). This spec was chaptered but never paced —
+  // 2 chapters, zero `beat()` — so it recorded a ~9.5s clip, under the 15s
+  // watchable floor MOTIR-1772 introduced. The three chapters below are the
+  // three things a reviewer needs to SEE, and each user-visible action gets a
+  // beat. Pacing only; every assertion is unchanged and every wait is still an
+  // authoritative signal (see the note at CHAPTER_HOLD_MS).
   await chapter('Expand a childless stub', async () => {
+    // Let the tree be read before anything is clicked — the reviewer needs to
+    // see that "Notifications" has no children to expand FROM.
+    await beat();
+
     // Find the "Notifications" stub row and click Expand in its actions menu.
     await clickRowAction(page, seed.notifKey, 'Expand');
+    await beat();
 
     // The review dock appears — with stubs the entire job life cycle completes
     // in one tick, so wait for the authoritative signal directly.
     await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
+    await beat();
   });
 
-  await chapter('Review and approve', async () => {
+  await chapter('Review what it proposes', async () => {
     // Assert all three children are proposed (page-level search — the delta
     // sits in a sibling of the header, not inside it).
     for (const title of ['In-app notifications', 'Email notifications', 'Push notifications']) {
       await expect(page.getByText(title)).toHaveCount(1);
     }
+    // The proposal is the whole point of the review step — hold it long enough
+    // to actually read the three titles.
+    await beat();
+    await beat();
+  });
 
+  await chapter('Approve — the children are real', async () => {
     // Approve — the REAL plan approve route (materialize), the one write path.
     const approveResponse = page.waitForResponse(
       (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
@@ -193,6 +212,7 @@ test('expand — click Expand on childless stub, review, approve, children appea
     expect((await approveResponse).status()).toBe(200);
 
     await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
+    await beat();
 
     // Assert DB: the three children were created.
     const children = await db.workItem.findMany({
@@ -204,6 +224,15 @@ test('expand — click Expand on childless stub, review, approve, children appea
     });
     expect(children).toHaveLength(3);
     for (const c of children) expect(c.kind).toBe('task');
+    await beat();
+
+    // NOT re-asserted on `/items`. Showing the three children back in the tree
+    // would be the better receipt — the DB assertion above is invisible on a
+    // video — but they land UNDER the "Notifications" stub, whose tree row
+    // renders collapsed, so a bare `goto('/items')` + text assertion finds
+    // nothing (measured: it fails at 20s). Revealing them means driving the
+    // disclosure, which is new interaction surface this card has no business
+    // adding. The clip ends on the shipped confirmation, as it did before.
   });
 });
 
