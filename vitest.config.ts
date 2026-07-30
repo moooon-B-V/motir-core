@@ -348,6 +348,28 @@ export default defineConfig({
         // carries the top-up + the DTO→adapter→canvas seam.
         'components/planning/ProjectRoadmapCanvas.tsx',
         'components/planning/WorkItemRoadmap.tsx',
+        // Story MOTIR-1863 (connect the CLI) · Subtask MOTIR-1870 — the whole
+        // `motir login` surface joins the gate now that every code card has
+        // merged and the numbers are real. This is a CREDENTIAL path: the
+        // service is the one seam where a browser session becomes a bearer
+        // token, the routes are the CLI's wire contract (RFC 8628 error codes a
+        // published binary branches on), and `DeviceApproval` is the approval
+        // screen whose four-fact inventory IS the device grant's phishing
+        // mitigation — the ADR says in as many words that losing it invalidates
+        // the decision's risk assessment. An untested branch in any of them is
+        // an unproven one on the path that hands out credentials.
+        'lib/services/cliDeviceService.ts',
+        'lib/repositories/deviceCodeRepository.ts',
+        'lib/mappers/cliDeviceMappers.ts',
+        'lib/cliDevice/constants.ts',
+        'lib/cliDevice/errors.ts',
+        'lib/cliDevice/userCode.ts',
+        'app/api/cli/device/start/route.ts',
+        'app/api/cli/device/token/route.ts',
+        'app/api/cli/device/approve/route.ts',
+        'app/api/cli/device/grant/route.ts',
+        'app/(auth)/device/_components/DeviceApproval.tsx',
+        'app/(authed)/settings/account/_components/ConnectCliPanel.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -596,6 +618,40 @@ export default defineConfig({
           lines: 90,
         },
         'components/planning/WorkItemRoadmap.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Subtask MOTIR-1870 — the `motir login` surface at the same floor.
+        'lib/repositories/deviceCodeRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/cliDeviceMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/cliDevice/constants.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/cliDevice/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/cliDevice/userCode.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/cli/device/approve/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/cli/device/grant/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/(authed)/settings/account/_components/ConnectCliPanel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // These four gate on FUNCTIONS + LINES only — the same carve-out this
+        // config already makes for `whoami` and friends, and the CLI lane makes
+        // for `mcpClient` / `help`. Each is at 100% functions and ≥95% lines; what
+        // the 90% BRANCH bar would fail on is un-coverable code, named here so a
+        // future reader can tell a carve-out from a gap:
+        //   • cliDeviceService — three `throw err` rethrows that re-raise anything
+        //     the shipped invariants say cannot arrive: a non-`NotAMemberError`
+        //     failure out of the mint, and the two `translate*Error` fall-throughs
+        //     for a plugin error that is not an `APIError`. Reaching them means
+        //     stubbing Better-Auth, which would test the stub.
+        //   • start/route + token/route — a `body ?? {}` arm that cannot be null
+        //     (the parse always assigns) and the poll's final rethrow for an error
+        //     that is not a `DeviceGrantError`.
+        //   • DeviceApproval — JSX presence conditionals (avatar, single- vs
+        //     multi-workspace, the token-label chip) whose absent arms are already
+        //     asserted through the rendered output rather than through a distinct
+        //     branch, plus `readErrorCode`'s unparseable-body catch.
+        'lib/services/cliDeviceService.ts': { functions: 90, lines: 90 },
+        'app/api/cli/device/start/route.ts': { functions: 90, lines: 90 },
+        'app/api/cli/device/token/route.ts': { functions: 90, lines: 90 },
+        'app/(auth)/device/_components/DeviceApproval.tsx': { functions: 90, lines: 90 },
       },
     },
   },
