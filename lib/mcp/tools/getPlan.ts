@@ -60,6 +60,13 @@ function sizing(
   return parts.length > 0 ? ` (${parts.join(' · ')})` : '';
 }
 
+/** ` · repo: <name>` — WHICH REPO the proposal pins the item to (MOTIR-1884).
+ *  Omitted when unpinned, so a single-repo project's plan reads exactly as it
+ *  did before pins existed. */
+function repoPin(targetRepo: string | null | undefined): string {
+  return targetRepo ? ` · repo: ${targetRepo}` : '';
+}
+
 /** ` · blocked_by: <ref>, <ref>` — the proposed dependency edges, verbatim (a
  *  real work-item id or an intra-plan `planItem:` temp-ref). */
 function blockers(refs: string[]): string {
@@ -77,6 +84,7 @@ function describeItem(item: PlanItemDto): string {
     return (
       `${marker} [${kind}${type}] ${title}` +
       sizing(fields?.storyPoints, fields?.estimateMinutes) +
+      repoPin(fields?.targetRepo) +
       blockers(item.blockedByRefs)
     );
   }
@@ -187,7 +195,8 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'Read a plan WITH the proposals it bundles — what an AI planning pass actually ' +
         'proposed, not just how many items it produced. Returns the plan plus `items[]`: each ' +
         "proposal's `op` (add / modify / remove), the `proposedFields` of an `add` (title, " +
-        'kind, type, priority, executor, storyPoints, estimateMinutes, description), the ' +
+        'kind, type, priority, executor, storyPoints, estimateMinutes, description, and ' +
+        "targetRepo — which repo of the project's set the item ships in), the " +
         '`patch` of a `modify`, and the `parentRef` / `blockedByRefs` that let you rebuild the ' +
         `proposed tree and its dependency edges. Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
         'instead when you only need the status of a submitted job (and whether that job died); ' +

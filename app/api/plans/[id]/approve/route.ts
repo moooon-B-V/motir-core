@@ -6,6 +6,7 @@ import { plansService } from '@/lib/services/plansService';
 import {
   PlanGrammarError,
   PlanItemTargetMissingError,
+  PlanItemUnknownTargetRepoError,
   PlanNotFoundError,
   PlanNotInExpectedStatusError,
   PlanRefGraphError,
@@ -60,6 +61,16 @@ export async function POST(
       return NextResponse.json(
         { code: err.code, planItemId: err.planItemId, error: err.message },
         { status: 409 },
+      );
+    }
+    // A proposal pinned to a repo outside the project's set (MOTIR-1884) — 422,
+    // the same status the identical bad pin gets on the direct work-item write
+    // path. Raised before the transaction opens, so nothing was written; the
+    // `planItemId` says WHICH proposal to fix.
+    if (err instanceof PlanItemUnknownTargetRepoError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, error: err.message },
+        { status: 422 },
       );
     }
     // Materialize-time proposal failures the gate cannot pre-empt (a target
