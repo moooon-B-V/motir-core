@@ -4,8 +4,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { runListReady } from '@/lib/mcp/tools/listReady';
+import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
+import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
+import { runListSprints } from '@/lib/mcp/tools/listSprints';
+import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -137,6 +143,9 @@ interface LeafOptions {
   type?: 'code' | 'manual';
   executor?: 'coding_agent' | 'human';
   descriptionMd?: string;
+  /** Born already in a sprint (the create-into-sprint path) — what `motir
+   *  sprint`'s fixtures need. */
+  sprintId?: string;
 }
 
 /** A ready (todo, unblocked, childless) leaf. */
@@ -151,9 +160,135 @@ async function leaf(
   );
 }
 
+/** A story — the parent whose CHILDREN `motir show` lays out in build waves. */
+async function story(fx: WorkItemFixture, title: string): Promise<WorkItemDto> {
+  return workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'story', title }, fx.ctx);
+}
+
+/** A subtask under `parentId` — a sibling in that story's own dependency DAG. */
+async function child(
+  fx: WorkItemFixture,
+  parentId: string,
+  title: string,
+  opts: LeafOptions = {},
+): Promise<WorkItemDto> {
+  return workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'subtask', title, parentId, ...opts },
+    fx.ctx,
+  );
+}
+
 /** `from` is_blocked_by `to`. */
 async function block(fx: WorkItemFixture, fromId: string, toId: string): Promise<void> {
   await workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
+}
+
+/** `from` relates_to `to` (the service persists the reciprocal row too). */
+async function relate(fx: WorkItemFixture, fromId: string, toId: string): Promise<void> {
+  await workItemsService.linkWorkItems({ fromId, toId, kind: 'relates_to' }, fx.ctx);
+}
+
+/** Walk an item to `done` through the LEGAL hops — there is no direct
+ *  `todo → done` edge in the default workflow, so a satisfied blocker has to be
+ *  driven the way the product drives one. */
+async function markDone(fx: WorkItemFixture, id: string): Promise<void> {
+  for (const status of ['in_progress', 'in_review', 'done']) {
+    await workItemsService.updateStatus(id, status, fx.ctx);
+  }
+}
+
+/** A planned sprint. */
+async function sprint(fx: WorkItemFixture, name: string): Promise<SprintDto> {
+  return sprintsService.createSprint(fx.projectId, { name }, fx.ctx);
+}
+
+// ── reading a rendered table back ───────────────────────────────────────────
+
+/**
+ * Parse one `formatTable` block out of CLI output, by COLUMN OFFSET rather than
+ * by splitting on whitespace.
+ *
+ * The offsets come from the `───` underline, which is the only thing that
+ * survives an EMPTY cell: `BLOCKED BY` is blank on every unblocked row, and a
+ * `/\s{2,}/` split silently merges the columns either side of it — turning a
+ * six-column row into five and quietly mis-reading every assertion below it.
+ */
+interface ParsedTable {
+  headers: string[];
+  rows: Record<string, string>[];
+}
+
+function tableAfter(output: string, heading: RegExp): ParsedTable {
+  const lines = output.split('\n');
+  const at = lines.findIndex((line) => heading.test(line));
+  if (at === -1) throw new Error(`No line matching ${heading} in:\n${output}`);
+
+  let cursor = at + 1;
+  while (cursor < lines.length && lines[cursor]?.trim() === '') cursor += 1;
+  const headerLine = lines[cursor] ?? '';
+  const underline = lines[cursor + 1] ?? '';
+  if (underline.trim() === '' || !/^[─ ]+$/.test(underline)) {
+    throw new Error(`Expected a table under ${heading}, got:\n${headerLine}\n${underline}`);
+  }
+
+  const spans: [number, number][] = [];
+  for (const match of underline.matchAll(/─+/g)) {
+    spans.push([match.index, match.index + match[0].length]);
+  }
+  const cut = (line: string): string[] => spans.map(([s, e]) => line.slice(s, e).trim());
+
+  const headers = cut(headerLine);
+  const rows: Record<string, string>[] = [];
+  for (let r = cursor + 2; r < lines.length; r += 1) {
+    const line = lines[r] ?? '';
+    // A blank line ends the table; so does the mark LEGEND / the cycle warning,
+    // which `withLegend` appends with no separating blank line.
+    if (line.trim() === '' || /^[✓↗⚠]/.test(line.trimStart())) break;
+    const cells = cut(line);
+    rows.push(Object.fromEntries(headers.map((h, c) => [h, cells[c] ?? ''])));
+  }
+  return { headers, rows };
+}
+
+/** One row of a parsed table, by its KEY cell. */
+function rowFor(table: ParsedTable, key: string): Record<string, string> {
+  const row = table.rows.find((r) => r['KEY'] === key);
+  if (!row) throw new Error(`No row for ${key} in ${JSON.stringify(table.rows)}`);
+  return row;
+}
+
+/** The `structuredContent` of a tool call, as the CLI receives it over the
+ *  wire — the value every edge assertion below is compared AGAINST, so a key
+ *  renamed on either side of the seam fails here. */
+function structured<T>(result: { structuredContent?: unknown }): T {
+  return result.structuredContent as T;
+}
+
+interface EdgeSummary {
+  key: string;
+  title: string;
+  status: string;
+}
+interface EdgeBlock {
+  blockedBy: EdgeSummary[];
+  blocks: EdgeSummary[];
+}
+
+/**
+ * The `search_work_items` envelope that selects ONE sprint's items.
+ *
+ * Spelled out here rather than imported from `packages/cli/src/render.ts` on
+ * purpose: this suite drives the BUILT binary, so importing the CLI's own
+ * source to build the expectation would let a wrong envelope agree with itself.
+ * (It is also the grammar the /items URL and saved filters use, which is why
+ * `motir sprint` can never disagree with the web app about sprint membership.)
+ */
+function sprintItemsFilter(sprintId: string) {
+  return {
+    version: 'v1',
+    combinator: 'and' as const,
+    conditions: [{ field: 'sprint', operator: 'is_any_of' as const, value: [sprintId] }],
+  };
 }
 
 /** Re-read an item's authoritative state (status + recorded session branch). */
@@ -283,6 +418,522 @@ describe('read parity — the CLI never disagrees with the app about "ready"', (
     const bad = await ws.run(['link', '--project', 'NOPE']);
     expect(bad.exitCode).toBe(1);
     expect(bad.stderr).toContain('not accessible');
+  });
+});
+
+// ── motir show — the item DETAIL read (7.9.13) ──────────────────────────────
+
+describe('motir show — the detail read against a real tree', () => {
+  it('renders the header, readiness, lineage and all three edge groups from ONE real read', async () => {
+    const { fx } = await linkedProject();
+    const parent = await story(fx, 'The terminal read surface');
+    const target = await child(fx, parent.id, 'Wire the detail read', {
+      descriptionMd: '## Why\n\nBecause the terminal should show a plan.\n',
+    });
+    const blocker = await child(fx, parent.id, 'Ship the aggregate');
+    const dependent = await child(fx, parent.id, 'Document the read');
+    const cousin = await leaf(fx, 'An unrelated note');
+    await block(fx, target.id, blocker.id);
+    await block(fx, dependent.id, target.id);
+    await relate(fx, target.id, cousin.id);
+
+    const show = await ws.run(['show', target.identifier]);
+    expect(show.exitCode).toBe(0);
+
+    // The tool's OWN payload — every edge assertion below reads its expected
+    // value out of this, never out of a hardcoded string, so a key renamed in
+    // the DTO or in the CLI's mirror fails HERE rather than rendering blank.
+    const detail = structured<{
+      item: { identifier: string; title: string; kind: string };
+      readiness: { ready: boolean; openBlockers: { identifier: string }[] };
+      ancestors: { identifier: string }[];
+      blockedBy: { item: { identifier: string } }[];
+      blocks: { item: { identifier: string } }[];
+      relatesTo: { item: { identifier: string } }[];
+    }>(await runGetWorkItem({ key: target.identifier }, fx.ctx));
+
+    expect(show.stdout).toContain(detail.item.identifier);
+    expect(show.stdout).toContain(detail.item.title);
+    expect(show.stdout).toContain(detail.item.kind);
+
+    // READINESS — the SERVER's verdict, rendered, not re-derived by the CLI.
+    expect(detail.readiness.ready).toBe(false);
+    const readiness = show.stdout.split('READINESS\n')[1]?.split('\n')[0] ?? '';
+    for (const b of detail.readiness.openBlockers) expect(readiness).toContain(b.identifier);
+
+    // LINEAGE — root → self.
+    const lineage = show.stdout.split('LINEAGE\n')[1]?.split('\n')[0] ?? '';
+    expect(lineage).toBe(
+      [...detail.ancestors.map((a) => a.identifier), target.identifier].join(' › '),
+    );
+
+    // The three edge groups, each against the tool's own list.
+    const section = (name: string): string =>
+      show.stdout.split(`${name} (`)[1]?.split('\n\n')[0] ?? '';
+    expect(detail.blockedBy.map((l) => l.item.identifier)).toEqual([blocker.identifier]);
+    expect(detail.blocks.map((l) => l.item.identifier)).toEqual([dependent.identifier]);
+    expect(detail.relatesTo.map((l) => l.item.identifier)).toEqual([cousin.identifier]);
+    for (const [name, links] of [
+      ['BLOCKED BY', detail.blockedBy],
+      ['BLOCKS', detail.blocks],
+      ['RELATES TO', detail.relatesTo],
+    ] as const) {
+      const body = section(name);
+      expect(body).not.toBe('');
+      for (const link of links) expect(body).toContain(link.item.identifier);
+    }
+
+    // The CHILDREN table belongs to the PARENT, so the leaf reports none —
+    // and reports it as the empty line, not an empty table.
+    expect(show.stdout).toContain('CHILDREN (0)\nno children');
+    // The raw Markdown body is printed verbatim: it is what a human pastes
+    // into an agent, not something the terminal reformats.
+    expect(show.stdout).toContain('## Why');
+  });
+
+  it('fails an unknown key and a key in ANOTHER tenant the SAME way (404-not-403)', async () => {
+    const { fx } = await linkedProject();
+    await leaf(fx, 'Something this tenant can see');
+
+    // A well-formed key that does not exist in a project this token CAN read.
+    const unknown = await ws.run(['show', `${fx.projectIdentifier}-9999`]);
+    expect(unknown.exitCode).toBe(1);
+
+    // A real item, in a project this token cannot see at all.
+    const other = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHR' });
+    const hidden = await workItemsService.createWorkItem(
+      { projectId: other.projectId, kind: 'task', title: 'Their secret roadmap item' },
+      other.ctx,
+    );
+    const foreign = await ws.run(['show', hidden.identifier]);
+
+    expect(foreign.exitCode).toBe(1);
+    // The existence contract: a cross-tenant key reads as NOT FOUND, never as
+    // "forbidden" — a 403 would confirm the item exists — and never leaks the
+    // title.
+    expect(foreign.stderr.toLowerCase()).not.toContain('forbidden');
+    expect(foreign.stderr.toLowerCase()).not.toContain('permission');
+    expect(foreign.output).not.toContain('Their secret roadmap item');
+
+    // A malformed key never reaches the server at all.
+    const malformed = await ws.run(['show', 'not-a-key']);
+    expect(malformed.exitCode).toBe(1);
+    expect(malformed.stderr).toContain('is not a work item key');
+  });
+});
+
+// ── motir sprints / motir sprint (7.9.14) ───────────────────────────────────
+
+describe('motir sprints — the project’s sprints', () => {
+  it('prints exactly the list_sprints set, in sequence order, with the ACTIVE one marked', async () => {
+    const { fx } = await linkedProject();
+    const first = await sprint(fx, 'Foundations');
+    const second = await sprint(fx, 'The read surface');
+    await sprint(fx, 'Zed the last one');
+    await sprintsService.startSprint(second.id, {}, fx.ctx);
+
+    const printed = await ws.run(['sprints']);
+    expect(printed.exitCode).toBe(0);
+
+    const { sprints } = structured<{
+      sprints: { name: string; state: string; sequence: number }[];
+    }>(await runListSprints({ projectKey: fx.projectIdentifier }, fx.ctx));
+    const expected = [...sprints].sort((a, b) => a.sequence - b.sequence);
+
+    const table = tableAfter(printed.stdout, /\d+ sprints?:/);
+    expect(table.rows.map((r) => r['NAME'])).toEqual(expected.map((s) => s.name));
+    expect(table.rows.map((r) => r['STATE'])).toEqual(expected.map((s) => s.state));
+
+    // The active marker is on the active sprint and on nothing else.
+    const marked = table.rows.filter((r) => r[''] === '*').map((r) => r['NAME']);
+    expect(marked).toEqual(['The read surface']);
+    expect(printed.stdout).toContain(first.name);
+  });
+
+  it('refuses an unknown --state rather than silently listing everything', async () => {
+    const { fx } = await linkedProject();
+    await sprint(fx, 'Foundations');
+
+    const bad = await ws.run(['sprints', '--state', 'halfway']);
+
+    expect(bad.exitCode).toBe(1);
+    expect(bad.stderr).toContain('Unknown sprint state');
+    expect(bad.stderr).toContain('planned');
+  });
+});
+
+describe('motir sprint — ONE sprint’s work items', () => {
+  it('resolves the ACTIVE sprint by default, and by id and by name PREFIX', async () => {
+    const { fx } = await linkedProject();
+    const planned = await sprint(fx, 'Foundations');
+    const active = await sprint(fx, 'The read surface');
+    await sprintsService.startSprint(active.id, {}, fx.ctx);
+    await leaf(fx, 'In the active sprint', { sprintId: active.id });
+    await leaf(fx, 'In the planned one', { sprintId: planned.id });
+
+    // No argument → the active sprint.
+    const byDefault = await ws.run(['sprint']);
+    expect(byDefault.exitCode).toBe(0);
+    expect(byDefault.stdout).toContain(`${active.name}  [active]`);
+    expect(byDefault.stdout).toContain('In the active sprint');
+    expect(byDefault.stdout).not.toContain('In the planned one');
+
+    // By id.
+    const byId = await ws.run(['sprint', planned.id]);
+    expect(byId.exitCode).toBe(0);
+    expect(byId.stdout).toContain(`${planned.name}  [planned]`);
+    expect(byId.stdout).toContain('In the planned one');
+
+    // By name PREFIX — "Found" is unambiguous.
+    const byPrefix = await ws.run(['sprint', 'Found']);
+    expect(byPrefix.exitCode).toBe(0);
+    expect(byPrefix.stdout).toContain(`${planned.name}  [planned]`);
+  });
+
+  it('collects the WHOLE sprint across a real nextCursor boundary', async () => {
+    const { fx } = await linkedProject();
+    const active = await sprint(fx, 'The big one');
+    await sprintsService.startSprint(active.id, {}, fx.ctx);
+    // The tool clamps `limit` to 50, and the CLI pages AT that cap — so a
+    // sprint of 55 cannot be collected without following a cursor.
+    const SIZE = 55;
+    for (let i = 1; i <= SIZE; i += 1) {
+      await leaf(fx, `Item number ${i}`, { sprintId: active.id });
+    }
+
+    // Prove the boundary is REAL: one page at the cap leaves a cursor behind.
+    const filter = sprintItemsFilter(active.id);
+    const firstPage = structured<{ items: unknown[]; total: number; nextCursor: string | null }>(
+      await runSearchWorkItems({ projectKey: fx.projectIdentifier, filter, limit: 50 }, fx.ctx),
+    );
+    expect(firstPage.total).toBe(SIZE);
+    expect(firstPage.items).toHaveLength(50);
+    expect(firstPage.nextCursor).not.toBeNull();
+
+    const printed = await ws.run(['sprint']);
+    expect(printed.exitCode).toBe(0);
+
+    // The printed count is the server's own total, and the table really carries
+    // that many rows — the CLI never prints a short table that reads as whole.
+    expect(printed.stdout).toContain(`${firstPage.total} work items:`);
+    expect(printed.stdout).not.toContain('could not be collected');
+    const table = tableAfter(printed.stdout, /\d+ work items:/);
+    expect(table.rows).toHaveLength(SIZE);
+    // …including the rows only the SECOND page could have carried.
+    expect(table.rows.map((r) => r['TITLE'])).toContain(`Item number ${SIZE}`);
+
+    // `--json` agrees with the table and with the server's total.
+    const asJson = await ws.run(['sprint', '--json']);
+    const payload = JSON.parse(asJson.stdout) as { items: unknown[]; total: number };
+    expect(payload.total).toBe(SIZE);
+    expect(payload.items).toHaveLength(SIZE);
+  });
+
+  it('errors with guidance when NO sprint is active', async () => {
+    const { fx } = await linkedProject();
+    await sprint(fx, 'Planned but never started');
+
+    const none = await ws.run(['sprint']);
+
+    expect(none.exitCode).toBe(1);
+    expect(none.stderr).toContain('No sprint is active');
+    expect(none.stderr).toContain('motir sprints');
+  });
+});
+
+// ── the dependency-EDGE seam (7.9.0f → 7.9.16) ──────────────────────────────
+//
+// The point of this file for THIS increment. The per-package suites render the
+// edge columns against a SCRIPTED server — i.e. against the CLI's own idea of
+// the payload, which is precisely the shape that can be wrong. These drive the
+// REAL tool output back through the REAL renderer, so a key renamed on either
+// side of the seam fails here instead of rendering a silently empty column.
+
+describe('the dependency-edge columns — real tool output through the real renderer', () => {
+  it('`motir ready` names what each row BLOCKS, matching list_ready’s own block', async () => {
+    const { fx } = await linkedProject();
+    const a = await leaf(fx, 'A — the one to do first');
+    const b = await leaf(fx, 'B — waits on A');
+    const c = await leaf(fx, 'C — also waits on A');
+    await block(fx, b.id, a.id);
+    await block(fx, c.id, a.id);
+
+    const ready = await ws.run(['ready']);
+    expect(ready.exitCode).toBe(0);
+
+    const tool = structured<{ items: { key: string; dependencies: EdgeBlock }[] }>(
+      await runListReady({ projectKey: fx.projectIdentifier }, fx.ctx),
+    );
+    const toolRow = tool.items.find((i) => i.key === a.identifier);
+    expect(toolRow?.dependencies.blocks.map((e) => e.key).sort()).toEqual(
+      [b.identifier, c.identifier].sort(),
+    );
+
+    const table = tableAfter(ready.stdout, /\d+ ready work items?:/);
+    expect(table.headers).toContain('BLOCKS');
+    const cell = rowFor(table, a.identifier)['BLOCKS'] ?? '';
+    for (const edge of toolRow?.dependencies.blocks ?? []) expect(cell).toContain(edge.key);
+
+    // B and C are BLOCKED, so they are not in the ready set at all — the column
+    // describes the rows that ARE there, it does not invent them.
+    expect(table.rows.map((r) => r['KEY'])).toEqual([a.identifier]);
+    // A ready row's own blockers are satisfied by definition, so the reverse
+    // column would be dead on every row and is deliberately absent.
+    expect(table.headers).not.toContain('BLOCKED BY');
+  });
+
+  it('`motir sprint` names a row’s live blockers and MARKS the satisfied one', async () => {
+    const { fx } = await linkedProject();
+    const active = await sprint(fx, 'The read surface');
+    await sprintsService.startSprint(active.id, {}, fx.ctx);
+    const a = await leaf(fx, 'A — the blocker', { sprintId: active.id });
+    const finished = await leaf(fx, 'D — already finished', { sprintId: active.id });
+    const open = await leaf(fx, 'E — still open', { sprintId: active.id });
+    const b = await leaf(fx, 'B — waits on three things', { sprintId: active.id });
+    await block(fx, b.id, a.id);
+    await block(fx, b.id, finished.id);
+    await block(fx, b.id, open.id);
+    await markDone(fx, finished.id);
+
+    const printed = await ws.run(['sprint']);
+    expect(printed.exitCode).toBe(0);
+
+    const filter = sprintItemsFilter(active.id);
+    const tool = structured<{ items: { identifier: string; dependencies: EdgeBlock }[] }>(
+      await runSearchWorkItems({ projectKey: fx.projectIdentifier, filter, limit: 50 }, fx.ctx),
+    );
+    const toolRow = tool.items.find((i) => i.identifier === b.identifier);
+    expect(toolRow?.dependencies.blockedBy.map((e) => e.key).sort()).toEqual(
+      [a.identifier, finished.identifier, open.identifier].sort(),
+    );
+
+    const table = tableAfter(printed.stdout, /\d+ work items:/);
+    expect(table.headers).toEqual(
+      expect.arrayContaining([
+        'KEY',
+        'KIND',
+        'STATUS',
+        'PRIORITY',
+        'BLOCKED BY',
+        'BLOCKS',
+        'TITLE',
+      ]),
+    );
+    const cell = rowFor(table, b.identifier)['BLOCKED BY'] ?? '';
+
+    // Every blocker the tool reported is named — including the finished one,
+    // which is what the ✓ is FOR. The contract is that a satisfied blocker is
+    // DISTINGUISHABLE from a live one, not that it is hidden: a reader has to
+    // be able to answer "why is this not moving" from the row, and "it isn't,
+    // that one is done" is part of the answer.
+    for (const edge of toolRow?.dependencies.blockedBy ?? []) expect(cell).toContain(edge.key);
+    expect(cell).toContain(`${finished.identifier}✓`);
+    expect(cell).not.toContain(`${a.identifier}✓`);
+    expect(cell).not.toContain(`${open.identifier}✓`);
+    // The live blockers come first — they are what the wait is actually about.
+    expect(cell.indexOf(a.identifier)).toBeLessThan(cell.indexOf(finished.identifier));
+    expect(printed.stdout).toContain('✓ = already done');
+
+    // A row nothing gates renders BLANK, never a zero and never a false block.
+    expect(rowFor(table, a.identifier)['BLOCKED BY']).toBe('');
+    expect(rowFor(table, a.identifier)['BLOCKS']).toContain(b.identifier);
+  });
+
+  it('truncates a wide cell with +n while `--json` carries the FULL block', async () => {
+    const { fx } = await linkedProject();
+    const hub = await leaf(fx, 'The hub everything waits on');
+    const waiting: string[] = [];
+    for (let i = 1; i <= 5; i += 1) {
+      const dependent = await leaf(fx, `Dependent ${i}`);
+      await block(fx, dependent.id, hub.id);
+      waiting.push(dependent.identifier);
+    }
+
+    const ready = await ws.run(['ready']);
+    const cell = rowFor(tableAfter(ready.stdout, /\d+ ready work items?:/), hub.identifier)[
+      'BLOCKS'
+    ];
+    // Five edges, a budget of three: the cell must NOT print all five, and must
+    // say how many it withheld rather than truncating silently.
+    expect(cell).toContain('+2');
+    expect(waiting.filter((key) => cell?.includes(key))).toHaveLength(3);
+
+    // The abbreviation is a TERMINAL-WIDTH concern only — the machine view
+    // never lies, and it matches the tool byte for byte.
+    const asJson = await ws.run(['ready', '--json']);
+    const rows = JSON.parse(asJson.stdout) as { key: string; dependencies: EdgeBlock }[];
+    const jsonRow = rows.find((r) => r.key === hub.identifier);
+    const tool = structured<{ items: { key: string; dependencies: EdgeBlock }[] }>(
+      await runListReady({ projectKey: fx.projectIdentifier }, fx.ctx),
+    );
+    expect(jsonRow?.dependencies).toEqual(
+      tool.items.find((i) => i.key === hub.identifier)?.dependencies,
+    );
+    expect(jsonRow?.dependencies.blocks.map((e) => e.key).sort()).toEqual([...waiting].sort());
+  });
+
+  it('EXCLUDES an archived blocker from every edge column (the MOTIR-1328 rule)', async () => {
+    const { fx } = await linkedProject();
+    const active = await sprint(fx, 'The read surface');
+    await sprintsService.startSprint(active.id, {}, fx.ctx);
+    const live = await leaf(fx, 'A live blocker', { sprintId: active.id });
+    const stale = await leaf(fx, 'A blocker that was archived', { sprintId: active.id });
+    const waiting = await leaf(fx, 'Waiting on both', { sprintId: active.id });
+    await block(fx, waiting.id, live.id);
+    await block(fx, waiting.id, stale.id);
+    await workItemsService.archiveWorkItem(stale.id, fx.ctx);
+
+    const printed = await ws.run(['sprint']);
+    expect(printed.exitCode).toBe(0);
+
+    const table = tableAfter(printed.stdout, /\d+ work items:/);
+    const cell = rowFor(table, waiting.identifier)['BLOCKED BY'] ?? '';
+    expect(cell).toContain(live.identifier);
+    // An archived blocker is a STALE edge: it must not appear, and it must not
+    // read as something the reader has to go and finish.
+    expect(cell).not.toContain(stale.identifier);
+    expect(printed.stdout).not.toContain(stale.identifier);
+  });
+});
+
+// ── motir show — the build-order WAVE view (7.9.16b) ────────────────────────
+
+describe('motir show — build-order waves over a real Postgres DAG', () => {
+  it('layers a real fan-out / fan-in DAG into the correct waves', async () => {
+    const { fx } = await linkedProject();
+    const parent = await story(fx, 'A story with a real shape');
+    // Two roots; W1 fans OUT to two dependents; W4 fans IN from two blockers.
+    const w1 = await child(fx, parent.id, 'Migration');
+    const w2 = await child(fx, parent.id, 'Design');
+    const w3 = await child(fx, parent.id, 'Service');
+    const w4 = await child(fx, parent.id, 'Route');
+    const w5 = await child(fx, parent.id, 'UI');
+    await block(fx, w3.id, w1.id);
+    await block(fx, w4.id, w1.id);
+    await block(fx, w4.id, w2.id);
+    await block(fx, w5.id, w3.id);
+    await block(fx, w5.id, w4.id);
+
+    const show = await ws.run(['show', parent.identifier]);
+    expect(show.exitCode).toBe(0);
+
+    const table = tableAfter(show.stdout, /CHILDREN \(5\)/);
+    expect(show.stdout).toContain('CHILDREN (5) — build order');
+    expect(table.headers).toEqual(['WAVE', 'KEY', 'KIND', 'STATUS', 'BLOCKED BY', 'TITLE']);
+
+    const waveOf = (item: WorkItemDto): string => rowFor(table, item.identifier)['WAVE'] ?? '';
+    // Wave 1 is the story's LOCAL ready set — exactly the independently
+    // buildable children, nothing more.
+    expect(
+      table.rows
+        .filter((r) => r['WAVE'] === '1')
+        .map((r) => r['KEY'])
+        .sort(),
+    ).toEqual([w1.identifier, w2.identifier].sort());
+    expect(waveOf(w3)).toBe('2');
+    expect(waveOf(w4)).toBe('2');
+    expect(waveOf(w5)).toBe('3');
+
+    // The fan-in row NAMES both of its blockers, so the reason for the wait is
+    // answerable from the row.
+    const fanIn = rowFor(table, w4.identifier)['BLOCKED BY'] ?? '';
+    expect(fanIn).toContain(w1.identifier);
+    expect(fanIn).toContain(w2.identifier);
+    expect(rowFor(table, w1.identifier)['BLOCKED BY']).toBe('');
+
+    // `--json` carries the same order machine-readably, and its per-child edge
+    // block matches the tool's — the same drift check, one level down.
+    const asJson = await ws.run(['show', parent.identifier, '--json']);
+    const payload = JSON.parse(asJson.stdout) as {
+      children: { identifier: string; wave: number | null; dependencies: EdgeBlock }[];
+    };
+    expect(new Map(payload.children.map((c) => [c.identifier, c.wave]))).toEqual(
+      new Map([
+        [w1.identifier, 1],
+        [w2.identifier, 1],
+        [w3.identifier, 2],
+        [w4.identifier, 2],
+        [w5.identifier, 3],
+      ]),
+    );
+    const tool = structured<{ children: { identifier: string; dependencies: EdgeBlock }[] }>(
+      await runGetWorkItem({ key: parent.identifier }, fx.ctx),
+    );
+    for (const jsonChild of payload.children) {
+      const toolChild = tool.children.find((c) => c.identifier === jsonChild.identifier);
+      expect(jsonChild.dependencies).toEqual(toolChild?.dependencies);
+    }
+  });
+
+  it('a DONE blocker and an ARCHIVED one both stop gating — neither delays a wave', async () => {
+    const { fx } = await linkedProject();
+    const parent = await story(fx, 'A story part-way through');
+    const finished = await child(fx, parent.id, 'Already shipped');
+    const stale = await child(fx, parent.id, 'Archived after a re-plan');
+    const open = await child(fx, parent.id, 'Still to do');
+    const target = await child(fx, parent.id, 'Waits on all three');
+    await block(fx, target.id, finished.id);
+    await block(fx, target.id, stale.id);
+    await block(fx, target.id, open.id);
+    await markDone(fx, finished.id);
+    await workItemsService.archiveWorkItem(stale.id, fx.ctx);
+
+    const show = await ws.run(['show', parent.identifier]);
+    expect(show.exitCode).toBe(0);
+
+    // The archived child leaves the aggregate entirely.
+    const table = tableAfter(show.stdout, /CHILDREN \(3\)/);
+    expect(table.rows.map((r) => r['KEY'])).not.toContain(stale.identifier);
+
+    const cell = rowFor(table, target.identifier)['BLOCKED BY'] ?? '';
+    expect(cell).toContain(open.identifier);
+    expect(cell).toContain(`${finished.identifier}✓`);
+    // The archived edge is gone from the cell, and — the part a fixture-based
+    // unit test cannot prove — it does not push the row down a wave either.
+    expect(cell).not.toContain(stale.identifier);
+    expect(rowFor(table, target.identifier)['WAVE']).toBe('2');
+    expect(rowFor(table, open.identifier)['WAVE']).toBe('1');
+    expect(rowFor(table, finished.identifier)['WAVE']).toBe('1');
+  });
+
+  it('a blocked_by CYCLE cannot be seeded at all — Postgres rejects the closing edge', async () => {
+    const { fx } = await linkedProject();
+    const parent = await story(fx, 'A story someone tried to tangle');
+    const first = await child(fx, parent.id, 'One');
+    const second = await child(fx, parent.id, 'Two');
+    await block(fx, second.id, first.id);
+
+    // 7.9.15 was authored expecting to SEED a cycle here — "which the plan rules
+    // forbid but the DB permits" — and drive `show`'s cycle marker end-to-end.
+    // Against shipped reality that premise is false: `enforce_work_item_link_no_cycle`
+    // (migration 20260531231110) walks the `is_blocked_by` chain from the new
+    // edge's far end on EVERY insert and raises `WI_LINK_CYCLE` (SQLSTATE 23514)
+    // if the walk reaches the near end. It is a TRIGGER, so no write path evades
+    // it — not the service, not the repository, not a raw insert. So the
+    // assertable fact is the invariant itself, which is the stronger one: the
+    // renderer's cycle branch is UNREACHABLE from data the product can hold.
+    // (Its own behaviour stays covered by MOTIR-1848's `assignChildWaves` /
+    // `cycleMembers` unit cases, which can hand it the impossible input.)
+    await expect(block(fx, first.id, second.id)).rejects.toThrow();
+    await expect(
+      db.workItemLink.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          fromId: first.id,
+          toId: second.id,
+          kind: 'is_blocked_by',
+          createdById: fx.ownerId,
+        },
+      }),
+    ).rejects.toThrow(/WI_LINK_CYCLE/);
+
+    // …and the surface stays honest: a total order, no cycle marker.
+    const show = await ws.run(['show', parent.identifier]);
+    expect(show.exitCode).toBe(0);
+    expect(show.stdout).not.toContain('dependency CYCLE');
+    const table = tableAfter(show.stdout, /CHILDREN \(2\)/);
+    expect(rowFor(table, first.identifier)['WAVE']).toBe('1');
+    expect(rowFor(table, second.identifier)['WAVE']).toBe('2');
   });
 });
 
