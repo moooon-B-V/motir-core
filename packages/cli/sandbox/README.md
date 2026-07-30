@@ -76,17 +76,20 @@ docker run --rm -it \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
-| Tag                                            | Digest                                 |
-| ---------------------------------------------- | -------------------------------------- |
-| `ghcr.io/moooon-b-v/motir-sandbox:base`        | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | _no release published yet — see below_ |
-| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | _no release published yet — see below_ |
+**Release `cli-v0.1.0`** ([run 30547054641](https://github.com/moooon-B-V/motir-core/actions/runs/30547054641)).
+Each row's immutable twin — `:<profile>-0.1.0` — points at the same manifest.
+
+| Tag                                            | Digest                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:292289b41e97acc93f8f336ca31d4146a25941036e0199ca8e5e9e931262066e` |
+| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:be09575019378b707e229808a7d832f063afe6515dfe325371cf4b13f85362be` |
+| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:f1212309ebbd945cfb9cff398565e78f77225472defece899ccf311d0cbef0e6` |
+| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:9a1f012847795029ffe5b015f320fc1485e658cd693adbd33bcad0e6b580ba4b` |
+| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:e0aec4f3908fb64e60bda93ce260e0f598f6c7a502b3bb764aef5dc0f5cdc561` |
+| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:3e0a1e5600ec86b9f7583f918be5ee5445caf75da85210b8bcf6abfd51be8496` |
+| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:0955c69d320cc26af0882cc93205f2d38ac82770b963cec5076d714666d17b3c` |
+| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:dfbb31dd911a27b48d910a273a93980c5ff510c197b1c98de8130d6845265c9c` |
+| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:57d6e0e0024f3e8f57490d7e782e3745e7e399f5f1f1bd5f5af0a26fc49f38ac` |
 
 The digests are filled in from the release run's job summary at each `cli-v*`
 tag (see [Publishing](#publishing)) — this table is the record, but it is a
