@@ -273,6 +273,39 @@ export interface WorkItemLink {
   item: WorkItemSummary;
 }
 
+/** The far end of ONE per-row dependency edge (`WorkItemEdgeSummaryDto`), as the
+ * MCP reads project it: `key` is the `PROD-<n>` identifier, `status` the raw
+ * workflow status key. */
+export interface WorkItemEdgeSummary {
+  key: string;
+  title: string;
+  status: string;
+}
+
+/** Both directions of the `is_blocked_by` graph around one row
+ * (`WorkItemDependencyEdgesDto`). The server promises both arrays are always
+ * present — empty, never missing — so nothing here branches on presence. */
+export interface WorkItemDependencyEdges {
+  blockedBy: WorkItemEdgeSummary[];
+  blocks: WorkItemEdgeSummary[];
+}
+
+/**
+ * A CHILD row of the detail aggregate: a summary PLUS the sibling dependency
+ * block `get_work_item` attaches (MOTIR-1848), which `motir show` folds into
+ * build-order waves.
+ *
+ * `dependencies` is OPTIONAL — the one place in this mirror where a missing
+ * field is a shape the server really can produce. The CLI is versioned and
+ * published independently of the server it talks to, so a newer CLI routinely
+ * meets an OLDER Motir whose `get_work_item` predates the block. Absent means
+ * "this server cannot tell me the graph", and `show` falls back to the plain
+ * children table rather than drawing a wave order it cannot substantiate.
+ */
+export interface WorkItemChild extends WorkItemSummary {
+  dependencies?: WorkItemDependencyEdges;
+}
+
 /**
  * The `get_work_item` aggregate (`IssueDetailDto`) — the item, its lineage, its
  * dependency edges, and the server's own readiness verdict (dependency-only —
@@ -309,7 +342,7 @@ export interface WorkItemDetail {
   /** The full parent chain, ordered root→self and EXCLUDING the item itself. */
   ancestors: WorkItemSummary[];
   parent: WorkItemSummary | null;
-  children: WorkItemSummary[];
+  children: WorkItemChild[];
   blockedBy: WorkItemLink[];
   blocks: WorkItemLink[];
   relatesTo: WorkItemLink[];

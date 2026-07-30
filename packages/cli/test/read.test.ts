@@ -223,12 +223,83 @@ describe('motir show', () => {
     expect(server.calls).toEqual([{ name: 'get_work_item', args: { key: 'PROD-7' } }]);
   });
 
-  it('--json emits the tool payload UNCHANGED', async () => {
+  // ── the build-order WAVE view (7.9.16b · MOTIR-1848) ──────────────────────
+  //
+  // `detail` above deliberately carries children WITHOUT the per-child
+  // `dependencies` block — an OLDER Motir, which a separately-versioned CLI
+  // routinely meets. The two tests above therefore also pin the DEGRADED path:
+  // the plain 7.9.13 `CHILDREN` table, and a `--json` pass-through.
+
+  /** The same aggregate from a server that DOES project the children's edges. */
+  const graphed = {
+    ...detail,
+    children: [
+      {
+        identifier: 'PROD-9',
+        kind: 'subtask',
+        title: 'The dependent',
+        status: 'blocked',
+        dependencies: {
+          blockedBy: [{ key: 'PROD-8', title: 'The blocker', status: 'todo' }],
+          blocks: [],
+        },
+      },
+      {
+        identifier: 'PROD-8',
+        kind: 'subtask',
+        title: 'The blocker',
+        status: 'todo',
+        dependencies: {
+          blockedBy: [],
+          blocks: [{ key: 'PROD-9', title: 'The dependent', status: 'todo' }],
+        },
+      },
+    ],
+  };
+
+  it('--json emits the tool payload UNCHANGED against a server with no child edges', async () => {
     const stdout = capture();
 
     await showCommand('PROD-7', { json: true });
 
     expect(JSON.parse(stdout())).toEqual(detail);
+  });
+
+  it('orders the children into build WAVES when the server projects their edges', async () => {
+    const stdout = capture();
+    server.script({ get_work_item: { structured: graphed } });
+
+    await showCommand('PROD-7', {});
+    const printed = stdout();
+
+    expect(printed).toContain('CHILDREN (2) — build order');
+    expect(printed).toContain('WAVE  KEY     KIND     STATUS   BLOCKED BY  TITLE');
+    // The blocker leads, though the server listed it SECOND — the table is
+    // ordered by the graph, not by position.
+    const blocker = printed.indexOf('1     PROD-8');
+    const dependent = printed.indexOf('2     PROD-9');
+    expect(blocker).toBeGreaterThan(-1);
+    expect(dependent).toBeGreaterThan(blocker);
+    expect(printed).toContain('PROD-8      The dependent');
+  });
+
+  it('--json carries the full dependencies block AND the wave, in build order', async () => {
+    const stdout = capture();
+    server.script({ get_work_item: { structured: graphed } });
+
+    await showCommand('PROD-7', { json: true });
+    const payload = JSON.parse(stdout()) as {
+      children: { identifier: string; wave: number; dependencies: { blockedBy: unknown[] } }[];
+    };
+
+    expect(payload.children.map((c) => [c.identifier, c.wave])).toEqual([
+      ['PROD-8', 1],
+      ['PROD-9', 2],
+    ]);
+    // Untruncated — the `+n` budget is a terminal-width concern, not a payload one.
+    expect(payload.children[1]?.dependencies.blockedBy).toEqual([
+      { key: 'PROD-8', title: 'The blocker', status: 'todo' },
+    ]);
   });
 
   it('surfaces the SERVER’s own message for an unknown / cross-tenant key', async () => {

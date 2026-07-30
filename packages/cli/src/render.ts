@@ -5,6 +5,7 @@ import type {
   SearchFilterEnvelope,
   SearchItemSummary,
   SprintSummary,
+  WorkItemChild,
   WorkItemDetail,
   WorkItemLink,
   WorkItemSummary,
@@ -288,13 +289,14 @@ export function renderStatusBlock(pulse: StatusPulse): string {
 // read: header → readiness → lineage → children → the three dependency edge
 // groups → the body. Each is pure and separately exported, because the block is
 // assembled from parts that later cards re-arrange rather than rewrite:
-// 7.9.16 sorts the children into build-order WAVES and prepends a column, so
-// the ROW BUILDER (`childRows`) and the TABLE renderer (`renderRelationTable`)
+// 7.9.16b sorts the children into build-order WAVES and widens the column set,
+// so the ROW BUILDER (`childRows`) and the TABLE renderer (`renderRelationTable`)
 // are deliberately separate — the rows carry no ordering and the table carries
-// no column set.
+// no column set. It reuses both as-is (see `renderChildrenSection` below).
 
-/** The columns `motir show` gives a CHILD row. 7.9.16 prepends `WAVE` /
- * `BLOCKED BY` to a copy of this rather than editing the renderer. */
+/** The columns `motir show` gives a CHILD row. The WAVE view builds
+ * {@link WAVE_CHILD_HEADERS} around a copy of this rather than editing the
+ * renderer. */
 export const CHILD_HEADERS = ['KEY', 'KIND', 'STATUS', 'TITLE'];
 
 /** The columns an EDGE row (blocked by / blocks / relates to) gets. */
@@ -325,16 +327,245 @@ export function edgeRows(links: WorkItemLink[], titleWidth = 60): string[][] {
  * A named section: `HEADING (n)` and either the table or the empty line. Rows
  * come in already built (and already ordered), so a caller can re-sort them or
  * hand a wider `headers` set without touching this.
+ *
+ * `note` annotates the COUNT line (`CHILDREN (6) — build order`) — how the rows
+ * below are ordered, when that is not the server's own order. Dropped on an
+ * empty section, where there is no ordering to explain.
  */
 export function renderRelationTable(
   heading: string,
   rows: string[][],
   emptyLine: string,
   headers: string[] = EDGE_HEADERS,
+  note?: string,
 ): string {
   const title = `${heading} (${rows.length})`;
   if (rows.length === 0) return `${title}\n${emptyLine}`;
-  return `${title}\n${formatTable(headers, rows)}`;
+  return `${note ? `${title} — ${note}` : title}\n${formatTable(headers, rows)}`;
+}
+
+// ── build-order WAVES (7.9.16b · MOTIR-1848) ────────────────────────────────
+//
+// The children of one parent form a small DAG (`blocked_by` between siblings).
+// A WAVE is a layer of that DAG: wave 1 is the parent's LOCAL ready set — every
+// child nothing un-done gates — wave 2 is what only wave 1 gates, and so on. The
+// wave NUMBER is the graph: it says what can be worked in parallel right now and
+// what has to wait, in a column, next to the status and title you need in order
+// to act on it. (Deliberately NOT a `git log --graph` rail: a within-story DAG
+// fans and a node routinely carries several blockers, which needs lane
+// assignment + crossing edges — illegible past ~3 lanes, and it leaves nowhere
+// to put status or title. A true graph view belongs on the web canvas.)
+
+/**
+ * The default workflow's TERMINAL status keys (`category: 'done'` in
+ * lib/workflows/defaultWorkflow.ts): `done` AND `cancelled`. A blocker in either
+ * is SATISFIED — it no longer gates — which is exactly the server's own
+ * readiness rule (`workflowsService.getTerminalStatusKeys`).
+ *
+ * The edge projection carries a raw status KEY and there is no workflow-read MCP
+ * tool, so — like {@link IN_FLIGHT_STATUS_KEYS} — the CLI classifies against the
+ * default workflow's well-known keys. A project on a CUSTOM workflow that renamed
+ * its terminal statuses simply reads as more-blocked here (a conservative,
+ * documented limitation), never as a crash and never as falsely-ready.
+ */
+export const TERMINAL_STATUS_KEYS = ['done', 'cancelled'] as const;
+
+/** Whether a blocker's status means it no longer gates. */
+export function isSatisfiedBlocker(status: string): boolean {
+  return (TERMINAL_STATUS_KEYS as readonly string[]).includes(status);
+}
+
+/** One child placed in the build order, with the blockers that put it there. */
+export interface ChildWave {
+  child: WorkItemChild;
+  /** 1-based build wave — or `null` when the child sits in a dependency CYCLE
+   * and therefore has no position in any build order. */
+  wave: number | null;
+  /** Un-done blockers that are SIBLINGS — the only edges that set the wave. */
+  siblingBlockers: string[];
+  /** Un-done blockers OUTSIDE this parent. The plan rules forbid these, but the
+   * data can hold them: they are NAMED (so the reason for the wait is visible)
+   * and deliberately do NOT form a sibling layer — nothing in this table can
+   * clear them, so counting them would distort every wave below. */
+  externalBlockers: string[];
+  /** Blockers already terminal. Shown, so "why is this wave 1" is answerable
+   * from the row rather than from memory. */
+  satisfiedBlockers: string[];
+}
+
+/**
+ * `(children) => the same children, layered into build waves` — PURE, and the
+ * whole graph computation `motir show` does.
+ *
+ * STABLE: each wave keeps the order the children arrived in (the server's), so
+ * two runs against unchanged data render identically. Cycle members — children
+ * whose sibling blockers can never all resolve — come LAST with `wave: null`,
+ * because a cycle is a planning bug to REPORT, not a reason to fail or to draw a
+ * false order.
+ */
+export function assignChildWaves(children: WorkItemChild[]): ChildWave[] {
+  const siblingKeys = new Set(children.map((c) => c.identifier));
+  const classified = children.map((child) => {
+    const entry: ChildWave = {
+      child,
+      wave: null,
+      siblingBlockers: [],
+      externalBlockers: [],
+      satisfiedBlockers: [],
+    };
+    for (const edge of child.dependencies?.blockedBy ?? []) {
+      if (isSatisfiedBlocker(edge.status)) entry.satisfiedBlockers.push(edge.key);
+      else if (siblingKeys.has(edge.key)) entry.siblingBlockers.push(edge.key);
+      else entry.externalBlockers.push(edge.key);
+    }
+    return entry;
+  });
+
+  // Kahn layering. Each pass takes every child whose sibling blockers are ALL
+  // already placed, off a snapshot taken before the pass — so two siblings that
+  // block each other's peer never land in the same wave.
+  const placed = new Map<string, number>();
+  const ordered: ChildWave[] = [];
+  let remaining = classified;
+  for (let wave = 1; remaining.length > 0; wave += 1) {
+    const ready = remaining.filter((e) => e.siblingBlockers.every((k) => placed.has(k)));
+    if (ready.length === 0) break; // only cycles left
+    for (const entry of ready) {
+      entry.wave = wave;
+      ordered.push(entry);
+    }
+    for (const entry of ready) placed.set(entry.child.identifier, wave);
+    remaining = remaining.filter((e) => !placed.has(e.child.identifier));
+  }
+  return [...ordered, ...remaining];
+}
+
+/** The cycle members left unplaced by {@link assignChildWaves}, in table order. */
+export function cycleMembers(waves: ChildWave[]): string[] {
+  return waves.filter((w) => w.wave === null).map((w) => w.child.identifier);
+}
+
+/** The columns the WAVE view gives a child: {@link CHILD_HEADERS} with the build
+ * order in front and the blockers beside the status. TITLE stays last — it is
+ * the truncated column, so nothing after it can lose its alignment. */
+export const WAVE_CHILD_HEADERS = ['WAVE', 'KEY', 'KIND', 'STATUS', 'BLOCKED BY', 'TITLE'];
+
+/** How many blocker keys a `BLOCKED BY` cell prints before it overflows to
+ * `+n`. The cell never wraps: a wrapped cell would wreck `formatTable`'s
+ * column alignment for every row below it. */
+export const BLOCKER_KEYS_BUDGET = 3;
+
+/** Suffix marks: a blocker already terminal, and one outside this parent. */
+const SATISFIED_MARK = '✓';
+const EXTERNAL_MARK = '↗';
+/** The WAVE cell for a child that has no wave (a cycle member). */
+const NO_WAVE = '—';
+
+/** What each mark means. Printed per-mark, and only for a mark a row actually
+ * SHOWS — a legend for a symbol not on the screen (one the `+n` budget cut, say)
+ * is noise that reads as a promise the table did not keep. */
+const MARK_LEGEND: [string, string][] = [
+  [SATISFIED_MARK, `${SATISFIED_MARK} = already done`],
+  [EXTERNAL_MARK, `${EXTERNAL_MARK} = blocker outside this parent`],
+];
+
+/**
+ * ONE child's `BLOCKED BY` cell: the blocker keys, un-done siblings first (they
+ * are what the wait is actually about), then external, then satisfied. Beyond
+ * {@link BLOCKER_KEYS_BUDGET} keys the rest collapse to `+n` — a fan-in of nine
+ * must not push TITLE off the terminal. No blockers renders BLANK, not a zero.
+ */
+export function blockedByCell(entry: ChildWave, budget = BLOCKER_KEYS_BUDGET): string {
+  const keys = [
+    ...entry.siblingBlockers,
+    ...entry.externalBlockers.map((k) => `${k}${EXTERNAL_MARK}`),
+    ...entry.satisfiedBlockers.map((k) => `${k}${SATISFIED_MARK}`),
+  ];
+  if (keys.length === 0) return '';
+  if (keys.length <= budget) return keys.join(', ');
+  return `${keys.slice(0, budget).join(', ')} +${keys.length - budget}`;
+}
+
+/** `(waves) => rows` — the wave view's cells, in {@link WAVE_CHILD_HEADERS}
+ * order. Built from {@link childRow}, so the four shared columns can never drift
+ * between the plain table and this one. */
+export function waveChildRows(
+  waves: ChildWave[],
+  titleWidth = 60,
+  budget = BLOCKER_KEYS_BUDGET,
+): string[][] {
+  return waves.map((entry) => {
+    const cells = childRow(entry.child, titleWidth);
+    const wave = entry.wave === null ? NO_WAVE : String(entry.wave);
+    // CHILD_HEADERS is KEY · KIND · STATUS · TITLE — the blockers go before the
+    // (truncated) title, the wave in front.
+    return [wave, ...cells.slice(0, 3), blockedByCell(entry, budget), ...cells.slice(3)];
+  });
+}
+
+/**
+ * The whole CHILDREN section, in whichever of its two forms the server supports.
+ *
+ * With the per-child `dependencies` block (MOTIR-1848) it is the build-order WAVE
+ * view. WITHOUT it — an older Motir, since the CLI ships to npm on its own
+ * release train — it is exactly the table 7.9.13 shipped: the CLI degrades to the
+ * truth it can prove rather than inventing an order or failing on a field it
+ * never got.
+ */
+export function renderChildrenSection(children: WorkItemChild[], titleWidth = 60): string {
+  const graphed = children.length > 0 && children.every((c) => c.dependencies !== undefined);
+  if (!graphed) {
+    return renderRelationTable(
+      'CHILDREN',
+      childRows(children, titleWidth),
+      'no children',
+      CHILD_HEADERS,
+    );
+  }
+
+  const waves = assignChildWaves(children);
+  const rows = waveChildRows(waves, titleWidth);
+  const lines = [
+    renderRelationTable('CHILDREN', rows, 'no children', WAVE_CHILD_HEADERS, 'build order'),
+  ];
+  const legend = MARK_LEGEND.filter(([mark]) => rows.some((row) => row[4]?.includes(mark)));
+  if (legend.length > 0) lines.push(legend.map(([, text]) => text).join(' · '));
+  const cycle = cycleMembers(waves);
+  if (cycle.length > 0) {
+    // Reported, not thrown: `show` reads a plan, and a plan that cannot be
+    // ordered is precisely what the reader needs to be told.
+    lines.push(
+      `⚠ dependency CYCLE — ${cycle.join(', ')} block each other and have no build order. ` +
+        'Fix the blocked_by edges.',
+    );
+  }
+  return lines.join('\n');
+}
+
+/** A child as `show --json` emits it: the full, UNTRUNCATED `dependencies` block
+ * plus the wave the table computed, so a script gets the build order without
+ * re-deriving the graph. */
+export type WorkItemChildWithWave = WorkItemChild & { wave: number | null };
+
+/**
+ * The `show --json` payload: the tool's own aggregate, with `children` re-ordered
+ * into build order and each carrying its `wave` (`null` for a cycle member).
+ * Against a server with no per-child edges the aggregate passes through
+ * UNCHANGED — the same degradation the table takes.
+ */
+export function detailWithWaves(
+  detail: WorkItemDetail,
+): WorkItemDetail | (Omit<WorkItemDetail, 'children'> & { children: WorkItemChildWithWave[] }) {
+  const graphed =
+    detail.children.length > 0 && detail.children.every((c) => c.dependencies !== undefined);
+  if (!graphed) return detail;
+  return {
+    ...detail,
+    children: assignChildWaves(detail.children).map((entry) => ({
+      ...entry.child,
+      wave: entry.wave,
+    })),
+  };
 }
 
 /** The item's identity line + its field line. A null field is OMITTED rather
@@ -392,12 +623,7 @@ export function renderWorkItemDetail(detail: WorkItemDetail, titleWidth = 60): s
     renderItemHeader(detail.item),
     `READINESS\n${renderReadinessLine(detail.readiness)}`,
     `LINEAGE\n${renderLineage(detail)}`,
-    renderRelationTable(
-      'CHILDREN',
-      childRows(detail.children, titleWidth),
-      'no children',
-      CHILD_HEADERS,
-    ),
+    renderChildrenSection(detail.children, titleWidth),
     renderRelationTable('BLOCKED BY', edgeRows(detail.blockedBy, titleWidth), 'none'),
     renderRelationTable('BLOCKS', edgeRows(detail.blocks, titleWidth), 'none'),
     renderRelationTable('RELATES TO', edgeRows(detail.relatesTo, titleWidth), 'none'),

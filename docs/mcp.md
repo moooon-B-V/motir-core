@@ -351,6 +351,26 @@ shape the detail page reads.
 (description, status, priority, assignee, …), its parent, children, dependency
 links, and a readiness verdict.
 
+Each **CHILD** row additionally carries the same
+[`dependencies` block](#the-dependencies-block-list-reads) the list reads attach
+— identical shape, identical guarantees — so the children's build ORDER is
+derivable from this one call:
+
+```jsonc
+"children": [
+  {
+    "identifier": "PROD-8", "kind": "subtask", "title": "Ship the schema", "status": "todo",
+    "dependencies": { "blockedBy": [], "blocks": [{ "key": "PROD-9", "title": "Wire the UI", "status": "todo" }] }
+  }
+]
+```
+
+It costs **two** queries regardless of child count (the same batched reader), and
+it is the sibling sub-graph — the item's OWN edges are the richer top-level
+`blockedBy` / `blocks` / `relatesTo` groups, which also carry link ids. `motir
+show` folds it into the build-order WAVE column; `show --json` adds a computed
+`wave` per child (`null` for a member of a dependency cycle).
+
 ### Work-item writes
 
 #### `create_work_item`
