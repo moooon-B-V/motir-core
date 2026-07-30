@@ -26,7 +26,15 @@ export const CLI_CLIENT_ID = 'motir-cli';
  * (device code's residual risk, ADR Q0b), and fifteen minutes is ample to open a
  * browser, sign in, and approve.
  */
-export const DEVICE_CODE_EXPIRES_IN = '15m';
+export const DEVICE_CODE_EXPIRES_MINUTES = 15;
+
+/**
+ * The same lifetime as the Better-Auth time string the plugin config takes. Derived
+ * from the number above rather than written twice: the `/device` page's expired and
+ * unknown-code copy STATES this figure to the human ("codes last 15 minutes"), so a
+ * literal here would be a second place for the ADR's value to drift out of.
+ */
+export const DEVICE_CODE_EXPIRES_IN = `${DEVICE_CODE_EXPIRES_MINUTES}m`;
 
 /** Minimum poll spacing the CLI is told to honour; polling faster answers
  * `slow_down`. The plugin's default, pinned so the AC is visible in review. */

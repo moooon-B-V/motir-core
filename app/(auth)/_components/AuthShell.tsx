@@ -6,26 +6,61 @@ import { type ReactNode } from 'react';
  * headline + optional subhead, then the slotted body (form fields,
  * buttons, footer link). Spacing here is what gives every auth page
  * the same vertical rhythm — keep it here, not on individual pages.
+ *
+ * `tight` is the `design/cli-connect/` mock's `.ac-head.tight`: a smaller
+ * headline and a closer stack, for the ONE auth screen that must fit a
+ * measured amount of content above the fold (`/device`'s confirm step,
+ * Subtask MOTIR-1867 — its four facts and both CTAs have to be visible
+ * together at 648px, and the default 5xl headline alone costs ~56px of
+ * that budget). It lives here rather than on the page for the reason the
+ * paragraph above gives: the rhythm is this component's job.
  */
 export function AuthShell({
   headline,
   subhead,
+  tight = false,
   children,
 }: {
   headline: string;
   subhead?: ReactNode;
+  tight?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-8">
-      <header className="flex flex-col gap-3">
-        <h1 className="font-serif text-4xl font-semibold leading-tight tracking-tight text-(--el-text) sm:text-5xl">
+    <section className={tight ? 'flex flex-col gap-3' : 'flex flex-col gap-8'}>
+      <header className={tight ? 'flex flex-col gap-1' : 'flex flex-col gap-3'}>
+        <h1
+          className={
+            tight
+              ? 'font-serif text-2xl font-semibold leading-tight tracking-tight text-(--el-text)'
+              : 'font-serif text-4xl font-semibold leading-tight tracking-tight text-(--el-text) sm:text-5xl'
+          }
+        >
           {headline}
         </h1>
-        {subhead ? <p className="text-(--el-text-muted) font-sans text-base">{subhead}</p> : null}
+        {subhead ? (
+          <p className={`text-(--el-text-muted) font-sans ${tight ? 'text-sm' : 'text-base'}`}>
+            {subhead}
+          </p>
+        ) : null}
       </header>
       {children}
     </section>
+  );
+}
+
+/**
+ * A short code or token label rendered as a chip — the `design/cli-connect/` mock's
+ * `.code-chip`. Lives here beside the other auth-card pieces because three surfaces
+ * show the same device code: `/device` itself, its signed-out hand-off, and the
+ * sign-in card the hand-off lands on. `--radius-control` is the token whose own
+ * docstring names code chips as its job.
+ */
+export function CodeChip({ children }: { children: ReactNode }) {
+  return (
+    <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-[0.92em] whitespace-nowrap text-(--el-code-text)">
+      {children}
+    </code>
   );
 }
 
