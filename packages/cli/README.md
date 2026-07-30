@@ -49,6 +49,50 @@ motir link remove <repo>                              # remove an override
 motir doctor [--agent <cmd>] [--json]                 # BYOK preflight (read-only)
 ```
 
+## Reading the plan — `ready` / `status` / `sprints` / `sprint` / `show` (7.9.13 · 7.9.14 · 7.9.16)
+
+The read surface. Every one of these is a pure read: it claims nothing, writes
+nothing, and is safe to run in a loop.
+
+```sh
+motir ready   [--kinds <list>] [--assignee <id|me|unassigned>] [--json]
+motir status  [--json]                                # ready / in-flight + active sprint
+motir sprints [--state <planned|active|complete>] [--json]
+motir sprint  [ref] [--kinds <list>] [--json]         # defaults to the ACTIVE sprint
+motir show    <key> [--json]                          # one item, in full
+motir open    <key> [--print]                         # …in the browser
+```
+
+`motir sprint`'s **`ref` resolves in order**: omitted → the active sprint; then a
+sprint **id**; then an **exact name**; then a **name prefix** — each
+case-insensitive, first rule yielding exactly one sprint wins. An ambiguous
+prefix is an error that names the candidates rather than picking the first;
+`motir sprints` (which flags the active sprint with `*`) is how you find the name
+to type.
+
+**Dependency edges render in two shapes**, chosen by the shape of the set:
+
+- **Columns** on `ready` and `sprint` — `BLOCKS` on `ready` (a ready item has no
+  open blockers by definition, so the other direction would be a dead column),
+  `BLOCKED BY` **+** `BLOCKS` on `sprint`, which holds mixed-status work. A cell
+  prints at most **three** keys and collapses the rest to `+n` so it can never
+  wrap and break the table; `✓` marks a blocker already `done`/`cancelled` (it no
+  longer gates); an item with no edges renders **blank**, never `0`. **`--json`
+  always carries the full untruncated `dependencies` block** — the truncation is
+  display-only.
+- **A `WAVE` build order** on `show`'s children, because one parent's children
+  are a closed DAG. Wave 1 is the independently-buildable set; later waves are
+  gated by earlier ones; `BLOCKED BY` names the edges. `↗` marks a blocker
+  outside the parent (named, but it forms no wave — nothing in the table can
+  clear it). Children in a dependency **cycle** get `—` for a wave and a
+  `⚠ dependency CYCLE` line: a planning bug to fix in the tree, not a CLI
+  failure, so `show` still exits **0** (`wave: null` in `--json`).
+
+The reason the two differ, in one sentence: a ready set or a sprint spans many
+parents so its edges are disconnected fragments, whereas a story's children are
+one closed dependency graph. Full prose, with worked examples of both, lives in
+[`docs/cli.md`](../../docs/cli.md#dependencies-in-the-terminal--two-renderings).
+
 ## Dispatch — `motir next` / `motir run` / `motir done` (7.9.3)
 
 ```sh
@@ -299,8 +343,8 @@ text is an **error naming that shorthand** — never a prompt that hangs.
 Usage: motir [options] [command]
 
 SETUP COMMANDS:      auth · link · doctor
-READ COMMANDS:       ready · status · open
-WORK LOOP COMMANDS:  next · run · done
+READ COMMANDS:       ready · status · sprints · sprint · show · open
+WORK LOOP COMMANDS:  next · run · auto · batch · plan · done
 HELP TOPICS:         help · environment · files
 FLAGS:               -v, --version · -h, --help
 EXAMPLES:            …
@@ -313,13 +357,14 @@ registered without an explicit group falls into `ADDITIONAL COMMANDS`**, so a
 later subtask adds a command — and, with one `.helpGroup(...)` line, files it
 under `SETUP` / `READ` / `WORK LOOP COMMANDS` — without ever rewriting the help
 surface. (7.9.3 was the first to exercise that: `next` / `run` / `done` joined
-the reserved work-loop group with one line each, and `auto` / `batch` will do
-the same.)
+the reserved work-loop group with one line each; `auto` / `batch` / `plan` then
+did the same, and `sprints` / `sprint` / `show` joined `READ COMMANDS` the same
+way.)
 
 Two **topics** answer what a command list cannot:
 
 ```sh
-motir help environment   # the 4 env vars Motir reads, and what each overrides
+motir help environment   # the 6 env vars Motir reads, and what each overrides
 motir help files         # ~/.config/motir/config.json + .motir.json
 ```
 
