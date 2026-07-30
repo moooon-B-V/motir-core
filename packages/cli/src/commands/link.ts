@@ -1,7 +1,7 @@
 import { MotirClient } from '../mcpClient.js';
 import { CliError } from '../errors.js';
 import { info, out } from '../output.js';
-import { isInteractive, promptLine } from '../prompts.js';
+import { describeProject, resolveProject } from '../projectLink.js';
 import { resolveServerUrl } from '../serverResolve.js';
 import { resolveCredential } from '../config/userConfig.js';
 import {
@@ -83,16 +83,22 @@ export async function linkCommand(opts: LinkOptions): Promise<void> {
       });
     }
 
-    let project = opts.project ?? existing?.config.project;
-    if (!project) {
-      if (!isInteractive()) {
-        throw new CliError('No project given.', { hint: 'Pass --project <key>.' });
-      }
-      project = await promptLine('Project key');
+    // A key the user ASSERTED (this run's flag, or the one already on the link)
+    // is probed; a key they did NOT give is RESOLVED. The two are different
+    // questions: the probe validates a claim, `list_projects` enumerates what
+    // the token can actually reach — which is proof of access by construction,
+    // so a resolved project needs no second round trip to justify itself.
+    const asserted = opts.project ?? existing?.config.project;
+    let project: string;
+    let chosen: string | null = null;
+    if (asserted) {
+      await assertProjectAccessible(client, asserted);
+      project = asserted;
+    } else {
+      const resolved = await resolveProject(client, workspace, serverUrl);
+      project = resolved.project.key;
+      chosen = describeProject(resolved, workspace);
     }
-    if (!project) throw new CliError('A project key is required.');
-
-    await assertProjectAccessible(client, project);
 
     // Build the config, preserving any existing repo overrides; `--repo` marks
     // this root as that single repo's checkout (the single-repo "." override).
@@ -108,6 +114,9 @@ export async function linkCommand(opts: LinkOptions): Promise<void> {
     const targetDir = existing?.dir ?? cwd;
     const path = writeLink(targetDir, withRepo);
     info(`Linked ${targetDir} → ${workspace}/${project} on ${serverUrl}`);
+    // Only when nobody named the project: a link that chose FOR the user has to
+    // say what it chose, and on what grounds.
+    if (chosen) info(`Chose ${chosen}.`);
     info(`Wrote ${path}`);
     showLink(targetDir, withRepo);
   } finally {

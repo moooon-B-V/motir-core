@@ -113,7 +113,10 @@ export function buildProgram(): Command {
     .helpGroup(HELP_GROUP.setup)
     .option('--server <url>', 'Server base URL (defaults to the existing link / single server).')
     .option('--workspace <slug>', 'Workspace slug (defaults to the token’s active workspace).')
-    .option('--project <key>', 'Project key, e.g. PROD.')
+    .option(
+      '--project <key>',
+      'Project key, e.g. PROD. Omit it and the workspace’s only project is used.',
+    )
     .option(
       '--repo <name>',
       'Mark THIS directory as a single repo’s checkout (writes a "." override).',

@@ -1,4 +1,11 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,6 +35,13 @@ import {
  *  close, since closing an already-closed server throws. */
 let server: DeviceTestServer | undefined;
 let home: string;
+/** The cwd + home the AUTO-LINK step (MOTIR-1880) sees, pinned to throwaway
+ *  directories for EVERY test in the file. A successful login now offers to
+ *  write a `.motir.json`, and the one thing no suite may do is write that file
+ *  into the checkout it is running from — so no test is left standing in the
+ *  runner's real cwd, whether or not it is about the auto-link. */
+let linkCwd: string;
+let linkHome: string;
 /** Every delay the command asked for, in order — the `slow_down` evidence. */
 let slept: number[];
 let stderr: string;
@@ -39,6 +53,8 @@ function deps(overrides: LoginDeps = {}): LoginDeps {
       slept.push(ms);
     },
     openUrl: async () => true,
+    cwd: linkCwd,
+    home: linkHome,
     ...overrides,
   };
 }
@@ -50,6 +66,8 @@ async function serve(options: DeviceTestServerOptions = {}): Promise<DeviceTestS
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'motir-login-'));
+  linkCwd = mkdtempSync(join(tmpdir(), 'motir-login-cwd-'));
+  linkHome = mkdtempSync(join(tmpdir(), 'motir-login-home-'));
   vi.stubEnv('MOTIR_CONFIG_HOME', home);
   // The server ladder must not fall through to a real host or to a link walked
   // up from the runner's cwd; every test passes --server explicitly.
@@ -381,6 +399,118 @@ describe('the default seams are the real ones', () => {
     const s = await serve({ startStatus: 500 });
 
     await expect(loginCommand({ server: s.url })).rejects.toBeInstanceOf(CliError);
+  });
+});
+
+// ── the auto-link step (MOTIR-1880) ─────────────────────────────────────────
+//
+// `loginCommand` hooks the success path, so these assert the WIRING: that the
+// step runs at all, that it is fed the granted credential's own workspace and
+// token, and — the half that matters — that each of the four disqualifying
+// conditions ends with NO FILE WRITTEN. The rules themselves, and the messages,
+// are `projectLink.test.ts`'s; what is under test here is that login applies
+// them to the right inputs.
+
+describe('the login auto-link', () => {
+  const oneProject = [
+    { key: 'PROD', id: 'p1', name: 'Prodect', slug: 'prodect', accessLevel: 'open' },
+  ];
+  const linkFile = (dir: string): string => join(dir, '.motir.json');
+
+  /** The pinned cwd (`linkCwd`) plays the workspace root; `linkHome` plays
+   *  `$HOME`. Both are throwaway temp dirs — see the note on their declaration. */
+  function autoLinkDeps(overrides: LoginDeps = {}): LoginDeps {
+    return deps({ listProjects: async () => oneProject, ...overrides });
+  }
+
+  it('links this folder when the workspace has exactly one project', async () => {
+    const s = await serve();
+
+    await loginCommand({ server: s.url }, autoLinkDeps());
+
+    expect(JSON.parse(readFileSync(linkFile(linkCwd), 'utf8'))).toEqual({
+      serverUrl: s.url,
+      // The link's workspace is the GRANT's workspace slug, not a second lookup:
+      // the token was minted for it, so nothing else can be right.
+      workspace: GRANTED_CREDENTIAL.workspace.slug,
+      project: 'PROD',
+    });
+    expect(stderr).toContain(`Wrote ${linkFile(linkCwd)}`);
+  });
+
+  it('reads the projects with the credential it just stored', async () => {
+    const s = await serve();
+    const seen: { serverUrl: string; token: string }[] = [];
+
+    await loginCommand(
+      { server: s.url },
+      autoLinkDeps({
+        listProjects: async (input) => {
+          seen.push(input);
+          return oneProject;
+        },
+      }),
+    );
+
+    expect(seen).toEqual([{ serverUrl: s.url, token: GRANTED_CREDENTIAL.access_token }]);
+  });
+
+  it('writes NOTHING when a link already exists at or above cwd', async () => {
+    const s = await serve();
+    const existing = { serverUrl: 'https://other.test', workspace: 'other', project: 'OTHER' };
+    writeFileSync(linkFile(linkCwd), JSON.stringify(existing));
+
+    await loginCommand({ server: s.url }, autoLinkDeps());
+
+    expect(JSON.parse(readFileSync(linkFile(linkCwd), 'utf8'))).toEqual(existing);
+    expect(stderr).toContain('motir link --project OTHER');
+  });
+
+  it('writes NOTHING when the workspace has several projects', async () => {
+    const s = await serve();
+    const several = [...oneProject, { ...oneProject[0]!, key: 'ACME', id: 'p2', name: 'Acme' }];
+
+    await loginCommand({ server: s.url }, autoLinkDeps({ listProjects: async () => several }));
+
+    expect(existsSync(linkFile(linkCwd))).toBe(false);
+    expect(stderr).toContain('motir link --project <key>');
+  });
+
+  it('writes NOTHING when the workspace has no projects', async () => {
+    const s = await serve();
+
+    await loginCommand({ server: s.url }, autoLinkDeps({ listProjects: async () => [] }));
+
+    expect(existsSync(linkFile(linkCwd))).toBe(false);
+    expect(stderr).toContain('No projects in workspace');
+  });
+
+  it('writes NOTHING when cwd is $HOME — the file would bind every folder below it', async () => {
+    const s = await serve();
+
+    await loginCommand({ server: s.url }, autoLinkDeps({ cwd: linkHome }));
+
+    expect(existsSync(linkFile(linkHome))).toBe(false);
+    expect(stderr).toContain('home directory');
+  });
+
+  it('still reports a SUCCESSFUL login when the project read fails', async () => {
+    const s = await serve();
+
+    await loginCommand(
+      { server: s.url },
+      autoLinkDeps({
+        listProjects: async () => {
+          throw new CliError('server fell over');
+        },
+      }),
+    );
+
+    // The credential is stored and the login line printed: the auto-link is a
+    // convenience on top of a completed login, never a gate on it.
+    expect(getCredential(s.url)?.token).toBe(GRANTED_CREDENTIAL.access_token);
+    expect(stderr).toContain('Logged in as yue@motir.test');
+    expect(existsSync(linkFile(linkCwd))).toBe(false);
   });
 });
 
