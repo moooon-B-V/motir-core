@@ -39,6 +39,11 @@ const SRC_DIR = fileURLToPath(new URL('../src/', import.meta.url));
  * out of date the way the hand-audit did.
  */
 const OPTIONS_INTERFACE: Record<string, string | null> = {
+  // `LoginOptions.browser` is commander's NEGATED boolean: `--no-browser`
+  // registers under the attribute name `browser`, which is what the handler
+  // reads and what this audit compares against.
+  login: 'LoginOptions',
+  logout: 'AuthScopeOptions',
   auth: null,
   'auth login': 'AuthLoginOptions',
   'auth status': 'AuthScopeOptions',
