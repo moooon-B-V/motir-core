@@ -14,6 +14,7 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
   CrossWorkspaceLinkError,
   SelfLinkError,
@@ -256,6 +257,15 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof TooManyPlanChangeTargetsError ||
     err instanceof PlanChangeTurnConflictError
   ) {
+    return toolError(err.code, err.message);
+  }
+  // Workspace-membership gate (MOTIR-1879): `list_projects` calls a service
+  // whose FIRST act is `projectsService.assertMembership` against the token's
+  // bound workspace. The bearer gate already vouched for that membership, so
+  // this is only reachable in the race where it was revoked mid-request — map it
+  // to a clean tool error so an agent reads NOT_A_MEMBER and stops, rather than
+  // an opaque JSON-RPC internal error.
+  if (err instanceof NotAMemberError) {
     return toolError(err.code, err.message);
   }
   if (err instanceof McpMissingContextError) {

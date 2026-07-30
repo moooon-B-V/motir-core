@@ -225,6 +225,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // non-member sees only themselves (no cross-tenant resource to deny).
       const argFor: Record<McpToolName, Record<string, unknown>> = {
         whoami: {},
+        // Self-scoped like whoami: no resource key, and the workspace comes from
+        // the token — so it can only ever list the CALLER's own projects.
+        list_projects: {},
         get_work_item: { key: item1 },
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },
@@ -266,13 +269,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // to MCP_TOOL_NAMES without an entry here fails the suite by construction.
       expect(Object.keys(argFor).sort()).toEqual([...MCP_TOOL_NAMES].sort());
 
-      // Two tools are SELF-SCOPED — they act only within the CALLER's own
+      // Three tools are SELF-SCOPED — they act only within the CALLER's own
       // workspace and take no cross-tenant resource key, so they are
       // structurally incapable of reaching A's data: `whoami` returns the
-      // caller's own identity, and `complete_session` matches a session branch
+      // caller's own identity, `list_projects` (MOTIR-1879) the caller's own
+      // workspace's projects, and `complete_session` matches a session branch
       // inside the caller's (empty) workspace → a no-op, not a 404. The
       // 404-not-403 denial applies to every RESOURCE-TARGETING tool.
-      const SELF_SCOPED = new Set<McpToolName>(['whoami', 'complete_session']);
+      const SELF_SCOPED = new Set<McpToolName>(['whoami', 'list_projects', 'complete_session']);
 
       const client = await connect(nonMemberToken);
       for (const name of MCP_TOOL_NAMES) {
@@ -292,6 +296,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const whoami = await client.callTool({ name: 'whoami', arguments: {} });
       expect((structured(whoami).user as { email?: string }).email).toBe(outsider.owner.email);
       expect(JSON.stringify(whoami)).not.toContain('Acme');
+
+      // Same proof for list_projects: the success above listed only the
+      // OUTSIDER's own project (ZZZ) — A's PROD never appears.
+      const projects = await client.callTool({ name: 'list_projects', arguments: {} });
+      expect((structured(projects).projects as { key: string }[]).map((p) => p.key)).toEqual([
+        'ZZZ',
+      ]);
+      expect(JSON.stringify(projects)).not.toContain('PROD');
       await client.close();
 
       // The non-member's writes had NO effect on A — the items are untouched.
@@ -572,6 +584,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       await plansService.markPlanned(plan.id, fx.ctx);
       const argFor: Record<McpToolName, Record<string, unknown>> = {
         whoami: {},
+        list_projects: {},
         get_work_item: { key: item1 },
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },

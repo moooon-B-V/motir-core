@@ -236,6 +236,7 @@ export default defineConfig({
         'lib/mcp/tools/addComment.ts',
         'lib/mcp/tools/searchWorkItems.ts',
         'lib/mcp/tools/whoami.ts',
+        'lib/mcp/tools/listProjects.ts',
         'lib/mcp/tools/listSprints.ts',
         'lib/mcp/tools/validateSprint.ts',
         // Work-item finishability — the tool, plus the shared loose/tight
@@ -503,6 +504,9 @@ export default defineConfig({
         'lib/mcp/tools/addComment.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/searchWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/listSprints.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-1879 — the project-enumeration read (tests/mcp/list-projects.test.ts
+        // walks both the populated and empty-list arms plus the thrown-error path).
+        'lib/mcp/tools/listProjects.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/validateSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/createSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/updateSprint.ts': { branches: 90, functions: 90, lines: 90 },

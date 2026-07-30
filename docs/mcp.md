@@ -89,7 +89,7 @@ The scopes and the tools each one gates:
 
 | Scope                | Gates                                                                                                                                                                                                                             |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`, `open_plan_session`                        |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_projects`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`, `open_plan_session`       |
 | `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item`, `append_plan_turn`, `submit_plan_session` |
 | `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                                                              |
 | `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                                                                |
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **36 tools**.
+`initialize` handshake and registers **37 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -171,7 +171,9 @@ Shared input conventions:
 
 - A **work item** is addressed by its `PROD-<n>` **identifier** (case-insensitive),
   e.g. `"PROD-7"`. The owning project is derived from the key prefix.
-- A **project** is addressed by its **key**, e.g. `"PROD"` (case-insensitive).
+- A **project** is addressed by its **key**, e.g. `"PROD"` (case-insensitive) —
+  obtain it from `list_projects`, which returns the `key` of every project the
+  token can reach.
 - A **sprint** is addressed by its opaque **id** (not a `PROD-<n>` key) — obtain
   it from `list_sprints`.
 - Paginated reads take an opaque **`cursor`** in and return a **`nextCursor`**
@@ -1024,6 +1026,39 @@ cross-user exposure.
 **Output** — `structuredContent`: `{ user, workspace }` (the actor's user
 profile and active-workspace summary; `workspace` may be null only in the race
 where the membership was removed mid-request).
+
+#### `list_projects`
+
+Enumerate the projects the presented token can reach — the read that lets a
+client **resolve** a project instead of asking the user to type its key. Takes
+**no arguments**: the workspace is the one the token is bound to, so this can
+never reach another tenant. `whoami`'s companion — `whoami` answers "who am I and
+which workspace", this answers "which projects are in it".
+
+**Input** — none.
+
+**Output** — `structuredContent`: `{ projects: ProjectRow[] }`, where each
+`ProjectRow` is:
+
+| Field         | Type                                           | Notes                                                        |
+| ------------- | ---------------------------------------------- | ------------------------------------------------------------ |
+| `key`         | string                                         | The project key — exactly what `projectKey` takes elsewhere. |
+| `id`          | string                                         | Opaque project id.                                           |
+| `name`        | string                                         | Display name.                                                |
+| `slug`        | string                                         | URL slug.                                                    |
+| `accessLevel` | `"open" \| "limited" \| "private" \| "public"` | Browse-access level — disambiguates same-named projects.     |
+
+The text block lists one project per line: `PROD — Prodect · open`.
+
+**Access + tenancy.** Backed by the SAME service the app shell's project switcher
+calls, so the checks are the UI's: workspace membership is asserted, then every
+project the caller may not browse (Story 6.4) is filtered out. A workspace with no
+reachable projects returns an **empty list**, not an error.
+
+**No per-row cost.** The whole call is a constant number of queries regardless of
+how many projects come back. `createdAt` and a work-item count are deliberately
+omitted — either would cost an extra projection or a query per row, which a
+client looping over projects would inherit as a scale bug.
 
 #### `mark_integrated`
 

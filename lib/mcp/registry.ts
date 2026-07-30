@@ -23,6 +23,7 @@ import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/t
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
+import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
@@ -81,6 +82,7 @@ export const MCP_TOOL_NAMES = [
   ADD_COMMENT_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   WHOAMI_TOOL_NAME,
+  LIST_PROJECTS_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -158,6 +160,11 @@ export function registerMcpTools(
   registerSearchWorkItems(target, resolveContext);
   // Identity (added by 7.9.1, consumed by the CLI's auth commands).
   registerWhoami(target, resolveContext);
+  // Project enumeration (MOTIR-1879) — the token's reachable projects, so a
+  // client can RESOLVE a project instead of demanding its key. whoami's
+  // companion: whoami answers "who + which workspace", this answers "which
+  // projects in it".
+  registerListProjects(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-
