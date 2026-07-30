@@ -634,6 +634,10 @@ jobs:
       # recording `readdirSync` yielded first and silently drop the rest, so on a
       # multi-story run only one story got its receipt (observed: PR #1620
       # published MOTIR-811 and discarded MOTIR-1726's clip).
+      # MOTIR-1905 removed the SECOND way the lane lost every receipt: the
+      # watchability gate used to abort the whole run on the first sub-floor clip,
+      # so one unpaced spec cost every OTHER story its video too. An unwatchable
+      # clip now costs only its own story, and the step still exits non-zero.
       # Auth is KEYLESS GitHub OIDC first (MOTIR-1650) —
       # the moooon repo is App-connected, so no secret is needed;
       # MOTIR_UPLOAD_TOKEN is the PAT fallback. The uploader no-ops when NEITHER
@@ -654,6 +658,16 @@ jobs:
       # merge. It publishes to production (app.motir.co); until THIS PR merges and
       # deploys, production has no keyless endpoint, so the OIDC publish 401s
       # (chicken-and-egg). Post-merge, subsequent acceptance runs publish for real.
+      #
+      # ⚠️ `continue-on-error` REWRITES THIS STEP'S CONCLUSION TO `success` — on
+      # the checks UI, in `gh pr checks`, and in the REST API — even when the
+      # script exits 1. That is not a reason to remove it (a fork PR with no OIDC,
+      # or a transient 5xx, must not red-light a merge), but it means the step's
+      # own status can never be the signal. So the uploader reports through the
+      # two channels the rewrite does NOT swallow: a `::error::` ANNOTATION and
+      # the job SUMMARY (MOTIR-1905). Before that, a completely broken acceptance
+      # gate — one unpaced spec suppressing every story's receipt — looked green
+      # for days, and the raw job log was the only place it was visible.
       - name: Publish the acceptance video
         if: matrix.id == 'acceptance-video' && success()
         continue-on-error: true

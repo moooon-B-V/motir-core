@@ -385,6 +385,39 @@ function ciRunUrl() {
     : null;
 }
 
+// ── CI VISIBILITY (MOTIR-1905) ───────────────────────────────────────────────
+//
+// The publish step runs under `continue-on-error: true` so a side-effect can
+// never gate a merge — the right call, with one consequence nobody priced in:
+// GitHub rewrites the step's `conclusion` to `success`, so `gh pr checks`, the
+// checks UI, AND the REST API all report green even on exit 1. The raw job log
+// was the only witness, which is how a completely broken acceptance gate went
+// unnoticed from the day the watchability floor shipped.
+//
+// So the script reports through the two channels `continue-on-error` does NOT
+// swallow: a workflow ANNOTATION (surfaced on the run and the PR's Files tab)
+// and the job SUMMARY (rendered on the run page). Both are no-ops off CI.
+
+/** Emit a GitHub workflow annotation. Newlines are escaped — a raw one would
+ *  truncate the command and swallow the rest of the message. */
+function ciAnnotate(level, message) {
+  if (!process.env['GITHUB_ACTIONS']) return;
+  const escaped = String(message).replace(/\r?\n/g, '%0A');
+  console.log(`::${level}::${escaped}`);
+}
+
+/** Append one Markdown line to the job summary (best-effort — a summary that
+ *  cannot be written must never be the reason a publish run fails). */
+function ciSummary(line) {
+  const file = process.env['GITHUB_STEP_SUMMARY'];
+  if (!file) return;
+  try {
+    fs.appendFileSync(file, `${line}\n`);
+  } catch {
+    // Ignore: reporting is not the job.
+  }
+}
+
 /**
  * Discover every recording, resolve each one's story, and publish them all.
  *
@@ -427,34 +460,55 @@ export async function main() {
     process.exit(1);
   }
 
-  // WATCHABILITY GATE (MOTIR-1772) — before any auth or upload, so an
-  // unwatchable receipt fails the step loudly and publishes NOTHING rather than
-  // landing a clip nobody can review.
-  const unwatchable = targets
-    .map((t) => ({
-      ...t,
-      verdict: assessWatchability({
-        chapters: readChapters(t.recording.chapters),
-        meta: readRecordingMeta(t.recording.recordingMeta),
-      }),
-    }))
-    .filter((t) => !t.verdict.watchable);
-  if (unwatchable.length > 0) {
-    for (const { storyKey, recording, verdict } of unwatchable) {
-      console.error(
-        `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is NOT watchable: ${verdict.reason}.`,
-      );
-    }
-    console.error(
-      'A reviewer accepts the Story by WATCHING this clip, so an unwatchable recording is a broken acceptance gate — nothing was published.\n' +
-        'Pace the recorded happy path: wrap each phase in `chapter(...)` (which paces itself) and `await beat()` after each user-visible action. Both are in tests/e2e/_helpers/acceptance-video.ts.\n' +
-        'Do NOT fix this by lowering the floor.',
-    );
+  // WATCHABILITY GATE (MOTIR-1772) — assessed before any auth or upload, so an
+  // unwatchable receipt never lands a clip nobody can review.
+  //
+  // PER-RECORDING, NOT ALL-OR-NOTHING (MOTIR-1905). This gate used to
+  // `process.exit(1)` on the FIRST unwatchable clip, before publishing anything —
+  // so one unpaced spec suppressed EVERY story's receipt in the lane. That is what
+  // happened: `acceptance-augment-replan` recorded ~9.5s, and from the day the
+  // floor shipped no story got a video, on `main` or on any PR, while the step
+  // reported success behind `continue-on-error`.
+  //
+  // The blast radius is now one story, which is the ONLY story whose evidence is
+  // actually in question — and it matches the policy the publish loop below has
+  // always used for a failed upload: report it, keep going for the others, and
+  // exit non-zero at the end so the run is never silently green. The gate is not
+  // weakened: an unwatchable clip is still never published, and the step still
+  // fails.
+  ciSummary('### Acceptance videos\n');
+  const assessed = targets.map((t) => ({
+    ...t,
+    verdict: assessWatchability({
+      chapters: readChapters(t.recording.chapters),
+      meta: readRecordingMeta(t.recording.recordingMeta),
+    }),
+  }));
+  const unwatchable = assessed.filter((t) => !t.verdict.watchable);
+  const publishable = assessed.filter((t) => t.verdict.watchable);
+
+  for (const { storyKey, recording, verdict } of unwatchable) {
+    const message =
+      `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is NOT watchable: ${verdict.reason}. ` +
+      'It was NOT published; the other recordings in this run were unaffected. ' +
+      'Pace the recorded happy path: wrap each phase in `chapter(...)` (which paces itself) and ' +
+      '`await beat()` after each user-visible action, both in tests/e2e/_helpers/acceptance-video.ts. ' +
+      'Do NOT fix this by lowering the floor.';
+    console.error(message);
+    // A CI ANNOTATION, so the failure is visible on the run without opening the
+    // raw job log (MOTIR-1905). `continue-on-error` rewrites the step's
+    // conclusion to `success`, which is why the log was the only witness.
+    ciAnnotate('error', `Unwatchable acceptance video for ${storyKey}: ${verdict.reason}`);
+    ciSummary(`- ❌ **${storyKey}** — not published: ${verdict.reason}`);
+  }
+
+  if (publishable.length === 0) {
+    console.error('No watchable acceptance recording in this run — nothing to publish.');
     process.exit(1);
   }
 
-  console.log(`Acceptance publish targets (${targets.length}):`);
-  for (const { recording, storyKey, source } of targets) {
+  console.log(`Acceptance publish targets (${publishable.length}):`);
+  for (const { recording, storyKey, source } of publishable) {
     console.log(`  ${path.basename(recording.dir)} → ${storyKey} (resolved via ${source}).`);
   }
   // Two recordings CAN legitimately target the same story (two chaptered tests in
@@ -462,7 +516,7 @@ export async function main() {
   // evidence is append-only, and silently dropping one is the very bug MOTIR-1734
   // fixed — but say so, because a duplicate receipt on a story is surprising.
   const perStory = new Map();
-  for (const { storyKey } of targets) perStory.set(storyKey, (perStory.get(storyKey) ?? 0) + 1);
+  for (const { storyKey } of publishable) perStory.set(storyKey, (perStory.get(storyKey) ?? 0) + 1);
   for (const [storyKey, count] of perStory) {
     if (count > 1) console.log(`Note: ${count} recordings target ${storyKey} — publishing all.`);
   }
@@ -476,6 +530,11 @@ export async function main() {
     console.log(
       'No GitHub OIDC token (needs id-token: write) and no MOTIR_UPLOAD_TOKEN — skipping the publish (BYOK is opt-in).',
     );
+    // Returns 0 even if a recording was unwatchable. Deliberate: with no
+    // credential nothing was going to be published anyway, and a fork PR — which
+    // gets neither OIDC nor the secret — must not be red-lit by a pacing defect
+    // it cannot fix. The unwatchable clips were still REPORTED and annotated
+    // above, so the signal is not lost on a run that can act on it.
     return;
   }
   console.log(
@@ -494,7 +553,7 @@ export async function main() {
   // one story's bad publish cannot cost the others their receipt; the step still
   // exits non-zero at the end, so a partial publish is never silently green.
   let failed = 0;
-  for (const { recording, storyKey } of targets) {
+  for (const { recording, storyKey, verdict } of publishable) {
     try {
       const result = await uploadAcceptanceVideo({
         baseUrl,
@@ -509,19 +568,31 @@ export async function main() {
         provenance,
       });
       console.log(`Published acceptance evidence for ${storyKey}: ${result?.evidence?.id ?? 'ok'}`);
+      ciSummary(
+        `- ✅ **${storyKey}** — published (${verdict.totalSeconds?.toFixed(1) ?? '?'}s clip).`,
+      );
     } catch (err) {
       failed += 1;
       console.error(
         `Failed to publish ${path.basename(recording.dir)} → ${storyKey}: ${err?.message ?? err}`,
       );
+      ciAnnotate('error', `Acceptance publish failed for ${storyKey}: ${err?.message ?? err}`);
+      ciSummary(`- ❌ **${storyKey}** — publish failed: ${err?.message ?? err}`);
     }
   }
 
-  if (failed > 0) {
-    console.error(`${failed} of ${targets.length} acceptance publish(es) failed.`);
+  console.log(
+    `Published ${publishable.length - failed} of ${targets.length} acceptance recording(s).`,
+  );
+  // Non-zero on EITHER kind of problem — an unwatchable clip is as much a broken
+  // acceptance gate as a failed upload, and both must survive `continue-on-error`
+  // as a visible annotation rather than a green step (MOTIR-1905).
+  if (failed > 0 || unwatchable.length > 0) {
+    console.error(
+      `${failed} publish failure(s) and ${unwatchable.length} unwatchable recording(s) out of ${targets.length}.`,
+    );
     process.exit(1);
   }
-  console.log(`Published ${targets.length} acceptance recording(s).`);
 }
 
 // Run only when invoked as a script (not when imported by a test).

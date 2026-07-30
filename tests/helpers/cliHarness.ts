@@ -4,7 +4,10 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  rmdirSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,26 +34,117 @@ const CLI_ENTRY = join(CLI_DIR, 'dist', 'index.js');
 let built = false;
 
 /**
+ * The lock + stamp that make the build safe across vitest WORKERS (below). They
+ * live under the package's `node_modules/.cache` — already git-ignored, already
+ * per-checkout, and (unlike anything in `dist/`) not wiped by tsup's `clean`.
+ */
+const BUILD_CACHE = join(CLI_DIR, 'node_modules', '.cache', 'motir-cli-build');
+const BUILD_LOCK = join(BUILD_CACHE, 'lock');
+const BUILD_STAMP = join(BUILD_CACHE, 'stamp');
+/** A lock older than this belonged to a worker that died holding it. */
+const LOCK_STALE_MS = 180_000;
+/** How long a worker waits for the peer that is building before giving up. */
+const LOCK_WAIT_MS = 240_000;
+
+/** Newest mtime across everything the bundle is built FROM — the build's input
+ *  fingerprint. Equal fingerprint ⇒ the `dist/` on disk is already this source. */
+function sourceFingerprint(): string {
+  let newest = 0;
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else newest = Math.max(newest, statSync(path).mtimeMs);
+    }
+  };
+  walk(join(CLI_DIR, 'src'));
+  for (const file of ['tsup.config.ts', 'package.json']) {
+    newest = Math.max(newest, statSync(join(CLI_DIR, file)).mtimeMs);
+  }
+  return String(newest);
+}
+
+/**
+ * Take an exclusive, cross-PROCESS build lock. `mkdir` is atomic on every
+ * filesystem we run on (POSIX + the CI runners), which is the whole reason it is
+ * the lock primitive here rather than a file whose existence check races.
+ */
+function acquireBuildLock(): void {
+  mkdirSync(BUILD_CACHE, { recursive: true });
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      mkdirSync(BUILD_LOCK);
+      return;
+    } catch {
+      // Held. Break it only if its holder is long gone — a crashed worker must
+      // not wedge every later run, and a live one must not be trampled.
+      try {
+        if (Date.now() - statSync(BUILD_LOCK).mtimeMs > LOCK_STALE_MS) {
+          rmdirSync(BUILD_LOCK);
+          continue;
+        }
+      } catch {
+        // The holder released it between our mkdir and our stat — just retry.
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`Timed out waiting for the @motir/cli build lock (${BUILD_LOCK}).`);
+      }
+      // A short synchronous wait: this runs in a `beforeAll`, and the peer we
+      // are waiting on is running tsup, not our event loop.
+      spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},250)'], { stdio: 'ignore' });
+    }
+  }
+}
+
+/**
  * Build `packages/cli` and return the path to the built entrypoint.
  *
- * Built from THIS commit's source on every run (never a stale `dist/` a previous
- * build left behind) — the same reason the design-system CI job rebuilds before
- * running its barrel guard. Memoized per process: one worker, one build. Keep
- * every binary-spawning test in ONE file, so two workers can never build into
- * the same `dist/` concurrently.
+ * Built from THIS commit's source (never a stale `dist/` a previous run left
+ * behind) — the same reason the design-system CI job rebuilds before running its
+ * barrel guard. Memoized per process, and SERIALIZED + deduplicated across
+ * processes by a lock + an input fingerprint.
+ *
+ * ⚠️ WHY THE LOCK EXISTS (MOTIR-1870). The root lane runs with
+ * `fileParallelism: true`, so two SEPARATE files that spawn the binary land in
+ * two workers that can call this at the same moment — and `tsup` runs with
+ * `clean: true`, so the second build would delete `dist/` out from under a child
+ * process the first worker had already spawned. That used to be avoided by
+ * convention ("keep every binary-spawning test in ONE file"), which stopped
+ * being tenable when this Story added its own binary-driven suite
+ * (`cli-connect-story.test.ts`) beside `cli-story.test.ts`. The lock makes the
+ * invariant structural: exactly one build runs at a time, and the loser skips it
+ * entirely because the fingerprint already matches.
  */
 export function ensureCliBuilt(): string {
   if (built) return CLI_ENTRY;
-  // tsup is a devDependency OF the package, so pnpm links it under the
-  // package's own `node_modules/.bin` (not the root's).
-  const tsup = join(CLI_DIR, 'node_modules', '.bin', 'tsup');
-  const result = spawnSync(tsup, [], { cwd: CLI_DIR, encoding: 'utf8', shell: false });
-  if (result.status !== 0) {
-    throw new Error(
-      `Building @motir/cli failed (exit ${result.status}):\n${result.stderr ?? ''}\n${result.stdout ?? ''}`,
-    );
+  acquireBuildLock();
+  try {
+    const fingerprint = sourceFingerprint();
+    const alreadyBuilt =
+      existsSync(CLI_ENTRY) &&
+      existsSync(BUILD_STAMP) &&
+      readFileSync(BUILD_STAMP, 'utf8') === fingerprint;
+    if (!alreadyBuilt) {
+      // tsup is a devDependency OF the package, so pnpm links it under the
+      // package's own `node_modules/.bin` (not the root's).
+      const tsup = join(CLI_DIR, 'node_modules', '.bin', 'tsup');
+      const result = spawnSync(tsup, [], { cwd: CLI_DIR, encoding: 'utf8', shell: false });
+      if (result.status !== 0) {
+        throw new Error(
+          `Building @motir/cli failed (exit ${result.status}):\n${result.stderr ?? ''}\n${result.stdout ?? ''}`,
+        );
+      }
+      if (!existsSync(CLI_ENTRY)) {
+        throw new Error(`tsup reported success but ${CLI_ENTRY} is missing.`);
+      }
+      // Stamped AFTER the build (tsup's `clean: true` wipes `dist/` first), so a
+      // crash mid-build leaves no stamp and the next worker rebuilds.
+      writeFileSync(BUILD_STAMP, fingerprint);
+    }
+  } finally {
+    rmdirSync(BUILD_LOCK);
   }
-  if (!existsSync(CLI_ENTRY)) throw new Error(`tsup reported success but ${CLI_ENTRY} is missing.`);
   built = true;
   return CLI_ENTRY;
 }
