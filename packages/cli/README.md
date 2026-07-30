@@ -24,10 +24,18 @@ login`, `motir link add`), native async actions (`parseAsync`), and built-in
   same esbuild the rest of the toolchain already trusts.
 - **Runtime:** Node ≥ 22, ESM (`"type": "module"`).
 
-## Install (in-repo — 7.9 distribution)
+## Install
 
-Publishing `@motir/cli` to npm is Epic-8 work (gated on securing the Motir
-name). For now, install from the checkout:
+```sh
+npm install -g @motir/cli
+motir --help
+```
+
+`pnpm add -g @motir/cli` and `yarn global add @motir/cli` install the same
+package. Runtime: **Node ≥ 22**, ESM.
+
+**For contributors** — to run the CLI from this checkout instead of the
+published package:
 
 ```sh
 pnpm --filter @motir/cli build      # produces dist/index.js (the `motir` binary)
@@ -467,3 +475,43 @@ each for a reason written down beside its threshold entry, and `motir batch`'s
 two modules are a KNOWN GAP named in the same file (MOTIR-1829). CI runs the package
 suite + gate as its own job (`CLI package`), the same shape `@motir/design-system`
 uses; the story suite rides the sharded Vitest job.
+
+## Releasing
+
+Releases publish to the **public npm registry** via CI — the
+`.github/workflows/release-cli.yml` workflow, triggered by a package-scoped git
+tag. There is no manual `npm publish` in the normal path.
+
+1. **Bump the version** in `packages/cli/package.json` (semver: the public
+   surface is the `motir` command set — its subcommands, flags and output
+   contracts — so removing or renaming one is a **major** bump).
+2. **Open + merge** the PR with the bump.
+3. **Tag and push** — the tag version MUST equal the `package.json` version (the
+   workflow guards this and fails fast otherwise):
+
+   ```bash
+   git tag cli-v<x.y.z>          # e.g. cli-v0.1.0
+   git push origin cli-v<x.y.z>
+   ```
+
+4. The workflow builds, runs the package suite + coverage gate, verifies the
+   tarball (`dist/**` only), and publishes `@motir/cli@<x.y.z>` with public
+   access and npm provenance. Re-running an already-published version is a no-op
+   (idempotent), not a failure.
+
+**One tag, two lanes.** `cli-v*` also fires
+[`release-sandbox.yml`](../../.github/workflows/release-sandbox.yml), which
+publishes the [sandbox images](./sandbox/README.md). That is deliberate: the
+`motir` binary on npm and the one baked into the images are the same version by
+construction, and both lanes guard the tag against this `package.json`.
+
+**Dry run:** trigger the workflow from the Actions tab via **Run workflow**
+(`workflow_dispatch`) with **dry run** checked — it builds, tests and packs the
+tarball as a downloadable artifact without publishing.
+
+**Auth:** the publish step uses the `NPM_TOKEN` Actions secret (MOTIR-662).
+`@motir/design-system` has moved to OIDC Trusted Publishing, which needs a
+Trusted Publisher configured on npmjs.com **per package**; `@motir/cli` has none
+yet, so it stays on the token. Provenance is generated either way —
+`--provenance` needs `id-token: write` plus the `repository` field in
+`package.json`, not a trusted publisher.

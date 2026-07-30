@@ -1,0 +1,151 @@
+# Publishes `@motir/cli` to the public npm registry (Subtask 8.7.9 · MOTIR-669).
+#
+# Trigger: push the PACKAGE-SCOPED tag `cli-v<x.y.z>` — the SAME tag
+# `release-sandbox.yml` already consumes, so the `motir` binary on npm and the
+# one baked into the sandbox images are the same version by construction. A
+# monorepo must scope its release tags per package (`design-system-v*` is the
+# other one); a bare `v*` would also fire for the app. Or run it manually via
+# `workflow_dispatch` with `dry_run: true`, which builds, tests and PACKS the
+# tarball (uploaded as an artifact) but skips the publish — how you validate a
+# change to this lane without minting a version.
+#
+# Release procedure (see packages/cli/README.md → "Install"):
+#   1. bump packages/cli/package.json `version`
+#   2. open + merge the PR
+#   3. git tag cli-v<x.y.z> && git push origin cli-v<x.y.z>
+#   4. this workflow builds, guards the tag==version, tests, and publishes —
+#      and the same tag fires release-sandbox.yml for the container images.
+#
+# This file is the copy `release-design-system.yml`'s header prescribes: same
+# shape, with `PACKAGE`/`PKG_DIR`, the `on.push.tags` prefix and the tag-strip
+# prefix changed. ONE deliberate divergence: auth is the long-lived `NPM_TOKEN`
+# Actions secret (provisioned by MOTIR-662), not OIDC Trusted Publishing.
+# Trusted Publishing needs a publisher configured on npmjs.com PER PACKAGE, and
+# `@motir/cli` has none — its `0.0.1` name-claim was published by hand with that
+# token. Provenance is still generated: `--provenance` needs `id-token: write`
+# and a `repository` field, not a trusted publisher. Migrating this lane to OIDC
+# later is a two-line change — drop `registry-url` + `NODE_AUTH_TOKEN` once the
+# publisher exists.
+name: Release @motir/cli
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build + test + pack only; skip the npm publish step'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  # Lets the job request the OIDC id-token npm uses to attest PROVENANCE — the
+  # free supply-chain attestation binding the tarball to this workflow, this
+  # commit, and this runner. It needs the `repository` field that
+  # packages/cli/package.json now carries.
+  id-token: write
+
+# Never let two releases of the same tag run concurrently; don't cancel one in
+# flight (a half-cancelled publish is worse than a queued one).
+concurrency:
+  group: release-cli-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish @motir/cli
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE: '@motir/cli'
+      PKG_DIR: packages/cli
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          # Writes the .npmrc that points npm at the public registry and maps
+          # NODE_AUTH_TOKEN onto it. Without this the publish step would
+          # authenticate as nobody.
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+
+      - name: Build the package
+        run: pnpm --filter "$PACKAGE" build
+
+      - name: Resolve the package version
+        id: ver
+        run: |
+          PKG_VERSION="$(node -p "require('./${PKG_DIR}/package.json').version")"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Package version: $PKG_VERSION"
+
+      # Fail fast if the tag and the package.json version disagree — the tag is
+      # the human intent, package.json is what actually publishes; a mismatch
+      # means someone forgot to bump (or retagged wrong), and it would push
+      # `0.1.0` to npm off a `cli-v0.2.0` tag while the sandbox images went out
+      # as `:claude-0.1.0`. Only meaningful on a tag push.
+      #
+      # Deliberately free of `${{ }}` interpolation — the block is plain bash,
+      # so `packages/cli/test/releaseCli.test.ts` can EXECUTE it against a fake
+      # GITHUB_REF_NAME and prove it fails on a mismatch instead of asserting
+      # that it looks like it would. Same guard text as release-sandbox.yml.
+      - name: Guard — tag version must equal package version
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
+          PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          echo "Tag version: $TAG_VERSION  ·  package.json version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version '$TAG_VERSION' but packages/cli/package.json is '$PKG_VERSION'. Bump the package version to match the tag, or retag."
+            exit 1
+          fi
+
+      # The same lane ci.yml runs on every pull request, coverage gate included.
+      # A release is the last place to discover the suite was red.
+      - name: Test the package
+        run: pnpm --filter "$PACKAGE" test:coverage
+
+      # Pack for real rather than `--dry-run`: it prints the same "Tarball
+      # Contents" listing AND leaves an artifact a human can open, which is what
+      # makes a dry run a meaningful rehearsal of the publish.
+      - name: Pack the tarball
+        run: npm pack --pack-destination "$RUNNER_TEMP"
+        working-directory: ${{ env.PKG_DIR }}
+
+      - name: Upload the tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: motir-cli-${{ steps.ver.outputs.pkg_version }}-tarball
+          path: ${{ runner.temp }}/motir-cli-*.tgz
+          if-no-files-found: error
+
+      # Idempotency: a re-run of an already-published version is a success, not
+      # a hard failure (npm itself would 403 on a duplicate publish). A `cli-v*`
+      # tag also drives the sandbox images, so re-running the tag to recover a
+      # failed image push must not red-X on the npm half that already landed.
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          set -euo pipefail
+          if npm view "${PACKAGE}@${{ steps.ver.outputs.pkg_version }}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${PACKAGE}@${{ steps.ver.outputs.pkg_version }} is already published — skipping publish."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: >-
+          steps.published.outputs.already == 'false' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        run: pnpm --filter "$PACKAGE" exec npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
