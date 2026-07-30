@@ -609,6 +609,9 @@ model Workspace {
   // Workspace-scoped tenant data — cascade with the workspace.
   planChangeSessions       PlanChangeSession[]
   planChangeTurns          PlanChangeTurn[]
+  // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
+  // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
+  projectRepos             ProjectRepo[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -625,12 +628,12 @@ model Workspace {
 /// archive/delete clears a member's `activeProjectId` (onDelete: SetNull)
 /// rather than cascading the membership away.
 model Project {
-  id                     String              @id @default(cuid())
-  workspaceId            String
-  name                   String
-  slug                   String
-  identifier             String
-  lastWorkItemNumber     Int                 @default(0)
+  id                      String                @id @default(cuid())
+  workspaceId             String
+  name                    String
+  slug                    String
+  identifier              String
+  lastWorkItemNumber      Int                   @default(0)
   /// Per-project status-transition enforcement mode (Story 2.2). `restricted`
   /// (default) consults the `workflow_transition` rows — only an explicit
   /// edge is a legal move. `open` ignores them: any status → any status is
@@ -639,7 +642,7 @@ model Project {
   /// flipping to `open` does NOT delete the curated transition rows, so a
   /// flip back to `restricted` restores the graph. Jira and Linear both ship
   /// this same "guarded vs anything-goes" project-level toggle.
-  workflowPolicyMode     WorkflowPolicyMode  @default(restricted)
+  workflowPolicyMode      WorkflowPolicyMode    @default(restricted)
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
@@ -647,7 +650,7 @@ model Project {
   /// existing projects backfill to it on migration — a `private` default would
   /// lock every current member out. The browse/edit policy that reads this is
   /// computed at the service layer in Subtask 6.4.3.
-  accessLevel            ProjectAccessLevel  @default(open)
+  accessLevel             ProjectAccessLevel    @default(open)
   /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
   /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
   /// the project admin via the shipped `MarkdownEditor` in settings (6.12.8).
@@ -655,7 +658,7 @@ model Project {
   /// is `public`. Nullable — an empty field falls back to a slim auto-intro
   /// (never a blank page), so every existing project backfills to NULL with no
   /// migration data step.
-  publicOverviewMd       String?             @map("public_overview_md")
+  publicOverviewMd        String?               @map("public_overview_md")
   /// The moment the project most recently BECAME `public` (Story 6.13 · Subtask
   /// 6.13.4) — the "newest" axis the project square's Recent/New rank orders by
   /// (GitLab Explore → Newest). Stamped by `setAccessLevel` whenever the access
@@ -666,20 +669,20 @@ model Project {
   /// non-public project, backfill to NULL with no migration data step; the
   /// Recent rank COALESCEs NULL to `createdAt` so such rows still order
   /// deterministically (their creation moment as the fallback "made public").
-  madePublicAt           DateTime?           @map("made_public_at")
+  madePublicAt            DateTime?             @map("made_public_at")
   /// Public hero subtitle (Story 6.16 · Subtask 6.16.2) — the short tagline
   /// shown under the project name on the public hero, edited in-place by the
   /// project admin. A public-SAFE field: it rides the public projection only
   /// when the project is `public`. Nullable — unset falls back to a generic
   /// i18n tagline (never a blank subtitle), so every existing project backfills
   /// to NULL with no migration data step.
-  publicTagline          String?             @map("public_tagline")
+  publicTagline           String?               @map("public_tagline")
   /// Public hero meta pills (Story 6.16 · Subtask 6.16.2) — the short tags
   /// shown as pills on the public hero, edited in-place by the project admin. A
   /// public-SAFE field: it rides the public projection only when the project is
   /// `public`. Defaults to an empty array — an unset field shows no pills, so
   /// every existing project backfills to `[]` with no migration data step.
-  publicTags             String[]            @default([]) @map("public_tags")
+  publicTags              String[]              @default([]) @map("public_tags")
   /// Immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264). Stamped ONCE —
   /// with the approval timestamp — when the project's FIRST `Plan` is approved +
   /// materialized (`plansService.approvePlan`), then NEVER cleared or re-written:
@@ -692,7 +695,7 @@ model Project {
   /// source of truth (no second derived signal): the `/onboarding` redirect and
   /// the roadmap planning-origin cluster (MOTIR-1013), which assert a planning
   /// journey only a truly-onboarded project has.
-  onboardingRanAt        DateTime?           @map("onboarding_ran_at")
+  onboardingRanAt         DateTime?             @map("onboarding_ran_at")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read
@@ -704,17 +707,17 @@ model Project {
   /// default · Time estimate · Issue count — exactly Jira board Estimation
   /// settings). Defaults to `story_points` so every existing project backfills
   /// to the agile default (no lock-out).
-  estimationStatistic    EstimationStatistic @default(story_points)
+  estimationStatistic     EstimationStatistic   @default(story_points)
   /// The suggested-value DECK the estimate picker offers (it does not
   /// hard-constrain entry — story points stay a free numeric value): `fibonacci`
   /// (the planning-poker default — 1,2,3,5,8,13,21,…), `linear` (1,2,3,4,5,…),
   /// or `custom` (the project-defined list in `customScaleValues`).
-  pointScale             PointScale          @default(fibonacci)
+  pointScale              PointScale            @default(fibonacci)
   /// The project-defined deck values, used ONLY when `pointScale = custom`.
   /// These are UI SUGGESTIONS for the picker — summation uses the `Decimal`
   /// `work_item.storyPoints`, so a `Float[]` for the suggestion list is fine
   /// (avoids a Decimal-array column). Backfills to `[]` on migration.
-  customScaleValues      Float[]             @default([])
+  customScaleValues       Float[]               @default([])
   /// AI-drafted explanations opt-in (Story 7.4 · MOTIR-850). When true, the
   /// `generate_tree` planner drafts a "why this matters" `explanationMd`
   /// (`explanationSource = ai_draft`) for every proposed item; the flag rides
@@ -723,7 +726,7 @@ model Project {
   /// Default `false` — proposals carry no explanation until a project opts in
   /// (the toggle is SURFACED by the 7.13 AI-settings panel, MOTIR-919), so every
   /// existing project backfills to OFF with no data step.
-  aiGenerateExplanations Boolean             @default(false) @map("ai_generate_explanations")
+  aiGenerateExplanations  Boolean               @default(false) @map("ai_generate_explanations")
   /// AUTO-PLAN cadence switch (Story 7.13 · MOTIR-915). When true, the cadence
   /// engine (MOTIR-916) watches the project's ready set and fires a 7.4
   /// expand-the-plan run once it drains below `aiAutoPlanThreshold`. Default
@@ -731,7 +734,7 @@ model Project {
   /// project backfills to OFF with no migration data step. An open-core
   /// `Project` COLUMN (not an AI-only table): the open PM core reads it to
   /// decide whether to schedule the run at all.
-  aiAutoPlanEnabled      Boolean             @default(false) @map("ai_auto_plan_enabled")
+  aiAutoPlanEnabled       Boolean               @default(false) @map("ai_auto_plan_enabled")
   /// The ready-set low-water mark the auto-expand fires at (Story 7.13 ·
   /// MOTIR-915) — "fewer than N ready items left ⇒ expand". Default `5`,
   /// mirroring Principle #17's "enough work, not all the work" (a
@@ -742,13 +745,13 @@ model Project {
   /// `projectAiSettingsService` with a typed 422 (never silently clamped at the
   /// DB); the column carries no CHECK constraint, matching how every other
   /// project-settings column here is validated in the service.
-  aiAutoPlanThreshold    Int                 @default(5) @map("ai_auto_plan_threshold")
+  aiAutoPlanThreshold     Int                   @default(5) @map("ai_auto_plan_threshold")
   /// AI SPRINT-PLANNING switch (Story 7.13 · MOTIR-915). When true, the
   /// `plan_sprint` packing job (MOTIR-917) may pack the ready set into short
   /// dependency-aware sprints, persisted through the Epic-4 sprint services
   /// (MOTIR-918). Default `false` — OFF until opted in, so an existing project's
   /// sprint board is never rearranged by a feature nobody enabled.
-  aiSprintPlanningEnabled Boolean            @default(false) @map("ai_sprint_planning_enabled")
+  aiSprintPlanningEnabled Boolean               @default(false) @map("ai_sprint_planning_enabled")
   /// The length, in days, of a sprint the AI packs (Story 7.13 · MOTIR-915).
   /// Default `2` — the deliberate, RECORDED deviation from the mirror's 1–4
   /// WEEK sprint: Motir's executor is a coding agent that lands a subtask in
@@ -757,7 +760,7 @@ model Project {
   /// {@link AI_SPRINT_LENGTH_DAYS_MIN}..{@link AI_SPRINT_LENGTH_DAYS_MAX} (1–14)
   /// app-side, so a human-paced team can still stretch it to a fortnight
   /// without the column becoming a free-form integer.
-  aiSprintLengthDays     Int                 @default(2) @map("ai_sprint_length_days")
+  aiSprintLengthDays      Int                   @default(2) @map("ai_sprint_length_days")
   /// PER-PROJECT planner-model override (Story 7.13 · MOTIR-915). NULL — the
   /// default — means "use the platform default planner model", which is
   /// motir-ai's `plannerModel()` (`PLANNER_MODEL` env → `PLANNER_MODELS.default`,
@@ -769,7 +772,23 @@ model Project {
   /// model-id-charset token) and normalizes `''` → NULL, so clearing the field
   /// in the settings panel means "back to the default" rather than "the empty
   /// model".
-  aiPlannerModel         String?             @map("ai_planner_model")
+  aiPlannerModel          String?               @map("ai_planner_model")
+  /// WHO OWNS the project's repository set (`docs/decisions/project-repository-set.md`
+  /// §3, MOTIR-1780) — `user` (created in the user's own account/org, theirs from
+  /// the first commit) or `motir` (created under Motir's org, recorded as
+  /// CLAIMABLE for MOTIR-711's transfer flow). Deliberately SET-level, not
+  /// per-row: §3.5 forbids a set that is half in the user's account and half in
+  /// Motir's, so a row that cannot be created in the chosen target FAILS as a row
+  /// rather than silently retargeting — which is only expressible if the target is
+  /// one value for the whole set. NULL until the establish step decides, so every
+  /// existing project backfills to NULL with no data step.
+  repoSetOwnership        ProjectRepoOwnership? @map("repo_set_ownership")
+  /// The ACCOUNT LOGIN the set's repositories live under (§3.2) — the user's
+  /// personal account by default, or an org they administer, or Motir's org when
+  /// `repoSetOwnership = motir`. One choice for the SET (see above), which is what
+  /// lets 9.3.7 find every claimable repo of a project with ONE project-scoped read
+  /// instead of a GitHub account scan. NULL until the establish step decides.
+  repoSetTargetAccount    String?               @map("repo_set_target_account")
   /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
   /// validated at the service layer against the avatar registry
   /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
@@ -777,11 +796,11 @@ model Project {
   /// letters), so every existing row backfills with no migration data step.
   /// NOT an image upload — Jira's own default avatars are a preset library; the
   /// 2.3.7 upload primitive is attachment-scoped (the recorded deviation).
-  avatarIcon             String?
-  avatarColor            String?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
-  archivedAt             DateTime?
+  avatarIcon              String?
+  avatarColor             String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  archivedAt              DateTime?
 
   workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
@@ -850,6 +869,10 @@ model Project {
   // `PlanChangeSession.@@unique([projectId, scopeKey])`, which is why this is a
   // list rather than the former `?` one-to-one. Cascade.
   planChangeSessions     PlanChangeSession[]
+  // The project's REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780) — one row per
+  // INTENDED repository, ordered, primary first. Cascade: deleting a project
+  // removes its set (the plan for repos that only existed for that project).
+  repos                  ProjectRepo[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3557,17 +3580,17 @@ model ImportSourceIdentity {
 /// refreshed, so a GitLab row populates them. The columns are nullable + provider-
 /// neutral in name precisely so the shared entity serves both models.
 model GithubInstallation {
-  id             String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   /// Provider discriminator — "github" (default) or "gitlab"; the seam keys on it.
-  provider       String   @default("github")
+  provider              String    @default("github")
   /// The host's own installation/connection id (as a string — never do math on
   /// it): GitHub's numeric installation id, or the GitLab connection id minted at
   /// connect. UNIQUE (one row per connection); the webhook + token paths key on
   /// it. DISTINCT from `id`, the internal cuid PK.
-  installationId String   @unique @map("installation_id")
-  workspaceId    String   @map("workspace_id")
-  accountLogin   String   @map("account_login")
-  accountType    String   @map("account_type")
+  installationId        String    @unique @map("installation_id")
+  workspaceId           String    @map("workspace_id")
+  accountLogin          String    @map("account_login")
+  accountType           String    @map("account_type")
   /// The connection's access token, encrypted at rest — NULL for GitHub (minted
   /// on demand). Populated for GitLab (OAuth issues a stored token). Only
   /// `lib/gitlab/tokenCrypto.ts` + `gitlabConnectionService` read/write it.
@@ -3578,8 +3601,8 @@ model GithubInstallation {
   /// When the stored access token expires — the refresh path reads it to decide
   /// when to refresh. NULL for GitHub (no stored token).
   tokenExpiresAt        DateTime? @map("token_expires_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   repos     GithubRepo[]
@@ -3609,6 +3632,12 @@ model GithubRepo {
 
   installation GithubInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
   pullRequests GithubPullRequest[]
+  /// The project-repo-set row this connected repo REALIZES, if any (MOTIR-1780).
+  /// At most one — a repo created for project A can never be recorded as project
+  /// B's (`ProjectRepo.githubRepoId` is `@unique`). Back-relation of a SetNull FK:
+  /// disconnecting this repo leaves the set row with a null realized repo, not a
+  /// deleted plan.
+  projectRepo  ProjectRepo?
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -3941,19 +3970,19 @@ enum MigrateOnboardingStatus {
 /// with no ambiguity about WHICH thread resumes. Workspace-scoped tenant data
 /// (RLS in the same migration).
 model PlanChangeSession {
-  id          String  @id @default(cuid())
-  workspaceId String  @map("workspace_id")
-  projectId   String  @map("project_id")
+  id              String    @id @default(cuid())
+  workspaceId     String    @map("workspace_id")
+  projectId       String    @map("project_id")
   /// Who opened the thread. SetNull — a departed author leaves the conversation
   /// intact and unattributed (the `Notification` actor semantics).
-  createdById String? @map("created_by_id")
+  createdById     String?   @map("created_by_id")
   /// The number of turns on the thread — the READ-DERIVED value an append
   /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
   /// and re-read it inside the transaction, so two concurrent appends serialize
   /// into two ordered turns instead of colliding on `seq` (the
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
-  turnCount   Int     @default(0) @map("turn_count")
+  turnCount       Int       @default(0) @map("turn_count")
   /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
   /// thread "the conversation about THESE work items" rather than "the project's
   /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
@@ -3961,23 +3990,23 @@ model PlanChangeSession {
   /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
   /// `(project_id, scope_key)` unique still admits exactly one of those per
   /// project while allowing one contextual thread per distinct anchor set.
-  scopeKey    String  @default("") @map("scope_key")
+  scopeKey        String    @default("") @map("scope_key")
   /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
   /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
   /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
   /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
   /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
   /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
-  targetKeys  String[] @default([]) @map("target_keys")
+  targetKeys      String[]  @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
-  lastJobId   String? @map("last_job_id")
+  lastJobId       String?   @map("last_job_id")
   /// When that submission happened. Null until the thread has been submitted at
   /// least once (a thread can accumulate turns without ever submitting).
   lastSubmittedAt DateTime? @map("last_submitted_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -4054,4 +4083,171 @@ enum PlanChangeTurnRole {
   system
 
   @@map("plan_change_turn_role")
+}
+
+/// One INTENDED repository in a project's REPOSITORY SET (Story MOTIR-1775 ·
+/// MOTIR-1780), specified by `docs/decisions/project-repository-set.md`.
+///
+/// This table is BOTH a PLAN and a RECORD, deliberately in one place: a row is
+/// created `proposed` (role + name + seed source, nothing on GitHub yet) and
+/// later carries `github_repo_id`, the realized `GithubRepo` mirror row. One
+/// table rather than an intents table plus a links table, because two registries
+/// drift — the same argument `docs/decisions/target-repo-attribution.md` §1 used
+/// to refuse a second repo registry.
+///
+/// It is ALSO the project↔repo association whose absence
+/// `lib/services/codeGraphIndexService.ts` and `lib/ai/codeContext.ts` each
+/// record as a deferred refinement. MOTIR-1780 makes the association EXIST; it
+/// deliberately does NOT re-point either consumer (that is MOTIR-1754's
+/// code-index loop) — see the comments at both sites.
+///
+/// CARDINALITY comes from the architecture, never from a constant: a project that
+/// separates a web app from an API is TWO rows, add a shared package and it is
+/// three, a monorepo is one. The single-repo project is one row in this same
+/// table (ADR §6), not a second code path.
+///
+/// Naming note: the Prisma model is `ProjectRepo` (table `project_repository`) so
+/// its data-access leaf can be `projectRepoRepository`, unambiguous next to the
+/// long-shipped `projectRepository` — which is the repository for the `project`
+/// table, a different entity.
+///
+/// Workspace-scoped tenant data, so `workspace_id` is non-null and the RLS policy
+/// ships in the SAME migration (PRODECT_FINDINGS #20 — no unguarded window). Both
+/// tenant FKs and the nullable realized-repo FK are modelled as Prisma
+/// `@relation`s on BOTH sides with the same actions the SQL uses (the
+/// FK-`@relation` rule), so `migrate dev` reports no drift.
+model ProjectRepo {
+  id            String           @id @default(cuid())
+  workspaceId   String           @map("workspace_id")
+  projectId     String           @map("project_id")
+  /// WHAT this repository is (ADR §1.1) — a fixed six-value enum, because the role
+  /// drives real behaviour: it selects what the repo is seeded from (§2) and it is
+  /// the key a work item's repo pin resolves through (§5). An open string could do
+  /// neither without a lookup table that would be this enum, less safely.
+  /// A role MAY repeat (§1.2) — two services are two `api` rows.
+  role          ProjectRepoRole
+  /// The free-form label the enum deliberately does not carry (ADR §1.1) — `api` +
+  /// "billing" versus `api` + "search". Distinguishes repeated roles for a human;
+  /// never a resolution key (an ambiguous role resolves to null, §5.3, rather than
+  /// being disambiguated by a label nobody validated).
+  label         String?
+  /// The INTENDED repo name, editable per row until the row is established (ADR
+  /// §1.4/§1.5). Unique per project (see `@@unique`). Once realized this is still
+  /// the authored intent — the authoritative checkout name is the realized repo's
+  /// own `name`, which is what the read layer prefers (a rename on the host must
+  /// not silently re-point a dispatch).
+  name          String
+  /// WHAT the repo is seeded from (ADR §2), recorded as a STRING, not a boolean or
+  /// a two-value enum: when the multi-stack starter registry lands (MOTIR-709 /
+  /// 9.3.5) a row's seed source becomes a registry key and §2's table becomes its
+  /// default map — no migration, no second code path. Values today come from
+  /// `lib/projectRepos/vocabulary.ts`.
+  seedSource    String           @map("seed_source")
+  /// The per-row ESTABLISH state (ADR §4.1). Rows are INDEPENDENT: one may fail or
+  /// be skipped while the others succeed, and nothing is rolled back (a created
+  /// repository is a real artifact in the user's own account — §4.2). `failed` is
+  /// RESUMABLE, not terminal.
+  state         ProjectRepoState @default(proposed)
+  /// Why a `failed` row failed, so partial establishment is RECORDED rather than
+  /// inferred (revoked token, not an org admin, name collision, template policy,
+  /// rate limit). Null in every other state; cleared on a retry.
+  failureReason String?          @map("failure_reason")
+  /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
+  /// creation or connect-existing completes (`attachRealizedRepo`). This is the
+  /// seam that makes one table serve as both plan and record.
+  ///
+  /// `@unique` is the second uniqueness guarantee the ADR requires: a realized repo
+  /// is claimed by AT MOST ONE project row, so a repo created for project A can
+  /// never be recorded as project B's. Postgres allows many NULLs in a unique
+  /// index, which is exactly right — every `proposed` row is unrealized.
+  ///
+  /// SetNull (not Cascade): disconnecting a repo must leave the row with a null
+  /// realized repo and its state still reading honestly. A disconnected repo is
+  /// not a lost plan — the role + name + seed source survive so the row can be
+  /// re-established.
+  githubRepoId  String?          @unique @map("github_repo_id")
+  /// ORDER within the set, and it is MEANINGFUL: the first row is the project's
+  /// PRIMARY repo (ADR §1.3) — what a single-repo project's one row is, and the
+  /// deterministic tie-break anywhere the set needs one. Order carries NO dispatch
+  /// meaning; an item is never routed by position. A fractional index (the same
+  /// `String @db.Text` + `lib/workItems/positioning` scheme as `work_item` /
+  /// `board_column`), so a row is reordered with one write.
+  position      String           @db.Text
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubRepo GithubRepo? @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+
+  /// The first uniqueness guarantee: at most one row per `(project, name)`, so two
+  /// rows can never race for one repo name. Enforced in the DATABASE — the service
+  /// additionally rejects a CASE-VARIANT collision (git-host names are
+  /// case-insensitive), for which this exact-match index is the backstop.
+  @@unique([projectId, name])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("project_repository")
+}
+
+/// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
+/// Six values, fixed — do NOT add one without amending the ADR, and keep it in
+/// lockstep with motir-ai's proposal-schema role enum (MOTIR-1885).
+enum ProjectRepoRole {
+  /// A browser-facing application — the default platform starter's shape.
+  web
+  /// A backend service exposing an API: a separated backend, or one of several.
+  api
+  /// A native / cross-platform mobile app.
+  mobile
+  /// A library or package consumed by the other repos.
+  shared
+  /// Infrastructure-as-code, deployment, CI-only content.
+  infra
+  /// The honest escape hatch — a CLI, a desktop app, a docs site.
+  other
+
+  @@map("project_repo_role")
+}
+
+/// The per-row establish lifecycle (ADR §4.1):
+///
+///   proposed ──create──▶ creating ──▶ created
+///      │                    │
+///      │                    └──error──▶ failed ──retry──▶ creating
+///      │                                   │
+///      ├──connect-existing──▶ connected ◀──┘
+///      │                                   │
+///      └──skip──▶ skipped ◀────────────────┘
+///
+/// `created`, `connected` and `skipped` are SETTLED; `failed` is resumable. The
+/// legal-edge table lives in `lib/projectRepos/transitions.ts`.
+enum ProjectRepoState {
+  /// Derived or hand-added, nothing created yet, fully editable.
+  proposed
+  /// Creation is in flight on the host.
+  creating
+  /// Motir created the repository.
+  created
+  /// An existing repository was connected instead (this is how a MONOREPO
+  /// collapses the set to one row).
+  connected
+  /// Deliberately left without a repository — NOT an error (ADR §4.3).
+  skipped
+  /// Creation failed; `failureReason` says why. Retryable, connectable, skippable.
+  failed
+
+  @@map("project_repo_state")
+}
+
+/// WHO owns a project's repository set (ADR §3) — read on `Project`, not on a set
+/// row, because §3.5 forbids a half-and-half set.
+enum ProjectRepoOwnership {
+  /// Created in the user's own account/org — theirs from the first commit.
+  user
+  /// Created under Motir's org, recorded as CLAIMABLE (MOTIR-711 transfers the
+  /// whole set together).
+  motir
+
+  @@map("project_repo_ownership")
 }
