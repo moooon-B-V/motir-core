@@ -147,7 +147,16 @@ export const projectRepoProposalService = {
         created.push(
           await projectRepoSetService.addRow(
             projectId,
-            { role: row.role, name: row.name, seedSource: row.seedSource },
+            {
+              role: row.role,
+              name: row.name,
+              seedSource: row.seedSource,
+              // WHY this row is here, PERSISTED (MOTIR-1892) — not merely
+              // returned. The proposer runs once, so a signal that lived only in
+              // this result would be gone by the time the establish step renders
+              // the set on any later page load.
+              proposalSignal: row.signal,
+            },
             ctx,
           ),
         );
@@ -157,13 +166,12 @@ export const projectRepoProposalService = {
       }
     }
 
-    // WHY each row is there travels with the RESULT, not into the table: the set
-    // row records the plan (role / name / seed source / state) and has no column
-    // for the derivation's reasoning. That is what keeps a wrong proposal arguable
-    // — the caller can see the signal behind every row it just wrote. Surfacing it
-    // in the establish-step UI on a LATER page load needs it PERSISTED, which is a
-    // column on MOTIR-1780's table and therefore its own card (MOTIR-1892), not a
-    // boundary this one crosses.
+    // WHY each row is there travels BOTH ways now (MOTIR-1892): the machine-
+    // readable `signal` is persisted on the row (`created[i].proposalSignal`), so
+    // the establish-step UI can show what Motir inferred on any later page load —
+    // which matters because this proposer runs exactly once. The English `reason`
+    // stays on the RESULT only: it is a log / PR-output gloss, not a localized
+    // string, so it has no business on a rendered surface.
     return { proposed: true, rows, created };
   },
 };

@@ -33,6 +33,7 @@ interface JoinedRow {
   seedSource: string;
   state: ProjectRepo['state'];
   failureReason: string | null;
+  proposalSignal: string | null;
   githubRepoId: string | null;
   position: string;
   createdAt: Date;
@@ -62,6 +63,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     seedSource: r.seedSource,
     state: r.state,
     failureReason: r.failureReason,
+    proposalSignal: r.proposalSignal,
     githubRepoId: r.githubRepoId,
     position: r.position,
     createdAt: r.createdAt,
@@ -124,6 +126,7 @@ export const projectRepoRepository = {
         pr."seed_source"       AS "seedSource",
         pr."state"             AS "state",
         pr."failure_reason"    AS "failureReason",
+        pr."proposal_signal"   AS "proposalSignal",
         pr."github_repo_id"    AS "githubRepoId",
         pr."position"          AS "position",
         pr."created_at"        AS "createdAt",

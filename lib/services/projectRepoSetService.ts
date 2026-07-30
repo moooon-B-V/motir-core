@@ -15,6 +15,7 @@ import type {
   AddProjectRepoInput,
   PatchProjectRepoInput,
   ProjectRepoDto,
+  ProjectRepoProposalSignalDto,
   ProjectRepoSetDto,
   SetProjectRepoOwnershipInput,
 } from '@/lib/dto/projectRepos';
@@ -24,7 +25,11 @@ import {
   type ProjectRepoName,
 } from '@/lib/projectRepos/names';
 import { allowedTransitions, canTransition } from '@/lib/projectRepos/transitions';
-import { defaultSeedSourceForRole } from '@/lib/projectRepos/vocabulary';
+import {
+  PROJECT_REPO_PROPOSAL_SIGNALS,
+  defaultSeedSourceForRole,
+  isProjectRepoProposalSignal,
+} from '@/lib/projectRepos/vocabulary';
 import {
   ProjectRepoInvalidFieldError,
   ProjectRepoNameTakenError,
@@ -139,6 +144,24 @@ function validateSeedSource(raw: string): string {
     );
   }
   return seedSource;
+}
+
+/**
+ * Validate a caller-supplied derivation signal (MOTIR-1892) against ADR §0.1's
+ * ladder. An ABSENT signal is legal and means null — that is every hand-added
+ * row, which has no Motir inference to record. A PRESENT one must name a rung the
+ * ADR fixes: the column is what the establish step maps to copy, so a value it
+ * cannot map is a bug to reject at the write, not one to discover at render.
+ */
+function validateProposalSignal(raw: unknown): ProjectRepoProposalSignalDto | null {
+  if (raw === undefined || raw === null) return null;
+  if (!isProjectRepoProposalSignal(raw)) {
+    throw new ProjectRepoInvalidFieldError(
+      'proposalSignal',
+      `it must be one of ${PROJECT_REPO_PROPOSAL_SIGNALS.join(', ')}.`,
+    );
+  }
+  return raw;
 }
 
 /**
@@ -340,6 +363,12 @@ export const projectRepoSetService = {
    * one repository, while the DB's `(project_id, name)` unique index only catches
    * the exact duplicate. That index is still the arbiter of a lost race, and its
    * P2002 is translated to the same typed error.
+   *
+   * `proposalSignal` records WHY Motir proposed the row (ADR §0.1) and is
+   * supplied only by the derivation (MOTIR-1881 through MOTIR-1892). A caller
+   * that omits it — every hand-added row — persists NULL, which is what makes the
+   * column distinguish "Motir inferred this" from "the user asked for this"
+   * rather than attributing an inference to nobody.
    */
   async addRow(
     projectId: string,
@@ -351,6 +380,7 @@ export const projectRepoSetService = {
     const seedSource = validateSeedSource(
       input.seedSource ?? defaultSeedSourceForRole(input.role as ProjectRepoRole),
     );
+    const proposalSignal = validateProposalSignal(input.proposalSignal);
 
     const row = await inProject(projectId, ctx, 'edit', async (tx) => {
       const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
@@ -370,6 +400,7 @@ export const projectRepoSetService = {
             label,
             name,
             seedSource,
+            proposalSignal,
             state: 'proposed',
             position: keyForAppend(last),
           },

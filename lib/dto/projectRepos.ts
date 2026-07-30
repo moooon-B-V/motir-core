@@ -21,6 +21,29 @@ export type ProjectRepoStateDto =
 export type ProjectRepoOwnershipDto = 'user' | 'motir';
 
 /**
+ * WHY a proposed row is in the set — the ADR §0.1 signal that produced it, in
+ * ladder order (MOTIR-1892). Persisted on the row so the establish-step UI
+ * (MOTIR-1782) can show what Motir inferred on a LATER page load, not only in
+ * the proposal run's own result.
+ *
+ * MACHINE-READABLE on purpose, and the persisted value is this signal ALONE.
+ * `ProposedRepoRow.reason` — the derivation's one-line English gloss — is a log
+ * / PR-output fallback and is NOT a localized string; persisting it would put
+ * untranslated prose on a rendered surface, which the i18n-catalog parity gate
+ * exists to prevent. The UI maps this key to its own copy.
+ *
+ *   * `plan-item-role`   §0.1.1 — a repo ROLE pinned on the generated tree.
+ *   * `preplan-platform` §0.1.2 — the pre-plan session's `platform`.
+ *   * `default-web`      §0.1.4 — the thin-signal default: exactly one web row.
+ *
+ * The runtime list is `PROJECT_REPO_PROPOSAL_SIGNALS` in
+ * `lib/projectRepos/vocabulary.ts`, which is what the service validates against;
+ * `RepoProposalSignal` in `lib/projectRepos/proposal.ts` is this same type under
+ * the derivation's own name.
+ */
+export type ProjectRepoProposalSignalDto = 'plan-item-role' | 'preplan-platform' | 'default-web';
+
+/**
  * The REALIZED repository behind a set row — the connected `GithubRepo` mirror
  * row, present only once creation or connect-existing has completed.
  *
@@ -65,6 +88,17 @@ export interface ProjectRepoDto {
   seedSource: string;
   state: ProjectRepoStateDto;
   failureReason: string | null;
+  /**
+   * WHY Motir proposed this row (ADR §0.1), or NULL when nothing inferred it —
+   * a row the USER added has no Motir inference to explain, and so does every
+   * row that predates MOTIR-1892. NULL is therefore the honest answer, not a
+   * gap: a consumer renders the derivation only where one exists.
+   *
+   * Survives a user's edit of the row: the signal records what Motir inferred
+   * at proposal time, and renaming a row (or changing its role) does not
+   * rewrite that history.
+   */
+  proposalSignal: ProjectRepoProposalSignalDto | null;
   /** The connected repository this row realizes, or null when it has none yet
    *  (or no longer has one — see the type doc). */
   realizedRepo: RealizedProjectRepoDto | null;
@@ -105,6 +139,11 @@ export interface AddProjectRepoInput {
   /** Override ADR §2's default for the role — the seam MOTIR-709's starter
    *  registry will use. Omit for the default. */
   seedSource?: string;
+  /** The ADR §0.1 signal that produced this row, when Motir's derivation is what
+   *  proposed it (MOTIR-1892). OMITTED by every hand-added row — a row the user
+   *  added has no inference to record — which is what makes the persisted column
+   *  read as "this one was Motir's idea, and here is why". */
+  proposalSignal?: ProjectRepoProposalSignalDto;
 }
 
 /** Input to `projectRepoSetService.patchRow` — a PARTIAL edit of an unestablished

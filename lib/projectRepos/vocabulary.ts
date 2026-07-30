@@ -1,4 +1,5 @@
 import type { ProjectRepoRole, ProjectRepoState } from '@prisma/client';
+import type { ProjectRepoProposalSignalDto } from '@/lib/dto/projectRepos';
 
 // The repo-SET vocabulary (Story MOTIR-1775 · MOTIR-1780) — the small set of
 // constants `docs/decisions/project-repository-set.md` fixes, in one module so no
@@ -52,6 +53,39 @@ export const ESTABLISHED_PROJECT_REPO_STATES = [
 /** Whether a row is ESTABLISHED — i.e. it names a repository that exists. */
 export function isEstablishedState(state: ProjectRepoState): boolean {
   return (ESTABLISHED_PROJECT_REPO_STATES as readonly ProjectRepoState[]).includes(state);
+}
+
+/**
+ * Every DERIVATION SIGNAL a proposed row may record (ADR §0.1), in the ladder's
+ * own order (MOTIR-1892). The ONE runtime list: the service validates a written
+ * value against it, and the derivation's emitted values are asserted against it,
+ * so the persisted column can never hold a rung the ADR does not name.
+ *
+ * A plain STRING column rather than a Prisma enum, for the same reason
+ * `seedSource` is one: this vocabulary is a LADDER that grows as §0.1 gains rungs
+ * (a repo-role signal from an imported codebase, say), and each new rung already
+ * requires code — a derivation branch and the UI's copy for it — so a database
+ * enum would add a migration to a change that is a code change either way, and a
+ * second place for the two to drift. Unlike `role` (which selects the seed source
+ * and is the key a repo pin resolves through), the signal drives NO behaviour: it
+ * is explanatory metadata the UI renders. Integrity comes from the closed union +
+ * this list + the service's validation, and a value outside it is rejected at the
+ * only writer.
+ */
+export const PROJECT_REPO_PROPOSAL_SIGNALS = [
+  /** §0.1.1 — a repo ROLE pinned on the generated tree (the primary signal). */
+  'plan-item-role',
+  /** §0.1.2 — the pre-plan session's `platform` fixed the primary row's role. */
+  'preplan-platform',
+  /** §0.1.4 — the thin-signal default: exactly one `web` row. */
+  'default-web',
+] as const satisfies readonly ProjectRepoProposalSignalDto[];
+
+/** Whether a value is one of the ADR §0.1 signals — the guard the set service
+ *  validates a written `proposalSignal` with, so an unknown rung is rejected at
+ *  the write rather than discovered by a UI that cannot map it to copy. */
+export function isProjectRepoProposalSignal(value: unknown): value is ProjectRepoProposalSignalDto {
+  return (PROJECT_REPO_PROPOSAL_SIGNALS as readonly unknown[]).includes(value);
 }
 
 /**

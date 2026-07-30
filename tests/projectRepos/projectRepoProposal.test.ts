@@ -8,6 +8,7 @@ import {
   type ProposedRepoRow,
 } from '@/lib/projectRepos/proposal';
 import {
+  PROJECT_REPO_PROPOSAL_SIGNALS,
   PROJECT_REPO_ROLES,
   SEED_SOURCE_INITIALISED,
   SEED_SOURCE_PLATFORM_STARTER,
@@ -253,7 +254,10 @@ describe('deriveRepoSetProposal — the ADR §0.1 ladder', () => {
       // A project always needs somewhere for its code to live.
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) {
-        expect(['plan-item-role', 'preplan-platform', 'default-web']).toContain(row.signal);
+        // Against the PERSISTED vocabulary, not a literal list (MOTIR-1892): the
+        // signal is now a column the set service validates, so a rung this module
+        // could emit but that list does not admit would be rejected at the write.
+        expect(PROJECT_REPO_PROPOSAL_SIGNALS).toContain(row.signal);
         expect(row.reason.trim().length).toBeGreaterThan(0);
         // Creatable as-is: the set service's own name validation must never be
         // the thing that discovers a derived name is malformed.

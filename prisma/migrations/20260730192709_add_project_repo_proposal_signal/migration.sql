@@ -1,0 +1,29 @@
+-- WHY a proposed repo-set row is there, PERSISTED (Story MOTIR-1775 · MOTIR-1892)
+-- — the `docs/decisions/project-repository-set.md` §0.1 rung the derivation
+-- climbed to, so the establish step can show what Motir inferred on a LATER page
+-- load. The proposer runs exactly ONCE (it refuses to touch a set that already
+-- has rows), so a signal that lived only in its return value was gone by the time
+-- anything rendered the set.
+--
+-- NULLABLE with NO backfill, deliberately: null is the honest answer for a row
+-- the USER added (there is no Motir inference to explain) and for every row
+-- written before this column existed. Inventing a signal for those rows would
+-- record a derivation that never happened — the "freeze a guess in a column whose
+-- purpose is to record a decision" defect ADR §0.3 names.
+--
+-- TEXT rather than a Postgres enum, for the same reason `seed_source` is TEXT:
+-- §0.1 is a LADDER that gains rungs, and each new rung already requires code (a
+-- derivation branch + the UI's copy), so an enum would add a migration to a
+-- change that is a code change either way — and a second place for the two to
+-- drift. The signal drives no behaviour (unlike `role`, which selects the seed
+-- source and resolves repo pins); the closed union in `lib/dto/projectRepos.ts`,
+-- `PROJECT_REPO_PROPOSAL_SIGNALS`, and `projectRepoSetService.addRow`'s
+-- validation are what keep the column from holding a rung the ADR does not name.
+--
+-- No RLS change: the column joins an EXISTING workspace-scoped table whose
+-- `project_repository_active_workspace` policy is FOR ALL and predicates on
+-- `workspace_id`, so it is covered the moment it exists. No index either — the
+-- column is explanatory metadata that nothing filters or joins on.
+
+-- AlterTable
+ALTER TABLE "project_repository" ADD COLUMN     "proposal_signal" TEXT;

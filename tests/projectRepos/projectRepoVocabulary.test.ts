@@ -2,12 +2,14 @@ import { ProjectRepoRole, ProjectRepoState } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   ESTABLISHED_PROJECT_REPO_STATES,
+  PROJECT_REPO_PROPOSAL_SIGNALS,
   PROJECT_REPO_ROLES,
   PROJECT_REPO_STATES,
   SEED_SOURCE_INITIALISED,
   SEED_SOURCE_PLATFORM_STARTER,
   defaultSeedSourceForRole,
   isEstablishedState,
+  isProjectRepoProposalSignal,
 } from '@/lib/projectRepos/vocabulary';
 import {
   PROJECT_REPO_TRANSITIONS,
@@ -37,6 +39,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     seedSource: SEED_SOURCE_PLATFORM_STARTER,
     state: 'created',
     failureReason: null,
+    proposalSignal: null,
     githubRepoId: 'gr-1',
     position: 'a0',
     createdAt: now,
@@ -117,6 +120,31 @@ describe('the ADR §2 seeding table', () => {
   it('gives every role in the vocabulary a default (the map is total)', () => {
     for (const role of PROJECT_REPO_ROLES) {
       expect(defaultSeedSourceForRole(role).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('the ADR §0.1 derivation-signal vocabulary (MOTIR-1892)', () => {
+  it('is exactly the rungs the ADR names, in ladder order — no invented signals', () => {
+    // The persisted column is what the establish step maps to copy, so this list
+    // and §0.1 are the same list. A value here the ADR does not name is a rung
+    // nobody decided; a rung missing here cannot be recorded at all.
+    expect(PROJECT_REPO_PROPOSAL_SIGNALS).toEqual([
+      'plan-item-role',
+      'preplan-platform',
+      'default-web',
+    ]);
+  });
+
+  it('admits every listed signal and rejects anything else', () => {
+    for (const signal of PROJECT_REPO_PROPOSAL_SIGNALS) {
+      expect(isProjectRepoProposalSignal(signal)).toBe(true);
+    }
+    // Absence is legal at the COLUMN (a user-added row records null) but is not a
+    // signal, so the guard itself must say no — the service is what maps
+    // null/undefined to "no inference".
+    for (const other of ['', 'vibes', 'plan_item_role', 'PLAN-ITEM-ROLE', null, undefined, 0]) {
+      expect(isProjectRepoProposalSignal(other)).toBe(false);
     }
   });
 });

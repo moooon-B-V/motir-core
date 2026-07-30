@@ -14,6 +14,7 @@ import {
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
 import {
+  PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_SOURCE_INITIALISED,
   SEED_SOURCE_PLATFORM_STARTER,
 } from '@/lib/projectRepos/vocabulary';
@@ -199,6 +200,119 @@ describe('a project repository SET', () => {
       fx.ctx,
     );
     expect(row.label).toBeNull();
+  });
+});
+
+// ── WHY a row is there, PERSISTED (MOTIR-1892) ─────────────────────────────
+
+describe('the derivation signal a row records', () => {
+  it('persists the signal Motir derived, and SURVIVES a re-read of the set', async () => {
+    // The whole point of the column: the proposer runs once, so the signal has to
+    // come back from the DATABASE on a later page load, not from the run's own
+    // return value. Read through `listByProject`, whose hand-written SELECT is
+    // exactly where a new column silently goes missing.
+    const fx = await makeWorkItemFixture();
+    const created = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme', proposalSignal: 'preplan-platform' },
+      fx.ctx,
+    );
+    expect(created.proposalSignal).toBe('preplan-platform');
+
+    const [listed] = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
+    expect(listed!.proposalSignal).toBe('preplan-platform');
+    const set = await projectRepoSetService.getSet(fx.projectId, fx.ctx);
+    expect(set.rows[0]!.proposalSignal).toBe('preplan-platform');
+  });
+
+  it('records NULL for a row the USER added — there is no inference to explain', async () => {
+    const fx = await makeWorkItemFixture();
+    const row = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
+      fx.ctx,
+    );
+    expect(row.proposalSignal).toBeNull();
+    expect(
+      (await projectRepoSetService.listByProject(fx.projectId, fx.ctx))[0]!.proposalSignal,
+    ).toBeNull();
+    // NULL in the DB, not the string "null" or an empty string — a consumer
+    // branches on absence.
+    const persisted = await db.projectRepo.findUnique({ where: { id: row.id } });
+    expect(persisted!.proposalSignal).toBeNull();
+  });
+
+  it('treats an EXPLICIT null the same as omitting it — absence has one meaning', async () => {
+    // A caller that spreads a partially-filled object writes `null`, not
+    // `undefined`; both mean "nothing inferred this row", and neither is an
+    // unknown value to reject.
+    const fx = await makeWorkItemFixture();
+    const row = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme', proposalSignal: null as never },
+      fx.ctx,
+    );
+    expect(row.proposalSignal).toBeNull();
+  });
+
+  it('REJECTS a signal outside ADR §0.1s ladder, and writes nothing', async () => {
+    // The column is what the establish step maps to copy, so an unmappable value
+    // is a bug to reject at the write rather than discover at render.
+    const fx = await makeWorkItemFixture();
+    await expect(
+      projectRepoSetService.addRow(
+        fx.projectId,
+        { role: 'web', name: 'acme', proposalSignal: 'vibes' as never },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(ProjectRepoInvalidFieldError);
+    expect(await projectRepoSetService.listByProject(fx.projectId, fx.ctx)).toEqual([]);
+  });
+
+  it('accepts EVERY rung the ADR names — the vocabulary and the column agree', async () => {
+    const fx = await makeWorkItemFixture();
+    for (const [i, signal] of PROJECT_REPO_PROPOSAL_SIGNALS.entries()) {
+      const row = await projectRepoSetService.addRow(
+        fx.projectId,
+        { role: 'other', name: `acme-${i}`, proposalSignal: signal },
+        fx.ctx,
+      );
+      expect(row.proposalSignal).toBe(signal);
+    }
+  });
+
+  it('SURVIVES the user editing the row — the signal records what Motir inferred, not what the row now says', async () => {
+    // A rename is a decision about the repo; it is not a claim that Motir never
+    // inferred anything. Clearing the signal here would erase the history the
+    // column exists to keep.
+    const fx = await makeWorkItemFixture();
+    const row = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme-web', proposalSignal: 'plan-item-role' },
+      fx.ctx,
+    );
+    const patched = await projectRepoSetService.patchRow(
+      row.id,
+      { name: 'acme-frontend', role: 'other' },
+      fx.ctx,
+    );
+    expect(patched.proposalSignal).toBe('plan-item-role');
+  });
+
+  it('SURVIVES the establish machine — a row that becomes real still says why it was proposed', async () => {
+    const fx = await makeWorkItemFixture();
+    const row = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme-web', proposalSignal: 'default-web' },
+      fx.ctx,
+    );
+    const creating = await projectRepoSetService.markCreating(row.id, fx.ctx);
+    expect(creating.proposalSignal).toBe('default-web');
+
+    const repo = await connectRepo(fx.workspaceId, 'acme-web');
+    const realized = await projectRepoSetService.attachRealizedRepo(row.id, repo.id, fx.ctx);
+    expect(realized.state).toBe('created');
+    expect(realized.proposalSignal).toBe('default-web');
   });
 });
 
