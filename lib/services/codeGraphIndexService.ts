@@ -27,8 +27,16 @@ import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 // workspace → its `organizationId` → ALL its projects, and calls motir-ai ONCE
 // PER PROJECT with the SAME tarball bytes. A repo installed at a workspace is
 // therefore indexed into each of that workspace's projects' code-graph stores.
-// A precise repo↔project association (to avoid indexing a repo into unrelated
-// projects) is a future refinement — deliberately NOT built here.
+//
+// The precise repo↔project association this fan-out wanted NOW EXISTS
+// (MOTIR-1780): `project_repository` is a project's repository SET, one row per
+// intended repo, each carrying the realized `GithubRepo` it maps to — read it via
+// `projectRepoSetService.getSet` / `listByProject`. This service is DELIBERATELY
+// still workspace-scoped: narrowing the fan-out is a behaviour change to shipped,
+// working code-graph plumbing, and it belongs to MOTIR-1754 (the BYOK code-index
+// loop), which owns per-repo index freshness end to end. So the association is no
+// longer missing — only unadopted here, and by whom is recorded. Do not read this
+// paragraph as an invitation to fix it in passing.
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
 // transaction (RLS-safe under the trusted-writer escape, like the webhook); the
