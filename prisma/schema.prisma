@@ -498,8 +498,17 @@ model Organization {
   /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
   acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
 
-  memberships OrganizationMembership[]
-  workspaces  Workspace[]
+  memberships         OrganizationMembership[]
+  workspaces          Workspace[]
+  // CI-minutes consumption attributed to this org (Story MOTIR-1775 ·
+  // MOTIR-1896). The org is the tier the POOL and the credit ledger are held at
+  // (`ci-minutes-allowance.md` §4.1), so both metering tables carry it
+  // denormalized — that is what makes "how many minutes has org X used this
+  // period?" one indexed read for the allowance sibling (MOTIR-1901) instead of
+  // a join through every workspace. Cascade: an org's consumption history is
+  // meaningless without the org.
+  ciWorkflowRunUsages CiWorkflowRunUsage[]
+  ciPeriodUsages      CiPeriodUsage[]
 
   @@map("organization")
 }
@@ -612,6 +621,12 @@ model Workspace {
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos             ProjectRepo[]
+  // Metered CI consumption — the per-run audit rows and the per-period rollup
+  // (Story MOTIR-1775 · MOTIR-1896). Workspace-scoped tenant data (the
+  // workspace_id + RLS contract) even though the POOL is resolved per org, so a
+  // tenant can never read another's consumption. Cascade with the workspace.
+  ciWorkflowRunUsages      CiWorkflowRunUsage[]
+  ciPeriodUsages           CiPeriodUsage[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -873,6 +888,13 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                  ProjectRepo[]
+  // Metered CI runs attributed to this project (Story MOTIR-1775 · MOTIR-1896).
+  // SetNull, NOT Cascade: the run rows are a spend AUDIT, and Motir was really
+  // billed for those minutes whether or not the project still exists — deleting
+  // them with the project would erase real cost. `ci-minutes-allowance.md` §5.4
+  // makes the same call for the live case (a Motir-org repo whose project was
+  // deleted is "metered as a cost, charged to nobody, and LOGGED").
+  ciWorkflowRunUsages    CiWorkflowRunUsage[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3636,14 +3658,20 @@ model GithubRepo {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  installation GithubInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
-  pullRequests GithubPullRequest[]
+  installation        GithubInstallation   @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  pullRequests        GithubPullRequest[]
+  /// Metered CI runs on this repo (Story MOTIR-1775 · MOTIR-1896). SetNull, like
+  /// `ProjectRepo.githubRepoId`: disconnecting the repo must not delete the
+  /// record that Motir paid for its compute. The row keeps `repoOwner`/`repoName`
+  /// — the identity GitHub actually bills against — so the audit survives the
+  /// mirror row entirely.
+  ciWorkflowRunUsages CiWorkflowRunUsage[]
   /// The project-repo-set row this connected repo REALIZES, if any (MOTIR-1780).
   /// At most one — a repo created for project A can never be recorded as project
   /// B's (`ProjectRepo.githubRepoId` is `@unique`). Back-relation of a SetNull FK:
   /// disconnecting this repo leaves the set row with a null realized repo, not a
   /// deleted plan.
-  projectRepo  ProjectRepo?
+  projectRepo         ProjectRepo?
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -4123,41 +4151,41 @@ enum PlanChangeTurnRole {
 /// `@relation`s on BOTH sides with the same actions the SQL uses (the
 /// FK-`@relation` rule), so `migrate dev` reports no drift.
 model ProjectRepo {
-  id            String           @id @default(cuid())
-  workspaceId   String           @map("workspace_id")
-  projectId     String           @map("project_id")
+  id             String           @id @default(cuid())
+  workspaceId    String           @map("workspace_id")
+  projectId      String           @map("project_id")
   /// WHAT this repository is (ADR §1.1) — a fixed six-value enum, because the role
   /// drives real behaviour: it selects what the repo is seeded from (§2) and it is
   /// the key a work item's repo pin resolves through (§5). An open string could do
   /// neither without a lookup table that would be this enum, less safely.
   /// A role MAY repeat (§1.2) — two services are two `api` rows.
-  role          ProjectRepoRole
+  role           ProjectRepoRole
   /// The free-form label the enum deliberately does not carry (ADR §1.1) — `api` +
   /// "billing" versus `api` + "search". Distinguishes repeated roles for a human;
   /// never a resolution key (an ambiguous role resolves to null, §5.3, rather than
   /// being disambiguated by a label nobody validated).
-  label         String?
+  label          String?
   /// The INTENDED repo name, editable per row until the row is established (ADR
   /// §1.4/§1.5). Unique per project (see `@@unique`). Once realized this is still
   /// the authored intent — the authoritative checkout name is the realized repo's
   /// own `name`, which is what the read layer prefers (a rename on the host must
   /// not silently re-point a dispatch).
-  name          String
+  name           String
   /// WHAT the repo is seeded from (ADR §2), recorded as a STRING, not a boolean or
   /// a two-value enum: when the multi-stack starter registry lands (MOTIR-709 /
   /// 9.3.5) a row's seed source becomes a registry key and §2's table becomes its
   /// default map — no migration, no second code path. Values today come from
   /// `lib/projectRepos/vocabulary.ts`.
-  seedSource    String           @map("seed_source")
+  seedSource     String           @map("seed_source")
   /// The per-row ESTABLISH state (ADR §4.1). Rows are INDEPENDENT: one may fail or
   /// be skipped while the others succeed, and nothing is rolled back (a created
   /// repository is a real artifact in the user's own account — §4.2). `failed` is
   /// RESUMABLE, not terminal.
-  state         ProjectRepoState @default(proposed)
+  state          ProjectRepoState @default(proposed)
   /// Why a `failed` row failed, so partial establishment is RECORDED rather than
   /// inferred (revoked token, not an org admin, name collision, template policy,
   /// rate limit). Null in every other state; cleared on a retry.
-  failureReason String?          @map("failure_reason")
+  failureReason  String?          @map("failure_reason")
   /// WHY Motir proposed this row — the ADR §0.1 rung the derivation climbed to
   /// (MOTIR-1892), so the establish step can show what was inferred on a LATER
   /// page load and a wrong proposal is arguable rather than mysterious. Without
@@ -4182,7 +4210,7 @@ model ProjectRepo {
   /// Only the machine-readable SIGNAL is stored, never the derivation's English
   /// `reason`: that gloss is a log/PR fallback and is not a localized string, so
   /// persisting it would put untranslated prose on a rendered surface.
-  proposalSignal String?         @map("proposal_signal")
+  proposalSignal String?          @map("proposal_signal")
   /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.
@@ -4196,16 +4224,16 @@ model ProjectRepo {
   /// realized repo and its state still reading honestly. A disconnected repo is
   /// not a lost plan — the role + name + seed source survive so the row can be
   /// re-established.
-  githubRepoId  String?          @unique @map("github_repo_id")
+  githubRepoId   String?          @unique @map("github_repo_id")
   /// ORDER within the set, and it is MEANINGFUL: the first row is the project's
   /// PRIMARY repo (ADR §1.3) — what a single-repo project's one row is, and the
   /// deterministic tie-break anywhere the set needs one. Order carries NO dispatch
   /// meaning; an item is never routed by position. A fractional index (the same
   /// `String @db.Text` + `lib/workItems/positioning` scheme as `work_item` /
   /// `board_column`), so a row is reordered with one write.
-  position      String           @db.Text
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
+  position       String           @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -4219,6 +4247,161 @@ model ProjectRepo {
   @@index([workspaceId])
   @@index([projectId])
   @@map("project_repository")
+}
+
+/// ONE completed GitHub Actions workflow run whose compute MOTIR PAID FOR (Story
+/// MOTIR-1775 · MOTIR-1896) — the per-run AUDIT row of the CI-minutes meter
+/// (`docs/decisions/ci-minutes-allowance.md`).
+///
+/// Motir hosts every repository it creates for a new project in its own GitHub
+/// org (ADR §Context, after the MOTIR-1893 amendment), and private-repo Actions
+/// minutes bill to the REPOSITORY OWNER — so from the first `motir run` onward
+/// Motir pays for those users' CI. This table is the measurement: what ran, how
+/// long, on which runner, at which price ratio, and which tenant it belongs to.
+///
+/// This table MEASURES and STORES. It debits no credits, reads no balance and
+/// refuses no dispatch — that is MOTIR-1901's job, and the seam between them is
+/// ONE read (`ciMinutesMeterService.getOrgPeriodConsumption`).
+///
+/// ⚠️ IDEMPOTENCY is the `@@unique([runId, runAttempt])` index (ADR §5.8). A
+/// webhook delivery can repeat — GitHub retries, and a redelivery is routine —
+/// and a run counted twice would bill a user for compute that ran once. The
+/// ATTEMPT is part of the key, not incidental: a re-run is a new attempt that
+/// GitHub bills AGAIN, so it must meter again. The unique index is the real
+/// guard (a pre-read races); the service catches its P2002 and reports
+/// `duplicate` without touching the period rollup.
+///
+/// ⚠️ EVERY QUANTITY IS RE-DERIVABLE, so a repricing needs no backfill (§3.3):
+/// the raw wall clock, the billable (per-job `ceil`) minutes, the runner
+/// breakdown and the MULTIPLIER APPLIED are all stored. A future rate change
+/// adds an effective-dated entry and never rewrites what was already counted.
+///
+/// Workspace-scoped tenant data: `workspace_id` is non-null and the RLS policy
+/// ships in the SAME migration (PRODECT_FINDINGS #20 — no unguarded window),
+/// with the `app.system_admin` escape the webhook path needs (it has no active
+/// workspace), mirroring `github_repo`.
+model CiWorkflowRunUsage {
+  id             String  @id @default(cuid())
+  /// Provider discriminator — always "github" today. ADR §5.6: Motir creates no
+  /// GitLab repositories, so there is no GitLab compute it pays for. The column
+  /// exists so that stays a recorded fact rather than an assumption baked into
+  /// the table's shape.
+  provider       String  @default("github")
+  workspaceId    String  @map("workspace_id")
+  /// The org the POOL and the credit ledger are keyed by (§4.1), DENORMALIZED so
+  /// the allowance sibling's "used this period" question is one indexed read.
+  organizationId String  @map("organization_id")
+  /// The attributed project — NULLABLE and SetNull. A Motir-org repo whose
+  /// project was deleted is still real spend (§5.4: "metered as a cost, charged
+  /// to nobody, and LOGGED"), and silence there would hide it.
+  projectId      String? @map("project_id")
+  /// The connected-repo mirror row this run belongs to — nullable + SetNull, so
+  /// disconnecting a repo never deletes the record that Motir paid for it.
+  githubRepoId   String? @map("github_repo_id")
+
+  /// GitHub's own workflow-run id (as a string — never do math on it).
+  runId        String  @map("run_id")
+  /// The run ATTEMPT. A re-run bills again, so it is part of the idempotency key.
+  runAttempt   Int     @map("run_attempt")
+  /// The repository owner AS THE RUN REPORTED IT (§5.5) — never copied from the
+  /// mirror, which can hold a pre-transfer owner. This is the identity GitHub
+  /// bills against, and it is what the §5.1 gate matched on, so the row records
+  /// WHY it was metered.
+  repoOwner    String  @map("repo_owner")
+  repoName     String  @map("repo_name")
+  workflowName String? @map("workflow_name")
+
+  /// The calendar-month period this run counts in — midnight UTC on the 1st
+  /// (§4.5). A PURE function of `runCompletedAt`, so the meter keys a row
+  /// without reading any billing state, and the bucket never moves.
+  periodStart    DateTime @map("period_start")
+  /// When the run completed — the period key AND the effective-date the runner
+  /// rates were resolved at (§3.3).
+  runCompletedAt DateTime @map("run_completed_at")
+
+  /// Σ ceil(per-JOB wall-clock minutes) — what GitHub bills, before
+  /// normalization. Per-job rounding up is not optional (§5.8): jobs run in
+  /// parallel, so the run's own wall clock would badly undercount a 4-job suite.
+  billableMinutes         Int     @map("billable_minutes")
+  /// Σ raw job durations in seconds, UN-rounded — the audit trail that makes a
+  /// later re-pricing a recomputation rather than a backfill (§3.3).
+  rawWallClockSeconds     Decimal @map("raw_wall_clock_seconds") @db.Decimal(12, 2)
+  /// The METERED quantity: Σ (billable minutes × the runner's price ratio). The
+  /// pool is denominated in these (§3.1). Decimal, never Float — these are
+  /// summed into a period total that a credit charge is derived from, and
+  /// binary-float drift has no place there.
+  linearEquivalentMinutes Decimal @map("linear_equivalent_minutes") @db.Decimal(12, 2)
+  jobCount                Int     @map("job_count")
+  /// Per-runner-family breakdown: family, the multiplier APPLIED, billable
+  /// minutes, raw seconds, job count, and whether the family was unpriced (the
+  /// §3.4 ×1.00 fallback). JSON rather than a child table — it is an explanatory
+  /// audit payload nothing filters or joins on.
+  runnerBreakdown         Json    @map("runner_breakdown")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+
+  /// The idempotency guarantee (§5.8) — a run reported twice counts once, and a
+  /// RE-RUN (a new attempt) counts again.
+  @@unique([runId, runAttempt])
+  @@index([workspaceId])
+  @@index([organizationId, periodStart])
+  @@index([projectId])
+  @@map("ci_workflow_run_usage")
+}
+
+/// The PER-PERIOD consumption rollup (Story MOTIR-1775 · MOTIR-1896) — the row
+/// the allowance sibling (MOTIR-1901) reads to answer "how many
+/// Linux-equivalent minutes has org X used this period?".
+///
+/// WHY a rollup at all: the ADR's acceptance is that the question is "a single
+/// indexed read rather than a scan-and-sum over all history". Summing
+/// `ci_workflow_run_usage` would grow without bound — one row per PR run,
+/// forever — while this table holds at most one row per (workspace, month).
+/// The per-run rows stay for audit; this is the hot read.
+///
+/// KEYED BY WORKSPACE, summed by ORG. The pool is org-level (§4.1) but an org
+/// can hold several workspaces, and this table follows the workspace-scoped
+/// tenancy contract like every other tenant table. The org read is therefore a
+/// SUM over that org's rows for one period — bounded by the org's workspace
+/// count (small) and served entirely by `@@index([organizationId, periodStart])`,
+/// so it is still one indexed query, never a history scan.
+///
+/// The rollup is incremented IN THE SAME TRANSACTION as the run row that feeds
+/// it, so the two can never disagree: a duplicate delivery fails the run row's
+/// unique index and the increment rolls back with it.
+model CiPeriodUsage {
+  id             String @id @default(cuid())
+  workspaceId    String @map("workspace_id")
+  organizationId String @map("organization_id")
+
+  /// Midnight UTC on the 1st of the calendar month (§4.5).
+  periodStart DateTime @map("period_start")
+
+  /// The pool-denominated total — what the allowance is measured against.
+  linearEquivalentMinutes Decimal @default(0) @map("linear_equivalent_minutes") @db.Decimal(14, 2)
+  /// The un-normalized billable total, kept alongside so a repricing can be
+  /// checked against the raw (§3.3) and so the monthly reconciliation has a
+  /// like-for-like figure to compare with GitHub's own report (§5.8).
+  billableMinutes         Int     @default(0) @map("billable_minutes")
+  rawWallClockSeconds     Decimal @default(0) @map("raw_wall_clock_seconds") @db.Decimal(14, 2)
+  runCount                Int     @default(0) @map("run_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// One rollup row per workspace per period — the upsert target.
+  @@unique([workspaceId, periodStart])
+  /// The org's "used this period" read (§Consequences, MOTIR-1901's one input).
+  @@index([organizationId, periodStart])
+  @@map("ci_period_usage")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).

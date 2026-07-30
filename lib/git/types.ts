@@ -88,6 +88,63 @@ export interface NormalizedPushEvent {
   headSha: string | null;
 }
 
+/** A completed CI workflow run, normalized across providers — consumed by the
+ *  CI-minutes meter (Story MOTIR-1775 · MOTIR-1896). DISTINCT from
+ *  `NormalizedStatusEvent`, which is the *verification* signal (did CI pass?)
+ *  and deliberately carries no timing: this one is the *billing* signal (how
+ *  much compute did it consume, and who owns the repo that pays for it?).
+ *
+ *  `repoOwner` is read from the RUN's own payload rather than the stored mirror
+ *  — `docs/decisions/ci-minutes-allowance.md` §5.5: the owner login is what
+ *  GitHub bills on and what flips at a repo transfer, while the mirror row can
+ *  be briefly stale. `attempt` is part of the idempotency key because a RE-RUN
+ *  is a new attempt that bills again (§5.8). */
+export interface NormalizedWorkflowRunEvent {
+  providerRepoId: string;
+  /** The host's own workflow-run id (as a string — never do math on it). */
+  runId: string;
+  /** The run attempt; a re-run increments it and bills again. */
+  attempt: number;
+  repoOwner: string;
+  repoName: string;
+  /** The workflow's display name, for the audit trail. */
+  workflowName: string | null;
+  /** When the run completed — the period key (§4.5) AND the effective-date the
+   *  runner rates resolve at (§3.3). */
+  completedAt: Date;
+}
+
+/** One job of a completed workflow run, normalized across providers. The meter
+ *  bills PER JOB, rounded up (§5.8), so this is the unit it reads — not the run
+ *  as a whole, whose wall clock would undercount parallel jobs. */
+export interface NormalizedWorkflowJob {
+  id: string;
+  name: string;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  /** The runner labels the host reports (`["ubuntu-latest"]`) — what the
+   *  cost-normalization multiplier is resolved from. */
+  labels: string[];
+}
+
+/** One line of a host's billing usage report, normalized — the MONTHLY
+ *  RECONCILIATION source (§5.8). GitHub's per-run `/timing` endpoint and its
+ *  product-specific billing API are both closing down, so the audit path is the
+ *  enhanced-billing usage endpoint, which is summarised by SKU/repo/day and
+ *  carries no per-run detail. That is enough to reconcile, never enough to
+ *  meter — which is why the webhook path is the operational meter. */
+export interface NormalizedComputeUsageLine {
+  /** The repository the minutes were consumed by, as the host reports it. */
+  repositoryName: string;
+  /** The host's SKU label (e.g. "Actions Linux") — the runner family hint. */
+  sku: string;
+  /** Quantity in the host's own unit (minutes for Actions SKUs). */
+  quantity: number;
+  unitType: string;
+  /** The usage day, as reported. */
+  date: string;
+}
+
 /** A short-lived installation access token, minted on demand and cached
  *  in-memory only — NEVER persisted (the card's hard requirement). */
 export interface InstallationToken {

@@ -6,10 +6,13 @@ import type {
   CiConclusion,
   InstallationToken,
   NormalizedChangeRequest,
+  NormalizedComputeUsageLine,
   NormalizedInstallation,
   NormalizedPushEvent,
   NormalizedRepo,
   NormalizedStatusEvent,
+  NormalizedWorkflowJob,
+  NormalizedWorkflowRunEvent,
 } from '../types';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
@@ -269,7 +272,179 @@ export const githubProvider: GitProvider = {
       headSha: typeof after === 'string' && after.length > 0 ? after : null,
     };
   },
+
+  // --- CI-minutes metering (Story MOTIR-1775 · MOTIR-1896) -------------------
+  // GitHub is the only provider that implements these; see the capability note
+  // on the `GitProvider` interface and `ci-minutes-allowance.md` §5.6.
+
+  parseWorkflowRunEvent(rawPayload: unknown): NormalizedWorkflowRunEvent | null {
+    const payload = asRecord(rawPayload);
+    if (!payload) return null;
+    // Only a COMPLETED run is metered (§5.7 — the predicate is evaluated at run
+    // completion, which is what makes the transfer edge need no special case).
+    // `requested` / `in_progress` deliveries carry no billable duration.
+    if (payload['action'] !== 'completed') return null;
+
+    const run = asRecord(payload['workflow_run']);
+    const repo = asRecord(payload['repository']);
+    if (!run || !repo) return null;
+
+    const providerRepoId = idToString(repo['id']);
+    const runId = idToString(run['id']);
+    // The repo OWNER comes from the run delivery's own `repository.owner.login`
+    // — §5.5: never the stored mirror, which can hold a pre-transfer owner.
+    const repoOwner =
+      typeof asRecord(repo['owner'])?.['login'] === 'string'
+        ? (asRecord(repo['owner'])!['login'] as string)
+        : null;
+    const repoName = typeof repo['name'] === 'string' ? repo['name'] : null;
+    if (!providerRepoId || !runId || !repoOwner || !repoName) return null;
+
+    // `run_attempt` is part of the idempotency key: a re-run is a NEW attempt
+    // that GitHub bills again, so it must meter again (§5.8). A payload without
+    // one is attempt 1.
+    const rawAttempt = run['run_attempt'];
+    const attempt =
+      typeof rawAttempt === 'number' && Number.isInteger(rawAttempt) && rawAttempt > 0
+        ? rawAttempt
+        : 1;
+
+    // `updated_at` is the completion instant on a `completed` delivery; fall
+    // back to `run_started_at` only if it is missing, and refuse the delivery
+    // when neither parses — a run with no usable instant cannot be assigned a
+    // period (§4.5) or a rate effective-date (§3.3), and guessing one would
+    // silently misfile real spend.
+    const completedAt = parseDate(run['updated_at']) ?? parseDate(run['run_started_at']);
+    if (!completedAt) return null;
+
+    return {
+      providerRepoId,
+      runId,
+      attempt,
+      repoOwner,
+      repoName,
+      workflowName: typeof run['name'] === 'string' ? run['name'] : null,
+      completedAt,
+    };
+  },
+
+  async fetchWorkflowRunJobs(
+    installationId: string,
+    owner: string,
+    name: string,
+    runId: string,
+    attempt: number,
+  ): Promise<NormalizedWorkflowJob[]> {
+    const { token } = await mintInstallationToken(installationId);
+    // The ATTEMPT-scoped jobs endpoint, so a re-run reads only its OWN jobs —
+    // `/runs/{id}/jobs` would return every attempt's jobs and double-count.
+    //
+    // Deliberately NOT `/runs/{id}/timing`: that endpoint returns `billable` per
+    // OS directly and would be the obvious read, but GitHub has it "in the
+    // process of closing down" (§5.8), as it does the product-specific billing
+    // API. `/jobs` is not deprecated and carries `started_at`, `completed_at`
+    // and `labels` — everything the normalization needs.
+    const url =
+      `${GITHUB_API}/repos/${owner}/${name}/actions/runs/${runId}` +
+      `/attempts/${attempt}/jobs?per_page=100`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+      });
+    } catch (err) {
+      throw new Error(
+        `GitHub workflow-jobs endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
+      );
+    }
+    if (!res.ok) throw new Error(`GitHub workflow-jobs endpoint returned ${res.status}`);
+    const body = asRecord(await res.json());
+    const list = Array.isArray(body?.['jobs']) ? (body!['jobs'] as unknown[]) : [];
+    return list
+      .map(normalizeWorkflowJob)
+      .filter((job): job is NormalizedWorkflowJob => job !== null);
+  },
+
+  async fetchOrgComputeUsage(
+    org: string,
+    year: number,
+    month: number,
+    token: string,
+  ): Promise<NormalizedComputeUsageLine[]> {
+    // The ENHANCED-BILLING usage endpoint — the replacement for the closing-down
+    // product-specific billing API (§5.8). Summarised by SKU/repo/day, which is
+    // enough to RECONCILE and never enough to meter.
+    const url = `${GITHUB_API}/organizations/${org}/settings/billing/usage?year=${year}&month=${month}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+      });
+    } catch (err) {
+      throw new Error(
+        `GitHub billing-usage endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
+      );
+    }
+    if (!res.ok) throw new Error(`GitHub billing-usage endpoint returned ${res.status}`);
+    const body = asRecord(await res.json());
+    const items = Array.isArray(body?.['usageItems']) ? (body!['usageItems'] as unknown[]) : [];
+    return items
+      .map(normalizeUsageLine)
+      .filter((line): line is NormalizedComputeUsageLine => line !== null);
+  },
 };
+
+/** Parse a GitHub ISO-8601 timestamp, or null when absent / unparseable. */
+function parseDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Normalize one entry of the workflow-jobs listing. A job with no id/name is
+ *  unusable; one with no timestamps still normalizes (the meter skips it, which
+ *  keeps "why did this run meter nothing?" answerable from the job list). */
+function normalizeWorkflowJob(value: unknown): NormalizedWorkflowJob | null {
+  const job = asRecord(value);
+  if (!job) return null;
+  const id = idToString(job['id']);
+  if (!id) return null;
+  const labels = Array.isArray(job['labels'])
+    ? (job['labels'] as unknown[]).filter((l): l is string => typeof l === 'string')
+    : [];
+  return {
+    id,
+    name: typeof job['name'] === 'string' ? job['name'] : 'job',
+    startedAt: parseDate(job['started_at']),
+    completedAt: parseDate(job['completed_at']),
+    labels,
+  };
+}
+
+/** Normalize one `usageItems[]` entry of the enhanced-billing report. */
+function normalizeUsageLine(value: unknown): NormalizedComputeUsageLine | null {
+  const item = asRecord(value);
+  if (!item) return null;
+  const repositoryName = typeof item['repositoryName'] === 'string' ? item['repositoryName'] : null;
+  const sku = typeof item['sku'] === 'string' ? item['sku'] : null;
+  const quantity = typeof item['quantity'] === 'number' ? item['quantity'] : null;
+  if (repositoryName === null || sku === null || quantity === null) return null;
+  return {
+    repositoryName,
+    sku,
+    quantity,
+    unitType: typeof item['unitType'] === 'string' ? item['unitType'] : 'unknown',
+    date: typeof item['date'] === 'string' ? item['date'] : '',
+  };
+}
 
 /** Extract the associated PR/MR numbers from a check payload's `pull_requests`
  *  array (each entry is `{ number, ... }`), deduped. Empty when absent. */
