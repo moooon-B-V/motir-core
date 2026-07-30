@@ -848,36 +848,6 @@
         color: var(--el-text-eyebrow);
       }
       /* Segmented (packages/design-system/src/components/ui/Segmented.tsx) */
-      .seg {
-        display: inline-flex;
-        align-self: flex-start;
-        align-items: center;
-        gap: 2px;
-        border-radius: var(--radius-btn);
-        border: 1px solid var(--el-border);
-        background: var(--el-tabnav-track);
-        padding: 2px;
-      }
-      .seg > span {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: var(--height-control);
-        padding-inline: var(--spacing-control-x);
-        border-radius: calc(var(--radius-btn) - 2px);
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--el-text-secondary);
-        white-space: nowrap;
-      }
-      .seg > span.on {
-        background: var(--el-page-bg);
-        color: var(--el-text-strong);
-        box-shadow: var(--shadow-subtle);
-      }
-      .seg > span.on svg {
-        color: var(--el-tabnav-active);
-      }
       .step-head h3 {
         margin: 0;
         font-family: ui-serif, Georgia, serif;
@@ -967,6 +937,11 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      /* the row's ONE mode action — a single secondary, never a two-way control */
+      .row-main > .quiet-link {
+        align-self: flex-start;
+        margin-top: 2px;
       }
       .row-meta {
         display: flex;
@@ -1102,21 +1077,57 @@
         font-size: 12px;
         color: var(--el-text-muted);
       }
-      /* claimable callout — the no-GitHub path */
-      .claim {
+      /* the OWNERSHIP PROMISE — on the main line, never a footnote (MOTIR-1785
+         asserts a reviewer can SEE it). A standing guarantee, so it is a quiet
+         surface, not a severity tint. */
+      .promise {
         display: flex;
         gap: 10px;
         align-items: flex-start;
+        align-self: flex-start;
         border-radius: var(--radius-card);
-        background: var(--el-warning-surface);
-        color: var(--el-warning-text);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
         padding: 12px 14px;
-        font-size: 13px;
+        font-size: 14px;
         line-height: 1.5;
+        color: var(--el-text);
       }
-      .claim svg {
+      .promise svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .promise .door {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      /* per-row COLLABORATOR-INVITATION state (MOTIR-1900) — a sub-state OF a
+         created row, never a row tint of its own */
+      .inv {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .inv > .word {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .inv.pending svg {
+        color: var(--el-info);
+      }
+      .inv.ok svg {
+        color: var(--el-success);
+      }
+      .inv.none svg {
         color: var(--el-warning);
-        margin-top: 1px;
       }
       /* Combobox trigger (connect-existing picker) */
       .combo {
@@ -1198,8 +1209,8 @@
       /* the access-path flow strip */
       .flow {
         display: grid;
-        grid-template-columns: 1fr auto 1fr auto 1fr;
-        gap: 12px;
+        grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+        gap: 10px;
         align-items: center;
       }
       .flow .arrow {
@@ -1250,6 +1261,22 @@
   <body>
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
+        <symbol id="i-mail" viewBox="0 0 24 24">
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </symbol>
+        <symbol id="i-user-plus" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" x2="19" y1="8" y2="14" />
+          <line x1="22" x2="16" y1="11" y2="11" />
+        </symbol>
+        <symbol id="i-badge-check" viewBox="0 0 24 24">
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
         <symbol id="i-circle-check-big" viewBox="0 0 24 24">
           <path d="M21.801 10A10 10 0 1 1 17 3.335" />
@@ -1378,11 +1405,16 @@
         <h1>Where should your code live? — the step at plan approval</h1>
         <p>
           MOTIR-1778 · Story MOTIR-1775. The step that gives an approved plan somewhere for its code
-          to live. <b>Motir hosts it by default</b>, in one sentence, because the person answering
-          is a founder and not a developer — and the repository detail (names, roles, per-row state)
-          exists only for the user who explicitly says they already have code. Grounded in the
-          accepted ADR <code class="mono">docs/decisions/project-repository-set.md</code>; the
-          surface it lands in was rendered from a production build before anything was drawn.
+          to live. <b>Motir hosts it — always, for everyone</b>, in one sentence, because the person
+          answering is a founder and not a developer. Because those repositories are private and
+          under Motir's org, the main line then continues into
+          <b>getting the user access to their own code</b> (MOTIR-1900) — that is the flow that
+          exists today, so it is drawn as the main line. The repository detail (names, roles,
+          per-row state) exists only for the user who explicitly says they already have code.
+          Grounded in the accepted ADR
+          <code class="mono">docs/decisions/project-repository-set.md</code> and its
+          <b>2026-07-30 amendment</b> (MOTIR-1893, repos are always Motir-owned); the surface it
+          lands in was rendered from a production build before anything was drawn.
         </p>
       </header>
 
@@ -1400,6 +1432,18 @@
         and derives the repo set. The step then takes the CANVAS pane of the same box; the review
         rail is reused untouched, now showing <b>Approved</b>. On completion the rail's outcome
         gains one plain line — <b>"Your code is ready"</b> — and never a repository count or name.
+      </p>
+      <p class="panel-note">
+        <b>The main line has FOUR frames, not three, and frame 3 is why.</b> Every repository is
+        created under Motir's org and is <b>private</b> (ADR §3 amendment), so a user cannot clone
+        their own code until Motir invites them as a collaborator — which needs their GitHub login,
+        which Motir only has once they connect (MOTIR-1900).
+        <b>Before Epic 9 there is no non-technical workflow at all</b>: the hosted agent is what
+        would build the site a non-technical founder validates, so until it ships, every user runs
+        an agent locally and every user needs this access. The connect prompt is therefore drawn as
+        <b>part of the main line, AFTER approval</b> — never as a gate before it, and never as a
+        permission ask. The GitHub-free journey is what this becomes when hosted execution lands; it
+        is drawn as the future state in panel 8, not as today's primary case.
       </p>
       <div class="panel flow">
         <div class="frame">
@@ -1433,8 +1477,25 @@
         <div class="arrow">
           <svg class="i lg"><use href="#i-arrow-right" /></svg>
         </div>
+        <div class="frame now">
+          <div class="fcap">3 · get access — this design</div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+            <strong style="font-family: ui-serif, Georgia, serif; font-size: 15px"
+              >Get access to your code</strong
+            >
+            <span class="pill pill-done">Approved</span>
+          </div>
+          <p>Your code is private. Connect GitHub and Motir invites you to it.</p>
+          <button class="btn btn-primary btn-sm btn-block" type="button">
+            <svg class="gh"><use href="#i-github" /></svg>
+            Connect GitHub
+          </button>
+        </div>
+        <div class="arrow">
+          <svg class="i lg"><use href="#i-arrow-right" /></svg>
+        </div>
         <div class="frame">
-          <div class="fcap">3 · the plan is live — shipped rail, one line added</div>
+          <div class="fcap">4 · the plan is live — shipped rail, one line added</div>
           <div class="outcome" style="margin-top: 0">
             <p>
               <svg class="i sm" style="color: var(--el-success)"><use href="#i-sparkles" /></svg>
@@ -1452,11 +1513,11 @@
       </div>
       <p class="panel-note" style="margin-top: 14px">
         <b>Re-entry (the no-dead-end guarantee).</b> The set is a durable property of the project
-        (ADR §4.4), so the step is re-enterable — but the DEFAULT path has nothing to come back for,
-        because Motir finishes it. The door back in exists for the two cases that need it: setup
-        didn't finish (panel 2c), and the user later decides to use their own GitHub. The permanent
-        home for both is the code-context surface (MOTIR-1764 / Story MOTIR-1754) —
-        <b>not drawn here</b>, and not this card's to design.
+        (ADR §4.4), so the step is re-enterable. The door back in exists for the three cases that
+        need it: setup didn't finish (panel 2, <code class="mono">failed</code>), the invitation is
+        still pending or was never sent (panel 4), and the user later decides to use code they
+        already have. The permanent home for all three is the code-context surface (MOTIR-1764 /
+        Story MOTIR-1754) — <b>not drawn here</b>, and not this card's to design.
       </p>
 
       <!-- ══════════════════════════════════════════════════════════════════
@@ -1490,9 +1551,16 @@
                   <div class="eyebrow">Your project's code</div>
                   <h3 class="hero-h">Motir will host your code</h3>
                   <p class="hero-p">
-                    Your project's code lives with Motir, ready for your agents to start work. It's
-                    yours — move it to your own GitHub whenever you want.
+                    Your project's code lives with Motir, ready for your agents to start work.
                   </p>
+                </div>
+                <div class="promise">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                    whenever you want.
+                    <a class="link door" href="#">How moving it works</a>
+                  </span>
                 </div>
                 <div class="hero-cta">
                   <button class="btn btn-primary" type="button">Continue</button>
@@ -1567,9 +1635,16 @@
                   <div class="eyebrow">Your project's code</div>
                   <h3 class="hero-h">Motir will host your code</h3>
                   <p class="hero-p">
-                    Your project's code lives with Motir, ready for your agents to start work. It's
-                    yours — move it to your own GitHub whenever you want.
+                    Your project's code lives with Motir, ready for your agents to start work.
                   </p>
+                </div>
+                <div class="promise">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                    whenever you want.
+                    <a class="link door" href="#">How moving it works</a>
+                  </span>
                 </div>
                 <div class="hero-cta">
                   <button class="btn btn-primary" type="button">Continue</button>
@@ -1591,9 +1666,16 @@
                   <div class="eyebrow">Your project's code</div>
                   <h3 class="hero-h">Motir will host your code</h3>
                   <p class="hero-p">
-                    Your project's code lives with Motir, ready for your agents to start work. It's
-                    yours — move it to your own GitHub whenever you want.
+                    Your project's code lives with Motir, ready for your agents to start work.
                   </p>
+                </div>
+                <div class="promise">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                    whenever you want.
+                    <a class="link door" href="#">How moving it works</a>
+                  </span>
                 </div>
                 <div class="hero-cta">
                   <button class="btn btn-primary" type="button">Continue</button>
@@ -1622,7 +1704,10 @@
         <b>no per-repository progress, no repository name in the error and no GitHub status code</b>
         — those belong to the technical path (panel 5). <code class="mono">proposed</code>,
         <code class="mono">connected</code> and <code class="mono">skipped</code> cannot occur here:
-        nothing is proposed for approval, nothing is adopted, and there is nothing to decline.
+        nothing is proposed for approval, nothing is adopted, and there is nothing to decline. The
+        <b>ownership promise sits on the state itself</b>, not in a footnote — it is the sentence a
+        reviewer must be able to SEE in MOTIR-1785's acceptance video, so it is a line of its own
+        with the door to MOTIR-711's transfer beside it.
       </p>
       <div class="panel gallery">
         <div class="state">
@@ -1653,8 +1738,8 @@
           <div class="cap">
             <code>created</code
             ><span
-              >Settled. Plain language, and one honest way to go and look for anyone who wants
-              to.</span
+              >Settled — and the one state that continues: the code exists, so the next thing the
+              user needs is a way to reach it (panel 3).</span
             >
           </div>
           <div class="step hero" style="max-width: 30rem">
@@ -1666,16 +1751,20 @@
               <svg class="i lg"><use href="#i-circle-check-big" /></svg>
               Your code is ready
             </div>
-            <p class="helper" style="margin: 0">
-              Motir keeps it safe and connected. It's yours — move it to your own GitHub whenever
-              you want.
-            </p>
+            <div class="promise">
+              <svg class="i lg"><use href="#i-lock" /></svg>
+              <span>
+                <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                whenever you want.
+                <a class="link door" href="#">How moving it works</a>
+              </span>
+            </div>
             <div class="hero-cta">
-              <button class="btn btn-primary" type="button">Go to my backlog</button>
-              <button class="quiet-link" type="button">
-                <svg class="i sm"><use href="#i-external-link" /></svg>
-                See where it lives
+              <button class="btn btn-primary" type="button">
+                <svg class="gh"><use href="#i-github" /></svg>
+                Connect GitHub
               </button>
+              <button class="quiet-link" type="button">Go to my backlog</button>
             </div>
           </div>
         </div>
@@ -1716,10 +1805,244 @@
       </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 3 — THE ESCAPE HATCH, AND THE HAND-OFF
+           PANEL 3 — THE ACCESS STEP (NEW — MOTIR-1900)
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 3 · <b>"I already have code"</b> — the small way out, and the hand-off 7.10 owns
+        Panel 3 · <b>Get access to your code</b> — the connect prompt, AFTER approval, never a gate
+      </div>
+      <p class="panel-note">
+        <b>New UI this asset has never depicted, and the reason the main line was re-inverted.</b>
+        Repositories are created under Motir's org and are <b>private</b>, so the user cannot clone
+        their own code until Motir invites them as a collaborator — and Motir can only invite a
+        GitHub account it knows about (MOTIR-1900 reads the login from
+        <code class="mono">GithubIdentity</code>). So the step continues here.
+        <b>Three properties are load-bearing:</b> it comes <b>after</b> approval and after the code
+        exists, so nothing about GitHub can cost the user their plan; it is <b>not a gate</b> —
+        <b>Later</b> leaves with the plan intact and the door open on the code-context surface; and
+        it <b>asks for no permission</b>. Motir needs one thing, the user's GitHub username, which
+        is grant 1 (<b>identity</b>) of the shipped connect pane — the repository-access install is
+        grant 2 and is only needed for connect-existing (panel 5). Nothing here widens a grant, and
+        no re-consent, upgrade or org-owner state is drawn, because none is asked for.
+      </p>
+      <div class="panel twoup">
+        <figure>
+          <figcaption>3a · not connected yet — the prompt</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
+                <div class="step-head">
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 class="hero-h">Get access to your code</h3>
+                  <p class="hero-p">
+                    Your code is private — only you and Motir can see it. Connect GitHub and Motir
+                    will invite you to it, so you can open it, clone it, and point your own agent at
+                    it.
+                  </p>
+                </div>
+                <div class="promise">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                    whenever you want.
+                    <a class="link door" href="#">How moving it works</a>
+                  </span>
+                </div>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    Connect GitHub
+                  </button>
+                  <button class="quiet-link" type="button">Later</button>
+                </div>
+                <p class="helper" style="margin: 0">
+                  Motir only needs to know your GitHub username.
+                </p>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>3b · connected — the invitation is on its way</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
+                <div class="step-head">
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 class="hero-h">Get access to your code</h3>
+                </div>
+                <div class="status-line ok">
+                  <svg class="i lg"><use href="#i-circle-check-big" /></svg>
+                  You're invited to your code
+                </div>
+                <p class="helper" style="margin: 0">
+                  Motir invited <b>@yuezhu</b>. Accept the invitation on GitHub and your code is
+                  yours to clone.
+                </p>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">
+                    <svg class="i sm"><use href="#i-external-link" /></svg>
+                    Open the invitation
+                  </button>
+                  <button class="quiet-link" type="button">Go to my backlog</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+      <p class="panel-note" style="margin-top: 14px">
+        <b>"Later" is not a dead end and not a loss.</b> The plan is already in the backlog and the
+        code already exists; the user simply has no way to reach it yet. Motir says so in the rail's
+        outcome — <b>"Finish setting up access"</b> — and the permanent door is the code-context
+        surface (MOTIR-1764), which is where a user who never answers here picks it up later. The
+        set's own state is durable (ADR §4.4), so nothing has to be re-derived.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 4 — THE PER-ROW INVITATION STATES (NEW — MOTIR-1900)
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 · <b>The invitation, per repository</b> — invited · accepted · not invited
+      </div>
+      <p class="panel-note">
+        Access is granted <b>per repository</b> (MOTIR-1900 invites the project owner as an admin
+        collaborator on each created row), so it is a <b>sub-state of a created row</b>, not a row
+        state of its own — the row keeps its <code class="mono">created</code> /
+        <code class="mono">failed</code> / <code class="mono">skipped</code> tint from the ADR's
+        machine (§4.1) and the invitation is an extra line inside it. That also means a partial set
+        behaves correctly for free: a <code class="mono">skipped</code> row has nothing to be
+        invited to, and an invitation failure <b>never</b> fails the row — creation already
+        succeeded, and the invite is a side effect after commit that degrades to "not invited" with
+        a way to re-send. Each state carries an icon <b>and</b> a word, never colour alone.
+      </p>
+      <div class="panel gallery">
+        <div class="state">
+          <div class="cap">
+            <code>invited</code
+            ><span
+              >Sent, not yet accepted — GitHub owns the acceptance, so Motir shows the truth and a
+              way back to it.</span
+            >
+          </div>
+          <div class="row created">
+            <div class="row-top">
+              <div class="row-main">
+                <div class="row-meta">
+                  <span class="pill pill-neutral mono">web</span>
+                  <span class="row-state ok"
+                    ><svg class="i sm"><use href="#i-circle-check-big" /></svg> Created</span
+                  >
+                </div>
+                <div class="row-name">
+                  <svg class="gh"><use href="#i-github" /></svg>
+                  <a class="link full mono" href="#">motir-projects/acme-booking-web</a>
+                  <svg class="i sm" style="color: var(--el-icon-muted)">
+                    <use href="#i-external-link" />
+                  </svg>
+                </div>
+                <div class="inv pending">
+                  <span class="word">
+                    <svg class="i sm"><use href="#i-mail" /></svg>
+                    Invitation sent
+                  </span>
+                  <span class="sep">·</span>
+                  <span>to <b>@yuezhu</b>, waiting to be accepted on GitHub</span>
+                </div>
+                <div class="recover">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-external-link" /></svg>
+                    Open the invitation
+                  </button>
+                  <button class="btn btn-ghost btn-sm" type="button">Resend invitation</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <code>accepted</code
+            ><span
+              >Settled — the only state in which a user can actually clone. Nothing left to do, so
+              nothing is offered.</span
+            >
+          </div>
+          <div class="row created">
+            <div class="row-top">
+              <div class="row-main">
+                <div class="row-meta">
+                  <span class="pill pill-neutral mono">web</span>
+                  <span class="row-state ok"
+                    ><svg class="i sm"><use href="#i-circle-check-big" /></svg> Created</span
+                  >
+                </div>
+                <div class="row-name">
+                  <svg class="gh"><use href="#i-github" /></svg>
+                  <a class="link full mono" href="#">motir-projects/acme-booking-web</a>
+                  <svg class="i sm" style="color: var(--el-icon-muted)">
+                    <use href="#i-external-link" />
+                  </svg>
+                </div>
+                <div class="inv ok">
+                  <span class="word">
+                    <svg class="i sm"><use href="#i-badge-check" /></svg>
+                    You have access
+                  </span>
+                  <span class="sep">·</span>
+                  <span><b>@yuezhu</b> can clone and push to this repository</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <code>not invited</code
+            ><span
+              >Motir doesn't know a GitHub account to invite. Named honestly, with the one action
+              that fixes it — never a silent failure.</span
+            >
+          </div>
+          <div class="row created">
+            <div class="row-top">
+              <div class="row-main">
+                <div class="row-meta">
+                  <span class="pill pill-neutral mono">api</span>
+                  <span class="row-state ok"
+                    ><svg class="i sm"><use href="#i-circle-check-big" /></svg> Created</span
+                  >
+                </div>
+                <div class="row-name">
+                  <svg class="gh"><use href="#i-github" /></svg>
+                  <span class="full mono">motir-projects/acme-booking-api</span>
+                </div>
+                <div class="inv none" role="status">
+                  <span class="word">
+                    <svg class="i sm"><use href="#i-user-plus" /></svg>
+                    Not invited yet
+                  </span>
+                  <span class="sep">·</span>
+                  <span>Motir doesn't know your GitHub account yet</span>
+                </div>
+                <div class="recover">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    Connect GitHub
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 5 — THE ESCAPE HATCH, AND THE HAND-OFF
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 5 · <b>"I already have code"</b> — the small way out, and the hand-off 7.10 owns
       </div>
       <p class="panel-note">
         Choosing this is how a user <b>self-identifies as technical</b> — and only after it does any
@@ -1729,18 +2052,29 @@
         identity then install. This design <b>does not redraw those screens</b> — 7.10 owns them —
         and nothing on the default path sends a user to GitHub before they ask for it.
       </p>
+      <p class="panel-note">
+        <b>This door is now an alternative SOURCE, not an alternative HOME.</b> The ADR's 2026-07-30
+        amendment removed the account-creation branch:
+        <b>Motir never creates a repository in the user's own account</b>, for anyone. So the old
+        framing — "use your own GitHub <i>instead</i>", as if it were a second place for new code to
+        be born — is wrong, and the copy is re-written to say what actually survives:
+        <b>connect-existing</b>. It is the only path that ever touches the user's account, and it is
+        how a monorepo collapses the set to one row and how a pre-provisioned repository in a
+        governed org is used. This is also why the install (grant 2) matters <i>here</i> and not in
+        panel 3 — Motir needs repository access to read a repository the user already owns.
+      </p>
       <div class="panel twoup">
         <figure>
-          <figcaption>3a · the confirmation, in this step</figcaption>
+          <figcaption>5a · the confirmation, in this step</figcaption>
           <div class="shell">
             <div class="step-pane" style="padding: 28px 24px">
               <div class="step hero">
                 <div class="step-head">
                   <div class="eyebrow">Your project's code</div>
-                  <h3 class="hero-h">Use your own GitHub instead</h3>
+                  <h3 class="hero-h">Use the code you already have</h3>
                   <p class="hero-p">
-                    Motir will connect to your account and use the repositories you choose. You pick
-                    which ones it may see, on GitHub — Motir never sees the rest.
+                    Motir will use repositories you already have instead of creating new ones. You
+                    pick which ones it may see, on GitHub — Motir never sees the rest.
                   </p>
                 </div>
                 <div class="hero-cta">
@@ -1755,7 +2089,7 @@
           </div>
         </figure>
         <figure>
-          <figcaption>3b · the shipped pane it hands off to (not redrawn)</figcaption>
+          <figcaption>5b · the shipped pane it hands off to (not redrawn)</figcaption>
           <div class="card" style="padding: 16px">
             <div style="display: flex; flex-direction: column; gap: 12px">
               <strong style="font-size: 15px; color: var(--el-text)">Connect GitHub</strong>
@@ -1791,26 +2125,37 @@
            PANEL 4 — THE TECHNICAL PATH: THE SET
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 4 · <b>The technical path</b> — once connected, what the plan needs and where each
+        Panel 6 · <b>The technical path</b> — once connected, what the plan needs and where each
         part lives
       </div>
       <p class="panel-note">
         <b>Everything below is behind the "I already have code" door.</b> The user has connected
         their own GitHub, so repository vocabulary is now theirs to read: one row per part the plan
-        needs, each row saying whether Motir <b>creates</b> it in their account or <b>connects</b>
-        one they already have.
+        needs, each row saying whether Motir <b>creates</b> it (in Motir's org, exactly as the main
+        line does) or <b>connects</b> one they already have.
+        <b>There is no account choice on a created row</b>, because there is no longer a second
+        account it could go to — the owner prefix is fixed and the name is the editable part (ADR
+        §1.4). The org login <code class="mono">motir-projects</code> here is a stand-in: the real
+        one is MOTIR-1779's to provision, and nothing in this design depends on what it is called.
       </p>
       <p class="panel-note">
-        <b
-          >This is where "Add a repository" vs "Use an existing repository" stopped being
-          ambiguous.</b
-        >
-        They were siblings on one line, which made them read as alternatives — they are not. They
-        now live at <b>different levels</b>: <b>per row</b>, a
-        <code class="mono">Segmented</code> answers <i>where does THIS part live</i> —
-        <b>Create for me</b> or <b>Use one of mine</b>; <b>at set level</b>,
-        <b>Add a repository</b> only ever means <i>the plan needs a part Motir didn't infer</i>. One
-        asks where; the other asks how many.
+        <b>The per-row <code class="mono">Segmented</code> is GONE, and this is why.</b> It offered
+        <b>Create for me</b> vs <b>Use one of mine</b> — two answers to "where does this part live".
+        The ADR's 2026-07-30 amendment deleted the first one: Motir never creates a repository in
+        the user's account, so "create" no longer means "in your account", it means the same
+        Motir-hosted thing the default path does.
+        <b>A two-way control with one option left is a lie about the choice on offer</b>, so the row
+        now has a <b>default</b> (Motir creates it) and a <b>single quiet secondary</b> —
+        <b>Use one of mine</b> — which is an action, not an alternative. The row in the other mode
+        offers the way back, <b>Let Motir host it</b>, in the same slot.
+      </p>
+      <p class="panel-note">
+        <b>The levels stay separate, which is what fixed the original ambiguity.</b> "Add a
+        repository" and "use an existing repository" were once siblings on one line, reading as two
+        ways of doing the same thing. <b>Per row</b>, <b>Use one of mine</b> answers
+        <i>where does THIS part live</i>. <b>At set level</b>, <b>Add a repository</b> only ever
+        means <i>the plan needs a part Motir didn't infer</i>. One asks where; the other asks how
+        many — and they are never drawn at the same weight on the same line.
       </p>
       <div class="panel">
         <div class="step" style="max-width: 40rem">
@@ -1845,22 +2190,20 @@
                     <span class="sep">·</span>
                     <span>The app people use</span>
                   </div>
-                  <div class="seg" role="group" aria-label="Where the web part lives">
-                    <span class="on"
-                      ><svg class="i sm"><use href="#i-plus" /></svg> Create for me</span
-                    >
-                    <span
-                      ><svg class="i sm"><use href="#i-link" /></svg> Use one of mine</span
-                    >
-                  </div>
                   <div class="field">
                     <label class="sr" for="r4a">Name of the web repository</label>
                     <div class="field-box">
-                      <span class="pre mono">yuezhu /</span>
+                      <span class="pre mono">motir-projects /</span>
                       <input id="r4a" value="acme-booking-web" />
                     </div>
-                    <span class="helper">Seeded from the Motir Next.js starter.</span>
+                    <span class="helper"
+                      >Motir creates and hosts it · seeded from the Motir Next.js starter.</span
+                    >
                   </div>
+                  <button class="quiet-link" type="button">
+                    <svg class="i sm"><use href="#i-link" /></svg>
+                    Use one of mine
+                  </button>
                 </div>
                 <div class="row-actions">
                   <button class="icon-btn" type="button" aria-label="Move down">
@@ -1882,14 +2225,6 @@
                     <span class="sep">·</span>
                     <span>The service behind it</span>
                   </div>
-                  <div class="seg" role="group" aria-label="Where the api part lives">
-                    <span
-                      ><svg class="i sm"><use href="#i-plus" /></svg> Create for me</span
-                    >
-                    <span class="on"
-                      ><svg class="i sm"><use href="#i-link" /></svg> Use one of mine</span
-                    >
-                  </div>
                   <div class="field">
                     <label for="r4b">Repository to use for the api</label>
                     <div class="combo">
@@ -1908,6 +2243,7 @@
                       <a class="link" href="#">Grant more on GitHub</a>
                     </span>
                   </div>
+                  <button class="quiet-link" type="button">Let Motir host it</button>
                   <div class="why">
                     <svg class="i sm"><use href="#i-sparkles" /></svg>
                     <span>
@@ -1957,19 +2293,6 @@
       </p>
       <div class="panel" style="max-width: 40rem">
         <div class="row bare">
-          <div
-            class="seg"
-            role="group"
-            aria-label="Where your code lives"
-            style="margin-bottom: 10px"
-          >
-            <span
-              ><svg class="i sm"><use href="#i-plus" /></svg> Create for me</span
-            >
-            <span class="on"
-              ><svg class="i sm"><use href="#i-link" /></svg> Use one of mine</span
-            >
-          </div>
           <div class="field">
             <label for="r4c">Repository to use</label>
             <div class="combo">
@@ -1981,6 +2304,9 @@
             </div>
             <span class="helper">Everything lives here. Motir won't create anything.</span>
           </div>
+          <button class="quiet-link" type="button" style="margin-top: 10px">
+            Let Motir host it
+          </button>
         </div>
       </div>
 
@@ -1988,7 +2314,7 @@
            PANEL 5 — THE TECHNICAL PATH'S PER-ROW STATES + PARTIAL
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 5 · <b>The technical path's per-row states</b> — and the partial outcome
+        Panel 7 · <b>The technical path's per-row states</b> — and the partial outcome
       </div>
       <p class="panel-note">
         The ADR §4.1 machine, drawn at row scale, <b>on this path only</b>. Rows are independent — a
@@ -2003,22 +2329,37 @@
         <code class="mono">--el-danger-surface</code> are the same token value, so it would be
         invisible; the tint goes on the row and the state is named in text beside its icon.
       </p>
+      <p class="panel-note">
+        <b>A created row also carries its invitation sub-state</b> (panel 4) — omitted from this
+        gallery only so each state reads on its own. The two axes are independent by construction:
+        <code class="mono">created</code> is about the repository existing,
+        <code class="mono">invited</code> / <code class="mono">accepted</code> /
+        <code class="mono">not invited</code> is about the user being able to reach it, and neither
+        can fail the other.
+      </p>
       <div class="panel gallery">
         <div class="state">
           <div class="cap">
             <code>creating</code
-            ><span>Per-row progress — the row reports for itself while its siblings carry on.</span>
+            ><span
+              >Per-row progress — the row reports for itself while its siblings carry on. The spike
+              (§4.2) settles the shape: GitHub's <code>201</code> means the record exists, not that
+              the tree is seeded, so a row is only <code>created</code> once a readiness read
+              succeeds.</span
+            >
           </div>
           <div class="row">
             <div class="row-top">
               <div class="row-main">
                 <div class="row-meta"><span class="pill pill-neutral mono">api</span></div>
-                <div class="row-name"><span class="full mono">yuezhu/acme-booking-api</span></div>
+                <div class="row-name">
+                  <span class="full mono">motir-projects/acme-booking-api</span>
+                </div>
                 <div class="row-meta" role="status">
                   <span class="spin" aria-hidden="true"></span>
                   <span>Creating…</span>
                   <span class="sep">·</span>
-                  <span>Adding it to the Motir GitHub App</span>
+                  <span>Seeding it from the starter</span>
                 </div>
               </div>
             </div>
@@ -2042,13 +2383,13 @@
                   </div>
                   <div class="row-name">
                     <svg class="gh"><use href="#i-github" /></svg>
-                    <a class="link full mono" href="#">yuezhu/acme-booking-web</a>
+                    <a class="link full mono" href="#">motir-projects/acme-booking-web</a>
                     <svg class="i sm" style="color: var(--el-icon-muted)">
                       <use href="#i-external-link" />
                     </svg>
                   </div>
                   <span class="helper"
-                    >Seeded from the Motir Next.js starter · connected to Motir.</span
+                    >Hosted by Motir · seeded from the Motir Next.js starter.</span
                   >
                 </div>
               </div>
@@ -2129,19 +2470,21 @@
                     ><svg class="i sm"><use href="#i-triangle-alert" /></svg> Couldn't create</span
                   >
                 </div>
-                <div class="row-name"><span class="full mono">yuezhu/acme-booking-api</span></div>
+                <div class="row-name">
+                  <span class="full mono">motir-projects/acme-booking-api</span>
+                </div>
                 <p class="alert" role="alert" style="margin: 0">
                   <svg class="i sm"><use href="#i-triangle-alert" /></svg>
                   <span>
-                    <b>yuezhu</b> already has a repository called
-                    <span class="mono">acme-booking-api</span>. Rename this one, or use the existing
-                    repository instead.
+                    Motir already hosts a repository called
+                    <span class="mono">acme-booking-api</span>. Rename this one, or use one of yours
+                    instead.
                   </span>
                 </p>
                 <div class="field">
                   <label class="sr" for="r5f">Name of the api repository</label>
                   <div class="field-box err">
-                    <span class="pre mono">yuezhu /</span>
+                    <span class="pre mono">motir-projects /</span>
                     <input id="r5f" value="acme-booking-api-2" />
                   </div>
                 </div>
@@ -2181,7 +2524,7 @@
                   </div>
                   <div class="row-name">
                     <svg class="gh"><use href="#i-github" /></svg>
-                    <a class="link full mono" href="#">yuezhu/acme-booking-web</a>
+                    <a class="link full mono" href="#">motir-projects/acme-booking-web</a>
                   </div>
                 </div>
               </div>
@@ -2199,8 +2542,8 @@
                   <p class="alert" role="alert" style="margin: 0">
                     <svg class="i sm"><use href="#i-triangle-alert" /></svg>
                     <span>
-                      GitHub declined the request — <b>yuezhu</b> has hit its repository limit.
-                      Nothing was created for this row.
+                      GitHub declined the request and nothing was created for this row. Motir will
+                      retry, or you can use one of yours instead.
                     </span>
                   </p>
                   <div class="recover">
@@ -2248,6 +2591,82 @@
           </div>
         </div>
       </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 8 — WHAT THIS BECOMES AFTER EPIC 9 (the future state, NOT today)
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 8 · <b>What this becomes when the hosted agent ships</b> — the future state, drawn as
+        a variant and not as the main line
+      </div>
+      <p class="panel-note">
+        <b>The GitHub-free journey is real, but it is not today's.</b> An earlier draft of this
+        asset made it the main line and demoted the connect step to a variant — drawing an audience
+        the product cannot yet serve as its primary case.
+        <b>Before Epic 9 there is no non-technical workflow at all</b>: the hosted agent is what
+        would build the site a non-technical founder validates, so until it ships, every user runs
+        their own agent locally and every user needs panel 3. When hosted execution lands, panel 3
+        becomes <b>optional</b> for the founder who never touches code — the agent pushes, the
+        preview deploys, and they validate the running site — and it stays <b>required</b> for the
+        developer who wants the repository on their machine.
+        <b>Nothing in the drawn surfaces changes</b>: the same step, the same copy, the same states.
+        Only whether the user is offered access <i>now</i> or <i>whenever they want it</i> changes,
+        which is a one-line difference in what follows <code class="mono">created</code>.
+      </p>
+      <div class="panel twoup">
+        <figure>
+          <figcaption>8a · today (pre-Epic-9) — every user continues into panel 3</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 24px">
+              <div class="step hero">
+                <div class="status-line ok">
+                  <svg class="i lg"><use href="#i-circle-check-big" /></svg>
+                  Your code is ready
+                </div>
+                <p class="helper" style="margin: 0">
+                  You'll run your own agent against it, so you need it on your machine.
+                </p>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    Connect GitHub
+                  </button>
+                  <button class="quiet-link" type="button">Go to my backlog</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>8b · after Epic 9 — access becomes the quiet option</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 24px">
+              <div class="step hero">
+                <div class="status-line ok">
+                  <svg class="i lg"><use href="#i-circle-check-big" /></svg>
+                  Your code is ready
+                </div>
+                <p class="helper" style="margin: 0">
+                  Motir's agent will start on your backlog. You never have to touch the code.
+                </p>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">Go to my backlog</button>
+                  <button class="quiet-link" type="button">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    Connect GitHub
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+      <p class="panel-note" style="margin-top: 14px">
+        <b>Drawn here so it is a recorded consequence, not a redesign waiting to happen.</b> 8b is
+        the state MOTIR-1782 must be able to reach by swapping which action is primary — the reason
+        the access step is a separate step (panel 3) rather than a fourth branch welded into panel
+        2's <code class="mono">created</code> state.
+      </p>
     </div>
   </body>
 </html>

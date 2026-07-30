@@ -1,9 +1,10 @@
 # `design/repository-set/` — design notes
 
 **Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** The design reference for
-**"Where should your code live?"** — the step at plan approval that gives an approved plan
-somewhere for its code to live. It is the layout source of truth for **MOTIR-1782** (the
-approval-step UI) and the surface **MOTIR-1785**'s E2E + acceptance video walk.
+the step at plan approval that gives an approved plan somewhere for its code to live — and then
+gives the user a way to reach it. It is the layout source of truth for **MOTIR-1782** (the
+approval-step UI) and **MOTIR-1900** (collaborator access), and the surface **MOTIR-1785**'s E2E +
+acceptance video walk.
 
 - **Asset of record:** [`repository-set.mock.html`](./repository-set.mock.html) — the source of
   truth, built from the real design system. Its `.png` export
@@ -11,93 +12,163 @@ approval-step UI) and the surface **MOTIR-1785**'s E2E + acceptance video walk.
 - **Definition of done (three files):** `design-notes.md` + `repository-set.mock.html` +
   `repository-set.png`. All three are committed.
 - **Scope:** pixels and copy only. No React, no route, no `en.json` entries — those are
-  MOTIR-1782's.
+  MOTIR-1782's / MOTIR-1900's.
 
 ---
 
 ## 0. The answer in one line
 
-**Motir hosts your code. One sentence, one button, and a small "I already have code" for the
-people who do.**
+**Motir hosts your code — for everyone. Then Motir gets you access to it.** One sentence and one
+button to say yes; one prompt afterwards to connect GitHub so you can actually clone what Motir
+made you; and a small "I already have code" for the people who have their own.
 
-Everything technical — repository names, roles, the account, per-repository progress, GitHub error
-strings — lives **behind that small link**, and appears only once a user has said they already
-have code, which is how they self-identify as someone the word "repository" means something to.
+Everything technical — repository names, roles, the derivation's "why", the full per-row state
+machine — lives **behind that small link**, and appears only once a user has said they already have
+code, which is how they self-identify as someone the word "repository" means something to.
 
-### Why the first version of this design was wrong, and what changed (Yue, 2026-07-30)
+---
 
-The first pass drew the underlying model on screen: a row per repository, each with a `web`/`api`
-role chip, an editable `<owner>/<name>`, a seed source, and per-row GitHub failure reasons — and
-asked the user to curate it. **That is a developer tool.** Motir is chat-first and explicitly not
-developers-only; the person approving a plan is usually a founder who does not know what a
-repository is, let alone why their project needs two.
+## 0.1 · Revision history — this asset has been re-scoped twice, and both are recorded
+
+| Version                | What it drew                                                                                           | Why it changed                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **v1**                 | One question: "where should your code live?", one choice                                               | The repo count is decided by the architecture, not by the user — a single choice cannot express a set                                |
+| **v2**                 | The derived set, as editable rows, as the default surface                                              | Yue at design review: **too technical.** A founder cannot judge whether three repositories is right — `notes.html` #151, second time |
+| **v3**                 | "Motir will host your code" as the default; the rows behind "I already have code"                      | Right shape, wrong era — see below                                                                                                   |
+| **v4 (this revision)** | Same default, plus the **access step**; the account-creation branch deleted; the main line re-inverted | The ADR's ownership amendment (MOTIR-1893) + the access gap it opened (MOTIR-1900) + drawing a post-Epic-9 audience as today's user  |
+
+### Why v2 was wrong (kept, because it is the load-bearing product rule)
+
+v2 drew the underlying model on screen — a row per repository with a role chip, an editable
+`<owner>/<name>`, a seed source, and per-row GitHub failure reasons — and asked the user to curate
+it. **That is a developer tool.** Motir is chat-first and explicitly not developers-only; the person
+approving a plan is usually a founder who does not know what a repository is, let alone why their
+project needs two.
 
 This is the **`notes.html` #151 class, second occurrence**. #151 was the coding convention planned
 as `proposed → edit → APPROVE → standard`, and the rule it produced is: _do not plan a human
 approval gate — or a bespoke edit surface — for an AI-derived artifact a non-technical user cannot
 meaningfully evaluate; derive it, use it automatically, and expose it read-only._ The repo SET is
 exactly such an artifact: it is **derived** (ADR §0.1, from the plan's own contents), and a founder
-cannot judge whether three repositories is right.
+cannot judge whether three repositories is right. **That rule still governs every default-path
+screen here.**
 
-Two consequences worth recording, because they are not just a redraw:
+### What v4 changed, and why (Yue, 2026-07-30, second review)
 
-- **The CARD asked for the wrong thing.** MOTIR-1778 requires "the set, as rows … role, editable
-  name, where it will be created, what it is seeded from" and "both cardinalities drawn side by
-  side" as the point of the card. Those requirements are satisfied here **for the technical path
-  only**; the default path deliberately shows none of it. The card needs amending to say so.
-- **ADR §0.2 needs one amendment.** It reads "the set is presented with every row editable (add,
-  remove, rename, change role, switch to connect-existing) and nothing is created until it is
-  confirmed." That is now true of the **technical path**, not of the default. The rest of the ADR
-  is untouched — and §6 already anticipated this exact latitude: _"the one-question feel is a
-  property of the PRESENTATION of a one-row set (MOTIR-1778 / MOTIR-1782), never of a second branch
-  in the model."_
+**1 · The account-creation branch is DELETED.** The per-row `Segmented` offered **Create for me**
+(in the user's own account) vs **Use one of mine**. The ADR's
+[2026-07-30 amendment](../../docs/decisions/project-repository-set.md#amendment-2026-07-30-yue--motir-1893)
+removed the first: **Motir never creates a repository in the user's own account**, for anyone, so
+"create" no longer names a second destination — it means the same Motir-hosted thing the default
+path does. A two-way control with one option left is a lie about the choice on offer, so the row now
+has a **default** (Motir creates it) and a **single quiet secondary**, **Use one of mine**, which is
+an action, not an alternative. `useOneOfMine` survives unchanged because connect-existing is the only
+path that ever touches the user's account — it is how a monorepo collapses the set to one row and how
+a pre-provisioned repository in a governed org is used.
 
-**The model is unchanged.** The set still holds as many rows as the architecture decides, still
-carries roles and per-row state, and `targetRepo` still resolves through it (ADR §5). Only who is
-shown it changed.
+`ownTitle` / `ownLead` are re-worded for the same reason. They read as an alternative **home** for
+new code ("Use your own GitHub instead"); they are now only an alternative **source**
+("Use the code you already have").
+
+**2 · The ACCESS step is drawn — new UI this asset had never depicted.** Repositories are created
+under Motir's org and are **private**, so the user cannot clone their own code until Motir invites
+them as an admin collaborator (**MOTIR-1900**), which needs a GitHub login Motir only has once they
+connect. Drawn: the **connect prompt** (panel 3), the **per-row invitation states** (panel 4), and
+the **ownership promise on the main line** rather than in a footnote — MOTIR-1785 asserts a reviewer
+can SEE it in the acceptance video, so it is a line of its own with the door to MOTIR-711's transfer
+beside it.
+
+**3 · The main line is RE-INVERTED.** v3's notes concluded _"Motir-hosted is the default, so the
+non-technical journey has no GitHub in it at all"_ and drew that GitHub-free path as the main line.
+That end state is right, but **it arrives with the hosted agent**. Before Epic 9 there is no
+non-technical workflow at all — the hosted agent is what would build the site a non-technical founder
+validates — so until it ships, every user is technical, connects GitHub, and runs their own agent
+locally. **The flow that exists today is the main line** (panels 0–4); the GitHub-free path is drawn
+as the state it becomes once hosted execution lands (panel 8). Drawing an audience the product cannot
+yet serve as the primary case was the v3 mistake, and panel 8 exists so the correction is a recorded
+consequence rather than a redesign waiting to happen.
+
+**No GitHub-permission or grant state is drawn anywhere**, deliberately. There is no "your grant is
+not upgraded", no re-consent prompt, no org-owner warning: nothing in this flow asks the user for a
+permission. The ADR's credential table is what makes that true — the user-facing App is **unchanged**
+by this decision (`Administration` is _not_ added to it), the provisioning credential is Motir's own
+on Motir's org and never appears in a user flow, and the only new consent the product ever asks for
+is Epic 9's opt-in writer App, which is not this surface's business.
+
+### Two of MOTIR-1778's own acceptance criteria are knowingly superseded — flagged, not quietly dropped
+
+Both were written for v3 and are contradicted by the re-scope that produced v4, so they are answered
+against the newer instruction rather than the older list. Neither is an omission:
+
+- **"The Motir-hosted main line is drawn … and no GitHub prompt on it."** v4's re-scope says the
+  opposite in as many words: _"the pre-Epic-9 main line **always continues into the connect + access
+  step**."_ The main line therefore ends in **Connect GitHub** (panel 2 `created` → panel 3). The
+  spirit of the original AC survives exactly where it was aimed — **nothing before or during setup
+  mentions GitHub**, and no GitHub state gates approval. Panel 8 draws the state in which the
+  original wording becomes true again.
+- **"The default path is ONE sentence + one action + one small 'I already have code'."** The same
+  re-scope requires the ownership promise **on the main line rather than as a footnote**, so panel 1
+  carries a fourth element. It is a **statement, not a control** — one line of standing guarantee
+  plus one link out — so the count of things the user must decide is unchanged, which is what the
+  AC was protecting.
+
+### What did NOT change
+
+The **model** is untouched. The set still holds as many rows as the architecture decides, still
+carries roles and per-row state, `targetRepo` still resolves through it (ADR §5), and the row
+lifecycle is still §4.1's. Panels 1, 1b, 2, 6 and 7 are v3's, edited — not redrawn.
 
 ---
 
 ## 1. Where every decision came from (no flow is invented here)
 
-| Behaviour                                                                                     | Source                                                                             |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| The set's cardinality is DERIVED from the plan; the default is one `web` repo on thin signals | ADR `docs/decisions/project-repository-set.md` §0.1 (MOTIR-1776, accepted)         |
-| Presentation of a one-row set is this card's to decide, not the model's                       | ADR §6                                                                             |
-| The role enum (`web` · `api` · `mobile` · `shared` · `infra` · `other`)                       | ADR §1.1                                                                           |
-| ORDER is meaningful; the first row is the project's **primary** repository                    | ADR §1.3                                                                           |
-| Names: `<project-slug>` at one row, `<project-slug>-<role>` at two or more; always editable   | ADR §1.4                                                                           |
-| Collisions offer a suffixed name, pre-filled and editable, before the row is created          | ADR §1.5                                                                           |
-| Seed source per role — the starter for `web`, an INITIALISED repo for everything else         | ADR §2                                                                             |
-| **Motir's org + claimable when there is no GitHub identity** — the DEFAULT path here          | ADR §3.3, §3.4                                                                     |
-| Ownership decided ONCE for the set; never half Motir's and half the user's                    | ADR §3.2, §3.5                                                                     |
-| The per-row state machine, row independence, no rollback, resumability, partial completion    | ADR §4.1–§4.4                                                                      |
-| The single-repo project is the degenerate case of one model, never a second code path         | ADR §6                                                                             |
-| The per-row **reason** a proposed row surfaces                                                | MOTIR-1881 — "a row with no nameable reason should not exist"                      |
-| The host surface, the split, the rail, the approve CTA, the decided outcome                   | `app/(authed)/plans/[id]/page.tsx` · `PlanningWorkspace` · `PlanReviewRail`        |
-| The GitHub connect/install hand-off                                                           | `app/(authed)/settings/workspace/github/page.tsx` (7.10) — pointed at, not redrawn |
-| Don't gate an AI-derived artifact a non-technical user can't judge                            | `notes.html` #151                                                                  |
+| Behaviour                                                                                       | Source                                                                             |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| The set's cardinality is DERIVED from the plan; the default is one `web` repo on thin signals   | ADR `docs/decisions/project-repository-set.md` §0.1 (MOTIR-1776, accepted)         |
+| Presentation of a one-row set is this card's to decide, not the model's                         | ADR §6                                                                             |
+| The role enum (`web` · `api` · `mobile` · `shared` · `infra` · `other`)                         | ADR §1.1                                                                           |
+| ORDER is meaningful; the first row is the project's **primary** repository                      | ADR §1.3                                                                           |
+| Names: `<project-slug>` at one row, `<project-slug>-<role>` at two or more; always editable     | ADR §1.4                                                                           |
+| Collisions offer a suffixed name, pre-filled and editable, before the row is created            | ADR §1.5                                                                           |
+| Seed source per role — the starter for `web`, an INITIALISED repo for everything else           | ADR §2                                                                             |
+| **Every CREATED repo is Motir-owned and claimable — no account branch, for anyone**             | ADR §3 **amendment 2026-07-30** (MOTIR-1893)                                       |
+| Connect-existing is untouched and is the only path that reaches the user's own account          | ADR §3 amendment                                                                   |
+| The ownership promise the Motir-org default obliges the copy to make                            | ADR §3 amendment, closing paragraph                                                |
+| A repo Motir owns is still the user's to REACH — collaborator invite, per created repo          | ADR §3 amendment · **MOTIR-1900**                                                  |
+| The connect prompt belongs AFTER approval, framed as "get access to your code", never as a gate | **MOTIR-1900** ("not a gate before approval … but a prompt after it")              |
+| Invitation states: invited / accepted / not-invited-no-identity, with re-send                   | **MOTIR-1900** acceptance criteria                                                 |
+| An invite failure must NOT fail repo creation                                                   | **MOTIR-1900** ("a side effect after commit, degrading gracefully")                |
+| The per-row state machine, row independence, no rollback, resumability, partial completion      | ADR §4.1–§4.4                                                                      |
+| **Per-row async with polling — a `201` is not a ready repository**                              | **MOTIR-1777** spike, `docs/github-repo-creation-mechanics.md` §4.2 + finding 5    |
+| 2–5 repos is nowhere near any rate limit; serialise anyway                                      | MOTIR-1777 spike §4.1                                                              |
+| The single-repo project is the degenerate case of one model, never a second code path           | ADR §6                                                                             |
+| The per-row **reason** a proposed row surfaces                                                  | MOTIR-1881 — "a row with no nameable reason should not exist"                      |
+| The host surface, the split, the rail, the approve CTA, the decided outcome                     | `app/(authed)/plans/[id]/page.tsx` · `PlanningWorkspace` · `PlanReviewRail`        |
+| The GitHub connect/install hand-off, and its two separable grants                               | `app/(authed)/settings/workspace/github/page.tsx` (7.10) — pointed at, not redrawn |
+| The transfer this design promises but does not draw                                             | MOTIR-711 (9.3.7)                                                                  |
+| Don't gate an AI-derived artifact a non-technical user can't judge                              | `notes.html` #151                                                                  |
+| Design against what is SHIPPED — render it, don't read-and-redraw it                            | `notes.html` #73                                                                   |
 
-> **A pleasant consequence of the inversion:** what used to be the "no-GitHub variant" is now the
-> **main line**. Motir-hosted is the default, so the non-technical journey has no GitHub in it at
-> all — and ADR §3.3's claimable framing stops being an edge case to explain and becomes the one
-> promise the default path makes ("It's yours — move it to your own GitHub whenever you want").
+### The spike has since LANDED — and it answers the question this design asked
 
-### The spike's latency answer does not exist yet — and this design is safe either way
+v3 was drawn while MOTIR-1777 was still in progress. It is now `done` and
+`docs/github-repo-creation-mechanics.md` is on `main`. Three of its findings bear on this asset, and
+all three confirm the shape already drawn rather than change it:
 
-MOTIR-1777 (the four GitHub mechanics, including "what creating N repos back-to-back costs") was
-**still in progress** when this was drawn; nothing of it is on `origin/main`. So the design takes
-the shape that is correct under both answers:
-
-- **Default path:** ONE status line for the whole set — _"Setting up your code…"_ — which is right
-  whether that takes 400ms or 20s, and never exposes a per-repository count the user did not ask
-  for.
-- **Technical path:** **per-row** progress, required if creation is slow and harmless if it is
-  fast.
-
-If the spike finds partial failure is not retryable per repo, the failed row's **Retry** is the
-affordance to revisit; the other two recoveries (use one of mine, skip) hold regardless. Nothing
-else here depends on it.
+- **Latency is still the one UNVERIFIED number** (§4.2 — the available credential had no
+  `delete_repo` scope, so it is recorded as unverified rather than estimated). The design is safe
+  either way, deliberately: the **default path** shows ONE status line for the whole set
+  (_"Setting up your code…"_), which is right at 400 ms or 20 s and never exposes a per-repository
+  count the user did not ask for; the **technical path** shows **per-row** progress, required if
+  creation is slow and harmless if it is fast.
+- **A `201` does not mean the repository is ready** (§4.2). Template seeding is not synchronous, so
+  a row is `created` only after a readiness read succeeds. Panel 7's `creating` row says so
+  (_"Seeding it from the starter"_) and the notes say it here, because it is the one spike answer
+  that changes a UI card: **MOTIR-1782 must model each row as its own async job**
+  (`pending → creating → seeding → ready | failed`), never one synchronous "create the set" request
+  that returns when the last call returns.
+- **Rate limits do not constrain this story's N** (§4.1: 80 content-generating requests/minute), so
+  nothing here needs a batching or throttling affordance.
 
 ---
 
@@ -115,8 +186,13 @@ services (`tests/e2e/_helpers/plans-review-seed.ts`), full-page screenshots at 1
 - **`/plans/<approved-plan>`** — the state the step lands back into: the rail's pill flipped to
   **Approved**, the history gaining **"Approved · Plans Owner"**, and `DecidedOutcome` showing a
   `--el-success` Sparkles + **"Added 1 item to your backlog"** + **"View in backlog"**.
-- **`/settings/workspace/github`** (nav label **"Git"**) — the two-grant connect flow. Panel 3b
+- **`/settings/workspace/github`** (nav label **"Git"**) — the two-grant connect flow. Panel 5b
   mirrors it as the hand-off target and redraws none of it.
+
+**Re-verified for this revision:** `git diff c76e2b7a origin/main` over `app/(authed)/plans`,
+`components/plans`, `app/globals.css`, `packages/design-system/theme.css` and
+`app/(authed)/settings/workspace/github` is **empty** — none of the composed shipped surfaces has
+moved since those renders, so they still describe reality and were not re-shot.
 
 The route header, the box, the `grid-cols-[1fr_22rem]` split and every element of the rail are
 **mirrored markup**, not stylized stand-ins. **The step is the only new surface.**
@@ -136,18 +212,20 @@ The route header, the box, the `grid-cols-[1fr_22rem]` split and every element o
    the truthful use of the space.
 
 ```
-/plans/[id]  ──[ Approve — add 24 items to your backlog ]──▶  the step  ──[ Continue ]──▶  the plan is live
-  (planned)        materializes + derives the repo set        "Motir will      Motir sets it up      (rail outcome +
-                                                              host your code"                        "Your code is ready")
+/plans/[id] ─[ Approve — add 24 items ]→ the step ─[ Continue ]→ get access ─[ Connect GitHub ]→ live
+ (planned)     materializes + derives    "Motir will   Motir sets    "Get access     invite sent    (rail:
+               the repo set              host your      it up         to your code"   + accepted    "Your code
+                                         code"                                                      is ready")
 ```
 
 **The rail's outcome gains exactly one plain line — "Your code is ready" — and never a repository
-count or name.**
+count or name.** If the user leaves access unfinished, that line reads **"Finish setting up
+access"** instead.
 
 **Re-entry (the no-dead-end guarantee).** The set is durable (ADR §4.4), so the step is
-re-enterable — but the default path has nothing to come back for, because Motir finishes it. The
-door back exists for the two cases that need it: setup didn't finish (panel 2c), and the user later
-decides to use their own GitHub. The permanent home for both is the code-context surface
+re-enterable. The door back exists for the three cases that need it: setup didn't finish (panel 2,
+`failed`), the invitation is pending or was never sent (panel 4), and the user later decides to use
+code they already have. The permanent home for all three is the code-context surface
 (**MOTIR-1764** / Story MOTIR-1754) — **not drawn here**. The step earns **no new left-nav entry**:
 it is an action inside an existing surface, not a first-class project VIEW (`notes.html` #99).
 
@@ -155,84 +233,150 @@ it is an action inside an existing surface, not a first-class project VIEW (`not
 
 - **Can the target user judge it?** The default asks one thing they can answer — _is it fine for
   Motir to host this?_ — and nothing they cannot.
-- **Does answering it block their flow?** No. Approve materializes the plan **first**; the items
-  are in the backlog before the step is answered, and **"Continue"** is a one-click accept of a
-  default that is already correct.
+- **Does answering it block their flow?** No, and neither does the access step. Approve materializes
+  the plan **first**; the items are in the backlog before either is answered. **Continue** is a
+  one-click accept of a default that is already correct, and **Later** on the access prompt leaves
+  with the plan intact and the door open.
 
 ---
 
 ## 4. The default path (panels 1, 1b, 2) — the whole thing for most users
 
-**Panel 1.** Overline, one serif statement, one sentence of body, one primary, one quiet secondary.
-Absent by design: repository name, role, account, count, rows, table chrome, seed source, reorder,
-per-row menu, "add a repository". The only branch is **I already have code**, sized like the
-exception it is.
+**Panel 1.** Overline, one serif statement, one sentence of body, **the ownership promise**, one
+primary, one quiet secondary. Absent by design: repository name, role, account, count, rows, table
+chrome, seed source, reorder, per-row menu, "add a repository". The only branch is **I already have
+code**, sized like the exception it is.
+
+**The ownership promise is on the main line, not in a footnote.** ADR §3's amendment makes Motir the
+default holder of every new project's code, which the ADR itself calls a trust surface "the product
+copy must state plainly rather than let the user discover". So it is its own element — a `lock` icon,
+_"**It's yours.** Motir keeps it safe and private — move it to your own GitHub whenever you want."_,
+and the **door**: a `How moving it works` link into MOTIR-711's transfer. **The promise and its door
+are drawn; the transfer flow is not** (9.3.7 owns it). It is styled as a quiet standing guarantee
+(`--el-surface-soft`), not a severity tint, because it is a fact about the arrangement rather than a
+warning about it.
 
 **Panel 1b — both cardinalities.** The card's central problem, answered by **removing the
 question**: the same screen ships whether the plan needs one repository or three. The two renders in
 the mock are **identical pixels**; only what Motir does behind them differs. Nothing about
 cardinality reaches the user, so a one-row set cannot look like a list of one and a three-row set
-cannot look advanced.
+cannot look advanced. Where the difference DOES surface is the technical path (panel 6), which is
+also the only place the count is spoken (**Set up 2 repositories**).
 
 **Panel 2 — three states, in plain language.** The ADR's six per-row states are the _model_; this
 path renders only what the user can act on:
 
-| ADR state                            | Default path                                                                                             | Forward path                          |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `creating`                           | **"Setting up your code…"** — one `role="status"` line for the whole set                                 | (resolves)                            |
-| `created`                            | **"Your code is ready"** + _"See where it lives"_                                                        | **Go to my backlog**                  |
-| `failed`                             | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                           | **Try again** · _I already have code_ |
-| `proposed` · `connected` · `skipped` | **cannot occur** — nothing is proposed for approval, nothing is adopted, and there is nothing to decline | —                                     |
+| ADR state                            | Default path                                                                                             | Forward path                                      |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `creating`                           | **"Setting up your code…"** — one `role="status"` line for the whole set                                 | (resolves)                                        |
+| `created`                            | **"Your code is ready"** + the ownership promise                                                         | **Connect GitHub** (panel 3) · _Go to my backlog_ |
+| `failed`                             | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                           | **Try again** · _I already have code_             |
+| `proposed` · `connected` · `skipped` | **cannot occur** — nothing is proposed for approval, nothing is adopted, and there is nothing to decline | —                                                 |
 
 **No per-repository progress, no repository name in the error, no GitHub status code** on this path.
 The failure copy names the consequence in the user's terms — _"Your plan is safe in your backlog.
 Nothing is lost — Motir will tell you if a task needs code that isn't ready yet"_ — which is the
 honest hand-off to the code-blind signal MOTIR-1754 renders.
 
+**`created` is the one state that continues**, which is the whole of change 3: the code now exists,
+and the next thing the user needs is a way to reach it.
+
 ---
 
-## 5. The technical path (panels 3–5) — behind "I already have code"
+## 5. The access step (panels 3–4) — new, and on the main line
 
-**Panel 3.** One short confirmation (_"Use your own GitHub instead"_), then the **shipped** connect
-flow. Nothing on the default path sends a user to GitHub before they ask for it.
+**Panel 3 — the connect prompt.** _"Get access to your code."_ Three properties are load-bearing and
+each is drawn, not just asserted:
 
-**Panel 4.** Once connected, repository vocabulary is theirs to read: one row per part the plan
+1. **It comes AFTER approval, and after the code exists.** Nothing about GitHub can cost the user
+   their plan, because the plan is already in the backlog and the repositories are already made.
+2. **It is not a gate.** **Later** is a real answer: it leaves with everything intact, and the rail's
+   outcome says what is unfinished (**"Finish setting up access"**). The permanent door is
+   MOTIR-1764's code-context surface.
+3. **It asks for no permission.** Motir needs exactly one thing — the user's GitHub username — which
+   is **grant 1 (identity)** of the shipped connect pane (`GithubIdentity.githubLogin`, which is
+   where MOTIR-1900 reads it from). The **repository-access install is grant 2** and is needed only
+   for connect-existing (panel 5), because that is the only path that reads a repository the user
+   owns. No re-consent, upgrade, or org-owner state is drawn, because none is asked for.
+
+Copy stays plain-language on this panel — _"Your code is private — only you and Motir can see it"_ —
+because a user who has not connected has not yet self-identified as technical. **Repository names
+appear only after they connect**, which is the same #151 discipline the "I already have code" door
+applies, one step later.
+
+**Panel 4 — the invitation, per repository.** Access is granted per repository, so the invitation is
+a **sub-state OF a created row**, never a row state of its own: the row keeps its
+`created` / `failed` / `skipped` tint from §4.1 and the invitation is an extra line inside it. Two
+things fall out of that for free:
+
+- A `skipped` row has nothing to be invited to, so a partial set (panel 7) needs no special case.
+- An invitation failure **never** fails the row — creation already succeeded, and MOTIR-1900 makes
+  the invite a side effect after commit that degrades gracefully.
+
+| Invitation state | How it reads                                                                                                          | Forward paths                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `invited`        | `Mail` in `--el-info` + **"Invitation sent"** · to `@login`, waiting to be accepted on GitHub                         | **Open the invitation** · **Resend invitation** |
+| `accepted`       | `BadgeCheck` in `--el-success` + **"You have access"** · `@login` can clone and push                                  | (settled — nothing offered)                     |
+| `not invited`    | `UserPlus` in `--el-warning` + **"Not invited yet"** · Motir doesn't know your GitHub account yet, in `role="status"` | **Connect GitHub**                              |
+
+GitHub owns the acceptance, so Motir shows the truth and a way back to it rather than pretending to
+know more than it does. Every state carries an icon **and** a word, never colour alone.
+
+---
+
+## 6. The technical path (panels 5–7) — behind "I already have code"
+
+**Panel 5.** One short confirmation — **"Use the code you already have"** — then the **shipped**
+connect flow. The re-wording matters: this door is an alternative **SOURCE**, not an alternative
+**HOME**. Motir never creates a repository in the user's account, so "use your own GitHub instead"
+described a destination that no longer exists; what survives is connect-existing.
+
+**Panel 6.** Once connected, repository vocabulary is theirs to read: one row per part the plan
 needs, with a plain-language gloss beside each role chip (`web` · _The app people use_; `api` ·
 _The service behind it_), the derivation's **"why"**, and reorder + a `⋯` menu at two or more rows.
-One row drops the chip, the suffix, the grip and the menu, exactly as before.
+One row drops the chip, the suffix, the grip and the menu. **A created row's owner prefix is fixed**
+(Motir's org — `motir-projects` in the mock is a stand-in; MOTIR-1779 provisions the real one and
+nothing here depends on its name) and the **name** is the editable part, per ADR §1.4.
 
-### "Add a repository" vs "Use an existing repository" — the ambiguity, and the fix
+### The per-row control: why a single secondary replaced the `Segmented`
 
-In the first version these sat **side by side on one line**, which made them read as two ways of
-doing the same thing. They are not, and the labels never said so. They now live at **different
-levels**:
+| Level         | Control                                                          | The question it answers                    |
+| ------------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| **Per row**   | one quiet secondary: **Use one of mine** ⇄ **Let Motir host it** | _where does THIS part live_                |
+| **Set level** | **Add a repository**                                             | _the plan needs a part Motir didn't infer_ |
 
-- **Per row** — a `Segmented` answers _where does THIS part live_: **Create for me** ·
-  **Use one of mine**. Two mutually exclusive answers to one question, in the one control that
-  means "pick one of these".
-- **At set level** — **Add a repository** only ever means _the plan needs a part Motir didn't
-  infer_. It changes **how many** rows there are, never where an existing row lives.
+The `Segmented` is gone because it had one option left. It answered "where does this part live" with
+**Create for me** vs **Use one of mine**, and the ADR amendment deleted the first: "create" no longer
+means "in your account". A two-way control offering one real destination misrepresents the choice, so
+the row now has a **default** (Motir creates it) and **one action** to leave it. The action's label
+names the mode you would switch TO, so a connect-existing row offers **Let Motir host it** in the
+same slot.
 
-One asks _where_; the other asks _how many_. The old pairing asked both at once, in the same visual
-weight, with no hint that one was per-row and one was per-set — which is exactly why it was
-confusing.
+The original ambiguity fix still holds and is the reason the levels are drawn apart: "Add a
+repository" and "use an existing repository" once sat **side by side on one line**, which made them
+read as two ways of doing the same thing. One asks _where_; the other asks _how many_ — so they are
+never at the same weight on the same line.
 
-**Panel 5 — the per-row states, on this path only.**
+**Panel 7 — the per-row states, on this path only.**
 
-| State       | How it reads                                                                                                                                                                                 | Forward paths                                       |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `creating`  | Per-row `Spinner` + **"Creating…"** + what it is doing, in `role="status"`. Siblings keep working.                                                                                           | resolves to `created` / `failed`                    |
-| `created`   | `--el-success-surface` row · `CircleCheckBig` in `--el-success` + **"Created"** · the real `owner/name` as an external link                                                                  | (settled)                                           |
-| `connected` | `--el-notice-info-bg` row · `Link` in `--el-info` + **"Connected"** · _"nothing was created and nothing was changed in it"_                                                                  | (settled)                                           |
-| `skipped`   | Quiet `--el-surface-soft` row · `SkipForward` in `--el-icon-muted` + **"Skipped"** · what Motir will do about it                                                                             | **Create it after all** · **Use one of mine**       |
-| `failed`    | `--el-danger-surface` row · `TriangleAlert` in `--el-danger` + **"Couldn't create"** · the REAL reason, in `role="alert"` · the name field re-opened with the suffixed suggestion (ADR §1.5) | **Retry** · **Use one of mine** · **Skip this one** |
+| State       | How it reads                                                                                                                                                                                 | Forward paths                                                            |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `creating`  | Per-row `Spinner` + **"Creating…"** + _"Seeding it from the starter"_, in `role="status"`. Siblings keep working.                                                                            | resolves to `created` / `failed` **after a readiness read** (spike §4.2) |
+| `created`   | `--el-success-surface` row · `CircleCheckBig` in `--el-success` + **"Created"** · the real `owner/name` as an external link · **plus its invitation sub-state** (panel 4)                    | (settled)                                                                |
+| `connected` | `--el-notice-info-bg` row · `Link` in `--el-info` + **"Connected"** · _"nothing was created and nothing was changed in it"_                                                                  | (settled)                                                                |
+| `skipped`   | Quiet `--el-surface-soft` row · `SkipForward` in `--el-icon-muted` + **"Skipped"** · what Motir will do about it                                                                             | **Create it after all** · **Use one of mine**                            |
+| `failed`    | `--el-danger-surface` row · `TriangleAlert` in `--el-danger` + **"Couldn't create"** · the REAL reason, in `role="alert"` · the name field re-opened with the suffixed suggestion (ADR §1.5) | **Retry** · **Use one of mine** · **Skip this one**                      |
+
+The gallery omits the invitation line from the `created` row only so each state reads on its own.
+The two axes are independent by construction: `created` is about the repository existing,
+`invited` / `accepted` / `not invited` is about the user being able to reach it, and neither can fail
+the other.
 
 **Rules the states obey**
 
 - **Rows are independent** (ADR §4.2) — state lives on the row, so one spinner or failure never
   freezes or reverts a sibling. No set-level blocking overlay, and **no compensating delete**: a
-  created repository is a real artifact in the user's account, and removing it to tidy a report is
-  the worse answer.
+  created repository is a real artifact, and removing it to tidy a report is the worse answer.
 - **No state is a dead end** — `failed` and `skipped` keep every recovery, now or on a later visit
   (§4.1, §4.4).
 - **State is never colour alone** — always an icon **plus a word** (finding #35), with
@@ -246,129 +390,173 @@ confusing.
   beside its icon (`.row-state`). Only the role chip stays a `Pill tone="neutral"`, which has its
   own border and reads on every tint.
 
-**The PARTIAL outcome** (end of panel 5) — created + failed + skipped in one set, still completable
+**The PARTIAL outcome** (end of panel 7) — created + failed + skipped in one set, still completable
 (§4.3): a `role="status"` summary counting the truth, the primary becoming **Finish setup**, and
-nothing pretending the failed row succeeded.
+nothing pretending the failed row succeeded. Failure copy is now Motir-org-framed, because that is
+where creation happens: a collision is _"Motir already hosts a repository called …"_, and a decline
+is reported without blaming the user's account for a limit it never hit.
 
 ---
 
-## 6. Primitives — every element, and what it is
+## 7. Panel 8 — what this becomes when the hosted agent ships
 
-| Element                           | Primitive                                                | Notes                                                                            |
-| --------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Step statement                    | `h2` `font-serif`                                        | 28px on the default path, 22px on the technical one                              |
-| "Your project's code" overline    | `SectionLabel`                                           | mono · 11px · 0.06em · `--el-text-eyebrow`                                       |
-| Primary action                    | `Button variant="primary"`                               | `Continue` · `Go to my backlog` · `Try again` · `Set up N repositories`          |
-| Quiet secondary                   | a text button in `--el-link`                             | `I already have code` · `See where it lives` · `Let Motir host it`               |
-| Default-path state line           | `Spinner` / lucide icon + text                           | `role="status"` while working, `role="alert"` on failure                         |
-| **Per-row create-or-connect**     | **`Segmented`**                                          | the shipped `--el-tabnav-track` control; two options, one active                 |
-| A row container (≥2 rows)         | `Card` (untinted, `data-surface="card"`)                 | `--radius-card` · `--el-border` · row padding, not `--spacing-card-padding`      |
-| Repository name field             | `Input` (composing `FormField`)                          | `addonStart` carries the `owner /` prefix; `error` variant on a failed row       |
-| Existing-repository picker        | `Combobox`                                               | over the repos the installation grants; "Grant more on GitHub" hands off to 7.10 |
-| Role chip                         | `Pill tone="neutral"`                                    | mono; roles are metadata, not a status — no semantic tint is spent on them       |
-| Reorder / menu trigger            | icon `Button` at `--height-control` + `--radius-control` | `ChevronUp` / `ChevronDown` / `Ellipsis`                                         |
-| Row `⋯` menu                      | `Popover` + a menu list                                  | `--radius-card` container, `--radius-control` rows, `--el-option-active-bg`      |
-| The "why" panel                   | a callout `div` (`--el-callout-bg`) + `Sparkles`         | mirrors the shipped AI-proposal callout; not a `Tooltip`                         |
-| Row recoveries                    | `Button variant="secondary" size="sm"` + `ghost sm`      | Retry emphasized; the others quiet                                               |
-| Rail (status · history · outcome) | **the shipped `PlanReviewRail`**                         | reused verbatim                                                                  |
+Drawn as a **variant**, explicitly not as the main line, so the correction v4 made cannot quietly
+reverse itself. Today (8a) every user continues into panel 3, because before Epic 9 there is no
+non-technical workflow at all. After Epic 9 (8b) the access step becomes **optional** for the founder
+who never touches code — the hosted agent pushes, the preview deploys, and they validate the running
+site — and stays **required** for the developer who wants the repository on their machine.
 
-**No new primitive is introduced.** If MOTIR-1782 finds it needs one, that is its own `design/`
-subtask, not an improvisation.
+**No drawn surface changes between them**: same step, same copy, same states. Only which action is
+primary after `created` changes — which is exactly why the access step is its own step (panel 3)
+rather than a fourth branch welded into panel 2's `created` state, and it is the one thing MOTIR-1782
+should keep swappable.
 
 ---
 
-## 7. Token roles — colour (`--el-*`) and shape
+## 8. Primitives — every element, and what it is
+
+| Element                           | Primitive                                                           | Notes                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Step statement                    | `h2` `font-serif`                                                   | 28px on the default + access paths, 22px on the technical one                                  |
+| "Your project's code" overline    | `SectionLabel`                                                      | mono · 11px · 0.06em · `--el-text-eyebrow`                                                     |
+| Primary action                    | `Button variant="primary"`                                          | `Continue` · `Connect GitHub` · `Open the invitation` · `Try again` · `Set up N repositories`  |
+| Quiet secondary                   | a text button in `--el-link`                                        | `I already have code` · `Later` · `Go to my backlog` · `Use one of mine` · `Let Motir host it` |
+| **Ownership promise**             | a callout `div` (`--el-surface-soft` + `--el-border-soft`) + `Lock` | a standing guarantee, not a severity tint; carries the transfer door                           |
+| Default-path state line           | `Spinner` / lucide icon + text                                      | `role="status"` while working, `role="alert"` on failure                                       |
+| **Per-row invitation line**       | lucide icon + a word + detail text                                  | `Mail` / `BadgeCheck` / `UserPlus`; inside the row, never its own row                          |
+| A row container (≥2 rows)         | `Card` (untinted, `data-surface="card"`)                            | `--radius-card` · `--el-border` · row padding, not `--spacing-card-padding`                    |
+| Repository name field             | `Input` (composing `FormField`)                                     | `addonStart` carries the fixed `motir-projects /` prefix; `error` variant on a failed row      |
+| Existing-repository picker        | `Combobox`                                                          | over the repos the installation grants; "Grant more on GitHub" hands off to 7.10               |
+| Role chip                         | `Pill tone="neutral"`                                               | mono; roles are metadata, not a status — no semantic tint is spent on them                     |
+| Reorder / menu trigger            | icon `Button` at `--height-control` + `--radius-control`            | `ChevronUp` / `ChevronDown` / `Ellipsis`                                                       |
+| Row `⋯` menu                      | `Popover` + a menu list                                             | `--radius-card` container, `--radius-control` rows, `--el-option-active-bg`                    |
+| The "why" panel                   | a callout `div` (`--el-callout-bg`) + `Sparkles`                    | mirrors the shipped AI-proposal callout; not a `Tooltip`                                       |
+| Row recoveries                    | `Button variant="secondary" size="sm"` + `ghost sm`                 | Retry / Open the invitation emphasized; the others quiet                                       |
+| Rail (status · history · outcome) | **the shipped `PlanReviewRail`**                                    | reused verbatim                                                                                |
+
+**`Segmented` is no longer used by this surface** (v3 used it for the per-row create/connect choice;
+see §6). **No new primitive is introduced.** If MOTIR-1782 finds it needs one, that is its own
+`design/` subtask, not an improvisation.
+
+---
+
+## 9. Token roles — colour (`--el-*`) and shape
 
 Every value in the mock's `:root` block was **generated** from `packages/design-system/theme.css`
 (the Tier-0 `@theme` + Tier-3 `:root,[data-appearance-scope]` blocks), so no hex was retyped and the
 asset cannot drift. The only raw values in the file are the mock **board's own** backdrop and the
-canvas grid-dot texture — non-semantic decoration, per the colour rule's carve-out. **Dark mode
-needs nothing extra:** every colour is an `--el-*` reference, so `theme.css`'s `[data-theme='dark']`
-block re-skins the step.
+canvas grid-dot texture — non-semantic decoration, per the colour rule's carve-out. Every icon path
+is generated from `lucide-react`'s `__iconNode` (the octocat mark verbatim from
+`components/icons/GithubMark.tsx`, which lucide has no equivalent for). **Dark mode needs nothing
+extra in the BUILT component:** every colour the step renders is an `--el-*` reference — verified
+mechanically, zero `--color-*` and zero hex/`rgb()` in the authored rules and markup — so
+`theme.css`'s `[data-theme='dark']` block re-skins it with no per-component work. The **asset
+itself is light-only**, which is this repo's convention for `design/*.mock.html` (it embeds the
+generated light token block, not the dark one); that is a property of the mock, not a gap in the
+design.
 
-| Element                                         | Token                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------- |
-| Step pane (behind the step)                     | `--el-canvas`                                                                   |
-| Row container · rail card                       | `--el-card` · `--el-surface` / `--el-surface-soft`                              |
-| Statement / body / helper ink                   | `--el-text` · `--el-text-secondary` · `--el-text-helper`                        |
-| Overline                                        | `--el-text-eyebrow`                                                             |
-| Field · combobox                                | `--el-page-bg` fill · `--el-input-border` · `--el-text-muted` prefix            |
-| `Segmented` track · active option · active icon | `--el-tabnav-track` · `--el-page-bg` + `--shadow-subtle` · `--el-tabnav-active` |
-| Primary action                                  | `--el-accent` / `--el-accent-text`                                              |
-| Quiet secondaries and links                     | `--el-link`                                                                     |
-| "ready" state icon · `created` row              | `--el-success` · `--el-success-surface`                                         |
-| `connected` row · its icon                      | `--el-notice-info-bg` · `--el-info`                                             |
-| failure icon · `failed` row · its ink           | `--el-danger` · `--el-danger-surface` · `--el-danger-surface-text`              |
-| `skipped` row · its icon                        | `--el-surface-soft` · `--el-icon-muted`                                         |
-| The "why" callout · its sparkle                 | `--el-callout-bg` · `--el-accent-on-surface`                                    |
-| Role chip                                       | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                     |
-| Rail status pill (Approved)                     | `--el-tint-mint` + `--el-text-strong` (the shipped `STATUS_TINT`)               |
+| Element                                                           | Token                                                                |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Step pane (behind the step)                                       | `--el-canvas`                                                        |
+| Row container · rail card                                         | `--el-card` · `--el-surface` / `--el-surface-soft`                   |
+| Statement / body / helper ink                                     | `--el-text` · `--el-text-secondary` · `--el-text-helper`             |
+| Overline                                                          | `--el-text-eyebrow`                                                  |
+| **Ownership promise** · its border · its icon                     | `--el-surface-soft` · `--el-border-soft` · `--el-icon-muted`         |
+| Field · combobox                                                  | `--el-page-bg` fill · `--el-input-border` · `--el-text-muted` prefix |
+| Primary action                                                    | `--el-accent` / `--el-accent-text`                                   |
+| Quiet secondaries and links                                       | `--el-link`                                                          |
+| "ready" state icon · `created` row                                | `--el-success` · `--el-success-surface`                              |
+| **`invited`** icon · **`accepted`** icon · **`not invited`** icon | `--el-info` · `--el-success` · `--el-warning`                        |
+| Invitation state WORD (on a tinted row)                           | `--el-text-strong`                                                   |
+| `connected` row · its icon                                        | `--el-notice-info-bg` · `--el-info`                                  |
+| failure icon · `failed` row · its ink                             | `--el-danger` · `--el-danger-surface` · `--el-danger-surface-text`   |
+| `skipped` row · its icon                                          | `--el-surface-soft` · `--el-icon-muted`                              |
+| The "why" callout · its sparkle                                   | `--el-callout-bg` · `--el-accent-on-surface`                         |
+| Role chip                                                         | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`          |
+| Rail status pill (Approved)                                       | `--el-tint-mint` + `--el-text-strong` (the shipped `STATUS_TINT`)    |
 
 | Surface                                             | Shape token                                                            |
 | --------------------------------------------------- | ---------------------------------------------------------------------- |
 | Buttons                                             | `--radius-btn` · `--height-btn-md` / `-sm` · `--spacing-btn-x`         |
-| Row container · callouts · menu container · the box | `--radius-card`                                                        |
+| Row container · callouts · promise · menu · the box | `--radius-card`                                                        |
 | Field · combobox trigger                            | `--radius-input` · `--height-input` · `--spacing-input-x`              |
-| `Segmented` track · its options                     | `--radius-btn` · `calc(var(--radius-btn) - 2px)` · `--height-control`  |
 | Role chip                                           | `--radius-badge` · `--spacing-chip-x` / `-y`                           |
 | Icon buttons · menu rows                            | `--radius-control` · `--height-control` · `--spacing-control-x` / `-y` |
-| Menu elevation · active segment                     | `--shadow-elevated` · `--shadow-subtle`                                |
+| Menu elevation                                      | `--shadow-elevated`                                                    |
 
 **No Tier-0 `--color-*`, no generic `--radius-sm/md/lg`, no raw `rounded-md` / `p-2` / `h-9`, no
-invented hue.** The default path is deliberately quiet (ink, accent, one state hue at a time); the
-semantic spread — success, info, danger, warning, the lavender AI callout, the neutral chip — lives
-on the technical path where there are states to tell apart, so neither screen is grey-and-purple
-(finding #54) and neither is a fruit salad.
+invented hue.** The default and access paths are deliberately quiet (ink, accent, one state hue at a
+time); the semantic spread — success, info, danger, warning, the lavender AI callout, the neutral
+chip — lives where there are states to tell apart, so neither screen is grey-and-purple (finding #54)
+and neither is a fruit salad.
 
 ---
 
-## 8. Copy — every string, as `en.json` keys
+## 10. Copy — every string, as `en.json` keys
 
-Namespace **`repositorySet`**. MOTIR-1782 adds these to `messages/en.json` **and**
+Namespace **`repositorySet`**. MOTIR-1782 / MOTIR-1900 add these to `messages/en.json` **and**
 `messages/zh.json` (the i18n-catalog parity test fails otherwise).
 
 ### The default path
 
-| Key                 | String                                                                                                                                |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `overline`          | Your project's code                                                                                                                   |
-| `title`             | Motir will host your code                                                                                                             |
-| `lead`              | Your project's code lives with Motir, ready for your agents to start work. It's yours — move it to your own GitHub whenever you want. |
-| `continueCta`       | Continue                                                                                                                              |
-| `iHaveCode`         | I already have code                                                                                                                   |
-| `working`           | Setting up your code…                                                                                                                 |
-| `workingDetail`     | This takes a few seconds. Your plan is already in your backlog — you can leave this page.                                             |
-| `ready`             | Your code is ready                                                                                                                    |
-| `readyDetail`       | Motir keeps it safe and connected. It's yours — move it to your own GitHub whenever you want.                                         |
-| `goToBacklog`       | Go to my backlog                                                                                                                      |
-| `seeWhereItLives`   | See where it lives                                                                                                                    |
-| `setupFailed`       | Motir couldn't finish setting up your code                                                                                            |
-| `setupFailedDetail` | Your plan is safe in your backlog. Nothing is lost — Motir will tell you if a task needs code that isn't ready yet.                   |
-| `tryAgain`          | Try again                                                                                                                             |
-| `outcomeReady`      | Your code is ready _(the line added to the rail's outcome)_                                                                           |
+| Key                  | String                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `overline`           | Your project's code                                                                                                 |
+| `title`              | Motir will host your code                                                                                           |
+| `lead`               | Your project's code lives with Motir, ready for your agents to start work.                                          |
+| `promise`            | **It's yours.** Motir keeps it safe and private — move it to your own GitHub whenever you want.                     |
+| `promiseDoor`        | How moving it works _(the link into MOTIR-711's transfer)_                                                          |
+| `continueCta`        | Continue                                                                                                            |
+| `iHaveCode`          | I already have code                                                                                                 |
+| `working`            | Setting up your code…                                                                                               |
+| `workingDetail`      | This takes a few seconds. Your plan is already in your backlog — you can leave this page.                           |
+| `ready`              | Your code is ready                                                                                                  |
+| `goToBacklog`        | Go to my backlog                                                                                                    |
+| `setupFailed`        | Motir couldn't finish setting up your code                                                                          |
+| `setupFailedDetail`  | Your plan is safe in your backlog. Nothing is lost — Motir will tell you if a task needs code that isn't ready yet. |
+| `tryAgain`           | Try again                                                                                                           |
+| `outcomeReady`       | Your code is ready _(the line added to the rail's outcome)_                                                         |
+| `outcomeNeedsAccess` | Finish setting up access _(the rail's outcome when the user chose Later)_                                           |
+
+### The access step (MOTIR-1900)
+
+| Key                  | String                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accessTitle`        | Get access to your code                                                                                                                                             |
+| `accessLead`         | Your code is private — only you and Motir can see it. Connect GitHub and Motir will invite you to it, so you can open it, clone it, and point your own agent at it. |
+| `connectGithub`      | Connect GitHub                                                                                                                                                      |
+| `accessLater`        | Later                                                                                                                                                               |
+| `accessOnlyUsername` | Motir only needs to know your GitHub username.                                                                                                                      |
+| `invitedTitle`       | You're invited to your code                                                                                                                                         |
+| `invitedDetail`      | Motir invited {login}. Accept the invitation on GitHub and your code is yours to clone.                                                                             |
+| `openInvitation`     | Open the invitation                                                                                                                                                 |
+| `stateInvited`       | Invitation sent                                                                                                                                                     |
+| `invitedRowDetail`   | to {login}, waiting to be accepted on GitHub                                                                                                                        |
+| `resendInvitation`   | Resend invitation                                                                                                                                                   |
+| `stateAccepted`      | You have access                                                                                                                                                     |
+| `acceptedRowDetail`  | {login} can clone and push to this repository                                                                                                                       |
+| `stateNotInvited`    | Not invited yet                                                                                                                                                     |
+| `notInvitedDetail`   | Motir doesn't know your GitHub account yet                                                                                                                          |
 
 ### The technical path
 
 | Key                   | String                                                                                                                                                          |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ownTitle`            | Use your own GitHub instead                                                                                                                                     |
-| `ownLead`             | Motir will connect to your account and use the repositories you choose. You pick which ones it may see, on GitHub — Motir never sees the rest.                  |
-| `connectGithub`       | Connect GitHub                                                                                                                                                  |
+| `ownTitle`            | Use the code you already have                                                                                                                                   |
+| `ownLead`             | Motir will use repositories you already have instead of creating new ones. You pick which ones it may see, on GitHub — Motir never sees the rest.               |
 | `letMotirHost`        | Let Motir host it                                                                                                                                               |
 | `setTitle`            | Where should each part live?                                                                                                                                    |
 | `setLead`             | Connected as {login}. Your plan separates the web app from the API, so Motir needs a home for each.                                                             |
 | `roleGlossWeb`        | The app people use                                                                                                                                              |
 | `roleGlossApi`        | The service behind it                                                                                                                                           |
-| `createForMe`         | Create for me                                                                                                                                                   |
 | `useOneOfMine`        | Use one of mine                                                                                                                                                 |
-| `whereRoleLives`      | Where the {role} part lives _(the `Segmented` group's accessible name)_                                                                                         |
 | `nameLabelForRole`    | Name of the {role} repository                                                                                                                                   |
 | `nameLabelOne`        | Repository name                                                                                                                                                 |
 | `pickerLabelForRole`  | Repository to use for the {role}                                                                                                                                |
 | `pickerLabelOne`      | Repository to use                                                                                                                                               |
 | `pickerHint`          | Only the repositories you granted Motir appear here.                                                                                                            |
 | `grantMore`           | Grant more on GitHub                                                                                                                                            |
-| `seedStarter`         | Seeded from the Motir Next.js starter.                                                                                                                          |
+| `seedStarter`         | Motir creates and hosts it · seeded from the Motir Next.js starter.                                                                                             |
 | `seedInitialised`     | Starts with a README, a licence, a `.gitignore` and a CI stub — your first task in it builds the skeleton.                                                      |
 | `monorepoHint`        | Everything lives here. Motir won't create anything.                                                                                                             |
 | `whyTrigger`          | Why this repository?                                                                                                                                            |
@@ -382,9 +570,9 @@ Namespace **`repositorySet`**. MOTIR-1782 adds these to `messages/en.json` **and
 | `notNow`              | Not now                                                                                                                                                         |
 | `setupNote`           | The first row is your project's main repository. Nothing is created until you press Set up.                                                                     |
 | `stateCreating`       | Creating…                                                                                                                                                       |
-| `stateCreatingDetail` | Adding it to the Motir GitHub App                                                                                                                               |
+| `stateCreatingDetail` | Seeding it from the starter                                                                                                                                     |
 | `stateCreated`        | Created                                                                                                                                                         |
-| `createdDetail`       | Seeded from the Motir Next.js starter · connected to Motir.                                                                                                     |
+| `createdDetail`       | Hosted by Motir · seeded from the Motir Next.js starter.                                                                                                        |
 | `stateConnected`      | Connected                                                                                                                                                       |
 | `connectedDetail`     | Your existing repository — nothing was created and nothing was changed in it.                                                                                   |
 | `stateSkipped`        | Skipped                                                                                                                                                         |
@@ -392,44 +580,62 @@ Namespace **`repositorySet`**. MOTIR-1782 adds these to `messages/en.json` **and
 | `skippedDetail`       | Motir will plan around it, and say so when a task needs code that isn't there.                                                                                  |
 | `createAfterAll`      | Create it after all                                                                                                                                             |
 | `stateFailed`         | Couldn't create                                                                                                                                                 |
-| `failedNameTaken`     | {login} already has a repository called {name}. Rename this one, or use the existing repository instead.                                                        |
-| `failedLimit`         | GitHub declined the request — {login} has hit its repository limit. Nothing was created for this row.                                                           |
+| `failedNameTaken`     | Motir already hosts a repository called {name}. Rename this one, or use one of yours instead.                                                                   |
+| `failedDeclined`      | GitHub declined the request and nothing was created for this row. Motir will retry, or you can use one of yours instead.                                        |
 | `retryRow`            | Retry                                                                                                                                                           |
 | `summaryPartial`      | {created} created · {skipped} skipped · {unresolved} needs a decision                                                                                           |
 | `finishSetup`         | Finish setup                                                                                                                                                    |
 | `finishHint`          | Your plan is already in the backlog. Motir will tell you which tasks are waiting on a repository.                                                               |
 | `finishSetupLink`     | Finish setting up repositories                                                                                                                                  |
 
+**Removed in v4:** `createForMe` ("Create for me") and `whereRoleLives` (the `Segmented`'s group
+label) — the control they belonged to no longer exists. `failedLimit` is replaced by
+`failedDeclined`, because the repository limit it named was the user's account limit and creation no
+longer happens there. `readyDetail` and `seeWhereItLives` fold into `promise` and the access step.
+
 ### Accessible names — the superstring audit
 
 A new control's accessible name must not **contain** an existing one, or `getByRole` starts matching
-two things (the superstring-label class). Checked against `messages/en.json`:
+two things (the superstring-label class). Checked programmatically against all 4,367 strings in
+`messages/en.json`:
 
-- **`Use one of mine`** was chosen over "Connect existing", which would have contained the exact
-  existing name **"Connect"** (`import.steps.connect`, `gitlab.projects.connectAction`,
-  `onboardingMigrate.rail.connect`). It also reads better beside **Create for me**.
-- **`Not now`** was chosen over "Skip for now", which would have contained **"SKIP"**
-  (`import.preview.actionSkip`) _and_ collided with this surface's own **Skip this one**.
-- **`Continue`** duplicates `auth.continue` **exactly**, and **`Retry`** / **`Remove`** duplicate
-  `dashboards.states.retry` / `settings.members.remove` exactly. Exact duplicates on other surfaces
-  are fine and already the norm — only containment breaks a selector.
+- **`Later`** was chosen over "Not now", which this surface already uses at the technical path's set
+  footer — two controls with the same name on one route is exactly the scoping problem the rule
+  guards. "Skip for now" was rejected twice over: it contains **"Skip"**
+  (`import.preview.actionSkip`) _and_ collides with this surface's own **Skip this one**. `Later`
+  contains nothing in the catalog.
+- **`Open the invitation`** was chosen over "Open invitation on GitHub", which would have contained
+  **"GitHub"** (`shell.nav.github`, `github.title`, `publicProjects.github`) — a name already
+  ambiguous across the app.
+- **`Use one of mine`** was kept from v3 (chosen over "Connect existing", which would have contained
+  the exact existing name **"Connect"**), and **`Let Motir host it`** is reused verbatim at BOTH
+  altitudes — the step-level way back (panel 5a) and the row-level mode switch (panel 6). That is one
+  name for one action rather than two near-duplicates; **note for MOTIR-1785: scope that locator to
+  the row or the step under test**, never the page.
+- **`Resend invitation`** contains **"Resend"** (`settings.profile.email.pending.resend`), on the
+  account-settings surface only — no route renders both, so no locator can straddle them.
+- **`Continue`**, **`Retry`** and **`Remove`** duplicate `auth.continue`,
+  `dashboards.states.retry` and `settings.members.remove` **exactly**. Exact duplicates on other
+  surfaces are fine and already the norm — only containment breaks a selector.
 - **`Connect GitHub`** is the **same** name as the shipped Git-settings button, deliberately: it is
-  the same action, and the E2E should be able to reach either by the same name.
-- **Within this surface**, no name contains another. Note for MOTIR-1785: **`I already have code`**
-  appears on both the default step and the failure state, so scope that locator to the state under
-  test rather than the page.
+  the same action, and the E2E should be able to reach either by the same name. It now appears at
+  three altitudes here (the access prompt, a `not invited` row, and panel 2's `created` state) —
+  scope by container.
+- **Within this surface**, no name contains another. **`I already have code`** appears on both the
+  default step and the failure state, so scope that locator to the state under test rather than the
+  page.
 
 ---
 
-## 9. a11y
+## 11. a11y
 
 - **Every state carries text**, not colour alone (finding #35); tinted rows hold
-  `--el-text-strong` / `--el-danger-surface-text` ink so AA holds in both themes.
-- **`role="status"`** on the default path's _Setting up your code…_ and on the partial summary;
-  **`role="alert"`** on the default path's failure sentence and on each failed row's reason — the
-  row that failed announces itself, not the whole step.
-- **The `Segmented` is a labelled group** (_Where the web part lives_), so the two options are not
-  two orphan buttons to a screen reader.
+  `--el-text-strong` / `--el-danger-surface-text` ink so AA holds in both themes. The three
+  invitation states are `Mail` / `BadgeCheck` / `UserPlus` **plus** a word, so `invited` and
+  `accepted` are distinguishable without hue.
+- **`role="status"`** on the default path's _Setting up your code…_, on each `not invited` row, and
+  on the partial summary; **`role="alert"`** on the default path's failure sentence and on each
+  failed row's reason — the row that failed announces itself, not the whole step.
 - **The reorder affordance is keyboard-operable** — the grip is decorative (`aria-hidden`) and the
   real controls are **Move up** / **Move down**; drag is an enhancement, never the only path.
 - **Every field has a real label** — visible at one row (**Repository name**), visually hidden but
@@ -442,30 +648,42 @@ two things (the superstring-label class). Checked against `messages/en.json`:
 
 ---
 
-## 10. Page state after the step's mutations (the enforced contract)
+## 12. Page state after the step's mutations (the enforced contract)
 
-Setting up code changes three surfaces, and they do **not** all refresh the same way
-(`motir-core/CLAUDE.md`):
+Setting up code — and then granting access — changes three surfaces, and they do **not** all refresh
+the same way (`motir-core/CLAUDE.md`):
 
 1. **The step's own state line / row** — the response IS the confirmation. Keep the returned state;
-   do **not** `router.refresh()` it (the refresh re-reads and causes a visible revert).
+   do **not** `router.refresh()` it (the refresh re-reads and causes a visible revert). This now
+   covers the invitation sub-state too: a **Resend invitation** response is the confirmation, not a
+   reason to re-read the row.
 2. **The rail's outcome card** (server-rendered from the plan review read) — `router.refresh()`
-   reaches it, which is how **"Your code is ready"** / **"Finish setting up repositories"** appears.
+   reaches it, which is how **"Your code is ready"** / **"Finish setting up access"** appears.
 3. **Any client island seeded from server props** — the code-context surface and any nav badge own
    their own state; `router.refresh()` cannot reach them, so they need an explicit refetch trigger
    (a provider tick). MOTIR-1782 does the ones that exist and leaves the rest to MOTIR-1764.
 
+**Per-row polling is a fourth mechanism, not one of these three** (spike §4.2): each row's
+`creating → created` transition is settled by a readiness read, so the row is an async job with its
+own poll, and `router.refresh()` is neither how it starts nor how it finishes.
+
 ---
 
-## 11. Explicitly OUT of scope here (so nothing is built twice)
+## 13. Explicitly OUT of scope here (so nothing is built twice)
 
 - **The plan-approval surface, the canvas, the review rail** — shipped (MOTIR-847 / 1193 / 1194).
   Composed, not redrawn.
-- **The GitHub connect / install screens** — 7.10. Only the hand-off is drawn.
+- **The GitHub connect / install screens** — 7.10. Only the hand-off is drawn, and only grant 1 is
+  needed by the access step.
+- **The collaborator-invite service itself** — MOTIR-1900. Its states are drawn; none of its code,
+  credential handling, or failure taxonomy is designed here.
 - **The code-context / index-freshness surface, and the code-blind planning signal** — MOTIR-1764
-  (Story MOTIR-1754). Pointed at as the durable home of the set; none of it drawn.
-- **The claim / transfer flow** — MOTIR-711 (9.3.7). Only the claimable promise is worded.
+  (Story MOTIR-1754). Pointed at as the durable home of the set and of unfinished access; none of it
+  drawn.
+- **The claim / transfer flow** — MOTIR-711 (9.3.7). Only the promise and its door are drawn.
 - **The repo-set table, the derivation service, the creation primitive** — MOTIR-1780 / 1881 / 1781.
   Behaviour is quoted; no schema or service is designed here.
+- **The hosted agent, and anything that makes panel 8b real** — Epic 9. Panel 8 records the
+  consequence; it does not design the agent, its dispatch, or the CI metering that gates it.
 - **The multi-stack scaffold registry** — MOTIR-709 (9.3.5). The notes say honestly that a non-web
   repo starts near-empty until then, rather than implying a scaffold that does not exist.
