@@ -257,16 +257,33 @@ export class NotEpicError extends WorkItemError {
  * clean tool error the agent self-corrects from, so the message NAMES the
  * connected set.
  */
+/**
+ * WHICH domain a rejected pin was checked against (MOTIR-1783) — the project's
+ * own repository SET (`project_repository`) when it has one, else the workspace's
+ * connected repos. It changes only the MESSAGE, but that message is the whole
+ * value of the error: told the wrong set, the author corrects the wrong thing.
+ */
+export type UnknownTargetRepoScope = 'workspace' | 'project';
+
 export class UnknownTargetRepoError extends WorkItemError {
   readonly tag = 'UNKNOWN_TARGET_REPO' as const;
   readonly code = 'UNKNOWN_TARGET_REPO' as const;
-  constructor(repoName: string, connectedRefs: string[]) {
-    super(
-      connectedRefs.length === 0
-        ? `Unknown target repo "${repoName}" — this workspace has no connected repositories. ` +
-            'Connect the repo first, or leave targetRepo unset.'
-        : `Unknown target repo "${repoName}". Connected repositories: ${connectedRefs.join(', ')}.`,
-    );
+  constructor(
+    repoName: string,
+    connectedRefs: string[],
+    scope: UnknownTargetRepoScope = 'workspace',
+  ) {
+    const empty =
+      scope === 'project'
+        ? `Unknown target repo "${repoName}" — this project's repository set is empty. ` +
+          'Add the repository to the project first, or leave targetRepo unset.'
+        : `Unknown target repo "${repoName}" — this workspace has no connected repositories. ` +
+          'Connect the repo first, or leave targetRepo unset.';
+    const known =
+      scope === 'project'
+        ? `Unknown target repo "${repoName}". This project's repositories: ${connectedRefs.join(', ')}.`
+        : `Unknown target repo "${repoName}". Connected repositories: ${connectedRefs.join(', ')}.`;
+    super(connectedRefs.length === 0 ? empty : known);
     this.name = 'UnknownTargetRepoError';
   }
 }

@@ -18,7 +18,11 @@ import type {
   ProjectRepoSetDto,
   SetProjectRepoOwnershipInput,
 } from '@/lib/dto/projectRepos';
-import { toProjectRepoNames, type ProjectRepoName } from '@/lib/projectRepos/names';
+import {
+  toProjectRepoNames,
+  toProjectRepoPinNames,
+  type ProjectRepoName,
+} from '@/lib/projectRepos/names';
 import { allowedTransitions, canTransition } from '@/lib/projectRepos/transitions';
 import { defaultSeedSourceForRole } from '@/lib/projectRepos/vocabulary';
 import {
@@ -287,6 +291,37 @@ export const projectRepoSetService = {
     return inProject(projectId, ctx, 'browse', async (tx) => {
       const rows = await projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx);
       return toProjectRepoNames(rows);
+    });
+  },
+
+  /**
+   * BOTH repo-name domains a `targetRepo` is resolved against (MOTIR-1783), plus
+   * whether this project has a set at all — from ONE read of the set.
+   *
+   * Three answers rather than three calls, because the scope ladder in
+   * `lib/workItems/dispatchRepo.ts` needs all three at once and they must describe
+   * the SAME snapshot of the set: `hasSet` decides whether the project's set
+   * answers at all or the workspace-connected compatibility path does, and mixing
+   * that decision with a domain read from a later snapshot is how a project that
+   * gained its first row mid-request would validate a pin against the workspace
+   * and then dispatch against the project.
+   *
+   * `hasSet` is "the project has ROWS", not "the project has established rows": a
+   * set whose repositories are all still proposed HAS been planned, and answering
+   * it with the workspace's single connected repo would hand back a repository the
+   * project deliberately did not choose.
+   */
+  async getRepoNameDomains(
+    projectId: string,
+    ctx: ServiceContext,
+  ): Promise<{ hasSet: boolean; dispatchable: ProjectRepoName[]; pinnable: ProjectRepoName[] }> {
+    return inProject(projectId, ctx, 'browse', async (tx) => {
+      const rows = await projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx);
+      return {
+        hasSet: rows.length > 0,
+        dispatchable: toProjectRepoNames(rows),
+        pinnable: toProjectRepoPinNames(rows),
+      };
     });
   },
 

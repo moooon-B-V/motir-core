@@ -42,13 +42,20 @@ export interface ReadyDispatchContext extends ReadyItemContext {
    */
   sessionBranch: string | null;
   /**
-   * The RESOLVED target repo (Story 7.9 · MOTIR-1804) — the item's explicit pin,
-   * else the workspace's single connected repo, else null. Resolved by the
-   * service (it needs the workspace's connected repo set, which the row does not
-   * carry), not read from the row: `row.targetRepo` is only the pin. See the DTO
-   * doc for why the fallback stops at "exactly one".
+   * The RESOLVED target repo (Story 7.9 · MOTIR-1804; project-scoped in
+   * MOTIR-1783) — the item's explicit pin, else the single repo of the item's
+   * project, else null. Resolved by the service (it needs the project's repo
+   * set, which the row does not carry), not read from the row: `row.targetRepo`
+   * is only the pin. See the DTO doc for why the fallback stops at "exactly
+   * one", and `lib/workItems/dispatchRepo.ts` for the project → workspace scope
+   * ladder.
    */
   targetRepo: string | null;
+  /** The resolved repo's HTTPS clone URL, or null when Motir does not know it
+   *  (MOTIR-1783 — see the DTO doc; always present, never omitted). */
+  targetRepoCloneUrl: string | null;
+  /** The resolved repo's default branch, or null when Motir does not know it. */
+  targetRepoDefaultBranch: string | null;
 }
 
 function toAssigneeDto(assignee: ReadyAssignee | null): ReadyItemDto['assignee'] {
@@ -111,5 +118,7 @@ export function toReadyItemDispatchDto(
     runCommand: `motir run ${row.identifier}`,
     sessionBranch: ctx.sessionBranch,
     targetRepo: ctx.targetRepo,
+    targetRepoCloneUrl: ctx.targetRepoCloneUrl,
+    targetRepoDefaultBranch: ctx.targetRepoDefaultBranch,
   };
 }

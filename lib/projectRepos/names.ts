@@ -1,6 +1,7 @@
 import type { ProjectRepoRole } from '@prisma/client';
 import { normalizeTargetRepo, type ConnectedRepoName } from '@/lib/workItems/targetRepo';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
+import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { isEstablishedState } from './vocabulary';
 
 // The project-scoped counterpart of `listConnectedRepoNames` (Story MOTIR-1775 ·
@@ -71,6 +72,55 @@ export function toProjectRepoNames(rows: ProjectRepoWithRealized[]): ProjectRepo
     byName.set(key, {
       name,
       repoRef: `${row.githubRepo.owner}/${row.githubRepo.name}`,
+      // The coordinates an agent with no checkout needs (MOTIR-1783) — derived,
+      // never stored (`lib/repos/cloneUrl.ts`). Only a REALIZED row can carry
+      // them, which is exactly what this list is made of.
+      cloneUrl: repoCloneUrl(row.githubRepo),
+      defaultBranch: row.githubRepo.defaultBranch,
+      rowId: row.id,
+      role: row.role,
+      label: row.label,
+    });
+  }
+  return [...byName.values()];
+}
+
+/**
+ * The names a pin may be AUTHORED against — every row in the set, established or
+ * not, in set order.
+ *
+ * A WIDER domain than {@link toProjectRepoNames} on purpose, and the difference
+ * is the whole point of having two:
+ *
+ * - **Authoring** records a DECISION about work that has not run yet. The plan
+ *   names the repositories before any of them exists (ADR §5.1 — the planner
+ *   pins at generation, `proposed` rows and all), so validating an authored pin
+ *   against established rows only would reject the ordinary case: "this subtask
+ *   ships in the api repo we are about to create." What authoring must still
+ *   catch is the TYPO and the wrong-project name, which this domain does.
+ * - **Dispatch** names a checkout that has to EXIST right now, so it uses the
+ *   established list — a plan-only name would send an agent nowhere.
+ *
+ * An unrealized row's name is its AUTHORED one (there is no host casing to
+ * prefer yet), and it carries no coordinates: `cloneUrl` / `defaultBranch` stay
+ * null until the repository is real, so a pin resolved through this domain can
+ * never claim to know where something lives that does not.
+ */
+export function toProjectRepoPinNames(rows: ProjectRepoWithRealized[]): ProjectRepoName[] {
+  const byName = new Map<string, ProjectRepoName>();
+  for (const row of rows) {
+    const realized = row.githubRepo;
+    const name = normalizeTargetRepo(realized?.name ?? row.name);
+    if (name === null) continue;
+    const key = name.toLowerCase();
+    if (byName.has(key)) continue;
+    byName.set(key, {
+      name,
+      // No owner is known for a row that is still a plan, so the ref IS the
+      // name — the error message then lists it exactly as it may be pinned.
+      repoRef: realized ? `${realized.owner}/${realized.name}` : name,
+      cloneUrl: realized ? repoCloneUrl(realized) : null,
+      defaultBranch: realized?.defaultBranch ?? null,
       rowId: row.id,
       role: row.role,
       label: row.label,

@@ -149,13 +149,43 @@ export interface ReadyItemDispatchDto extends ReadyItemDto {
    * that override map and the `<root>/<repoName>` checkout convention use.
    *
    * RESOLVED, unlike `WorkItemDto.targetRepo` (the raw pin): the item's explicit
-   * pin when it has one, else the workspace's SINGLE connected repo when that is
+   * pin when it has one, else the SINGLE repo of the item's project when that is
    * unambiguous, else `null`. `null` is a real answer — "Motir does not know" —
    * and the CLI falls back to its link-root rule. It is NEVER a guess: with two
-   * or more connected repos and no pin, dispatching into an arbitrary checkout
-   * is worse than admitting the gap.
+   * or more repos and no pin, dispatching into an arbitrary checkout is worse
+   * than admitting the gap.
+   *
+   * The domain is the PROJECT's repository set (MOTIR-1783); a project that has
+   * no set — every project predating `project_repository` — still resolves
+   * against the workspace's connected repos, the compatibility rung.
    */
   targetRepo: string | null;
+  /**
+   * HOW to obtain {@link ReadyItemDispatchDto.targetRepo} — its HTTPS clone URL
+   * (MOTIR-1783), or `null` when Motir does not know one.
+   *
+   * `targetRepo` is a bare NAME, resolved for the CLI's `<root>/<repoName>`
+   * checkout convention: it answers an agent that ALREADY has the checkout. An
+   * agent that does not had nothing to clone, which is what this closes.
+   *
+   * Independently nullable from `targetRepo`, and `null` is a real value that is
+   * always PRESENT on the wire (never an omitted key, never `""`). It is null
+   * whenever Motir cannot derive a URL: no repo resolved at all; the pin names a
+   * repository that does not exist yet (a set row still being planned) or is no
+   * longer connected; or the provider is one this build cannot address.
+   */
+  targetRepoCloneUrl: string | null;
+  /**
+   * The default branch of {@link ReadyItemDispatchDto.targetRepo} — what a fresh
+   * clone lands on and what a new branch should be cut from — or `null` when
+   * Motir does not know it (the same cases as
+   * {@link ReadyItemDispatchDto.targetRepoCloneUrl}).
+   *
+   * Deliberately NOT defaulted to `"main"`: a guessed branch name is the same
+   * class of error as a guessed repo, and the consumer can only fall back
+   * sensibly if it can tell the difference between "main" and "unknown".
+   */
+  targetRepoDefaultBranch: string | null;
 }
 
 /**
