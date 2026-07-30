@@ -3,9 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>
-      Design mock · Where should your code live? — the repository SET at plan approval (MOTIR-1778)
-    </title>
+    <title>Design mock · Where should your code live? — Motir hosts your code (MOTIR-1778)</title>
     <!--
       DESIGN ASSET (HTML mockup) — THE REPOSITORY SET at plan approval: the step,
       one row per repository, both cardinalities, and every per-row state.
@@ -759,6 +757,7 @@
       .step-pane {
         display: flex;
         justify-content: center;
+        align-items: center;
         padding: 32px 28px;
         background:
           radial-gradient(circle at 1px 1px, rgba(15, 15, 15, 0.06) 1px, transparent 0) 0 0 / 22px
@@ -772,10 +771,112 @@
         flex-direction: column;
         gap: 20px;
       }
+      .step.hero {
+        max-width: 30rem;
+        gap: 24px;
+      }
       .step-head {
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      .hero-h {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.22;
+        color: var(--el-text);
+      }
+      .hero-p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .hero-cta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .quiet-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      /* the default path's plain-language state line */
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .status-line.ok svg {
+        color: var(--el-success);
+      }
+      .status-line.bad svg {
+        color: var(--el-danger);
+      }
+      /* two-up: the SAME screen at different real cardinalities */
+      .twoup {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .twoup > figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .twoup figcaption {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Segmented (packages/design-system/src/components/ui/Segmented.tsx) */
+      .seg {
+        display: inline-flex;
+        align-self: flex-start;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .seg > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding-inline: var(--spacing-control-x);
+        border-radius: calc(var(--radius-btn) - 2px);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .seg > span.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg > span.on svg {
+        color: var(--el-tabnav-active);
       }
       .step-head h3 {
         margin: 0;
@@ -1274,13 +1375,14 @@
     </svg>
     <div class="board">
       <header>
-        <h1>Where should your code live? — the repository SET at plan approval</h1>
+        <h1>Where should your code live? — the step at plan approval</h1>
         <p>
-          MOTIR-1778 · Story MOTIR-1775. The step that turns an approved plan into the repositories
-          the project's architecture needs. Every role, name, seed source, ownership rule and
-          per-row state below is quoted from the accepted ADR
-          <code class="mono">docs/decisions/project-repository-set.md</code>; the surface it lands
-          in was rendered from a production build before anything was drawn.
+          MOTIR-1778 · Story MOTIR-1775. The step that gives an approved plan somewhere for its code
+          to live. <b>Motir hosts it by default</b>, in one sentence, because the person answering
+          is a founder and not a developer — and the repository detail (names, roles, per-row state)
+          exists only for the user who explicitly says they already have code. Grounded in the
+          accepted ADR <code class="mono">docs/decisions/project-repository-set.md</code>; the
+          surface it lands in was rendered from a production build before anything was drawn.
         </p>
       </header>
 
@@ -1294,11 +1396,10 @@
         The step is the second half of the shipped approve action, in the shipped surface — not a
         floating panel and not a gate. Pressing
         <b>Approve — add 24 items to your backlog</b> materializes the plan (the items are in the
-        backlog before this step is answered, so a skipped or failed row can never cost the user
-        their plan) and proposes the repo set. The step then takes the CANVAS pane of the same box;
-        the review rail is reused untouched, now showing <b>Approved</b>. Completing the step adds
-        the repositories line to that rail's outcome — and while any row is unresolved, the rail
-        keeps the door back in, so no state is a dead end.
+        backlog <i>before</i> this step is answered, so nothing here can cost the user their plan)
+        and derives the repo set. The step then takes the CANVAS pane of the same box; the review
+        rail is reused untouched, now showing <b>Approved</b>. On completion the rail's outcome
+        gains one plain line — <b>"Your code is ready"</b> — and never a repository count or name.
       </p>
       <div class="panel flow">
         <div class="frame">
@@ -1322,18 +1423,12 @@
           <div class="fcap">2 · the step — this design</div>
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
             <strong style="font-family: ui-serif, Georgia, serif; font-size: 15px"
-              >Where should your code live?</strong
+              >Motir will host your code</strong
             >
             <span class="pill pill-done">Approved</span>
           </div>
-          <p>
-            The plan is already live. Same box, same rail — the step replaces the canvas pane with
-            one row per repository.
-          </p>
-          <button class="btn btn-primary btn-sm btn-block" type="button">
-            <svg class="i sm"><use href="#i-github" /></svg>
-            Create 2 repositories
-          </button>
+          <p>One sentence. The plan is already live; this is the last thing to say yes to.</p>
+          <button class="btn btn-primary btn-sm btn-block" type="button">Continue</button>
         </div>
         <div class="arrow">
           <svg class="i lg"><use href="#i-arrow-right" /></svg>
@@ -1347,9 +1442,9 @@
             </p>
             <p style="font-weight: 500; font-size: 13px">
               <svg class="i sm" style="color: var(--el-success)">
-                <use href="#i-folder-git-2" />
+                <use href="#i-circle-check-big" />
               </svg>
-              2 repositories created
+              Your code is ready
             </p>
             <a class="link" style="font-size: 12px" href="#">View in backlog</a>
           </div>
@@ -1357,47 +1452,28 @@
       </div>
       <p class="panel-note" style="margin-top: 14px">
         <b>Re-entry (the no-dead-end guarantee).</b> The set is a durable property of the project
-        (ADR §4.4), so the step is re-enterable. When a row is left
-        <code class="mono">failed</code> or <code class="mono">skipped</code>, frame 3's outcome
-        card carries <b>Finish setting up repositories</b> instead of the "2 repositories created"
-        line, routing back into this same step. The permanent home for "which roles have code, and
-        how fresh is the index" is the code-context surface (MOTIR-1764 / Story MOTIR-1754) —
+        (ADR §4.4), so the step is re-enterable — but the DEFAULT path has nothing to come back for,
+        because Motir finishes it. The door back in exists for the two cases that need it: setup
+        didn't finish (panel 2c), and the user later decides to use their own GitHub. The permanent
+        home for both is the code-context surface (MOTIR-1764 / Story MOTIR-1754) —
         <b>not drawn here</b>, and not this card's to design.
       </p>
-      <div class="panel" style="max-width: 420px">
-        <div class="outcome" style="margin-top: 0">
-          <p>
-            <svg class="i sm" style="color: var(--el-warning)">
-              <use href="#i-triangle-alert" />
-            </svg>
-            Added 24 items to your backlog
-          </p>
-          <p style="font-weight: 500; font-size: 13px; color: var(--el-text-secondary)">
-            1 of 3 repositories still needs a decision.
-          </p>
-          <a class="link" style="font-size: 12px" href="#">Finish setting up repositories</a>
-        </div>
-      </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 1 — ONE ROW
+           PANEL 1 — THE DEFAULT
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 1 · <b>ONE row</b> — the start-fresh case: one question, one answer
+        Panel 1 · <b>The default</b> — one sentence, one action, and a small way out
       </div>
       <p class="panel-note">
-        The common case, and the one the design is judged on. There is
+        The whole step, for everyone who has not said otherwise.
         <b
-          >no table chrome, no count, no "1 of 1", no reorder grip and no per-row
-          <code class="mono">⋯</code> menu</b
+          >No repository name, no role, no account, no count, no rows, no table, no "seeded from"</b
         >
-        — the set-level affordances that only make sense once there is something to compare. The row
-        is a single labelled field; the name is <code class="mono">acme-booking</code> with
-        <b>no role suffix</b> (ADR §1.4) and the role is not chipped, because with one repository
-        there is nothing to distinguish it from. What it is seeded from is stated plainly
-        underneath. The quiet secondary is still reachable — <b>Use an existing repository</b> sits
-        beside <b>Add a repository</b> as plain text rather than behind a per-row
-        <code class="mono">⋯</code> menu, because a one-row set has nothing to disambiguate.
+        — a founder is told what happens to their code and what it costs them (nothing, and it stays
+        theirs). The only branch is a single quiet <b>I already have code</b>, sized like the
+        exception it is. This is the <code class="mono">notes.html</code> #151 rule applied: derive
+        it, use it, and don't ask a non-technical user to curate a developer artifact.
       </p>
       <div class="panel route">
         <div class="route-header">
@@ -1409,61 +1485,21 @@
         <div class="shell">
           <div class="workspace">
             <div class="step-pane">
-              <div class="step">
+              <div class="step hero">
                 <div class="step-head">
                   <div class="eyebrow">Your project's code</div>
-                  <h3>Where should your code live?</h3>
-                  <p>
-                    Motir will create this repository in your GitHub account and connect it, so your
-                    agents can start work. Rename it first if you like.
+                  <h3 class="hero-h">Motir will host your code</h3>
+                  <p class="hero-p">
+                    Your project's code lives with Motir, ready for your agents to start work. It's
+                    yours — move it to your own GitHub whenever you want.
                   </p>
                 </div>
-
-                <div class="target">
-                  <svg class="gh"><use href="#i-github" /></svg>
-                  <span>Created in <span class="who">yuezhu</span> on GitHub</span>
-                  <span class="sep">·</span>
-                  <a class="link" href="#">Change account</a>
-                </div>
-
-                <div class="rows">
-                  <div class="row bare">
-                    <div class="field">
-                      <label for="r1">Repository name</label>
-                      <div class="field-box">
-                        <span class="pre mono">yuezhu /</span>
-                        <input id="r1" value="acme-booking" />
-                      </div>
-                      <span class="helper">
-                        Seeded from the Motir Next.js starter — app, database and design system,
-                        ready to run.
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div style="display: flex; gap: 18px; flex-wrap: wrap">
-                  <button class="add-row" type="button">
-                    <svg class="i sm"><use href="#i-plus" /></svg>
-                    Add a repository
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">Continue</button>
+                  <button class="quiet-link" type="button">
+                    <svg class="i sm"><use href="#i-github" /></svg>
+                    I already have code
                   </button>
-                  <button class="add-row" type="button">
-                    <svg class="i sm"><use href="#i-link" /></svg>
-                    Use an existing repository
-                  </button>
-                </div>
-
-                <div class="set-foot">
-                  <div class="cta">
-                    <button class="btn btn-primary" type="button">
-                      <svg class="gh"><use href="#i-github" /></svg>
-                      Create repository
-                    </button>
-                    <button class="btn btn-ghost" type="button">Not now</button>
-                  </div>
-                  <span class="primary-note">
-                    You can change this later — nothing is created until you press Create.
-                  </span>
                 </div>
               </div>
             </div>
@@ -1508,259 +1544,476 @@
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 2 — TWO ROWS
-           ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 2 · <b>TWO rows</b> (web + api) — the same step, one more row
+        Panel 1b · <b>Both cardinalities</b> — the same screen whether the plan needs one repository
+        or three
       </div>
       <p class="panel-note">
-        A separated frontend and backend is <b>normal, not advanced</b>: same heading, same primary
-        action, same row component. Only four things appear, and each earns its place the moment a
-        second row exists — the <b>role chip</b> (now the thing that tells the rows apart), the
-        <b>role suffix</b> in each name (ADR §1.4),
-        <b>reorder + a per-row <code class="mono">⋯</code> menu</b> (holding remove · use an
-        existing repository · skip; order is meaningful — the first row is the project's primary
-        repository, ADR §1.3), and the per-row <b>"Why this repository?"</b> disclosure, shown open
-        on the <code class="mono">api</code>
-        row. Nothing is added that a one-row set would have had to carry.
+        The card's central problem, answered by <b>removing the question</b> rather than by styling
+        it two ways. The ADR's model is unchanged — the set still has as many rows as the
+        architecture decides (§0.1), and a plan that separates a backend still gets its own
+        repository — but the <b>cardinality is not the user's business</b>, so it is not on screen.
+        These two renders are <b>identical pixels</b>; only what Motir did behind them differs. ADR
+        §6 already reserved exactly this: "the one-question feel is a property of the PRESENTATION …
+        never of a second branch in the model."
       </p>
-      <div class="panel route">
-        <div class="route-header">
-          <span class="back"
-            ><svg class="i"><use href="#i-chevron-left" /></svg
-          ></span>
-          <h2>Acme booking</h2>
-        </div>
-        <div class="shell">
-          <div class="workspace">
-            <div class="step-pane">
-              <div class="step">
+      <div class="panel twoup">
+        <figure>
+          <figcaption>Behind it: 1 repository (web)</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
                 <div class="step-head">
                   <div class="eyebrow">Your project's code</div>
-                  <h3>Where should your code live?</h3>
-                  <p>
-                    Your plan separates the web app from the API, so Motir proposed two
-                    repositories. Rename, add or remove any of them before they are created.
+                  <h3 class="hero-h">Motir will host your code</h3>
+                  <p class="hero-p">
+                    Your project's code lives with Motir, ready for your agents to start work. It's
+                    yours — move it to your own GitHub whenever you want.
                   </p>
                 </div>
-
-                <div class="target">
-                  <svg class="gh"><use href="#i-github" /></svg>
-                  <span>Created in <span class="who">yuezhu</span> on GitHub</span>
-                  <span class="sep">·</span>
-                  <a class="link" href="#">Change account</a>
-                </div>
-
-                <div class="rows">
-                  <div class="row">
-                    <div class="row-top">
-                      <span class="grip" aria-hidden="true"
-                        ><span></span><span></span><span></span
-                      ></span>
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span class="pill pill-neutral mono">web</span>
-                          <span class="sep">·</span>
-                          <span>Primary repository</span>
-                        </div>
-                        <div class="field">
-                          <label class="sr" for="r2a">Name of the web repository</label>
-                          <div class="field-box">
-                            <span class="pre mono">yuezhu /</span>
-                            <input id="r2a" value="acme-booking-web" />
-                          </div>
-                          <span class="helper">Seeded from the Motir Next.js starter.</span>
-                        </div>
-                        <button class="why-btn" type="button">
-                          <svg class="i sm"><use href="#i-circle-help" /></svg>
-                          Why this repository?
-                        </button>
-                      </div>
-                      <div class="row-actions">
-                        <button class="icon-btn" type="button" aria-label="Move down">
-                          <svg class="i"><use href="#i-chevron-down" /></svg>
-                        </button>
-                        <button class="icon-btn" type="button" aria-label="Repository actions">
-                          <svg class="i"><use href="#i-ellipsis" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="row">
-                    <div class="row-top">
-                      <span class="grip" aria-hidden="true"
-                        ><span></span><span></span><span></span
-                      ></span>
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span class="pill pill-neutral mono">api</span>
-                        </div>
-                        <div class="field">
-                          <label class="sr" for="r2b">Name of the api repository</label>
-                          <div class="field-box">
-                            <span class="pre mono">yuezhu /</span>
-                            <input id="r2b" value="acme-booking-api" />
-                          </div>
-                          <span class="helper">
-                            Starts with a README, a licence, a <span class="mono">.gitignore</span>
-                            and a CI stub — your first task in it builds the skeleton.
-                          </span>
-                        </div>
-                        <div class="why">
-                          <svg class="i sm"><use href="#i-sparkles" /></svg>
-                          <span>
-                            9 of the 24 items you approved build a backend service, so Motir
-                            proposed a separate <span class="mono">api</span> repository. Remove
-                            this row if you would rather keep everything in one.
-                          </span>
-                        </div>
-                      </div>
-                      <div class="row-actions">
-                        <button class="icon-btn" type="button" aria-label="Move up">
-                          <svg class="i"><use href="#i-chevron-up" /></svg>
-                        </button>
-                        <button class="icon-btn" type="button" aria-label="Repository actions">
-                          <svg class="i"><use href="#i-ellipsis" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button class="add-row" type="button">
-                  <svg class="i sm"><use href="#i-plus" /></svg>
-                  Add a repository
-                </button>
-
-                <div class="set-foot">
-                  <div class="cta">
-                    <button class="btn btn-primary" type="button">
-                      <svg class="gh"><use href="#i-github" /></svg>
-                      Create 2 repositories
-                    </button>
-                    <button class="btn btn-ghost" type="button">Not now</button>
-                  </div>
-                  <span class="primary-note">
-                    Both are created in the same account, and both stay yours.
-                  </span>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">Continue</button>
+                  <button class="quiet-link" type="button">
+                    <svg class="i sm"><use href="#i-github" /></svg>
+                    I already have code
+                  </button>
                 </div>
               </div>
             </div>
-
-            <aside class="rail" aria-label="Plan review">
-              <div class="rail-head">
-                <div class="rail-title-row">
-                  <h4 class="rail-title">Acme booking</h4>
-                  <span class="pill pill-done">Approved</span>
-                </div>
-                <p class="rail-sub">24 proposed items</p>
-              </div>
-              <section style="display: flex; flex-direction: column; gap: 8px">
-                <h5 class="rail-h3">History</h5>
-                <ol class="hist">
-                  <li>
-                    <span class="dot"></span
-                    ><span>Generation started<span class="when">Jul 30, 2026, 11:53 AM</span></span>
-                  </li>
-                  <li>
-                    <span class="dot"></span
-                    ><span>Plan ready<span class="when">Jul 30, 2026, 11:56 AM</span></span>
-                  </li>
-                  <li>
-                    <span class="dot"></span
-                    ><span>Approved · Zhu Yue<span class="when">Jul 30, 2026, 12:02 PM</span></span>
-                  </li>
-                </ol>
-              </section>
-              <div class="outcome">
-                <p>
-                  <svg class="i sm" style="color: var(--el-success)">
-                    <use href="#i-sparkles" />
-                  </svg>
-                  Added 24 items to your backlog
-                </p>
-                <a class="link" style="font-size: 12px" href="#">View in backlog</a>
-              </div>
-            </aside>
           </div>
-        </div>
+        </figure>
+        <figure>
+          <figcaption>Behind it: 3 repositories (web · api · shared)</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
+                <div class="step-head">
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 class="hero-h">Motir will host your code</h3>
+                  <p class="hero-p">
+                    Your project's code lives with Motir, ready for your agents to start work. It's
+                    yours — move it to your own GitHub whenever you want.
+                  </p>
+                </div>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">Continue</button>
+                  <button class="quiet-link" type="button">
+                    <svg class="i sm"><use href="#i-github" /></svg>
+                    I already have code
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
       </div>
 
       <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 3 — EVERY PER-ROW STATE
+           PANEL 2 — THE DEFAULT PATH'S THREE STATES
            ══════════════════════════════════════════════════════════════════ -->
       <div class="panel-label">
-        Panel 3 · <b>Every per-row state</b> from the ADR's machine — each with its forward path
+        Panel 2 · <b>The default path has three states</b> — working, ready, and couldn't finish
       </div>
       <p class="panel-note">
-        The six states of ADR §4.1, drawn at row scale.
-        <b>Rows are independent</b>: a row's state is carried by the row, never by the step, so one
-        row's spinner or failure leaves its siblings alone (§4.2), and nothing is rolled back. State
-        is carried by an <b>icon + a word + a token fill</b> — never colour alone (finding #35) and
-        never a dashed or dotted border, which the canvas already owns for a different meaning.
-        <b>No state is terminal</b>: <code class="mono">failed</code> and
-        <code class="mono">skipped</code> both keep every forward path, at this visit or a later
-        one.
+        The ADR's six per-row states are the <b>model</b>; this path renders only what the user can
+        act on. <code class="mono">creating</code> → <b>"Setting up your code…"</b>,
+        <code class="mono">created</code> → <b>"Your code is ready"</b>, and
+        <code class="mono">failed</code> → one plain sentence with one button. There is
+        <b>no per-repository progress, no repository name in the error and no GitHub status code</b>
+        — those belong to the technical path (panel 5). <code class="mono">proposed</code>,
+        <code class="mono">connected</code> and <code class="mono">skipped</code> cannot occur here:
+        nothing is proposed for approval, nothing is adopted, and there is nothing to decline.
       </p>
       <div class="panel gallery">
         <div class="state">
           <div class="cap">
-            <code>proposed</code
+            <code>creating</code
             ><span
-              >The default. Editable name, the recorded reason, and one prominent action — Create —
-              for the whole set.</span
+              >One line for the whole set, however many repositories it holds. Announced politely,
+              never blocking.</span
             >
           </div>
-          <div class="row">
-            <div class="row-top">
-              <span class="grip" aria-hidden="true"><span></span><span></span><span></span></span>
-              <div class="row-main">
-                <div class="row-meta"><span class="pill pill-neutral mono">shared</span></div>
-                <div class="field">
-                  <label class="sr" for="r3a">Name of the shared repository</label>
-                  <div class="field-box">
-                    <span class="pre mono">yuezhu /</span>
-                    <input id="r3a" value="acme-booking-shared" />
-                  </div>
-                  <span class="helper"
-                    >Starts with a README, a licence, a <span class="mono">.gitignore</span> and a
-                    CI stub.</span
-                  >
-                </div>
-                <button class="why-btn" type="button">
-                  <svg class="i sm"><use href="#i-circle-help" /></svg>
-                  Why this repository?
-                </button>
-              </div>
-              <div class="row-actions">
-                <button class="icon-btn" type="button" aria-label="Move up">
-                  <svg class="i"><use href="#i-chevron-up" /></svg>
-                </button>
-                <button class="icon-btn" type="button" aria-label="Repository actions">
-                  <svg class="i"><use href="#i-ellipsis" /></svg>
-                </button>
-              </div>
+          <div class="step hero" style="max-width: 30rem">
+            <div class="step-head">
+              <div class="eyebrow">Your project's code</div>
+              <h3 class="hero-h">Motir will host your code</h3>
+            </div>
+            <div class="status-line" role="status">
+              <span class="spin" aria-hidden="true"></span>
+              Setting up your code…
+            </div>
+            <p class="helper" style="margin: 0">
+              This takes a few seconds. Your plan is already in your backlog — you can leave this
+              page.
+            </p>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <code>created</code
+            ><span
+              >Settled. Plain language, and one honest way to go and look for anyone who wants
+              to.</span
+            >
+          </div>
+          <div class="step hero" style="max-width: 30rem">
+            <div class="step-head">
+              <div class="eyebrow">Your project's code</div>
+              <h3 class="hero-h">Motir will host your code</h3>
+            </div>
+            <div class="status-line ok">
+              <svg class="i lg"><use href="#i-circle-check-big" /></svg>
+              Your code is ready
+            </div>
+            <p class="helper" style="margin: 0">
+              Motir keeps it safe and connected. It's yours — move it to your own GitHub whenever
+              you want.
+            </p>
+            <div class="hero-cta">
+              <button class="btn btn-primary" type="button">Go to my backlog</button>
+              <button class="quiet-link" type="button">
+                <svg class="i sm"><use href="#i-external-link" /></svg>
+                See where it lives
+              </button>
             </div>
           </div>
         </div>
 
         <div class="state">
           <div class="cap">
-            <code>creating</code
+            <code>failed</code
             ><span
-              >Per-row progress, not one blocking spinner — the row reports for itself while its
-              siblings carry on. The name is frozen; the row is not.</span
+              >Panel 2c — no dead end and no jargon: what happened, what it costs (nothing yet), one
+              button.</span
             >
+          </div>
+          <div class="step hero" style="max-width: 30rem">
+            <div class="step-head">
+              <div class="eyebrow">Your project's code</div>
+              <h3 class="hero-h">Motir will host your code</h3>
+            </div>
+            <div class="status-line bad">
+              <svg class="i lg"><use href="#i-triangle-alert" /></svg>
+              Motir couldn't finish setting up your code
+            </div>
+            <p class="helper" role="alert" style="margin: 0">
+              Your plan is safe in your backlog. Nothing is lost — Motir will tell you if a task
+              needs code that isn't ready yet.
+            </p>
+            <div class="hero-cta">
+              <button class="btn btn-primary" type="button">
+                <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                Try again
+              </button>
+              <button class="quiet-link" type="button">
+                <svg class="i sm"><use href="#i-github" /></svg>
+                I already have code
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 3 — THE ESCAPE HATCH, AND THE HAND-OFF
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 3 · <b>"I already have code"</b> — the small way out, and the hand-off 7.10 owns
+      </div>
+      <p class="panel-note">
+        Choosing this is how a user <b>self-identifies as technical</b> — and only after it does any
+        repository vocabulary appear. It is one short confirmation, then the <b>shipped</b> GitHub
+        connect flow (mirrored below from
+        <code class="mono">app/(authed)/settings/workspace/github/page.tsx</code>): two grants,
+        identity then install. This design <b>does not redraw those screens</b> — 7.10 owns them —
+        and nothing on the default path sends a user to GitHub before they ask for it.
+      </p>
+      <div class="panel twoup">
+        <figure>
+          <figcaption>3a · the confirmation, in this step</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
+                <div class="step-head">
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 class="hero-h">Use your own GitHub instead</h3>
+                  <p class="hero-p">
+                    Motir will connect to your account and use the repositories you choose. You pick
+                    which ones it may see, on GitHub — Motir never sees the rest.
+                  </p>
+                </div>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    Connect GitHub
+                  </button>
+                  <button class="quiet-link" type="button">Let Motir host it</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>3b · the shipped pane it hands off to (not redrawn)</figcaption>
+          <div class="card" style="padding: 16px">
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <strong style="font-size: 15px; color: var(--el-text)">Connect GitHub</strong>
+              <span class="helper">Two quick grants — both happen on GitHub.</span>
+              <div style="display: flex; gap: 10px; align-items: flex-start">
+                <svg class="i lg" style="color: var(--el-card-icon-fg)">
+                  <use href="#i-circle-check-big" />
+                </svg>
+                <div>
+                  <div class="eyebrow">Step 1 · Identity</div>
+                  <div style="font-size: 14px; font-weight: 600; color: var(--el-text)">
+                    Verify your GitHub identity
+                  </div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: flex-start">
+                <svg class="i lg" style="color: var(--el-card-icon-fg)">
+                  <use href="#i-folder-git-2" />
+                </svg>
+                <div>
+                  <div class="eyebrow">Step 2 · Repository access</div>
+                  <div style="font-size: 14px; font-weight: 600; color: var(--el-text)">
+                    Install the Motir GitHub App
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 4 — THE TECHNICAL PATH: THE SET
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 · <b>The technical path</b> — once connected, what the plan needs and where each
+        part lives
+      </div>
+      <p class="panel-note">
+        <b>Everything below is behind the "I already have code" door.</b> The user has connected
+        their own GitHub, so repository vocabulary is now theirs to read: one row per part the plan
+        needs, each row saying whether Motir <b>creates</b> it in their account or <b>connects</b>
+        one they already have.
+      </p>
+      <p class="panel-note">
+        <b
+          >This is where "Add a repository" vs "Use an existing repository" stopped being
+          ambiguous.</b
+        >
+        They were siblings on one line, which made them read as alternatives — they are not. They
+        now live at <b>different levels</b>: <b>per row</b>, a
+        <code class="mono">Segmented</code> answers <i>where does THIS part live</i> —
+        <b>Create for me</b> or <b>Use one of mine</b>; <b>at set level</b>,
+        <b>Add a repository</b> only ever means <i>the plan needs a part Motir didn't infer</i>. One
+        asks where; the other asks how many.
+      </p>
+      <div class="panel">
+        <div class="step" style="max-width: 40rem">
+          <div class="step-head">
+            <div class="eyebrow">Your project's code</div>
+            <h3
+              style="
+                margin: 0;
+                font-family: ui-serif, Georgia, serif;
+                font-size: 22px;
+                font-weight: 600;
+                color: var(--el-text);
+              "
+            >
+              Where should each part live?
+            </h3>
+            <p
+              style="margin: 0; font-size: 14px; line-height: 1.55; color: var(--el-text-secondary)"
+            >
+              Connected as <b>yuezhu</b>. Your plan separates the web app from the API, so Motir
+              needs a home for each.
+            </p>
+          </div>
+
+          <div class="rows">
+            <div class="row">
+              <div class="row-top">
+                <span class="grip" aria-hidden="true"><span></span><span></span><span></span></span>
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">web</span>
+                    <span class="sep">·</span>
+                    <span>The app people use</span>
+                  </div>
+                  <div class="seg" role="group" aria-label="Where the web part lives">
+                    <span class="on"
+                      ><svg class="i sm"><use href="#i-plus" /></svg> Create for me</span
+                    >
+                    <span
+                      ><svg class="i sm"><use href="#i-link" /></svg> Use one of mine</span
+                    >
+                  </div>
+                  <div class="field">
+                    <label class="sr" for="r4a">Name of the web repository</label>
+                    <div class="field-box">
+                      <span class="pre mono">yuezhu /</span>
+                      <input id="r4a" value="acme-booking-web" />
+                    </div>
+                    <span class="helper">Seeded from the Motir Next.js starter.</span>
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button class="icon-btn" type="button" aria-label="Move down">
+                    <svg class="i"><use href="#i-chevron-down" /></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="row-top">
+                <span class="grip" aria-hidden="true"><span></span><span></span><span></span></span>
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">api</span>
+                    <span class="sep">·</span>
+                    <span>The service behind it</span>
+                  </div>
+                  <div class="seg" role="group" aria-label="Where the api part lives">
+                    <span
+                      ><svg class="i sm"><use href="#i-plus" /></svg> Create for me</span
+                    >
+                    <span class="on"
+                      ><svg class="i sm"><use href="#i-link" /></svg> Use one of mine</span
+                    >
+                  </div>
+                  <div class="field">
+                    <label for="r4b">Repository to use for the api</label>
+                    <div class="combo">
+                      <svg class="i sm" style="color: var(--el-icon-field)">
+                        <use href="#i-search" />
+                      </svg>
+                      <span style="flex: 1; min-width: 0" class="mono"
+                        >acme-inc/booking-service</span
+                      >
+                      <svg class="i sm" style="color: var(--el-icon-field)">
+                        <use href="#i-chevron-down" />
+                      </svg>
+                    </div>
+                    <span class="helper">
+                      Only the repositories you granted Motir appear here.
+                      <a class="link" href="#">Grant more on GitHub</a>
+                    </span>
+                  </div>
+                  <div class="why">
+                    <svg class="i sm"><use href="#i-sparkles" /></svg>
+                    <span>
+                      9 of the 24 items you approved build a backend service, so Motir asked for a
+                      separate home for it. Remove this row to keep everything in one repository.
+                    </span>
+                  </div>
+                </div>
+                <div class="row-actions">
+                  <button class="icon-btn" type="button" aria-label="Move up">
+                    <svg class="i"><use href="#i-chevron-up" /></svg>
+                  </button>
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="add-row" type="button">
+            <svg class="i sm"><use href="#i-plus" /></svg>
+            Add a repository
+          </button>
+
+          <div class="set-foot">
+            <div class="cta">
+              <button class="btn btn-primary" type="button">
+                <svg class="gh"><use href="#i-github" /></svg>
+                Set up 2 repositories
+              </button>
+              <button class="btn btn-ghost" type="button">Not now</button>
+            </div>
+            <span class="primary-note">
+              The first row is your project's main repository. Nothing is created until you press
+              Set up.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <p class="panel-note" style="margin-top: 20px">
+        <b>One row, on the technical path.</b> A single-repository project — or a monorepo, which is
+        the same thing with <b>Use one of mine</b> chosen — drops the role chip, the suffix, the
+        grip and the menu. The technical path keeps the one-question feel too; it just says
+        "repository" out loud.
+      </p>
+      <div class="panel" style="max-width: 40rem">
+        <div class="row bare">
+          <div
+            class="seg"
+            role="group"
+            aria-label="Where your code lives"
+            style="margin-bottom: 10px"
+          >
+            <span
+              ><svg class="i sm"><use href="#i-plus" /></svg> Create for me</span
+            >
+            <span class="on"
+              ><svg class="i sm"><use href="#i-link" /></svg> Use one of mine</span
+            >
+          </div>
+          <div class="field">
+            <label for="r4c">Repository to use</label>
+            <div class="combo">
+              <svg class="i sm" style="color: var(--el-icon-field)"><use href="#i-search" /></svg>
+              <span style="flex: 1; min-width: 0" class="mono">acme-inc/booking-monorepo</span>
+              <svg class="i sm" style="color: var(--el-icon-field)">
+                <use href="#i-chevron-down" />
+              </svg>
+            </div>
+            <span class="helper">Everything lives here. Motir won't create anything.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 5 — THE TECHNICAL PATH'S PER-ROW STATES + PARTIAL
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 5 · <b>The technical path's per-row states</b> — and the partial outcome
+      </div>
+      <p class="panel-note">
+        The ADR §4.1 machine, drawn at row scale, <b>on this path only</b>. Rows are independent — a
+        row's state is carried by the row, so one spinner or one failure leaves its siblings alone
+        (§4.2), and nothing is rolled back. State is carried by an
+        <b>icon + a word + a token fill</b>, never colour alone (finding #35) and never a dashed
+        border, which the canvas already owns for a different meaning. <b>No state is terminal</b>:
+        <code class="mono">failed</code> and <code class="mono">skipped</code> keep every forward
+        path, at this visit or a later one. A
+        <b>state pill is deliberately not used on a tinted row</b> —
+        <code class="mono">Pill severity="danger"</code> and
+        <code class="mono">--el-danger-surface</code> are the same token value, so it would be
+        invisible; the tint goes on the row and the state is named in text beside its icon.
+      </p>
+      <div class="panel gallery">
+        <div class="state">
+          <div class="cap">
+            <code>creating</code
+            ><span>Per-row progress — the row reports for itself while its siblings carry on.</span>
           </div>
           <div class="row">
             <div class="row-top">
               <div class="row-main">
                 <div class="row-meta"><span class="pill pill-neutral mono">api</span></div>
-                <div class="row-name">
-                  <span class="full mono">yuezhu/acme-booking-api</span>
-                </div>
+                <div class="row-name"><span class="full mono">yuezhu/acme-booking-api</span></div>
                 <div class="row-meta" role="status">
                   <span class="spin" aria-hidden="true"></span>
                   <span>Creating…</span>
@@ -1774,63 +2027,52 @@
 
         <div class="state">
           <div class="cap">
-            <code>created</code
-            ><span
-              >Settled. The real full name, linked out to GitHub, and what it was seeded from.</span
-            >
+            <code>created</code> · <code>connected</code
+            ><span>Both settled shapes: created in the user's account, or adopted untouched.</span>
           </div>
-          <div class="row created">
-            <div class="row-top">
-              <div class="row-main">
-                <div class="row-meta">
-                  <span class="pill pill-neutral mono">web</span>
-                  <span class="row-state ok"
-                    ><svg class="i sm"><use href="#i-circle-check-big" /></svg> Created</span
+          <div class="rows">
+            <div class="row created">
+              <div class="row-top">
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">web</span>
+                    <span class="row-state ok"
+                      ><svg class="i sm"><use href="#i-circle-check-big" /></svg> Created</span
+                    >
+                  </div>
+                  <div class="row-name">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    <a class="link full mono" href="#">yuezhu/acme-booking-web</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <span class="helper"
+                    >Seeded from the Motir Next.js starter · connected to Motir.</span
                   >
                 </div>
-                <div class="row-name">
-                  <svg class="gh"><use href="#i-github" /></svg>
-                  <a class="link full mono" href="#">yuezhu/acme-booking-web</a>
-                  <svg class="i sm" style="color: var(--el-icon-muted)">
-                    <use href="#i-external-link" />
-                  </svg>
-                </div>
-                <span class="helper"
-                  >Seeded from the Motir Next.js starter · connected to Motir.</span
-                >
               </div>
             </div>
-          </div>
-        </div>
-
-        <div class="state">
-          <div class="cap">
-            <code>connected</code
-            ><span
-              >The quiet secondary path — an existing repository, adopted instead of created. Same
-              settled shape.</span
-            >
-          </div>
-          <div class="row connected">
-            <div class="row-top">
-              <div class="row-main">
-                <div class="row-meta">
-                  <span class="pill pill-neutral mono">api</span>
-                  <span class="row-state info"
-                    ><svg class="i sm"><use href="#i-link" /></svg> Connected</span
-                  >
+            <div class="row connected">
+              <div class="row-top">
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">api</span>
+                    <span class="row-state info"
+                      ><svg class="i sm"><use href="#i-link" /></svg> Connected</span
+                    >
+                  </div>
+                  <div class="row-name">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    <a class="link full mono" href="#">acme-inc/booking-service</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <span class="helper">
+                    Your existing repository — nothing was created and nothing was changed in it.
+                  </span>
                 </div>
-                <div class="row-name">
-                  <svg class="gh"><use href="#i-github" /></svg>
-                  <a class="link full mono" href="#">acme-inc/booking-service</a>
-                  <svg class="i sm" style="color: var(--el-icon-muted)">
-                    <use href="#i-external-link" />
-                  </svg>
-                </div>
-                <span class="helper"
-                  >Your existing repository — nothing was created and nothing was changed in
-                  it.</span
-                >
               </div>
             </div>
           </div>
@@ -1840,8 +2082,8 @@
           <div class="cap">
             <code>skipped</code
             ><span
-              >Legal and quiet — an inactive state, not a severity, so it takes a quiet surface and
-              muted ink rather than a warning hue. Both ways forward stay on the row.</span
+              >Legal and quiet — an inactive state, not a severity. Both ways forward stay on the
+              row.</span
             >
           </div>
           <div class="row skipped">
@@ -1856,17 +2098,14 @@
                 <div class="row-name" style="color: var(--el-text-secondary)">
                   <span class="full">No repository for the mobile app</span>
                 </div>
-                <span class="helper"
-                  >Motir will plan around it, and say so when a task needs code that isn't
-                  there.</span
-                >
+                <span class="helper">
+                  Motir will plan around it, and say so when a task needs code that isn't there.
+                </span>
                 <div class="recover">
                   <button class="btn btn-secondary btn-sm" type="button">
                     Create it after all
                   </button>
-                  <button class="btn btn-ghost btn-sm" type="button">
-                    Use an existing repository
-                  </button>
+                  <button class="btn btn-ghost btn-sm" type="button">Use one of mine</button>
                 </div>
               </div>
             </div>
@@ -1877,8 +2116,8 @@
           <div class="cap">
             <code>failed</code
             ><span
-              >The reason in words, then all three recoveries — retry this row, adopt one you
-              already have, or leave the role without code. Announced as an alert.</span
+              >The real reason — a technical user gets the real one — then all three recoveries.
+              Announced as an alert.</span
             >
           </div>
           <div class="row failed">
@@ -1900,10 +2139,10 @@
                   </span>
                 </p>
                 <div class="field">
-                  <label class="sr" for="r3f">Name of the api repository</label>
+                  <label class="sr" for="r5f">Name of the api repository</label>
                   <div class="field-box err">
                     <span class="pre mono">yuezhu /</span>
-                    <input id="r3f" value="acme-booking-api-2" />
+                    <input id="r5f" value="acme-booking-api-2" />
                   </div>
                 </div>
                 <div class="recover">
@@ -1911,9 +2150,7 @@
                     <svg class="i sm"><use href="#i-refresh-cw" /></svg>
                     Retry
                   </button>
-                  <button class="btn btn-ghost btn-sm" type="button">
-                    Use an existing repository
-                  </button>
+                  <button class="btn btn-ghost btn-sm" type="button">Use one of mine</button>
                   <button class="btn btn-ghost btn-sm" type="button">Skip this one</button>
                 </div>
               </div>
@@ -1922,458 +2159,92 @@
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 4 — THE PARTIAL OUTCOME
-           ══════════════════════════════════════════════════════════════════ -->
-      <div class="panel-label">
-        Panel 4 · <b>The PARTIAL state</b> — created + failed + skipped in one set, and the step
-        still finishes
-      </div>
-      <p class="panel-note">
-        The state a real user hits, drawn as a first-class picture rather than left out of a
-        happy-path mock. Row 1 was created, row 2 failed, row 3 was skipped — and the step is
-        <b>completable</b> (ADR §4.3): the summary counts the truth, the primary action is
-        <b>Finish setup</b>, and nothing pretends the failed row succeeded. The created repository
-        is <b>not</b> rolled back — it is a real thing in the user's account (§4.2), and deleting it
-        to make the report tidy would be the worse answer. Each row keeps its own recoveries, here
-        and on any later visit.
+      <p class="panel-note" style="margin-top: 24px">
+        <b>The PARTIAL outcome</b> — created + failed + skipped in one set, and the step still
+        finishes. The state a real user hits, and the one a happy-path mock omits. The summary
+        counts the truth, the primary becomes <b>Finish setup</b>, and the created repository is
+        <b>not</b>
+        rolled back — it is a real thing in the user's account (§4.2), and deleting it to tidy a
+        report is the worse answer. Approval may complete with a row unresolved (§4.3).
       </p>
-      <div class="panel route">
-        <div class="shell">
-          <div class="workspace">
-            <div class="step-pane">
-              <div class="step">
-                <div class="step-head">
-                  <div class="eyebrow">Your project's code</div>
-                  <h3>Where should your code live?</h3>
-                  <p>Two of three are settled. You can finish now and come back to the third.</p>
-                </div>
-
-                <div class="rows">
-                  <div class="row created">
-                    <div class="row-top">
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span class="pill pill-neutral mono">web</span>
-                          <span class="row-state ok"
-                            ><svg class="i sm"><use href="#i-circle-check-big" /></svg>
-                            Created</span
-                          >
-                        </div>
-                        <div class="row-name">
-                          <svg class="gh"><use href="#i-github" /></svg>
-                          <a class="link full mono" href="#">yuezhu/acme-booking-web</a>
-                          <svg class="i sm" style="color: var(--el-icon-muted)">
-                            <use href="#i-external-link" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
+      <div class="panel" style="max-width: 40rem">
+        <div class="step">
+          <div class="rows">
+            <div class="row created">
+              <div class="row-top">
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">web</span>
+                    <span class="row-state ok"
+                      ><svg class="i sm"><use href="#i-circle-check-big" /></svg> Created</span
+                    >
                   </div>
-
-                  <div class="row failed">
-                    <div class="row-top">
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span class="pill pill-neutral mono">api</span>
-                          <span class="row-state bad"
-                            ><svg class="i sm"><use href="#i-triangle-alert" /></svg> Couldn't
-                            create</span
-                          >
-                        </div>
-                        <div class="row-name">
-                          <span class="full mono">yuezhu/acme-booking-api</span>
-                        </div>
-                        <p class="alert" role="alert" style="margin: 0">
-                          <svg class="i sm"><use href="#i-triangle-alert" /></svg>
-                          <span>
-                            GitHub declined the request — <b>yuezhu</b> has hit its repository
-                            limit. Nothing was created for this row.
-                          </span>
-                        </p>
-                        <div class="recover">
-                          <button class="btn btn-secondary btn-sm" type="button">
-                            <svg class="i sm"><use href="#i-refresh-cw" /></svg>
-                            Retry
-                          </button>
-                          <button class="btn btn-ghost btn-sm" type="button">
-                            Use an existing repository
-                          </button>
-                          <button class="btn btn-ghost btn-sm" type="button">Skip this one</button>
-                        </div>
-                      </div>
-                    </div>
+                  <div class="row-name">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    <a class="link full mono" href="#">yuezhu/acme-booking-web</a>
                   </div>
-
-                  <div class="row skipped">
-                    <div class="row-top">
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span class="pill pill-neutral mono">infra</span>
-                          <span class="row-state off"
-                            ><svg class="i sm"><use href="#i-skip-forward" /></svg> Skipped</span
-                          >
-                        </div>
-                        <div class="row-name" style="color: var(--el-text-secondary)">
-                          <span class="full">No repository for infrastructure</span>
-                        </div>
-                        <div class="recover">
-                          <button class="btn btn-ghost btn-sm" type="button">
-                            Create it after all
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="set-foot">
-                  <div class="summary" role="status">
-                    <b>1 created</b> <span class="sep">·</span> 1 skipped
-                    <span class="sep">·</span> 1 needs a decision
-                  </div>
-                  <div class="cta">
-                    <button class="btn btn-primary" type="button">Finish setup</button>
-                  </div>
-                  <span class="primary-note">
-                    Your plan is already in the backlog. Motir will tell you which tasks are waiting
-                    on a repository.
-                  </span>
                 </div>
               </div>
             </div>
-
-            <aside class="rail" aria-label="Plan review">
-              <div class="rail-head">
-                <div class="rail-title-row">
-                  <h4 class="rail-title">Acme booking</h4>
-                  <span class="pill pill-done">Approved</span>
-                </div>
-                <p class="rail-sub">24 proposed items</p>
-              </div>
-              <section style="display: flex; flex-direction: column; gap: 8px">
-                <h5 class="rail-h3">History</h5>
-                <ol class="hist">
-                  <li>
-                    <span class="dot"></span
-                    ><span>Generation started<span class="when">Jul 30, 2026, 11:53 AM</span></span>
-                  </li>
-                  <li>
-                    <span class="dot"></span
-                    ><span>Plan ready<span class="when">Jul 30, 2026, 11:56 AM</span></span>
-                  </li>
-                  <li>
-                    <span class="dot"></span
-                    ><span>Approved · Zhu Yue<span class="when">Jul 30, 2026, 12:02 PM</span></span>
-                  </li>
-                </ol>
-              </section>
-              <div class="outcome">
-                <p>
-                  <svg class="i sm" style="color: var(--el-success)">
-                    <use href="#i-sparkles" />
-                  </svg>
-                  Added 24 items to your backlog
-                </p>
-                <a class="link" style="font-size: 12px" href="#">View in backlog</a>
-              </div>
-            </aside>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 5 — THE NO-GITHUB PATH
-           ══════════════════════════════════════════════════════════════════ -->
-      <div class="panel-label">
-        Panel 5 · <b>The no-GitHub path</b> — the same rows, under Motir's organization, claimable
-      </div>
-      <p class="panel-note">
-        Not a different journey and not a wizard: the
-        <b>same step, the same rows, the same primary action</b>. Only the set-level target line
-        changes, and one callout explains what "Motir owns these" means and how to undo it (ADR §3.3
-        / §3.4). There is <b>no GitHub prompt</b> anywhere on this path — connecting an account is
-        an offer in quiet secondary type, and it hands off to the <b>shipped</b> Git settings pane
-        (rendered above; 7.10 owns those screens, so they are pointed at, never redrawn). Ownership
-        is decided <b>once for the whole set</b>
-        — a set is never half in the user's account and half in Motir's (§3.5).
-      </p>
-      <div class="panel route">
-        <div class="shell">
-          <div class="workspace">
-            <div class="step-pane">
-              <div class="step">
-                <div class="step-head">
-                  <div class="eyebrow">Your project's code</div>
-                  <h3>Where should your code live?</h3>
-                  <p>
-                    Your plan separates the web app from the API, so Motir proposed two
-                    repositories. Rename, add or remove any of them before they are created.
+            <div class="row failed">
+              <div class="row-top">
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">api</span>
+                    <span class="row-state bad"
+                      ><svg class="i sm"><use href="#i-triangle-alert" /></svg> Couldn't
+                      create</span
+                    >
+                  </div>
+                  <p class="alert" role="alert" style="margin: 0">
+                    <svg class="i sm"><use href="#i-triangle-alert" /></svg>
+                    <span>
+                      GitHub declined the request — <b>yuezhu</b> has hit its repository limit.
+                      Nothing was created for this row.
+                    </span>
                   </p>
-                </div>
-
-                <div class="target">
-                  <svg class="i"><use href="#i-building-2" /></svg>
-                  <span
-                    >Created in <span class="who">Motir's organization</span> — yours to claim any
-                    time</span
-                  >
-                </div>
-
-                <div class="rows">
-                  <div class="row">
-                    <div class="row-top">
-                      <span class="grip" aria-hidden="true"
-                        ><span></span><span></span><span></span
-                      ></span>
-                      <div class="row-main">
-                        <div class="row-meta">
-                          <span class="pill pill-neutral mono">web</span>
-                          <span class="sep">·</span>
-                          <span>Primary repository</span>
-                        </div>
-                        <div class="field">
-                          <label class="sr" for="r5a">Name of the web repository</label>
-                          <div class="field-box">
-                            <span class="pre mono">motir-projects /</span>
-                            <input id="r5a" value="acme-booking-web" />
-                          </div>
-                          <span class="helper">Seeded from the Motir Next.js starter.</span>
-                        </div>
-                      </div>
-                      <div class="row-actions">
-                        <button class="icon-btn" type="button" aria-label="Move down">
-                          <svg class="i"><use href="#i-chevron-down" /></svg>
-                        </button>
-                        <button class="icon-btn" type="button" aria-label="Repository actions">
-                          <svg class="i"><use href="#i-ellipsis" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="row">
-                    <div class="row-top">
-                      <span class="grip" aria-hidden="true"
-                        ><span></span><span></span><span></span
-                      ></span>
-                      <div class="row-main">
-                        <div class="row-meta"><span class="pill pill-neutral mono">api</span></div>
-                        <div class="field">
-                          <label class="sr" for="r5b">Name of the api repository</label>
-                          <div class="field-box">
-                            <span class="pre mono">motir-projects /</span>
-                            <input id="r5b" value="acme-booking-api" />
-                          </div>
-                          <span class="helper">
-                            Starts with a README, a licence, a <span class="mono">.gitignore</span>
-                            and a CI stub.
-                          </span>
-                        </div>
-                      </div>
-                      <div class="row-actions">
-                        <button class="icon-btn" type="button" aria-label="Move up">
-                          <svg class="i"><use href="#i-chevron-up" /></svg>
-                        </button>
-                        <button class="icon-btn" type="button" aria-label="Repository actions">
-                          <svg class="i"><use href="#i-ellipsis" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="claim">
-                  <svg class="i sm"><use href="#i-info" /></svg>
-                  <span>
-                    Motir holds these repositories for you.
-                    <b>Claiming moves the whole set to your own GitHub account</b> and keeps
-                    everything connected — do it whenever you're ready, or never.
-                  </span>
-                </div>
-
-                <button class="add-row" type="button">
-                  <svg class="i sm"><use href="#i-plus" /></svg>
-                  Add a repository
-                </button>
-
-                <div class="set-foot">
-                  <div class="cta">
-                    <button class="btn btn-primary" type="button">Create 2 repositories</button>
-                    <button class="btn btn-ghost" type="button">Not now</button>
-                  </div>
-                  <span class="primary-note">
-                    Prefer your own account?
-                    <a class="link" href="#">Connect a GitHub account first</a> — it opens Settings
-                    › Git, and this step waits for you.
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <aside class="rail" aria-label="Plan review">
-              <div class="rail-head">
-                <div class="rail-title-row">
-                  <h4 class="rail-title">Acme booking</h4>
-                  <span class="pill pill-done">Approved</span>
-                </div>
-                <p class="rail-sub">24 proposed items</p>
-              </div>
-              <section style="display: flex; flex-direction: column; gap: 8px">
-                <h5 class="rail-h3">History</h5>
-                <ol class="hist">
-                  <li>
-                    <span class="dot"></span
-                    ><span>Generation started<span class="when">Jul 30, 2026, 11:53 AM</span></span>
-                  </li>
-                  <li>
-                    <span class="dot"></span
-                    ><span>Plan ready<span class="when">Jul 30, 2026, 11:56 AM</span></span>
-                  </li>
-                  <li>
-                    <span class="dot"></span
-                    ><span>Approved · Zhu Yue<span class="when">Jul 30, 2026, 12:02 PM</span></span>
-                  </li>
-                </ol>
-              </section>
-              <div class="outcome">
-                <p>
-                  <svg class="i sm" style="color: var(--el-success)">
-                    <use href="#i-sparkles" />
-                  </svg>
-                  Added 24 items to your backlog
-                </p>
-                <a class="link" style="font-size: 12px" href="#">View in backlog</a>
-              </div>
-            </aside>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══════════════════════════════════════════════════════════════════
-           PANEL 6 — CONNECT EXISTING / THE MONOREPO COLLAPSE
-           ══════════════════════════════════════════════════════════════════ -->
-      <div class="panel-label">
-        Panel 6 · <b>Use an existing repository</b> — the quiet secondary, and how a monorepo
-        collapses the set to one row
-      </div>
-      <p class="panel-note">
-        Create is the only prominent action per row; adopting a repository you already have is the
-        quiet alternative, on the row's own menu. It is also the <b>monorepo escape hatch</b> (ADR
-        §6): one repository for everything is a one-row set whose row is connected rather than
-        created — the same model, no second code path. Switching a row to this state swaps the name
-        field for the shipped <code class="mono">Combobox</code> over the repositories Motir can
-        already see, and offers to drop the rows the monorepo makes redundant.
-      </p>
-      <div class="panel gallery" style="grid-template-columns: 1fr 1fr; gap: 20px">
-        <div class="state">
-          <div class="cap">
-            <code>proposed</code> → <code>connect existing</code><span>The row's menu, open.</span>
-          </div>
-          <div class="row">
-            <div class="row-top">
-              <div class="row-main">
-                <div class="row-meta"><span class="pill pill-neutral mono">api</span></div>
-                <div class="field">
-                  <label class="sr" for="r6a">Name of the api repository</label>
-                  <div class="field-box">
-                    <span class="pre mono">yuezhu /</span>
-                    <input id="r6a" value="acme-booking-api" />
+                  <div class="recover">
+                    <button class="btn btn-secondary btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                      Retry
+                    </button>
+                    <button class="btn btn-ghost btn-sm" type="button">Use one of mine</button>
+                    <button class="btn btn-ghost btn-sm" type="button">Skip this one</button>
                   </div>
                 </div>
               </div>
-              <div class="row-actions">
-                <button class="icon-btn" type="button" aria-label="Repository actions">
-                  <svg class="i"><use href="#i-ellipsis" /></svg>
-                </button>
-              </div>
             </div>
-            <div class="listbox" style="max-width: 260px; align-self: flex-end">
-              <span class="opt active"
-                ><svg class="i sm"><use href="#i-link" /></svg> Use an existing repository</span
-              >
-              <span class="opt"
-                ><svg class="i sm"><use href="#i-skip-forward" /></svg> Skip this one</span
-              >
-              <span class="opt"
-                ><svg class="i sm"><use href="#i-trash-2" /></svg> Remove</span
-              >
-            </div>
-          </div>
-        </div>
-
-        <div class="state">
-          <div class="cap">
-            <code>connect existing</code> — picking<span
-              >The shipped Combobox over what Motir can already see.</span
-            >
-          </div>
-          <div class="row">
-            <div class="row-top">
-              <div class="row-main">
-                <div class="row-meta"><span class="pill pill-neutral mono">api</span></div>
-                <div class="field">
-                  <label for="r6b">Repository to use for the api</label>
-                  <div class="combo">
-                    <svg class="i sm" style="color: var(--el-icon-field)">
-                      <use href="#i-search" />
-                    </svg>
-                    <span style="flex: 1; min-width: 0" class="mono">acme-inc/booking-service</span>
-                    <svg class="i sm" style="color: var(--el-icon-field)">
-                      <use href="#i-chevron-down" />
-                    </svg>
+            <div class="row skipped">
+              <div class="row-top">
+                <div class="row-main">
+                  <div class="row-meta">
+                    <span class="pill pill-neutral mono">infra</span>
+                    <span class="row-state off"
+                      ><svg class="i sm"><use href="#i-skip-forward" /></svg> Skipped</span
+                    >
                   </div>
-                  <span class="helper">
-                    Only the repositories you granted Motir appear here.
-                    <a class="link" href="#">Grant more on GitHub</a>
-                  </span>
+                  <div class="row-name" style="color: var(--el-text-secondary)">
+                    <span class="full">No repository for infrastructure</span>
+                  </div>
+                  <div class="recover">
+                    <button class="btn btn-ghost btn-sm" type="button">Create it after all</button>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="listbox">
-              <span class="opt active"
-                ><svg class="gh"><use href="#i-github" /></svg>
-                <span class="mono">acme-inc/booking-service</span></span
-              >
-              <span class="opt"
-                ><svg class="gh"><use href="#i-github" /></svg>
-                <span class="mono">acme-inc/booking-monorepo</span></span
-              >
-              <span class="opt"
-                ><svg class="gh"><use href="#i-github" /></svg>
-                <span class="mono">acme-inc/website</span></span
-              >
-            </div>
           </div>
-        </div>
-      </div>
-
-      <div class="panel-note" style="margin-top: 20px">
-        <b>The monorepo, collapsed to one row.</b> One connected repository, no role suffix, no list
-        affordances — indistinguishable from panel 1 except that the row was adopted instead of
-        created. The offer to drop the now-redundant rows is part of the switch, not a separate
-        screen.
-      </div>
-      <div class="panel" style="max-width: 36rem">
-        <div class="row connected">
-          <div class="row-top">
-            <div class="row-main">
-              <div class="row-meta">
-                <span class="row-state info"
-                  ><svg class="i sm"><use href="#i-link" /></svg> Connected</span
-                >
-              </div>
-              <div class="row-name">
-                <svg class="gh"><use href="#i-github" /></svg>
-                <a class="link full mono" href="#">acme-inc/booking-monorepo</a>
-                <svg class="i sm" style="color: var(--el-icon-muted)">
-                  <use href="#i-external-link" />
-                </svg>
-              </div>
-              <span class="helper">
-                Everything lives here. Motir removed the second proposed row —
-                <a class="link" href="#">undo</a>.
-              </span>
+          <div class="set-foot">
+            <div class="summary" role="status">
+              <b>1 created</b> <span class="sep">·</span> 1 skipped <span class="sep">·</span> 1
+              needs a decision
             </div>
+            <div class="cta">
+              <button class="btn btn-primary" type="button">Finish setup</button>
+            </div>
+            <span class="primary-note">
+              Your plan is already in the backlog. Motir will tell you which tasks are waiting on a
+              repository.
+            </span>
           </div>
         </div>
       </div>
