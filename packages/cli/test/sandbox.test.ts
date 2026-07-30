@@ -82,6 +82,24 @@ const volumesOf = (block: string): string[] =>
     .map((line) => line.trim().replace(/^- /, ''));
 
 /**
+ * The `environment:` keys of one compose service block. Read as `KEY: value`
+ * lines under that key so a variable named only in a COMMENT cannot satisfy the
+ * pass-through assertion.
+ */
+const environmentOf = (block: string): string[] => {
+  const lines = block.split('\n');
+  const start = lines.findIndex((line) => /^\s{4}environment:\s*$/.test(line));
+  if (start === -1) return [];
+  const keys: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^\s{4}\S/.test(line)) break; // the next service-level key
+    const entry = /^\s{6}([A-Za-z_][A-Za-z0-9_]*):/.exec(line);
+    if (entry?.[1]) keys.push(entry[1]);
+  }
+  return keys;
+};
+
+/**
  * A profile's case arm in install-agent.sh: everything from its own `<id>)`
  * label up to the next `;;`. Read as an ARM rather than a substring so the
  * "profile is named somewhere in the file" drift guard cannot be satisfied by
@@ -249,6 +267,85 @@ describe('sandbox entrypoint', () => {
     expect(echoes.length).toBeGreaterThan(0);
     // `motir next --print | pbcopy` must receive the prompt and nothing else.
     for (const line of echoes) expect(line).toMatch(/>&2$/);
+  });
+});
+
+// ── The credential story: three tiers, one of which needs no mount (MOTIR-1877)
+// The sandbox used to have exactly ONE way in — a credential mounted read-only
+// from a host that had already run a login — which left a fresh machine, a CI
+// runner and anyone running a published image with no path at all. These guards
+// pin the three tiers across every surface that has to agree about them: the
+// entrypoint's message, compose, the devcontainers and the README.
+
+describe('the credential tiers', () => {
+  const CREDENTIAL_ENV = ['MOTIR_TOKEN', 'MOTIR_SERVER'];
+
+  it('passes the env tier through on EVERY compose service, not just the base one', () => {
+    // A profile that forgot them would work on the maintainer's laptop (where
+    // the mount is populated) and fail on every machine that has no host login —
+    // the exact split the env tier exists to close.
+    for (const [name, block] of Object.entries(composeServices)) {
+      const env = environmentOf(block);
+      for (const key of CREDENTIAL_ENV) {
+        expect(env, `compose service ${name} must pass ${key} through`).toContain(key);
+      }
+    }
+  });
+
+  it('names ALL THREE ways in when no credential is present', () => {
+    // The old message named one (mount it from the host), which is correct only
+    // on the machine you already logged in on.
+    const block = entrypoint.slice(entrypoint.indexOf('THREE ways a credential gets in here'));
+    expect(block, 'the env tier').toContain('-e MOTIR_TOKEN');
+    expect(block, 'the in-container login').toMatch(/motir login/);
+    expect(block, 'the mount').toContain('$HOME/.config/motir:$CONFIG_DIR:ro');
+  });
+
+  it('says nothing at all when MOTIR_TOKEN carries the credential', () => {
+    // A warning that fires on a working configuration teaches people to ignore
+    // the warnings that matter.
+    expect(entrypoint).toContain(
+      'if [ -z "${MOTIR_TOKEN:-}" ] && [ ! -f "$CONFIG_DIR/config.json" ]',
+    );
+  });
+
+  it('tells the truth about `motir login` by TESTING whether the config dir is writable', () => {
+    // Under a `:ro` mount the login cannot persist, so offering it flatly would
+    // send the reader at a command that must fail. The writability of the
+    // nearest existing ancestor is the honest test — the dir itself may not
+    // exist yet, in which case the CLI creates it.
+    expect(entrypoint).toContain('config_dir_writable() {');
+    expect(entrypoint).toMatch(/while \[ ! -e "\$dir" \]/);
+    expect(entrypoint).toContain('drop the :ro mount to use it');
+  });
+
+  it('carries the mount-free one-liner in the entrypoint header AND the README', () => {
+    const header = entrypoint.slice(0, entrypoint.indexOf('set -euo pipefail'));
+    expect(header).toContain('-e MOTIR_TOKEN -e MOTIR_SERVER');
+    expect(readme).toContain('-e MOTIR_TOKEN -e MOTIR_SERVER');
+    // …and the mount is documented as OPTIONAL rather than as the contract.
+    expect(readme).toContain('Three ways to give it a Motir credential');
+    expect(readme).toMatch(/\*\*Optional\*\*, read-only/);
+  });
+
+  it('forwards the env tier into every devcontainer variant too', () => {
+    // `remoteEnv` is the devcontainer analogue of compose's `environment:` — a
+    // variant without it is the one shape of this image that still demands a
+    // host login.
+    const variants = [
+      'devcontainer.json',
+      ...PROFILE_IDS.map((id) => join(id, 'devcontainer.json')),
+    ];
+    for (const relative of variants) {
+      const variant = JSON.parse(
+        readFileSync(join(SANDBOX_DIR, 'devcontainer', relative), 'utf8'),
+      ) as { remoteEnv?: Record<string, string> };
+      for (const key of CREDENTIAL_ENV) {
+        expect(variant.remoteEnv?.[key], `${relative} must forward ${key}`).toBe(
+          `\${localEnv:${key}}`,
+        );
+      }
+    }
   });
 });
 
