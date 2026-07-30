@@ -304,6 +304,36 @@ because a user who has not connected has not yet self-identified as technical. *
 appear only after they connect**, which is the same #151 discipline the "I already have code" door
 applies, one step later.
 
+### Which account gets access — connected, never typed, and therefore SHOWN
+
+There is deliberately **no "type your GitHub username" field**. The account Motir invites is the one
+the user **connects** — `GithubIdentity.githubLogin`, which is where MOTIR-1900 reads it. A typed
+handle proves nothing (anyone can type anyone's), a typo would invite a **stranger** to a private
+repository, and Motir needs the verified identity anyway for dispatch and attribution.
+
+But that mechanism is only honest if the user can **see** which account got access, which v4's first
+pass did not draw — it asserted _"Motir invited @yuezhu"_ in a sentence and offered no way to correct
+it. **3b now mirrors the shipped `IdentityHeader`** (`app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx`):
+the avatar, **@login**, the `Pill severity="success"` **Verified** badge, and a trailing **Use a
+different account** which re-runs the connect rather than opening a field. That is `notes.html` #73
+applied — when the element already exists as shipped UI, the design SHOWS the real component rather
+than redrawing a stand-in — and it is the same component the Git settings pane already puts a
+`Disconnect` button on.
+
+### ⚠️ Only the approving user — teammate access is a plan gap, filed as MOTIR-1910
+
+MOTIR-1900 invites **the project owner**, and nothing planned anywhere invites anyone else. Every
+repository is private and Motir-owned, so on a six-person workspace the other five cannot clone the
+project's code by any path. Verified at rung 2 — `grep -rn "collaborator" lib app` returns nothing,
+and a tenant search names no card that invites a non-owner.
+
+It is **not drawn on this surface**, on purpose: a teammate is not standing at plan approval, so
+their door belongs on a surface they actually reach (the code-context surface, MOTIR-1764, or project
+settings). It also cannot reuse the owner's mechanism as-is — Motir cannot OAuth on a teammate's
+behalf — so it resolves against workspace membership rather than a typed handle, and it multiplies
+the CI-spend exposure MOTIR-1901 / MOTIR-1907 meter. **MOTIR-1910** carries all of that, and likely
+needs a decision card ahead of it.
+
 **Panel 4 — the invitation, per repository.** Access is granted per repository, so the invitation is
 a **sub-state OF a created row**, never a row state of its own: the row keeps its
 `created` / `failed` / `skipped` tint from §4.1 and the invitation is an extra line inside it. Two
@@ -526,9 +556,12 @@ Namespace **`repositorySet`**. MOTIR-1782 / MOTIR-1900 add these to `messages/en
 | `accessLead`         | Your code is private — only you and Motir can see it. Connect GitHub and Motir will invite you to it, so you can open it, clone it, and point your own agent at it. |
 | `connectGithub`      | Connect GitHub                                                                                                                                                      |
 | `accessLater`        | Later                                                                                                                                                               |
-| `accessOnlyUsername` | Motir only needs to know your GitHub username.                                                                                                                      |
+| `accessWhichAccount` | Motir invites the GitHub account you connect — you'll see which one.                                                                                                |
 | `invitedTitle`       | You're invited to your code                                                                                                                                         |
-| `invitedDetail`      | Motir invited {login}. Accept the invitation on GitHub and your code is yours to clone.                                                                             |
+| `identityVerified`   | Verified _(reuses `github.identity.verified` — the shipped `IdentityHeader`'s success pill)_                                                                        |
+| `identityCaption`    | This is the account Motir invited                                                                                                                                   |
+| `useOtherAccount`    | Use a different account _(re-runs the connect; it does NOT open a username field)_                                                                                  |
+| `invitedDetail`      | Accept the invitation on GitHub and your code is yours to clone.                                                                                                    |
 | `openInvitation`     | Open the invitation                                                                                                                                                 |
 | `stateInvited`       | Invitation sent                                                                                                                                                     |
 | `invitedRowDetail`   | to {login}, waiting to be accepted on GitHub                                                                                                                        |

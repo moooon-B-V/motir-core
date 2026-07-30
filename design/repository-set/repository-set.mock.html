@@ -1103,6 +1103,54 @@
         margin-top: 4px;
         font-size: 13px;
       }
+      /* WHICH ACCOUNT gets access — the shipped IdentityHeader, mirrored
+         (gitSettingsPrimitives.tsx). Motir invites the account you CONNECT;
+         it is never typed, so it must be SHOWN and changeable. */
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+      }
+      .identity .av {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        width: 40px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-avatar-fallback);
+        color: var(--el-text-inverted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .identity .who {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        flex: 1;
+      }
+      .identity .top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .identity .login {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .identity .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
       /* per-row COLLABORATOR-INVITATION state (MOTIR-1900) — a sub-state OF a
          created row, never a row tint of its own */
       .inv {
@@ -1824,6 +1872,32 @@
         grant 2 and is only needed for connect-existing (panel 5). Nothing here widens a grant, and
         no re-consent, upgrade or org-owner state is drawn, because none is asked for.
       </p>
+      <p class="panel-note">
+        <b
+          >There is deliberately no "type your GitHub username" field — and 3b is what pays for
+          that.</b
+        >
+        The account Motir invites is the one the user <b>connects</b> (<code class="mono"
+          >GithubIdentity.githubLogin</code
+        >, which is where MOTIR-1900 reads it), never one they type. That is the right mechanism — a
+        typed handle proves nothing, and a typo would invite a <i>stranger</i> to a private
+        repository — but it is only honest if the user can SEE which account got access. So 3b
+        mirrors the <b>shipped <code class="mono">IdentityHeader</code></b> (<code class="mono"
+          >gitSettingsPrimitives.tsx</code
+        >): avatar, <b>@login</b>, the <code class="mono">Pill severity="success"</code>
+        <b>Verified</b> badge, and a <b>Use a different account</b> escape that re-runs the connect
+        rather than opening a field. Reusing the real component is
+        <code class="mono">notes.html</code> #73 applied — when the element already exists, the
+        design shows it, it does not redraw a stand-in.
+      </p>
+      <p class="panel-note">
+        <b>⚠️ This covers the person who approved the plan, and nobody else.</b> MOTIR-1900 invites
+        <i>the project owner</i>; a workspace has other members, and none of them gets access by any
+        path drawn here or planned anywhere. That is a plan gap, not a drawing gap — filed as
+        <b>MOTIR-1910</b>, whose home is a surface a teammate actually stands on (the code-context
+        surface / project settings), not the approval step.
+        <b>Teammate access is not drawn here.</b>
+      </p>
       <div class="panel twoup">
         <figure>
           <figcaption>3a · not connected yet — the prompt</figcaption>
@@ -1855,14 +1929,14 @@
                   <button class="quiet-link" type="button">Later</button>
                 </div>
                 <p class="helper" style="margin: 0">
-                  Motir only needs to know your GitHub username.
+                  Motir invites the GitHub account you connect — you'll see which one.
                 </p>
               </div>
             </div>
           </div>
         </figure>
         <figure>
-          <figcaption>3b · connected — the invitation is on its way</figcaption>
+          <figcaption>3b · connected — WHICH account got access, and the invitation</figcaption>
           <div class="shell">
             <div class="step-pane" style="padding: 28px 24px">
               <div class="step hero">
@@ -1874,9 +1948,22 @@
                   <svg class="i lg"><use href="#i-circle-check-big" /></svg>
                   You're invited to your code
                 </div>
+                <div class="identity">
+                  <span class="av" aria-hidden="true">Y</span>
+                  <span class="who">
+                    <span class="top">
+                      <span class="login">@yuezhu</span>
+                      <span class="pill pill-done">
+                        <svg class="i sm"><use href="#i-badge-check" /></svg>
+                        Verified
+                      </span>
+                    </span>
+                    <span class="cap">This is the account Motir invited</span>
+                  </span>
+                  <button class="quiet-link" type="button">Use a different account</button>
+                </div>
                 <p class="helper" style="margin: 0">
-                  Motir invited <b>@yuezhu</b>. Accept the invitation on GitHub and your code is
-                  yours to clone.
+                  Accept the invitation on GitHub and your code is yours to clone.
                 </p>
                 <div class="hero-cta">
                   <button class="btn btn-primary" type="button">
