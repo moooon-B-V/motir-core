@@ -15,5 +15,9 @@
   ],
   "remoteUser": "node",
   "overrideCommand": true,
-  "postAttachCommand": "motir --version"
+  "postAttachCommand": "motir --version",
+  "remoteEnv": {
+    "MOTIR_TOKEN": "${localEnv:MOTIR_TOKEN}",
+    "MOTIR_SERVER": "${localEnv:MOTIR_SERVER}"
+  }
 }

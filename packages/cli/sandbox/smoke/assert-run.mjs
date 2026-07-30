@@ -42,12 +42,26 @@ const entries = readFileSync(CALLS_PATH, 'utf8')
   .filter(Boolean)
   .map((line) => JSON.parse(line));
 
-const toolCalls = entries.filter((e) => e.method === 'tools/call');
-const names = toolCalls.map((e) => e.tool);
+const allToolCalls = entries.filter((e) => e.method === 'tools/call');
 
 check(
   entries.some((e) => e.method === 'initialize'),
   'the CLI never completed an MCP `initialize` handshake',
+);
+
+// The suite runs `motir ready` against this same stub before the loop starts —
+// it is the cheapest proof that the credential resolved, whichever tier supplied
+// it (MOTIR-1877) — so ONE leading `list_ready` belongs to that pre-flight and is
+// skipped here. Only a leading one: a `list_ready` from inside the loop would be
+// the batch read-ahead this file exists to refuse, so it is checked for
+// separately rather than filtered away.
+const preflight = allToolCalls[0]?.tool === 'list_ready' ? 1 : 0;
+const toolCalls = allToolCalls.slice(preflight);
+const names = toolCalls.map((e) => e.tool);
+
+check(
+  !names.includes('list_ready'),
+  'the loop called `list_ready` — the ready set is re-queried ONE item at a time, never read ahead in a batch',
 );
 
 // The expected shape, built rather than hard-coded so the item count is a knob.

@@ -21,8 +21,20 @@
 // attached", and it RECORDS every call so the smoke script can assert the
 // sequence rather than just the exit code.
 //
+// It ALSO serves the two DEVICE-GRANT routes `motir login` speaks (MOTIR-1877):
+// `/api/cli/device/start` and `/api/cli/device/token`, on plain JSON/HTTP rather
+// than MCP — which is the shape the real server has, because a login runs before
+// any bearer exists. That is what lets the smoke lane prove the two mount-free
+// credential paths (an `MOTIR_TOKEN` handed in, and a login performed INSIDE the
+// container) against something, instead of against a mocked-out CLI.
+//
+// The approval a human would give in a browser is scripted: the token endpoint
+// answers `authorization_pending` for `--device-pending` polls and then grants.
+// Zero is a legitimate value — an instantly-approved grant — and the default of
+// one exercises the polling loop at least once.
+//
 // Usage:
-//   node stub-server.mjs --port <n> --log <path> [--items <n>]
+//   node stub-server.mjs --port <n> --log <path> [--items <n>] [--device-pending <n>]
 // It prints one line to stdout — the base URL — once it is listening.
 
 import { createServer } from 'node:http';
@@ -39,6 +51,8 @@ const PORT = Number.parseInt(argOf('port', '0'), 10);
 const LOG_PATH = argOf('log', '');
 const ITEM_COUNT = Number.parseInt(argOf('items', '2'), 10);
 const PROJECT_KEY = argOf('project', 'SMOKE');
+/** Polls answered `authorization_pending` before the grant is approved. */
+const DEVICE_PENDING_POLLS = Number.parseInt(argOf('device-pending', '1'), 10);
 
 if (!LOG_PATH) {
   console.error('stub-server: --log <path> is required (the call log the smoke test asserts on).');
@@ -97,6 +111,19 @@ function nextReady() {
   return { item };
 }
 
+/**
+ * The READ surface `motir ready` pages through — one page, no cursor. It reports
+ * the items not yet handed out, so calling it before the loop describes the same
+ * set the loop is about to drain, and calling it after describes an empty one.
+ *
+ * It exists here because `motir ready` is the cheapest end-to-end proof that a
+ * credential RESOLVED: it connects, authenticates and reads. The mount-free legs
+ * (MOTIR-1877) run it as their first assertion for exactly that reason.
+ */
+function listReady() {
+  return { items: ITEMS.slice(served), nextCursor: null };
+}
+
 function transitionStatus(args) {
   return { key: args.key, status: args.status };
 }
@@ -134,6 +161,7 @@ function markIntegrated(args) {
  *  tools directly — so this is documentation, not dispatch. */
 const TOOL_NAMES = [
   'whoami',
+  'list_ready',
   'next_ready',
   'transition_status',
   'dispatch_prompt',
@@ -145,6 +173,8 @@ function callTool(name, args) {
   switch (name) {
     case 'whoami':
       return whoami();
+    case 'list_ready':
+      return listReady();
     case 'next_ready':
       return nextReady();
     case 'transition_status':
@@ -156,6 +186,80 @@ function callTool(name, args) {
     default:
       return null;
   }
+}
+
+// ── the device grant (`motir login`) ────────────────────────────────────────
+//
+// The two routes deviceAuth.ts speaks. They are NOT MCP: a login runs before any
+// credential exists, so there is no bearer to open an MCP session with — the real
+// server has the same split, and the stub mirrors it rather than inventing a
+// friendlier shape the CLI would never meet.
+//
+// The human in the middle is scripted, not skipped: the token endpoint answers
+// `authorization_pending` until the configured number of polls has gone by, which
+// is what makes the smoke run exercise the POLLING loop rather than a single
+// lucky request.
+
+const DEVICE_START_PATH = '/api/cli/device/start';
+const DEVICE_TOKEN_PATH = '/api/cli/device/token';
+const DEVICE_CODE = 'smoke-device-code';
+/** Eight characters with no dash, so `groupUserCode` regroups it to K4TP-9RXM —
+ *  the form the smoke assertions look for on the container's stderr. */
+const USER_CODE = 'K4TP9RXM';
+
+let devicePolls = 0;
+let listeningPort = PORT;
+
+function deviceStart(body) {
+  devicePolls = 0;
+  record({ device: 'start', hostname: body?.hostname ?? null });
+  const base = `http://127.0.0.1:${listeningPort}`;
+  return {
+    status: 200,
+    body: {
+      device_code: DEVICE_CODE,
+      user_code: USER_CODE,
+      verification_uri: `${base}/device`,
+      verification_uri_complete: `${base}/device?code=${USER_CODE}`,
+      expires_in: 900,
+      // One second is the CLI's floor (MIN_POLL_SECONDS) — the smoke run should
+      // not sit through a realistic five.
+      interval: 1,
+    },
+  };
+}
+
+function deviceToken(body) {
+  devicePolls += 1;
+  record({ device: 'token', poll: devicePolls });
+  if (body?.device_code !== DEVICE_CODE) {
+    // What the real server answers for an unknown / consumed code. Getting this
+    // wrong would make a CLI regression look like a stub crash.
+    return { status: 400, body: { error: 'invalid_grant' } };
+  }
+  if (devicePolls <= DEVICE_PENDING_POLLS) {
+    return { status: 400, body: { error: 'authorization_pending' } };
+  }
+  return {
+    status: 200,
+    body: {
+      access_token: 'device-not-a-real-token',
+      token_type: 'bearer',
+      scope: 'cli',
+      expires_in: 0,
+      user: { id: 'u1', name: 'Smoke User', email: 'smoke@example.invalid' },
+      workspace: { id: 'w1', name: 'Smoke', slug: 'smoke' },
+    },
+  };
+}
+
+/** Handle a device route. Returns false when the path is not one of them. */
+function handleDeviceRoute(pathname, body, res) {
+  if (pathname !== DEVICE_START_PATH && pathname !== DEVICE_TOKEN_PATH) return false;
+  const { status, body: payload } =
+    pathname === DEVICE_START_PATH ? deviceStart(body) : deviceToken(body);
+  res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(payload));
+  return true;
 }
 
 // ── JSON-RPC / streamable-HTTP ──────────────────────────────────────────────
@@ -238,6 +342,12 @@ const server = createServer((req, res) => {
       return;
     }
 
+    // The device routes are plain JSON, not JSON-RPC — dispatch on the PATH
+    // before anything reads `msg.id`, or a login body would fall through to the
+    // notification branch and get a silent 202.
+    const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
+    if (handleDeviceRoute(pathname, msg, res)) return;
+
     // A notification / response carries no id and gets no body — 202 is what
     // the transport expects for `notifications/initialized`.
     if (msg.id === undefined) {
@@ -283,6 +393,7 @@ server.listen(PORT, '127.0.0.1', () => {
   // The URL is DATA — loop-smoke.sh redirects stdout into a file and reads it as
   // the readiness signal — so it is written, not logged.
   const address = server.address();
+  listeningPort = address.port;
   process.stdout.write(`http://127.0.0.1:${address.port}\n`);
 });
 

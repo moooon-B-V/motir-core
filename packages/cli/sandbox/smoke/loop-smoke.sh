@@ -94,13 +94,36 @@ done
 say "stub server at $(cat "$RUN_DIR/stub.url")"
 
 # ── the run ─────────────────────────────────────────────────────────────────
-# The credential comes from the READ-ONLY mount (or MOTIR_CONFIG_HOME when this
-# script is run outside a container); nothing here writes to it. That is not a
+# The credential comes from whichever tier the CALLER set up — the read-only
+# mount, or `MOTIR_TOKEN` in the environment (MOTIR-1877), or a login this
+# container performed itself. Nothing here writes to it either way. That is not a
 # convenience — an unattended run that needed to write beside its PAT could not
 # work in the sandbox at all, so the smoke run proves it does not have to.
+#
+# The tier is REPORTED rather than assumed, because this script is now driven
+# three ways and a leg that silently fell back to another tier would still pass.
 
 export PATH="$SMOKE_DIR/bin:$PATH"
 export MOTIR_SMOKE_GH_LOG="$GH_LOG"
+
+CONFIG_DIR="${MOTIR_CONFIG_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}}/motir"
+if [ -n "${MOTIR_TOKEN:-}" ]; then
+    say 'credential tier: MOTIR_TOKEN from the environment (no credential mount needed)'
+elif [ -f "$CONFIG_DIR/config.json" ]; then
+    say "credential tier: $CONFIG_DIR/config.json"
+else
+    fail "no credential at all — neither MOTIR_TOKEN nor $CONFIG_DIR/config.json"
+fi
+
+# `motir ready` FIRST: it connects, authenticates and reads, so it is the
+# cheapest end-to-end proof that the credential actually resolved — and when it
+# does not, its one-line error says so far more clearly than a loop that dies
+# three tool calls in.
+say 'reading the ready set (`motir ready`)'
+(cd "$WORKSPACE" && motir ready) > "$RUN_DIR/ready.log" 2>&1 ||
+    fail "motir ready failed: $(cat "$RUN_DIR/ready.log")"
+grep -q 'SMOKE-1' "$RUN_DIR/ready.log" ||
+    fail "motir ready listed no ready items (see $RUN_DIR/ready.log)"
 
 say 'running motir auto with the fake agent'
 set +e

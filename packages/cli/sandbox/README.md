@@ -18,33 +18,70 @@ container is the _recommended_ path, not a requirement.
 > the real mount table, and drives `motir auto` end-to-end inside the image with
 > a fake agent (see [Validation](#validation)). This slice **publishes** it: the
 > smoke-tested images go to GHCR on a `cli-v*` tag, so adopting the sandbox is a
-> `docker run`, not a `git clone` (see [Publishing](#publishing)).
+> `docker run`, not a `git clone` (see [Publishing](#publishing)). MOTIR-1877
+> then closed the last thing that still needed a prior host login: the
+> credential mount is **optional**, `MOTIR_TOKEN` / `MOTIR_SERVER` are honoured
+> everywhere, and `motir login` runs inside the container (see
+> [the three ways](#three-ways-to-give-it-a-motir-credential)).
 
 ## Run
 
-Pull and go — no checkout, no build:
+Pull and go — no checkout, no build, and no prior host login:
 
 ```sh
 docker run --rm -it \
   -v "$PWD:/workspace" \
-  -v "$HOME/.config/motir:/home/node/.config/motir:ro" \
+  -e MOTIR_TOKEN -e MOTIR_SERVER \
   -v "$HOME/.claude:/home/node/.claude:ro" \
   ghcr.io/moooon-b-v/motir-sandbox:claude \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
-Three mounts, and they are the whole host contract:
+One required mount, one optional one, and the agent's own:
 
-| Mount                      | Why                                                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `$PWD:/workspace`          | Writable. Your `.motir.json` tree — the only host path the agent can change.                                 |
-| `$HOME/.config/motir:…:ro` | Read-only. The Motir PAT: `motir auth login` runs on the **host**, the container only consumes the result.   |
-| `$HOME/.claude:…:ro`       | Read-only. The agent's own credential — swap it for your profile's row in [the matrix](#the-profile-matrix). |
+| Mount / variable               | Why                                                                                                                                             |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$PWD:/workspace`              | **Required, writable.** Your `.motir.json` tree — the only host path the agent can change.                                                      |
+| `MOTIR_TOKEN` / `MOTIR_SERVER` | The Motir credential, from the environment. Needs no host state at all, so it is the CI / fresh-machine / published-image path.                 |
+| `$HOME/.config/motir:…:ro`     | **Optional**, read-only. A credential you already have on this host — an alternative to the two variables above, not a requirement (see below). |
+| `$HOME/.claude:…:ro`           | Read-only. The agent's own credential — swap it for your profile's row in [the matrix](#the-profile-matrix).                                    |
 
 Run it from your **workspace root** (the directory holding `.motir.json`), not
 from inside a single checkout — `motir auto` dispatches across every repo in the
 workspace. With no command, you get an interactive shell in `/workspace`
 instead.
+
+### Three ways to give it a Motir credential
+
+The container needs a token for your Motir server. It has the same three tiers
+the CLI has anywhere else — the resolution ladder is
+`MOTIR_TOKEN` → the stored config — and all three work in here (MOTIR-1877):
+
+1. **`-e MOTIR_TOKEN -e MOTIR_SERVER`** — pass them through from your shell.
+   `GH_TOKEN` / `GH_HOST` one-for-one. Nothing is mounted, nothing is written to
+   disk, and it is the only tier a CI runner or a brand-new machine can use.
+   Mint the token in Motir under **Settings → Account → API tokens**.
+2. **`motir login`, inside the container** — a device grant: it prints a code and
+   a URL, you approve it in a browser on any device, and the container polls
+   until the token is minted. Headless by construction, which is exactly what a
+   container is. **This needs the credential mount to be ABSENT** — with no bind
+   over it, `~/.config/motir` inside the container is writable and the login
+   persists for the container's life (and dies with `--rm`, like the rest of the
+   ephemeral layer).
+3. **`-v "$HOME/.config/motir:/home/node/.config/motir:ro"`** — mount a
+   credential you already have. Read-only, because a container that mounts one
+   _consumes_ it and never mints or rotates it. This is the convenient path on
+   the laptop you already ran `motir login` on.
+
+With none of them, the entrypoint says so on **stderr** and names all three
+before anything fails deeper in.
+
+> **An environment credential does not widen the blast radius.** It is a variable
+> in one process tree, not a host path, so the mount table — the thing
+> [confinement](#what-it-confines--and-what-it-does-not) is actually asserted
+> against — is one entry SHORTER than it used to be. The smoke lane proves both
+> halves: the mount-free legs run with only `/workspace` bound, and the
+> confinement suite still refuses any host bind beyond the documented ones.
 
 > The `base` image ships **no** coding agent, so `motir auto --agent …` has
 > nothing to launch there. Use it for `motir next --print` workflows — the
@@ -70,7 +107,7 @@ sandbox you can re-enter — the same argument 7.9.7a makes for the base image:
 ```sh
 docker run --rm -it \
   -v "$PWD:/workspace" \
-  -v "$HOME/.config/motir:/home/node/.config/motir:ro" \
+  -e MOTIR_TOKEN -e MOTIR_SERVER \
   -v "$HOME/.claude:/home/node/.claude:ro" \
   ghcr.io/moooon-b-v/motir-sandbox@sha256:<digest> \
   motir auto --agent "claude --dangerously-skip-permissions"
@@ -101,14 +138,18 @@ docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 
 ## What it confines — and what it does not
 
-|                |                                                                                                                                                                                                                                                                               |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Filesystem** | Confined. The only host surfaces inside the container are a writable `/workspace` (your `.motir.json` tree) and a **read-only** `~/.config/motir` (the PAT). No docker socket, no other host bind.                                                                            |
-| **Network**    | **Open, by design.** Every coding agent needs its provider API, and every dispatched item needs git remotes plus the Motir server. This image confines the filesystem blast radius, not egress — reach for docker's own `--network` controls if your threat model needs more. |
-| **Privileges** | Runs as the unprivileged `node` user (uid 1000), so files written into the mount stay owned by you rather than by root.                                                                                                                                                       |
+|                |                                                                                                                                                                                                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Filesystem** | Confined. The only host surfaces inside the container are a writable `/workspace` (your `.motir.json` tree) and, _if you mount one_, a **read-only** `~/.config/motir` (the PAT). With the environment tier there is exactly ONE host bind. No docker socket, no other host bind. |
+| **Network**    | **Open, by design.** Every coding agent needs its provider API, and every dispatched item needs git remotes plus the Motir server. This image confines the filesystem blast radius, not egress — reach for docker's own `--network` controls if your threat model needs more.     |
+| **Privileges** | Runs as the unprivileged `node` user (uid 1000), so files written into the mount stay owned by you rather than by root.                                                                                                                                                           |
 
-The PAT mount is read-only because the container _consumes_ a credential and
-never mints or rotates one: run `motir auth login` on the **host**.
+A MOUNTED PAT is read-only because the container _consumes_ that credential and
+never rotates it — so `motir login` cannot persist over a `:ro` bind, and says so
+in one sentence rather than dying on an `EROFS` (the smoke lane asserts exactly
+that). Minting a credential in here is a different matter and is supported:
+start the container **without** the mount and run `motir login`, or hand it a
+token with `MOTIR_TOKEN`. See [the three ways](#three-ways-to-give-it-a-motir-credential).
 
 > **The CLI's own mutable state does not live beside the PAT.** The session
 > exclude list (the ids `motir auto` skips after a failed agent) resolves from
@@ -161,6 +202,14 @@ docker compose --profile codex run --rm sandbox-codex \
 `MOTIR_WORKSPACE=/path/to/workspace` overrides which host directory is mounted
 as `/workspace`; the default is the parent of this motir-core checkout.
 
+**Every service passes `MOTIR_TOKEN` and `MOTIR_SERVER` through from your shell**,
+so the compose form has the same mount-free credential path as `docker run`:
+export the two variables and the `~/.config/motir` bind carries nothing the run
+needs. The bind stays in the file because compose cannot express a conditional
+mount (and it is still the right default on a host you have logged in on) — if
+you want a container with genuinely no credential mount, which is also what
+`motir login` inside the container requires, use the `docker run` form above.
+
 ## Dev container
 
 `devcontainer/devcontainer.json` is the VS Code / `devcontainer` CLI variant of
@@ -172,6 +221,11 @@ profile's `AGENT` build arg plus that agent's own read-only credential mount:
 devcontainer up --workspace-folder . \
   --config packages/cli/sandbox/devcontainer/claude/devcontainer.json
 ```
+
+Each variant also forwards `MOTIR_TOKEN` / `MOTIR_SERVER` from your local
+environment (`remoteEnv`), so a dev container on a machine that never ran a host
+login still resolves a credential — the same tier the `docker run` and compose
+forms use.
 
 To use one for your own workspace, copy the file to
 `<your-workspace>/.devcontainer/devcontainer.json` and repoint `build.context` /
@@ -454,8 +508,12 @@ so an image no smoke test touched cannot reach the registry.
 
 ### `Sandbox smoke (loop + failure + confinement)`
 
-Builds the base image, then starts it with **exactly** the mount recipe from
-[Run](#run) and executes three suites inside it:
+Builds the base image, then starts it **three times** — once per credential
+recipe from [Run](#run), because whether a credential mount is present and
+whether a token is in the environment are properties of how the container was
+LAUNCHED, not something a script can simulate from inside one.
+
+**Run 1 — with the read-only credential mount.** Four suites:
 
 - **`confinement.sh`** — asserts the blast radius against `/proc/self/mounts`,
   the ground truth: `/workspace` is the one writable host bind, every credential
@@ -492,6 +550,29 @@ Builds the base image, then starts it with **exactly** the mount recipe from
   the credential mount is never touched), one with `MOTIR_STATE_HOME` forced
   back onto the read-only mount (the run still closes out, warning instead of
   dying).
+
+- **`readonly-login-smoke.sh`** — `motir login` under that same mount. The grant
+  succeeds and there is then nowhere to put the token, which must surface as ONE
+  sentence naming the fix (and pointing at `MOTIR_TOKEN`, the tier that needs no
+  disk) — never an `EROFS`, never a stack trace, and with the mounted credential
+  left byte-for-byte unchanged. A supported configuration used correctly must not
+  read as a crash (MOTIR-1836 is that class of bug).
+
+**Run 2 — no credential mount, `-e MOTIR_TOKEN -e MOTIR_SERVER`.**
+`env-credential-smoke.sh` asserts the bind really is absent (against
+`/proc/self/mounts`, so the leg cannot pass on a credential it was handed rather
+than the one under test), then drives the whole `loop-smoke.sh` suite —
+`motir ready` plus the full `motir auto` loop — on the environment tier alone.
+This is the recipe CI and a fresh machine use, so it is smoke-tested as its own
+case rather than assumed to follow from the mounted one.
+
+**Run 3 — no mount and no token: a fresh machine.** `login-smoke.sh` runs
+`motir login --no-browser` inside the container against the stub's device routes:
+the code is printed grouped (`K4TP-9RXM`) with its URL, the approval is scripted
+after one `authorization_pending` poll, and the minted credential is written to
+the container's own `~/.config/motir/config.json` at mode 600. Then `motir ready`
+reads the plan with nothing in the environment — which is the actual claim, not
+that a file appeared.
 
 Run it yourself — it needs nothing but docker:
 
@@ -571,23 +652,26 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 
 ## Files
 
-| File                             | What it is                                                                                                                                                                                                                                                            |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                                                                                       |
-| `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs and wiring the codegraph MCP server where codegraph has a target.                                                                     |
-| `entrypoint.sh`                  | Verifies the mounts, redirects the three agents whose codegraph config a `:ro` mount would mask, indexes `/workspace` with CodeGraph and installs its git sync hooks, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean. |
-| `docker-compose.yml`             | The compose form — one service + compose profile per agent, each with its credential mount.                                                                                                                                                                           |
-| `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                                                                                             |
-| `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                                                                                         |
-| `smoke/run.sh`                   | The validation driver: build the image, run it through the documented mount recipe, execute all three in-container suites.                                                                                                                                            |
-| `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                                                                                                |
-| `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                                                                                               |
-| `smoke/failure-smoke.sh`         | The failure path: an agent that dies mid-run must still cost nothing — the branch is pushed and the pull request opened, with the store writable and unwritable.                                                                                                      |
-| `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call.                                                                                                                                                                           |
-| `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                                                                                               |
-| `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                                                                                         |
-| `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                      |
-| `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                                                                                                   |
+| File                             | What it is                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                                                                                                                                              |
+| `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs and wiring the codegraph MCP server where codegraph has a target.                                                                                                                            |
+| `entrypoint.sh`                  | Verifies the mounts, names all three credential paths when none is present, redirects the three agents whose codegraph config a `:ro` mount would mask, indexes `/workspace` with CodeGraph and installs its git sync hooks, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean. |
+| `docker-compose.yml`             | The compose form — one service + compose profile per agent, each passing `MOTIR_TOKEN` / `MOTIR_SERVER` through and mounting its agent credential.                                                                                                                                                                           |
+| `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                                                                                                                                                    |
+| `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                                                                                                                                                |
+| `smoke/run.sh`                   | The validation driver: build the image, then run it through each documented credential recipe — mounted, env-only, and nothing-at-all — executing the suites that belong to each.                                                                                                                                            |
+| `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                                                                                                                                                       |
+| `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                                                                                                                                                      |
+| `smoke/failure-smoke.sh`         | The failure path: an agent that dies mid-run must still cost nothing — the branch is pushed and the pull request opened, with the store writable and unwritable.                                                                                                                                                             |
+| `smoke/env-credential-smoke.sh`  | The mount-free environment tier: proves the bind is absent, then runs the whole loop on `MOTIR_TOKEN` alone.                                                                                                                                                                                                                 |
+| `smoke/login-smoke.sh`           | `motir login` performed INSIDE the container — device grant, approval, a credential written to its own config dir, and a read that uses it.                                                                                                                                                                                  |
+| `smoke/readonly-login-smoke.sh`  | The same login under the `:ro` mount: it must refuse in one sentence naming the fix, write nothing, and never leak an `EROFS`.                                                                                                                                                                                               |
+| `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call — plus the two device-grant routes `motir login` speaks.                                                                                                                                                                          |
+| `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                                                                                                                                                      |
+| `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                                                                                                                                                |
+| `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                                                                             |
+| `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                                                                                                                                                          |
 
 Two workflow files sit outside this directory: the build/smoke/publish matrix
 itself, `.github/workflows/sandbox-images.yml`, and the tagged release lane that
