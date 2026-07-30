@@ -1,0 +1,3543 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Connect the CLI — the /device approval page + the account-settings panel
+      (MOTIR-1866)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — the two BROWSER surfaces the `motir login`
+      device grant needs (Story MOTIR-1863 · design card MOTIR-1866):
+
+        SURFACE 1 — `/device`, the verification + approval page, in all SIX states.
+                    Built by MOTIR-1867.
+        SURFACE 2 — the "Connect the CLI" panel COMPOSED INTO the shipped
+                    Settings → Account → API tokens pane. Built by MOTIR-1869.
+
+      Neither exists today (verified at design time, not assumed): `GET /device`
+      on a production build of `origin/main` returns **404**, and
+      `design/settings/` holds account-settings / profile / appearance /
+      token-scopes with nothing about the CLI.
+
+      GROUNDED IN SHIPPED REALITY, RENDERED FIRST (notes.html #73). Before drawing
+      anything, the host surfaces were built (`next build`) and screenshotted from
+      a running server: `/settings/account/api-tokens` (populated + empty) and
+      `/sign-in`. Every repro below mirrors what those renders actually show — the
+      TopNav, the account rail with its five real entries, the serif page head, the
+      "Your tokens" Card and its EIGHT-column table (Label · Token · Scopes ·
+      Workspace · Created · Expires · Last used · Actions), the pale
+      `--el-auth-wash` sign-in card. The `<style>` token block is machine-copied
+      1:1 from `@motir/design-system/theme.css` (Tier 0 + dark + the Tier-3
+      `--el-*` layer), and every icon path is generated from the installed
+      `lucide-react` icon nodes — no retyped values anywhere.
+
+      THE WORKFLOW IS NOT INVENTED. Every state, endpoint and error name comes from
+      (a) the ADR card MOTIR-1864 (the three tiers, approval mints a CLI-labelled
+      PAT, narrow scopes, workspace binding, `CLI · <hostname>` label), (b) the
+      substrate card MOTIR-1865 (the endpoints + the five poll states), and (c) the
+      INSTALLED `better-auth` device-authorization plugin, read at
+      `node_modules/better-auth/dist/plugins/device-authorization/` — which is what
+      pins the 8-character user code, its `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
+      charset (no I/O/0/1), the dash being optional (`userCode.replace(/-/g,'')`),
+      the 30-minute default expiry, the 5-second poll interval, and the
+      claim-then-approve order (`GET /device?user_code=` must run in the signed-in
+      session before `POST /device/approve`). See design-notes.md for the
+      per-behaviour citations and the two planning flags this surfaced.
+
+      PANELS — review EVERY one (mistake #31):
+        0   The ENTRANCE — both doors, drawn: the CLI's own hand-off into the
+            browser (two URL forms), and the in-app path (avatar menu → Account
+            settings → Security → API tokens).
+        1   /device · code entry (hand-typed — the sandbox / SSH path).
+        2   /device · code entry, PRE-FILLED from `verification_uri_complete`.
+        3   /device · CONFIRM, multi-workspace (the workspace picker present).
+        4   /device · CONFIRM, single workspace (the picker absent).
+        5   /device · approved — "return to your terminal".
+        6   /device · denied.
+        7   /device · expired · and unknown code.
+        8   /device · signed-out arrival + the sign-in hand-off that returns.
+        9   Settings → Account → API tokens WITH the "Connect the CLI" panel in
+            place (populated list, incl. the CLI-minted row).
+        10  The same pane for a first-time user (empty token list) + the
+            copy-confirmation toast.
+        11  Dark parity — the confirm screen + the connect panel.
+      Toggle dark at the top to confirm token parity.
+    -->
+    <style>
+      /* ── Tier 0 (@theme → :root) — copied 1:1 from @motir/design-system/theme.css ── */
+      :root {
+        /* ── Color: brand & primary ─────────────────────────────────────── */
+        /* Notion's signature purple — reserved for the dominant CTA only. */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        /* Accent FILL behind white text (filled buttons/badges). In light theme it
+           equals --color-primary; the dark theme darkens it so white label text
+           clears WCAG AA (the brighter --color-primary stays the accent used AS text
+           on the page). See [data-theme='dark']. (MOTIR-757) */
+        --color-primary-fill: #5645d4;
+
+        /* Surfaces */
+        --color-background: #ffffff; /* canvas */
+        --color-foreground: #1a1a1a; /* ink (primary text) */
+        --color-surface: #f6f5f4; /* subtle section backgrounds */
+        --color-surface-soft: #fafaf9; /* quieter section divisions */
+        --color-canvas: #ecebe7; /* recessed board behind raised cards (planning canvas) */
+
+        /* Text scale (Notion's warm-charcoal hierarchy) */
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f; /* body emphasis */
+        --color-slate: #5d5b54; /* secondary text */
+        --color-steel: #787671; /* tertiary / footer */
+        --color-stone: #a4a097; /* muted labels */
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        /* Borders / hairlines */
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        /* Accent secondary (used sparingly — pastel tints for feature cards) */
+        --color-accent: #ff64c8; /* brand pink */
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        /* Card tints (pale, for tinted surface variants) */
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        /* Semantic */
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        /* Link blue (NOT primary purple — distinct role). Tuned to clear WCAG AA
+           (4.5:1) on BOTH the white page (#ffffff → 4.94:1) AND the slightly darker
+           --color-surface-soft (#fafaf9 → 4.73:1) that hovered rows paint behind it,
+           so a link on a hovered soft-surface row stays accessible
+           (bug-filters-directory-name-link-hover-aa-contrast — #0075de was 4.37:1
+           on the soft surface). */
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* ── Typography ─────────────────────────────────────────────────── */
+        /* CSS variables set by next/font in app/layout.tsx. */
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        /* Type scale — Notion-ish hierarchy.
+           Headings (xl and up) default to serif; body defaults to sans. */
+        --font-size-xs: 0.75rem; /* 12px — micro labels */
+        --font-size-sm: 0.875rem; /* 14px — small body, buttons */
+        --font-size-base: 1rem; /* 16px — primary body */
+        --font-size-lg: 1.25rem; /* 20px — h4 / subtitle */
+        --font-size-xl: 1.5rem; /* 24px — h3 / card titles */
+        --font-size-2xl: 2rem; /* 32px — h2 */
+        --font-size-3xl: 3rem; /* 48px — h1 */
+        --font-size-display: 5rem; /* 80px — hero display */
+
+        /* ── Shape (the warm-editorial base style) ─────────────────────── */
+        /* Notion uses sober rectangles (8px buttons); Figma uses pills (50px).
+           The base scale IS the `warm-editorial` style (sober rectangles); the
+           `soft-playful` style adopts Figma's pills in its [data-style] block. */
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        /* Semantic shape tokens — components reference these, not --radius-md
+           directly. Lets a [data-style] block override these without renaming. */
+        --radius-btn: 8px; /* Notion-style sober button */
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px; /* small interactive affordances — menu/list rows, icon & close buttons, tooltips, code chips */
+        --radius-kbd: 4px; /* keyboard-hint chips */
+
+        /* ── Elevation ──────────────────────────────────────────────────── */
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        /* ── Spacing ────────────────────────────────────────────────────── */
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        /* Component-specific spacing */
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        /* Control-level spacing — small affordances. Flip with the active style so a
+           getdesign swap can redefine control DENSITY, not just radius. */
+        --spacing-control-x: 10px; /* menu/list rows, combobox trigger & search, sidebar rows */
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px; /* square icon / close buttons */
+        --spacing-chip-x: 10px; /* badge / pill chips */
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px; /* <kbd> keyboard-hint chips */
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px; /* tooltip & inline code blocks */
+        --spacing-tooltip-y: 4px;
+
+        /* Heights */
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px; /* single-line / square small control */
+
+        /* ── Interaction ────────────────────────────────────────────────── */
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+
+      /* ── Tier 1 — dark overrides (verbatim) ── */
+      [data-theme='dark'] {
+        color-scheme: dark;
+
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e; /* recessed board behind raised cards (planning canvas) */
+
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        /* Primary stays close to brand; brightened from the light theme so the accent
+           reads as TEXT/icon on the near-black canvas (#7b6ce5 on #0f0f0f ≈ 4.67:1, AA
+           text). But white text ON this as a FILL is only 4.1:1 — so filled accent
+           buttons use the darker --color-primary-fill below instead (MOTIR-757). */
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        /* Darker accent fill for dark theme: white label text on #6c5cdd is 4.99:1
+           (AA), while #6c5cdd still clears 3:1 as a fill against the dark canvas. */
+        --color-primary-fill: #6c5cdd;
+
+        /* Pastel tints dimmed for dark backgrounds */
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+
+      /* ── Tier 3 — the --el-* element layer (verbatim) ── */
+      :root,
+      [data-appearance-scope] {
+        /* ── Page ──────────────────────────────────────────────────────── */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        /* ── Text scale (the warm-charcoal hierarchy, named by ROLE) ────── */
+        --el-text: var(--color-foreground); /* primary ink */
+        --el-text-strong: var(--color-charcoal); /* emphasis / AA-safe text on tints */
+        --el-text-secondary: var(--color-slate); /* secondary copy */
+        --el-text-muted: var(--color-muted-foreground); /* muted / captions */
+        --el-text-tertiary: var(--color-steel); /* tertiary / footers */
+        --el-text-faint: var(--color-stone); /* faint labels */
+        --el-text-inverted: var(--color-background); /* text on an ink / accent fill */
+
+        /* ── Accent (active CTA identity) + brand highlight ─────────────── */
+        /* --el-accent is the FILL behind --el-accent-text (white): filled buttons,
+           badges, toggles. --el-accent-on-surface is the accent used AS text/icon on
+           a page surface. They diverge in dark theme (fill darkens for white-text AA;
+           text stays brand-bright for AA on the near-black canvas) — MOTIR-757. */
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent); /* brand pink — decorative accents */
+
+        /* ── Surfaces ──────────────────────────────────────────────────── */
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas); /* recessed board behind raised cards (planning canvas) */
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted); /* faint fill — chips, code, inverted text */
+
+        /* ── Borders ───────────────────────────────────────────────────── */
+        --el-border: var(--color-border); /* default hairline */
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        /* ── Links ─────────────────────────────────────────────────────── */
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        /* ── Semantic status ───────────────────────────────────────────── */
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        /* ── Pastel tints (Pill tones, feature surfaces) ───────────────── */
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        /* ── Status hues (MOTIR-1273 · 1266.2 — un-collapse the workflow statuses) ──
+           Each workflow status renders its dot/icon in its OWN hue, so in_review /
+           blocked / cancelled differentiate from the three lifecycle CATEGORIES the
+           filter dots used to collapse them onto. Maps to a Tier-0 --color-* (the
+           gold-standard --el-chart-* / --el-type-* pattern), so every palette re-skins
+           them automatically through its --color-* overrides — no per-palette block
+           needed (the card's "+ 10 palette blocks" is satisfied by that indirection;
+           verified slate ≠ stone and info/warning/destructive/success/primary are all
+           palette-defined across all 10). The status DOT uses the hue at full strength;
+           a status CHIP bg = color-mix(var(--el-status-X) 14%, var(--el-surface)) with
+           --el-text-strong (design/design-system/design-notes.md §A). Keys grounded in
+           lib/workflows/defaultWorkflow.ts. */
+        --el-status-todo: var(--color-stone); /* neutral grey — not started */
+        --el-status-in-progress: var(--color-info); /* blue — active */
+        --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
+        --el-status-done: var(--color-success); /* green — resolved */
+        --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
+        --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
+
+        /* ── Priority hues (MOTIR-1273 · 1266.2 — a 5-step diverging ramp) ──
+           Un-collapses lib/issues/priorityMeta.ts, where `medium` AND `lowest` were
+           both neutral grey (the exact "can't differentiate" complaint). red → orange
+           → mid-slate → blue → faint-stone: two DISTINCT greys for medium / lowest,
+           kept legible by the redundant ArrowUp / Minus / ArrowDown icon (AA, finding
+           #35). The Pill `priority` tone tints these over --el-surface
+           (design/design-system/design-notes.md §B). */
+        --el-priority-highest: var(--color-destructive); /* red */
+        --el-priority-high: var(--color-warning); /* orange */
+        --el-priority-medium: var(--color-slate); /* mid slate (un-collapsed) */
+        --el-priority-low: var(--color-info); /* blue */
+        --el-priority-lowest: var(--color-stone); /* faint stone (un-collapsed) */
+
+        /* ── Semantic SURFACES (MOTIR-1273 · 1266.2 — banner / callout fills) ──
+           Names the banner/callout fills components reached for as raw --el-tint-*
+           (the FormField error box, the public danger / warning banners). Each = a
+           tint base + a strong-ink text token, AA-safe (charcoal-on-tint clears
+           ~10:1 both themes, finding #35). notice-info / callout / success are
+           defined AHEAD of their dedicated surfaces (the spec's "NEW (no impl)"
+           pattern; design/design-system/design-notes.md §C). */
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal); /* ink on the warning surface */
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        /* ── Identity hues (MOTIR-1274 · 1266.3 — un-collapse the shared --el-tint-* pool) ──
+           Roles / org-roles / privacy / labels / avatars each got a DEDICATED token so a
+           palette can tune them apart (today they all pulled from the same six --el-tint-*,
+           so a label, a role and an avatar could not diverge). Every token DEFAULTS to
+           today's exact tint → zero visual change in the motir base; each maps to a Tier-0
+           --color-* so palettes + the dark block re-skin them for free (no per-palette
+           block — the gold-standard --el-chart-* / --el-type-* indirection). This block
+           also DECOUPLES the --el-type-* MISUSE: NotificationRow event badges, the
+           ProjectAvatar mono tile and the OrgUsageClient model dots were borrowing
+           work-item-KIND hues for non-type meaning; they get their own --el-notif-* /
+           --el-avatar-fallback / --el-model-* tokens at the SAME hues (still zero change).
+           design/design-system/design-notes.md §D. */
+        /* Roles / org-roles / privacy — Pill memberRole/orgRole/tone (today hardcoded in
+           Pill.tsx CVA). admin→lavender, member→sky, viewer→mint; owner→lavender; private→
+           lavender, public→sky (public defined AHEAD — no rendered "public" badge yet). */
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        /* Label ramp — lib/labels/labelTint.ts hashes the name → 1..6 in the fixed order
+           peach,rose,mint,lavender,sky,yellow (the seed-loader family; matches shipped). */
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists
+           project.avatarColor ∈ these strings, so numbering them would break stored rows
+           (spec §7.1, rung-2 migration safety). The fallback fixes --el-type-* misuse #2 —
+           the mono initials tile keeps its blue but stops borrowing --el-type-task. */
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(
+          --color-info
+        ); /* mono tile — was --el-type-task (= --color-info) */
+        /* Notification event badges (decouple --el-type-* misuse #2; same hues → zero change).
+           mentioned keeps the accent fill it already used — --el-accent resolves to
+           --color-primary-fill (purple), NOT --color-accent (pink); the spec's base column
+           read --color-accent but its note said "alias for consistency", so per §2
+           zero-visual-change this maps to the SHIPPED value. */
+        --el-notif-mentioned: var(
+          --color-primary-fill
+        ); /* the accent fill (matches prior --el-accent) */
+        --el-notif-commented: var(--color-info); /* was --el-type-task */
+        --el-notif-assigned: var(--color-accent-green); /* was --el-type-story */
+        --el-notif-transitioned: var(--color-accent-teal); /* was --el-type-subtask */
+        /* AI model dots (promote to a named family; deepseek was borrowing --el-type-subtask).
+           opus keeps the accent fill, same --color-primary-fill reasoning as mentioned. */
+        --el-model-opus: var(
+          --color-primary-fill
+        ); /* the accent fill (matches prior --el-accent) */
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal); /* was --el-type-subtask */
+
+        /* ── Icon + text roles (MOTIR-1275 · 1266.4 — split the --el-text-muted /
+           --el-text triple-duty) ──
+           Icons and overlines/subtitles were borrowing the body-copy text tokens
+           (--el-text-muted for every icon + caption, --el-text for the tooltip fill),
+           so a palette could not tune an icon apart from prose. These give each role
+           its own token mapped to the SAME Tier-0 neutral it resolves to today, so
+           every palette + the dark block re-skin them for free (the gold-standard
+           --el-chart-* / --el-type-* indirection — no per-palette block). icon-btn /
+           icon-heading are defined AHEAD of an explicit consumer (the spec's
+           "NEW (no impl)" pattern; buttons inherit currentColor today).
+           design/design-system/design-notes.md §E. */
+        --el-icon-muted: var(--color-muted-foreground); /* inactive nav / chevron / close */
+        --el-icon-active: var(--color-primary); /* active nav icon (was --el-accent-on-surface) */
+        --el-icon-btn: var(
+          --color-foreground
+        ); /* explicit button-icon ink (usually currentColor) */
+        --el-icon-heading: var(--color-charcoal); /* an icon beside a heading */
+        --el-icon-field: var(--color-muted-foreground); /* search / chevron / calendar in inputs */
+        --el-text-eyebrow: var(--color-muted-foreground); /* uppercase-mono overline */
+        --el-text-subtitle: var(--color-slate); /* lead paragraph (Modal / EmptyState desc) */
+        --el-text-helper: var(--color-muted-foreground); /* form hint (was --el-text-muted) */
+        --el-text-identifier: var(
+          --color-slate
+        ); /* monospace MOTIR-123 keys (was --el-text-secondary) */
+
+        /* ── Component-surface primitives (MOTIR-1275 · 1266.4) ──
+           Names the control surfaces that were overloading --el-surface (option
+           highlight / chip fill / switch knob), --el-border(-strong) (control vs
+           panel edge) and --el-text (tooltip fill). Each defaults to the exact
+           Tier-0 --color-* the component renders today → zero visual change in the
+           motir base; a palette can now tune each apart. Two deliberate
+           spec-vs-shipped reconciliations (rung-2), documented in §F of the notes:
+           (1) --el-count-bg maps to --color-muted, NOT the spec's tentative
+           --color-surface — board count badges render ON an --el-surface column, so
+           surface would erase them; muted is the shipped fill (and identical to
+           surface in dark). (2) --el-overlay-scrim is the lone concrete-value token
+           (no --color-* base), so it carries an explicit dark companion below; light
+           == today's bg-black/40, dark DEEPENS to ~65% for a legible scrim.
+           design/design-system/design-notes.md §F. */
+        --el-tooltip-bg: var(--color-foreground); /* inverted tooltip fill (was --el-text) */
+        --el-tooltip-text: var(
+          --color-background
+        ); /* text on the tooltip (was --el-text-inverted) */
+        --el-switch-on: var(--color-primary-fill); /* checked track (was --el-accent) */
+        --el-switch-knob: var(--color-surface); /* the thumb (was --el-surface) */
+        --el-option-active-bg: var(
+          --color-muted
+        ); /* highlighted listbox option (was --el-surface) */
+        --el-overlay-scrim: #00000066; /* modal/dialog scrim — concrete (light); dark companion below */
+        --el-chip-bg: var(--color-surface); /* neutral chip fill (tinted chips keep their tint) */
+        --el-chip-border: var(--color-border); /* neutral chip edge */
+        --el-card: var(--color-background); /* untinted card surface — fixes the bg-card orphan */
+        --el-input-border: var(
+          --color-hairline-strong
+        ); /* input outline (was --el-border-strong) */
+        --el-button-border: var(--color-hairline-strong); /* secondary-button outline */
+        --el-count-bg: var(--color-muted); /* count-badge fill (shipped value; see note above) */
+        --el-count-text: var(--color-slate); /* count-badge ink (was --el-text-secondary) */
+
+        /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
+        /* The colour the UI was missing: each issue type renders its icon in its
+           own hue, matching ISSUE_TYPE_META.colorToken. */
+        --el-type-epic: var(--color-accent); /* pink */
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* ── Work-item TYPE hues (the work-NATURE palette, Story 2.7 · 2.7.4) ────
+           Parallel to the per-KIND hues above: the ten fixed `WorkItemType` members
+           each render their icon/chip in their own hue (matches
+           lib/issues/workItemTypeMeta.ts). NO new Tier-0 colour needed — the seven
+           "produces an artifact" types take the seven saturated hues; the three
+           "meta / admin" types (decision, manual, chore) take the three greys
+           (desaturation is semantically apt). Each maps to a Tier-0 var, so the
+           [data-theme="dark"] block re-skins them automatically. The chip puts the
+           hue in a color-mix tint BACKGROUND with --el-text-strong text (AA,
+           finding #35); never a page-level tint. */
+        --el-type-code: var(--color-info); /* blue   — implementation */
+        --el-type-design: var(--color-accent); /* pink   — UI/UX design */
+        --el-type-test: var(--color-success); /* green  — automated tests */
+        --el-type-content: var(--color-accent-teal); /* teal   — copy / docs / translate */
+        --el-type-research: var(--color-primary); /* purple — spike / investigation */
+        --el-type-review: var(--color-accent-orange); /* orange — QA / review */
+        --el-type-deploy: var(--color-destructive); /* red    — infra / ops / release */
+        --el-type-decision: var(--color-charcoal); /* ink    — decision record */
+        --el-type-manual: var(--color-stone); /* stone  — human provisioning */
+        --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+
+        /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
+           Every chart colour routes through one of these, NEVER a raw --color-*
+           in chart code (the per-component growth pattern). They map to Tier-0
+           vars, so the Tier-1 dark block re-skins them automatically. The pair
+           committed/completed is distinguished by TEXT label too, never colour
+           alone (finding #35). */
+        --el-chart-guideline: var(--color-stone); /* burndown ideal line (dashed) */
+        --el-chart-actual: var(--color-primary); /* burndown actual remaining */
+        --el-chart-scope: var(--color-warning); /* scope-change marker */
+        --el-chart-committed: var(--color-info); /* velocity committed bar */
+        --el-chart-completed: var(--color-success); /* velocity completed bar */
+        --el-chart-average: var(--color-charcoal); /* velocity average (dashed ref) */
+        --el-chart-plot: var(--color-surface-soft); /* plot background fill */
+        --el-chart-grid: var(--color-border); /* gridlines */
+        --el-chart-axis: var(--color-steel); /* axis line + tick labels */
+        /* Story 6.3 dashboards (6.3.4) — the categorical donut ramp + the
+           created/resolved series + the deficit/surplus difference fills. Same
+           growth pattern: map to existing Tier-0 vars, so the dark block re-skins
+           them automatically. The donut cycles cat-1..7; "None"/unset is always
+           cat-none (neutral grey); created/resolved read by line + legend label,
+           never colour alone (finding #35). */
+        --el-chart-cat-1: var(--color-primary); /* distribution donut segment 1 */
+        --el-chart-cat-2: var(--color-info); /* segment 2 */
+        --el-chart-cat-3: var(--color-success); /* segment 3 */
+        --el-chart-cat-4: var(--color-warning); /* segment 4 */
+        --el-chart-cat-5: var(--color-accent-teal); /* segment 5 */
+        --el-chart-cat-6: var(--color-accent); /* segment 6 */
+        --el-chart-cat-7: var(--color-charcoal); /* segment 7 (ramp length) */
+        --el-chart-cat-none: var(--color-stone); /* the "None" / unset group */
+        --el-chart-created: var(--color-info); /* created-vs-resolved: created line */
+        --el-chart-resolved: var(--color-success); /* created-vs-resolved: resolved line */
+        --el-chart-deficit: var(--color-destructive); /* fill where created > resolved */
+        --el-chart-surplus: var(--color-success); /* fill where resolved > created */
+        --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
+        --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
+        /* Sprint CYCLE GRAPH series (Story 8.14 — Linear scope-vs-completed). A
+           collision-free --el-chart-cycle-* family: the bare --el-chart-completed /
+           -started / -target names are taken (velocity / old burndown), so reusing
+           them would silently re-skin those charts. The --el-chart-plot/grid/axis
+           scaffold is reused unchanged. */
+        --el-chart-cycle-scope: var(--color-stone); /* live total scope (gray) */
+        --el-chart-cycle-started: var(--color-warning); /* started / in progress (amber) */
+        --el-chart-cycle-completed: var(--color-info); /* completed (solid blue) */
+        --el-chart-cycle-target: var(--color-info); /* ideal remaining (blue, dotted) */
+
+        /* ── Public projects (Story 6.12 · public read-only view) ──────────
+           New --el-* roles 6.12.4/6.12.6/6.12.7 add here, each mapped to an
+           existing Tier-0 value (the per-component token-growth pattern). The
+           [data-theme="dark"] block re-skins them automatically because every
+           mapping is a --color-* var the Tier-1 block already flips (no concrete
+           hex). Per design/public-projects/design-notes.md "Colour roles". */
+        --el-public-banner-bg: var(
+          --color-tint-sky
+        ); /* "you're viewing a public project" framing */
+        --el-public-banner-text: var(--color-charcoal); /* AA ~10:1 on the sky tint */
+        --el-vote-bg: var(--color-tint-lavender); /* upvote control resting fill (6.12.7) */
+        --el-vote-active-bg: var(--color-primary); /* voted: accent fill */
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        /* ── Onboarding / canvas (Story 1266.6 · MOTIR-1277) ───────────────
+           Per-element hues for the onboarding canvas: revision-diff kind chips
+           (RevisionDiff), the discovery chat bubbles (DiscoveryChatRail), the
+           planning-canvas edges (PlanningCanvas), and the station tier tile
+           (StationNode). Each maps to the exact Tier-0 --color-* it renders
+           today (zero visual change vs the borrowed --el-tint-* / --el-accent /
+           --el-border), so a palette re-skins them via its --color-* override
+           and [data-theme="dark"] flips them — no per-palette / dark entry.
+           Per design/design-system/design-notes.md §H. NB: the card's "wire
+           --el-roadmap-* into StationNode" is corrected there — roadmap stays
+           scoped to the PUBLIC roadmap; the canvas gets its own
+           --el-station-tier-* family (a different semantic concept). */
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill); /* text stays --el-accent-text */
+        --el-chat-bubble-ai: var(--color-surface-soft); /* text stays --el-text */
+        /* Canvas dependency edges ride the RECESSED --el-canvas, not a raised surface, so
+           they use INK tokens (--color-slate / -charcoal), NOT the hairline-on-a-card
+           --color-border / -hairline-strong which are near-invisible there (~1.0-1.9:1 vs
+           the canvas in every palette — MOTIR-1564). Ink clears WCAG 1.4.11 (≥3:1) on the
+           canvas across all palettes/themes while still re-tinting per palette; solid vs
+           dashed + the arrowhead marker carry the committed/pending distinction. */
+        --el-canvas-edge-pending: var(
+          --color-slate
+        ); /* dashed, not-yet-committed edge (quiet ink) */
+        --el-canvas-edge-committed: var(--color-charcoal); /* solid, settled edge (emphasis ink) */
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        /* the Overview hero's soft corner washes (decorative tints only; all text
+           sits on --el-page-bg, never on the wash, so AA holds — finding #35) */
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        /* "Building in public" (Story 6.17.2/6.17.4) — the reframed `public` access
+           option glyph + the "Live"/status badge. Tier-0 flips (--color-tint-lavender
+           and --color-charcoal both re-skin under [data-theme="dark"]) re-skin these
+           automatically, so they live in Tier 3 once with no dark-block entry. */
+        --el-build-bg: var(--color-tint-lavender); /* badge / reframed-option tint */
+        --el-build-text: var(--color-charcoal); /* AA ~10:1 on the lavender tint, both themes */
+        --el-build-glyph: var(--color-primary); /* the megaphone accent glyph */
+
+        /* ── Interaction / agile surfaces (MOTIR-1276 · 1266.5) ──────────────
+           Un-collapses the dnd / selection / overdue / accent meanings that all
+           rode --el-tint-lavender / --el-accent / --el-text, so a palette can tune a
+           drop target apart from a selected row apart from an overdue date. Each
+           maps to a --color-* → zero base-palette change AND every palette + dark
+           re-skins for free (§1; the chart/type ramp pattern). The previously
+           undifferentiated meanings (selection vs drop; overdue vs a future date)
+           now read distinctly; the rest default to today's exact value.
+           design/design-system/design-notes.md §G. */
+        --el-selection-bg: var(
+          --color-tint-sky
+        ); /* selected row/card — sky, NOT the drop lavender */
+        --el-droptarget-bg: var(--color-tint-lavender); /* dnd drop-zone fill (shipped) */
+        --el-board-column-accent: var(--color-primary); /* drop ring / column border */
+        --el-overdue: var(--color-destructive); /* past-due date */
+        --el-due-soon: var(--color-warning); /* due today / within 3 days */
+        --el-sprint-accent: var(--color-tint-lavender); /* sprint-header emphasis (shipped) */
+        --el-epic-accent: var(--color-accent); /* pink epic identity (aliases --el-type-epic) */
+        --el-archived-pill-bg: var(--color-muted); /* inactive "Archived" badge fill */
+        --el-archived-pill-text: var(--color-slate); /* AA-safe ink on the muted fill */
+        --el-auth-wash: var(--color-tint-sky); /* sign-in background wash (text on the card) */
+        --el-tabnav-track: var(--color-surface); /* tab-bar track (Segmented / PublicTabNav) */
+        --el-tabnav-active: var(--color-primary); /* active-tab glyph (== --el-accent-on-surface) */
+        --el-card-icon-bg: var(--color-muted); /* hub/settings card icon tile */
+        --el-card-icon-fg: var(--color-primary); /* the icon inside that tile */
+
+        /* ── Code/mono (used by /tokens reference route) ───────────────── */
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        /* ── App shell — sidebar (Subtask 1.5.2). The shell mockup paints the
+           sidebar rail on $--surface and the content area on $--background; the
+           active nav row inverts that (a $--background row against the $--surface
+           rail) so the current page reads as inset into the page canvas. ──── */
+        --el-sidebar-bg: var(
+          --color-surface
+        ); /* the rail — surface, distinct from the page canvas */
+        --el-sidebar-border: var(--color-hairline); /* the 1px seam between rail and content */
+        --el-sidebar-item-bg-hover: #eeede9; /* subtle hover lift — one shade darker than surface (light) */
+        --el-sidebar-item-bg-active: var(
+          --color-background
+        ); /* active row = canvas inset into the rail */
+      }
+
+      /* ── Tier 3 dark lift (verbatim) ── */
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        /* The modal scrim deepens in dark (MOTIR-1275 · 1266.4): on a near-black
+           canvas a 40% scrim barely separates the dialog, so dark uses ~65% — the
+           other concrete-hex --el-* alongside the sidebar hover. Light value (40%,
+           == the prior bg-black/40) lives in the :root block above. */
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just this review page) ────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 86ch;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label span {
+        text-transform: none;
+        letter-spacing: 0;
+        font-family: var(--font-sans);
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .duo {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* ═══ The (auth) route-group FRAME — app/(auth)/layout.tsx ═════════════
+         Shipped: a centred card on the --el-auth-wash page, --radius-card +
+         --shadow-elevated, px-6 py-10 (sm:px-10). `/device` reuses it verbatim;
+         the card is widened to 32rem (see design-notes) because the confirm
+         screen carries a four-part detail list, not a single field. */
+      .authwash {
+        background: var(--el-auth-wash);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 36px 24px;
+        display: flex;
+        justify-content: center;
+      }
+      .authcard {
+        width: 100%;
+        max-width: 32rem;
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 36px 40px;
+      }
+      .authcard.narrow {
+        max-width: 28rem; /* the shipped sign-in width, unchanged */
+      }
+      .ac-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 26px;
+      }
+      .ac-head h1 {
+        font-family: var(--font-serif);
+        font-size: 32px;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .ac-head p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .ac-body {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .ac-foot {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+
+      /* ── Input / FormField (components/ui/Input.tsx + FormField.tsx) ─────── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .field .helper {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .input .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .input .val,
+      .input .ph {
+        flex: 1;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .input .ph {
+        color: var(--el-text-faint);
+      }
+      /* focus = the shipped Input's `focus-within:ring-2 ring-(--focus-ring-color)
+         ring-offset-2 ring-offset-background` — an offset ring, not a recoloured
+         border. */
+      .input.focused {
+        box-shadow:
+          0 0 0 var(--focus-ring-offset) var(--el-page-bg),
+          0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--focus-ring-color);
+      }
+      /* The device-code field: the 8-char user code, shown 4-4. Mono + tracked so
+         a hand-typed code reads back cleanly; the dash is cosmetic (the server
+         strips it). */
+      .input.codefield {
+        height: 56px;
+      }
+      .input.codefield .val,
+      .input.codefield .ph {
+        font-family: var(--font-mono);
+        font-size: 24px;
+        letter-spacing: 0.22em;
+        text-align: center;
+      }
+
+      /* ── Button (components/ui/Button.tsx) ──────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-lg {
+        height: var(--height-btn-lg);
+        padding: 0 24px;
+        font-size: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      /* DENY — a full-weight button, never a muted link beside Approve: same size,
+         same row, 50/50 with the primary. Danger ink on a page surface is
+         --el-danger (NOT --el-danger-text, which is the ink FOR a danger fill and
+         is #ffffff in the light palette — bug MOTIR-1553). The solid danger fill
+         is reserved for a DESTRUCTIVE act; denying destroys nothing, so this is
+         the secondary variant with danger ink + border. */
+      .btn-deny {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-danger);
+      }
+      .btn-deny .ic {
+        color: var(--el-danger);
+      }
+      .btn.full {
+        width: 100%;
+      }
+      .btnrow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .icon-btn.danger:hover {
+        color: var(--el-danger);
+        background: var(--el-surface);
+      }
+
+      /* ── Callout grammar (the shipped shown-once warning / revoke confirm) ── */
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--el-tint-peach);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .callout .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-strong);
+      }
+      .callout p + p {
+        margin-top: 6px;
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+      }
+      .callout.danger .ic {
+        color: var(--el-danger);
+      }
+      .callout.success {
+        background: var(--el-tint-mint);
+      }
+      .callout.success .ic {
+        color: var(--el-success);
+      }
+      .callout.info {
+        background: var(--el-tint-sky);
+      }
+      .callout.info .ic {
+        color: var(--el-info);
+      }
+
+      /* ── The confirm screen's four-part detail list ──────────────────────────
+         The settings-row grammar (label/desc left, control right) from the
+         Language pane, stacked inside a bordered box so the four facts read as
+         ONE reviewable block: WHO · WHAT · WHICH WORKSPACE · WHAT SCOPES. */
+      .detail {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 2px var(--spacing-card-padding);
+      }
+      .drow {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 15px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .drow:last-child {
+        border-bottom: 0;
+      }
+      .drow .dk {
+        flex: none;
+        width: 122px;
+        padding-top: 2px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        /* --el-text-muted, NOT --el-text-faint: these four keys carry the meaning
+           of the phishing check, and faint is 2.61:1 on white (decorative only).
+           Muted is 4.54:1 light / 7.35:1 dark. */
+        color: var(--el-text-muted);
+        text-transform: uppercase;
+      }
+      .drow .dv {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .drow .dv .sub {
+        display: block;
+        margin-top: 3px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      /* the mock uses <span> wrappers throughout (so the markup stays valid
+         inside inline contexts) — every text stack that a component would render
+         as a <div>/<p> is made a block here, once. */
+      .who .nm,
+      .who .em,
+      .me .nm,
+      .me .em,
+      .scope .sname,
+      .scope .sdesc,
+      .scope > span:last-child,
+      .cant,
+      .carried .clabel,
+      .carried .cval,
+      .menu .mid .nm,
+      .menu .mid .em,
+      .step .scap {
+        display: block;
+      }
+      .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .who .nm {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .who .em {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .agent {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .agent .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+      .code-chip {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        white-space: nowrap;
+      }
+      /* Combobox trigger (components/ui/Combobox.tsx) — input-shaped select */
+      .select {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .select .chev {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      /* the granted-scope list — the plain-language labels from
+         design/settings/token-scopes.mock.html, read-only here */
+      .scopes {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .scope {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .scope .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-text-muted);
+      }
+      .scope .sname {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .scope .sdesc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        line-height: 1.45;
+      }
+      .cant {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--el-border-soft);
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The carried-context banner — the shipped `IdeaCarried` surface
+           (app/(auth)/_components/AuthShell.tsx), reused so the pending code
+           survives the sign-in hand-off visibly. ─────────────────────────── */
+      .carried {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-input);
+        padding: var(--spacing-sm) var(--spacing-input-x);
+      }
+      .carried .clabel {
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-muted);
+      }
+      .carried .cval {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+
+      /* ── OR divider (AuthShell.OrDivider) ────────────────────────────────── */
+      .ordiv {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .ordiv .ln {
+        height: 1px;
+        flex: 1;
+        background: var(--el-border);
+      }
+      .ordiv .tx {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--el-text-muted);
+      }
+
+      /* ═══ Panel 0 — the entrance ═══════════════════════════════════════════ */
+      .door {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: var(--spacing-card-padding);
+      }
+      .door h4 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .door .dsub {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .step-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0;
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      .step-note .ic {
+        width: 14px;
+        height: 14px;
+      }
+      /* An ILLUSTRATION of where the code comes from. Terminal text is NOT a
+         design surface (packages/cli/src/render.ts: the colour/shape token rules
+         don't apply to terminal output) and MOTIR-1868 owns this wording — it is
+         drawn only so the reader sees the door. Still token-coloured, so it
+         cannot introduce an invented hue. */
+      .term {
+        border-radius: var(--radius-card);
+        border: 1px dashed var(--el-border-strong);
+        background: var(--el-code-bg);
+        padding: 14px 16px;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: var(--el-code-text);
+        white-space: pre-wrap;
+      }
+      .term .dim {
+        color: var(--el-text-muted);
+      }
+      .term-cap {
+        margin: 6px 0 0;
+        font-size: 11px;
+        font-style: italic;
+        color: var(--el-text-faint);
+      }
+      /* browser URL bar — non-semantic review decoration */
+      .urlbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        overflow: hidden;
+      }
+      .urlbar .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .urlbar b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* ═══ The authed APP SHELL repro (Panels 9–11) — mirrors the RENDERED
+           /settings/account/api-tokens: TopNav + account rail + content ═════ */
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 56px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .org {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .org .tile {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .org .chev {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+      }
+      .searchbox {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: 260px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text-faint);
+      }
+      .searchbox .ic {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+      .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border-radius: var(--radius-kbd);
+        background: var(--el-surface);
+        color: var(--el-text-muted);
+      }
+      .navicons {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .navicons .ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-text-muted);
+      }
+      .avatar.sm {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+      }
+      .shell {
+        display: flex;
+        min-height: 560px;
+      }
+      .rail {
+        flex: none;
+        width: 244px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px var(--spacing-control-x) 0;
+      }
+      .me .meta {
+        min-width: 0;
+      }
+      .me .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .me .em {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-icon-active);
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 28px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        margin-bottom: 20px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+        max-width: 52ch;
+        line-height: 1.5;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: 64rem; /* the shipped pane's table-pane width */
+      }
+
+      /* ── Card primitive (components/ui/Card) — header slot + body ─────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-head h3 .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-icon-active);
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        max-width: 60ch;
+        line-height: 1.5;
+      }
+      .card-body {
+        padding: var(--spacing-card-padding);
+      }
+      .card-body.tight {
+        padding: 4px var(--spacing-card-padding) 8px;
+      }
+
+      /* ── SURFACE 2 — the "Connect the CLI" panel's own internals ─────────── */
+      .steps {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .step .scap {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-muted); /* AA — see the .dk note above */
+      }
+      .snippet {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 8px 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+      }
+      .snippet code {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-code-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .next {
+        margin: 16px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .next .mono {
+        font-size: 12.5px;
+      }
+      .aside {
+        margin: 8px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .panel-foot {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--el-border-soft);
+        flex-wrap: wrap;
+      }
+      .foot-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+      .foot-link .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .tie {
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Token table — the SHIPPED 8-column list (ApiTokensManager) ──────── */
+      .ttable {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .ttable thead th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 0 10px 8px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .ttable thead th.right,
+      .ttable tbody td.right {
+        text-align: right;
+      }
+      .ttable tbody td {
+        padding: 13px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13.5px;
+        color: var(--el-text);
+        vertical-align: middle;
+      }
+      .ttable tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .ttable .label {
+        font-weight: 500;
+      }
+      .ttable .meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .ttable .meta.muted {
+        color: var(--el-text-muted);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--accent {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+
+      /* ── EmptyState (components/ui/EmptyState.tsx) ───────────────────────── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 40px var(--spacing-card-padding);
+      }
+      .empty .ic-wrap {
+        color: var(--el-text-muted);
+        margin-bottom: var(--spacing-md);
+      }
+      .empty .ic-wrap svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0 0 var(--spacing-md);
+        max-width: 60ch;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Popover (components/ui/Popover.tsx) — the UserMenu, drawn as a door ─ */
+      .menuwrap {
+        position: relative;
+      }
+      .menu {
+        position: absolute;
+        right: 0;
+        top: 38px;
+        width: 240px;
+        z-index: 5;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px 0;
+      }
+      .menu .mid {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 4px;
+      }
+      .menu .mid .nm {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .menu .mid .em {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .menu .mrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 4px;
+        padding: 8px;
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .menu .mrow .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .menu .mrow.hl {
+        background: var(--el-surface);
+      }
+      /* review-only pointer halo marking the door being taken */
+      .halo {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+      }
+      .cursor {
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        color: var(--el-text);
+      }
+
+      /* ── Toast (components/ui/Toast.tsx) ────────────────────────────────── */
+      .toast {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        width: 340px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 14px;
+      }
+      .toast .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-success);
+      }
+      .toast .tt {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .toast .tb {
+        margin-top: 2px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .toast-slot {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: -70px;
+        padding: 0 32px 24px;
+        position: relative;
+        z-index: 4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Connect the CLI — the `/device` approval page + the account-settings panel</h1>
+        <p>
+          MOTIR-1866 (design) for MOTIR-1867 (the page) and MOTIR-1869 (the panel). Both surfaces
+          are new: <code class="mono">/device</code> 404s on a production build of
+          <code class="mono">origin/main</code>
+          today. The hosts they land in — the API-tokens pane and the sign-in card — were RENDERED
+          first and are mirrored here, not redrawn from source. Every state, code format and error
+          name is cited in design-notes.md. Multi-panel — review each.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) — generated from the installed lucide-react v1.16 icon nodes -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
+          />
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-key-round"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-terminal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 19h8" />
+          <path d="m4 17 6-6-6-6" />
+        </g>
+        <g
+          id="i-laptop"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z"
+          />
+          <path d="M20.054 15.987H3.946" />
+        </g>
+        <g
+          id="i-shield-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-circle-check-big"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-circle-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m15 9-6 6" />
+          <path d="m9 9 6 6" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-external-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-square-pen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path
+            d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"
+          />
+        </g>
+        <g
+          id="i-plug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 22v-5" />
+          <path d="M15 8V2" />
+          <path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" />
+          <path d="M9 8V2" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-trash-2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-log-out"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 17 5-5-5-5" />
+          <path d="M21 12H9" />
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        </g>
+        <g
+          id="i-user-cog"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 15H6a4 4 0 0 0-4 4v2" />
+          <path d="m14.305 16.53.923-.382" />
+          <path d="m15.228 13.852-.923-.383" />
+          <path d="m16.852 12.228-.383-.923" />
+          <path d="m16.852 17.772-.383.924" />
+          <path d="m19.148 12.228.383-.923" />
+          <path d="m19.53 18.696-.382-.924" />
+          <path d="m20.772 13.852.924-.383" />
+          <path d="m20.772 16.148.924.383" />
+          <circle cx="18" cy="15" r="3" />
+          <circle cx="9" cy="7" r="4" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </g>
+        <g
+          id="i-triangle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+          />
+          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g
+          id="i-link"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </g>
+        <g
+          id="i-book-open"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-monitor"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="3" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 0 — THE ENTRANCE. Both doors, drawn.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 0 — the entrance
+      <span
+        >· door 1: the CLI hands the browser a URL · door 2: the app's own path to the connect
+        panel</span
+      >
+    </div>
+    <div class="panel duo">
+      <div class="door">
+        <h4>Door 1 → <span class="mono">/device</span></h4>
+        <p class="dsub">
+          The page has no nav entry and never should: it is a one-task hand-off reached by URL, like
+          the shipped <code class="mono">/reset-password/new</code>. The CLI is what sends the user
+          here, two ways — and BOTH are drawn (Panels 1 + 2), because the hand-typed path is how the
+          sandbox and SSH work.
+        </p>
+        <div class="term">
+          <span class="dim">$</span> motir login
+          <span class="dim">→ open</span> https://app.motir.co/device
+          <span class="dim">and enter</span> K4TP-9RXM
+          <span class="dim"> waiting for approval…</span>
+        </div>
+        <p class="term-cap">
+          Illustrative only — terminal text is not a design surface (packages/cli/src/render.ts) and
+          MOTIR-1868 owns this wording.
+        </p>
+        <div class="step-note">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>
+          the browser then opens one of these
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div class="urlbar">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-link" /></svg>
+            <span>app.motir.co<b>/device?user_code=K4TP-9RXM</b></span>
+          </div>
+          <div class="urlbar">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-link" /></svg>
+            <span
+              >app.motir.co<b>/device</b>
+              <span style="color: var(--el-text-faint)">— typed by hand, code pasted</span></span
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="door">
+        <h4>Door 2 → the “Connect the CLI” panel</h4>
+        <p class="dsub">
+          The panel is the entrance that makes the CLI EXIST for someone who never read the repo. It
+          adds NO new primary-nav entry and NO new route: it is the first card of the existing
+          Security → API tokens pane, reached the way every account pane is — the avatar menu.
+        </p>
+        <div style="position: relative">
+          <div
+            class="topnav"
+            style="border: 1px solid var(--el-border); border-radius: var(--radius-card)"
+          >
+            <span class="org"
+              ><span class="tile">M</span>moooon<svg class="chev" viewBox="0 0 24 24">
+                <use href="#i-chevron-down" /></svg
+            ></span>
+            <span class="searchbox"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg>Search<span
+                class="kbd"
+                >⌘K</span
+              ></span
+            >
+            <span class="navicons">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-monitor" /></svg>
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+            </span>
+            <span class="menuwrap">
+              <span class="avatar sm halo">Y</span>
+              <span class="menu">
+                <span class="mid" style="display: block">
+                  <span class="nm" style="display: block">Zhu Yue</span>
+                  <span class="em">zhuyue11@gmail.com</span>
+                </span>
+                <span class="mrow hl"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-user-cog" /></svg>Account
+                  settings</span
+                >
+                <span class="mrow"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-settings" /></svg>Workspace
+                  settings</span
+                >
+                <span class="mrow"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-log-out" /></svg>Sign out</span
+                >
+              </span>
+            </span>
+          </div>
+        </div>
+        <div class="step-note" style="margin-top: 200px">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>
+          then, in the account rail: Security → API tokens (Panel 9)
+        </div>
+        <div style="max-width: 232px">
+          <div class="grp">
+            <div class="grp-label">Security</div>
+            <div class="nav-row active halo">
+              <span class="ni"
+                ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
+              ></span>
+              <span class="nl">API tokens</span>
+            </div>
+          </div>
+        </div>
+        <p class="tie" style="margin-top: 14px">
+          The rail label stays <b>API tokens</b> — the panel is titled “Connect the CLI” inside the
+          pane. Renaming the entry would churn the <code class="mono">accountSettingsNav</code>
+          registry, its i18n keys and the route↔registry totality test for no user gain.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 1 — /device · code entry (hand-typed)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 1 —
+      <span>/device · state 1 of 6 · code entry (typed by hand — the sandbox / SSH path)</span>
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <div class="ac-head">
+            <h1>Connect the Motir CLI</h1>
+            <p>Enter the code your terminal is showing.</p>
+          </div>
+          <div class="ac-body">
+            <div class="field">
+              <label for="code-1">Device code</label>
+              <div class="input codefield focused">
+                <span class="ph" id="code-1">XXXX-XXXX</span>
+              </div>
+              <span class="helper"
+                >Eight characters. Lower case and the dash both work — there are no O, I, 0 or 1 to
+                mistake.</span
+              >
+            </div>
+            <button class="btn btn-primary btn-lg full">Continue</button>
+          </div>
+          <p class="ac-foot">
+            Didn’t run <code class="mono">motir login</code> yourself? Close this page — nothing is
+            connected until you approve it.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 2 — /device · code entry, pre-filled
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 2 —
+      <span
+        >/device · state 1, PRE-FILLED · arrived on `verification_uri_complete` (`?user_code=`), the
+        code carried in from the CLI</span
+      >
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <div class="ac-head">
+            <h1>Connect the Motir CLI</h1>
+            <p>Check this is the code your terminal is showing, then continue.</p>
+          </div>
+          <div class="ac-body">
+            <div class="field">
+              <label for="code-2">Device code</label>
+              <div class="input codefield">
+                <span class="val" id="code-2">K4TP-9RXM</span>
+              </div>
+              <span class="helper">Filled in from the link your terminal opened.</span>
+            </div>
+            <button class="btn btn-primary btn-lg full">Continue</button>
+          </div>
+          <p class="ac-foot">
+            Didn’t run <code class="mono">motir login</code> yourself? Close this page — nothing is
+            connected until you approve it.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 3 — /device · CONFIRM (multi-workspace). THE phishing defence.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 3 —
+      <span
+        >/device · state 2 of 6 · CONFIRM, multi-workspace · the device grant's only phishing
+        defence: WHO · WHAT · WHICH WORKSPACE · WHAT SCOPES, and a Deny with real weight</span
+      >
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <div class="ac-head">
+            <h1>Connect this terminal?</h1>
+            <p>Read this before you approve — it is the only check on what the terminal gets.</p>
+          </div>
+          <div class="ac-body">
+            <div class="detail">
+              <div class="drow">
+                <span class="dk">You</span>
+                <span class="dv">
+                  <span class="who">
+                    <span class="avatar">Y</span>
+                    <span>
+                      <span class="nm" style="display: block">Zhu Yue</span>
+                      <span class="em">zhuyue11@gmail.com</span>
+                    </span>
+                  </span>
+                  <span class="sub"
+                    >Not you? <span class="link">Sign out and sign in as someone else</span>.</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Connecting</span>
+                <span class="dv">
+                  <span class="agent"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Motir CLI
+                    on <span class="mono">studio-mbp</span></span
+                  >
+                  <span class="sub"
+                    >Code <span class="code-chip">K4TP-9RXM</span> · asked 12 seconds ago</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Workspace</span>
+                <span class="dv">
+                  <span class="select"
+                    >moooon · Motir<svg class="chev" viewBox="0 0 24 24">
+                      <use href="#i-chevron-down" /></svg
+                  ></span>
+                  <span class="sub"
+                    >The terminal sees only this workspace. You belong to 3 — pick the one you want
+                    to work in.</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">It can</span>
+                <span class="dv">
+                  <span class="scopes">
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                      <span>
+                        <span class="sname" style="display: block">Read everything</span>
+                        <span class="sdesc"
+                          >Work items, boards, sprints, comments and reports.</span
+                        >
+                      </span>
+                    </span>
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-square-pen" /></svg>
+                      <span>
+                        <span class="sname" style="display: block">Edit work items</span>
+                        <span class="sdesc">Create and update work items, comments and links.</span>
+                      </span>
+                    </span>
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
+                      <span>
+                        <span class="sname" style="display: block">Connect integrations</span>
+                        <span class="sdesc"
+                          >Link external tools and post activity back to Motir.</span
+                        >
+                      </span>
+                    </span>
+                  </span>
+                  <span class="cant"
+                    >It can’t archive or delete work items, and it can’t change members or
+                    billing.</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Expires</span>
+                <span class="dv">
+                  In 90 days
+                  <span class="sub"
+                    >Or the moment you revoke it in Settings → Account → API tokens. Revoking is the
+                    only way to disconnect a terminal.</span
+                  >
+                </span>
+              </div>
+            </div>
+
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
+              <div>
+                <p>
+                  Approve this only if you just ran <span class="mono">motir login</span> on
+                  <span class="mono">studio-mbp</span> yourself.
+                </p>
+                <p>
+                  If someone sent you this code — in a chat, an email or a support ticket — deny it.
+                  Approving hands THEIR terminal everything listed above, as you.
+                </p>
+              </div>
+            </div>
+
+            <div class="btnrow">
+              <button class="btn btn-deny btn-lg full">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg>Deny
+              </button>
+              <button class="btn btn-primary btn-lg full">Approve and connect</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 4 — /device · CONFIRM (single workspace — picker absent)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4 —
+      <span
+        >/device · state 2, SINGLE workspace · the picker is absent and the workspace is simply
+        stated (no choice to make = no control to render)</span
+      >
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <div class="ac-head">
+            <h1>Connect this terminal?</h1>
+            <p>Read this before you approve — it is the only check on what the terminal gets.</p>
+          </div>
+          <div class="ac-body">
+            <div class="detail">
+              <div class="drow">
+                <span class="dk">You</span>
+                <span class="dv">
+                  <span class="who">
+                    <span class="avatar">Y</span>
+                    <span>
+                      <span class="nm" style="display: block">Zhu Yue</span>
+                      <span class="em">zhuyue11@gmail.com</span>
+                    </span>
+                  </span>
+                  <span class="sub"
+                    >Not you? <span class="link">Sign out and sign in as someone else</span>.</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Connecting</span>
+                <span class="dv">
+                  <span class="agent"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Motir CLI
+                    on <span class="mono">devbox-01</span></span
+                  >
+                  <span class="sub"
+                    >Code <span class="code-chip">B7QN-M2XD</span> · asked 4 seconds ago</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Workspace</span>
+                <span class="dv">
+                  moooon · Motir
+                  <span class="sub">Your only workspace.</span>
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">It can</span>
+                <span class="dv">
+                  <span class="scopes">
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                      <span>
+                        <span class="sname" style="display: block">Read everything</span>
+                        <span class="sdesc"
+                          >Work items, boards, sprints, comments and reports.</span
+                        >
+                      </span>
+                    </span>
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-square-pen" /></svg>
+                      <span>
+                        <span class="sname" style="display: block">Edit work items</span>
+                        <span class="sdesc">Create and update work items, comments and links.</span>
+                      </span>
+                    </span>
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
+                      <span>
+                        <span class="sname" style="display: block">Connect integrations</span>
+                        <span class="sdesc"
+                          >Link external tools and post activity back to Motir.</span
+                        >
+                      </span>
+                    </span>
+                  </span>
+                  <span class="cant"
+                    >It can’t archive or delete work items, and it can’t change members or
+                    billing.</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Expires</span>
+                <span class="dv">
+                  In 90 days
+                  <span class="sub"
+                    >Or the moment you revoke it in Settings → Account → API tokens.</span
+                  >
+                </span>
+              </div>
+            </div>
+
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
+              <div>
+                <p>
+                  Approve this only if you just ran <span class="mono">motir login</span> on
+                  <span class="mono">devbox-01</span> yourself.
+                </p>
+                <p>
+                  If someone sent you this code — in a chat, an email or a support ticket — deny it.
+                  Approving hands THEIR terminal everything listed above, as you.
+                </p>
+              </div>
+            </div>
+
+            <div class="btnrow">
+              <button class="btn btn-deny btn-lg full">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg>Deny
+              </button>
+              <button class="btn btn-primary btn-lg full">Approve and connect</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANELS 5 + 6 — approved · denied
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panels 5 + 6 —
+      <span
+        >/device · states 3 and 4 of 6 · approved (“go back to your terminal”) · denied — each
+        states plainly what now exists and what to do next</span
+      >
+    </div>
+    <div class="panel duo">
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard" style="max-width: 30rem; padding: 32px">
+          <div class="ac-head">
+            <h1>Terminal connected</h1>
+            <p>Nothing more to do here.</p>
+          </div>
+          <div class="ac-body">
+            <div class="callout success">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-check-big" /></svg>
+              <div>
+                <p>
+                  Go back to your terminal — <span class="mono">motir login</span> has finished and
+                  <span class="mono">studio-mbp</span> is signed in to <b>moooon · Motir</b>.
+                </p>
+              </div>
+            </div>
+            <p
+              style="margin: 0; font-size: 13px; line-height: 1.6; color: var(--el-text-secondary)"
+            >
+              We created a token called <span class="code-chip">CLI · studio-mbp</span> in this
+              workspace. It expires in 90 days; revoking it disconnects that terminal.
+            </p>
+            <button class="btn btn-secondary full">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-key-round" /></svg>View API tokens
+            </button>
+          </div>
+          <p class="ac-foot">You can close this page.</p>
+        </div>
+      </div>
+
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard" style="max-width: 30rem; padding: 32px">
+          <div class="ac-head">
+            <h1>Request denied</h1>
+            <p>Good — that is the right call for a code you didn’t ask for.</p>
+          </div>
+          <div class="ac-body">
+            <div class="callout danger">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg>
+              <div>
+                <p>
+                  Nothing was connected and no token was created. That terminal will report that the
+                  request was denied.
+                </p>
+              </div>
+            </div>
+            <p
+              style="margin: 0; font-size: 13px; line-height: 1.6; color: var(--el-text-secondary)"
+            >
+              Denied it by mistake? Run <span class="mono">motir login</span> again for a fresh code
+              — this one can’t be reused.
+            </p>
+            <button class="btn btn-secondary full">Enter another code</button>
+          </div>
+          <p class="ac-foot">You can close this page.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 7 — expired · unknown code
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 7 —
+      <span
+        >/device · states 5a + 5b of 6 · expired (the plugin's 30-minute default) and an unknown
+        code — same screen, two copies, each with the way forward so the terminal is never left
+        spinning against a dead end</span
+      >
+    </div>
+    <div class="panel duo">
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard" style="max-width: 30rem; padding: 32px">
+          <div class="ac-head">
+            <h1>That code has expired</h1>
+            <p>Codes last 30 minutes.</p>
+          </div>
+          <div class="ac-body">
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+              <div>
+                <p>
+                  <span class="code-chip">K4TP-9RXM</span> is no longer valid, and nothing was
+                  connected. Run <span class="mono">motir login</span> again to get a new code.
+                </p>
+              </div>
+            </div>
+            <button class="btn btn-primary full">Enter a new code</button>
+          </div>
+          <p class="ac-foot">
+            Your terminal has already stopped waiting — it reports the code expired.
+          </p>
+        </div>
+      </div>
+
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard" style="max-width: 30rem; padding: 32px">
+          <div class="ac-head">
+            <h1>We don’t recognise that code</h1>
+            <p>Check for a typo, or start again.</p>
+          </div>
+          <div class="ac-body">
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-alert" /></svg>
+              <div>
+                <p>
+                  Codes are eight characters and expire after 30 minutes. Run
+                  <span class="mono">motir login</span> again if yours is older than that.
+                </p>
+              </div>
+            </div>
+            <div class="field">
+              <label for="code-7">Device code</label>
+              <div class="input codefield focused">
+                <span class="val" id="code-7">K4TP-9RXN</span>
+              </div>
+              <span class="helper">One character off is the usual cause.</span>
+            </div>
+            <button class="btn btn-primary full">Try again</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 8 — signed-out arrival + the sign-in hand-off that RETURNS
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 8 —
+      <span
+        >/device · state 6 of 6 · signed-out arrival (the common real case) → the shipped sign-in
+        card, with the pending code carried across and brought back</span
+      >
+    </div>
+    <div class="panel duo">
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard" style="max-width: 30rem; padding: 32px">
+          <div class="ac-head">
+            <h1>Sign in to connect the CLI</h1>
+            <p>We’ll bring you straight back to this code.</p>
+          </div>
+          <div class="ac-body">
+            <div class="carried">
+              <span class="clabel">Connecting</span>
+              <span class="cval"
+                >Motir CLI on <span class="mono">studio-mbp</span> · code
+                <span class="code-chip">K4TP-9RXM</span></span
+              >
+            </div>
+            <p
+              style="
+                margin: 0;
+                font-size: 13.5px;
+                line-height: 1.6;
+                color: var(--el-text-secondary);
+              "
+            >
+              Only the account you sign in as can approve this — and only that account’s workspaces
+              can be picked.
+            </p>
+            <button class="btn btn-primary btn-lg full">Sign in to continue</button>
+          </div>
+          <p class="ac-foot">
+            Goes to <span class="mono">/sign-in?next=%2Fdevice%3Fuser_code%3DK4TP-9RXM</span> — the
+            shipped <span class="mono">?next=</span> hand-off, carrying the code so the return lands
+            on Panel 3, not back on an empty field.
+          </p>
+        </div>
+      </div>
+
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard narrow" style="padding: 32px">
+          <div class="ac-head">
+            <h1>Welcome back!</h1>
+            <p>Use Motir to turn any product idea into reality.</p>
+          </div>
+          <div class="ac-body">
+            <div class="carried">
+              <span class="clabel">Connecting the CLI</span>
+              <span class="cval"
+                ><span class="mono">studio-mbp</span> · code
+                <span class="code-chip">K4TP-9RXM</span></span
+              >
+            </div>
+            <button class="btn btn-secondary btn-lg full">Continue with Google</button>
+            <div class="ordiv">
+              <span class="ln"></span><span class="tx">or</span><span class="ln"></span>
+            </div>
+            <div class="input">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-mail" /></svg>
+              <span class="ph">Email address</span>
+            </div>
+            <button class="btn btn-primary btn-lg full">Continue</button>
+          </div>
+          <p class="ac-foot">
+            The SHIPPED sign-in card, unchanged except the carried banner — the same
+            <span class="mono">IdeaCarried</span> surface the marketing hero already uses to carry a
+            draft across sign-in. Signing in returns to <span class="mono">/device</span> with the
+            code still in hand.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 9 — SURFACE 2, in place in the shipped pane (populated)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 9 —
+      <span
+        >Surface 2 · the “Connect the CLI” panel IN PLACE as the first card of the shipped Settings
+        → Account → API tokens pane · the CLI-minted row sits in the SAME list below, which is not
+        re-specified here</span
+      >
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topnav">
+          <span class="org"
+            ><span class="tile">M</span>moooon<svg class="chev" viewBox="0 0 24 24">
+              <use href="#i-chevron-down" /></svg
+          ></span>
+          <span class="searchbox"
+            ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg>Search<span
+              class="kbd"
+              >⌘K</span
+            ></span
+          >
+          <span class="navicons">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-monitor" /></svg>
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+          </span>
+          <span class="avatar sm">Y</span>
+        </div>
+        <div class="shell">
+          <div class="rail">
+            <div>
+              <div class="back">
+                <svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="me">
+                <span class="avatar">Y</span>
+                <span class="meta">
+                  <span class="nm" style="display: block">Zhu Yue</span>
+                  <span class="em">zhuyue11@gmail.com</span>
+                </span>
+              </div>
+              <div class="settings-eyebrow" style="margin-top: 10px">Account settings</div>
+            </div>
+            <div>
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                  ></span>
+                  <span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                  ></span>
+                  <span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                  ></span>
+                  <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
+                  ></span>
+                  <span class="nl">API tokens</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>API tokens</h2>
+              <p class="sub">
+                Personal access tokens let your coding agents reach Motir over the MCP server. Each
+                token acts as you — give every agent its own, and revoke any you no longer use.
+              </p>
+            </div>
+
+            <div class="stack">
+              <!-- ── THE NEW PANEL ──────────────────────────────────────── -->
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Connect
+                      the CLI
+                    </h3>
+                    <p class="hsub">
+                      Run Motir from your terminal — <span class="mono">motir next</span>,
+                      <span class="mono">motir run</span>, <span class="mono">motir auto</span>.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="steps">
+                    <div class="step">
+                      <span class="scap">1 · Install</span>
+                      <div class="snippet">
+                        <code>npm install -g @motir/cli</code>
+                        <button class="icon-btn" aria-label="Copy install command">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="step">
+                      <span class="scap">2 · Sign in</span>
+                      <div class="snippet">
+                        <code>motir login</code>
+                        <button class="icon-btn" aria-label="Copy sign-in command">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="next">
+                    <span class="mono">motir login</span> shows a short code and opens Motir in your
+                    browser. Approve it there and the terminal is connected — there is no token to
+                    copy by hand.
+                  </p>
+                  <p class="aside">
+                    No browser on that machine? <span class="mono">motir login</span> prints the
+                    code and the URL to open anywhere, so SSH sessions and containers use the same
+                    command. For an unattended agent, set
+                    <span class="mono">MOTIR_TOKEN</span> instead.
+                  </p>
+                  <div class="panel-foot">
+                    <span class="foot-link"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-book-open" /></svg>Read the
+                      CLI guide</span
+                    >
+                    <span class="tie"
+                      >An approved terminal appears below as
+                      <span class="code-chip">CLI · &lt;hostname&gt;</span> — revoking it there
+                      disconnects that terminal.</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── the SHIPPED tokens card, mirrored, NOT re-specified ── -->
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Your tokens</h3>
+                    <p class="hsub">Shown once at creation, then stored only as a hash.</p>
+                  </div>
+                  <button class="btn btn-primary btn-sm">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create token
+                  </button>
+                </div>
+                <div class="card-body tight">
+                  <table class="ttable">
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>Token</th>
+                        <th>Scopes</th>
+                        <th>Workspace</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Last used</th>
+                        <th class="right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td class="label">CLI · studio-mbp</td>
+                        <td><span class="code-chip">motir_pat_LZ…</span></td>
+                        <td><span class="pill pill--neutral">Custom</span></td>
+                        <td class="meta">Motir</td>
+                        <td class="meta">Jul 30, 2026</td>
+                        <td class="meta">in 90 days</td>
+                        <td class="meta muted">Just now</td>
+                        <td class="right">
+                          <button
+                            class="icon-btn danger"
+                            aria-label="Revoke token CLI · studio-mbp"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash-2" /></svg>
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="label">Claude Code · laptop</td>
+                        <td><span class="code-chip">motir_pat_9Qd…</span></td>
+                        <td><span class="pill pill--neutral">Standard</span></td>
+                        <td class="meta">Motir</td>
+                        <td class="meta">Jul 12, 2026</td>
+                        <td class="meta">in 74 days</td>
+                        <td class="meta">2 hours ago</td>
+                        <td class="right">
+                          <button
+                            class="icon-btn danger"
+                            aria-label="Revoke token Claude Code · laptop"
+                          >
+                            <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash-2" /></svg>
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 10 — SURFACE 2 for a first-time user (empty list) + toast
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 10 —
+      <span
+        >Surface 2 · the first-time case, which is the whole point of the panel: the pane is EMPTY,
+        so the CLI route must read before the “Create token” empty state, not after · plus the
+        copy-confirmation toast</span
+      >
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topnav">
+          <span class="org"
+            ><span class="tile">M</span>moooon<svg class="chev" viewBox="0 0 24 24">
+              <use href="#i-chevron-down" /></svg
+          ></span>
+          <span class="searchbox"
+            ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg>Search<span
+              class="kbd"
+              >⌘K</span
+            ></span
+          >
+          <span class="navicons">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-monitor" /></svg>
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+          </span>
+          <span class="avatar sm">A</span>
+        </div>
+        <div class="shell">
+          <div class="rail">
+            <div>
+              <div class="back">
+                <svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="me">
+                <span class="avatar">A</span>
+                <span class="meta">
+                  <span class="nm" style="display: block">Ada Okonjo</span>
+                  <span class="em">ada@moooon.net</span>
+                </span>
+              </div>
+              <div class="settings-eyebrow" style="margin-top: 10px">Account settings</div>
+            </div>
+            <div>
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                  ></span>
+                  <span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                  ></span>
+                  <span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                  ></span>
+                  <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
+                  ></span>
+                  <span class="nl">API tokens</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>API tokens</h2>
+              <p class="sub">
+                Personal access tokens let your coding agents reach Motir over the MCP server. Each
+                token acts as you — give every agent its own, and revoke any you no longer use.
+              </p>
+            </div>
+
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Connect
+                      the CLI
+                    </h3>
+                    <p class="hsub">
+                      Run Motir from your terminal — <span class="mono">motir next</span>,
+                      <span class="mono">motir run</span>, <span class="mono">motir auto</span>.
+                    </p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="steps">
+                    <div class="step">
+                      <span class="scap">1 · Install</span>
+                      <div class="snippet">
+                        <code>npm install -g @motir/cli</code>
+                        <button class="icon-btn" aria-label="Copy install command">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="step">
+                      <span class="scap">2 · Sign in</span>
+                      <div class="snippet">
+                        <code>motir login</code>
+                        <button class="icon-btn" aria-label="Copy sign-in command">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="next">
+                    <span class="mono">motir login</span> shows a short code and opens Motir in your
+                    browser. Approve it there and the terminal is connected — there is no token to
+                    copy by hand.
+                  </p>
+                  <p class="aside">
+                    No browser on that machine? <span class="mono">motir login</span> prints the
+                    code and the URL to open anywhere, so SSH sessions and containers use the same
+                    command. For an unattended agent, set
+                    <span class="mono">MOTIR_TOKEN</span> instead.
+                  </p>
+                  <div class="panel-foot">
+                    <span class="foot-link"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-book-open" /></svg>Read the
+                      CLI guide</span
+                    >
+                    <span class="tie"
+                      >An approved terminal will appear below as
+                      <span class="code-chip">CLI · &lt;hostname&gt;</span>.</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <!-- the SHIPPED EmptyState, unchanged -->
+              <div class="card">
+                <div class="empty">
+                  <span class="ic-wrap"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
+                  ></span>
+                  <h3>No API tokens yet</h3>
+                  <p>
+                    API tokens let your coding agents talk to Motir over the MCP server — list ready
+                    work, open work items, move them, and comment, all as you.
+                    <span class="link">Read the MCP setup guide</span> to connect your first agent.
+                  </p>
+                  <button class="btn btn-primary">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create token
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="toast-slot">
+        <div class="toast" role="status">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-check-big" /></svg>
+          <div>
+            <div class="tt">Copied</div>
+            <div class="tb">Paste it into your terminal and press enter.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANEL 11 — dark parity
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 11 —
+      <span
+        >dark parity · the confirm screen and the connect panel on `data-theme="dark"` — every
+        surface, tint, callout and code chip flips through the token layer and stays AA</span
+      >
+    </div>
+    <!-- `data-appearance-scope` alongside `data-theme` is the SHIPPED mechanism for
+         theming a nested subtree: the Tier-3 `--el-*` layer is declared on
+         `:root, [data-appearance-scope]`, and var() resolves at the DECLARING
+         element, so a subtree that flips `--color-*` must re-emit `--el-*` to pick
+         the flip up (theme.css, MOTIR-1040). Without it this panel renders light. -->
+    <div class="panel duo" data-theme="dark" data-appearance-scope>
+      <div class="authwash" style="padding: 28px 20px">
+        <div class="authcard" style="max-width: 30rem; padding: 32px">
+          <div class="ac-head">
+            <h1>Connect this terminal?</h1>
+            <p>Read this before you approve — it is the only check on what the terminal gets.</p>
+          </div>
+          <div class="ac-body">
+            <div class="detail">
+              <div class="drow">
+                <span class="dk">You</span>
+                <span class="dv">
+                  <span class="who">
+                    <span class="avatar">Y</span>
+                    <span>
+                      <span class="nm" style="display: block">Zhu Yue</span>
+                      <span class="em">zhuyue11@gmail.com</span>
+                    </span>
+                  </span>
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Connecting</span>
+                <span class="dv">
+                  <span class="agent"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Motir CLI
+                    on <span class="mono">studio-mbp</span></span
+                  >
+                  <span class="sub"
+                    >Code <span class="code-chip">K4TP-9RXM</span> · asked 12 seconds ago</span
+                  >
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">Workspace</span>
+                <span class="dv">
+                  <span class="select"
+                    >moooon · Motir<svg class="chev" viewBox="0 0 24 24">
+                      <use href="#i-chevron-down" /></svg
+                  ></span>
+                </span>
+              </div>
+              <div class="drow">
+                <span class="dk">It can</span>
+                <span class="dv">
+                  <span class="scopes">
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                      <span><span class="sname">Read everything</span></span>
+                    </span>
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-square-pen" /></svg>
+                      <span><span class="sname">Edit work items</span></span>
+                    </span>
+                    <span class="scope">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
+                      <span><span class="sname">Connect integrations</span></span>
+                    </span>
+                  </span>
+                  <span class="cant"
+                    >It can’t archive or delete work items, and it can’t change members or
+                    billing.</span
+                  >
+                </span>
+              </div>
+            </div>
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
+              <div>
+                <p>
+                  Approve this only if you just ran <span class="mono">motir login</span> on
+                  <span class="mono">studio-mbp</span> yourself.
+                </p>
+              </div>
+            </div>
+            <div class="btnrow">
+              <button class="btn btn-deny btn-lg full">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg>Deny
+              </button>
+              <button class="btn btn-primary btn-lg full">Approve and connect</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="
+          background: var(--el-page-bg);
+          border: 1px solid var(--el-border);
+          border-radius: var(--radius-card);
+          padding: 24px;
+        "
+      >
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Connect the CLI
+              </h3>
+              <p class="hsub">
+                Run Motir from your terminal — <span class="mono">motir next</span>,
+                <span class="mono">motir run</span>, <span class="mono">motir auto</span>.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="steps">
+              <div class="step">
+                <span class="scap">1 · Install</span>
+                <div class="snippet">
+                  <code>npm install -g @motir/cli</code>
+                  <button class="icon-btn" aria-label="Copy install command">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="step">
+                <span class="scap">2 · Sign in</span>
+                <div class="snippet">
+                  <code>motir login</code>
+                  <button class="icon-btn" aria-label="Copy sign-in command">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="next">
+              <span class="mono">motir login</span> shows a short code and opens Motir in your
+              browser. Approve it there and the terminal is connected — there is no token to copy by
+              hand.
+            </p>
+            <div class="panel-foot">
+              <span class="foot-link"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-book-open" /></svg>Read the CLI
+                guide</span
+              >
+              <span class="tie"
+                >An approved terminal appears below as
+                <span class="code-chip">CLI · &lt;hostname&gt;</span>.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
