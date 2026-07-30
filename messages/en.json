@@ -54,6 +54,103 @@
       "speed": "Speed"
     }
   },
+  "device": {
+    "heading": {
+      "entry": "Connect the Motir CLI",
+      "confirm": "Connect this terminal?",
+      "approved": "Terminal connected",
+      "denied": "Request denied",
+      "expired": "That code has expired",
+      "unknown": "We don’t recognise that code",
+      "signedOut": "Sign in to connect the CLI"
+    },
+    "subhead": {
+      "entry": "Enter the code your terminal is showing.",
+      "entryPrefilled": "Check this is the code your terminal is showing, then continue.",
+      "confirm": "Check all four before you approve — this is the only gate on what it gets.",
+      "approved": "Nothing more to do here.",
+      "denied": "Good — that is the right call for a code you didn’t ask for.",
+      "expired": "Codes last {minutes} minutes.",
+      "unknown": "Check for a typo, or start again.",
+      "signedOut": "We’ll bring you straight back to this code."
+    },
+    "code": {
+      "label": "Device code",
+      "placeholder": "XXXX-XXXX",
+      "helper": "Eight characters. Lower case and the dash both work — there are no O, I, 0 or 1 to mistake.",
+      "helperPrefilled": "Filled in from the link your terminal opened.",
+      "helperTypo": "One character off is the usual cause.",
+      "incomplete": "A device code is eight characters."
+    },
+    "continue": "Continue",
+    "checking": "Checking that code…",
+    "foot": {
+      "notYou": "Didn’t run <cmd>motir login</cmd> yourself? Close this page — nothing is connected until you approve it.",
+      "close": "You can close this page."
+    },
+    "confirm": {
+      "you": "You",
+      "notYou": "Not you? <link>Sign out</link> and sign in as them.",
+      "connecting": "Connecting",
+      "agent": "Motir CLI on {hostname}",
+      "agentUnknownHost": "Motir CLI",
+      "askedAgo": "Code <chip>{code}</chip> · asked {ago}",
+      "workspace": "Workspace",
+      "workspacePicker": "Workspace this terminal can see",
+      "workspaceHelp": "You belong to {count} — it sees only this one.",
+      "workspaceOnly": "Your only workspace.",
+      "itCan": "It can",
+      "cant": "Not: archive or delete work items, members, billing.",
+      "expires": "Expires",
+      "expiresValue": "In {days} days",
+      "expiresHelp": "Revoke it in API tokens to disconnect.",
+      "warning": "Approve only if you just ran <cmd>motir login</cmd> on {hostname} yourself. If someone sent you this code — a chat, an email, a support ticket — <strong>deny it</strong>: approving hands THEIR terminal everything above, as you.",
+      "warningUnknownHost": "Approve only if you just ran <cmd>motir login</cmd> yourself. If someone sent you this code — a chat, an email, a support ticket — <strong>deny it</strong>: approving hands THEIR terminal everything above, as you.",
+      "actions": "Approve or deny this terminal",
+      "approve": "Approve and connect",
+      "deny": "Deny"
+    },
+    "approved": {
+      "body": "Go back to your terminal — <cmd>motir login</cmd> has finished and {hostname} is signed in to <strong>{workspace}</strong>.",
+      "bodyUnknownHost": "Go back to your terminal — <cmd>motir login</cmd> has finished and it is signed in to <strong>{workspace}</strong>.",
+      "bodyAlready": "This code was already approved. Go back to your terminal — <cmd>motir login</cmd> has finished and it is connected.",
+      "tokenNote": "We created a token called <chip>{label}</chip> in this workspace. It expires in {days} days; revoking it disconnects that terminal.",
+      "viewTokens": "View API tokens"
+    },
+    "denied": {
+      "body": "Nothing was connected and no token was created. That terminal will report that the request was denied.",
+      "retry": "Denied it by mistake? Run <cmd>motir login</cmd> again for a fresh code — this one can’t be reused.",
+      "another": "Enter another code"
+    },
+    "expired": {
+      "body": "<chip>{code}</chip> is no longer valid, and nothing was connected. Run <cmd>motir login</cmd> again to get a new code.",
+      "newCode": "Enter a new code",
+      "terminalNote": "Your terminal has already stopped waiting — it reports the code expired."
+    },
+    "unknown": {
+      "body": "Codes are eight characters and expire after {minutes} minutes. Run <cmd>motir login</cmd> again if yours is older than that.",
+      "retry": "Try again"
+    },
+    "signedOut": {
+      "carriedLabel": "Connecting",
+      "carriedValue": "Motir CLI · code <chip>{code}</chip>",
+      "carriedNoCode": "Motir CLI — no code yet",
+      "body": "Only the account you sign in as can approve this — and only that account’s workspaces can be picked.",
+      "cta": "Sign in to continue"
+    },
+    "signInCarried": {
+      "label": "Connecting the CLI",
+      "value": "Motir CLI · code <chip>{code}</chip>",
+      "valueNoCode": "Motir CLI"
+    },
+    "errors": {
+      "claimedByOther": "This code was opened by a different Motir account. Sign in as that account, or run motir login again for a fresh code.",
+      "workspaceForbidden": "You are not a member of that workspace, so this terminal can’t be connected to it. Pick another one.",
+      "notClaimed": "We lost track of that code. Enter it again to carry on.",
+      "network": "We couldn’t reach Motir. Check your connection and try again.",
+      "unexpected": "Something went wrong on our side. Try again, or run motir login for a fresh code."
+    }
+  },
   "markdownEditor": {
     "mentionPeople": "People",
     "mentionWorkItems": "Work items",
@@ -2101,6 +2198,24 @@
     "apiTokens": {
       "heading": "API tokens",
       "subtitle": "Personal access tokens let your coding agents reach Motir over the MCP server. Each token acts as you — give every agent its own, and revoke any you no longer use.",
+      "cli": {
+        "title": "Connect the CLI",
+        "subtitle": "Run Motir from your terminal — <mono>motir next</mono>, <mono>motir run</mono>, <mono>motir auto</mono>.",
+        "step1": "1 · Install",
+        "step2": "2 · Sign in",
+        "copyInstall": "Copy install command",
+        "copySignIn": "Copy sign-in command",
+        "next": "<mono>motir login</mono> shows a short code and opens Motir in your browser. Approve it there and the terminal is connected — there is no token to copy by hand.",
+        "headless": "No browser on that machine? <mono>motir login</mono> prints the code and the URL to open anywhere, so SSH sessions and containers use the same command. For an unattended agent, set <mono>MOTIR_TOKEN</mono> instead.",
+        "guide": "Read the CLI guide",
+        "tie": "An approved terminal appears below as <code>CLI · {host}</code> — revoking it there disconnects that terminal.",
+        "tieEmpty": "An approved terminal will appear below as <code>CLI · {host}</code>.",
+        "copyFailed": "Couldn't copy — select the command and copy it manually.",
+        "toast": {
+          "title": "Copied",
+          "body": "Paste it into your terminal and press enter."
+        }
+      },
       "card": {
         "title": "Your tokens",
         "subtitle": "Shown once at creation, then stored only as a hash.",

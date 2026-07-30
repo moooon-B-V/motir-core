@@ -26,9 +26,17 @@ import {
   InvalidDeviceGrantError,
 } from '@/lib/cliDevice/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
-import { toDeviceGrantStartDTO, toDeviceGrantTokenDTO } from '@/lib/mappers/cliDeviceMappers';
+import {
+  toDeviceGrantDescriptionDTO,
+  toDeviceGrantStartDTO,
+  toDeviceGrantTokenDTO,
+} from '@/lib/mappers/cliDeviceMappers';
 import type { IssuedDeviceCode } from '@/lib/mappers/cliDeviceMappers';
-import type { DeviceGrantStartDTO, DeviceGrantTokenDTO } from '@/lib/dto/cliDevice';
+import type {
+  DeviceGrantDescriptionDTO,
+  DeviceGrantStartDTO,
+  DeviceGrantTokenDTO,
+} from '@/lib/dto/cliDevice';
 
 // The `motir login` device-authorization flow (Story MOTIR-1863 · Subtask
 // MOTIR-1865), implementing `docs/decisions/cli-login.md`. Three acts, two clients:
@@ -135,6 +143,63 @@ export const cliDeviceService = {
     });
 
     return toDeviceGrantStartDTO(issued);
+  },
+
+  /**
+   * CLAIM the code and DESCRIBE what is connecting (`GET /api/cli/device/grant`,
+   * Subtask MOTIR-1888) — the read the `/device` approval screen is built on, and the
+   * only way the browser can answer the ADR's "what is connecting". Better-Auth's own
+   * verify endpoint returns `{ user_code, status }`; the `hostname` and `createdAt`
+   * the screen needs sit unread on Motir's own row.
+   *
+   * ONE CALL DOES BOTH, ON PURPOSE. The claim (`userId` stamped on the row) is a hard
+   * precondition of approve — skipping it is the `DeviceGrantNotClaimedError` 409 the
+   * substrate documents — so splitting this into "describe" + "claim" would let a page
+   * render the facts, offer an Approve button, and only then discover the sequencing
+   * bug. Fusing them means a screen that renders at all is a screen that can approve.
+   *
+   * ORDER: claim first, read second. The claim is what makes `userId` readable, so a
+   * read before it could not tell "mine" from "someone else's". The plugin also owns
+   * the unknown-code and expiry checks, and it runs them BEFORE it looks at the
+   * session — so those two answers come back from it rather than being duplicated here
+   * (unlike `approve`, whose pre-checks must run before its own binding write).
+   *
+   * No transaction and no row lock: nothing here writes. See
+   * `deviceCodeRepository.findByUserCodeForRead` for why a lock would guard nothing.
+   */
+  async describe(input: {
+    userCode: string;
+    actorUserId: string;
+    headers: Headers;
+  }): Promise<DeviceGrantDescriptionDTO> {
+    const userCode = normalizeUserCode(input.userCode);
+
+    try {
+      // The CANONICAL code, and the request's own headers — the plugin reads the
+      // session itself (as with `deviceApprove`), and a claim is exactly what a
+      // session-less call must NOT perform.
+      await auth.api.deviceVerify({ query: { user_code: userCode }, headers: input.headers });
+    } catch (err) {
+      throw translateVerifyError(err);
+    }
+
+    const row = await deviceCodeRepository.findByUserCodeForRead(userCode);
+    // The plugin just resolved this code, so a miss means a concurrent poll reaped the
+    // row (denied/expired are deleted on discovery) in the window between. Gone is
+    // indistinguishable from never-existed, which is the right answer either way.
+    if (!row) throw new InvalidDeviceGrantError('Invalid user code');
+
+    // The claim did not land, so this session cannot be shown the grant. Reachable when
+    // the caller gates on a session but forwards no cookies for the plugin's own read —
+    // a client-sequencing bug, surfaced as the SAME 409 `approve` answers rather than
+    // silently returning facts to a session that cannot then approve them.
+    if (!row.userId) throw new DeviceGrantNotClaimedError();
+    // Claimed by a DIFFERENT signed-in user. The phishing-relevant case, and the reason
+    // this read is attributed at all: the facts on this screen are the mitigation, so
+    // they are shown to the session that owns the grant and to no one else.
+    if (row.userId !== input.actorUserId) throw new DeviceGrantForbiddenError();
+
+    return toDeviceGrantDescriptionDTO(row);
   },
 
   /**
@@ -316,6 +381,29 @@ async function mintForGrant(grant: {
   if (!user || !workspace) throw new DeviceGrantUnboundError();
 
   return toDeviceGrantTokenDTO({ token: minted.token, dto: minted.dto, user, workspace });
+}
+
+/**
+ * Translate the plugin's `APIError` from the CLAIM (`deviceVerify`) into this domain's
+ * typed errors.
+ *
+ * ⚠️ SEPARATE FROM `translateApproveError` ON PURPOSE — do not merge them. Both
+ * endpoints raise `invalid_request`, and it means DIFFERENT things: on `deviceVerify`
+ * it is `INVALID_USER_CODE` (the code does not exist → 404), while on `deviceApprove`
+ * it is "this grant is not in an approvable state" (→ 409 NOT_PENDING). Routing the
+ * claim through the approve translator would answer 409 for a mistyped code, which is
+ * precisely the state the `/device` page renders as "already approved".
+ *
+ * Unlike the approve path, neither branch here is a race: the plugin checks the code
+ * and its expiry before it ever looks at the session, so both are ordinary answers to
+ * an ordinary request. An unrecognised body still rethrows rather than being swallowed.
+ */
+function translateVerifyError(err: unknown): unknown {
+  if (!(err instanceof APIError)) return err;
+  const code = (err.body as { error?: string } | undefined)?.error;
+  if (code === 'expired_token') return new DeviceGrantExpiredError();
+  if (code === 'invalid_request') return new InvalidDeviceGrantError('Invalid user code');
+  return err;
 }
 
 /**

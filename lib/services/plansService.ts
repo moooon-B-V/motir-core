@@ -31,11 +31,14 @@ import {
   InvalidProposalError,
   PlanItemNotFoundError,
   PlanItemTargetMissingError,
+  PlanItemUnknownTargetRepoError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
+import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
+import { UnknownTargetRepoError } from '@/lib/workItems/errors';
 
 import type {
   CreatePlanInput,
@@ -170,6 +173,11 @@ function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }
   // so record it numeric (the same `Number(...)` shape estimationService logs).
   if (row.estimateMinutes != null) diff.estimateMinutes = { from: null, to: row.estimateMinutes };
   if (row.storyPoints != null) diff.storyPoints = { from: null, to: Number(row.storyPoints) };
+  // The repo pin (MOTIR-1884) — recorded when the proposal carried one (null =
+  // unpinned is omitted, like every other optional field here). `targetRepo` has a
+  // `textField()` disposition in lib/activity/renderers.ts, so the created-revision
+  // feed renders it.
+  if (row.targetRepo != null) diff.targetRepo = { from: null, to: row.targetRepo };
   return diff;
 }
 
@@ -285,6 +293,89 @@ async function assertProposalsPersistable(
   await runPersistGate(items, ctx, terminalStatusKeys, tx);
 }
 
+// ── The proposed REPO PIN, resolved before the transaction (MOTIR-1884) ───────
+//
+// A project's repository SET is sized by its architecture (MOTIR-1780), so
+// `resolveDispatchRepo`'s "the single repo" default stops answering the moment a
+// project has two: an item with no pin resolves to `null` and no agent is told
+// where to build. The planner therefore pins each proposed item (motir-ai,
+// MOTIR-1885) and the pin rides `proposedFields` / `patch` to here.
+//
+// It is resolved OUTSIDE the approve transaction, for the reason
+// `lib/workItems/targetRepo.ts` documents and the direct-write path already
+// obeys: the domain read opens its OWN workspace context (the
+// `project_repository` / `github_repo` RLS policies are workspace-keyed) and
+// Prisma cannot nest interactive transactions. Resolving first also means an
+// unknown repo is rejected while the tree is still byte-identical — the same
+// property the confirmation gate's pre-transaction pass has.
+
+/** Each PlanItem's RESOLVED pin, keyed by plan-item id. A key is present only
+ *  when that proposal actually carried a `targetRepo`, so an `add` with no pin
+ *  and a `modify` that doesn't touch the pin are indistinguishable from the
+ *  pre-MOTIR-1884 behaviour (absent ≠ explicit null). */
+type ResolvedRepoPins = ReadonlyMap<string, string | null>;
+
+/** The authored `targetRepo` a proposal carries, or `undefined` when it carries
+ *  none (an `add` without the field, a `modify` whose patch omits it). */
+function authoredTargetRepo(item: PlanItem): string | null | undefined {
+  if (item.op === 'add') {
+    return ((item.proposedFields ?? null) as PlanItemProposedFields | null)?.targetRepo;
+  }
+  if (item.op === 'modify') {
+    return ((item.patch ?? null) as PlanItemPatch | null)?.targetRepo;
+  }
+  return undefined;
+}
+
+/**
+ * Normalize + VALIDATE every proposed pin against the PROJECT's repository set,
+ * BEFORE the approve transaction opens. Returns the value each proposal
+ * materializes (`null` = explicitly unpinned).
+ *
+ * Validation is `resolveAuthoredTargetRepoInProject` — the SAME resolver the
+ * direct work-item write path calls, so the `owner/name` and bare-name forms, the
+ * case-insensitive match, the stored casing, and the project-vs-workspace scope
+ * ladder behave identically however the pin arrived. That also means a pin to a
+ * set row that is still `proposed` is ACCEPTED (the pin domain is every row, not
+ * just the established ones): the plan names repositories before it creates them,
+ * so recording that intent is ordinary. What is still caught is the typo and the
+ * SIBLING project's repo.
+ *
+ * An unknown name becomes a `PlanItemUnknownTargetRepoError` naming the offending
+ * PROPOSAL — the reviewer of a hundred-item plan needs to know which one, and the
+ * underlying message (which lists the project's repositories) rides along.
+ *
+ * Resolutions are memoized per authored spelling: a plan pins many items to the
+ * same few repos, and the domain read is per-call. A plan carrying NO pins does
+ * no reads at all.
+ */
+async function resolveProposedTargetRepos(
+  items: PlanItem[],
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<ResolvedRepoPins> {
+  const resolved = new Map<string, string | null>();
+  const memo = new Map<string, string | null>();
+
+  for (const item of items) {
+    const authored = authoredTargetRepo(item);
+    if (authored === undefined) continue;
+    const cacheKey = authored ?? '';
+    if (!memo.has(cacheKey)) {
+      try {
+        memo.set(cacheKey, await resolveAuthoredTargetRepoInProject(authored, projectId, ctx));
+      } catch (err) {
+        if (err instanceof UnknownTargetRepoError) {
+          throw new PlanItemUnknownTargetRepoError(item.id, authored ?? '', err.message);
+        }
+        throw err;
+      }
+    }
+    resolved.set(item.id, memo.get(cacheKey)!);
+  }
+  return resolved;
+}
+
 /**
  * Apply every PlanItem of a (locked, `planned`, GATED) plan inside the caller's
  * approve transaction. `add` → MATERIALIZE a WorkItem (intra-plan refs
@@ -293,13 +384,17 @@ async function assertProposalsPersistable(
  *
  * PRECONDITION: `assertProposalsPersistable` has already passed on `items`
  * under this same transaction — this function does not re-check the grammar or
- * done-work immutability, it applies an already-confirmed proposal set.
+ * done-work immutability, it applies an already-confirmed proposal set. The repo
+ * pins in `repoPins` are likewise ALREADY resolved + validated
+ * (`resolveProposedTargetRepos`, outside this transaction) — this function only
+ * writes them.
  */
 async function materialize(
   items: PlanItem[],
   plan: Plan,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  repoPins: ResolvedRepoPins,
 ): Promise<void> {
   const project = await projectRepository.findById(plan.projectId, tx);
   if (!project) throw new ProjectNotFoundError(plan.projectId);
@@ -411,6 +506,12 @@ async function materialize(
       // storyPoints column). Null when the `add` carried no estimate.
       estimateMinutes: pf.estimateMinutes ?? null,
       storyPoints: pf.storyPoints ?? null,
+      // WHICH REPO this item ships in (MOTIR-1884) — already normalized to the
+      // bare name and validated against the project's set before the transaction
+      // opened. Absent from the map = the proposal carried no pin, which stores
+      // `null` exactly as it did before the field existed (the shipped resolver's
+      // single-repo fallback still serves those projects unchanged).
+      targetRepo: repoPins.get(item.id) ?? null,
       position,
       backlogRank,
     };
@@ -513,7 +614,7 @@ async function materialize(
   // modify + remove against existing targets (locked + re-read inside the tx).
   for (const item of items) {
     if (item.op === 'modify') {
-      await applyModify(item, ctx, resolveRef, tx);
+      await applyModify(item, ctx, resolveRef, tx, repoPins);
     } else if (item.op === 'remove') {
       if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
       const locked = await workItemRepository.lockById(item.workItemId, tx);
@@ -533,6 +634,7 @@ async function applyModify(
   ctx: ServiceContext,
   resolveRef: (ref: string) => string,
   tx: Prisma.TransactionClient,
+  repoPins: ResolvedRepoPins,
 ): Promise<void> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
@@ -591,6 +693,19 @@ async function applyModify(
   if (patch.estimateMinutes !== undefined && patch.estimateMinutes !== current.estimateMinutes) {
     update.estimateMinutes = patch.estimateMinutes;
     diff.estimateMinutes = { from: current.estimateMinutes, to: patch.estimateMinutes };
+  }
+  // RE-PIN the repo (MOTIR-1884) — present in `repoPins` ONLY when the patch
+  // carried a `targetRepo` key, which is what keeps "leave it alone" distinct
+  // from "unpin it" (an explicit null resolves to null and clears the column).
+  // The value is already normalized + validated against the project's set; the
+  // `targetRepo` diff key has a `textField()` disposition in
+  // lib/activity/renderers.ts, so this revision renders with no new registry entry.
+  if (repoPins.has(item.id)) {
+    const nextTargetRepo = repoPins.get(item.id)!;
+    if (nextTargetRepo !== current.targetRepo) {
+      update.targetRepo = nextTargetRepo;
+      diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
+    }
   }
   if (Object.keys(update).length > 0) {
     await workItemRepository.update(item.workItemId, update, tx);
@@ -1001,7 +1116,24 @@ export const plansService = {
     // Pass 1 — reject BEFORE the transaction opens (the card's atomicity point:
     // a malformed proposal never even starts a write). Pass 2 runs inside, under
     // the target row locks, and is the verdict that actually gates materialize.
-    await runPersistGate(await planItemRepository.findByPlan(planId), ctx, terminalStatusKeys);
+    const preItems = await planItemRepository.findByPlan(planId);
+    await runPersistGate(preItems, ctx, terminalStatusKeys);
+
+    // The proposed repo PINS (MOTIR-1884), normalized + validated against this
+    // PROJECT's repository set. Out here because the domain read opens its own
+    // workspace context and cannot nest inside the approve transaction (the same
+    // hazard `lib/workItems/targetRepo.ts` documents and the direct-write path
+    // obeys) — and because an unknown repo should be rejected while the tree is
+    // still byte-identical.
+    //
+    // Resolved from THIS pre-transaction snapshot, which is authoritative for
+    // pins: on a `planned` plan the proposal set is frozen. `addProposals` /
+    // `deepenProposal` require `generating`, `updateProposal`'s editable set
+    // (`mergeProposedFields`) does not include `targetRepo`, `declinePlan` moves
+    // the plan to `declined` (which the in-transaction status re-read below
+    // rejects), and the lifecycle has no path back to `generating`. So no pin the
+    // transaction materializes can differ from one resolved here.
+    const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
 
     const { row, items, firstOnboarding, projectKey } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -1018,7 +1150,7 @@ export const plansService = {
         // proposal set — nothing has been written yet, so a rejection here rolls
         // back a transaction that touched no work-item row.
         await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, tx);
-        await materialize(proposals, fresh, ctx, tx);
+        await materialize(proposals, fresh, ctx, tx, repoPins);
         // Read the project ONCE, before `markOnboardingRan` writes: its
         // pre-write `onboardingRanAt` gates the rename below, and its
         // `identifier` (the tenant projectKey) + the first-onboarding signal both
@@ -1104,6 +1236,42 @@ export const plansService = {
           );
         });
     }
+
+    // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
+    // approved plan is what the set's cardinality is derived from, so this is the
+    // moment it can be proposed at all. Writes `proposed` rows the establish step
+    // then shows as editable (ADR §0.2: Motir proposes, the user decides); it
+    // creates nothing on GitHub.
+    //
+    // Fired on EVERY approve, not only the first onboarding: the proposer's own
+    // guard is "a project whose set has any row is left completely alone", so a
+    // re-plan approve of an established project is one cheap read, while a project
+    // whose first attempt lost to a motir-ai hiccup gets another chance instead of
+    // being permanently setless.
+    //
+    // BEST-EFFORT and AFTER the tx commits, for both of the reasons the convention
+    // trigger above is: the pre-plan read is a `server-only` client call that
+    // cannot run inside the DB transaction, and establishing repos — important as
+    // it is — is not worth failing a plan approval over (ADR §4.3 is the same
+    // judgement one level down). A failure leaves the user an empty-but-editable
+    // set, which MOTIR-1782 can complete later (ADR §4.4: approval is not the last
+    // chance to establish a repo). Imported LAZILY for the same reason: the E2E
+    // plan seeds import plansService in the Playwright Node process, where
+    // `server-only` does not resolve.
+    await import('@/lib/services/projectRepoProposalService')
+      .then(({ projectRepoProposalService }) =>
+        // No `itemRoles`: a proposal carries no repo role until MOTIR-1885 emits
+        // one and MOTIR-1884 carries it through materialize (ADR §5.5). This call
+        // site is where they wire it in.
+        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx),
+      )
+      .catch((err: unknown) => {
+        console.warn(
+          `[plansService.approvePlan] repository-set proposal failed for project ${plan.projectId}; skipping (the set stays empty and editable)`,
+          err,
+        );
+      });
+
     return toPlanWithItemsDto(row, items);
   },
 

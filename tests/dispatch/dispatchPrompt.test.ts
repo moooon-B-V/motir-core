@@ -515,8 +515,14 @@ describe('dispatch_prompt tool — access + shape', () => {
       'prompt',
       'sessionBranch',
       'targetRepo',
+      'targetRepoCloneUrl',
+      'targetRepoDefaultBranch',
       'workflowMode',
     ]);
+    // The routing coordinates (MOTIR-1783) ride the SAME payload as `next_ready`,
+    // so a CLI reading either surface handles one shape.
+    expect(dto.targetRepoCloneUrl).toBe('https://github.com/moooon/motir-core.git');
+    expect(dto.targetRepoDefaultBranch).toBe('main');
     // The summary embeds the prompt, so a human reading the session sees it.
     expect(text).toContain(dto.prompt);
   });

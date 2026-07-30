@@ -22,6 +22,7 @@ vi.mock('@/lib/auth', async (importOriginal) => ({
 const { db } = await import('@/lib/db');
 const { auth } = await import('@/lib/auth');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
+const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
@@ -31,6 +32,7 @@ const { truncateAuthTables } = await import('../helpers/db');
 const { POST: START } = await import('@/app/api/cli/device/start/route');
 const { POST: APPROVE } = await import('@/app/api/cli/device/approve/route');
 const { POST: TOKEN } = await import('@/app/api/cli/device/token/route');
+const { GET: GRANT } = await import('@/app/api/cli/device/grant/route');
 
 // Transport tests for `/api/cli/device/*` (Story MOTIR-1863 · Subtask MOTIR-1865) —
 // the three routes `motir login` and the /device page drive. Real Postgres, real
@@ -60,6 +62,12 @@ function jsonReq(path: string, body: unknown, headers: Record<string, string> = 
     headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
+}
+
+/** The page's read — a GET, so the code rides in the query string exactly as the CLI
+ * printed it in `verification_uri_complete`. */
+function grantReq(userCode: string, headers: Record<string, string> = {}) {
+  return new Request(`${BASE}/grant?user_code=${encodeURIComponent(userCode)}`, { headers });
 }
 
 function pollReq(deviceCode: string, clientId: string = CLI_CLIENT_ID) {
@@ -309,5 +317,310 @@ describe('POST /api/cli/device/approve', () => {
     const res = await APPROVE(jsonReq('approve', body, { cookie }));
     expect(res.status).toBe(409);
     expect(((await res.json()) as { code: string }).code).toBe('DEVICE_GRANT_NOT_PENDING');
+  });
+});
+
+describe('GET /api/cli/device/grant — the approval screen’s read', () => {
+  it('200 with what is connecting, no-store, and the row now CLAIMED', async () => {
+    const { owner } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const grant = await startedGrant('workbox');
+
+    const res = await GRANT(grantReq(grant.user_code, { cookie }));
+    expect(res.status).toBe(200);
+    // A single-use credential-in-waiting whose status changes underneath the page.
+    expect(res.headers.get('cache-control')).toBe('no-store');
+
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual([
+      'askedAt',
+      'clientId',
+      'expiresAt',
+      'hostname',
+      'scopes',
+      'status',
+      'userCode',
+    ]);
+    expect(body['status']).toBe('pending');
+    expect(body['hostname']).toBe('workbox');
+    expect(body['scopes']).toEqual(['read', 'work_items:write', 'integration']);
+    // The GET's side effect: the page can now approve (approve refuses an unclaimed code).
+    expect(
+      (await db.deviceCode.findUniqueOrThrow({ where: { deviceCode: grant.device_code } })).userId,
+    ).toBe(owner.id);
+  });
+
+  it('resolves a dash-grouped lowercase code to the same grant, echoing the canonical form', async () => {
+    const { owner } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+    const grant = await startedGrant();
+
+    const typed = `${grant.user_code.slice(0, 4)}-${grant.user_code.slice(4)}`.toLowerCase();
+    const res = await GRANT(grantReq(typed, { cookie }));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { userCode: string }).userCode).toBe(grant.user_code);
+  });
+
+  it('401 signed out — and a bearer PAT is NOT a credential here', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const grant = await startedGrant();
+
+    const signedOut = await GRANT(grantReq(grant.user_code));
+    expect(signedOut.status).toBe(401);
+
+    // A real, valid PAT. This route reads `getSession()` and never the bearer gate, so a
+    // token that authenticates the MCP transport authenticates nothing here — a PAT must
+    // not be able to enumerate in-flight grants or claim one.
+    const { token } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'probe',
+      expiresAt: null,
+      scopes: ['read'],
+    });
+    const withPat = await GRANT(grantReq(grant.user_code, { authorization: `Bearer ${token}` }));
+    expect(withPat.status).toBe(401);
+
+    // Neither attempt claimed the row.
+    expect(
+      (await db.deviceCode.findUniqueOrThrow({ where: { deviceCode: grant.device_code } })).userId,
+    ).toBeNull();
+  });
+
+  it('400 when user_code is missing or blank', async () => {
+    const { owner } = await createTestWorkspace();
+    signInAs(owner);
+    expect((await GRANT(new Request(`${BASE}/grant`))).status).toBe(400);
+    expect((await GRANT(grantReq('   '))).status).toBe(400);
+  });
+
+  it('404 unknown · 410 expired · 403 claimed by someone else', async () => {
+    const { owner: alice } = await createTestWorkspace();
+    const { owner: bob } = await createTestWorkspace();
+    const aliceCookie = await signInCookie(alice);
+    const bobCookie = await signInCookie(bob);
+
+    signInAs(alice);
+    const unknown = await GRANT(grantReq('ZZZZZZZZ', { cookie: aliceCookie }));
+    expect(unknown.status).toBe(404);
+    expect(((await unknown.json()) as { code: string }).code).toBe('DEVICE_GRANT_INVALID');
+
+    const stale = await startedGrant();
+    await db.deviceCode.update({
+      where: { deviceCode: stale.device_code },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    const expired = await GRANT(grantReq(stale.user_code, { cookie: aliceCookie }));
+    expect(expired.status).toBe(410);
+    expect(((await expired.json()) as { code: string }).code).toBe('DEVICE_GRANT_EXPIRED');
+
+    const grant = await startedGrant();
+    await claim(grant.user_code, aliceCookie); // Alice claimed it
+    signInAs(bob);
+    const forbidden = await GRANT(grantReq(grant.user_code, { cookie: bobCookie }));
+    expect(forbidden.status).toBe(403);
+    expect(((await forbidden.json()) as { code: string }).code).toBe('DEVICE_GRANT_FORBIDDEN');
+  });
+
+  it('409 when the session was gated but no cookie reached the plugin', async () => {
+    const { owner } = await createTestWorkspace();
+    signInAs(owner);
+    const grant = await startedGrant();
+
+    // `getSession()` is stubbed, so the route lets this through — but the plugin performs
+    // its OWN session read off the forwarded headers, and without a cookie the claim never
+    // lands. The page gets the same 409 `approve` answers for the same sequencing bug.
+    const res = await GRANT(grantReq(grant.user_code));
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('DEVICE_GRANT_NOT_CLAIMED');
+  });
+
+  it('200 for approved and for denied — terminal screens, not failures', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    signInAs(owner);
+
+    const approvedGrant = await startedGrant();
+    await claim(approvedGrant.user_code, cookie);
+    expect(
+      (
+        await APPROVE(
+          jsonReq(
+            'approve',
+            { userCode: approvedGrant.user_code, workspaceId: workspace.id },
+            { cookie },
+          ),
+        )
+      ).status,
+    ).toBe(200);
+
+    const deniedGrant = await startedGrant();
+    await claim(deniedGrant.user_code, cookie);
+    await auth.api.deviceDeny({
+      body: { userCode: deniedGrant.user_code },
+      headers: new Headers({ cookie }),
+    });
+
+    const approved = await GRANT(grantReq(approvedGrant.user_code, { cookie }));
+    expect(approved.status).toBe(200);
+    expect(((await approved.json()) as { status: string }).status).toBe('approved');
+
+    const denied = await GRANT(grantReq(deniedGrant.user_code, { cookie }));
+    expect(denied.status).toBe(200);
+    expect(((await denied.json()) as { status: string }).status).toBe('denied');
+  });
+});
+
+// ── the story gate's residue (Subtask MOTIR-1870) ────────────────────────────
+// Wire branches the transport suite above left unproven, found by measuring the
+// story's surface as a whole. Every one of them is a real request some client
+// will eventually send — a proxy that mangles a body, a grant that ages out
+// mid-approval, a second browser that races the first — and each has a DIFFERENT
+// status the page or the CLI branches on.
+
+describe('the malformed-body branches — a request the client did not mean to send', () => {
+  it('start still issues a grant when the body is unparseable or the hostname is not a string', async () => {
+    // `hostname` is optional and display-only, so neither case is worth a 400 —
+    // the login must not fail because a proxy mangled a body it did not need.
+    const garbled = new Request(`${BASE}/start`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'not json at all',
+    });
+    const res = await START(garbled);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { user_code: string }).user_code).toHaveLength(8);
+
+    const wrongType = await START(jsonReq('start', { hostname: { not: 'a string' } }));
+    expect(wrongType.status).toBe(200);
+    // Falls back to the placeholder, so the token label stays valid.
+    const row = await db.deviceCode.findFirstOrThrow({
+      where: { deviceCode: ((await wrongType.json()) as { device_code: string }).device_code },
+    });
+    expect(row.hostname).toBe('unknown host');
+  });
+
+  it('start skips the body read entirely when the client declares content-length: 0', async () => {
+    // A client that sends an explicit empty body (some HTTP stacks always do) must
+    // not have its login fail on a body the endpoint does not need.
+    const res = await START(
+      new Request(`${BASE}/start`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': '0' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const grant = (await res.json()) as { device_code: string };
+    const row = await db.deviceCode.findFirstOrThrow({
+      where: { deviceCode: grant.device_code },
+    });
+    expect(row.hostname).toBe('unknown host');
+  });
+
+  it('the poll answers RFC 8628 invalid_request — not a crash — for a non-JSON body', async () => {
+    const res = await TOKEN(
+      new Request(`${BASE}/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()) as { error: string }).toMatchObject({ error: 'invalid_request' });
+  });
+
+  it('approve answers 400 BAD_REQUEST for a non-JSON body', async () => {
+    const { owner } = await createTestWorkspace();
+    signInAs(owner);
+    const res = await APPROVE(
+      new Request(`${BASE}/approve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: 'nope',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()) as { code: string }).toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('POST /api/cli/device/approve — the two states the page renders differently', () => {
+  it('403 when the grant was claimed by a DIFFERENT signed-in user', async () => {
+    // The phishing-relevant case on the approval surface: a second browser cannot
+    // approve a grant the first one claimed. 403, not 409 — the page tells this
+    // user the request is not theirs rather than "already handled".
+    const { owner } = await createTestWorkspace();
+    const { owner: other, workspace: otherWorkspace } = await createTestWorkspace();
+    const grant = await startedGrant();
+    await claim(grant.user_code, await signInCookie(owner));
+
+    signInAs(other);
+    const res = await APPROVE(
+      jsonReq(
+        'approve',
+        { userCode: grant.user_code, workspaceId: otherWorkspace.id },
+        { cookie: await signInCookie(other) },
+      ),
+    );
+
+    expect(res.status).toBe(403);
+    expect((await res.json()) as { code: string }).toMatchObject({
+      code: 'DEVICE_GRANT_FORBIDDEN',
+    });
+    // Nothing was bound, so the rightful owner's grant is still approvable.
+    const row = await db.deviceCode.findUniqueOrThrow({ where: { userCode: grant.user_code } });
+    expect(row.status).toBe('pending');
+    expect(row.workspaceId).toBeNull();
+  });
+
+  it('410 when the code aged out while the human was still on the page', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    const grant = await startedGrant();
+    await claim(grant.user_code, cookie);
+    await db.deviceCode.update({
+      where: { userCode: grant.user_code },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+
+    signInAs(owner);
+    const res = await APPROVE(
+      jsonReq('approve', { userCode: grant.user_code, workspaceId: workspace.id }, { cookie }),
+    );
+
+    // 410 Gone — the page shows "this code expired, start again", which is a
+    // different screen from 404 (never existed) and from 409 (already handled).
+    expect(res.status).toBe(410);
+    expect((await res.json()) as { code: string }).toMatchObject({ code: 'DEVICE_GRANT_EXPIRED' });
+    expect(await db.apiToken.count()).toBe(0);
+  });
+});
+
+describe('POST /api/cli/device/token — the unbound grant', () => {
+  it('500 server_error, the ONE retryable state, for an approved grant with no binding', async () => {
+    // Unreachable through `approve` (the binding is written before the flip, under
+    // the row lock), so this pins the CONTRACT: if a row ever reaches the poll in
+    // that state, the CLI is told to retry rather than handed a token minted into
+    // nowhere. `deviceAuth.ts` maps `server_error` to `{ state: 'retry' }`.
+    const { owner, workspace } = await createTestWorkspace();
+    const cookie = await signInCookie(owner);
+    const grant = await startedGrant();
+    await claim(grant.user_code, cookie);
+    signInAs(owner);
+    await APPROVE(
+      jsonReq('approve', { userCode: grant.user_code, workspaceId: workspace.id }, { cookie }),
+    );
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { workspaceId: null },
+    });
+    await clearPollThrottle(grant.device_code);
+
+    const res = await TOKEN(pollReq(grant.device_code));
+
+    expect(res.status).toBe(500);
+    expect((await res.json()) as { error: string }).toMatchObject({ error: 'server_error' });
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await db.apiToken.count()).toBe(0);
   });
 });

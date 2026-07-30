@@ -188,7 +188,9 @@ export function findHelpTopic(name: string): HelpTopic | undefined {
 
 const EXAMPLES = [
   'EXAMPLES:',
-  '  $ motir auth login --server https://app.motir.co   # store a token',
+  '  $ motir login                                      # connect this terminal',
+  '  $ motir login --no-browser                         # …over SSH: print the code',
+  '  $ motir auth login --server https://app.motir.co   # paste a token you hold',
   '  $ motir link --project MOTIR                       # bind this folder',
   '  $ motir doctor                                     # preflight the setup',
   '  $ motir ready --kinds subtask --assignee me        # what can I pick up?',

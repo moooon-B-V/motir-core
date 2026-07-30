@@ -13,8 +13,15 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // resolution lives in one place — the exact shape `resolveTenantOrg` set for the
 // org half. Scoping is the WORKSPACE's connected set (a workspace is one
 // product, so its projects share the product's repos), matching the 7.5
-// code-graph index fan-out (`codeGraphIndexService`) — which resolves that
-// service's deferred "precise repo↔project association" note by design.
+// code-graph index fan-out (`codeGraphIndexService`).
+//
+// A PROJECT-scoped alternative now exists (MOTIR-1780): `project_repository` is
+// the project's repository SET, so `projectRepoSetService.listByProject` can answer
+// "this project's repos" where this function answers "the workspace's". This
+// resolver is DELIBERATELY left at workspace scope — re-pointing it would change
+// which repos a planning job sees, i.e. shipped, working AI-context behaviour, and
+// that adoption belongs to MOTIR-1754 (the BYOK code-index loop) alongside per-repo
+// index freshness. So the association is no longer missing, only unadopted here.
 //
 // A DB read ONLY (the 891 mirror rows) — never a GitHub API round-trip on the
 // submit path. No installation, or an installation with no granted repos,

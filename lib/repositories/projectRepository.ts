@@ -4,6 +4,7 @@ import {
   type PointScale,
   type Project,
   type ProjectAccessLevel,
+  type ProjectRepoOwnership,
   type WorkflowPolicyMode,
 } from '@prisma/client';
 import { db } from '@/lib/db';
@@ -718,6 +719,30 @@ export const projectRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
     return tx.project.update({ where: { id }, data });
+  },
+
+  /**
+   * Record WHO owns the project's repository SET and WHICH account it lands in
+   * (Story MOTIR-1775 · MOTIR-1780; `docs/decisions/project-repository-set.md`
+   * §3.2 / §3.4). Deliberately a PROJECT column pair, not a per-row field: §3.5
+   * forbids a set that is half in the user's account and half in Motir's, so the
+   * target is ONE choice for the whole set — which is also what lets MOTIR-711's
+   * transfer flow find every claimable repo of a project with one project-scoped
+   * read instead of a GitHub account scan.
+   *
+   * `tx` REQUIRED; the caller (`projectRepoSetService`) has already resolved +
+   * edit-gated the project and validated the account shape, so this is a plain
+   * id-keyed update.
+   */
+  async setRepoSetOwnership(
+    id: string,
+    data: { ownership: ProjectRepoOwnership; targetAccount: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({
+      where: { id },
+      data: { repoSetOwnership: data.ownership, repoSetTargetAccount: data.targetAccount },
+    });
   },
 
   /**

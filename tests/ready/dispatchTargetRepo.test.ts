@@ -4,7 +4,8 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { UnknownTargetRepoError } from '@/lib/workItems/errors';
-import { listConnectedRepoNames, resolveAuthoredTargetRepo } from '@/lib/workItems/targetRepo';
+import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
+import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
 import { runNextReady } from '@/lib/mcp/tools/nextReady';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import { runCreateWorkItem } from '@/lib/mcp/tools/createWorkItem';
@@ -146,18 +147,31 @@ describe('listConnectedRepoNames', () => {
 
     const names = await listConnectedRepoNames(fx.ctx);
     // The CLI resolves BOTH to `<root>/widgets`, so dispatch cannot tell them
-    // apart — carrying one entry is the honest model of that.
-    expect(names).toEqual([{ name: 'widgets', repoRef: 'acme/widgets' }]);
+    // apart — carrying one entry is the honest model of that. The coordinates
+    // (MOTIR-1783) come from the winning row, so the URL an agent clones and the
+    // name it checks out into always describe the same repository.
+    expect(names).toEqual([
+      {
+        name: 'widgets',
+        repoRef: 'acme/widgets',
+        cloneUrl: 'https://github.com/acme/widgets.git',
+        defaultBranch: 'main',
+      },
+    ]);
   });
 });
 
-describe('resolveAuthoredTargetRepo — connected-set validation', () => {
+describe('authored-pin validation falls back to the CONNECTED set for a project with no repo set', () => {
   it('accepts a connected repo by bare name and by `owner/name`', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'motir-core', { owner: 'moooon' });
 
-    expect(await resolveAuthoredTargetRepo('motir-core', fx.ctx)).toBe('motir-core');
-    expect(await resolveAuthoredTargetRepo('moooon/motir-core', fx.ctx)).toBe('motir-core');
+    expect(await resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx)).toBe(
+      'motir-core',
+    );
+    expect(
+      await resolveAuthoredTargetRepoInProject('moooon/motir-core', fx.projectId, fx.ctx),
+    ).toBe('motir-core');
   });
 
   it("matches case-insensitively but STORES the connected repo's own casing", async () => {
@@ -165,32 +179,34 @@ describe('resolveAuthoredTargetRepo — connected-set validation', () => {
     await connectRepo(fx, 'Motir-Core');
     // Git-host names are case-insensitive; storing the canonical casing is what
     // keeps the column and `.motir.json`'s directory name from disagreeing.
-    expect(await resolveAuthoredTargetRepo('motir-core', fx.ctx)).toBe('Motir-Core');
+    expect(await resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx)).toBe(
+      'Motir-Core',
+    );
   });
 
   it('normalizes a blank / null value to "unpinned" WITHOUT touching the connected set', async () => {
     const fx = await makeWorkItemFixture(); // no repos connected at all
-    expect(await resolveAuthoredTargetRepo(null, fx.ctx)).toBeNull();
-    expect(await resolveAuthoredTargetRepo('   ', fx.ctx)).toBeNull();
+    expect(await resolveAuthoredTargetRepoInProject(null, fx.projectId, fx.ctx)).toBeNull();
+    expect(await resolveAuthoredTargetRepoInProject('   ', fx.projectId, fx.ctx)).toBeNull();
   });
 
   it('rejects an unknown repo with a typed error naming the connected set', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'motir-core');
 
-    await expect(resolveAuthoredTargetRepo('motir-ai', fx.ctx)).rejects.toBeInstanceOf(
-      UnknownTargetRepoError,
-    );
-    await expect(resolveAuthoredTargetRepo('motir-ai', fx.ctx)).rejects.toThrow(
-      /Connected repositories: moooon\/motir-core/,
-    );
+    await expect(
+      resolveAuthoredTargetRepoInProject('motir-ai', fx.projectId, fx.ctx),
+    ).rejects.toBeInstanceOf(UnknownTargetRepoError);
+    await expect(
+      resolveAuthoredTargetRepoInProject('motir-ai', fx.projectId, fx.ctx),
+    ).rejects.toThrow(/Connected repositories: moooon\/motir-core/);
   });
 
   it('rejects ANY pin when the workspace has no connected repositories, and says so', async () => {
     const fx = await makeWorkItemFixture();
-    await expect(resolveAuthoredTargetRepo('motir-core', fx.ctx)).rejects.toThrow(
-      /no connected repositories/,
-    );
+    await expect(
+      resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
+    ).rejects.toThrow(/no connected repositories/);
   });
 });
 

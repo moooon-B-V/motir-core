@@ -54,6 +54,103 @@
       "speed": "倍速"
     }
   },
+  "device": {
+    "heading": {
+      "entry": "连接MotirCLI",
+      "confirm": "连接这个终端？",
+      "approved": "终端已连接",
+      "denied": "已拒绝请求",
+      "expired": "该验证码已过期",
+      "unknown": "无法识别该验证码",
+      "signedOut": "登录后连接CLI"
+    },
+    "subhead": {
+      "entry": "输入终端上显示的验证码。",
+      "entryPrefilled": "确认它与终端上显示的验证码一致，然后继续。",
+      "confirm": "批准前请逐项核对——这是它获得权限前的唯一关口。",
+      "approved": "无需再做其他操作。",
+      "denied": "做得对——对于自己没有申请过的验证码，就该如此。",
+      "expired": "验证码有效期为{minutes}分钟。",
+      "unknown": "请检查是否输错，或重新开始。",
+      "signedOut": "登录后会直接回到这个验证码。"
+    },
+    "code": {
+      "label": "设备验证码",
+      "placeholder": "XXXX-XXXX",
+      "helper": "共八位。小写字母和短横线都可以——其中不包含O、I、0和1，不会认错。",
+      "helperPrefilled": "已从终端打开的链接中自动填入。",
+      "helperTypo": "通常只是差了一个字符。",
+      "incomplete": "设备验证码为八位。"
+    },
+    "continue": "继续",
+    "checking": "正在核对验证码…",
+    "foot": {
+      "notYou": "不是你自己运行的<cmd>motir login</cmd>？关闭本页即可——未经你批准，不会连接任何东西。",
+      "close": "可以关闭本页了。"
+    },
+    "confirm": {
+      "you": "当前账号",
+      "notYou": "不是你？<link>退出登录</link>并换个账号登录。",
+      "connecting": "请求方",
+      "agent": "{hostname}上的MotirCLI",
+      "agentUnknownHost": "MotirCLI",
+      "askedAgo": "验证码<chip>{code}</chip> · 申请于{ago}",
+      "workspace": "工作区",
+      "workspacePicker": "该终端可访问的工作区",
+      "workspaceHelp": "你共属于{count}个工作区——它只能看到选中的这一个。",
+      "workspaceOnly": "你唯一的工作区。",
+      "itCan": "它可以",
+      "cant": "不可以：归档或删除工作项、管理成员、变更计费。",
+      "expires": "有效期",
+      "expiresValue": "{days}天后过期",
+      "expiresHelp": "在API令牌中撤销即可断开连接。",
+      "warning": "仅当你刚在{hostname}上亲自运行了<cmd>motir login</cmd>时才批准。如果这个验证码是别人发给你的——不管是聊天、邮件还是工单——请<strong>拒绝</strong>：批准就等于以你的身份，把上述全部权限交给对方的终端。",
+      "warningUnknownHost": "仅当你刚亲自运行了<cmd>motir login</cmd>时才批准。如果这个验证码是别人发给你的——不管是聊天、邮件还是工单——请<strong>拒绝</strong>：批准就等于以你的身份，把上述全部权限交给对方的终端。",
+      "actions": "批准或拒绝该终端",
+      "approve": "批准并连接",
+      "deny": "拒绝"
+    },
+    "approved": {
+      "body": "回到终端即可——<cmd>motir login</cmd>已完成，{hostname}已登录到<strong>{workspace}</strong>。",
+      "bodyUnknownHost": "回到终端即可——<cmd>motir login</cmd>已完成，它已登录到<strong>{workspace}</strong>。",
+      "bodyAlready": "该验证码此前已被批准。回到终端即可——<cmd>motir login</cmd>已完成，连接已建立。",
+      "tokenNote": "我们在该工作区创建了名为<chip>{label}</chip>的令牌，{days}天后过期；撤销它就会断开那个终端。",
+      "viewTokens": "查看API令牌"
+    },
+    "denied": {
+      "body": "未连接任何东西，也没有创建令牌。那个终端会提示请求被拒绝。",
+      "retry": "误点了拒绝？重新运行<cmd>motir login</cmd>获取新验证码——这个已不能再用。",
+      "another": "输入另一个验证码"
+    },
+    "expired": {
+      "body": "<chip>{code}</chip>已失效，未连接任何东西。重新运行<cmd>motir login</cmd>获取新验证码。",
+      "newCode": "输入新验证码",
+      "terminalNote": "你的终端已停止等待，并提示验证码已过期。"
+    },
+    "unknown": {
+      "body": "验证码为八位，且{minutes}分钟后过期。如果你的验证码比这更早，请重新运行<cmd>motir login</cmd>。",
+      "retry": "重试"
+    },
+    "signedOut": {
+      "carriedLabel": "请求方",
+      "carriedValue": "MotirCLI · 验证码<chip>{code}</chip>",
+      "carriedNoCode": "MotirCLI——尚无验证码",
+      "body": "只有你登录的那个账号能批准它，也只能选择该账号名下的工作区。",
+      "cta": "登录后继续"
+    },
+    "signInCarried": {
+      "label": "正在连接CLI",
+      "value": "MotirCLI · 验证码<chip>{code}</chip>",
+      "valueNoCode": "MotirCLI"
+    },
+    "errors": {
+      "claimedByOther": "该验证码是由另一个Motir账号打开的。请改用那个账号登录，或重新运行motir login获取新验证码。",
+      "workspaceForbidden": "你不是该工作区的成员，因此无法将终端连接到它。请选择其他工作区。",
+      "notClaimed": "我们丢失了该验证码的会话。请重新输入以继续。",
+      "network": "无法连接Motir。请检查网络后重试。",
+      "unexpected": "我们这边出了点问题。请重试，或运行motir login获取新验证码。"
+    }
+  },
   "markdownEditor": {
     "mentionPeople": "成员",
     "mentionWorkItems": "工作项",
@@ -2101,6 +2198,24 @@
     "apiTokens": {
       "heading": "API 令牌",
       "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
+      "cli": {
+        "title": "连接 CLI",
+        "subtitle": "在终端里运行 Motir——<mono>motir next</mono>、<mono>motir run</mono>、<mono>motir auto</mono>。",
+        "step1": "1 · 安装",
+        "step2": "2 · 登录",
+        "copyInstall": "复制安装命令",
+        "copySignIn": "复制登录命令",
+        "next": "<mono>motir login</mono> 会显示一个短代码并在浏览器中打开 Motir。在那里确认后终端即已连接——不需要手动复制任何令牌。",
+        "headless": "这台机器上没有浏览器？<mono>motir login</mono> 会打印代码和链接，你可以在任意设备上打开，因此 SSH 会话和容器都用同一条命令。若是无人值守的 agent，改为设置 <mono>MOTIR_TOKEN</mono>。",
+        "guide": "阅读 CLI 指南",
+        "tie": "已确认的终端会以 <code>CLI · {host}</code> 出现在下方列表中——在那里吊销它即可断开该终端。",
+        "tieEmpty": "已确认的终端将以 <code>CLI · {host}</code> 出现在下方列表中。",
+        "copyFailed": "复制失败——请手动选中并复制该命令。",
+        "toast": {
+          "title": "已复制",
+          "body": "粘贴到终端并按回车。"
+        }
+      },
       "card": {
         "title": "你的令牌",
         "subtitle": "仅在创建时显示一次，之后只保存哈希值。",

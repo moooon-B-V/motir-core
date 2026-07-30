@@ -7,8 +7,22 @@
 #
 #   docker run --rm -it \
 #     -v "$PWD:/workspace" \
+#     -e MOTIR_TOKEN -e MOTIR_SERVER \
+#     motir-sandbox:base motir auto --agent "<cmd>"
+#
+# The CREDENTIAL MOUNT IS OPTIONAL (MOTIR-1877). `MOTIR_TOKEN` / `MOTIR_SERVER`
+# are read by every command (the resolution ladder, MOTIR-1876), so a fresh
+# machine, a CI runner, or any box that never ran a host login gets in with two
+# environment variables and no host state at all. Mounting a host credential
+# still works and is still read-only:
+#
+#   docker run --rm -it \
+#     -v "$PWD:/workspace" \
 #     -v "$HOME/.config/motir:/home/node/.config/motir:ro" \
 #     motir-sandbox:base motir auto --agent "<cmd>"
+#
+# And with NO mount, `$HOME/.config/motir` inside the container is writable, so
+# `motir login` — a device grant, headless by construction — runs in here.
 #
 # EVERY message this script prints goes to STDERR. The CLI's delivery contract
 # reserves stdout for the prompt alone (`motir next --print | pbcopy`), so an
@@ -27,14 +41,38 @@ if [ ! -w "$WORKSPACE" ]; then
     exit 1
 fi
 
-# The PAT lives in a READ-ONLY mount by design: the container consumes the
-# credential, it never mints or rotates one. `motir auth login` therefore has to
-# be run on the HOST — say so up front instead of letting it fail on a read-only
-# filesystem mid-run.
-if [ ! -f "$CONFIG_DIR/config.json" ]; then
-    echo "motir-sandbox: no Motir credential at $CONFIG_DIR/config.json." >&2
-    echo "motir-sandbox: run \`motir auth login\` on the HOST, then mount it read-only:" >&2
-    echo "motir-sandbox:   -v \"\$HOME/.config/motir:$CONFIG_DIR:ro\"" >&2
+# THREE ways a credential gets in here, and the message names all three
+# (MOTIR-1877). It used to name one — mount a host credential, read-only — which
+# is a correct instruction only on the machine you already logged in on; a fresh
+# box, a CI runner and a container started from a published image had no path at
+# all. The order below is the order to TRY them: the environment tier needs no
+# state anywhere, `motir login` needs only a browser on some other device, and
+# the mount needs a prior host login.
+#
+# `MOTIR_TOKEN` counts as a credential, so a run that carries one says nothing:
+# a warning that fires on a working configuration teaches people to ignore it.
+
+# Can `motir login` write the credential from in here? The mount is the reason
+# it usually cannot — but the dir may not exist yet, in which case the CLI
+# creates it, so the question is really about the nearest EXISTING ancestor.
+config_dir_writable() {
+    local dir="$CONFIG_DIR"
+    while [ ! -e "$dir" ] && [ "$dir" != "/" ]; do
+        dir=$(dirname "$dir")
+    done
+    [ -w "$dir" ]
+}
+
+if [ -z "${MOTIR_TOKEN:-}" ] && [ ! -f "$CONFIG_DIR/config.json" ]; then
+    echo "motir-sandbox: no Motir credential — MOTIR_TOKEN is unset and there is no $CONFIG_DIR/config.json." >&2
+    echo "motir-sandbox: three ways in, in the order worth trying:" >&2
+    echo "motir-sandbox:   1. pass one from the host env:  -e MOTIR_TOKEN -e MOTIR_SERVER" >&2
+    if config_dir_writable; then
+        echo "motir-sandbox:   2. log in from in here:        \`motir login\` (prints a code; approve it in a browser anywhere)" >&2
+    else
+        echo "motir-sandbox:   2. \`motir login\` in here needs a WRITABLE $CONFIG_DIR — drop the :ro mount to use it" >&2
+    fi
+    echo "motir-sandbox:   3. mount a host credential:     -v \"\$HOME/.config/motir:$CONFIG_DIR:ro\"" >&2
 fi
 
 # A workspace with no project link still works (`motir link` can create one),

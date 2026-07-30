@@ -19,6 +19,21 @@
 # verified auto-approve flags are documented in ./README.md's profile matrix;
 # nothing here is asserted from memory.
 #
+# THE MOTIR CREDENTIAL IS NO LONGER MOUNT-ONLY (MOTIR-1877). Every service also
+# passes `MOTIR_TOKEN` / `MOTIR_SERVER` through from the host environment — the
+# resolution ladder MOTIR-1876 shipped, `GH_TOKEN` / `GH_HOST` one-for-one — so a
+# machine that never ran `motir auth login` still has a way in, which is the CI
+# and fresh-box case the mount cannot serve. An env credential outranks the
+# mounted one and is never written to disk.
+#
+# The `~/.config/motir` bind below is therefore OPTIONAL in the sense that
+# matters: with `MOTIR_TOKEN` exported it carries nothing the run needs. It stays
+# in the file because compose cannot express a conditional bind mount, and
+# because it is still the right default for the laptop you logged in on. If that
+# host directory does not exist, docker materialises it as an empty one — inert
+# here, but the mount-free form is `docker run` (see ./README.md § Run) or a
+# devcontainer, both of which simply omit it.
+#
 # CodeGraph interaction (7.9.7d, resolved by 7.9.7f + 7.9.7g): the image wires
 # the codegraph MCP server into each agent that codegraph has a target for,
 # writing that agent's own config file. For `codex` (~/.codex/config.toml),
@@ -55,11 +70,19 @@ services:
     init: true
     stdin_open: true
     tty: true
+    environment:
+      # The mount-free credential tier. Unset on the host means an EMPTY value
+      # here, which the CLI reads as absent (cli/cli#7800's bug, avoided at the
+      # single read point) — so exporting nothing changes nothing.
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
     volumes:
       # The ONLY writable host surface.
       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
-      # The PAT, READ-ONLY: the container consumes the credential and never
-      # mints or rotates one (`motir auth login` is a HOST command).
+      # The PAT, READ-ONLY: the container consumes a mounted credential and
+      # never mints or rotates one. Optional — see the header: with MOTIR_TOKEN
+      # exported nothing here is needed, and `motir login` inside a container
+      # started WITHOUT this bind writes to its own config dir.
       - ${HOME}/.config/motir:/home/node/.config/motir:ro
     # Deliberately absent, and asserted absent by the sandbox test:
     #   * no /var/run/docker.sock — the container must not be able to escape by
@@ -86,6 +109,8 @@ services:
     stdin_open: true
     tty: true
     environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
@@ -105,6 +130,8 @@ services:
     stdin_open: true
     tty: true
     environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
@@ -123,6 +150,9 @@ services:
     init: true
     stdin_open: true
     tty: true
+    environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
     volumes:
       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
       - ${HOME}/.config/motir:/home/node/.config/motir:ro
@@ -144,6 +174,9 @@ services:
     init: true
     stdin_open: true
     tty: true
+    environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
     volumes:
       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
       - ${HOME}/.config/motir:/home/node/.config/motir:ro
@@ -163,6 +196,9 @@ services:
     init: true
     stdin_open: true
     tty: true
+    environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
     volumes:
       - ${MOTIR_WORKSPACE:-../../../..}:/workspace
       - ${HOME}/.config/motir:/home/node/.config/motir:ro
@@ -183,6 +219,8 @@ services:
     stdin_open: true
     tty: true
     environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
       # The documented headless path — set it on the host and it passes through.
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
     volumes:
@@ -203,6 +241,8 @@ services:
     stdin_open: true
     tty: true
     environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
       # Aider's credential IS the model key it reads from the environment.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -227,6 +267,8 @@ services:
     stdin_open: true
     tty: true
     environment:
+      MOTIR_TOKEN: ${MOTIR_TOKEN:-}
+      MOTIR_SERVER: ${MOTIR_SERVER:-}
       # Goose stores provider secrets in the OS keyring by default, which a
       # container has no access to; this makes it fall back to the file-based
       # secrets.yaml inside the mounted config dir.

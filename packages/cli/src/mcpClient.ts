@@ -99,6 +99,22 @@ export interface SprintList {
   sprints: SprintSummary[];
 }
 
+/** One project as `list_projects` reports it (lib/mcp/tools/listProjects.ts,
+ * `McpProjectRow`). `key` is exactly what every other tool's `projectKey`
+ * argument takes, so a resolved project passes straight on with no field-name
+ * translation. */
+export interface ProjectSummary {
+  key: string;
+  id: string;
+  name: string;
+  slug: string;
+  accessLevel: string;
+}
+
+export interface ProjectList {
+  projects: ProjectSummary[];
+}
+
 /** A `search_work_items` result row (the `WorkItemListItemDto` subset the CLI
  * renders); `status` is the raw workflow status key.
  *
@@ -519,6 +535,13 @@ export class MotirClient {
 
   whoami(): Promise<WhoamiResult> {
     return this.callStructured<WhoamiResult>('whoami');
+  }
+
+  /** The token workspace's browsable projects (MOTIR-1879). Takes no arguments:
+   * the workspace is the one the PAT is bound to. An empty workspace is an
+   * EMPTY LIST, not an error. */
+  listProjects(): Promise<ProjectList> {
+    return this.callStructured<ProjectList>('list_projects');
   }
 
   listReady(args: {

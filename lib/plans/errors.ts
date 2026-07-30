@@ -104,6 +104,35 @@ export class PlanItemTargetMissingError extends Error {
   }
 }
 
+/**
+ * A proposal's `targetRepo` names a repository that is NOT in the PROJECT's
+ * repository set (Story MOTIR-1775 · MOTIR-1884) — a typo, or a repo that belongs
+ * to a sibling project of the same workspace.
+ *
+ * Why its own class rather than re-throwing `UnknownTargetRepoError`: a plan is a
+ * SET of proposals, so "unknown repo X" is not actionable on its own — the
+ * reviewer needs to know WHICH proposal carries it. The underlying message (which
+ * names the project's known repositories, so the author can self-correct) is
+ * carried through verbatim.
+ *
+ * → 422, the same status the identical mistake gets on the direct work-item write
+ * path (`UnknownTargetRepoError` through the route layer's blanket
+ * `WorkItemError` mapping) — a bad pin means the same thing however it arrived.
+ * Raised BEFORE the approve transaction opens, so the tree and the plan's status
+ * are untouched, exactly like the confirmation gate below.
+ */
+export class PlanItemUnknownTargetRepoError extends Error {
+  readonly code = 'PLAN_ITEM_UNKNOWN_TARGET_REPO' as const;
+  constructor(
+    readonly planItemId: string,
+    readonly repoName: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PlanItemUnknownTargetRepoError';
+  }
+}
+
 // ── The persist-time confirmation gate (Subtask 7.12.5 · MOTIR-911) ───────────
 // The three rejections `validatePlanProposals` raises BEFORE approve writes
 // anything. They are deliberately distinct from the errors above: those surface

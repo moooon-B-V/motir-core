@@ -27,7 +27,12 @@ import {
   setCredential,
 } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
-import { DEFAULT_TOOLS, startTestMcpServer, type TestMcpServer } from './helpers/mcpTestServer.js';
+import {
+  DEFAULT_TOOLS,
+  projectRow,
+  startTestMcpServer,
+  type TestMcpServer,
+} from './helpers/mcpTestServer.js';
 
 // The NETWORK commands (Subtask 7.9.5 · MOTIR-883) — `auth`, `link`, the read
 // trio, and the session plumbing under them — exercised as the real functions,
@@ -409,13 +414,53 @@ describe('motir link', () => {
     expect(server.calls).toHaveLength(0);
   });
 
-  it('refuses without a project when there is no TTY to ask for one', async () => {
+  it('resolves the SINGLE project with no flag and no prompt, and says which it chose', async () => {
     setCredential(server.url, { token: TOKEN });
+    const io = capture();
+
+    await linkCommand({ server: server.url });
+
+    expect(readLink()).toMatchObject({ project: 'PROD' });
+    // Resolution replaces the probe: `list_projects` enumerates what the token
+    // can reach, which IS proof of access — no `list_ready` round trip needed.
+    const names = server.calls.map((c) => c.name);
+    expect(names).toContain('list_projects');
+    expect(names).not.toContain('list_ready');
+    expect(io.stderr()).toContain('the only project in workspace acme');
+  });
+
+  it('refuses without a project when there are SEVERAL and no TTY to ask at', async () => {
+    setCredential(server.url, { token: TOKEN });
+    server.script({
+      list_projects: {
+        structured: { projects: [projectRow('PROD'), projectRow('ACME')] },
+      },
+    });
     capture();
 
     await expect(linkCommand({ server: server.url })).rejects.toMatchObject({
       hint: expect.stringMatching(/--project/),
     });
+    expect(existsSync(join(root, '.motir.json'))).toBe(false);
+  });
+
+  it('an explicit --project still wins, and still goes through the access probe', async () => {
+    setCredential(server.url, { token: TOKEN });
+    server.script({
+      list_projects: {
+        structured: { projects: [projectRow('PROD'), projectRow('ACME')] },
+      },
+    });
+    capture();
+
+    await linkCommand({ server: server.url, project: 'ACME' });
+
+    expect(readLink()).toMatchObject({ project: 'ACME' });
+    // A key the user ASSERTED is validated, not enumerated — the two paths stay
+    // distinct, so an explicit key is never silently replaced by a resolved one.
+    const names = server.calls.map((c) => c.name);
+    expect(names).toContain('list_ready');
+    expect(names).not.toContain('list_projects');
   });
 
   it('a bare re-run SHOWS the existing binding instead of rewriting it', async () => {
@@ -451,8 +496,9 @@ describe('motir link', () => {
     expect(() => linkRemoveCommand('motir-core')).toThrow(/No override for repo/);
   });
 
-  function readLink(): { repos?: Record<string, string> } {
+  function readLink(): { project?: string; repos?: Record<string, string> } {
     return JSON.parse(readFileSync(join(root, '.motir.json'), 'utf8')) as {
+      project?: string;
       repos?: Record<string, string>;
     };
   }

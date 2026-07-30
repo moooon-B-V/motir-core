@@ -8,7 +8,8 @@ import { useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signIn } from '@/lib/auth/client';
-import { AuthShell, OrDivider, FormAlert, IdeaCarried } from '../_components/AuthShell';
+import { formatUserCode, readDeviceUserCode } from '@/lib/cliDevice/userCode';
+import { AuthShell, CodeChip, OrDivider, FormAlert, IdeaCarried } from '../_components/AuthShell';
 import { GoogleButton } from '../_components/GoogleButton';
 
 // Where a visitor who arrived from the marketing hero lands after auth: the
@@ -58,6 +59,7 @@ function SignInShell() {
 
 function SignInForm() {
   const t = useTranslations('auth');
+  const tDevice = useTranslations('device');
   const router = useRouter();
   const searchParams = useSearchParams();
   // A cross-origin idea draft handed off from the marketing hero (Subtask 7.22.2
@@ -67,6 +69,13 @@ function SignInForm() {
   const draftId = searchParams.get('draft');
   const callbackURL = searchParams.get('next') ?? (draftId ? ONBOARDING_ENTRY_PATH : '/dashboard');
   const [carriedIdea, setCarriedIdea] = useState<string | null>(null);
+  // The CLI-connect hand-off (Story MOTIR-1863 · Subtask MOTIR-1867): `/device`
+  // sends a signed-out visitor here with `?next=/device?user_code=…`, and this
+  // banner is the ONLY change the `design/cli-connect/` mock asks of the shipped
+  // sign-in card — it tells the reader the code survived the boundary, which is
+  // what makes the round trip feel like one flow rather than two. `null` means
+  // "not a device hand-off"; `''` means a bare `/device` return with no code yet.
+  const deviceUserCode = readDeviceUserCode(callbackURL);
 
   // Claim the draft ONCE on mount: POST swaps the opaque id for the idea text and
   // plants the `motir_pending_idea` cookie server-side. On any failure (missing /
@@ -146,6 +155,16 @@ function SignInForm() {
   return (
     <AuthShell headline={t('welcomeBack')} subhead={t('signInSubhead')}>
       {carriedIdea ? <IdeaCarried label={t('ideaCarriedLabel')}>{carriedIdea}</IdeaCarried> : null}
+      {deviceUserCode !== null ? (
+        <IdeaCarried label={tDevice('signInCarried.label')}>
+          {deviceUserCode
+            ? tDevice.rich('signInCarried.value', {
+                code: formatUserCode(deviceUserCode),
+                chip: (chunks) => <CodeChip>{chunks}</CodeChip>,
+              })
+            : tDevice('signInCarried.valueNoCode')}
+        </IdeaCarried>
+      ) : null}
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'email' ? (

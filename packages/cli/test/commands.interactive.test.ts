@@ -1,8 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_TOOLS, startTestMcpServer, type TestMcpServer } from './helpers/mcpTestServer.js';
+import {
+  DEFAULT_TOOLS,
+  projectRow,
+  startTestMcpServer,
+  type TestMcpServer,
+} from './helpers/mcpTestServer.js';
 
 // The INTERACTIVE branches of `auth login` and `link` (Subtask 7.9.5 ·
 // MOTIR-883).
@@ -90,23 +95,49 @@ describe('motir auth login, interactively', () => {
 });
 
 describe('motir link, interactively', () => {
-  it('asks for the project key when neither a flag nor an existing link supplies one', async () => {
+  // Before MOTIR-1880 this asked for a project KEY whenever no flag supplied
+  // one — including in the single-project workspace where there was nothing to
+  // choose. It now RESOLVES (see projectLink.test.ts for the resolution rules);
+  // the prompt survives only for the genuinely ambiguous case, and as a PICKER.
+  it('does NOT ask when the workspace has exactly one project — it resolves it', async () => {
     setCredential(server.url, { token: TOKEN });
-    prompts.promptLine.mockResolvedValue('PROD');
 
     await linkCommand({ server: server.url });
 
-    expect(prompts.promptLine).toHaveBeenCalledWith('Project key');
+    expect(prompts.promptLine).not.toHaveBeenCalled();
     expect(JSON.parse(readFileSync(join(root, '.motir.json'), 'utf8'))).toMatchObject({
       project: 'PROD',
     });
   });
 
+  it('shows a picker when there are several, and links what was picked', async () => {
+    setCredential(server.url, { token: TOKEN });
+    server.script({
+      list_projects: {
+        structured: { projects: [projectRow('PROD', 'Prodect'), projectRow('ACME', 'Acme')] },
+      },
+    });
+    prompts.promptLine.mockResolvedValue('2');
+
+    await linkCommand({ server: server.url });
+
+    expect(prompts.promptLine).toHaveBeenCalledWith('Project [1-2, or a key]');
+    expect(JSON.parse(readFileSync(join(root, '.motir.json'), 'utf8'))).toMatchObject({
+      project: 'ACME',
+    });
+  });
+
   it('refuses an empty answer rather than writing a link with no project', async () => {
     setCredential(server.url, { token: TOKEN });
+    server.script({
+      list_projects: {
+        structured: { projects: [projectRow('PROD', 'Prodect'), projectRow('ACME', 'Acme')] },
+      },
+    });
     prompts.promptLine.mockResolvedValue('');
 
-    await expect(linkCommand({ server: server.url })).rejects.toThrow(/project key is required/);
+    await expect(linkCommand({ server: server.url })).rejects.toThrow(/not one of/);
+    expect(existsSync(join(root, '.motir.json'))).toBe(false);
   });
 
   it('refuses when the token resolves no workspace and none was named', async () => {

@@ -5,7 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { assembleDispatchPrompt } from '@/lib/dispatch/promptTemplate';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { listConnectedRepoNames, resolveDispatchTargetRepo } from '@/lib/workItems/targetRepo';
+import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The DISPATCH-PROMPT read (Story 7.9 · MOTIR-1802) — resolve everything the
@@ -63,9 +63,10 @@ export const dispatchPromptService = {
    * Reads, in parallel where they are independent: the item (access-gated), its
    * parent, its `is_blocked_by` dependencies, its READINESS (for the inherited
    * session branch — the one thing that picks the GIT WORKFLOW variant), and the
-   * workspace's connected repo set (for `targetRepo`). `targetRepo` resolves
-   * through the SAME `resolveDispatchTargetRepo` the ready dispatch payload uses
-   * (MOTIR-1804), so the two dispatch surfaces can never route differently.
+   * project's repo domain (for `targetRepo` + its coordinates). The repo resolves
+   * through the SAME `resolveItemDispatchRepo` the ready dispatch payload uses
+   * (MOTIR-1804 · MOTIR-1783), so the two dispatch surfaces can never route
+   * differently — including the project → workspace scope ladder.
    *
    * Any work item can be asked for a prompt — not just a ready one. Readiness is
    * the CLI's concern (it dispatches from `claim_next_ready`); this is the
@@ -84,14 +85,14 @@ export const dispatchPromptService = {
     }
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
-    const [parentRow, blockerKeys, readiness, connectedRepos] = await Promise.all([
+    const [parentRow, blockerKeys, readiness, dispatchRepo] = await Promise.all([
       item.parentId ? workItemRepository.findById(item.parentId) : Promise.resolve(null),
       resolveBlockerKeys(item.id),
       workItemsService.getReadiness(item.id, ctx),
-      listConnectedRepoNames(ctx),
+      resolveItemDispatchRepo(item.targetRepo, projectId, ctx),
     ]);
 
-    const targetRepo = resolveDispatchTargetRepo(item.targetRepo, connectedRepos);
+    const targetRepo = dispatchRepo?.name ?? null;
     const assembled = assembleDispatchPrompt({
       key: item.identifier,
       title: item.title,
@@ -123,6 +124,11 @@ export const dispatchPromptService = {
       key: item.identifier,
       prompt: assembled.prompt,
       targetRepo,
+      // The same coordinates the ready dispatch payload carries (MOTIR-1783) —
+      // present with a null value whenever Motir cannot say, so a CLI reading
+      // either surface handles one shape.
+      targetRepoCloneUrl: dispatchRepo?.cloneUrl ?? null,
+      targetRepoDefaultBranch: dispatchRepo?.defaultBranch ?? null,
       workflowMode: assembled.workflowMode,
       sessionBranch: assembled.sessionBranch,
     };

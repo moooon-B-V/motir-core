@@ -160,9 +160,12 @@ describe('toReadyItemDispatchDto', () => {
         parent: { identifier: 'PROD-1' },
         contextRefs: ['lib/dto/ready.ts', 'lib/mappers/readyMappers.ts'],
         sessionBranch: null,
-        // The RESOLVED target repo (MOTIR-1804) is supplied by the service, not
-        // read off the row — the mapper's job is only to carry it through.
+        // The RESOLVED target repo (MOTIR-1804) + its coordinates (MOTIR-1783)
+        // are supplied by the service, not read off the row — the mapper's job
+        // is only to carry them through.
         targetRepo: 'motir-core',
+        targetRepoCloneUrl: 'https://github.com/moooon/motir-core.git',
+        targetRepoDefaultBranch: 'main',
       },
     );
 
@@ -177,6 +180,8 @@ describe('toReadyItemDispatchDto', () => {
     expect(dto.runCommand).toBe('motir run PROD-7');
     expect(dto.runCommand).toMatch(/^motir run PROD-\d+$/);
     expect(dto.targetRepo).toBe('motir-core');
+    expect(dto.targetRepoCloneUrl).toBe('https://github.com/moooon/motir-core.git');
+    expect(dto.targetRepoDefaultBranch).toBe('main');
   });
 
   it('no blockers → empty blockerKeys; no parent → null parentKey', () => {
@@ -187,12 +192,18 @@ describe('toReadyItemDispatchDto', () => {
       contextRefs: [],
       sessionBranch: null,
       targetRepo: null,
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
     });
     expect(dto.blockerKeys).toEqual([]);
     expect(dto.parentKey).toBeNull();
     expect(dto.contextRefs).toEqual([]);
     // No pin and nothing to fall back to → the honest "Motir cannot say".
     expect(dto.targetRepo).toBeNull();
+    // …and the coordinates are PRESENT-and-null, never omitted keys: a consumer
+    // reads one shape whether or not Motir knows the repo.
+    expect(dto).toHaveProperty('targetRepoCloneUrl', null);
+    expect(dto).toHaveProperty('targetRepoDefaultBranch', null);
   });
 });
 

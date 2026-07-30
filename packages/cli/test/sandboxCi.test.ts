@@ -102,6 +102,9 @@ describe('the sandbox smoke harness', () => {
     'loop-smoke.sh',
     'failure-smoke.sh',
     'confinement.sh',
+    'env-credential-smoke.sh',
+    'login-smoke.sh',
+    'readonly-login-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -132,6 +135,58 @@ describe('the sandbox smoke harness', () => {
     // mount (MOTIR-1836), so it has to run in the container too — a driver that
     // stopped at the happy path is how the defect stayed invisible.
     expect(runSh).toContain('/workspace/.smoke/failure-smoke.sh');
+    // …and so does the login REFUSAL, for the same reason: it is the read-only
+    // mount that makes the write fail.
+    expect(runSh).toContain('/workspace/.smoke/readonly-login-smoke.sh');
+  });
+
+  it('runs the MOUNT-FREE recipes as their own container runs (MOTIR-1877)', () => {
+    // Whether a credential mount exists cannot be simulated from inside a
+    // container that has one — the same argument the confinement suite rests on.
+    // So the env tier and the in-container login each get a run of their own,
+    // launched WITHOUT the credential bind.
+    const mountFree = runSh.slice(runSh.indexOf('the mount-free recipes'));
+    expect(mountFree).toContain('/workspace/.smoke/env-credential-smoke.sh');
+    expect(mountFree).toContain('/workspace/.smoke/login-smoke.sh');
+    expect(mountFree).toContain('-e "MOTIR_TOKEN=env-not-a-real-token"');
+    expect(mountFree).toContain('-e "MOTIR_SERVER=http://127.0.0.1:$ENV_PORT"');
+    // THE assertion: neither mount-free run may carry the credential bind, or
+    // the tier under test would never be the one that supplied the credential.
+    expect(mountFree).not.toContain('/home/node/.config/motir');
+  });
+
+  it('makes each mount-free leg PROVE the bind is absent before asserting anything', () => {
+    // A driver edit that re-added the mount would otherwise leave both legs
+    // green while testing the old path — the failure mode is a test that still
+    // passes, which is the worst kind.
+    for (const name of ['env-credential-smoke.sh', 'login-smoke.sh']) {
+      const script = read(join(SMOKE_DIR, name));
+      expect(script, `${name} reads the mount table`).toContain('/proc/self/mounts');
+      expect(script, `${name} refuses a pre-existing credential`).toContain('config.json');
+    }
+  });
+
+  it('drives `motir login` against the stub REAL device routes, not a mock', () => {
+    // The login is the one command that speaks something other than MCP, so the
+    // stub has to serve `/api/cli/device/*` for the leg to mean anything.
+    const stub = read(join(SMOKE_DIR, 'stub-server.mjs'));
+    expect(stub).toContain('/api/cli/device/start');
+    expect(stub).toContain('/api/cli/device/token');
+    expect(stub).toContain('authorization_pending');
+    const loginSh = read(join(SMOKE_DIR, 'login-smoke.sh'));
+    expect(loginSh).toContain('motir login --server "$SERVER" --no-browser');
+    // The credential it wrote must then be USED — a file appearing proves less
+    // than a read that succeeds because of it.
+    expect(loginSh).toContain('motir ready');
+  });
+
+  it('asserts the read-only login fails as ONE SENTENCE, never as a stack', () => {
+    // MOTIR-1836's class: a supported configuration used correctly must not
+    // surface as a raw errno.
+    const roSh = read(join(SMOKE_DIR, 'readonly-login-smoke.sh'));
+    expect(roSh).toContain('Could not write the credential');
+    expect(roSh).toContain('MOTIR_TOKEN');
+    expect(roSh).toContain("'Unexpected error' 'EROFS'");
   });
 
   it('gives the failure leg its OWN stub port, and a CREDENTIAL that covers it', () => {
@@ -365,10 +420,14 @@ describe('the README, as the adoption path', () => {
     expect(readme).toContain('ghcr.io/moooon-b-v/motir-sandbox:claude');
   });
 
-  it('documents the three mounts the run contract is made of', () => {
+  it('documents the mounts the run contract is made of — and which one is optional', () => {
     expect(readme).toContain('-v "$PWD:/workspace"');
     expect(readme).toContain('-v "$HOME/.config/motir:/home/node/.config/motir:ro"');
     expect(readme).toContain('-v "$HOME/.claude:/home/node/.claude:ro"');
+    // The mount-free form is what a machine with no prior host login runs, so it
+    // is part of the adoption path, not a footnote (MOTIR-1877).
+    expect(readme).toContain('-e MOTIR_TOKEN -e MOTIR_SERVER');
+    expect(readme).toContain('### Three ways to give it a Motir credential');
   });
 
   it('records a digest per published tag and shows how to pin one', () => {

@@ -74,6 +74,29 @@ export interface PlanItemProposedFields {
     harness?: string | null;
     model?: string | null;
   } | null;
+  /**
+   * WHICH REPO this item ships in (Story MOTIR-1775 · MOTIR-1884) — the producer
+   * half of the multi-repo dispatch contract. A project now carries a repository
+   * SET sized by its architecture (MOTIR-1780), and `resolveDispatchRepo` only
+   * falls back to "the single repo" when there is exactly one: with two or more,
+   * an item that carries no pin resolves to `null` and no agent is told where to
+   * build. So the PLANNER pins each proposed item (the paired motir-ai card
+   * MOTIR-1885), and the pin travels here until materialize maps it onto the
+   * created WorkItem's `targetRepo`.
+   *
+   * Either the bare repo NAME (`motir-core`) or the `owner/name` ref form —
+   * normalized to the bare name at materialize, exactly as the direct-write path
+   * normalizes an authored pin. VALIDATED at approve against the PROJECT's set
+   * (not the workspace's connected repos), including rows that are still
+   * `proposed`: naming a repository the plan has decided on but not yet created
+   * is ordinary, while a typo or a sibling project's repo is rejected.
+   *
+   * OPTIONAL by contract — a proposal that carries no pin materializes exactly as
+   * it did before this field existed, so the single-repo projects the shipped
+   * fallback already serves are unaffected and the two repos' halves may merge in
+   * either order.
+   */
+  targetRepo?: string | null;
 }
 
 /**
@@ -98,6 +121,18 @@ export interface PlanItemPatch {
    */
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  /**
+   * RE-PIN the target's repo (MOTIR-1884) — the `modify` mirror of the `add`
+   * path's {@link PlanItemProposedFields.targetRepo}, so a re-plan that moves work
+   * from one repo of the set to another can say so instead of leaving the item
+   * pointed at the repo it was first planned into.
+   *
+   * Absent (`undefined`) leaves the pin untouched; an explicit `null` (or a blank
+   * string, which normalizes to `null`) UNPINS the item. Validated at approve the
+   * same way the `add` path's pin is — same project-scoped domain, same
+   * normalization — so the two paths cannot disagree about what a pin means.
+   */
+  targetRepo?: string | null;
   blockedByAdd?: string[];
   blockedByRemove?: string[];
 }

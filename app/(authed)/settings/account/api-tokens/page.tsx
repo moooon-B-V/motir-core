@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { ApiTokensManager } from '../_components/ApiTokensManager';
+import { ConnectCliPanel } from '../_components/ConnectCliPanel';
 
 // The API tokens pane of the account-settings area (Story 7.8 · Subtask 7.8.3) —
 // the Security → API tokens surface (design `account-settings.mock.html` Panels
@@ -37,6 +38,14 @@ export default async function AccountApiTokensPage() {
         <h2 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h2>
         <p className="max-w-[34rem] font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
       </header>
+
+      {/* The CLI route reads FIRST — above the tokens card AND above the empty
+          state (MOTIR-1869, design `cli-connect` Panels 9–10). A first-time user
+          has no tokens, so if this sat below, the person who could have run two
+          commands is instead walked into minting and pasting a secret by hand.
+          `hasTokens` only picks the tie line's tense; the panel itself is
+          unconditional. */}
+      <ConnectCliPanel hasTokens={tokens.length > 0} />
 
       <ApiTokensManager
         initialTokens={tokens}

@@ -37,11 +37,24 @@ export interface DispatchPromptDto {
   prompt: string;
   /**
    * WHICH repo to run this in — the RESOLVED bare repo name (the item's explicit
-   * pin, else the workspace's single connected repo), or `null` when Motir
-   * cannot say. Identical resolution to `ReadyItemDispatchDto.targetRepo`
-   * (MOTIR-1804), so the two dispatch surfaces can never route differently.
+   * pin, else the single repo of its PROJECT's repository set, else the
+   * workspace's single connected repo for a project with no set), or `null` when
+   * Motir cannot say. Identical resolution to `ReadyItemDispatchDto.targetRepo`
+   * (MOTIR-1804 · MOTIR-1783), so the two dispatch surfaces can never route
+   * differently.
    */
   targetRepo: string | null;
+  /**
+   * HOW to obtain {@link DispatchPromptDto.targetRepo} — its HTTPS clone URL, or
+   * `null` when Motir does not know one (MOTIR-1783). Always PRESENT, never an
+   * omitted key or an empty string; the same field, with the same semantics, as
+   * `ReadyItemDispatchDto.targetRepoCloneUrl`.
+   */
+  targetRepoCloneUrl: string | null;
+  /** The resolved repo's default branch, or `null` when Motir does not know it —
+   *  never defaulted to `"main"` (a guessed branch is a guessed repo's sibling
+   *  error). Mirrors `ReadyItemDispatchDto.targetRepoDefaultBranch`. */
+  targetRepoDefaultBranch: string | null;
   /**
    * Which `GIT WORKFLOW` variant the prompt carries — see
    * {@link DispatchWorkflowMode}. A MANUAL item (`type: manual` / `executor:

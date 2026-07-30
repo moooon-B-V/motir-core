@@ -1386,6 +1386,8 @@ describe('help — against the BUILT binary', () => {
     // the REAL binary's help, so a later command subtask that forgets to declare
     // its group shows up here as a real command missing from real help.
     for (const command of [
+      'login',
+      'logout',
       'auth',
       'link',
       'doctor',

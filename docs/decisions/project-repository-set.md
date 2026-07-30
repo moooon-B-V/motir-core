@@ -4,6 +4,13 @@
 establish the repository set at plan approval) · **Evidence pinned at:** `motir-core`
 `origin/main` @ `c3d3ac7e`, `motir-ai` `origin/main` @ `93afca4`
 
+**Amended:** 2026-07-30 (Yue · MOTIR-1893) — **§3 ownership**: a new project's repositories
+are **always** created under Motir's org, for every user. The original what-the-user-HAS
+branch (§3.1–§3.2, and §3.3's framing as a no-identity fallback) is **superseded**; it is
+kept below, marked, with the reversal recorded in
+[the amendment](#amendment-2026-07-30-yue--motir-1893--a-new-projects-repos-are-always-motir-owned).
+Nothing in §0–§2 or §4–§6 changes.
+
 The recorded architecture every other card in MOTIR-1775 builds to. It decides six
 things: what fixes the **number** of repositories a project has (§0), the **role**
 vocabulary and naming (§1), what **seeds** a repo the default starter does not fit (§2),
@@ -190,31 +197,161 @@ not as a repo selector.
 
 ### §3 — Ownership is decided ONCE for the whole set
 
-**3.1 · GitHub identity connected → the repos are created in the user's own account, as
-them.** Theirs from the first commit: no transfer, no acceptance step, no lock-in.
+> **⚠️ Read the amendment below first.** §3.1, §3.2 and §3.3's fallback framing are
+> **SUPERSEDED** by the 2026-07-30 amendment at the end of this section; §3.4 and §3.5
+> survive with the readings the amendment fixes. The superseded text is kept verbatim
+> because an ADR records how the thinking changed, not only where it landed.
 
-**3.2 · When the user administers several organizations, the target account is a single
-choice for the SET, defaulting to their personal account**, and it is recorded on the
-project alongside the set — not per row. A personal-account default is the one that always
-works: org repo-creation is frequently governed, and defaulting to an org would make the
-common case fail for a policy reason the user did not choose.
+**3.1 · ~~GitHub identity connected → the repos are created in the user's own account, as
+them.~~** _(Superseded 2026-07-30.)_ Theirs from the first commit: no transfer, no
+acceptance step, no lock-in.
+
+**3.2 · ~~When the user administers several organizations, the target account is a single
+choice for the SET, defaulting to their personal account~~**, _(Superseded 2026-07-30 —
+there is no account choice for a created row; the target is always Motir's org.)_ and it
+is recorded on the project alongside the set — not per row. A personal-account default is
+the one that always works: org repo-creation is frequently governed, and defaulting to an
+org would make the common case fail for a policy reason the user did not choose.
 
 **3.3 · No GitHub identity → the repos are created under Motir's org, recorded as
 Motir-owned and CLAIMABLE.** The non-technical user is not a different journey — same
-step, same outcome, with the claim path available whenever they want it.
+step, same outcome, with the claim path available whenever they want it. _(Amended
+2026-07-30: the OUTCOME stands and is now universal — every created repo is Motir-owned
+and claimable. Only the trigger is superseded: this is no longer the no-identity branch of
+a fork, it is **the** create path, for every user.)_
 
 **3.4 · "Claimable" is recorded as project-scoped data, not as something to be
 rediscovered.** The set carries an **ownership** value (`user` / `motir`) plus the target
 account login. MOTIR-711 (9.3.7)'s transfer flow finds every claimable repo of a project
 with one project-scoped read, and transfers **the whole set together** — never a GitHub
-account scan, never a per-repo hunt.
+account scan, never a per-repo hunt. _(Unchanged, with the amendment's reading: a
+**created** row is always `motir`; `user` now arises only from a **connect-existing** row,
+or from a set that 9.3.7 has already transferred.)_
 
 **3.5 · A set is never half in the user's account and half in Motir's.** A row that cannot
 be created in the chosen target fails **as a row** (§4) and falls back to connect-existing
 or skip; it does **not** silently retarget to Motir's org. A silent retarget would split
 the ownership of one project's code across two accounts on an error path, and 9.3.7's
 transfer would then be a partial answer that looks complete. If the user wants a different
-target, they change it for the set and re-run the step.
+target, they change it for the set and re-run the step. _(Amended 2026-07-30: the
+invariant holds and gets easier to keep — every created row targets the same Motir org, so
+the only way a set mixes ownership is the user deliberately connecting one of their own
+repos as a row. The failure rule is unchanged: a row that cannot be created fails as a row
+and is retried, connected, or skipped.)_
+
+#### Amendment 2026-07-30 (Yue · MOTIR-1893) — a new project's repos are ALWAYS Motir-owned
+
+**The decision.** **Every repository Motir CREATES for a new project is created under
+Motir's own organization, for both audiences, with no branch on what the user has.** The
+Motir org is no longer a fallback; it is the default and only home for a newly created
+repo. What follows creation is the explicit take-it-over path (MOTIR-711 / 9.3.7), which
+this decision promotes from an edge-case escape hatch to the standard way a project's code
+ends up in the user's own account.
+
+**Connect-existing is untouched.** It remains the only path that reaches a repository the
+user owns, and it keeps the shipped installation hand-off (`githubInstallationManageUrl()`
+— repo selection is changed on GitHub's install screen, never faked in-app). A user who
+already has code still connects it, exactly as before.
+
+**Why — three reasons, recorded with their evidence:**
+
+**1 · Two audiences, one path.** The non-technical user never touches GitHub: they
+validate the work on the site Motir built, while the code and the PM record sit ready to
+be taken over if the team grows. The technical user runs agents locally and may use the
+hosted agent. A branch keyed on _"do you have GitHub?"_ made the first case an edge case
+of the second — a second flow to design, build, test, and support, differing on the one
+axis the user cares least about. Removing the branch makes the establish step identical
+for everyone, which is what MOTIR-1778's design already draws ("Motir hosts your code" as
+the default, "Use your own GitHub instead" as the quiet secondary that leads to
+connect-existing).
+
+**2 · It avoids a permission escalation that would have cost the install funnel.**
+Creating a repository in a user's account requires the App permission Repository
+**`Administration: write`** (the spike's Mechanic 1 table). Three documented facts make
+that expensive, and they compound:
+
+- **Permissions are fixed at the App REGISTRATION, not per user.**
+  [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app),
+  verbatim: _"When you register a GitHub App, you can select permissions for the app."_ So
+  the permission set is a property of the App every installer sees — there is no
+  per-install, per-user, or per-flow subset. (GitHub has no optional-permission mechanism;
+  the community's own summary of the gap, in the unanswered discussion
+  [#51105](https://github.com/orgs/community/discussions/51105) _"Any way to define
+  optional GitHub app permissions?"_, is _"scope permissions are given in their entirety or
+  the login flow fails."_ **Stated as what it is: a user's conclusion in an unanswered
+  community thread, not GitHub documentation** — the documented facts are the two quoted
+  here and the re-consent quotes below.)
+- **An App that asks for it can no longer be installed by a repository admin.**
+  [Installing a GitHub App from a third party](https://docs.github.com/en/apps/using-github-apps/installing-a-github-app-from-a-third-party),
+  verbatim: _"Repository admins can install GitHub Apps in the organization that owns the
+  repository if the app does not request any organization permissions nor the 'repository
+  administration' permission."_ Requesting it therefore narrows installation to
+  **organization owners** — a hard funnel loss for every team whose evaluator is a repo
+  admin rather than an owner.
+- **Adding it to the SHIPPED App is a two-sided re-consent, not a config change.** From
+  [Editing a GitHub App's permissions](https://docs.github.com/en/apps/maintaining-github-apps/editing-a-github-apps-permissions),
+  quoted in the spike: _"Each account where the app is installed will need to approve the
+  new permissions."_ · _"…each user that has authorized the app will need to approve the
+  permission changes."_ · _"Updated permissions won't take effect on an installation or
+  user authorization until the new permissions are approved."_ Every existing installation
+  and every already-connected user would have had to re-approve before creation worked for
+  them.
+
+The cost was therefore paid by **every** user of the product — including everyone who
+never creates a repo — to serve a path the third reason shows was never universal anyway.
+
+**3 · It was never universally possible.** The spike (MOTIR-1777,
+`docs/github-repo-creation-mechanics.md` Mechanic 1) verified that `POST /user/repos` is
+**user-access-token-only**: it is not available to installation access tokens. There is no
+server-side, user-absent path to a personal-account repository at all — so the
+what-the-user-HAS branch could only ever have worked while the user was present and
+authorized, and never for the hosted agent acting later on their behalf. Creating in
+**Motir's org** uses `POST /orgs/{org}/repos`, which the same table records as available
+to an installation token.
+
+**The credential split this makes explicit — three credentials, one consent.** They stay
+separate on purpose:
+
+| Credential                                                                   | What it is for                                                                                                | Permissions                                                               | Does a user consent to it?                                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **The provisioning credential** — scoped to **Motir's own org** (MOTIR-1779) | Creating and seeding every new project's repositories (`POST /orgs/{org}/repos`, template `generate`)         | `Administration: write` **on Motir's org only**                           | **No.** It is Motir's credential on Motir's org; it never appears in any user's install or authorize flow |
+| **The user-facing Motir App** (MOTIR-890, shipped)                           | Everything the product already does with a user's repos — installation, indexing, dispatch, the webhooks      | **Unchanged.** MOTIR-890's least privilege; `Administration` is NOT added | Yes — the same grant they already give today, not widened by this decision                                |
+| **The opt-in writer App** (MOTIR-1894 / MOTIR-1895, Epic 9)                  | Letting the **hosted agent push** to a repository the USER owns (after a 9.3.7 transfer, or a connected repo) | `Contents: write`, and only for users who opt in                          | **Yes — and it is the only NEW consent this decision ever asks for**                                      |
+
+**A repo Motir owns is still the user's to reach.** Motir-owned is a hosting arrangement,
+not a wall: the user gets access to their own code on the repository itself (MOTIR-1900
+invites them as a collaborator on every repo Motir creates), independently of whether they
+ever take ownership via 9.3.7. Ownership and access are separate questions, and this
+decision only moves the first.
+
+`Contents: write` is neither an organization permission nor the repository-administration
+permission, so per the third-party-install quote above it does **not** trigger the
+org-owner-only install restriction. That is precisely why the escalation is cheap where
+`Administration` was not — and why the write capability is a separate, opt-in App rather
+than a widening of the App everyone installs.
+
+**One-way door — the two Apps stay separate.** Folding the opt-in writer's `Contents:
+write` into the default App later cannot be undone without registering a **new** App
+(permissions come off a registration only by re-consent of every installation, and the
+narrowed-funnel effects of a wider default App are not recoverable retroactively). Keeping
+them separate is the reversible choice, so it is the one taken.
+
+**The Motir org is now load-bearing at scale, not a fallback — and that has two standing
+consequences.** Every new project's repositories live there, so **(a)** their Actions
+minutes and storage bill to Motir (metering and the plan gates are Epic 9's problem, not
+this ADR's), and **(b)** Motir holds users' code by default, which is a trust and
+Terms-of-Service surface the product copy must state plainly rather than let the user
+discover. MOTIR-1778's design already carries the promise this obliges — _"It's yours —
+move it to your own GitHub whenever you want."_
+
+**What this asks of the not-yet-built cards** (recorded here so the sweep is visible, not
+to re-scope them): MOTIR-1779 provisions the org and the provisioning credential and is now
+on the critical path for **every** project rather than only the no-identity ones;
+MOTIR-1781 creates against Motir's org via the installation token and does not implement a
+user-account create path; MOTIR-1782 renders one default path plus the connect-existing
+secondary, with no account picker for created rows; MOTIR-1900 grants the user collaborator
+access to each created repo; MOTIR-711 (9.3.7) becomes the standard hand-off, not an edge
+case. The planning defect this amendment corrects is logged as MOTIR-1897.
 
 ### §4 — Rows are INDEPENDENT, failure is honest, and the step is resumable
 
@@ -357,10 +494,16 @@ MOTIR-1782), never of a second branch in the model.
   none.
 - **Ownership is a set-level property**, so 9.3.7's transfer flow gets a project-scoped
   query and a whole-set transfer, not a per-repo hunt. §3.5 is what guarantees the set is
-  transferable as a unit.
+  transferable as a unit. _(2026-07-30 amendment: every created set is Motir-owned, so
+  9.3.7 is on the **standard** path — the transfer flow is what makes the default
+  honest, not a rarely-taken branch.)_
 - **A `type: manual` prerequisite is confirmed, not created here:** §3.3 requires a Motir
   fallback org to exist. MOTIR-1779 already owns provisioning it, alongside whatever grant
-  change MOTIR-1777 determines.
+  change MOTIR-1777 determines. _(2026-07-30 amendment: no longer a fallback — MOTIR-1779
+  is a hard prerequisite for **every** project that establishes a repo set, and what it
+  provisions is the org plus a provisioning credential holding `Administration: write` on
+  **Motir's own org**. The grant change MOTIR-1777 was expected to determine for the
+  user-facing App is **not** taken: that App keeps MOTIR-890's least privilege.)_
 - **Nothing here re-decides the GitHub App model** (7.10, shipped) and nothing re-scopes the
   coding convention from project to repo (a 7.14 change). §1's per-row role is deliberately
   compatible with a per-repo convention landing later.
@@ -398,6 +541,16 @@ deliberately stops short and points at (d).
   sibling is retired and archived.
 - `docs/decisions/code-access-for-planning.md` — the sibling ADR whose "a NO decision files
   no cards" reasoning §0.3 follows.
+- `docs/github-repo-creation-mechanics.md` — the MOTIR-1777 spike: Mechanic 1's
+  permission/token table (`POST /user/repos` is user-token-only) and the re-consent quotes
+  the §3 amendment rests on.
+- GitHub documentation the §3 amendment quotes:
+  [Choosing permissions for a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app)
+  (permissions are selected at registration) ·
+  [Installing a GitHub App from a third party](https://docs.github.com/en/apps/using-github-apps/installing-a-github-app-from-a-third-party)
+  (the repository-administration permission narrows installation to organization owners) ·
+  [Editing a GitHub App's permissions](https://docs.github.com/en/apps/maintaining-github-apps/editing-a-github-apps-permissions)
+  (two-sided re-consent).
 - `motir-meta/notes.html` — the collapse-to-one-repo lesson (MOTIR-1775) and #103
   (cardinality is a cross-story contract) this ADR is the correction to; planning bug
   MOTIR-1887.

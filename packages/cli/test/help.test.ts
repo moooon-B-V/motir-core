@@ -105,6 +105,10 @@ describe('the curated overview', () => {
       server).
 
       SETUP COMMANDS:
+        login [options]           Connect this terminal: shows a code, opens Motir,
+                                  waits for your approval.
+        logout [options]          Disconnect this terminal: remove the stored token
+                                  for a server.
         auth                      Authenticate to a Motir server with a PAT.
         link [options]            Bind this workspace-root folder to a server +
                                   workspace + project.
@@ -151,7 +155,9 @@ describe('the curated overview', () => {
         -h, --help                display help for command
 
       EXAMPLES:
-        $ motir auth login --server https://app.motir.co   # store a token
+        $ motir login                                      # connect this terminal
+        $ motir login --no-browser                         # …over SSH: print the code
+        $ motir auth login --server https://app.motir.co   # paste a token you hold
         $ motir link --project MOTIR                       # bind this folder
         $ motir doctor                                     # preflight the setup
         $ motir ready --kinds subtask --assignee me        # what can I pick up?
@@ -212,7 +218,9 @@ describe('group membership', () => {
       HELP_GROUP.workLoop,
       HELP_GROUP.topics,
     ]);
-    expect(groups.get(HELP_GROUP.setup)).toEqual(['auth', 'link', 'doctor']);
+    // `login` / `logout` lead the group: the device grant is the command a
+    // person reaches for, and `auth login --token` is the tier below it.
+    expect(groups.get(HELP_GROUP.setup)).toEqual(['login', 'logout', 'auth', 'link', 'doctor']);
     expect(groups.get(HELP_GROUP.read)).toEqual([
       'ready',
       'status',
