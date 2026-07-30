@@ -2198,6 +2198,24 @@
     "apiTokens": {
       "heading": "API tokens",
       "subtitle": "Personal access tokens let your coding agents reach Motir over the MCP server. Each token acts as you — give every agent its own, and revoke any you no longer use.",
+      "cli": {
+        "title": "Connect the CLI",
+        "subtitle": "Run Motir from your terminal — <mono>motir next</mono>, <mono>motir run</mono>, <mono>motir auto</mono>.",
+        "step1": "1 · Install",
+        "step2": "2 · Sign in",
+        "copyInstall": "Copy install command",
+        "copySignIn": "Copy sign-in command",
+        "next": "<mono>motir login</mono> shows a short code and opens Motir in your browser. Approve it there and the terminal is connected — there is no token to copy by hand.",
+        "headless": "No browser on that machine? <mono>motir login</mono> prints the code and the URL to open anywhere, so SSH sessions and containers use the same command. For an unattended agent, set <mono>MOTIR_TOKEN</mono> instead.",
+        "guide": "Read the CLI guide",
+        "tie": "An approved terminal appears below as <code>CLI · {host}</code> — revoking it there disconnects that terminal.",
+        "tieEmpty": "An approved terminal will appear below as <code>CLI · {host}</code>.",
+        "copyFailed": "Couldn't copy — select the command and copy it manually.",
+        "toast": {
+          "title": "Copied",
+          "body": "Paste it into your terminal and press enter."
+        }
+      },
       "card": {
         "title": "Your tokens",
         "subtitle": "Shown once at creation, then stored only as a hash.",
