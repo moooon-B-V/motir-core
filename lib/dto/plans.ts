@@ -5,6 +5,7 @@
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
 import type { JobStatus } from '@/lib/ai/types';
+import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 
 /** Wire form of the Prisma `PlanStatus` enum. */
@@ -97,6 +98,38 @@ export interface PlanItemProposedFields {
    * either order.
    */
   targetRepo?: string | null;
+  /**
+   * WHICH ROLE of the project's repository set this item ships in (Story
+   * MOTIR-1775 · MOTIR-1912) — the PORTABLE pin, and the one a fresh onboarding
+   * generation can actually emit.
+   *
+   * ADR §5.2 calls this the load-bearing detail: at generation the repositories
+   * **do not exist** (the set is DERIVED from the tree, and the user may rename
+   * any row before it is created), so a NAME pinned then is stale the moment a row
+   * is edited and meaningless before the row exists at all. A role is stable
+   * across both.
+   *
+   * VALIDATED against the ROLE VOCABULARY (`PROJECT_REPO_ROLES` — `web` / `api` /
+   * `mobile` / `shared` / `infra` / `other`), not against the project's set: a
+   * closed enum needs no repository to exist, which is exactly what makes it
+   * emittable this early. An unrecognised value is rejected at the append /
+   * approve boundary (`PlanItemUnknownTargetRepoRoleError`); an explicit `null` is
+   * "unpinned", not an error.
+   *
+   * NOT redundant with {@link targetRepo} — ADR §5.4: *"Role is the portable pin;
+   * name is the settled one. Materialize accepts either."* A fresh generation
+   * emits a role; a re-plan / augment / `expand_item` on a project whose repos
+   * already exist may emit the name. When a proposal carries BOTH, the **name
+   * wins** for `work_item.targetRepo` (it is the settled answer, and it already
+   * survives the shipped set validation) and the role is still recorded, so the
+   * two pins never disagree about the outcome.
+   *
+   * Materialize only RECORDS it (onto `work_item.targetRepoRole`); resolving a
+   * role to a repo name happens later, when that role's row becomes established
+   * (MOTIR-1913) — it cannot happen here, because `proposeRepositorySet` runs
+   * AFTER the approve transaction commits and its rows start `proposed`.
+   */
+  targetRepoRole?: ProjectRepoRoleDto | null;
 }
 
 /**
@@ -133,6 +166,18 @@ export interface PlanItemPatch {
    * normalization — so the two paths cannot disagree about what a pin means.
    */
   targetRepo?: string | null;
+  /**
+   * RE-PIN the target's repo ROLE (MOTIR-1912) — the `modify` mirror of the `add`
+   * path's {@link PlanItemProposedFields.targetRepoRole}, so a re-plan that moves
+   * work from one role of the set to another (the API half becoming a shared
+   * package, say) can say so.
+   *
+   * Same sparse semantics as every other patch key, and deliberately identical to
+   * the shipped `targetRepo` patch: absent (`undefined`) leaves the pin untouched;
+   * an explicit `null` UNPINS. Validated against the role vocabulary the same way
+   * the `add` path's is, so the two paths cannot disagree about what a role means.
+   */
+  targetRepoRole?: ProjectRepoRoleDto | null;
   blockedByAdd?: string[];
   blockedByRemove?: string[];
 }

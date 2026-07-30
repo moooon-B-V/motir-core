@@ -4,6 +4,7 @@ import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import {
   InvalidProposalError,
   NoPlanForJobError,
+  PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
@@ -32,6 +33,8 @@ import type { ProposalInput } from '@/lib/dto/plans';
 //   PlanNotGeneratingError /
 //     PlanNotInExpectedStatusError → 409 (the plan already left `generating`)
 //   InvalidProposalError          → 422 (a proposal inconsistent with its op)
+//   PlanItemUnknownTargetRepoRoleError → 422 (a `targetRepoRole` outside the
+//                                          shared role vocabulary — MOTIR-1912)
 //   ProjectAccessDeniedError      → 404 browse / 403 edit
 export async function POST(req: Request): Promise<Response> {
   let auth;
@@ -92,6 +95,15 @@ export async function POST(req: Request): Promise<Response> {
     }
     if (err instanceof InvalidProposalError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    // A proposal pinning a repo ROLE outside the vocabulary the two repos share
+    // (MOTIR-1912). Rejected at the APPEND rather than at approve, so the producer
+    // learns while it is still writing the plan; `proposal` names which one.
+    if (err instanceof PlanItemUnknownTargetRepoRoleError) {
+      return NextResponse.json(
+        { code: err.code, proposal: err.proposalLabel, role: err.role, error: err.message },
+        { status: 422 },
+      );
     }
     if (err instanceof ProjectAccessDeniedError) {
       return NextResponse.json(

@@ -43,6 +43,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     publicChildrenHidden: false,
     sessionBranch: null,
     targetRepo: null,
+    targetRepoRole: null,
     planningSource: null,
     planningHarness: null,
     planningModel: null,

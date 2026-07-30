@@ -1,5 +1,5 @@
 import type { ProjectRepoRole, ProjectRepoState } from '@prisma/client';
-import type { ProjectRepoProposalSignalDto } from '@/lib/dto/projectRepos';
+import type { ProjectRepoProposalSignalDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 
 // The repo-SET vocabulary (Story MOTIR-1775 · MOTIR-1780) — the small set of
 // constants `docs/decisions/project-repository-set.md` fixes, in one module so no
@@ -27,6 +27,21 @@ export const PROJECT_REPO_ROLES = [
   'infra',
   'other',
 ] as const satisfies readonly ProjectRepoRole[];
+
+/**
+ * Whether a value is one of ADR §1.1's roles — the guard a PIN is validated with
+ * (MOTIR-1912), and the reason a role can be emitted before any repository
+ * exists: the vocabulary is CLOSED and needs no row to check against, unlike a
+ * repo NAME, which is only meaningful once the project's set holds it.
+ *
+ * Takes `unknown` on purpose. A role arrives inside a plan proposal's JSON —
+ * written by motir-ai over the 7.1 boundary and persisted verbatim — so the value
+ * reaching this guard is genuinely untyped, and `'backend'`, `''` and a number
+ * all have to read the same way: not a role.
+ */
+export function isProjectRepoRole(value: unknown): value is ProjectRepoRoleDto {
+  return (PROJECT_REPO_ROLES as readonly unknown[]).includes(value);
+}
 
 /** Every per-row establish state (ADR §4.1), in lifecycle order. */
 export const PROJECT_REPO_STATES = [
