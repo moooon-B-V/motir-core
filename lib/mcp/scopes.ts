@@ -59,6 +59,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   dispatch_prompt: 'read',
   search_work_items: 'read',
   whoami: 'read',
+  // list_projects enumerates the token workspace's browsable projects — a pure
+  // read, and the narrowest one: it takes no arguments and cannot leave the
+  // token's own workspace.
+  list_projects: 'read',
   list_sprints: 'read',
   validate_sprint: 'read',
   validate_work_item: 'read',
