@@ -43,9 +43,46 @@ pnpm --filter @motir/cli build      # produces dist/index.js (the `motir` binary
 node packages/cli/dist/index.js --help
 ```
 
-## Commands (this subtask)
+## Authenticate
 
 ```sh
+motir login
+```
+
+`motir login` is a **device grant**: it prints a short code and a URL, opens
+Motir in your browser, and waits for you to approve it there. Codes last 15
+minutes and nothing is written to disk until you approve. It is **headless by
+construction** — the code and URL are printed whether or not a browser opens, so
+an SSH session or a container uses the same command; `--no-browser` skips the
+launch attempt outright.
+
+The approval mints a CLI-scoped PAT: scopes `read`, `work_items:write`,
+`integration` (fixed — the grant can neither widen nor narrow them), 90-day
+expiry, labelled `CLI · <hostname>`. It lands in `~/.config/motir/config.json`,
+`chmod 600`, keyed by server URL.
+
+There are three credential tiers, and `motir login` is the middle one:
+
+| Tier                       | How                                | For                             |
+| -------------------------- | ---------------------------------- | ------------------------------- |
+| `MOTIR_TOKEN`              | export it — no login step, no file | CI, containers, read-only boxes |
+| `motir login`              | browser approval                   | a person at a terminal          |
+| `motir auth login --token` | paste a PAT you already hold       | scripts, older servers          |
+
+`MOTIR_TOKEN` is honoured by **every** command (paired with `MOTIR_SERVER` when
+there is no `.motir.json` to walk up to) and outranks a stored credential.
+
+**Disconnecting** is two different things: `motir logout` forgets the local copy
+on this machine, while **revoking the token in Settings → Account → API tokens**
+is the server-side kill switch. Full guide: [`docs/cli.md` §
+Authenticate](../../docs/cli.md#authenticate).
+
+## Setup commands
+
+```sh
+motir login        [--server <url>] [--no-browser]    # connect this terminal
+motir logout       [--server <url>]                   # forget the local credential
+
 motir auth login   [--server <url>] [--token <pat>]   # validate + store a PAT
 motir auth status  [--server <url>]                   # server, token prefix, owning user
 motir auth logout  [--server <url>]                   # forget the stored token

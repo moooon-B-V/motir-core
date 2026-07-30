@@ -48,34 +48,127 @@ node packages/cli/dist/index.js --help
 
 ## Authenticate
 
-The CLI authenticates with a **personal access token (PAT)**. Mint one in the
-web app — **Settings → Account → API tokens → Create** — and copy it
-immediately; Motir stores only a hash, so the plaintext is shown exactly once.
-[`docs/mcp.md` § Creating an API token](./mcp.md#creating-an-api-token) covers
-labels, expiry, and revocation.
+```sh
+motir login
+```
+
+That is the whole thing. `motir login` prints a short code, opens Motir in your
+browser, and waits for you to approve it there:
+
+```
+  Your code:  K4TP-9RXM
+  Open:       https://app.motir.co/device
+```
+
+Sign in, enter the code, approve — and the terminal reports who it connected as
+and which workspace it bound to. **Codes last 15 minutes**, and nothing is
+written to disk until you approve, so a denied, expired, or `Ctrl-C`'d login
+leaves no credential behind.
+
+**No browser on that machine?** The code and the URL are printed either way, so
+an SSH session or a container uses the _same_ command — open the URL on any
+device and enter the code there. `--no-browser` skips the launch attempt
+outright:
+
+```sh
+motir login --no-browser
+motir login --server https://motir.internal.example   # a self-hosted server
+```
+
+The credential lands in `~/.config/motir/config.json`, `chmod 600` inside a
+`0700` directory, **keyed by server URL** — so one machine can hold credentials
+for several Motir servers. If that directory is read-only (the sandbox image
+mounts it that way on purpose), use the `MOTIR_TOKEN` tier below instead: it is
+never written to disk at all.
+
+### What the approval mints
+
+The token `motir login` creates is **not** a general-purpose PAT. It is fixed at
+the boundary, and the approval screen shows it rather than letting you edit it:
+
+| Property      | Value                                                        |
+| ------------- | ------------------------------------------------------------ |
+| **Scopes**    | `read`, `work_items:write`, `integration` — and nothing else |
+| **Expiry**    | 90 days                                                      |
+| **Label**     | `CLI · <hostname>`, so you can tell which machine it is      |
+| **Workspace** | the one you choose on the approval screen                    |
+
+Those three scopes are exactly what the CLI's MCP calls resolve to: `read` for
+the selection and prompt tools, `work_items:write` for the status flips, and
+`integration` for `mark_integrated` / `complete_session` (which `motir auto` and
+`motir done --session` use). It calls nothing gated by `work_items:archive`,
+`work_items:delete`, or `sprints:write`.
+
+The grant cannot **widen** that set, and cannot **narrow** it either — a
+hand-narrowed grant would fail somewhere in the middle of an unattended
+`motir auto` run, which is the worst place to discover a missing scope. If you
+want a different grant, mint one by hand in **Settings → Account → API tokens →
+Create** (which keeps its full scope choice and its 30/90/365/never expiry) and
+supply it with the `--token` tier below. Reasoning:
+[`docs/decisions/cli-login.md`](./decisions/cli-login.md); per-scope detail:
+[`docs/mcp.md` § Token scopes](./mcp.md#token-scopes).
+
+### The three credential tiers
+
+`motir login` is the middle one. All three end in the same place — a PAT the CLI
+sends as its bearer credential — and differ only in who supplies it:
+
+| Tier                           | How                                          | For                                                 |
+| ------------------------------ | -------------------------------------------- | --------------------------------------------------- |
+| **`MOTIR_TOKEN`**              | export the variable — no login step, no file | CI, containers, any box with a read-only config dir |
+| **`motir login`**              | browser approval (above)                     | a person at a terminal                              |
+| **`motir auth login --token`** | paste a PAT you already hold                 | scripts, and servers predating the device grant     |
+
+**`MOTIR_TOKEN` is honoured by every command**, not only at login, and is never
+written anywhere. Pair it with `MOTIR_SERVER` when there is no `.motir.json` to
+walk up to:
+
+```sh
+export MOTIR_TOKEN=motir_pat_…
+export MOTIR_SERVER=https://app.motir.co   # optional — this is also the default
+motir ready                                # no login step at all
+```
+
+It **outranks** a stored credential, so a stale one exported in a shell profile
+wins silently; `motir auth status` names the source it used for exactly that
+reason. Precedence: `--token <pat>` > `MOTIR_TOKEN` > `config.json`.
+
+The paste path is unchanged, and is what a script wants when it already holds a
+token:
 
 ```sh
 motir auth login --server https://app.motir.co          # prompts for the token
 motir auth login --server https://app.motir.co --token motir_pat_…
 ```
 
-`login` validates the token before storing it: it connects, lists the server's
-tools, and resolves the owner with `whoami`. An invalid or revoked token is
-rejected here rather than halfway through a dispatch. The token is written to
-`~/.config/motir/config.json`, `chmod 600`, keyed by server URL — so one machine
-can hold tokens for several Motir servers.
-
-**Scopes.** A token minted with the default grant set can do everything the CLI
-needs. If you narrow the scopes by hand, the CLI needs `read` (the selection and
-prompt tools), `work_items:write` (the status flips), and `integration`
-(`mark_integrated` / `complete_session`, which `motir auto` and
-`motir done --session` use). See
-[`docs/mcp.md` § Token scopes](./mcp.md#token-scopes).
+`auth login` validates before storing: it connects, lists the server's tools, and
+resolves the owner with `whoami`, so an invalid or revoked token is rejected
+there rather than halfway through a dispatch. Mint the PAT it wants in the web
+app — **Settings → Account → API tokens → Create** — and copy it immediately;
+Motir stores only a hash, so the plaintext is shown exactly once
+([`docs/mcp.md` § Creating an API token](./mcp.md#creating-an-api-token)).
 
 ```sh
 motir auth status     # server, token prefix, owning user, active workspace
-motir auth logout     # forget the stored token for a server
 ```
+
+### Disconnecting
+
+Two different actions, and only one of them is a kill switch:
+
+- **`motir logout` forgets the local copy.** It removes the credential from
+  **this machine** only; the token itself keeps working anywhere else it is held.
+- **Revoking the token in Settings → Account → API tokens is the disconnect.**
+  That kills the credential server-side, everywhere, immediately. A terminal
+  connected by `motir login` appears in that list as `CLI · <hostname>`, which is
+  what makes "disconnect that machine" a single obvious row.
+
+```sh
+motir logout                    # this machine, the resolved server
+motir logout --server <url>     # a specific server
+```
+
+`motir auth logout` is the same action under the older name.
 
 ---
 
@@ -125,14 +218,14 @@ motir doctor
 One read-only pass that answers "is my setup correct?" before a dispatch stops
 halfway through:
 
-| Check                   | PASS means                                               | FAIL means                                                             |
-| ----------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Auth**                | the stored PAT connects, lists tools, and identifies you | no token, or invalid / expired → `motir auth login`                    |
-| **Project link**        | `.motir.json` resolved (walking up from the cwd)         | no link here or above → `motir link`                                   |
-| **Workspace + project** | the linked project is reachable _for this token_         | wrong key, or your user is not a member                                |
-| **Repo checkouts**      | every override path resolves                             | — a not-yet-cloned **convention** path is fine; an override only WARNs |
-| **Coding agent**        | the binary is on PATH and answers `--version`            | not on PATH → the profile's install source                             |
-| **Agent credential**    | the agent's credential exists, or its key env var is set | neither → where to sign in                                             |
+| Check                   | PASS means                                                    | FAIL means                                                             |
+| ----------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Auth**                | the resolved credential connects, lists tools, identifies you | no token, or invalid / expired → `motir login`                         |
+| **Project link**        | `.motir.json` resolved (walking up from the cwd)              | no link here or above → `motir link`                                   |
+| **Workspace + project** | the linked project is reachable _for this token_              | wrong key, or your user is not a member                                |
+| **Repo checkouts**      | every override path resolves                                  | — a not-yet-cloned **convention** path is fine; an override only WARNs |
+| **Coding agent**        | the binary is on PATH and answers `--version`                 | not on PATH → the profile's install source                             |
+| **Agent credential**    | the agent's credential exists, or its key env var is set      | neither → where to sign in                                             |
 
 It exits **non-zero** when a hard check fails, so `motir doctor && motir auto`
 is a usable gate. WARN rows never fail it — "no agent configured" is a warning,
@@ -213,6 +306,8 @@ Every command and flag the binary registers. `motir`, `motir help`, and
 
 | Command                        | Flags                                                                         |
 | ------------------------------ | ----------------------------------------------------------------------------- |
+| `motir login`                  | `--server <url>` · `--no-browser`                                             |
+| `motir logout`                 | `--server <url>`                                                              |
 | `motir auth login`             | `--server <url>` · `--token <pat>`                                            |
 | `motir auth status`            | `--server <url>`                                                              |
 | `motir auth logout`            | `--server <url>`                                                              |
@@ -222,6 +317,8 @@ Every command and flag the binary registers. `motir`, `motir help`, and
 | `motir doctor`                 | `--agent <cmd>` · `--json`                                                    |
 
 ```sh
+motir login                                    # the usual way in
+motir login --no-browser                       # …over SSH: just print the code
 motir auth login --server https://app.motir.co --token motir_pat_…
 motir auth status --server https://app.motir.co
 motir link --project ACME --repo acme-app
@@ -797,18 +894,29 @@ Pull and go — no checkout, no build:
 ```sh
 docker run --rm -it \
   -v "$PWD:/workspace" \
-  -v "$HOME/.config/motir:/home/node/.config/motir:ro" \
+  -e MOTIR_TOKEN -e MOTIR_SERVER \
   -v "$HOME/.claude:/home/node/.claude:ro" \
   ghcr.io/moooon-b-v/motir-sandbox:claude \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
-Three mounts, and they are the whole host contract: a **writable** `/workspace`
-(your `.motir.json` tree — the only host path the agent can change), a
-**read-only** `~/.config/motir` (the PAT: `motir auth login` runs on the _host_,
-the container only consumes the result), and a **read-only** mount of your
-agent's own credential. Run it from your **workspace root**, not from inside a
-single checkout — `motir auto` dispatches across every repo in the workspace.
+The host contract is a **writable** `/workspace` (your `.motir.json` tree — the
+only host path the agent can change) and a **read-only** mount of your agent's
+own credential. Run it from your **workspace root**, not from inside a single
+checkout — `motir auto` dispatches across every repo in the workspace.
+
+**The Motir credential has three routes in, and the mount is no longer the only
+one.** `MOTIR_TOKEN` / `MOTIR_SERVER` are read by every command, so a fresh
+machine or a CI runner that never ran a host login gets in with two environment
+variables and no host state at all. With no mount, `~/.config/motir` inside the
+container is writable — so `motir login`, headless by construction, runs in
+there too. Mounting a host credential still works and is still read-only:
+
+```sh
+  -v "$HOME/.config/motir:/home/node/.config/motir:ro"   # optional
+```
+
+An env credential outranks a mounted one and is never written to disk.
 
 There is one tag per agent profile (`claude`, `codex`, `opencode`, `kimi`,
 `antigravity`, `cursor`, `aider`, `goose`) plus an agent-less `base`, built for
@@ -864,17 +972,18 @@ the PAT: the sandbox image mounts the config dir read-only, which would leave th
 CLI no writable state directory at all. Setting `MOTIR_CONFIG_HOME` still moves
 it too, so one relocation continues to move the whole CLI state.
 
-Six environment variables, none required — each overrides a default
+Seven environment variables, none required — each overrides a default
 (`motir help environment` prints this from the shipped code):
 
-| Variable            | Overrides                                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `MOTIR_TOKEN`       | The PAT at **login only**, when `--token` is absent. Later commands use the stored one.                             |
-| `MOTIR_AGENT`       | The agent command. Precedence: `--agent` > `MOTIR_AGENT` > `agentCommand` in config.                                |
-| `MOTIR_CONFIG_HOME` | Where `motir/config.json` lives. Highest-precedence config home; also the second-choice state home.                 |
-| `XDG_CONFIG_HOME`   | The config home when `MOTIR_CONFIG_HOME` is unset (else `~/.config`).                                               |
-| `MOTIR_STATE_HOME`  | Where `motir/session-excludes.json` lives. Chain: this > `MOTIR_CONFIG_HOME` > `XDG_STATE_HOME` > `~/.local/state`. |
-| `XDG_DATA_HOME`     | Motir stores nothing here — `doctor` reads it only to find where _your agent_ keeps its credential.                 |
+| Variable            | Overrides                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `MOTIR_TOKEN`       | The PAT, honoured by **every** command. Set it and there is no login step and no file. Outranks a stored credential.   |
+| `MOTIR_SERVER`      | Which server to talk to. Chain: `--server` > this > `.motir.json` > the single stored server > `https://app.motir.co`. |
+| `MOTIR_AGENT`       | The agent command. Precedence: `--agent` > `MOTIR_AGENT` > `agentCommand` in config.                                   |
+| `MOTIR_CONFIG_HOME` | Where `motir/config.json` lives. Highest-precedence config home; also the second-choice state home.                    |
+| `XDG_CONFIG_HOME`   | The config home when `MOTIR_CONFIG_HOME` is unset (else `~/.config`).                                                  |
+| `MOTIR_STATE_HOME`  | Where `motir/session-excludes.json` lives. Chain: this > `MOTIR_CONFIG_HOME` > `XDG_STATE_HOME` > `~/.local/state`.    |
+| `XDG_DATA_HOME`     | Motir stores nothing here — `doctor` reads it only to find where _your agent_ keeps its credential.                    |
 
 `motir doctor` probes your agent's own key variables (`ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `CURSOR_API_KEY`) for **presence** and never reads a value.
@@ -883,12 +992,38 @@ Six environment variables, none required — each overrides a default
 
 ## Troubleshooting
 
+**`motir login` printed a code but no browser opened.** That is a supported
+outcome, not a failure — the launch is additive and the printed code and URL are
+sufficient on their own. Open the URL on any device, sign in, and enter the code;
+the terminal is still waiting. Pass `--no-browser` to skip the attempt entirely
+on a box you know is headless.
+
+**`Error: The code expired before it was approved.`** — codes last 15 minutes.
+Nothing was written, so there is nothing to clean up: run `motir login` again for
+a fresh one.
+
+**`Error: Approval was denied. No credential was written.`** — someone (possibly
+you, on the wrong request) pressed Deny at `/device`. Nothing was created, so
+there is nothing to revoke. If that request was not yours, it means someone had
+your code — start a fresh `motir login` and approve only a code you are looking
+at in your own terminal.
+
+**`Error: Could not write the credential to <path>.`** — the config directory is
+read-only. The sandbox image mounts it that way deliberately, since a container
+consumes a credential rather than minting one. Either make the directory
+writable, point `MOTIR_CONFIG_HOME` at one that is, or skip the file entirely
+with `MOTIR_TOKEN` — the environment tier is never written to disk.
+
+**`Error: <server> refused to start a login (HTTP 404).`** — that server predates
+`motir login`. Use the paste path instead: `motir auth login --token <pat>`.
+
 **`Error: Token invalid or expired.`** — the token was revoked, expired, or
 never stored for this server. Every unauthorized MCP response maps to this one
 error with the same hint; the CLI does not guess which of the four it was
-(matching the server's uniform 401). Mint a fresh PAT and
-`motir auth login` again. `motir auth status` tells you which token the CLI is
-holding for a server without exposing it.
+(matching the server's uniform 401). Reconnect with `motir login`, or store a
+fresh PAT with `motir auth login`. `motir auth status` tells you which token the
+CLI is holding for a server — and which source it came from — without exposing
+it.
 
 **`Error: No Motir project link found in this directory or any parent.`** — you
 are outside the linked tree. Run `motir link` at your workspace root, or `cd`
