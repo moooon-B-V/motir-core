@@ -160,7 +160,7 @@ describe('the curated overview', () => {
         $ motir show MOTIR-7                               # the item, its edges, its body
         $ motir open MOTIR-7 --print                       # the item’s URL
         $ motir auto --agent claude --max 5                # drain 5 items unattended
-        $ motir batch --agent claude                      # snapshot now, one PR each
+        $ motir batch --agent claude                       # snapshot now, one PR each
         $ motir plan "split the billing epic"              # plan by talking; prints proposals
 
       LEARN MORE:

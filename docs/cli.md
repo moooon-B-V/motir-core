@@ -149,8 +149,32 @@ the handshake, `whoami`, and a one-row search proving the project is reachable.
 
 ## Your first run
 
+Start by getting your bearings — where the project stands, what the current
+sprint holds, and what the item you are about to pick up actually says:
+
 ```sh
+motir status                   # ready / in-flight counts + the active sprint
+motir sprint                   # the active sprint's items, and what blocks what
 motir ready                    # what can be picked up right now
+```
+
+`motir sprint` and `motir ready` show dependency edges in their own columns, so
+you can see which item unblocks the most before choosing one — see
+[Dependencies in the terminal](#dependencies-in-the-terminal--two-renderings).
+
+Then **read the item before you dispatch it.** `motir show` gives you the whole
+card — fields, readiness, its dependency edges, and, for a story, its children in
+build order:
+
+```sh
+motir show MOTIR-42            # the item you're about to hand an agent
+```
+
+That is worth the ten seconds: it is where you notice that the card assumes
+something that does not exist yet, or that three of its siblings are buildable in
+parallel. Now claim it:
+
+```sh
 motir next --print             # claim the top item, print its prompt
 ```
 
@@ -208,16 +232,23 @@ motir doctor --agent "codex exec --sandbox workspace-write" --json
 
 ### Read
 
-| Command            | Flags                                                           |
-| ------------------ | --------------------------------------------------------------- |
-| `motir ready`      | `--kinds <list>` · `--assignee <id\|me\|unassigned>` · `--json` |
-| `motir status`     | `--json`                                                        |
-| `motir open <key>` | `--print`                                                       |
+| Command              | Flags                                                           |
+| -------------------- | --------------------------------------------------------------- |
+| `motir ready`        | `--kinds <list>` · `--assignee <id\|me\|unassigned>` · `--json` |
+| `motir status`       | `--json`                                                        |
+| `motir sprints`      | `--state <planned\|active\|complete>` · `--json`                |
+| `motir sprint [ref]` | `--kinds <list>` · `--json`                                     |
+| `motir show <key>`   | `--json`                                                        |
+| `motir open <key>`   | `--print`                                                       |
 
 ```sh
 motir ready --kinds subtask,bug --assignee me
-motir ready --json | jq '.[].identifier'
+motir ready --json | jq '.[].key'
 motir status                       # ready / in-flight counts + the active sprint
+motir sprints --state active       # just the one that's running
+motir sprint                       # the active sprint's work items
+motir sprint "Journey D"           # …a specific one, by name prefix
+motir show MOTIR-1775              # one item: fields, edges, children in build order
 motir open MOTIR-42 --print        # print the URL, don't launch a browser
 ```
 
@@ -226,6 +257,175 @@ error naming the valid set. These reads ride the same MCP tools the web app's
 **`/ready`** page uses, so the two can never disagree — `/ready` is the human
 mirror of `motir ready`, and its in-app help popover is the on-surface
 explanation of what "ready" means.
+
+`motir sprints` marks the active sprint with a `*` in the first column:
+
+```
+1 sprint:
+   STATE   NAME                                      ITEMS  POINTS  WINDOW
+─  ──────  ────────────────────────────────────────  ─────  ──────  ─────────────────────
+*  active  Journey D · The Motir CLI — terminal di…     41      45  2026-07-28T00:00:00…
+```
+
+#### `motir sprint [ref]` — how the ref resolves
+
+The one behaviour you cannot guess. `ref` is matched in this order, and the
+first rule that yields **exactly one** sprint wins:
+
+1. **Omitted** → the **active** sprint. If no sprint is active, that is an error
+   telling you to run `motir sprints`.
+2. **A sprint id** (the opaque `cmq…` string `--json` and the MCP emit).
+3. **An exact name**, case-insensitively.
+4. **A name prefix**, case-insensitively.
+
+A prefix matching **more than one** sprint is an error that names the
+candidates, so you can retype with enough of the name to disambiguate — it never
+silently picks the first:
+
+```console
+$ motir sprint "Sprint 1"
+Error: "Sprint 1" matches 11 sprints.
+Hint: Name one of: Sprint 1 · Project bootstrap, Sprint 10 · Swimlanes + WIP limits, …
+```
+
+No match at all fails the same way (one line + hint on **stderr**, exit **1**).
+Note that step 3 precedes step 4 deliberately: a sprint literally named
+`Sprint 1` would resolve to itself even though it is also a prefix of
+`Sprint 10`.
+
+### Dependencies in the terminal — two renderings
+
+Dependency edges show up in **two different shapes**, and they are not
+inconsistent with each other — they answer different questions because the sets
+they describe have different shapes.
+
+> A **ready set or a sprint spans many parents**, so its edges are disconnected
+> fragments with no graph to draw → a **column**. A **story's children are one
+> closed dependency graph** (every `blocked_by` edge joins siblings under the
+> same parent) → a **build order**.
+
+#### 1. Edge COLUMNS — on `motir ready` and `motir sprint`
+
+`motir sprint` carries both directions, because a sprint holds mixed-status work
+and "why can't this finish?" is the load-bearing question:
+
+```
+KEY         KIND     STATUS       PRIORITY  BLOCKED BY                             BLOCKS                  TITLE
+──────────  ───────  ───────────  ────────  ─────────────────────────────────────  ──────────────────────  ─────────────────────
+MOTIR-669   subtask  todo         high      MOTIR-662✓, MOTIR-664✓, MOTIR-668✓ +2  MOTIR-1869, MOTIR-1872  8.7.9 Publish the `@…
+MOTIR-809   story    in_progress  medium    MOTIR-808✓                             MOTIR-1789              Motir CLI — terminal…
+✓ = already done
+```
+
+`motir ready` carries **only `BLOCKS`**. That is not an omission: an item is in
+the ready set precisely because every blocker is already done, so a `BLOCKED BY`
+column would be dead in every row. What a picker actually wants is downstream
+impact — _"do this one first, it unblocks three."_
+
+```
+KEY         KIND     PRIORITY  ASSIGNEE    BLOCKS                              TITLE
+──────────  ───────  ────────  ──────────  ──────────────────────────────────  ─────────────────────
+MOTIR-1777  subtask  highest   unassigned  MOTIR-1779, MOTIR-1781              Spike — verify the t…
+MOTIR-1043  subtask  high      unassigned                                      8.8 The public /toke…
+```
+
+Reading the cells:
+
+- **Blank means no edges** — never `0`, which would read as a count the row does
+  not have (`MOTIR-1043` above).
+- **`✓` marks a blocker that is already `done` or `cancelled`.** It no longer
+  gates, so it must not read as if it does. Live edges are listed **first**;
+  settled ones follow, suffixed.
+- **`+n` is truncation, not a count of anything.** A cell prints at most
+  **three** keys and collapses the rest, because a wrapped cell would wreck the
+  column alignment of every row below it.
+- **`--json` always carries the full, untruncated edge block.** The abbreviation
+  is a display concern only; the machine view never lies. Here is the same row
+  both ways — the table collapses its fourth edge, the JSON keeps all four:
+
+  ```
+  MOTIR-1122  subtask  high  unassigned  MOTIR-1123, MOTIR-1124, MOTIR-1161 +1  8.5.1 Decide produc…
+  ```
+
+  ```console
+  $ motir ready --json | jq '.[] | select(.key == "MOTIR-1122") | .dependencies'
+  {
+    "blockedBy": [],
+    "blocks": [
+      { "key": "MOTIR-1123", "title": "8.5.2 Provision transactional-email provider…", "status": "todo" },
+      { "key": "MOTIR-1124", "title": "8.5.4 Production deploy + attach motir.co domain…", "status": "todo" },
+      { "key": "MOTIR-1161", "title": "8.5.5 Provision error-monitoring (Sentry)…", "status": "todo" },
+      { "key": "MOTIR-1165", "title": "8.5.9 App-level rate limiting on auth…", "status": "blocked" }
+    ]
+  }
+  ```
+
+  Note the field is **`key`** (the `MOTIR-<n>` identifier), on both the row and
+  every edge entry.
+
+- Against an **older Motir server** that does not project edges at all, the
+  columns are simply absent — the reads degrade to their previous shape rather
+  than failing. (The CLI is versioned and published independently of the
+  server.)
+
+#### 2. The `WAVE` build order — on `motir show <key>`
+
+A parent's children are a closed DAG, so `motir show` sorts them into **waves**
+and puts the wave number in a column. **Wave 1 is the story's independently
+buildable set** — everything no un-done sibling gates, i.e. what you can start
+in parallel right now. Wave 2 is what only wave 1 gates, and so on:
+
+```console
+$ motir show MOTIR-1775
+```
+
+```
+CHILDREN (10) — build order
+WAVE  KEY         KIND     STATUS   BLOCKED BY                             TITLE
+────  ──────────  ───────  ───────  ─────────────────────────────────────  ─────────────────────
+1     MOTIR-1776  subtask  todo                                            Decision — repo owne…
+1     MOTIR-1777  subtask  todo                                            Spike — verify the t…
+1     MOTIR-1780  subtask  todo                                            (motir-core) Project…
+2     MOTIR-1778  subtask  blocked  MOTIR-1776                             (motir-core) Design …
+2     MOTIR-1779  subtask  blocked  MOTIR-1777                             Apply the GitHub gra…
+2     MOTIR-1783  subtask  blocked  MOTIR-1780                             (motir-core) Name th…
+3     MOTIR-1781  subtask  blocked  MOTIR-1777, MOTIR-1779, MOTIR-1780     (motir-core) The rep…
+4     MOTIR-1782  subtask  blocked  MOTIR-1778, MOTIR-1781                 (motir-core) The app…
+5     MOTIR-1784  subtask  blocked  MOTIR-1780, MOTIR-1781, MOTIR-1782 +1  (motir-core) Vitest …
+5     MOTIR-1785  subtask  blocked  MOTIR-1782                             (motir-core) Playwri…
+```
+
+The wave number **is** the graph: three items can start immediately, and
+`MOTIR-1784` waits on four things (three shown, `+1` truncated). `BLOCKED BY`
+names the actual edges rather than just asserting an order, so "why is this
+wave 5?" is answerable from the row.
+
+Two marks appear here that the columns above don't need, and the legend prints
+**only** when a row actually shows one:
+
+- **`✓` — already done.** Same meaning as in the columns.
+- **`↗` — a blocker outside this parent.** Plan rules forbid these, but the data
+  can hold them, so they are named rather than hidden. They deliberately do
+  **not** form a wave: nothing in this table can clear them, so counting them
+  would distort every wave below.
+
+`show --json` re-orders `children` into the same build order and stamps each with
+its `wave`, so a script gets the ordering without re-deriving the graph.
+
+##### The cycle marker
+
+If children block each other in a loop they have **no position in any build
+order**. `motir show` reports that rather than inventing one: the cycle members
+come last with `—` in the `WAVE` column, followed by
+
+```
+⚠ dependency CYCLE — MOTIR-101, MOTIR-102 block each other and have no build order. Fix the blocked_by edges.
+```
+
+This is **a planning bug in the tree, not a CLI error** — `show` still exits
+**0**. The fix is to correct the `blocked_by` edges (in the web app, or with the
+`link_work_items` / `unlink_work_items` MCP tools); `motir show` is only
+reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 
 ### Work loop
 
@@ -263,7 +463,7 @@ commander's bare "unknown option".
 motir help                     # the curated overview (also: motir, motir --help)
 motir help auth login          # per-command help, nested
 motir link add --help          # the same, the other way round
-motir help environment         # the 5 env vars Motir reads, and what each overrides
+motir help environment         # the 6 env vars Motir reads, and what each overrides
 motir help files               # ~/.config/motir/config.json + .motir.json
 motir --version                # -v also works
 ```
