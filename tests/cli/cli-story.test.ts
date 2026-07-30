@@ -385,7 +385,7 @@ describe('auth + linking', () => {
     const link = await ws.run(['link', '--project', fx.projectIdentifier], { env });
     expect(link.exitCode).toBe(0);
 
-    for (const command of [['ready'], ['status'], ['open', item.key]]) {
+    for (const command of [['ready'], ['status'], ['open', item.identifier]]) {
       const result = await ws.run(command, { env });
       expect(result.exitCode, `${command.join(' ')}: ${result.stderr}`).toBe(0);
     }

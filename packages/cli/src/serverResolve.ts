@@ -48,7 +48,12 @@ export function resolveServerUrl(explicit?: string): string {
   const servers = listServers();
   if (servers.length === 1) return servers[0] as string;
   if (servers.length === 0) return DEFAULT_SERVER_URL;
-  if (servers.includes(DEFAULT_SERVER_URL)) return DEFAULT_SERVER_URL;
+  // EXACT equality against each stored key, never a substring match on a URL:
+  // both sides are already normalized (`setCredential` keys by
+  // `normalizeServerUrl`), so `https://app.motir.co.evil.test` can never satisfy
+  // this. Spelled as an explicit `===` predicate rather than `servers.includes(…)`
+  // so neither a reader nor a scanner has to infer which `includes` this is.
+  if (servers.some((stored) => stored === DEFAULT_SERVER_URL)) return DEFAULT_SERVER_URL;
   throw new CliError('Multiple servers are configured; pass --server <url> to choose one.', {
     hint: `Configured: ${servers.join(', ')}`,
   });
