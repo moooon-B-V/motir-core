@@ -2,7 +2,9 @@ import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { openUrl } from '../browser.js';
 import { CliError } from '../errors.js';
+import { MotirClient, type ProjectSummary } from '../mcpClient.js';
 import { info } from '../output.js';
+import { autoLinkAfterLogin } from '../projectLink.js';
 import { resolveServerUrl } from '../serverResolve.js';
 import { configPath, setCredential, TOKEN_ENV_VAR } from '../config/userConfig.js';
 import {
@@ -61,6 +63,30 @@ export interface LoginDeps {
    *  back-off as a WIDENED DELAY rather than sitting through it. */
   sleep?: (ms: number) => Promise<void>;
   openUrl?: typeof openUrl;
+  /** Enumerate the fresh token's projects, for the auto-link step. Injected so
+   *  the login tests drive every auto-link branch against the device server they
+   *  already run, with no second (MCP) server to stand up. */
+  listProjects?: (input: { serverUrl: string; token: string }) => Promise<ProjectSummary[]>;
+  /** The directory the link would be written to, and the home directory it must
+   *  never be. Injected so the four negative cases are assertions about the
+   *  RULE rather than about wherever the runner happens to be standing. */
+  cwd?: string;
+  home?: string;
+}
+
+/** Read the projects the just-minted token can reach (MOTIR-1879). */
+async function listProjectsWith(input: {
+  serverUrl: string;
+  token: string;
+}): Promise<ProjectSummary[]> {
+  const client = new MotirClient(input);
+  try {
+    await client.connect();
+    const { projects } = await client.listProjects();
+    return projects;
+  } finally {
+    await client.close();
+  }
 }
 
 /**
@@ -189,4 +215,17 @@ export async function loginCommand(opts: LoginOptions, deps: LoginDeps = {}): Pr
   info(
     `Logged in as ${credential.user.email} on ${serverUrl} (workspace ${credential.workspace.name}).`,
   );
+
+  // Bind this folder when that is unambiguous, so the common case is genuinely
+  // ONE command. Every guard, and why writing a link is the risky half of this,
+  // lives in projectLink.ts. The login itself is already complete and stored —
+  // this step can decline, but it can never fail the login.
+  const listProjects = deps.listProjects ?? listProjectsWith;
+  await autoLinkAfterLogin({
+    serverUrl,
+    workspace: credential.workspace.slug,
+    listProjects: () => listProjects({ serverUrl, token: credential.access_token }),
+    ...(deps.cwd === undefined ? {} : { cwd: deps.cwd }),
+    ...(deps.home === undefined ? {} : { home: deps.home }),
+  });
 }

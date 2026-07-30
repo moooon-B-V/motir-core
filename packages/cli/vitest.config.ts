@@ -38,6 +38,7 @@ export default defineConfig({
         'src/git.ts': { branches: 90, functions: 90, lines: 90 },
         'src/output.ts': { branches: 90, functions: 90, lines: 90 },
         'src/plan.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/projectLink.ts': { branches: 90, functions: 90, lines: 90 },
         'src/render.ts': { branches: 90, functions: 90, lines: 90 },
         'src/serverResolve.ts': { branches: 90, functions: 90, lines: 90 },
         'src/session.ts': { branches: 90, functions: 90, lines: 90 },

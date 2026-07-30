@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { ProjectSummary } from '../../src/mcpClient.js';
 
 // A REAL MCP server for the package's own tests (Subtask 7.9.5 · MOTIR-883).
 //
@@ -152,8 +153,23 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
   };
 }
 
+/** One `list_projects` row, with the fields the CLI reads. */
+export function projectRow(key: string, name = key): ProjectSummary {
+  return {
+    key,
+    id: `proj-${key.toLowerCase()}`,
+    name,
+    slug: key.toLowerCase(),
+    accessLevel: 'open',
+  };
+}
+
 /** The canned answers most command tests want — enough for `auth login`,
- *  `link`, `ready` and `status` to complete. */
+ *  `link`, `ready` and `status` to complete.
+ *
+ *  The default workspace holds exactly ONE project, which is the shape the
+ *  single-project auto-link (MOTIR-1880) is for; a test that needs the ambiguous
+ *  case scripts `list_projects` with several rows itself. */
 export const DEFAULT_TOOLS: ToolScript = {
   whoami: {
     structured: {
@@ -161,6 +177,7 @@ export const DEFAULT_TOOLS: ToolScript = {
       workspace: { id: 'ws-1', name: 'Acme', slug: 'acme' },
     },
   },
+  list_projects: { structured: { projects: [projectRow('PROD', 'Prodect')] } },
   list_ready: { structured: { items: [], nextCursor: null } },
   list_sprints: { structured: { sprints: [] } },
   search_work_items: { structured: { items: [], total: 0, nextCursor: null } },
