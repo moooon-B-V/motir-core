@@ -15,16 +15,46 @@ import * as route from '@/app/api/mcp/route';
 // resolvers, the tool registry and the real Postgres underneath are all the
 // shipped ones. No mocks, no stubbed transport (the repo's testing contract).
 //
-// What it deliberately is NOT: a stand-in for `next dev`. It serves exactly one
-// path — the MCP endpoint — because that is the entire surface the CLI talks to
-// (mcpClient.ts: "the ONE place the CLI talks to a Motir server"). Anything else
-// 404s, which keeps a test that accidentally depends on some other route honest
-// instead of silently passing against a hand-built fake.
+// What it deliberately is NOT: a stand-in for `next dev`. It serves the routes it
+// is asked for and 404s everything else, which keeps a test that accidentally
+// depends on some other route honest instead of silently passing against a
+// hand-built fake. By default that is exactly ONE path — the MCP endpoint —
+// because that is the entire surface the CLI talks to once it holds a credential
+// (mcpClient.ts: "the ONE place the CLI talks to a Motir server").
+//
+// `cliDeviceRoutes: true` adds the second surface, and the ONLY other one: the
+// two `/api/cli/device/*` endpoints `motir login` speaks BEFORE a credential
+// exists — `start` and `token` (packages/cli/src/deviceAuth.ts). Real route
+// modules, so the device-login suite drives the shipped grant → mint → bearer
+// chain over a socket with nothing stubbed (MOTIR-1870).
+//
+// The grant's BROWSER half (`/api/cli/device/grant` + `/approve`) is deliberately
+// NOT served: both are cookie-session routes gated by `getSession()`, which reads
+// `next/headers` and therefore only resolves inside a real Next request. A test
+// approves out-of-band through the service (with a real signed-in session's
+// headers, as `cliDeviceService.test.ts` does); the browser path over HTTP is
+// Playwright's subject, not this adapter's.
 
-/** Requests the handler owns. `mcp-handler` derives this from `basePath: '/api'`
- *  (see app/api/mcp/route.ts) and matches the request pathname against it, so the
- *  path has to arrive exactly as the CLI sends it. */
+/** Requests the MCP handler owns. `mcp-handler` derives this from
+ *  `basePath: '/api'` (see app/api/mcp/route.ts) and matches the request pathname
+ *  against it, so the path has to arrive exactly as the CLI sends it. */
 const MCP_PATHNAME = '/api/mcp';
+
+/** One route module, as the App Router exports it. */
+interface RouteModule {
+  GET?: (req: Request) => Promise<Response>;
+  POST?: (req: Request) => Promise<Response>;
+  DELETE?: (req: Request) => Promise<Response>;
+}
+
+export interface McpTestServerOptions {
+  /**
+   * Also serve Motir's CLI device-authorization routes (`/api/cli/device/*`) —
+   * what `motir login` posts to before it has a bearer. Off by default: a suite
+   * that only drives MCP should still 404 on everything else.
+   */
+  cliDeviceRoutes?: boolean;
+}
 
 export interface McpTestServer {
   /** Base URL to hand the CLI as `--server` (no trailing slash). */
@@ -85,8 +115,22 @@ async function writeResponse(response: Response, res: ServerResponse): Promise<v
  * Every caller MUST `close()` it (an `afterAll`), or the vitest worker will not
  * exit.
  */
-export async function startMcpHttpServer(): Promise<McpTestServer> {
+export async function startMcpHttpServer(
+  options: McpTestServerOptions = {},
+): Promise<McpTestServer> {
   const requests: McpTestServer['requests'] = [];
+  const routes = new Map<string, RouteModule>([[MCP_PATHNAME, route as RouteModule]]);
+  if (options.cliDeviceRoutes) {
+    // Imported lazily so a suite that does not ask for them never pulls
+    // Better-Auth's device plugin into its module graph.
+    const [start, token] = await Promise.all([
+      import('@/app/api/cli/device/start/route'),
+      import('@/app/api/cli/device/token/route'),
+    ]);
+    routes.set('/api/cli/device/start', start as RouteModule);
+    routes.set('/api/cli/device/token', token as RouteModule);
+  }
+
   const server: Server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -95,7 +139,8 @@ export async function startMcpHttpServer(): Promise<McpTestServer> {
         pathname: url.pathname,
         authorization: req.headers.authorization ?? null,
       });
-      if (url.pathname !== MCP_PATHNAME) {
+      const mod = routes.get(url.pathname);
+      if (!mod) {
         res.writeHead(404, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ code: 'NOT_FOUND' }));
         return;
@@ -110,8 +155,12 @@ export async function startMcpHttpServer(): Promise<McpTestServer> {
           ...(body && body.length > 0 ? { body: new Uint8Array(body) } : {}),
         });
         const method = req.method === 'GET' ? 'GET' : req.method === 'DELETE' ? 'DELETE' : 'POST';
-        const handler =
-          method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
+        const handler = method === 'GET' ? mod.GET : method === 'DELETE' ? mod.DELETE : mod.POST;
+        if (!handler) {
+          res.writeHead(405, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ code: 'METHOD_NOT_ALLOWED' }));
+          return;
+        }
         await writeResponse(await handler(request as never), res);
       } catch (err) {
         // A handler crash must surface as a 500 the CLI reports, never as an

@@ -386,3 +386,189 @@ describe('/device — accessibility', () => {
     expect(result.violations.map((v) => v.id)).toEqual([]);
   }, 30_000);
 });
+
+// ── the story gate's residue (Subtask MOTIR-1870) ────────────────────────────
+// Branches the suite above left unproven, found by measuring the whole story's
+// surface. Every one of them is a state a real reader reaches — an unknown host,
+// a session that ended mid-flow, a re-read that lands somewhere terminal, the
+// "not you" hand-off — and on THIS page an unhandled branch strands a terminal
+// that is still polling, which is exactly what the state coverage is for.
+
+describe('/device — the paths a first pass leaves for later', () => {
+  it('drops the hostname from BOTH warnings when the terminal reported none', async () => {
+    await reachConfirm({}, { hostname: null });
+
+    // The generic warning still names the act (`motir login`), because the
+    // phishing mitigation cannot depend on a field the CLI may not have sent.
+    expect(screen.getByText(/Approve only if you just ran/)).toBeTruthy();
+    expect(screen.getByText(/deny it/)).toBeTruthy();
+    // And the "what is connecting" line degrades to the client, not to a blank.
+    expect(screen.getByText('Motir CLI')).toBeTruthy();
+  });
+
+  it('confirms an unknown-host grant WITHOUT inventing a token label', async () => {
+    await reachConfirm({}, { hostname: null }, { status: 200, body: { ok: true } });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('heading', { name: 'Terminal connected' });
+    // The workspace is still named — that is the fact the reader approved.
+    expect(screen.getByText(/moooon · Side project/)).toBeTruthy();
+    // But no `CLI · <host>` chip, because there is no host to name.
+    expect(screen.queryByText(/CLI · /)).toBeNull();
+  });
+
+  it('routes a DENY that the server has already moved past by re-reading, not by guessing', async () => {
+    // Deny raced an approval elsewhere: the 409 is not a dead end, it is a
+    // re-read that lands on the true terminal screen.
+    await reachConfirm(
+      {},
+      {},
+      { status: 409, body: { code: 'DEVICE_GRANT_NOT_PENDING' } },
+      { status: 200, body: { ...GRANT, status: 'approved' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+
+    await screen.findByRole('heading', { name: 'Terminal connected' });
+    expect(screen.getByText(/already approved/)).toBeTruthy();
+  });
+
+  it('sends a session that expired before the DENY back through sign-in, code intact', async () => {
+    await reachConfirm({}, {}, { status: 401, body: { code: 'UNAUTHENTICATED' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(push).toHaveBeenCalledWith('/sign-in?next=%2Fdevice%3Fuser_code%3DK4TP9RXM');
+  });
+
+  it('shows a banner — never a blank page — when the network dies mid-DENY', async () => {
+    await reachConfirm({});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline');
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert').textContent).toContain('couldn’t reach Motir');
+    // Still on confirm, so the reader can retry the same decision.
+    expect(screen.getByRole('heading', { name: 'Connect this terminal?' })).toBeTruthy();
+  });
+
+  it('shows a banner when the RE-READ itself fails, rather than stranding the reader', async () => {
+    // The 409 → refresh path with a dead network on the second call: the page must
+    // still say something, because the terminal is still polling either way.
+    const responses = [{ status: 409, body: { code: 'DEVICE_GRANT_NOT_PENDING' } }];
+    await reachConfirm({}, {}, ...responses);
+    const failing = vi.fn(async (url: string) => {
+      if (String(url).endsWith('/approve')) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ code: 'DEVICE_GRANT_NOT_PENDING' }),
+        } as Response;
+      }
+      throw new Error('offline');
+    });
+    vi.stubGlobal('fetch', failing);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert').textContent).toContain('couldn’t reach Motir');
+  });
+
+  it('carries an unroutable RE-READ failure to the right screen (the grant expired meanwhile)', async () => {
+    await reachConfirm(
+      {},
+      {},
+      { status: 409, body: { code: 'DEVICE_GRANT_NOT_PENDING' } },
+      { status: 410, body: { code: 'DEVICE_GRANT_EXPIRED' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('heading', { name: 'That code has expired' });
+  });
+
+  it('the "not you" hand-off signs the reader OUT before sending them to sign-in', async () => {
+    // The phishing-adjacent case the confirm screen exists for: the person at the
+    // browser is not the person at the terminal. Signing out FIRST is the point —
+    // sending them to /sign-in with the old session live would land them straight
+    // back here as the wrong user.
+    const signOut = vi.fn(async () => undefined);
+    vi.doMock('@/lib/auth/client', () => ({ signOut }));
+    await reachConfirm({});
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    expect(push).toHaveBeenCalledWith('/sign-in?next=%2Fdevice%3Fuser_code%3DK4TP9RXM');
+    vi.doUnmock('@/lib/auth/client');
+  });
+
+  it('reads Better-Auth’s `{ error }` body as well as Motir’s `{ code }`', async () => {
+    // The two credential systems answer in two shapes and the page consumes both;
+    // an unrecognised code must still land on a message, never a blank screen.
+    await reachConfirm({}, {}, { status: 403, body: { error: 'access_denied' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert').textContent).toContain('different Motir account');
+  });
+
+  it('treats an unparseable error body as "no code" and still says something', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error('not json');
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage({ initialUserCode: 'K4TP-9RXM' });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert').textContent!.length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Connect the Motir CLI' })).toBeTruthy();
+  });
+
+  it('names the sequencing bug when the server says the code was never claimed', async () => {
+    // 409 NOT_CLAIMED is its own screen-level message, not the already-handled
+    // re-read: the page skipped the claim, so telling the reader "already
+    // approved" would be a lie about a state nobody is in.
+    await reachConfirm({}, {}, { status: 409, body: { code: 'DEVICE_GRANT_NOT_CLAIMED' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert').textContent!.length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Connect this terminal?' })).toBeTruthy();
+  });
+
+  it('lands on the DENIED screen when the re-read finds the grant was denied elsewhere', async () => {
+    await reachConfirm(
+      {},
+      {},
+      { status: 409, body: { code: 'DEVICE_GRANT_NOT_PENDING' } },
+      { status: 200, body: { ...GRANT, status: 'denied' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('heading', { name: 'Request denied' });
+  });
+
+  it('falls back to the first workspace when the active one is not one the user may bind in', async () => {
+    // `activeWorkspaceId` comes from the app-shell cookie and can name a workspace
+    // this user cannot mint a token in; defaulting the picker to it would post an
+    // id the server then refuses.
+    const calls = await reachConfirm(
+      { activeWorkspaceId: 'ws-not-mine' },
+      {},
+      { status: 200, body: { ok: true } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and connect' }));
+
+    await screen.findByRole('heading', { name: 'Terminal connected' });
+    expect(JSON.parse(String(calls[1]?.init?.body))).toMatchObject({ workspaceId: 'ws-1' });
+  });
+});

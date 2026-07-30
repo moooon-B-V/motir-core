@@ -26,10 +26,12 @@ const {
   DeviceGrantNotPendingError,
   DeviceGrantPendingError,
   DeviceGrantSlowDownError,
+  DeviceGrantUnboundError,
   InvalidDeviceGrantError,
 } = await import('@/lib/cliDevice/errors');
 const { NotAMemberError } = await import('@/lib/workspaces/errors');
 const { deviceCodeRepository } = await import('@/lib/repositories/deviceCodeRepository');
+const { toDeviceGrantTokenDTO } = await import('@/lib/mappers/cliDeviceMappers');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
@@ -808,5 +810,115 @@ describe('concurrency (real Postgres, warm pool)', () => {
     await clearPollThrottle(grant.device_code);
     await poll(grant.device_code);
     expect(await db.apiToken.count()).toBe(1);
+  });
+});
+
+// ── the story gate's residue (Subtask MOTIR-1870) ────────────────────────────
+// Branches the per-subtask suite above left unproven, found by measuring this
+// story's surface as a whole rather than card by card. Each is a REACHABLE state
+// with a real consequence, so each is exercised rather than waived: a grant
+// opened for another client, an approved row that cannot be honoured, an approver
+// who lost the workspace between approving and polling, and a token with no
+// expiry crossing the mapper.
+
+describe('poll — the states only a corrupted or shifted grant reaches', () => {
+  it('answers invalid_grant when the ROW was opened for a different client', async () => {
+    // The `client_id` pin has two halves: the value the poller presents (covered
+    // above) and the value recorded on the grant. This is the second — a grant
+    // opened by some other client cannot be collected by the CLI even though the
+    // CLI presents the right id.
+    const { owner, workspace } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(grant.user_code, headers);
+    await cliDeviceService.approve({
+      userCode: grant.user_code,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      headers,
+    });
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { clientId: 'some-other-client' },
+    });
+
+    await expect(poll(grant.device_code)).rejects.toBeInstanceOf(InvalidDeviceGrantError);
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('refuses to mint from an APPROVED grant that carries no workspace binding', async () => {
+    // Structurally unreachable through `approve` (which writes the binding BEFORE
+    // the flip, under the row lock) — which is exactly why it is worth a test: it
+    // pins the poll's refusal to mint from a row it cannot honour, so a future
+    // reordering of those two writes fails here instead of minting a token into
+    // an unknown workspace.
+    const { owner, workspace } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(grant.user_code, headers);
+    await cliDeviceService.approve({
+      userCode: grant.user_code,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      headers,
+    });
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { workspaceId: null },
+    });
+
+    await expect(poll(grant.device_code)).rejects.toBeInstanceOf(DeviceGrantUnboundError);
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('answers invalid_grant when the approver lost the workspace before the poll', async () => {
+    // The window the mint's `NotAMemberError` catch exists for: approval passed the
+    // membership check, then the user was removed from the workspace before the
+    // terminal collected. The grant is already consumed, so there is nothing to
+    // retry against — `invalid_grant` and re-running `motir login` is the fix.
+    const { owner, workspace } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(grant.user_code, headers);
+    await cliDeviceService.approve({
+      userCode: grant.user_code,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      headers,
+    });
+
+    // Org membership is what gates workspace access (`resolveWorkspaceAccess`
+    // returns null without it, even with a stale workspace-membership row), so
+    // removing the user from the ORG is what "lost the workspace" means here.
+    await db.organizationMembership.deleteMany({ where: { userId: owner.id } });
+    await db.workspaceMembership.deleteMany({
+      where: { workspaceId: workspace.id, userId: owner.id },
+    });
+
+    await expect(poll(grant.device_code)).rejects.toBeInstanceOf(InvalidDeviceGrantError);
+    expect(await db.apiToken.count()).toBe(0);
+    // Consumed either way: the claim committed before the mint was attempted, so a
+    // failed mint does NOT resurrect the grant.
+    expect(await db.deviceCode.count()).toBe(0);
+  });
+});
+
+describe('toDeviceGrantTokenDTO — the never-expiring token', () => {
+  it('reports expires_in 0 for a token with no expiry, rather than a NaN countdown', async () => {
+    // The device grant always sets 90 days, so this arm is only reachable if the
+    // mapper is ever reused for a settings-minted `never` token — the moment it is,
+    // an unguarded `new Date(null)` would send `NaN` to the CLI, which prints it.
+    const { owner, workspace } = await createTestWorkspace();
+    const { dto, token } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'never expires',
+      scopes: [...CLI_TOKEN_SCOPES],
+    });
+    expect(dto.expiresAt).toBeNull();
+
+    const mapped = toDeviceGrantTokenDTO({ token, dto, user: owner, workspace });
+
+    expect(mapped.expires_in).toBe(0);
+    expect(mapped.access_token).toBe(token);
+    expect(mapped.scope).toBe(dto.scopes.join(' '));
   });
 });
