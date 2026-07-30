@@ -95,6 +95,44 @@ export async function withSystemContext<T>(
 }
 
 /**
+ * Opens a Prisma transaction binding ONLY the `app.workspace_id` GUC (no
+ * `app.user_id`, no `app.system_admin`), then invokes `fn` with the transaction
+ * client. This is the workspace-tier analogue of
+ * `withOrgServiceWriteContext` (lib/organizations/context.ts): the context for a
+ * TRUSTED path that operates within ONE workspace WITHOUT an acting user.
+ *
+ * The caller today is the CI-minutes meter (Story MOTIR-1775 · MOTIR-1896),
+ * which resolves a GitHub `workflow_run` delivery to its tenant. A webhook has
+ * no session, so there is no user to bind — but `withSystemContext` would be the
+ * WRONG tool: `system_admin` is a cross-table, cross-tenant flag, and the meter
+ * needs to read exactly one workspace's rows. Binding the workspace id keeps the
+ * reach row-scoped, so RLS itself enforces that a repo can only be attributed
+ * inside the tenant that holds its installation.
+ *
+ * Sufficient for tables whose policy gates PURELY on `workspace_id` — the
+ * `project_repository` / `sprint` / `plan` shape, and the `workspace_active`
+ * SELECT policy. NOT sufficient for a policy that also reads `app.user_id`
+ * (membership-gated rows) or `app.project_id` (the `work_item` project
+ * narrowing), which is deliberate: a path that needs those has an acting user
+ * and should use `withWorkspaceContext`.
+ *
+ * SECURITY: the workspace id must come from a TRUSTED resolution (the meter
+ * takes it from the stored `github_installation` row the delivery's installation
+ * id resolves to), never from user input — exactly the constraint
+ * `withOrgServiceWriteContext` documents. The policy confines the effect to that
+ * one workspace, so it grants no broader reach than the id already implies.
+ */
+export async function withWorkspaceServiceContext<T>(
+  workspaceId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+    return fn(tx);
+  });
+}
+
+/**
  * Opens a Prisma transaction binding ONLY the `app.user_id` GUC, then
  * invokes `fn` with the transaction client. This is the half-context used
  * while RESOLVING which workspace a request acts within: the workspace id

@@ -22,6 +22,7 @@ import {
   type CiFeedbackContextResolution,
   type CiFeedbackResult,
 } from './changeRequestCiFeedback';
+import { ciMinutesMeterService, type MeterWorkflowRunOutcome } from './ciMinutesMeterService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -72,6 +73,17 @@ export type GithubWebhookResult =
         | 'unknown_installation'
         | 'unknown_repo';
     }
+  | {
+      // The CI-minutes meter (Story MOTIR-1775 · MOTIR-1896). `outcome` is the
+      // meter's own typed outcome, plus this handler's two edges: a delivery we
+      // do not meter at all, and one whose metering threw (acked, never 500).
+      event: 'workflow_run';
+      outcome:
+        | MeterWorkflowRunOutcome['outcome']
+        | 'ignored_action'
+        | 'unknown_installation'
+        | 'failed';
+    }
   | ChangeRequestSyncResult
   | CiFeedbackResult;
 
@@ -100,6 +112,8 @@ export const githubWebhookService = {
       case 'check_suite':
       case 'check_run':
         return this.handleCiStatus(body);
+      case 'workflow_run':
+        return this.handleWorkflowRun(body);
       default:
         // `ping` and every event we don't sync land here — a fast 2xx no-op.
         return { event: 'ignored', reason: `unhandled_event:${eventType}` };
@@ -226,6 +240,50 @@ export const githubWebhookService = {
     if (!event) return { event: 'ci', outcome: 'malformed' };
 
     return applyCiStatusFeedback(event, (tx) => resolveGithubCiContext(body, event, tx));
+  },
+
+  /**
+   * Handle a `workflow_run` delivery — the CI-MINUTES METER (Story MOTIR-1775 ·
+   * MOTIR-1896). DISTINCT from `handleCiStatus` above, and deliberately a
+   * separate event: `check_run`/`check_suite` answer "did CI pass?" (the
+   * verification loop) and carry no timing at all, while this answers "how much
+   * compute did Motir just pay for, and whose is it?" (the billing loop).
+   *
+   * Only a COMPLETED run normalizes (`ci-minutes-allowance.md` §5.7 — the
+   * predicate is evaluated at run completion, which is what makes the
+   * repo-transfer edge need no special case). Everything else is a fast no-op.
+   *
+   * The meter never throws for a run it simply does not meter, and this handler
+   * does not let one that DOES throw fail the delivery: an ack that 500s makes
+   * GitHub retry, and a retry cannot fix a bad token or an API outage. The
+   * `(run_id, run_attempt)` idempotency key means a later redelivery — GitHub's
+   * own, or a manual replay — meters it exactly once, so dropping this one
+   * loses nothing that cannot be recovered.
+   */
+  async handleWorkflowRun(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    if (!provider.parseWorkflowRunEvent) {
+      return { event: 'workflow_run', outcome: 'ignored_action' };
+    }
+    const run = provider.parseWorkflowRunEvent(body);
+    if (!run) return { event: 'workflow_run', outcome: 'ignored_action' };
+
+    const installationId = readInstallationId(body);
+    if (!installationId) return { event: 'workflow_run', outcome: 'unknown_installation' };
+
+    try {
+      const result = await ciMinutesMeterService.meterWorkflowRun(run, installationId);
+      return { event: 'workflow_run', outcome: result.outcome };
+    } catch (err) {
+      console.error('[githubWebhookService] CI-minutes metering failed; delivery acked', {
+        runId: run.runId,
+        runAttempt: run.attempt,
+        repoOwner: run.repoOwner,
+        repoName: run.repoName,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+      return { event: 'workflow_run', outcome: 'failed' };
+    }
   },
 };
 

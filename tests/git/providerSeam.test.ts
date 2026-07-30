@@ -292,3 +292,271 @@ describe('github.parsePushEvent (MOTIR-893)', () => {
     });
   });
 });
+
+// --- CI-minutes metering capability (Story MOTIR-1775 · MOTIR-1896) ----------
+// `docs/decisions/ci-minutes-allowance.md` §5.6 makes these OPTIONAL on the
+// seam: GitHub is the only host whose compute Motir pays for, because Motir
+// creates repositories only in its own GitHub org. GitLab is reachable through
+// connect-existing only — a namespace the user owns and GitLab bills them for.
+
+describe('the metering capability is GitHub-only, by design (§5.6)', () => {
+  it('GitHub declares it; GitLab does not', () => {
+    expect(typeof github.parseWorkflowRunEvent).toBe('function');
+    expect(typeof github.fetchWorkflowRunJobs).toBe('function');
+    expect(getGitProvider('gitlab').parseWorkflowRunEvent).toBeUndefined();
+    expect(getGitProvider('gitlab').fetchWorkflowRunJobs).toBeUndefined();
+  });
+});
+
+describe('github.parseWorkflowRunEvent (MOTIR-1896)', () => {
+  function runDelivery(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      action: 'completed',
+      repository: { id: 555, name: 'acme-web', owner: { login: 'motir-projects' } },
+      workflow_run: {
+        id: 7001,
+        name: 'CI',
+        run_attempt: 2,
+        run_started_at: '2026-07-30T11:00:00Z',
+        updated_at: '2026-07-30T12:00:00Z',
+      },
+      ...over,
+    };
+  }
+
+  it('normalizes a completed run, taking the owner from the RUN payload (§5.5)', () => {
+    expect(github.parseWorkflowRunEvent!(runDelivery())).toEqual({
+      providerRepoId: '555',
+      runId: '7001',
+      attempt: 2,
+      repoOwner: 'motir-projects',
+      repoName: 'acme-web',
+      workflowName: 'CI',
+      completedAt: new Date('2026-07-30T12:00:00Z'),
+    });
+  });
+
+  it('returns null for a run that has not completed (§5.7)', () => {
+    // The predicate is evaluated at run COMPLETION — that is what makes the
+    // repo-transfer edge fall out with no special handling.
+    expect(github.parseWorkflowRunEvent!(runDelivery({ action: 'requested' }))).toBeNull();
+    expect(github.parseWorkflowRunEvent!(runDelivery({ action: 'in_progress' }))).toBeNull();
+  });
+
+  it('defaults a payload with no run_attempt to attempt 1', () => {
+    const delivery = runDelivery();
+    delete (delivery['workflow_run'] as Record<string, unknown>)['run_attempt'];
+    expect(github.parseWorkflowRunEvent!(delivery)).toMatchObject({ attempt: 1 });
+  });
+
+  it('ignores a nonsensical run_attempt rather than trusting it', () => {
+    const delivery = runDelivery();
+    (delivery['workflow_run'] as Record<string, unknown>)['run_attempt'] = 0;
+    expect(github.parseWorkflowRunEvent!(delivery)).toMatchObject({ attempt: 1 });
+  });
+
+  it('falls back to run_started_at when updated_at is absent', () => {
+    const delivery = runDelivery();
+    delete (delivery['workflow_run'] as Record<string, unknown>)['updated_at'];
+    expect(github.parseWorkflowRunEvent!(delivery)).toMatchObject({
+      completedAt: new Date('2026-07-30T11:00:00Z'),
+    });
+  });
+
+  it('REFUSES a run with no usable timestamp rather than guessing one', () => {
+    // Without an instant the run cannot be assigned a period or a rate
+    // effective-date, and inventing one would silently misfile real spend.
+    const delivery = runDelivery();
+    delete (delivery['workflow_run'] as Record<string, unknown>)['updated_at'];
+    delete (delivery['workflow_run'] as Record<string, unknown>)['run_started_at'];
+    expect(github.parseWorkflowRunEvent!(delivery)).toBeNull();
+    (delivery['workflow_run'] as Record<string, unknown>)['updated_at'] = 'not-a-date';
+    expect(github.parseWorkflowRunEvent!(delivery)).toBeNull();
+  });
+
+  it('returns null for a malformed or unrelated payload', () => {
+    expect(github.parseWorkflowRunEvent!('not an object')).toBeNull();
+    expect(github.parseWorkflowRunEvent!(runDelivery({ workflow_run: undefined }))).toBeNull();
+    expect(github.parseWorkflowRunEvent!(runDelivery({ repository: undefined }))).toBeNull();
+    expect(
+      github.parseWorkflowRunEvent!(runDelivery({ repository: { id: 555, name: 'x' } })),
+    ).toBeNull(); // no owner login
+  });
+});
+
+describe('github.fetchWorkflowRunJobs (MOTIR-1896)', () => {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  beforeEach(() => {
+    _resetInstallationTokenCache();
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function stubJobs(body: unknown, status = 200): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async (url: string): Promise<Response> => {
+      const u = String(url);
+      if (u.includes('/access_tokens')) {
+        return new Response(
+          JSON.stringify({
+            token: 'ghs_jobs',
+            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('reads the ATTEMPT-scoped jobs endpoint, so a re-run does not double-count', async () => {
+    const fetchMock = stubJobs({
+      jobs: [
+        {
+          id: 42,
+          name: 'build',
+          started_at: '2026-07-30T11:00:00Z',
+          completed_at: '2026-07-30T11:05:00Z',
+          labels: ['ubuntu-latest'],
+        },
+      ],
+    });
+
+    const jobs = await github.fetchWorkflowRunJobs!(
+      '9001',
+      'motir-projects',
+      'acme-web',
+      '7001',
+      2,
+    );
+
+    expect(jobs).toEqual([
+      {
+        id: '42',
+        name: 'build',
+        startedAt: new Date('2026-07-30T11:00:00Z'),
+        completedAt: new Date('2026-07-30T11:05:00Z'),
+        labels: ['ubuntu-latest'],
+      },
+    ]);
+    // `/runs/{id}/jobs` would return EVERY attempt's jobs; the attempt-scoped
+    // path is what keeps a re-run billing only its own compute.
+    const jobsUrl = String(
+      fetchMock.mock.calls.find((c) => !String(c[0]).includes('access_tokens'))?.[0],
+    );
+    expect(jobsUrl).toContain('/repos/motir-projects/acme-web/actions/runs/7001/attempts/2/jobs');
+  });
+
+  it('does NOT use the closing-down /timing endpoint (§5.8)', async () => {
+    const fetchMock = stubJobs({ jobs: [] });
+    await github.fetchWorkflowRunJobs!('9001', 'motir-projects', 'acme-web', '7001', 1);
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).not.toContain('/timing');
+    }
+  });
+
+  it('normalizes a job with missing timestamps rather than dropping it', async () => {
+    // Keeping the row makes "why did this run meter nothing?" answerable from
+    // the job list; the arithmetic is what skips it.
+    stubJobs({ jobs: [{ id: 43, name: 'queued', labels: [] }] });
+    expect(await github.fetchWorkflowRunJobs!('9001', 'o', 'r', '7001', 1)).toEqual([
+      { id: '43', name: 'queued', startedAt: null, completedAt: null, labels: [] },
+    ]);
+  });
+
+  it('drops an entry with no usable id, and tolerates a missing jobs array', async () => {
+    stubJobs({ jobs: [{ name: 'nameless' }, 'garbage'] });
+    expect(await github.fetchWorkflowRunJobs!('9001', 'o', 'r', '7001', 1)).toEqual([]);
+    stubJobs({});
+    expect(await github.fetchWorkflowRunJobs!('9001', 'o', 'r', '7001', 1)).toEqual([]);
+  });
+
+  it('throws on a non-OK response', async () => {
+    stubJobs({ message: 'Not Found' }, 404);
+    await expect(github.fetchWorkflowRunJobs!('9001', 'o', 'r', '7001', 1)).rejects.toThrow(
+      /workflow-jobs endpoint returned 404/,
+    );
+  });
+});
+
+describe('github.fetchOrgComputeUsage (MOTIR-1896 — the reconciliation read)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reads the enhanced-billing usage endpoint with the org-billing token', async () => {
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            usageItems: [
+              {
+                repositoryName: 'acme-web',
+                sku: 'Actions Linux',
+                quantity: 120,
+                unitType: 'minutes',
+                date: '2026-07-15',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const lines = await github.fetchOrgComputeUsage!('motir-projects', 2026, 7, 'ghp_audit');
+
+    expect(lines).toEqual([
+      {
+        repositoryName: 'acme-web',
+        sku: 'Actions Linux',
+        quantity: 120,
+        unitType: 'minutes',
+        date: '2026-07-15',
+      },
+    ]);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe(
+      'https://api.github.com/organizations/motir-projects/settings/billing/usage?year=2026&month=7',
+    );
+    // The org-billing credential, NOT an installation token: an installation
+    // token cannot read org billing at all.
+    expect(init?.headers).toMatchObject({ authorization: 'Bearer ghp_audit' });
+  });
+
+  it('drops malformed usage lines and throws on a non-OK response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ usageItems: [{ sku: 'Actions Linux' }, 'garbage'] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    expect(await github.fetchOrgComputeUsage!('motir-projects', 2026, 7, 't')).toEqual([]);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 403 })),
+    );
+    await expect(github.fetchOrgComputeUsage!('motir-projects', 2026, 7, 't')).rejects.toThrow(
+      /billing-usage endpoint returned 403/,
+    );
+  });
+});

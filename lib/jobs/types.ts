@@ -281,6 +281,9 @@ export interface JobEventDataMap {
   'system.filter-subscription-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
+  /** Monthly CI-minutes reconciliation (Story MOTIR-1775 · MOTIR-1896) — cron
+   *  triggered, so it carries no payload beyond the scheduled envelope. */
+  'system.ci-minutes-reconcile': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;

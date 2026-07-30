@@ -370,12 +370,44 @@ export default defineConfig({
         'app/api/cli/device/grant/route.ts',
         'app/(auth)/device/_components/DeviceApproval.tsx',
         'app/(authed)/settings/account/_components/ConnectCliPanel.tsx',
+        // Story MOTIR-1775 · MOTIR-1896 — the CI-minutes METER (the measurement
+        // half of `docs/decisions/ci-minutes-allowance.md`). Gated from day one:
+        // every figure here becomes a charge on a user's credit balance via
+        // MOTIR-1901, so a silent regression in the arithmetic, the period key
+        // or the idempotency guard is a billing bug, not a test-coverage nit.
+        'lib/ciMetering/runnerRates.ts',
+        'lib/ciMetering/normalize.ts',
+        'lib/ciMetering/period.ts',
+        'lib/ciMetering/config.ts',
+        'lib/services/ciMinutesMeterService.ts',
+        'lib/services/ciMinutesReconciliationService.ts',
+        'lib/repositories/ciWorkflowRunUsageRepository.ts',
+        'lib/repositories/ciPeriodUsageRepository.ts',
+        'lib/jobs/definitions/ciMinutesReconcile.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
       // independently, so a regression in any one fails the run (rather than a
       // blended average hiding a weak module).
       thresholds: {
+        // Story MOTIR-1775 · MOTIR-1896 — the CI-minutes meter.
+        'lib/ciMetering/runnerRates.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciMetering/normalize.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciMetering/period.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciMetering/config.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciMinutesMeterService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciMinutesReconciliationService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/ciWorkflowRunUsageRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/ciPeriodUsageRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/ciMinutesReconcile.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 5.7 · Subtask 5.7.6 — notification-preference channel gate.
         'lib/services/notificationPreferencesService.ts': {
           branches: 90,
