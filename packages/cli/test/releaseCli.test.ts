@@ -44,6 +44,19 @@ const cliDoc = read(join(REPO_ROOT, 'docs', 'cli.md'));
 const indentOf = (line: string): number => line.length - line.trimStart().length;
 
 /**
+ * The workflow with comment-only lines removed — the lines the runner actually
+ * executes. Assertions about what a lane must NOT contain have to read this and
+ * not the raw file, or a comment EXPLAINING a removed mechanism re-trips the
+ * guard against it (the header documents the `NODE_AUTH_TOKEN` this lane
+ * deliberately no longer sets).
+ */
+const executableYaml = (workflow: string): string =>
+  workflow
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+
+/**
  * The shell body of a workflow step, by its `- name:`. Only sound because the
  * release steps use `run: |` block scalars at a fixed indent; it stops at the
  * first line that dedents out of the block.
@@ -154,25 +167,40 @@ describe('the release lane that publishes the package (8.7.9)', () => {
     // Comments are exempt — the header explains that this file is the
     // `release-design-system.yml` copy, and names it. Only lines the runner
     // would actually execute have to be free of the other package.
-    const yamlOnly = release
-      .split('\n')
-      .filter((line) => !line.trim().startsWith('#'))
-      .join('\n');
-    expect(yamlOnly).not.toContain('design-system');
+    expect(executableYaml(release)).not.toContain('design-system');
   });
 
-  it('authenticates with NPM_TOKEN and attests provenance', () => {
-    // `registry-url` is what writes the .npmrc that maps NODE_AUTH_TOKEN onto
-    // the registry — without it the publish authenticates as nobody, and npm's
-    // 404-not-401 failure mode makes that a confusing half-hour.
-    expect(release).toContain("registry-url: 'https://registry.npmjs.org'");
-    expect(release).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}');
+  it('authenticates with OIDC Trusted Publishing — NO secret at all', () => {
+    // MOTIR-1890. The lane shipped on the long-lived `NPM_TOKEN` and the very
+    // first CI use of it (the cli-v0.1.0 tag) failed with npm's MASKED auth
+    // error — `404 Not Found - PUT .../@motir%2fcli`, which is what npm returns
+    // instead of 401/403 so a caller cannot probe private scoped packages. This
+    // asserts the credential is now minted per-run from the OIDC id-token.
     expect(release).toContain('id-token: write');
     expect(release).toContain('npm publish --access public --provenance');
-    // No OTHER secret: any second credential would be one more thing to
-    // provision and rotate out of band.
-    const secrets = [...release.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]);
-    expect([...new Set(secrets)]).toEqual(['NPM_TOKEN']);
+    // ZERO secrets is the load-bearing assertion: `secrets.` reappearing here
+    // means someone reintroduced an out-of-band credential to rotate.
+    const executable = executableYaml(release);
+    expect([...executable.matchAll(/secrets\.(\w+)/g)]).toEqual([]);
+    expect(executable).not.toContain('NODE_AUTH_TOKEN');
+    // setup-node's `registry-url` writes an .npmrc whose only job is mapping
+    // NODE_AUTH_TOKEN. With no token that .npmrc publishes ANONYMOUSLY, so on a
+    // Trusted Publish its absence is required, not incidental.
+    expect(executable).not.toContain('registry-url');
+  });
+
+  it('upgrades npm past the 11.5.1 floor OIDC needs, before it publishes', () => {
+    // Node 22 ships npm 10.x, which has no Trusted Publishing support at all —
+    // it would fall back to reading a token that no longer exists. This is why
+    // the migration was NOT the "two-line change" the old header promised.
+    const upgrade = release.indexOf('npm install -g npm@latest');
+    expect(upgrade, 'the npm upgrade step exists').toBeGreaterThan(-1);
+    expect(release.indexOf('- name: Publish to npm')).toBeGreaterThan(upgrade);
+    // The design-system lane is the reference implementation of this pairing;
+    // if it ever drops the step, this lane's rationale needs revisiting too.
+    expect(read(join(WORKFLOW_DIR, 'release-design-system.yml'))).toContain(
+      'npm install -g npm@latest',
+    );
   });
 
   it('skips the publish on a dry run AND on an already-published version', () => {

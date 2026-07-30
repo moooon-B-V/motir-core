@@ -509,9 +509,27 @@ construction, and both lanes guard the tag against this `package.json`.
 (`workflow_dispatch`) with **dry run** checked — it builds, tests and packs the
 tarball as a downloadable artifact without publishing.
 
-**Auth:** the publish step uses the `NPM_TOKEN` Actions secret (MOTIR-662).
-`@motir/design-system` has moved to OIDC Trusted Publishing, which needs a
-Trusted Publisher configured on npmjs.com **per package**; `@motir/cli` has none
-yet, so it stays on the token. Provenance is generated either way —
-`--provenance` needs `id-token: write` plus the `repository` field in
-`package.json`, not a trusted publisher.
+**Auth:** the publish step uses **OIDC Trusted Publishing** — no `NPM_TOKEN`
+secret. GitHub mints a short-lived id-token (`id-token: write`) that npm
+exchanges for a one-time publish credential, gated by a Trusted Publisher
+configured on npmjs.com for this package (org `moooon-B-V` / repo `motir-core` /
+this workflow filename). Provenance is still requested explicitly with
+`--provenance`, which needs `id-token: write` plus the `repository` field in
+`package.json`.
+
+> **Why the lane moved off `NPM_TOKEN` (MOTIR-1890).** It originally published
+> with that long-lived secret (MOTIR-662). The `cli-v0.1.0` tag was its first
+> CI use, and it failed:
+>
+> ```
+> npm error code E404
+> npm error 404 Not Found - PUT https://registry.npmjs.org/@motir%2fcli
+> ```
+>
+> **A 404 on `PUT` for a scoped package that exists is npm's masked auth
+> failure**, not a missing package — npm answers 404 instead of 401/403 so an
+> unauthorized caller cannot probe which private scoped packages exist. Read it
+> as "the credential is wrong", never as "the package is gone". Note that the
+> `dry_run` path cannot catch this: it packs but skips the publish, so it
+> rehearses everything except auth. OIDC removes the credential that could
+> expire in the first place.
