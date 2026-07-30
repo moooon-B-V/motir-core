@@ -1104,6 +1104,42 @@ export const plansService = {
           );
         });
     }
+
+    // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
+    // approved plan is what the set's cardinality is derived from, so this is the
+    // moment it can be proposed at all. Writes `proposed` rows the establish step
+    // then shows as editable (ADR §0.2: Motir proposes, the user decides); it
+    // creates nothing on GitHub.
+    //
+    // Fired on EVERY approve, not only the first onboarding: the proposer's own
+    // guard is "a project whose set has any row is left completely alone", so a
+    // re-plan approve of an established project is one cheap read, while a project
+    // whose first attempt lost to a motir-ai hiccup gets another chance instead of
+    // being permanently setless.
+    //
+    // BEST-EFFORT and AFTER the tx commits, for both of the reasons the convention
+    // trigger above is: the pre-plan read is a `server-only` client call that
+    // cannot run inside the DB transaction, and establishing repos — important as
+    // it is — is not worth failing a plan approval over (ADR §4.3 is the same
+    // judgement one level down). A failure leaves the user an empty-but-editable
+    // set, which MOTIR-1782 can complete later (ADR §4.4: approval is not the last
+    // chance to establish a repo). Imported LAZILY for the same reason: the E2E
+    // plan seeds import plansService in the Playwright Node process, where
+    // `server-only` does not resolve.
+    await import('@/lib/services/projectRepoProposalService')
+      .then(({ projectRepoProposalService }) =>
+        // No `itemRoles`: a proposal carries no repo role until MOTIR-1885 emits
+        // one and MOTIR-1884 carries it through materialize (ADR §5.5). This call
+        // site is where they wire it in.
+        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx),
+      )
+      .catch((err: unknown) => {
+        console.warn(
+          `[plansService.approvePlan] repository-set proposal failed for project ${plan.projectId}; skipping (the set stays empty and editable)`,
+          err,
+        );
+      });
+
     return toPlanWithItemsDto(row, items);
   },
 
