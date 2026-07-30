@@ -41,6 +41,9 @@ const pkg = JSON.parse(read(join(CLI_DIR, 'package.json'))) as {
 const cliReadme = read(join(CLI_DIR, 'README.md'));
 const cliDoc = read(join(REPO_ROOT, 'docs', 'cli.md'));
 
+/** One package's entry in `npm pack --json` output (shape stable across majors; the CONTAINER is not). */
+type PackReport = { files: Array<{ path: string }> };
+
 const indentOf = (line: string): number => line.length - line.trimStart().length;
 
 /**
@@ -117,14 +120,32 @@ describe('the @motir/cli publish metadata', () => {
   it('ships a tarball of dist/ + package.json + README, and nothing stray', () => {
     // The real `npm pack` file list, not a reading of `files`: an .npmignore, a
     // stray root-level asset or a `files` edit would all show up here first.
+    //
+    // ⚠️ The JSON SHAPE is not stable across npm majors, and this suite runs
+    // under two different ones: `ci.yml` uses whatever node 22 bundles (npm 10),
+    // while `release-cli.yml` installs npm@latest for OIDC Trusted Publishing.
+    //   npm <= 11:  [ { id, name, files: [...] } ]        — an ARRAY
+    //   npm >= 12:  { "@motir/cli": { id, files: [...] } } — keyed by package
+    // Reading `[0]` silently yields undefined on npm 12, which empties `paths`
+    // and turns every assertion below into a vacuous pass except the two
+    // `toContain`s. Normalise to the entry list instead of indexing.
     const packed = JSON.parse(
       execFileSync('npm', ['pack', '--dry-run', '--json'], {
         cwd: CLI_DIR,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }),
-    ) as Array<{ files: Array<{ path: string }> }>;
-    const paths = (packed[0]?.files ?? []).map((f) => f.path);
+    ) as PackReport | PackReport[] | Record<string, PackReport>;
+    const entries: PackReport[] = Array.isArray(packed)
+      ? packed
+      : 'files' in packed
+        ? [packed as PackReport]
+        : Object.values(packed as Record<string, PackReport>);
+    const paths = (entries[0]?.files ?? []).map((f) => f.path);
+
+    // Guard the guard: if a future npm reshapes this again, fail LOUDLY here
+    // rather than passing an empty list through the checks below.
+    expect(paths.length, 'npm pack --json reported no files — shape changed?').toBeGreaterThan(0);
 
     for (const path of paths) {
       expect(
