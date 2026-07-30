@@ -1,9 +1,10 @@
 import type { DeviceCode, Prisma } from '@prisma/client';
+import { db } from '@/lib/db';
 
-// Data access for the `device_code` table (Story MOTIR-1863 · Subtask MOTIR-1865) —
-// the in-flight `motir login` grants. Single-op methods only; writes require `tx`
-// (CLAUDE.md 4-layer split). All business logic — the five-state branch, the mint,
-// the single-use delete — lives in `cliDeviceService`.
+// Data access for the `device_code` table (Story MOTIR-1863 · Subtasks MOTIR-1865 /
+// MOTIR-1888) — the in-flight `motir login` grants. Single-op methods only; writes
+// require `tx` (CLAUDE.md 4-layer split). All business logic — the five-state branch,
+// the mint, the single-use delete — lives in `cliDeviceService`.
 //
 // The table has TWO writers: Better-Auth's `deviceAuthorization` plugin drives
 // `status` / `userId` / `lastPolledAt` through its own adapter, and this repository
@@ -14,9 +15,12 @@ import type { DeviceCode, Prisma } from '@prisma/client';
 //
 // No RLS on this table (identity-scoped — see the `DeviceCode` docstring), so no
 // GUC-binding context is needed and no `withWorkspaceContext` wrapper is required.
-// Every method here takes `tx` — not only the writes: each read in this flow guards a
-// write in the same transaction, which is precisely the case CLAUDE.md says must take
-// `tx` and read under `SELECT FOR UPDATE`.
+//
+// Nearly every method here takes `tx`, and not only the writes: each read in the CLI's
+// flow guards a write in the same transaction, which is precisely the case CLAUDE.md
+// says must take `tx` and read under `SELECT FOR UPDATE`. The ONE exception is
+// `findByUserCodeForRead` — see its docstring for why a lock there would guard
+// nothing.
 
 export const deviceCodeRepository = {
   /**
@@ -48,6 +52,24 @@ export const deviceCodeRepository = {
   /** Re-read INSIDE the transaction, after `lockByUserCode`. */
   async findByUserCode(userCode: string, tx: Prisma.TransactionClient): Promise<DeviceCode | null> {
     return tx.deviceCode.findUnique({ where: { userCode } });
+  },
+
+  /**
+   * The `/device` page's read (Subtask MOTIR-1888) — the one method here that takes no
+   * `tx`, because it guards no write of ours: `describe` renders the row, it does not
+   * compute a decision from it. CLAUDE.md's "read methods used only by read-only
+   * service paths may use the `db` singleton" is exactly this case.
+   *
+   * A `FOR UPDATE` here would be worse than useless. The write in that flow — the
+   * CLAIM — is performed by Better-Auth's adapter in its OWN transaction and has
+   * already committed by the time this runs, so a lock could not make the pair atomic;
+   * it would only hold a row lock across a request that never writes, adding
+   * contention with the poll for nothing. The residual race is benign and handled by
+   * the caller: a concurrent poll can reap the row between the claim and this read, and
+   * `null` then means "the grant is gone", which is an honest 404.
+   */
+  async findByUserCodeForRead(userCode: string): Promise<DeviceCode | null> {
+    return db.deviceCode.findUnique({ where: { userCode } });
   },
 
   /** Record the CLI-reported hostname on a freshly created grant. */
