@@ -25,16 +25,50 @@ export interface WhoamiResult {
   workspace: { id: string; name: string; slug: string } | null;
 }
 
+/** The far end of ONE per-row dependency edge (`WorkItemEdgeSummaryDto`), as the
+ * MCP reads project it: `key` is the `PROD-<n>` identifier, `status` the raw
+ * workflow status key. */
+export interface WorkItemEdgeSummary {
+  key: string;
+  title: string;
+  status: string;
+}
+
+/** Both directions of the `is_blocked_by` graph around one row
+ * (`WorkItemDependencyEdgesDto`). The server promises both arrays are always
+ * present — empty, never missing — so nothing branches on ARRAY presence; only
+ * the BLOCK itself can be missing, from a server that predates it (below). */
+export interface WorkItemDependencyEdges {
+  blockedBy: WorkItemEdgeSummary[];
+  blocks: WorkItemEdgeSummary[];
+}
+
+/**
+ * Why every `dependencies` field in this mirror is OPTIONAL — the one place a
+ * missing field is a shape the server really can produce.
+ *
+ * The CLI is versioned and PUBLISHED TO NPM independently of the server it talks
+ * to, so a newer CLI routinely meets an OLDER Motir whose reads predate the edge
+ * projection. Absent therefore means "this server cannot tell me the graph", and
+ * every renderer degrades to the columns it can substantiate rather than drawing
+ * a dependency claim it never got or crashing on a field it cannot read.
+ */
+
 /** A ready-set row (the `list_ready` `ReadyItemDto`, terminal-relevant fields).
  * Kept loose — the CLI renders, it does not re-validate the server. `key` is the
  * `PROD-<n>` identifier; the ready row carries no `type`/`estimate` column (the
- * /ready row is kind · key · title · priority · assignee). */
+ * /ready row is kind · key · title · priority · assignee).
+ *
+ * `dependencies` is the per-row edge block 7.9.0f / MOTIR-1842 attaches, which
+ * `motir ready` renders as its `BLOCKS` column (MOTIR-1845). Optional per the
+ * note above. */
 export interface ReadyItemSummary {
   key: string;
   kind: string;
   title: string;
   priority: string;
   assignee?: { id: string; name: string } | null;
+  dependencies?: WorkItemDependencyEdges;
 }
 
 export interface ReadyPage {
@@ -66,13 +100,22 @@ export interface SprintList {
 }
 
 /** A `search_work_items` result row (the `WorkItemListItemDto` subset the CLI
- * renders); `status` is the raw workflow status key. */
+ * renders); `status` is the raw workflow status key.
+ *
+ * `dependencies` is the SAME block `list_ready` attaches — one seam, two tools
+ * (lib/mcp/dependencyEdges.ts) — which `motir sprint` renders as its `BLOCKED BY`
+ * / `BLOCKS` columns (MOTIR-1845). Note the key names do NOT follow this row's
+ * own vocabulary: an edge's far end is `key` (the `PROD-<n>` identifier) even
+ * though the row identifies ITSELF as `identifier`. That is the producer's shape
+ * (`WorkItemEdgeSummaryDto`), pinned deliberately — a renderer shared with
+ * `list_ready`'s rows can only work if both carry the edge block identically. */
 export interface SearchItemSummary {
   identifier: string;
   kind: string;
   title: string;
   status: string;
   priority: string;
+  dependencies?: WorkItemDependencyEdges;
 }
 
 export interface SearchPage {
@@ -273,34 +316,15 @@ export interface WorkItemLink {
   item: WorkItemSummary;
 }
 
-/** The far end of ONE per-row dependency edge (`WorkItemEdgeSummaryDto`), as the
- * MCP reads project it: `key` is the `PROD-<n>` identifier, `status` the raw
- * workflow status key. */
-export interface WorkItemEdgeSummary {
-  key: string;
-  title: string;
-  status: string;
-}
-
-/** Both directions of the `is_blocked_by` graph around one row
- * (`WorkItemDependencyEdgesDto`). The server promises both arrays are always
- * present — empty, never missing — so nothing here branches on presence. */
-export interface WorkItemDependencyEdges {
-  blockedBy: WorkItemEdgeSummary[];
-  blocks: WorkItemEdgeSummary[];
-}
-
 /**
  * A CHILD row of the detail aggregate: a summary PLUS the sibling dependency
  * block `get_work_item` attaches (MOTIR-1848), which `motir show` folds into
  * build-order waves.
  *
- * `dependencies` is OPTIONAL — the one place in this mirror where a missing
- * field is a shape the server really can produce. The CLI is versioned and
- * published independently of the server it talks to, so a newer CLI routinely
- * meets an OLDER Motir whose `get_work_item` predates the block. Absent means
- * "this server cannot tell me the graph", and `show` falls back to the plain
- * children table rather than drawing a wave order it cannot substantiate.
+ * `dependencies` is OPTIONAL for the reason given above {@link ReadyItemSummary}:
+ * absent means "this server cannot tell me the graph", and `show` falls back to
+ * the plain children table rather than drawing a wave order it cannot
+ * substantiate.
  */
 export interface WorkItemChild extends WorkItemSummary {
   dependencies?: WorkItemDependencyEdges;
