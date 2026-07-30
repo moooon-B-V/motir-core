@@ -7,6 +7,7 @@ import type {
   SprintSummary,
   WorkItemChild,
   WorkItemDetail,
+  WorkItemEdgeSummary,
   WorkItemLink,
   WorkItemSummary,
 } from './mcpClient.js';
@@ -106,21 +107,156 @@ export function formatTable(
   return [header, underline, ...rows.map(line)].join('\n');
 }
 
+// ── dependency-EDGE cells (7.9.16 · MOTIR-1845) ─────────────────────────────
+//
+// The vocabulary EVERY surface that prints an edge shares — `motir ready`'s
+// BLOCKS column, `motir sprint`'s BLOCKED BY + BLOCKS, and `motir show`'s wave
+// view (7.9.16b). One budget, one overflow marker, one "already done" mark, one
+// legend, so the three tables can never disagree about what a cell means.
+//
+// WHY A COLUMN AND NOT A GRAPH: a `blocked_by` edge only ever joins same-kind
+// SIBLINGS under the same parent (plan-rules.md § Ordering follows the dependency
+// arrow), so a plan is never one tangled DAG — it is many small closed ones, one
+// per parent. `ready` / `sprint` hold a HETEROGENEOUS set spanning many parents,
+// whose edges are therefore disconnected fragments with no graph to draw. The one
+// surface that IS a single closed DAG is `show`'s children, which is exactly why
+// that surface — and only that surface — gets a layered wave order.
+
+/**
+ * The default workflow's TERMINAL status keys (`category: 'done'` in
+ * lib/workflows/defaultWorkflow.ts): `done` AND `cancelled`. An edge whose far
+ * end is in either is SATISFIED — it no longer gates — which is exactly the
+ * server's own readiness rule (`workflowsService.getTerminalStatusKeys`).
+ *
+ * The edge projection carries a raw status KEY and there is no workflow-read MCP
+ * tool, so — like {@link IN_FLIGHT_STATUS_KEYS} — the CLI classifies against the
+ * default workflow's well-known keys. A project on a CUSTOM workflow that renamed
+ * its terminal statuses simply reads as more-blocked here (a conservative,
+ * documented limitation), never as a crash and never as falsely-ready.
+ */
+export const TERMINAL_STATUS_KEYS = ['done', 'cancelled'] as const;
+
+/** Whether an edge's far end is in a terminal status — i.e. no longer gates. */
+export function isSatisfiedBlocker(status: string): boolean {
+  return (TERMINAL_STATUS_KEYS as readonly string[]).includes(status);
+}
+
+/** How many edge keys ONE cell prints before the rest collapse to `+n`. The cell
+ * never wraps: a wrapped cell would wreck `formatTable`'s column alignment for
+ * every row below it, and the truncation is a DISPLAY concern only — `--json`
+ * always carries the full block. */
+export const EDGE_KEYS_BUDGET = 3;
+
+/** Suffix marks: an edge whose far end is already terminal, and (wave view only)
+ * a blocker outside the parent whose children are being ordered. */
+const SATISFIED_MARK = '✓';
+const EXTERNAL_MARK = '↗';
+
+/** What each mark means. Printed per-mark, and only for a mark a row actually
+ * SHOWS — a legend for a symbol not on the screen (one the `+n` budget cut, say)
+ * is noise that reads as a promise the table did not keep. */
+const MARK_LEGEND: [string, string][] = [
+  [SATISFIED_MARK, `${SATISFIED_MARK} = already done`],
+  [EXTERNAL_MARK, `${EXTERNAL_MARK} = blocker outside this parent`],
+];
+
+/** The legend line for whichever marks the given CELLS actually show, or `null`
+ * when they show none. */
+export function markLegend(cells: string[]): string | null {
+  const shown = MARK_LEGEND.filter(([mark]) => cells.some((cell) => cell.includes(mark)));
+  return shown.length > 0 ? shown.map(([, text]) => text).join(' · ') : null;
+}
+
+/** Join keys to a `, `-separated cell, collapsing everything past `budget` into a
+ * `+n` marker. An EMPTY list renders BLANK — never a `0`, which would read as a
+ * count the row does not have. */
+export function overflowKeys(keys: string[], budget: number): string {
+  if (keys.length === 0) return '';
+  if (keys.length <= budget) return keys.join(', ');
+  return `${keys.slice(0, budget).join(', ')} +${keys.length - budget}`;
+}
+
+/**
+ * ONE edge cell for a row of a HETEROGENEOUS list (`ready` / `sprint`), in either
+ * direction: the far-end keys, LIVE ones first — they are what the row is
+ * actually waiting on, or actually holding up — then the terminal ones suffixed
+ * `✓`, because an edge whose far end is done no longer gates and must not read as
+ * if it does. `undefined` (a server with no edge projection) renders blank, the
+ * same as no edges.
+ *
+ * Unlike {@link blockedByCell} there is no sibling/external split: on these
+ * surfaces EVERY far end is outside the row's own parent, so the distinction
+ * carries no information and the mark would be on every key.
+ */
+export function edgeCell(
+  edges: WorkItemEdgeSummary[] | undefined,
+  budget = EDGE_KEYS_BUDGET,
+): string {
+  if (!edges) return '';
+  const live = edges.filter((e) => !isSatisfiedBlocker(e.status)).map((e) => e.key);
+  const settled = edges
+    .filter((e) => isSatisfiedBlocker(e.status))
+    .map((e) => `${e.key}${SATISFIED_MARK}`);
+  return overflowKeys([...live, ...settled], budget);
+}
+
+/**
+ * Whether a page of rows carries the edge projection at all — TRUE only when
+ * EVERY row does.
+ *
+ * All-or-nothing on purpose: the block comes from one batched read per page
+ * (MOTIR-1842), so per-row absence is not a shape the server produces — a page
+ * either has the projection or predates it. Requiring every row means an OLDER
+ * Motir gets exactly the table it got before rather than a column of blanks that
+ * would read as "nothing blocks anything" (the degradation this card owes).
+ */
+function hasEdges(rows: { dependencies?: unknown }[]): boolean {
+  return rows.length > 0 && rows.every((row) => row.dependencies !== undefined);
+}
+
+/** Append the mark legend to a rendered table, when its edge cells show a mark. */
+function withLegend(table: string, cells: string[]): string {
+  const legend = markLegend(cells);
+  return legend ? `${table}\n${legend}` : table;
+}
+
 const READY_HEADERS = ['KEY', 'KIND', 'PRIORITY', 'ASSIGNEE', 'TITLE'];
 
-/** The `motir ready` table (or the empty-set line). Title is truncated so the
- * key/kind columns stay aligned in a normal terminal. */
+/** {@link READY_HEADERS} with the downstream-impact column before the (truncated)
+ * TITLE, so nothing after TITLE can lose its alignment. */
+const READY_EDGE_HEADERS = ['KEY', 'KIND', 'PRIORITY', 'ASSIGNEE', 'BLOCKS', 'TITLE'];
+
+/**
+ * The `motir ready` table (or the empty-set line). Title is truncated so the
+ * key/kind columns stay aligned in a normal terminal.
+ *
+ * A `BLOCKS` column (MOTIR-1845) names what each row UNBLOCKS — the direction
+ * that carries information HERE, because a ready row's blockers are by definition
+ * all satisfied, so a `BLOCKED BY` column would be dead on every row. What a
+ * picker wants from this list is downstream impact: "do this one first, three
+ * things are waiting on it." Against a server with no edge projection the column
+ * is omitted entirely and this is exactly the table 7.9.2 shipped.
+ */
 export function renderReadyTable(items: ReadyItemSummary[], titleWidth = 60): string {
   if (items.length === 0) return 'No ready work items.';
+  const graphed = hasEdges(items);
   const rows = items.map((it) => [
     it.key,
     it.kind,
     it.priority,
     it.assignee?.name ?? 'unassigned',
+    ...(graphed ? [edgeCell(it.dependencies?.blocks)] : []),
     truncate(it.title, titleWidth),
   ]);
   const count = `${items.length} ready work item${items.length === 1 ? '' : 's'}:`;
-  return `${count}\n${formatTable(READY_HEADERS, rows)}`;
+  const headers = graphed ? READY_EDGE_HEADERS : READY_HEADERS;
+  const table = `${count}\n${formatTable(headers, rows)}`;
+  return graphed
+    ? withLegend(
+        table,
+        rows.map((row) => row[4] ?? ''),
+      )
+    : table;
 }
 
 export interface StatusPulse {
@@ -188,10 +324,30 @@ export function renderSprintHeader(sprint: SprintSummary): string {
 
 const SPRINT_ITEM_HEADERS = ['KEY', 'KIND', 'STATUS', 'PRIORITY', 'TITLE'];
 
+/** {@link SPRINT_ITEM_HEADERS} with BOTH edge directions before the (truncated)
+ * TITLE. `BLOCKED BY` comes first: on a mixed-status list it is the load-bearing
+ * one — the reason a row is not moving. */
+const SPRINT_ITEM_EDGE_HEADERS = [
+  'KEY',
+  'KIND',
+  'STATUS',
+  'PRIORITY',
+  'BLOCKED BY',
+  'BLOCKS',
+  'TITLE',
+];
+
 /**
  * One sprint's work items. `total` is the server's own count for the query:
  * the printed count is asserted against it, so a page the CLI failed to
  * collect reads as a visible mismatch rather than a silently short table.
+ *
+ * `BLOCKED BY` + `BLOCKS` columns (MOTIR-1845) make an un-finishable sprint
+ * legible from the terminal: unlike `ready`, a sprint holds mixed-status work, so
+ * "what is holding this row up" is the question the table has to answer — and a
+ * blocker already `done` is marked `✓` rather than counted, so a row nothing gates
+ * cannot read as blocked. Omitted wholesale against a server with no edge
+ * projection.
  */
 export function renderSprintItems(
   items: SearchItemSummary[],
@@ -199,11 +355,13 @@ export function renderSprintItems(
   titleWidth = 60,
 ): string {
   if (items.length === 0) return 'No work items in this sprint.';
+  const graphed = hasEdges(items);
   const rows = items.map((it) => [
     it.identifier,
     it.kind,
     it.status,
     it.priority,
+    ...(graphed ? [edgeCell(it.dependencies?.blockedBy), edgeCell(it.dependencies?.blocks)] : []),
     truncate(it.title, titleWidth),
   ]);
   const noun = `work item${total === 1 ? '' : 's'}`;
@@ -213,7 +371,14 @@ export function renderSprintItems(
     items.length === total
       ? `${total} ${noun}:`
       : `${items.length} of ${total} ${noun} (the rest could not be collected):`;
-  return `${count}\n${formatTable(SPRINT_ITEM_HEADERS, rows)}`;
+  const headers = graphed ? SPRINT_ITEM_EDGE_HEADERS : SPRINT_ITEM_HEADERS;
+  const table = `${count}\n${formatTable(headers, rows)}`;
+  return graphed
+    ? withLegend(
+        table,
+        rows.flatMap((row) => [row[4] ?? '', row[5] ?? '']),
+      )
+    : table;
 }
 
 /**
@@ -356,25 +521,6 @@ export function renderRelationTable(
 // assignment + crossing edges — illegible past ~3 lanes, and it leaves nowhere
 // to put status or title. A true graph view belongs on the web canvas.)
 
-/**
- * The default workflow's TERMINAL status keys (`category: 'done'` in
- * lib/workflows/defaultWorkflow.ts): `done` AND `cancelled`. A blocker in either
- * is SATISFIED — it no longer gates — which is exactly the server's own
- * readiness rule (`workflowsService.getTerminalStatusKeys`).
- *
- * The edge projection carries a raw status KEY and there is no workflow-read MCP
- * tool, so — like {@link IN_FLIGHT_STATUS_KEYS} — the CLI classifies against the
- * default workflow's well-known keys. A project on a CUSTOM workflow that renamed
- * its terminal statuses simply reads as more-blocked here (a conservative,
- * documented limitation), never as a crash and never as falsely-ready.
- */
-export const TERMINAL_STATUS_KEYS = ['done', 'cancelled'] as const;
-
-/** Whether a blocker's status means it no longer gates. */
-export function isSatisfiedBlocker(status: string): boolean {
-  return (TERMINAL_STATUS_KEYS as readonly string[]).includes(status);
-}
-
 /** One child placed in the build order, with the blockers that put it there. */
 export interface ChildWave {
   child: WorkItemChild;
@@ -450,40 +596,24 @@ export function cycleMembers(waves: ChildWave[]): string[] {
  * the truncated column, so nothing after it can lose its alignment. */
 export const WAVE_CHILD_HEADERS = ['WAVE', 'KEY', 'KIND', 'STATUS', 'BLOCKED BY', 'TITLE'];
 
-/** How many blocker keys a `BLOCKED BY` cell prints before it overflows to
- * `+n`. The cell never wraps: a wrapped cell would wreck `formatTable`'s
- * column alignment for every row below it. */
-export const BLOCKER_KEYS_BUDGET = 3;
-
-/** Suffix marks: a blocker already terminal, and one outside this parent. */
-const SATISFIED_MARK = '✓';
-const EXTERNAL_MARK = '↗';
 /** The WAVE cell for a child that has no wave (a cycle member). */
 const NO_WAVE = '—';
-
-/** What each mark means. Printed per-mark, and only for a mark a row actually
- * SHOWS — a legend for a symbol not on the screen (one the `+n` budget cut, say)
- * is noise that reads as a promise the table did not keep. */
-const MARK_LEGEND: [string, string][] = [
-  [SATISFIED_MARK, `${SATISFIED_MARK} = already done`],
-  [EXTERNAL_MARK, `${EXTERNAL_MARK} = blocker outside this parent`],
-];
 
 /**
  * ONE child's `BLOCKED BY` cell: the blocker keys, un-done siblings first (they
  * are what the wait is actually about), then external, then satisfied. Beyond
- * {@link BLOCKER_KEYS_BUDGET} keys the rest collapse to `+n` — a fan-in of nine
+ * {@link EDGE_KEYS_BUDGET} keys the rest collapse to `+n` — a fan-in of nine
  * must not push TITLE off the terminal. No blockers renders BLANK, not a zero.
  */
-export function blockedByCell(entry: ChildWave, budget = BLOCKER_KEYS_BUDGET): string {
-  const keys = [
-    ...entry.siblingBlockers,
-    ...entry.externalBlockers.map((k) => `${k}${EXTERNAL_MARK}`),
-    ...entry.satisfiedBlockers.map((k) => `${k}${SATISFIED_MARK}`),
-  ];
-  if (keys.length === 0) return '';
-  if (keys.length <= budget) return keys.join(', ');
-  return `${keys.slice(0, budget).join(', ')} +${keys.length - budget}`;
+export function blockedByCell(entry: ChildWave, budget = EDGE_KEYS_BUDGET): string {
+  return overflowKeys(
+    [
+      ...entry.siblingBlockers,
+      ...entry.externalBlockers.map((k) => `${k}${EXTERNAL_MARK}`),
+      ...entry.satisfiedBlockers.map((k) => `${k}${SATISFIED_MARK}`),
+    ],
+    budget,
+  );
 }
 
 /** `(waves) => rows` — the wave view's cells, in {@link WAVE_CHILD_HEADERS}
@@ -492,7 +622,7 @@ export function blockedByCell(entry: ChildWave, budget = BLOCKER_KEYS_BUDGET): s
 export function waveChildRows(
   waves: ChildWave[],
   titleWidth = 60,
-  budget = BLOCKER_KEYS_BUDGET,
+  budget = EDGE_KEYS_BUDGET,
 ): string[][] {
   return waves.map((entry) => {
     const cells = childRow(entry.child, titleWidth);
@@ -513,8 +643,7 @@ export function waveChildRows(
  * never got.
  */
 export function renderChildrenSection(children: WorkItemChild[], titleWidth = 60): string {
-  const graphed = children.length > 0 && children.every((c) => c.dependencies !== undefined);
-  if (!graphed) {
+  if (!hasEdges(children)) {
     return renderRelationTable(
       'CHILDREN',
       childRows(children, titleWidth),
@@ -528,8 +657,8 @@ export function renderChildrenSection(children: WorkItemChild[], titleWidth = 60
   const lines = [
     renderRelationTable('CHILDREN', rows, 'no children', WAVE_CHILD_HEADERS, 'build order'),
   ];
-  const legend = MARK_LEGEND.filter(([mark]) => rows.some((row) => row[4]?.includes(mark)));
-  if (legend.length > 0) lines.push(legend.map(([, text]) => text).join(' · '));
+  const legend = markLegend(rows.map((row) => row[4] ?? ''));
+  if (legend) lines.push(legend);
   const cycle = cycleMembers(waves);
   if (cycle.length > 0) {
     // Reported, not thrown: `show` reads a plan, and a plan that cannot be
@@ -556,9 +685,7 @@ export type WorkItemChildWithWave = WorkItemChild & { wave: number | null };
 export function detailWithWaves(
   detail: WorkItemDetail,
 ): WorkItemDetail | (Omit<WorkItemDetail, 'children'> & { children: WorkItemChildWithWave[] }) {
-  const graphed =
-    detail.children.length > 0 && detail.children.every((c) => c.dependencies !== undefined);
-  if (!graphed) return detail;
+  if (!hasEdges(detail.children)) return detail;
   return {
     ...detail,
     children: assignChildWaves(detail.children).map((entry) => ({
