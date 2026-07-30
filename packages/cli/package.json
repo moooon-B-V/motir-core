@@ -3,13 +3,29 @@
   "version": "0.1.0",
   "description": "Motir CLI — terminal dispatch of the work loop (an MCP client of the Motir server).",
   "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moooon-B-V/motir-core.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://motir.co",
+  "bugs": {
+    "url": "https://github.com/moooon-B-V/motir-core/issues"
+  },
   "type": "module",
   "bin": {
     "motir": "./dist/index.js"
   },
+  "exports": {
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=22"
   },

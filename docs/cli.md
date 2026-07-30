@@ -28,22 +28,21 @@ code. It never reads the agent's credential and never inspects its output.
 
 ## Install
 
-`@motir/cli` is not on npm yet — publishing the package is its own piece of work
-(MOTIR-669). For now, build it from a `motir-core` checkout:
+```sh
+npm install -g @motir/cli
+motir --help
+```
+
+`pnpm add -g @motir/cli` and `yarn global add @motir/cli` install the same
+package. Runtime: **Node ≥ 22**, ESM. Every example below writes `motir`.
+
+**For contributors** — to run the CLI from a `motir-core` checkout instead of
+the published package:
 
 ```sh
 pnpm --filter @motir/cli build      # produces packages/cli/dist/index.js
 node packages/cli/dist/index.js --help
 ```
-
-To type `motir` instead of the full path, link the built package or add an
-alias:
-
-```sh
-alias motir="node $PWD/packages/cli/dist/index.js"
-```
-
-Runtime: **Node ≥ 22**, ESM. Every example below writes `motir`.
 
 ---
 
