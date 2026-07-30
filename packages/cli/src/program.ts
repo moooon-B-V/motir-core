@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { CLI_VERSION } from './version.js';
 import { authLogin, authLogout, authStatus } from './commands/auth.js';
+import { loginCommand } from './commands/login.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
 import {
   openCommand,
@@ -39,6 +40,49 @@ export function buildProgram(): Command {
   // Before ANY command is registered: commander applies the default command
   // group at registration time.
   applyHelpConfiguration(program);
+
+  // ── login / logout ────────────────────────────────────────────────────────
+  // Registered FIRST in the SETUP group because this is the command a person
+  // reaches for: `motir login` is the interactive default (a device grant), and
+  // `auth login --token` below stays for the token you already hold. The `auth`
+  // subtree is unchanged — CI keeps its `--token` path and 7.9.1 keeps working.
+  program
+    .command('login')
+    .description('Connect this terminal: shows a code, opens Motir, waits for your approval.')
+    .helpGroup(HELP_GROUP.setup)
+    .option('--server <url>', 'Server base URL, e.g. https://app.motir.co')
+    .option(
+      '--no-browser',
+      'Do not launch a browser — just print the code and the URL to open anywhere.',
+    )
+    .addHelpText(
+      'after',
+      [
+        '',
+        'No browser on this machine? The code and URL are printed either way, so an',
+        'SSH session or a container uses this same command — open the URL on any',
+        'device, sign in, and enter the code. For an unattended agent set MOTIR_TOKEN',
+        'instead (`motir help environment`).',
+      ].join('\n'),
+    )
+    // Arity-1 wrapper: commander appends the Command object, which must not land
+    // in `loginCommand`'s injectable-deps parameter.
+    .action((opts) => loginCommand(opts));
+  program
+    .command('logout')
+    .description('Disconnect this terminal: remove the stored token for a server.')
+    .helpGroup(HELP_GROUP.setup)
+    .option('--server <url>', 'Server to log out of (defaults to the linked / single server).')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'This removes the credential from THIS machine only. The server-side kill',
+        'switch is revoking the token in Settings → Account → API tokens — a terminal',
+        'connected by `motir login` appears there as `CLI · <hostname>`.',
+      ].join('\n'),
+    )
+    .action(authLogout);
 
   // ── auth ──────────────────────────────────────────────────────────────────
   const auth = program
