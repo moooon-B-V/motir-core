@@ -1,11 +1,20 @@
-// DTOs for the CLI device-authorization surface (Story MOTIR-1863 · Subtask
-// MOTIR-1865) — what crosses `/api/cli/device/*` to `packages/cli` and to the
-// `/device` page (Subtask MOTIR-1867).
+// DTOs for the CLI device-authorization surface (Story MOTIR-1863 · Subtasks
+// MOTIR-1865 / MOTIR-1888) — what crosses `/api/cli/device/*` to `packages/cli` and
+// to the `/device` page (Subtask MOTIR-1867).
 //
-// The FIELD NAMES ARE snake_case ON PURPOSE, unlike every other Motir DTO: these
-// two shapes are RFC 8628 §3.2 / §3.4 payloads, so a standard device-flow poller
-// works against Motir unchanged and the CLI's branch is the standard one. Deviating
-// to camelCase here would buy internal consistency and cost interoperability.
+// TWO NAMING CONVENTIONS LIVE IN THIS FILE, and the split is deliberate — read the
+// per-interface notes before adding a third shape:
+//
+// - `DeviceGrantStartDTO` / `DeviceGrantTokenDTO` are snake_case, unlike every other
+//   Motir DTO: they are RFC 8628 §3.2 / §3.4 payloads, so a standard device-flow
+//   poller works against Motir unchanged and the CLI's branch is the standard one.
+//   Deviating to camelCase there would buy internal consistency and cost
+//   interoperability.
+// - `DeviceGrantDescriptionDTO` is camelCase, the repo's normal convention: its only
+//   consumer is Motir's own `/device` page, not an OAuth client, so there is no
+//   interoperability to buy and the repo-wide convention wins.
+
+import type { TokenScope } from '@/lib/mcp/scopes';
 
 /**
  * The grant, as `POST /api/cli/device/start` hands it to the terminal. Everything
@@ -50,4 +59,44 @@ export interface DeviceGrantTokenDTO {
   expires_in: number;
   user: { id: string; name: string; email: string };
   workspace: { id: string; name: string; slug: string };
+}
+
+/** The three states of the plugin's grant machine — the only values it ever writes
+ * to `DeviceCode.status`, and the three the `/device` page branches on. */
+export type DeviceGrantStatus = 'pending' | 'approved' | 'denied';
+
+/**
+ * The grant as the `/device` approval screen reads it (`GET /api/cli/device/grant`,
+ * Subtask MOTIR-1888) — the answer to "what is connecting", which is the ADR's whole
+ * phishing mitigation and which no shipped endpoint could supply: Better-Auth's own
+ * `GET /api/auth/device?user_code=…` returns `{ user_code, status }` and nothing more.
+ *
+ * DELIBERATELY WITHOUT `deviceCode`, `userId`, `workspaceId`, or a token. The device
+ * code is the CLI's polling credential and putting it on a browser surface would hand
+ * a phishing page the one value it cannot otherwise obtain; the ids are things the
+ * page already knows (the session) or resolves server-side (`getWorkspaceContext`).
+ * The asserted-absence test in `tests/cli/` is what keeps this list from growing.
+ */
+export interface DeviceGrantDescriptionDTO {
+  /** The canonical code (dashes stripped, upper-cased) — so the screen echoes the
+   * form the server matched, not whatever the human happened to type. */
+  userCode: string;
+  status: DeviceGrantStatus;
+  /** What the CLI reported it is running on. Display-only and never interpreted
+   * (ADR Q4) — the screen renders it as untrusted, attacker-suppliable text. */
+  hostname: string | null;
+  /** When the terminal opened the grant — the screen's "asked for 20 seconds ago",
+   * the cue that catches a code the human did not just generate. ISO string (the
+   * API-boundary convention). */
+  askedAt: string;
+  /** When the code ages out (15m after `askedAt`). ISO string. */
+  expiresAt: string;
+  /** What approval WILL GRANT — `CLI_TOKEN_SCOPES`, never the row's requested
+   * `scope` string, which the substrate is explicit is "a record of what was asked,
+   * not what is granted". The grant is unconfigurable, so this is a fact about the
+   * deployment, not about the request. */
+  scopes: TokenScope[];
+  /** The client that opened the grant (`motir-cli`). Pinned server-side at start, so
+   * it is a display fact, not an input. */
+  clientId: string | null;
 }

@@ -29,6 +29,7 @@ const {
   InvalidDeviceGrantError,
 } = await import('@/lib/cliDevice/errors');
 const { NotAMemberError } = await import('@/lib/workspaces/errors');
+const { deviceCodeRepository } = await import('@/lib/repositories/deviceCodeRepository');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
@@ -47,6 +48,10 @@ const { truncateAuthTables } = await import('../helpers/db');
 
 const BASE_URL = 'http://localhost:3000';
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Allowance for the app clock vs. the DB's `CURRENT_TIMESTAMP`, and for however long an
+ * insert takes on a loaded runner. Any timestamp assertion here is a WINDOW, never an
+ * equality — see `describe`'s lifetime assertion for what an exact one costs. */
+const CLOCK_SKEW_MS = 5_000;
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -449,6 +454,266 @@ describe('approve — the gates', () => {
         headers,
       }),
     ).rejects.toBeInstanceOf(DeviceGrantExpiredError);
+  });
+});
+
+// The `/device` page's read (Subtask MOTIR-1888). What these cover that the route suite
+// cannot: that the call CLAIMS as a side effect, that the granted scopes come from the
+// constant rather than the row, and that the DTO withholds the CLI's own credential.
+describe('describe — claim + what is connecting', () => {
+  it('claims the row and returns what is connecting', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const before = Date.now();
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+
+    const described = await cliDeviceService.describe({
+      userCode: grant.user_code,
+      actorUserId: owner.id,
+      headers,
+    });
+
+    expect(described.status).toBe('pending');
+    expect(described.hostname).toBe('workbox');
+    expect(described.userCode).toBe(grant.user_code);
+    expect(described.clientId).toBe(CLI_CLIENT_ID);
+    // "asked for N seconds ago" is computed by the page from `askedAt`, so it has to be
+    // the grant's real creation instant, and `expiresAt` the 15m the ADR decided.
+    //
+    // The span is asserted with a TOLERANCE, not exactly: `expiresAt` is stamped by the
+    // plugin in JS (`Date.now() + ms('15m')`) while `askedAt` is the row's
+    // `@default(now())` — two INDEPENDENT clock readings, so they differ by however long
+    // the insert took plus any app↔DB skew. An exact `toBe(900_000)` passes locally and
+    // then loses by a millisecond on a loaded runner (it read 899_999 in CI); what the
+    // ADR actually decided is the 15-minute lifetime, which is what this checks.
+    // Same reason `before` gets a skew allowance rather than a bare `>=`: `created_at` is
+    // `DEFAULT CURRENT_TIMESTAMP`, so `askedAt` is the DATABASE's clock while `before` is
+    // this process's. Bounded on BOTH sides — what matters is that `askedAt` is the real
+    // creation instant (not epoch, not null, not stale), which a window proves and an
+    // exact comparison only pretends to.
+    const askedAtMs = new Date(described.askedAt).getTime();
+    expect(askedAtMs).toBeGreaterThan(before - CLOCK_SKEW_MS);
+    expect(askedAtMs).toBeLessThan(Date.now() + CLOCK_SKEW_MS);
+
+    const lifetimeMs = new Date(described.expiresAt).getTime() - askedAtMs;
+    expect(lifetimeMs).toBeGreaterThan(14 * 60 * 1000);
+    expect(lifetimeMs).toBeLessThanOrEqual(15 * 60 * 1000 + CLOCK_SKEW_MS);
+
+    // THE SIDE EFFECT that makes this one call instead of two: approve refuses an
+    // unclaimed grant, so a page that rendered these facts can now actually approve.
+    const row = await db.deviceCode.findUniqueOrThrow({
+      where: { deviceCode: grant.device_code },
+    });
+    expect(row.userId).toBe(owner.id);
+  });
+
+  it('reports the scopes approval WILL GRANT, never the scope string the request asked for', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    // A tampered/widened request record must not change what the screen promises: the
+    // grant is unconfigurable (ADR Q2) and the mint reads the constant.
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { scope: 'read work_items:delete sprints:write' },
+    });
+
+    const described = await cliDeviceService.describe({
+      userCode: grant.user_code,
+      actorUserId: owner.id,
+      headers,
+    });
+
+    expect(described.scopes).toEqual(CLI_TOKEN_SCOPES);
+    expect(described.scopes).not.toContain('work_items:delete');
+  });
+
+  it('never returns the device code, the user, the workspace, or a token', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+
+    const described = await cliDeviceService.describe({
+      userCode: grant.user_code,
+      actorUserId: owner.id,
+      headers,
+    });
+
+    // An EXACT key set, not a spot-check: a `...row` spread added later would leak the
+    // CLI's polling credential onto a browser surface, and only this assertion catches it.
+    expect(Object.keys(described).sort()).toEqual([
+      'askedAt',
+      'clientId',
+      'expiresAt',
+      'hostname',
+      'scopes',
+      'status',
+      'userCode',
+    ]);
+    expect(JSON.stringify(described)).not.toContain(grant.device_code);
+  });
+
+  it('accepts a dash-grouped, lowercase code as the same grant', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+
+    const typed = `${grant.user_code.slice(0, 4)}-${grant.user_code.slice(4)}`.toLowerCase();
+    const described = await cliDeviceService.describe({
+      userCode: typed,
+      actorUserId: owner.id,
+      headers,
+    });
+
+    // The CANONICAL form comes back, so the screen echoes what the server matched.
+    expect(described.userCode).toBe(grant.user_code);
+    expect(
+      (await db.deviceCode.findUniqueOrThrow({ where: { deviceCode: grant.device_code } })).userId,
+    ).toBe(owner.id);
+  });
+
+  it('returns approved and denied as a STATUS, not an error — they are terminal screens', async () => {
+    const { owner, workspace } = await createTestWorkspace();
+    const headers = await signIn(owner);
+
+    const approvedGrant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(approvedGrant.user_code, headers);
+    await cliDeviceService.approve({
+      userCode: approvedGrant.user_code,
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      headers,
+    });
+    const deniedGrant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(deniedGrant.user_code, headers);
+    await auth.api.deviceDeny({ body: { userCode: deniedGrant.user_code }, headers });
+
+    expect(
+      (
+        await cliDeviceService.describe({
+          userCode: approvedGrant.user_code,
+          actorUserId: owner.id,
+          headers,
+        })
+      ).status,
+    ).toBe('approved');
+    expect(
+      (
+        await cliDeviceService.describe({
+          userCode: deniedGrant.user_code,
+          actorUserId: owner.id,
+          headers,
+        })
+      ).status,
+    ).toBe('denied');
+  });
+
+  it('rejects an unknown code', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+
+    await expect(
+      cliDeviceService.describe({ userCode: 'ZZZZZZZZ', actorUserId: owner.id, headers }),
+    ).rejects.toBeInstanceOf(InvalidDeviceGrantError);
+  });
+
+  it('rejects an expired code WITHOUT claiming it', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    await expect(
+      cliDeviceService.describe({ userCode: grant.user_code, actorUserId: owner.id, headers }),
+    ).rejects.toBeInstanceOf(DeviceGrantExpiredError);
+    // The plugin checks expiry before it looks at the session, so a dead code is never
+    // attributed to whoever happened to open the link.
+    expect(
+      (await db.deviceCode.findUniqueOrThrow({ where: { deviceCode: grant.device_code } })).userId,
+    ).toBeNull();
+  });
+
+  it('refuses a grant another session already claimed', async () => {
+    const { owner: alice } = await createTestWorkspace();
+    const { owner: bob } = await createTestWorkspace();
+    const aliceHeaders = await signIn(alice);
+    const bobHeaders = await signIn(bob);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(grant.user_code, aliceHeaders); // Alice claimed it
+
+    await expect(
+      cliDeviceService.describe({
+        userCode: grant.user_code,
+        actorUserId: bob.id,
+        headers: bobHeaders,
+      }),
+    ).rejects.toBeInstanceOf(DeviceGrantForbiddenError);
+    // Bob's read left Alice's claim intact — the plugin only stamps an UNclaimed row.
+    expect(
+      (await db.deviceCode.findUniqueOrThrow({ where: { deviceCode: grant.device_code } })).userId,
+    ).toBe(alice.id);
+  });
+
+  it('refuses when the claim could not land (no session forwarded to the plugin)', async () => {
+    const { owner } = await createTestWorkspace();
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+
+    // The route gates on `getSession()`, but the plugin performs its own session read off
+    // the forwarded headers. Cookie-less headers mean the claim silently does not happen —
+    // a client-sequencing bug, and returning the facts anyway would show a screen whose
+    // Approve button is guaranteed to 409.
+    await expect(
+      cliDeviceService.describe({
+        userCode: grant.user_code,
+        actorUserId: owner.id,
+        headers: new Headers({ origin: BASE_URL }),
+      }),
+    ).rejects.toBeInstanceOf(DeviceGrantNotClaimedError);
+  });
+
+  it('rejects a status outside the plugin machine as an unusable grant, not a 500', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(grant.user_code, headers);
+    // `status` is a plain String column owned by the plugin's adapter, so the type system
+    // cannot rule this out; a corrupted row must not become a fourth state the page has
+    // no screen for.
+    await db.deviceCode.update({
+      where: { deviceCode: grant.device_code },
+      data: { status: 'nonsense' },
+    });
+
+    await expect(
+      cliDeviceService.describe({ userCode: grant.user_code, actorUserId: owner.id, headers }),
+    ).rejects.toBeInstanceOf(InvalidDeviceGrantError);
+  });
+
+  it('answers a grant reaped between the claim and the read as gone', async () => {
+    const { owner } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+
+    // The benign race the read is documented to tolerate: a concurrent poll reaps the row
+    // (denied/expired grants are deleted on discovery) in the window between the plugin's
+    // lookup and Motir's. That window cannot be hit by deleting the row up front — the
+    // plugin's own lookup would miss first and answer for a different reason — so the
+    // repository read is stubbed for exactly one call. This is the ONE mock in this file,
+    // and it stands in for a concurrent transaction, not for a collaborator.
+    const spy = vi
+      .spyOn(deviceCodeRepository, 'findByUserCodeForRead')
+      .mockResolvedValueOnce(null as never);
+    try {
+      await expect(
+        cliDeviceService.describe({ userCode: grant.user_code, actorUserId: owner.id, headers }),
+      ).rejects.toBeInstanceOf(InvalidDeviceGrantError);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
