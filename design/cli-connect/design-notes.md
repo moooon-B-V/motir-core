@@ -82,9 +82,11 @@ for exactly this reason.
   visitor.
 - **It gets NO nav entry.** Not the `#99` case (a first-class _view_ earns a rail
   entry); this is a hand-off page whose door is the CLI. Panel 0 draws that door.
-- **The card widens to `max-w-[32rem]`** (sign-in stays `28rem`) because the
-  confirm screen carries a five-row detail list. A one-off `max-w-[…]` on the
-  container is the same knob the peek/lightbox modals already use.
+- **The card width is per-state:** `max-w-[28rem]` for the single-field states
+  (code entry, approved, denied, expired — the shipped sign-in width) and
+  **`max-w-[40rem]` for the confirm screen**, whose two-column detail block is what
+  keeps it on one screen (below). A one-off `max-w-[…]` on the container is the same
+  knob the peek/lightbox modals already use.
 - **⚠️ Do NOT add `/device` to `proxy.ts`’s matcher.** The proxy bounces to
   `/sign-in` with `next` set to `request.nextUrl.pathname` **only** — it drops the
   query string, so a proxy bounce would silently lose `?user_code=`. The page owns
@@ -104,6 +106,42 @@ for exactly this reason.
 
 Every state ends in a **forward path**, because the terminal is blocked on this
 page: a dead end here strands the user with a spinning CLI.
+
+### It MUST fit one screen — measured, not assumed
+
+The confirm screen is the one surface in this design where content below the fold
+is actively dangerous: if Approve sits off-screen, the reader scrolls **past** the
+four facts to reach it, which defeats the whole point of the check.
+
+The first draft failed this badly — a single-column detail list with a 122 px key
+column made the card **1106 px** tall, overflowing every laptop by 242–522 px. It
+was rebuilt as **two columns at `max-w-[40rem]`** with captions above their values.
+Measured in Chromium inside the shipped `(auth)` frame (`min-h-screen` ·
+`items-center` · `py-12`), card height **541 px**:
+
+| Screen (minus ~120 px browser chrome) | Page scrolls? | Facts end | Buttons end |
+| ------------------------------------- | ------------- | --------- | ----------- |
+| 1366×768 → 648                        | no            | 419       | 575         |
+| 1280×800 → 680                        | no            | 435       | 591         |
+| 1440×900 → 780                        | no            | 485       | 641         |
+| 1512×982 → 862                        | no            | 526       | 682         |
+
+**The invariant for MOTIR-1867 to hold:** the four facts and BOTH buttons are
+simultaneously visible at a 648 px viewport height. Three consequences worth
+keeping:
+
+- **Width, not height, absorbs new content** — the same call
+  `token-scopes.mock.html` made for the scope picker (Yue, 2026-06-16: "a scrolled
+  picker hides options"). If a fact is added later, widen or re-balance the two
+  columns; do not let the card grow past ~560 px.
+- **The scope rows are NAMES only** on this screen — "Read everything" · "Edit work
+  items" · "Connect integrations" — plus the one-line **Not:** exclusion. The
+  per-scope descriptions live in the API-tokens scopes UI that owns them
+  (`token-scopes.mock.html`). Fewer words on a security screen people skim is the
+  point, and it is what bought the last 50 px.
+- **Never put the CTAs in a sticky footer.** A pinned Approve could sit on screen
+  while the facts are still unread — the exact failure this layout exists to
+  prevent. Buttons stay last in the flow.
 
 ### The confirm screen IS the mitigation — the four facts
 

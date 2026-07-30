@@ -819,6 +819,9 @@
         flex-direction: column;
         gap: 20px;
       }
+      .authcard.confirm .ac-body {
+        gap: 13px;
+      }
       .ac-foot {
         margin-top: 22px;
         padding-top: 18px;
@@ -993,7 +996,7 @@
         align-items: flex-start;
         background: var(--el-tint-peach);
         border-radius: var(--radius-card);
-        padding: 12px 14px;
+        padding: 10px 14px;
       }
       .callout .ic {
         width: 18px;
@@ -1030,61 +1033,84 @@
         color: var(--el-info);
       }
 
-      /* ── The confirm screen's four-part detail list ──────────────────────────
-         The settings-row grammar (label/desc left, control right) from the
-         Language pane, stacked inside a bordered box so the four facts read as
-         ONE reviewable block: WHO · WHAT · WHICH WORKSPACE · WHAT SCOPES. */
+      /* ── The confirm screen's four-part detail block ─────────────────────────
+         TWO COLUMNS, captions above their values — because this card MUST fit a
+         laptop viewport without scrolling. It is the one screen where content
+         below the fold is dangerous: if Approve is off-screen the reader scrolls
+         PAST the four facts to reach it. Measured budget in design-notes.md.
+         Width-not-height is the same call `token-scopes.mock.html` made for the
+         scope picker (Yue, 2026-06-16: "a scrolled picker hides options"). */
+      .authcard.confirm {
+        max-width: 40rem;
+        padding: 20px 30px;
+      }
+      .ac-head.tight {
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .ac-head.tight h1 {
+        font-size: 26px;
+      }
+      .ac-head.tight p {
+        font-size: 14px;
+      }
       .detail {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
-        padding: 2px var(--spacing-card-padding);
       }
-      .drow {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 20px;
-        padding: 15px 0;
-        border-bottom: 1px solid var(--el-border-soft);
+      .detail.cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
       }
-      .drow:last-child {
-        border-bottom: 0;
-      }
-      .drow .dk {
-        flex: none;
-        width: 122px;
-        padding-top: 2px;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        /* --el-text-muted, NOT --el-text-faint: these four keys carry the meaning
-           of the phishing check, and faint is 2.61:1 on white (decorative only).
-           Muted is 4.54:1 light / 7.35:1 dark. */
-        color: var(--el-text-muted);
-        text-transform: uppercase;
-      }
-      .drow .dv {
-        flex: 1;
+      .dcol {
         min-width: 0;
+        padding: 4px 18px;
+        display: flex;
+        flex-direction: column;
+      }
+      .dcol + .dcol {
+        border-left: 1px solid var(--el-border-soft);
+      }
+      .dblock {
+        padding: 10px 0;
+        min-width: 0;
+      }
+      .dblock + .dblock {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .dblock .dk {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        /* --el-text-muted, NOT --el-text-faint: these four captions carry the
+           meaning of the phishing check, and faint is 2.61:1 on white
+           (decorative only). Muted is 4.54:1 light / 7.35:1 dark. */
+        color: var(--el-text-muted);
+      }
+      .dblock .sub {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+      .dstrong {
+        display: block;
         font-size: 14px;
+        font-weight: 500;
         color: var(--el-text);
       }
-      .drow .dv .sub {
-        display: block;
-        margin-top: 3px;
-        font-size: 12.5px;
-        line-height: 1.5;
-        color: var(--el-text-muted);
-      }
-      /* the mock uses <span> wrappers throughout (so the markup stays valid
-         inside inline contexts) — every text stack that a component would render
-         as a <div>/<p> is made a block here, once. */
+      /* the mock uses <span> wrappers throughout (so the markup stays valid in
+         inline contexts) — every text stack a component would render as a
+         <div>/<p> is made a block here, once. */
       .who .nm,
       .who .em,
       .me .nm,
       .me .em,
       .scope .sname,
-      .scope .sdesc,
       .scope > span:last-child,
       .cant,
       .carried .clabel,
@@ -1173,7 +1199,7 @@
       .scopes {
         display: flex;
         flex-direction: column;
-        gap: 9px;
+        gap: 7px;
       }
       .scope {
         display: flex;
@@ -1188,21 +1214,17 @@
         color: var(--el-text-muted);
       }
       .scope .sname {
-        font-size: 13.5px;
+        font-size: 13px;
         font-weight: 500;
         color: var(--el-text);
       }
-      .scope .sdesc {
-        font-size: 12.5px;
-        color: var(--el-text-muted);
-        line-height: 1.45;
-      }
       .cant {
-        margin-top: 10px;
-        padding-top: 10px;
+        display: block;
+        margin-top: 8px;
+        padding-top: 8px;
         border-top: 1px dashed var(--el-border-soft);
-        font-size: 12.5px;
-        line-height: 1.5;
+        font-size: 12px;
+        line-height: 1.45;
         color: var(--el-text-muted);
       }
 
@@ -2503,31 +2525,29 @@
     </div>
     <div class="panel">
       <div class="authwash">
-        <div class="authcard">
-          <div class="ac-head">
+        <div class="authcard confirm">
+          <div class="ac-head tight">
             <h1>Connect this terminal?</h1>
-            <p>Read this before you approve — it is the only check on what the terminal gets.</p>
+            <p>Check all four before you approve — this is the only gate on what it gets.</p>
           </div>
           <div class="ac-body">
-            <div class="detail">
-              <div class="drow">
-                <span class="dk">You</span>
-                <span class="dv">
+            <div class="detail cols">
+              <div class="dcol">
+                <div class="dblock">
+                  <span class="dk">You</span>
                   <span class="who">
                     <span class="avatar">Y</span>
                     <span>
-                      <span class="nm" style="display: block">Zhu Yue</span>
+                      <span class="nm">Zhu Yue</span>
                       <span class="em">zhuyue11@gmail.com</span>
                     </span>
                   </span>
                   <span class="sub"
-                    >Not you? <span class="link">Sign out and sign in as someone else</span>.</span
+                    >Not you? <span class="link">Sign out</span> and sign in as them.</span
                   >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Connecting</span>
-                <span class="dv">
+                </div>
+                <div class="dblock">
+                  <span class="dk">Connecting</span>
                   <span class="agent"
                     ><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Motir CLI
                     on <span class="mono">studio-mbp</span></span
@@ -2535,66 +2555,46 @@
                   <span class="sub"
                     >Code <span class="code-chip">K4TP-9RXM</span> · asked 12 seconds ago</span
                   >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Workspace</span>
-                <span class="dv">
+                </div>
+                <div class="dblock">
+                  <span class="dk">Workspace</span>
                   <span class="select"
                     >moooon · Motir<svg class="chev" viewBox="0 0 24 24">
                       <use href="#i-chevron-down" /></svg
                   ></span>
-                  <span class="sub"
-                    >The terminal sees only this workspace. You belong to 3 — pick the one you want
-                    to work in.</span
-                  >
-                </span>
+                  <span class="sub">You belong to 3 — it sees only this one.</span>
+                </div>
               </div>
-              <div class="drow">
-                <span class="dk">It can</span>
-                <span class="dv">
+              <div class="dcol">
+                <div class="dblock">
+                  <span class="dk">It can</span>
                   <span class="scopes">
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
                       <span>
-                        <span class="sname" style="display: block">Read everything</span>
-                        <span class="sdesc"
-                          >Work items, boards, sprints, comments and reports.</span
-                        >
+                        <span class="sname">Read everything</span>
                       </span>
                     </span>
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-square-pen" /></svg>
                       <span>
-                        <span class="sname" style="display: block">Edit work items</span>
-                        <span class="sdesc">Create and update work items, comments and links.</span>
+                        <span class="sname">Edit work items</span>
                       </span>
                     </span>
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
                       <span>
-                        <span class="sname" style="display: block">Connect integrations</span>
-                        <span class="sdesc"
-                          >Link external tools and post activity back to Motir.</span
-                        >
+                        <span class="sname">Connect integrations</span>
                       </span>
                     </span>
                   </span>
-                  <span class="cant"
-                    >It can’t archive or delete work items, and it can’t change members or
-                    billing.</span
-                  >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Expires</span>
-                <span class="dv">
-                  In 90 days
-                  <span class="sub"
-                    >Or the moment you revoke it in Settings → Account → API tokens. Revoking is the
-                    only way to disconnect a terminal.</span
-                  >
-                </span>
+                  <span class="cant">Not: archive or delete work items, members, billing.</span>
+                </div>
+                <div class="dblock">
+                  <span class="dk">Expires</span>
+                  <span class="dstrong">In 90 days</span>
+                  <span class="sub">Revoke it in API tokens to disconnect.</span>
+                </div>
               </div>
             </div>
 
@@ -2602,12 +2602,10 @@
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
               <div>
                 <p>
-                  Approve this only if you just ran <span class="mono">motir login</span> on
-                  <span class="mono">studio-mbp</span> yourself.
-                </p>
-                <p>
-                  If someone sent you this code — in a chat, an email or a support ticket — deny it.
-                  Approving hands THEIR terminal everything listed above, as you.
+                  Approve only if you just ran <span class="mono">motir login</span> on
+                  <span class="mono">studio-mbp</span> yourself. If someone sent you this code — a
+                  chat, an email, a support ticket — <b>deny it</b>: approving hands THEIR terminal
+                  everything above, as you.
                 </p>
               </div>
             </div>
@@ -2635,31 +2633,29 @@
     </div>
     <div class="panel">
       <div class="authwash">
-        <div class="authcard">
-          <div class="ac-head">
+        <div class="authcard confirm">
+          <div class="ac-head tight">
             <h1>Connect this terminal?</h1>
-            <p>Read this before you approve — it is the only check on what the terminal gets.</p>
+            <p>Check all four before you approve — this is the only gate on what it gets.</p>
           </div>
           <div class="ac-body">
-            <div class="detail">
-              <div class="drow">
-                <span class="dk">You</span>
-                <span class="dv">
+            <div class="detail cols">
+              <div class="dcol">
+                <div class="dblock">
+                  <span class="dk">You</span>
                   <span class="who">
                     <span class="avatar">Y</span>
                     <span>
-                      <span class="nm" style="display: block">Zhu Yue</span>
+                      <span class="nm">Zhu Yue</span>
                       <span class="em">zhuyue11@gmail.com</span>
                     </span>
                   </span>
                   <span class="sub"
-                    >Not you? <span class="link">Sign out and sign in as someone else</span>.</span
+                    >Not you? <span class="link">Sign out</span> and sign in as them.</span
                   >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Connecting</span>
-                <span class="dv">
+                </div>
+                <div class="dblock">
+                  <span class="dk">Connecting</span>
                   <span class="agent"
                     ><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Motir CLI
                     on <span class="mono">devbox-01</span></span
@@ -2667,59 +2663,43 @@
                   <span class="sub"
                     >Code <span class="code-chip">B7QN-M2XD</span> · asked 4 seconds ago</span
                   >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Workspace</span>
-                <span class="dv">
-                  moooon · Motir
+                </div>
+                <div class="dblock">
+                  <span class="dk">Workspace</span>
+                  <span class="dstrong">moooon · Motir</span>
                   <span class="sub">Your only workspace.</span>
-                </span>
+                </div>
               </div>
-              <div class="drow">
-                <span class="dk">It can</span>
-                <span class="dv">
+              <div class="dcol">
+                <div class="dblock">
+                  <span class="dk">It can</span>
                   <span class="scopes">
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
                       <span>
-                        <span class="sname" style="display: block">Read everything</span>
-                        <span class="sdesc"
-                          >Work items, boards, sprints, comments and reports.</span
-                        >
+                        <span class="sname">Read everything</span>
                       </span>
                     </span>
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-square-pen" /></svg>
                       <span>
-                        <span class="sname" style="display: block">Edit work items</span>
-                        <span class="sdesc">Create and update work items, comments and links.</span>
+                        <span class="sname">Edit work items</span>
                       </span>
                     </span>
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
                       <span>
-                        <span class="sname" style="display: block">Connect integrations</span>
-                        <span class="sdesc"
-                          >Link external tools and post activity back to Motir.</span
-                        >
+                        <span class="sname">Connect integrations</span>
                       </span>
                     </span>
                   </span>
-                  <span class="cant"
-                    >It can’t archive or delete work items, and it can’t change members or
-                    billing.</span
-                  >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Expires</span>
-                <span class="dv">
-                  In 90 days
-                  <span class="sub"
-                    >Or the moment you revoke it in Settings → Account → API tokens.</span
-                  >
-                </span>
+                  <span class="cant">Not: archive or delete work items, members, billing.</span>
+                </div>
+                <div class="dblock">
+                  <span class="dk">Expires</span>
+                  <span class="dstrong">In 90 days</span>
+                  <span class="sub">Revoke it in API tokens to disconnect.</span>
+                </div>
               </div>
             </div>
 
@@ -2727,12 +2707,10 @@
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
               <div>
                 <p>
-                  Approve this only if you just ran <span class="mono">motir login</span> on
-                  <span class="mono">devbox-01</span> yourself.
-                </p>
-                <p>
-                  If someone sent you this code — in a chat, an email or a support ticket — deny it.
-                  Approving hands THEIR terminal everything listed above, as you.
+                  Approve only if you just ran <span class="mono">motir login</span> on
+                  <span class="mono">devbox-01</span> yourself. If someone sent you this code — a
+                  chat, an email, a support ticket — <b>deny it</b>: approving hands THEIR terminal
+                  everything above, as you.
                 </p>
               </div>
             </div>
@@ -3394,30 +3372,36 @@
          `:root, [data-appearance-scope]`, and var() resolves at the DECLARING
          element, so a subtree that flips `--color-*` must re-emit `--el-*` to pick
          the flip up (theme.css, MOTIR-1040). Without it this panel renders light. -->
-    <div class="panel duo" data-theme="dark" data-appearance-scope>
+    <div
+      class="panel"
+      data-theme="dark"
+      data-appearance-scope
+      style="display: flex; flex-direction: column; gap: 20px"
+    >
       <div class="authwash" style="padding: 28px 20px">
-        <div class="authcard" style="max-width: 30rem; padding: 32px">
-          <div class="ac-head">
+        <div class="authcard confirm">
+          <div class="ac-head tight">
             <h1>Connect this terminal?</h1>
-            <p>Read this before you approve — it is the only check on what the terminal gets.</p>
+            <p>Check all four before you approve — this is the only gate on what it gets.</p>
           </div>
           <div class="ac-body">
-            <div class="detail">
-              <div class="drow">
-                <span class="dk">You</span>
-                <span class="dv">
+            <div class="detail cols">
+              <div class="dcol">
+                <div class="dblock">
+                  <span class="dk">You</span>
                   <span class="who">
                     <span class="avatar">Y</span>
                     <span>
-                      <span class="nm" style="display: block">Zhu Yue</span>
+                      <span class="nm">Zhu Yue</span>
                       <span class="em">zhuyue11@gmail.com</span>
                     </span>
                   </span>
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Connecting</span>
-                <span class="dv">
+                  <span class="sub"
+                    >Not you? <span class="link">Sign out</span> and sign in as them.</span
+                  >
+                </div>
+                <div class="dblock">
+                  <span class="dk">Connecting</span>
                   <span class="agent"
                     ><svg class="ic" viewBox="0 0 24 24"><use href="#i-terminal" /></svg>Motir CLI
                     on <span class="mono">studio-mbp</span></span
@@ -3425,50 +3409,61 @@
                   <span class="sub"
                     >Code <span class="code-chip">K4TP-9RXM</span> · asked 12 seconds ago</span
                   >
-                </span>
-              </div>
-              <div class="drow">
-                <span class="dk">Workspace</span>
-                <span class="dv">
+                </div>
+                <div class="dblock">
+                  <span class="dk">Workspace</span>
                   <span class="select"
                     >moooon · Motir<svg class="chev" viewBox="0 0 24 24">
                       <use href="#i-chevron-down" /></svg
                   ></span>
-                </span>
+                  <span class="sub">You belong to 3 — it sees only this one.</span>
+                </div>
               </div>
-              <div class="drow">
-                <span class="dk">It can</span>
-                <span class="dv">
+              <div class="dcol">
+                <div class="dblock">
+                  <span class="dk">It can</span>
                   <span class="scopes">
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
-                      <span><span class="sname">Read everything</span></span>
+                      <span>
+                        <span class="sname">Read everything</span>
+                      </span>
                     </span>
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-square-pen" /></svg>
-                      <span><span class="sname">Edit work items</span></span>
+                      <span>
+                        <span class="sname">Edit work items</span>
+                      </span>
                     </span>
                     <span class="scope">
                       <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
-                      <span><span class="sname">Connect integrations</span></span>
+                      <span>
+                        <span class="sname">Connect integrations</span>
+                      </span>
                     </span>
                   </span>
-                  <span class="cant"
-                    >It can’t archive or delete work items, and it can’t change members or
-                    billing.</span
-                  >
-                </span>
+                  <span class="cant">Not: archive or delete work items, members, billing.</span>
+                </div>
+                <div class="dblock">
+                  <span class="dk">Expires</span>
+                  <span class="dstrong">In 90 days</span>
+                  <span class="sub">Revoke it in API tokens to disconnect.</span>
+                </div>
               </div>
             </div>
+
             <div class="callout">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
               <div>
                 <p>
-                  Approve this only if you just ran <span class="mono">motir login</span> on
-                  <span class="mono">studio-mbp</span> yourself.
+                  Approve only if you just ran <span class="mono">motir login</span> on
+                  <span class="mono">studio-mbp</span> yourself. If someone sent you this code — a
+                  chat, an email, a support ticket — <b>deny it</b>: approving hands THEIR terminal
+                  everything above, as you.
                 </p>
               </div>
             </div>
+
             <div class="btnrow">
               <button class="btn btn-deny btn-lg full">
                 <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-x" /></svg>Deny
