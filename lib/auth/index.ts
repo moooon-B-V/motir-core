@@ -1,12 +1,19 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { nextCookies } from 'better-auth/next-js';
+import { deviceAuthorization } from 'better-auth/plugins';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
+import {
+  CLI_CLIENT_ID,
+  DEVICE_CODE_EXPIRES_IN,
+  DEVICE_CODE_POLL_INTERVAL,
+  DEVICE_VERIFICATION_PATH,
+} from '@/lib/cliDevice/constants';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -280,7 +287,46 @@ export const auth = betterAuth({
 
   // The nextCookies plugin makes Set-Cookie headers flow correctly through
   // Next.js Server Actions. Recommended for App Router.
-  plugins: [nextCookies()],
+  //
+  // deviceAuthorization (Story MOTIR-1863 · Subtask MOTIR-1865) is the RFC 8628
+  // state machine behind `motir login`: it mounts /device/code, /device/token,
+  // GET /device, /device/approve and /device/deny under the existing /api/auth/*
+  // handler and persists grants in the `DeviceCode` model. It is a PRIVATE
+  // IMPLEMENTATION DETAIL — the CLI's contract is Motir's own /api/cli/device/*
+  // (see lib/services/cliDeviceService.ts and docs/decisions/cli-login.md), because
+  // the plugin's own /device/token completes into a SESSION and no bearer gate in
+  // this repo accepts one. Only two of its endpoints are called from outside:
+  // GET /api/auth/device?user_code=… (the claim, which stamps userId onto the row)
+  // and POST /api/auth/device/deny — both from the /device page (MOTIR-1867).
+  //
+  // Config notes (all decided in the ADR):
+  //   * verificationUri is RELATIVE, so buildVerificationUris resolves it against
+  //     the baseURL chain above and a preview deployment prints its own URL.
+  //   * expiresIn 15m (not the plugin's 30m default) — a shorter code lifetime is a
+  //     smaller phishing window, which is the residual risk of choosing device code
+  //     over loopback+PKCE.
+  //   * validateClient pins client_id, so an unrelated caller cannot open grants.
+  //   * NO generateUserCode override: the plugin's default charset is already
+  //     ABCDEFGHJKLMNPQRSTUVWXYZ23456789 — free of 0/O/1/I/L.
+  //   * NO rateLimit customRule for /device/token: the CLI polls this endpoint on a
+  //     5s interval BY DESIGN, and the plugin's own per-grant `slow_down` throttle
+  //     (lastPolledAt + pollingInterval) is the correct guard. An IP-keyed limiter
+  //     here would break the normal flow, not an attack.
+  plugins: [
+    nextCookies(),
+    deviceAuthorization({
+      verificationUri: DEVICE_VERIFICATION_PATH,
+      expiresIn: DEVICE_CODE_EXPIRES_IN,
+      interval: DEVICE_CODE_POLL_INTERVAL,
+      validateClient: (clientId: string) => clientId === CLI_CLIENT_ID,
+      // `schema: {}` is REQUIRED, not decoration: better-auth 1.6.11 declares this
+      // option as `z.custom(() => true)` with no `.optional()`, so its own options
+      // parser throws `expected nonoptional, received undefined` when it is absent.
+      // An empty object means "no model/field renames" — which is what we want, since
+      // Motir's DeviceCode model already uses the plugin's field names verbatim.
+      schema: {},
+    }),
+  ],
 });
 
 /**

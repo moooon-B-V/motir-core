@@ -81,6 +81,11 @@ model User {
   // removes their pending change tokens — they are short-lived auth substrate,
   // not audit, mirroring the session/account lifecycle).
   emailChangeRequests         EmailChangeRequest[]
+  // Back-relation for DeviceCode (Subtask MOTIR-1865). A user may have in-flight
+  // `motir login` grants they have claimed but not yet approved (Cascade on the
+  // FK: they are short-lived auth substrate, not audit — same lifecycle as
+  // emailChangeRequests / sessions).
+  deviceCodes                 DeviceCode[]
   workspaceMemberships        WorkspaceMembership[]
   // Back-relation for OrganizationMembership (Story 6.10). A user belongs to
   // many organizations (the root tenancy tier) — Cascade on the FK: deleting a
@@ -323,6 +328,82 @@ model EmailChangeRequest {
   @@map("email_change_request")
 }
 
+/// One in-flight device-authorization grant for `motir login` (RFC 8628, Story
+/// MOTIR-1863 · Subtask MOTIR-1865 — `docs/decisions/cli-login.md`). The terminal
+/// opens a grant, the human approves it in a browser, and the terminal's next poll
+/// exchanges it for a CLI-scoped PAT. Short-lived (15 minutes) and SINGLE-USE: the
+/// row is deleted the moment it is consumed, denied, or found expired, so this
+/// table holds only pending state — never an audit trail.
+///
+/// TWO WRITERS, by design. The lower nine fields are Better-Auth's
+/// `deviceAuthorization` plugin's own model, driven exclusively through its adapter
+/// (`plugins/device-authorization/schema.mjs`), so their PRISMA FIELD NAMES ARE
+/// FIXED — the adapter addresses `db.deviceCode` and passes these exact camelCase
+/// keys. Renaming one breaks the plugin at runtime with no typecheck error. The
+/// last two (`workspaceId`, `hostname`) are MOTIR-owned: the plugin's `mergeSchema`
+/// can only rename existing fields, never add one, so the ADR's answer is that we
+/// own `schema.prisma` and add the columns here; a Motir repository is the only
+/// thing that reads or writes them.
+///
+/// TENANCY — identity-scoped, NOT workspace-scoped, so it carries NO RLS (the
+/// `verification` / `email_change_request` precedent, not the workspace-RLS table
+/// contract). Three reasons: the row is created BEFORE any workspace is chosen
+/// (`workspaceId` is null for most of its life); it is read PRE-AUTH on every CLI
+/// poll, which presents no session and no bearer, so there is no `app.workspace_id`
+/// GUC to gate on; and the codes themselves are the capability — a 40-char device
+/// code and an 8-char user code, both `@unique`, are the only keys that reach a row.
+/// `workspaceId` is a nullable FK recording the approver's binding CHOICE (which
+/// workspace the minted PAT belongs to), not a tenancy discriminator.
+model DeviceCode {
+  id String @id @default(cuid())
+
+  // ── Better-Auth plugin-owned fields (names fixed by its adapter) ──────────
+  /// The high-entropy code the CLI holds and polls with (40 chars). `@unique`:
+  /// it is the poll's only lookup key, and a duplicate would be ambiguous.
+  deviceCode      String    @unique @map("device_code")
+  /// The short code the human reads out and types on `/device` (8 chars from a
+  /// charset with no `0/O/1/I/L`). `@unique` for the same reason.
+  userCode        String    @unique @map("user_code")
+  /// Null until the verifying browser session CLAIMS the code (the plugin's
+  /// `GET /device?user_code=…`); approval then requires the claimer to be the
+  /// approver. Cascade: deleting a user drops their in-flight grants.
+  userId          String?   @map("user_id")
+  expiresAt       DateTime  @map("expires_at")
+  /// `pending` | `approved` | `denied` — the plugin's state machine.
+  status          String
+  /// Stamped on every poll; with `pollingInterval` it is what makes a too-fast
+  /// poll answer `slow_down`.
+  lastPolledAt    DateTime? @map("last_polled_at")
+  /// Minimum poll spacing in MILLISECONDS (the plugin stores `ms(interval)`).
+  pollingInterval Int?      @map("polling_interval")
+  clientId        String?   @map("client_id")
+  /// The requested scope string, space-separated (RFC 8628 fidelity). NOT the
+  /// authority for the mint — `CLI_TOKEN_SCOPES` is (the grant is deliberately
+  /// unconfigurable), so this is a record of what was asked, not what is granted.
+  scope           String?
+
+  // ── Motir-owned fields (the plugin neither reads nor writes these) ────────
+  /// The workspace the approving user bound the credential to (the ADR's Q3
+  /// picker). Written at approval, BEFORE the status flip, so a poll that
+  /// observes `approved` always has a workspace to mint into. Cascade: deleting
+  /// the workspace drops grants that would mint into it.
+  workspaceId String? @map("workspace_id")
+  /// The hostname the CLI reported at `POST /api/cli/device/start`. Display-only
+  /// (the approval screen's "what is connecting", and the token's `CLI · <host>`
+  /// label) — never interpreted, never trusted.
+  hostname    String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("device_code")
+}
+
 /// Anonymous, short-lived "idea draft" for the cross-origin pre-auth handoff
 /// (Subtask 7.22.2 / MOTIR-1458). A LOGGED-OUT visitor types a project idea on
 /// the standalone motir-marketing site (motir.co) — a DIFFERENT origin, so it
@@ -502,6 +583,11 @@ model Workspace {
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
   apiTokens                ApiToken[]
+  // In-flight `motir login` grants BOUND to this workspace (Subtask MOTIR-1865).
+  // The row is not tenant data (it is identity-scoped, no RLS — see DeviceCode);
+  // the edge exists because the pending grant names the workspace its PAT would be
+  // minted into, so it must go with the workspace. Cascade.
+  deviceCodes              DeviceCode[]
   // AI-planning proposal bundles + their proposed-operation items (Story 7.21).
   // Workspace-scoped tenant data — cascade with the workspace.
   plans                    Plan[]

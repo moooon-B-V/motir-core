@@ -138,3 +138,27 @@ export function toolScope(toolName: McpToolName): TokenScope {
 export const DEFAULT_TOKEN_SCOPES: TokenScope[] = TOKEN_SCOPES.filter(
   (scope) => scope !== 'work_items:delete',
 );
+
+/**
+ * The FIXED grant a `motir login` device-authorization approval mints (Story
+ * MOTIR-1863 · Subtask MOTIR-1865; decided in `docs/decisions/cli-login.md` Q2).
+ * Deliberately NARROWER than {@link DEFAULT_TOKEN_SCOPES}: every one of the
+ * sixteen tools `packages/cli/src/mcpClient.ts` calls maps through
+ * {@link TOOL_SCOPES} into exactly these three, and the CLI calls nothing gated by
+ * `work_items:archive`, `work_items:delete` or `sprints:write` — so the default
+ * set would over-grant three scopes to a credential that lives unattended on a
+ * remote box.
+ *
+ * It lives HERE, beside `TOKEN_SCOPES` / `DEFAULT_TOKEN_SCOPES` and the tool→scope
+ * map, because that co-location is the guardrail: adding an MCP tool now carries a
+ * third question next to its `TOOL_SCOPES` entry — does the CLI call it, and if so
+ * does this set already cover it? A tool gated by `sprints:write` that the CLI
+ * later calls would 403 on every device-minted token.
+ *
+ * The approval screen SHOWS these and cannot change them (neither widen — a
+ * `work_items:delete` control on a socially-engineerable screen is the one
+ * affordance that turns a phishing success into a destructive one — nor narrow: a
+ * hand-narrowed grant breaks `motir auto` mid-run). A different grant is minted in
+ * Settings → Account → API tokens and carried by `motir auth login --token`.
+ */
+export const CLI_TOKEN_SCOPES: TokenScope[] = ['read', 'work_items:write', 'integration'];
