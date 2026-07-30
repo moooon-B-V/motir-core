@@ -7,6 +7,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueDetailDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { attachEdges, CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 
 // `get_work_item` (Story 7.8 · Subtask 7.8.4) — read ONE work item by its
 // `PROD-<n>` identifier, returned as the issue-detail aggregate (the same
@@ -14,6 +15,13 @@ import { toToolError, toolOk } from '../toolResult';
 // dependency links + readiness verdict). One service call, no business logic —
 // the 6.4 browse gate + the 404-not-403 cross-tenant contract live in the
 // service unchanged.
+//
+// PLUS the per-CHILD dependency block (7.9.16b / MOTIR-1848). The aggregate's
+// `children` are `WorkItemSummaryDto[]` and carry no edges, so a client could not
+// order them without an N+1 fan-out; `motir show`'s build-order WAVE view needs
+// exactly that sibling sub-graph. It rides ONE extra batched call (two queries,
+// any child count) and is attached at the TRANSPORT, following 7.9.0f's precedent
+// — `IssueDetailDto` stays as-is for the web detail page.
 
 export const GET_WORK_ITEM_TOOL_NAME = 'get_work_item';
 
@@ -56,7 +64,16 @@ export async function runGetWorkItem(
   const identifier = args.key.trim().toUpperCase();
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
   const detail = await workItemsService.getIssueDetail(project.id, identifier, ctx);
-  return toolOk(summarize(detail), detail as unknown as Record<string, unknown>);
+  // The children's dependency edges in TWO batched queries (MOTIR-1842's reader),
+  // never one read per child — a 43-child story must stay a single round-trip.
+  // `getIssueDetail` has already run the browse gate on the whole aggregate, so
+  // the ids handed over are ones the caller may see.
+  const edges = await workItemsService.getDependencyEdgesForItems(
+    detail.children.map((c) => c.id),
+    ctx,
+  );
+  const structured = { ...detail, children: attachEdges(detail.children, edges) };
+  return toolOk(summarize(detail), structured as unknown as Record<string, unknown>);
 }
 
 export function registerGetWorkItem(server: McpServer, resolveContext: McpContextResolver): void {
@@ -67,7 +84,8 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
       description:
         'Read a single work item by its identifier (e.g. "PROD-7"): full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
-        'readiness verdict. Honors the same access checks as the UI.',
+        'readiness verdict. Honors the same access checks as the UI. ' +
+        CHILD_EDGE_BLOCK_DESCRIPTION,
       inputSchema,
     },
     async (args, extra) => {

@@ -1,16 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  BLOCKER_KEYS_BUDGET,
   CHILD_HEADERS,
   EDGE_HEADERS,
   FILTER_VERSION,
   IN_FLIGHT_STATUS_KEYS,
+  TERMINAL_STATUS_KEYS,
+  WAVE_CHILD_HEADERS,
+  assignChildWaves,
+  blockedByCell,
   childRow,
   childRows,
+  cycleMembers,
+  detailWithWaves,
   edgeRows,
   formatSprintWindow,
   formatTable,
   inFlightFilter,
+  isSatisfiedBlocker,
   issueUrl,
+  renderChildrenSection,
   renderItemHeader,
   renderLineage,
   renderReadinessLine,
@@ -24,6 +33,7 @@ import {
   resolveSprintRef,
   sprintFilter,
   truncate,
+  waveChildRows,
   type StatusPulse,
 } from '../src/render.js';
 import { CliError } from '../src/errors.js';
@@ -31,6 +41,7 @@ import type {
   ReadyItemSummary,
   SearchItemSummary,
   SprintSummary,
+  WorkItemChild,
   WorkItemDetail,
   WorkItemSummary,
 } from '../src/mcpClient.js';
@@ -459,6 +470,370 @@ describe('childRows / edgeRows / renderRelationTable', () => {
 
     expect(block.split('\n')[1]).toBe('WAVE  KEY     KIND     STATUS  TITLE');
     expect(block).toContain('1     PROD-9  subtask  todo    Wire the thing');
+  });
+});
+
+// ── build-order WAVES (7.9.16b · MOTIR-1848) ────────────────────────────────
+//
+// The wave assignment is a PURE function over the children's `blocked_by`
+// sub-graph, so every shape a real plan can take is asserted directly: a flat
+// set, a chain, a fan-out, a fan-in, a node whose blockers sit in two different
+// waves, blockers already done, a blocker OUTSIDE the parent, and a cycle.
+
+const kid = (n: number, over: Partial<WorkItemChild> = {}): WorkItemChild => ({
+  identifier: `PROD-${n}`,
+  kind: 'subtask',
+  title: `Child ${n}`,
+  status: 'todo',
+  dependencies: { blockedBy: [], blocks: [] },
+  ...over,
+});
+
+/** `blocked_by` edges to the named siblings, `todo` unless a status is given. */
+const gatedBy = (...specs: (number | [number, string])[]): WorkItemChild['dependencies'] => ({
+  blockedBy: specs.map((spec) => {
+    const [n, status] = Array.isArray(spec) ? spec : [spec, 'todo'];
+    return { key: `PROD-${n}`, title: `Child ${n}`, status };
+  }),
+  blocks: [],
+});
+
+const wavesOf = (children: WorkItemChild[]) =>
+  assignChildWaves(children).map((w) => [w.child.identifier, w.wave] as const);
+
+describe('assignChildWaves', () => {
+  it('puts a FLAT set — no edges at all — entirely in wave 1', () => {
+    expect(wavesOf([kid(1), kid(2), kid(3)])).toEqual([
+      ['PROD-1', 1],
+      ['PROD-2', 1],
+      ['PROD-3', 1],
+    ]);
+  });
+
+  it('layers a CHAIN one wave per link', () => {
+    expect(
+      wavesOf([kid(1), kid(2, { dependencies: gatedBy(1) }), kid(3, { dependencies: gatedBy(2) })]),
+    ).toEqual([
+      ['PROD-1', 1],
+      ['PROD-2', 2],
+      ['PROD-3', 3],
+    ]);
+  });
+
+  it('puts a FAN-OUT’s dependents all in wave 2 — they are parallel work', () => {
+    expect(
+      wavesOf([kid(1), kid(2, { dependencies: gatedBy(1) }), kid(3, { dependencies: gatedBy(1) })]),
+    ).toEqual([
+      ['PROD-1', 1],
+      ['PROD-2', 2],
+      ['PROD-3', 2],
+    ]);
+  });
+
+  it('puts a FAN-IN behind all of its blockers', () => {
+    expect(wavesOf([kid(1), kid(2), kid(3), kid(4, { dependencies: gatedBy(1, 2, 3) })])).toEqual([
+      ['PROD-1', 1],
+      ['PROD-2', 1],
+      ['PROD-3', 1],
+      ['PROD-4', 2],
+    ]);
+  });
+
+  it('places a node behind its DEEPEST blocker when they sit in different waves', () => {
+    // 4 is blocked by 1 (wave 1) AND 3 (wave 2) — so it is wave 3, not wave 2.
+    const children = [
+      kid(1),
+      kid(2),
+      kid(3, { dependencies: gatedBy(2) }),
+      kid(4, { dependencies: gatedBy(1, 3) }),
+    ];
+    expect(wavesOf(children)).toEqual([
+      ['PROD-1', 1],
+      ['PROD-2', 1],
+      ['PROD-3', 2],
+      ['PROD-4', 3],
+    ]);
+  });
+
+  it('does NOT count a satisfied blocker — a done gate is no gate', () => {
+    const [entry] = assignChildWaves([kid(2, { dependencies: gatedBy([1, 'done']) })]);
+    expect(entry?.wave).toBe(1);
+    expect(entry?.satisfiedBlockers).toEqual(['PROD-1']);
+    expect(entry?.siblingBlockers).toEqual([]);
+    // `cancelled` is terminal too (category `done` in the default workflow).
+    expect(assignChildWaves([kid(2, { dependencies: gatedBy([1, 'cancelled']) })])[0]?.wave).toBe(
+      1,
+    );
+  });
+
+  it('treats a blocker OUTSIDE this parent as external — named, never a layer', () => {
+    // PROD-99 is not a sibling, so nothing in this table can clear it. It must
+    // not push PROD-2 into wave 2 and drag every dependent down with it.
+    const children = [kid(2, { dependencies: gatedBy(99) }), kid(3, { dependencies: gatedBy(2) })];
+    const [second, third] = assignChildWaves(children);
+
+    expect(second?.wave).toBe(1);
+    expect(second?.externalBlockers).toEqual(['PROD-99']);
+    expect(second?.siblingBlockers).toEqual([]);
+    expect(third?.wave).toBe(2);
+  });
+
+  it('gives CYCLE members no wave, groups them last, and names them', () => {
+    const children = [
+      kid(1),
+      kid(2, { dependencies: gatedBy(3) }),
+      kid(3, { dependencies: gatedBy(2) }),
+    ];
+    const waves = assignChildWaves(children);
+
+    expect(waves.map((w) => [w.child.identifier, w.wave])).toEqual([
+      ['PROD-1', 1],
+      ['PROD-2', null],
+      ['PROD-3', null],
+    ]);
+    expect(cycleMembers(waves)).toEqual(['PROD-2', 'PROD-3']);
+    // A node hanging OFF the cycle can never be placed either.
+    expect(
+      cycleMembers(assignChildWaves([...children, kid(4, { dependencies: gatedBy(2) })])),
+    ).toEqual(['PROD-2', 'PROD-3', 'PROD-4']);
+  });
+
+  it('is STABLE — within a wave the server’s order survives, so runs match', () => {
+    const children = [kid(9), kid(8), kid(7, { dependencies: gatedBy(9) }), kid(6)];
+    expect(wavesOf(children)).toEqual([
+      ['PROD-9', 1],
+      ['PROD-8', 1],
+      ['PROD-6', 1],
+      ['PROD-7', 2],
+    ]);
+  });
+
+  it('treats a child with NO dependencies field as edge-free rather than crashing', () => {
+    const bare: WorkItemChild = {
+      identifier: 'PROD-1',
+      kind: 'subtask',
+      title: 'x',
+      status: 'todo',
+    };
+    expect(assignChildWaves([bare])[0]?.wave).toBe(1);
+  });
+
+  it('classifies terminal statuses off the default workflow’s done category', () => {
+    expect([...TERMINAL_STATUS_KEYS]).toEqual(['done', 'cancelled']);
+    expect(isSatisfiedBlocker('done')).toBe(true);
+    expect(isSatisfiedBlocker('cancelled')).toBe(true);
+    expect(isSatisfiedBlocker('in_review')).toBe(false);
+    expect(isSatisfiedBlocker('blocked')).toBe(false);
+  });
+});
+
+describe('blockedByCell', () => {
+  const cellFor = (deps: WorkItemChild['dependencies'], budget?: number) =>
+    blockedByCell(
+      assignChildWaves([kid(1), kid(2), kid(3), kid(4, { dependencies: deps })])[3]!,
+      budget,
+    );
+
+  it('renders BLANK for no edges — not a zero', () => {
+    expect(cellFor(gatedBy())).toBe('');
+  });
+
+  it('renders a single blocker as its bare key', () => {
+    expect(cellFor(gatedBy(1))).toBe('PROD-1');
+  });
+
+  it('renders exactly the budget without an overflow marker', () => {
+    expect(BLOCKER_KEYS_BUDGET).toBe(3);
+    expect(cellFor(gatedBy(1, 2, 3))).toBe('PROD-1, PROD-2, PROD-3');
+  });
+
+  it('collapses everything past the budget to +n', () => {
+    const many = {
+      blockedBy: [1, 2, 3, 4, 5].map((n) => ({ key: `PROD-${n}`, title: 'x', status: 'todo' })),
+      blocks: [],
+    };
+    expect(blockedByCell(assignChildWaves([kid(9, { dependencies: many })])[0]!)).toBe(
+      'PROD-1↗, PROD-2↗, PROD-3↗ +2',
+    );
+    expect(cellFor(gatedBy(1, 2, 3), 2)).toBe('PROD-1, PROD-2 +1');
+  });
+
+  it('marks a DONE blocker and an EXTERNAL one, un-done siblings first', () => {
+    // The wait is about the un-done siblings, so they lead; the marks make the
+    // other two kinds distinguishable at a glance.
+    expect(cellFor(gatedBy([1, 'done'], 99, 2), 9)).toBe('PROD-2, PROD-99↗, PROD-1✓');
+  });
+});
+
+describe('renderChildrenSection', () => {
+  const chain = [
+    kid(1),
+    kid(2, { dependencies: gatedBy(1) }),
+    kid(3, { dependencies: gatedBy(2) }),
+  ];
+
+  it('draws the WAVE table, ordered by wave and labelled as build order', () => {
+    const block = renderChildrenSection(chain);
+    const lines = block.split('\n');
+
+    expect(lines[0]).toBe('CHILDREN (3) — build order');
+    expect(lines[1]).toBe('WAVE  KEY     KIND     STATUS  BLOCKED BY  TITLE');
+    expect(WAVE_CHILD_HEADERS).toEqual(['WAVE', 'KEY', 'KIND', 'STATUS', 'BLOCKED BY', 'TITLE']);
+    expect(lines[3]).toBe('1     PROD-1  subtask  todo                Child 1');
+    expect(lines[4]).toBe('2     PROD-2  subtask  todo    PROD-1      Child 2');
+    expect(lines[5]).toBe('3     PROD-3  subtask  todo    PROD-2      Child 3');
+  });
+
+  it('reads as today’s plain list when the story has no internal edges', () => {
+    // All wave 1, every BLOCKED BY blank — the truth about a fully parallel set.
+    const block = renderChildrenSection([kid(1), kid(2)]);
+    expect(block.split('\n').slice(3)).toEqual([
+      '1     PROD-1  subtask  todo                Child 1',
+      '1     PROD-2  subtask  todo                Child 2',
+    ]);
+    expect(block).not.toContain('✓');
+    expect(block).not.toContain('CYCLE');
+  });
+
+  it('explains only the marks a row actually SHOWS', () => {
+    // No marks at all → no legend.
+    expect(renderChildrenSection(chain)).not.toContain('already done');
+
+    // One mark → one line, not both halves of a fixed legend.
+    const doneOnly = renderChildrenSection([kid(2, { dependencies: gatedBy([1, 'done']) })]);
+    expect(doneOnly).toContain('✓ = already done');
+    expect(doneOnly).not.toContain('outside this parent');
+
+    const externalOnly = renderChildrenSection([kid(2, { dependencies: gatedBy(99) })]);
+    expect(externalOnly).toContain('↗ = blocker outside this parent');
+    expect(externalOnly).not.toContain('already done');
+
+    expect(renderChildrenSection([kid(2, { dependencies: gatedBy([1, 'done'], 99) })])).toContain(
+      '✓ = already done · ↗ = blocker outside this parent',
+    );
+  });
+
+  it('does NOT explain a mark the +n budget cut from every row', () => {
+    // The done blocker is real, but it fell off the end of the cell — a legend
+    // for a symbol that is not on the screen is a promise the table did not keep.
+    const budgeted = renderChildrenSection([
+      kid(1),
+      kid(2),
+      kid(3),
+      kid(5, { dependencies: gatedBy(1, 2, 3, [4, 'done']) }),
+    ]);
+    expect(budgeted).toContain('+1');
+    expect(budgeted).not.toContain('already done');
+  });
+
+  it('SURFACES a cycle under an explicit marker naming its members', () => {
+    const block = renderChildrenSection([
+      kid(1),
+      kid(2, { dependencies: gatedBy(3) }),
+      kid(3, { dependencies: gatedBy(2) }),
+    ]);
+
+    // The unplaceable rows sit last, with an em-dash where the wave would be…
+    const rows = block.split('\n').slice(3, 6);
+    expect(rows[0]).toContain('1     PROD-1');
+    expect(rows[1]).toContain('—     PROD-2');
+    expect(rows[2]).toContain('—     PROD-3');
+    // …and the reason is stated, not left to be inferred from the dashes.
+    expect(block).toContain('⚠ dependency CYCLE — PROD-2, PROD-3 block each other');
+  });
+
+  it('DEGRADES to the 7.9.13 table when the server sends no per-child edges', () => {
+    const legacy: WorkItemChild[] = [
+      { identifier: 'PROD-1', kind: 'subtask', title: 'Child 1', status: 'todo' },
+      { identifier: 'PROD-2', kind: 'subtask', title: 'Child 2', status: 'done' },
+    ];
+    const block = renderChildrenSection(legacy);
+
+    expect(block.split('\n')[0]).toBe('CHILDREN (2)');
+    expect(block.split('\n')[1]).toBe('KEY     KIND     STATUS  TITLE');
+    expect(block).not.toContain('WAVE');
+  });
+
+  it('keeps the empty section exactly as it was', () => {
+    expect(renderChildrenSection([])).toBe('CHILDREN (0)\nno children');
+  });
+
+  it('holds formatTable alignment with a truncated title AND an overflowing cell', () => {
+    const many = {
+      blockedBy: [1, 2, 3, 4, 5].map((n) => ({ key: `PROD-${n}`, title: 'x', status: 'todo' })),
+      blocks: [],
+    };
+    const block = renderChildrenSection(
+      [kid(1), kid(9, { dependencies: many, title: 'z'.repeat(90) })],
+      20,
+    );
+    const [header, underline, ...rows] = block.split('\n').slice(1);
+
+    expect(rows[1]).toContain('+2');
+    expect(rows[1]).toContain('…');
+    // The truncated title fills the TITLE column exactly, so that row fills the
+    // underline — the overflowing BLOCKED BY cell cost it nothing.
+    expect(rows[1]).toHaveLength(underline?.length ?? 0);
+    // …and BOTH rows start their title at the header's TITLE offset: the wide
+    // cell widened the column for every row, it did not shove one of them over.
+    expect(rows[0]?.indexOf('Child 1')).toBe(header?.indexOf('TITLE'));
+    expect(rows[1]?.indexOf('z')).toBe(header?.indexOf('TITLE'));
+  });
+});
+
+describe('detailWithWaves', () => {
+  const detailWith = (children: WorkItemChild[]) => bareDetail({ children });
+
+  it('re-orders the children into build order and stamps each with its wave', () => {
+    const out = detailWithWaves(
+      detailWith([
+        kid(3, { dependencies: gatedBy(1) }),
+        kid(1),
+        kid(2, { dependencies: gatedBy(3) }),
+      ]),
+    );
+    expect(out.children.map((c) => [c.identifier, (c as { wave?: number }).wave])).toEqual([
+      ['PROD-1', 1],
+      ['PROD-3', 2],
+      ['PROD-2', 3],
+    ]);
+  });
+
+  it('carries the FULL untruncated dependency block — the +n budget is display-only', () => {
+    const many = {
+      blockedBy: [1, 2, 3, 4, 5].map((n) => ({
+        key: `PROD-${n}`,
+        title: `Child ${n}`,
+        status: 'todo',
+      })),
+      blocks: [],
+    };
+    const [child] = detailWithWaves(detailWith([kid(9, { dependencies: many })])).children;
+    expect(child?.dependencies?.blockedBy).toHaveLength(5);
+  });
+
+  it('stamps a cycle member with wave null rather than dropping it', () => {
+    const out = detailWithWaves(
+      detailWith([kid(2, { dependencies: gatedBy(3) }), kid(3, { dependencies: gatedBy(2) })]),
+    );
+    expect(out.children.map((c) => (c as { wave?: number | null }).wave)).toEqual([null, null]);
+  });
+
+  it('passes the aggregate through UNCHANGED when the server sends no edges', () => {
+    const legacy = detailWith([
+      { identifier: 'PROD-1', kind: 'subtask', title: 'Child 1', status: 'todo' },
+    ]);
+    expect(detailWithWaves(legacy)).toBe(legacy);
+    expect(detailWithWaves(bareDetail())).toEqual(bareDetail());
+  });
+});
+
+describe('waveChildRows', () => {
+  it('reuses childRow, so the four shared columns cannot drift from CHILD_HEADERS', () => {
+    const entry = assignChildWaves([kid(1), kid(2, { dependencies: gatedBy(1) })])[1]!;
+    const shared = childRow(entry.child, 60);
+
+    expect(waveChildRows([entry], 60)).toEqual([['2', ...shared.slice(0, 3), 'PROD-1', shared[3]]]);
   });
 });
 

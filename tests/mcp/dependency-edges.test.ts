@@ -8,7 +8,8 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { runListReady } from '@/lib/mcp/tools/listReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
-import { edgeMarker } from '@/lib/mcp/dependencyEdges';
+import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
+import { attachEdges, edgeMarker } from '@/lib/mcp/dependencyEdges';
 import { CrossWorkspaceLinkError } from '@/lib/workItems/linkErrors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -28,6 +29,12 @@ import { truncateAuthTables } from '../helpers/db';
 //   transport  — `list_ready` + `search_work_items` attach the IDENTICAL
 //     `dependencies` block to every structuredContent row and render the same
 //     compact marker in the text block.
+//
+// Plus the CHILD projection (Subtask 7.9.16b / MOTIR-1848): `get_work_item`
+// attaches the SAME block to every child of the detail aggregate, from the SAME
+// batched reader — the sibling sub-graph `motir show`'s build-order wave view is
+// computed from. Same three claims (identical shape, total, two queries), now on
+// the aggregate.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -44,6 +51,17 @@ afterAll(async () => {
 const mk = (fx: WorkItemFixture, title: string, projectId?: string) =>
   workItemsService.createWorkItem(
     { projectId: projectId ?? fx.projectId, kind: 'task', title },
+    fx.ctx,
+  );
+
+/** A story, and a subtask under it — the parent/child shape `get_work_item`
+ * projects sibling edges onto. */
+const mkStory = (fx: WorkItemFixture, title: string) =>
+  workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'story', title }, fx.ctx);
+
+const mkChild = (fx: WorkItemFixture, parentId: string, title: string) =>
+  workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'subtask', title, parentId },
     fx.ctx,
   );
 
@@ -372,6 +390,158 @@ describe('the `dependencies` block on the MCP list reads', () => {
       blocks: [],
     });
     await client.close();
+  });
+});
+
+describe('attachEdges', () => {
+  it('is TOTAL — a row the reader had no entry for still gets two empty arrays', () => {
+    const edges = { a: { blockedBy: [{ key: 'PROD-1', title: 'x', status: 'todo' }], blocks: [] } };
+    expect(attachEdges([{ id: 'a' }, { id: 'b' }], edges)).toEqual([
+      { id: 'a', dependencies: edges.a },
+      { id: 'b', dependencies: { blockedBy: [], blocks: [] } },
+    ]);
+  });
+
+  it('leaves the row’s own fields untouched', () => {
+    expect(attachEdges([{ id: 'a', title: 'Keep me' }], {})[0]).toMatchObject({
+      id: 'a',
+      title: 'Keep me',
+    });
+  });
+});
+
+describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', () => {
+  type Child = {
+    id: string;
+    identifier: string;
+    dependencies: { blockedBy: { key: string }[]; blocks: { key: string }[] };
+  };
+  const children = (r: CallToolResult) => (r.structuredContent as { children: Child[] }).children;
+
+  it('every child carries the block, with 1842’s key names, in BOTH directions', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    const first = await mkChild(fx, story.id, 'Ship the schema');
+    const second = await mkChild(fx, story.id, 'Wire the service');
+    await block(fx, second.id, first.id);
+
+    const rows = children(await runGetWorkItem({ key: story.identifier }, fx.ctx));
+    expect(rows.map((c) => c.identifier)).toEqual([first.identifier, second.identifier]);
+    expect(rows.find((c) => c.id === second.id)!.dependencies).toEqual({
+      blockedBy: [{ key: first.identifier, title: 'Ship the schema', status: 'todo' }],
+      blocks: [],
+    });
+    expect(rows.find((c) => c.id === first.id)!.dependencies).toEqual({
+      blockedBy: [],
+      blocks: [{ key: second.identifier, title: 'Wire the service', status: 'todo' }],
+    });
+  });
+
+  it('is TOTAL — an edge-free child carries empty arrays, never a missing key', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    await mkChild(fx, story.id, 'All alone');
+
+    const rows = children(await runGetWorkItem({ key: story.identifier }, fx.ctx));
+    expect(rows[0]!.dependencies).toEqual({ blockedBy: [], blocks: [] });
+  });
+
+  it('a many-child aggregate issues NO per-child query — the batched reader, twice', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    const kids: Awaited<ReturnType<typeof mkChild>>[] = [];
+    for (let i = 0; i < 20; i++) kids.push(await mkChild(fx, story.id, `Child ${i}`));
+    // A chain, so every interior child has an edge in BOTH directions.
+    for (let i = 1; i < kids.length; i++) await block(fx, kids[i]!.id, kids[i - 1]!.id);
+
+    const { result, queries } = await countLinkQueries(() =>
+      runGetWorkItem({ key: story.identifier }, fx.ctx),
+    );
+    const rows = children(result);
+    expect(rows).toHaveLength(20);
+    // TWO for the child projection; the aggregate's OWN link groups (blockedBy /
+    // blocks / relatesTo / duplicates / clones + readiness) cost a fixed handful
+    // more. What matters is that the count does not scale with the child count.
+    expect(queries).toBeLessThanOrEqual(10);
+    expect(rows[10]!.dependencies.blockedBy.map((e) => e.key)).toEqual([kids[9]!.identifier]);
+    expect(rows[10]!.dependencies.blocks.map((e) => e.key)).toEqual([kids[11]!.identifier]);
+  });
+
+  it('a childless item costs the projection NOTHING and still answers', async () => {
+    const fx = await makeWorkItemFixture();
+    const lonely = await mk(fx, 'No children');
+
+    const res = await runGetWorkItem({ key: lonely.identifier }, fx.ctx);
+    expect(children(res)).toEqual([]);
+  });
+
+  it('names the child’s blocker STATUS, so a done blocker is distinguishable', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    const blocker = await mkChild(fx, story.id, 'Ship the schema');
+    const dependent = await mkChild(fx, story.id, 'Wire the UI');
+    await block(fx, dependent.id, blocker.id);
+    await markDone(blocker.id);
+
+    const rows = children(await runGetWorkItem({ key: story.identifier }, fx.ctx));
+    expect(rows.find((c) => c.id === dependent.id)!.dependencies.blockedBy).toEqual([
+      { key: blocker.identifier, title: 'Ship the schema', status: 'done' },
+    ]);
+  });
+
+  it('the block is IDENTICAL to the one the list reads project for the same item', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    const blocker = await mkChild(fx, story.id, 'Ship the schema');
+    const middle = await mkChild(fx, story.id, 'Wire the service');
+    await block(fx, middle.id, blocker.id);
+
+    const childRow = children(await runGetWorkItem({ key: story.identifier }, fx.ctx)).find(
+      (c) => c.id === middle.id,
+    )!;
+    const searchRow = rows(await runSearchWorkItems({ projectKey: 'PROD' }, fx.ctx)).find(
+      (r) => r.id === middle.id,
+    )!;
+    expect(childRow.dependencies).toEqual(searchRow.dependencies);
+  });
+
+  it('advertises the block, and it survives the real transport', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    const blocker = await mkChild(fx, story.id, 'Ship the schema');
+    const dependent = await mkChild(fx, story.id, 'Wire the UI');
+    await block(fx, dependent.id, blocker.id);
+
+    const client = await connectClient(fx.ctx);
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === 'get_work_item')!.description).toContain(
+      'Every CHILD row also carries `dependencies: { blockedBy, blocks }`',
+    );
+    const res = (await client.callTool({
+      name: 'get_work_item',
+      arguments: { key: story.identifier },
+    })) as CallToolResult;
+    expect(children(res).find((c) => c.id === dependent.id)!.dependencies).toEqual({
+      blockedBy: [{ key: blocker.identifier, title: 'Ship the schema', status: 'todo' }],
+      blocks: [],
+    });
+    await client.close();
+  });
+
+  it('leaves the rest of the aggregate byte-identical to the service’s own DTO', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mkStory(fx, 'The story');
+    await mkChild(fx, story.id, 'Only child');
+
+    const res = await runGetWorkItem({ key: story.identifier }, fx.ctx);
+    const structured = res.structuredContent as Record<string, unknown>;
+    const detail = await workItemsService.getIssueDetail(fx.projectId, story.identifier, fx.ctx);
+    // Only `children` differs: the web-facing `IssueDetailDto` is untouched, so
+    // no route-shape test that reads this aggregate back can drift (the reason
+    // 7.9.0f attaches at the transport rather than widening the DTO).
+    const { children: _ignored, ...restOfTool } = structured;
+    const { children: _alsoIgnored, ...restOfDto } = detail as unknown as Record<string, unknown>;
+    expect(JSON.parse(JSON.stringify(restOfTool))).toEqual(JSON.parse(JSON.stringify(restOfDto)));
   });
 });
 

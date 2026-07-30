@@ -4,6 +4,7 @@ import { requireLink } from '../config/linkConfig.js';
 import { collectReady, collectSprintItems, withProjectSession } from '../session.js';
 import { openUrl } from '../browser.js';
 import {
+  detailWithWaves,
   inFlightFilter,
   issueUrl,
   renderReadyTable,
@@ -216,16 +217,21 @@ export interface ShowOptions {
  * Markdown body.
  *
  * ONE tool call (`get_work_item`) does all of it — the aggregate already carries
- * everything, readiness included, so the CLI renders the server's verdict and
- * never re-derives it. A pure read: `show` never claims, transitions or edits.
+ * everything, readiness included (and, since MOTIR-1848, each child's dependency
+ * edges, which is what makes the children's build ORDER derivable without a
+ * per-child read), so the CLI renders the server's verdict and never re-derives
+ * it. A pure read: `show` never claims, transitions or edits.
  */
 export async function showCommand(key: string, opts: ShowOptions): Promise<void> {
   const identifier = parseItemKey(key, 'show');
   const detail = await withProjectSession(({ client }) => client.getWorkItem(identifier));
   if (opts.json) {
-    // The tool's own `structuredContent`, unchanged — same contract as
-    // `ready --json` / `status --json`.
-    json(detail);
+    // The tool's own `structuredContent` — same contract as `ready --json` /
+    // `status --json` — with the children in build order and each carrying the
+    // `wave` the table computed, so a script never re-derives the graph. The
+    // `dependencies` block rides through in FULL: the `+n` budget is a
+    // terminal-width concern, not a payload one.
+    json(detailWithWaves(detail));
     return;
   }
   out(renderWorkItemDetail(detail));
