@@ -10,6 +10,7 @@ import {
   defaultSeedSourceForRole,
   isEstablishedState,
   isProjectRepoProposalSignal,
+  isProjectRepoRole,
 } from '@/lib/projectRepos/vocabulary';
 import {
   PROJECT_REPO_TRANSITIONS,
@@ -120,6 +121,36 @@ describe('the ADR §2 seeding table', () => {
   it('gives every role in the vocabulary a default (the map is total)', () => {
     for (const role of PROJECT_REPO_ROLES) {
       expect(defaultSeedSourceForRole(role).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('the role GUARD — what a plan proposal may pin (MOTIR-1912)', () => {
+  it('admits every role in the vocabulary', () => {
+    for (const role of PROJECT_REPO_ROLES) {
+      expect(isProjectRepoRole(role)).toBe(true);
+    }
+  });
+
+  it('rejects a plausible near-miss, a blank, and a non-string', () => {
+    // The values that actually show up: a producer using its own word for a role
+    // (`backend` / `frontend`), a blank the JSON carried through, and anything the
+    // proposal's untyped JSON can hold. `null` / `undefined` are rejected HERE and
+    // interpreted one layer up as "unpinned" — the guard answers "is this a role?",
+    // not "is this legal on a proposal?".
+    for (const other of [
+      'backend',
+      'frontend',
+      'Web',
+      'web ',
+      '',
+      null,
+      undefined,
+      0,
+      ['web'],
+      { role: 'web' },
+    ]) {
+      expect(isProjectRepoRole(other)).toBe(false);
     }
   });
 });

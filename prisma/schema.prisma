@@ -1315,6 +1315,22 @@ model WorkItem {
   // this table's camelCase, no-`@map` columns; unindexed (never a lookup key).
   // See docs/decisions/target-repo-attribution.md.
   targetRepo            String?
+  // The PORTABLE half of the same pin (Story MOTIR-1775 · MOTIR-1912, ADR
+  // `docs/decisions/project-repository-set.md` §5.2) — WHICH ROLE of the project's
+  // repository set this item's work belongs to, or NULL when the planner pinned
+  // none. The role exists because at generation the repositories DO NOT: the set
+  // is derived from the tree and the user may rename any row before it is
+  // created, so a NAME pinned then is stale the moment a row is edited and
+  // meaningless before the row exists at all. A role is stable across both.
+  // Recorded at materialize and RESOLVED to a `targetRepo` name later, when the
+  // role's row becomes established (MOTIR-1913) — the two columns are therefore
+  // complements, not alternatives, and `targetRepo` remains the only thing
+  // dispatch reads. The Prisma enum (not a String) because the vocabulary is
+  // ADR §1.1's fixed six and `project_repository.role` already models it that way
+  // — one spelling of the role across the two tables that must agree. camelCase,
+  // no `@map`, matching this table's columns; unindexed (the resolution pass
+  // scans a single project's items).
+  targetRepoRole        ProjectRepoRole?
   // CI / verification signal (Story 7.10 · Subtask 7.10.6 / MOTIR-894) — the
   // result of a linked PR's CI, flowed back from the `check_suite` / `check_run`
   // webhook so "did the dispatched work actually pass?" lives in Motir, not only

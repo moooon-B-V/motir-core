@@ -7,6 +7,7 @@ import {
   PlanGrammarError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
+  PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotInExpectedStatusError,
   PlanRefGraphError,
@@ -70,6 +71,16 @@ export async function POST(
     if (err instanceof PlanItemUnknownTargetRepoError) {
       return NextResponse.json(
         { code: err.code, planItemId: err.planItemId, error: err.message },
+        { status: 422 },
+      );
+    }
+    // A proposal pinning a repo ROLE outside ADR §1.1's vocabulary (MOTIR-1912) —
+    // 422 like the bad NAME above, and for the same reason: a malformed pin means
+    // the same thing however it arrived. Also raised before the transaction opens,
+    // so nothing was written.
+    if (err instanceof PlanItemUnknownTargetRepoRoleError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, role: err.role, error: err.message },
         { status: 422 },
       );
     }

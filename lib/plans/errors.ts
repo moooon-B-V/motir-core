@@ -133,6 +133,49 @@ export class PlanItemUnknownTargetRepoError extends Error {
   }
 }
 
+/**
+ * A proposal's `targetRepoRole` is not one of ADR §1.1's roles (Story MOTIR-1775 ·
+ * MOTIR-1912) — `'backend'`, `''`, a number, anything the closed vocabulary does
+ * not admit.
+ *
+ * A sibling of {@link PlanItemUnknownTargetRepoError}, and deliberately NOT the
+ * same class: the two pins fail for different reasons and are fixed differently.
+ * An unknown repo NAME is a fact about THIS project (its set does not hold that
+ * repository); an unknown ROLE is a fact about the producer (it emitted a word
+ * outside the enum the two repos share, `PROJECT_REPO_ROLES` ⟷ motir-ai's
+ * proposal-schema role). Collapsing them would tell the author to check their
+ * project's repositories for a mistake that is not there.
+ *
+ * Raised at BOTH boundaries a role can arrive through, so a bad value can never
+ * reach the `targetRepoRole` column:
+ *
+ *   * `addProposals` — the append, where the PlanItem does not exist yet, so
+ *     {@link planItemId} is `null` and {@link proposalLabel} identifies the
+ *     offending proposal by its title (an `add`) or its target (a `modify`);
+ *   * `approvePlan` — BEFORE the transaction opens, where the row exists and
+ *     {@link planItemId} names it exactly. Cheap (the check is pure), and it is
+ *     what makes "an unrecognised role materializes nothing" true even for a plan
+ *     whose proposals were written before this validation shipped.
+ *
+ * → 422 at both, the same status a bad repo pin gets — a malformed pin means the
+ * same thing however it arrived.
+ */
+export class PlanItemUnknownTargetRepoRoleError extends Error {
+  readonly code = 'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE' as const;
+  constructor(
+    /** The PlanItem's id, or `null` when it is not persisted yet (the append). */
+    readonly planItemId: string | null,
+    /** The offending proposal, as the author can recognise it. */
+    readonly proposalLabel: string,
+    /** The rejected value, stringified for a message (it may not be a string). */
+    readonly role: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PlanItemUnknownTargetRepoRoleError';
+  }
+}
+
 // ── The persist-time confirmation gate (Subtask 7.12.5 · MOTIR-911) ───────────
 // The three rejections `validatePlanProposals` raises BEFORE approve writes
 // anything. They are deliberately distinct from the errors above: those surface

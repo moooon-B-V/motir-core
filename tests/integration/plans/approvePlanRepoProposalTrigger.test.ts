@@ -64,9 +64,15 @@ describe('plansService.approvePlan — repository-set proposal (MOTIR-1881)', ()
     await plansService.approvePlan(planId, fx.ctx);
 
     expect(projectRepoProposalService.proposeRepositorySet).toHaveBeenCalledTimes(1);
+    // The third argument arrived with MOTIR-1912: §0.1.1's `itemRoles`, the
+    // distinct repo roles the plan's `add` proposals pin. EMPTY here because this
+    // plan pins none — which is the ladder falling through to the platform /
+    // default-web rungs, exactly as it did before the seam was wired. The signal
+    // itself is proved in `approvePlanTargetRepoRole.test.ts`.
     expect(projectRepoProposalService.proposeRepositorySet).toHaveBeenCalledWith(
       fx.projectId,
       fx.ctx,
+      { itemRoles: [] },
     );
   });
 

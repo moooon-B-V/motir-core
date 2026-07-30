@@ -32,6 +32,7 @@ import {
   PlanItemNotFoundError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
+  PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
@@ -39,7 +40,9 @@ import {
 } from '@/lib/plans/errors';
 import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
 import { UnknownTargetRepoError } from '@/lib/workItems/errors';
+import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 
+import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type {
   CreatePlanInput,
   ListPlansOptions,
@@ -112,6 +115,16 @@ function validateProposal(p: ProposalInput): void {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
     }
     validateProposedSizing(p.proposedFields);
+    // The repo ROLE (MOTIR-1912) — checked HERE, at the append, because the check
+    // is pure (a closed vocabulary, no repository need exist) and the producer is
+    // a machine: telling motir-ai its role is unknown while it is still writing
+    // the plan is worth far more than discovering it at approve, when a human is
+    // waiting. Approve re-checks anyway, for the proposals that predate this.
+    assertKnownRepoRole(
+      p.proposedFields.targetRepoRole,
+      null,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
     if (!p.patch) throw new InvalidProposalError('A `modify` proposal requires a patch.');
@@ -123,6 +136,13 @@ function validateProposal(p: ProposalInput): void {
     // sizing alone, or an explicit `null` that clears it.
     validateStoryPoints(p.patch.storyPoints ?? null);
     validateEstimateMinutes(p.patch.estimateMinutes ?? null);
+    // A `modify` may RE-PIN the role (MOTIR-1912) — same vocabulary check as the
+    // `add` path, so the two cannot disagree about what a role is.
+    assertKnownRepoRole(
+      p.patch.targetRepoRole,
+      null,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
   } else {
     // remove
     if (!p.workItemId) throw new InvalidProposalError('A `remove` proposal requires workItemId.');
@@ -376,6 +396,107 @@ async function resolveProposedTargetRepos(
   return resolved;
 }
 
+// ── The proposed REPO ROLE — the PORTABLE pin (MOTIR-1912) ────────────────────
+//
+// The pin above names a REPOSITORY; this one names a ROLE of the project's set,
+// and ADR §5.2 calls the difference load-bearing: at generation the repositories
+// DO NOT EXIST — the set is derived from the tree (§0.1) and the user may rename
+// any row before it is created — so a name pinned then is stale the moment a row
+// is edited and meaningless before the row exists at all. A role is stable across
+// both, which is what lets the ONBOARDING path pin anything at all.
+//
+// Two things follow, and they are why this sits beside the name resolver rather
+// than inside it:
+//
+//   * VALIDATION is against the closed vocabulary (`PROJECT_REPO_ROLES`), NOT the
+//     project's set — which is precisely what makes a role emittable before the
+//     set exists. So it is PURE: no DB read, no memo, and nothing to await.
+//   * The distinct roles ARE §0.1.1's derivation signal, the primary rung of the
+//     ladder `deriveRepoSetProposal` walks. Collecting them is therefore not a
+//     side errand of validation but the point: a `web` + `api` plan is what makes
+//     the proposer emit TWO rows, and without this the ladder always falls through
+//     to `preplan-platform` / `default-web` and a two-repo project can never be
+//     proposed.
+
+/** The `targetRepoRole` a proposal carries, as UNKNOWN — the value rides in
+ *  producer-written JSON persisted verbatim, so `'backend'` and a number are as
+ *  possible as a role, and only {@link assertKnownRepoRole} may narrow it. */
+function authoredTargetRepoRole(item: PlanItem): unknown {
+  if (item.op === 'add') {
+    return ((item.proposedFields ?? null) as PlanItemProposedFields | null)?.targetRepoRole;
+  }
+  if (item.op === 'modify') {
+    return ((item.patch ?? null) as PlanItemPatch | null)?.targetRepoRole;
+  }
+  return undefined;
+}
+
+/** Name a proposal the way its author can recognise it: an `add` by the title it
+ *  proposes, a `modify` by the item it targets. */
+function proposalLabel(p: { op: string; workItemId?: string | null; title?: string }): string {
+  if (p.op === 'add') return p.title?.trim() ? `“${p.title.trim()}”` : 'an untitled `add`';
+  return `the \`${p.op}\` of work item ${p.workItemId ?? '(unknown)'}`;
+}
+
+/**
+ * REJECT a repo role outside ADR §1.1's vocabulary, naming the offending
+ * proposal. `undefined` (the proposal carries no role) and `null` (an explicit
+ * "unpinned") both PASS — absent is not an error, and the `null` case is what
+ * lets a `modify` clear a pin, exactly as the name path's does.
+ */
+function assertKnownRepoRole(role: unknown, planItemId: string | null, label: string): void {
+  if (role === undefined || role === null || isProjectRepoRole(role)) return;
+  const printed = typeof role === 'string' ? role : String(JSON.stringify(role) ?? role);
+  throw new PlanItemUnknownTargetRepoRoleError(
+    planItemId,
+    label,
+    printed,
+    `Proposal ${label} pins the unknown repository role \`${printed}\`. A role must be one of: ${PROJECT_REPO_ROLES.join(', ')}.`,
+  );
+}
+
+/**
+ * Validate EVERY proposal's role and return the DISTINCT roles the plan's `add`
+ * proposals pin, deduped and ordered by FIRST APPEARANCE in the plan — ADR
+ * §0.1.1's signal, handed to `proposeRepositorySet` as `itemRoles`.
+ *
+ * Ordered by first appearance rather than sorted because the plan's own order is
+ * the only ordering that carries meaning here (the tree is generated
+ * primary-surface-first), and because the derivation re-orders anyway: §1.3 puts
+ * the platform's primary role first and the rest in §1.1 vocabulary order. Two
+ * layers, one deciding what the signals ARE and one deciding how a SET is
+ * ordered — this is the first.
+ *
+ * Adds ONLY: a `modify` re-pins an item that already exists, which is not
+ * evidence about the set's cardinality (the set was derived when the tree was
+ * generated). Its role is still validated — an unknown one must materialize
+ * nothing — it simply does not vote.
+ */
+function resolveProposedRepoRoles(items: PlanItem[]): ProjectRepoRoleDto[] {
+  const ordered: ProjectRepoRoleDto[] = [];
+  const seen = new Set<ProjectRepoRoleDto>();
+
+  for (const item of items) {
+    const role = authoredTargetRepoRole(item);
+    assertKnownRepoRole(
+      role,
+      item.id,
+      proposalLabel({
+        op: item.op,
+        workItemId: item.workItemId,
+        title: ((item.proposedFields ?? null) as PlanItemProposedFields | null)?.title,
+      }),
+    );
+    if (item.op !== 'add' || role == null) continue;
+    const known = role as ProjectRepoRoleDto;
+    if (!seen.has(known)) {
+      seen.add(known);
+      ordered.push(known);
+    }
+  }
+  return ordered;
+}
+
 /**
  * Apply every PlanItem of a (locked, `planned`, GATED) plan inside the caller's
  * approve transaction. `add` → MATERIALIZE a WorkItem (intra-plan refs
@@ -512,6 +633,18 @@ async function materialize(
       // `null` exactly as it did before the field existed (the shipped resolver's
       // single-repo fallback still serves those projects unchanged).
       targetRepo: repoPins.get(item.id) ?? null,
+      // The PORTABLE half of the same pin (MOTIR-1912) — validated against the
+      // role vocabulary before the transaction opened, and RECORDED here rather
+      // than resolved: `proposeRepositorySet` runs AFTER this transaction commits
+      // and writes rows in state `proposed`, so on the onboarding path there is no
+      // ESTABLISHED row for a role to resolve against at materialize (ADR §5.3
+      // would make every role resolve to `null`). Storing it is what lets the
+      // resolution happen at the moment a row actually becomes established
+      // (MOTIR-1913). Independent of `targetRepo`: a proposal carrying BOTH keeps
+      // the settled NAME as its pin (§5.4) and still records the role, so the two
+      // never disagree about where the item ships.
+      targetRepoRole: (pf.targetRepoRole ??
+        null) as Prisma.WorkItemUncheckedCreateInput['targetRepoRole'],
       position,
       backlogRank,
     };
@@ -705,6 +838,22 @@ async function applyModify(
     if (nextTargetRepo !== current.targetRepo) {
       update.targetRepo = nextTargetRepo;
       diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
+    }
+  }
+  // RE-PIN / UNPIN the repo ROLE (MOTIR-1912) — the same sparse contract as the
+  // name above: the key PRESENT is what distinguishes "leave it alone" from
+  // "unpin it", and the value was validated against the vocabulary before the
+  // transaction opened. Deliberately NOT recorded in the revision `diff`: a role
+  // is planner plumbing that has not yet resolved to anything the reader can act
+  // on, and the resolution that follows writes `targetRepo`, which IS diffed — so
+  // the History feed reports the repo an item moved to, once that is a fact,
+  // rather than announcing an intention twice. Same judgement (and same reason —
+  // no renderer disposition, no invented label) the shipped `explanationSource`
+  // metadata column is given on the `add` path.
+  if (patch.targetRepoRole !== undefined) {
+    const nextRole = patch.targetRepoRole ?? null;
+    if (nextRole !== current.targetRepoRole) {
+      update.targetRepoRole = nextRole as Prisma.WorkItemUncheckedUpdateInput['targetRepoRole'];
     }
   }
   if (Object.keys(update).length > 0) {
@@ -1135,6 +1284,17 @@ export const plansService = {
     // transaction materializes can differ from one resolved here.
     const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
 
+    // The proposed repo ROLES (MOTIR-1912) — validated against the vocabulary and
+    // collected from the SAME pre-transaction snapshot, and for the same two
+    // reasons: an unknown role is rejected while the tree is still byte-identical,
+    // and a `planned` plan's proposal set is frozen, so what is read here is what
+    // the transaction materializes. Pure — unlike the name pin, this needs no
+    // domain read, because a role's domain is a closed enum.
+    //
+    // The list is ALSO §0.1.1's derivation signal, handed to `proposeRepositorySet`
+    // after the commit below.
+    const repoRoles = resolveProposedRepoRoles(preItems);
+
     const { row, items, firstOnboarding, projectKey } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
@@ -1260,10 +1420,16 @@ export const plansService = {
     // `server-only` does not resolve.
     await import('@/lib/services/projectRepoProposalService')
       .then(({ projectRepoProposalService }) =>
-        // No `itemRoles`: a proposal carries no repo role until MOTIR-1885 emits
-        // one and MOTIR-1884 carries it through materialize (ADR §5.5). This call
-        // site is where they wire it in.
-        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx),
+        // `itemRoles` — ADR §0.1.1's PRIMARY signal, wired in by MOTIR-1912: the
+        // distinct roles this plan's `add` proposals pin, in the plan's own order.
+        // A `web` + `api` plan therefore proposes TWO rows (each `plan-item-role`),
+        // which is the first point in the tree where a multi-repo project can be
+        // proposed at all. An EMPTY list — a plan that pins nothing, which is every
+        // plan a producer older than MOTIR-1885 writes — leaves the ladder to fall
+        // through to `preplan-platform` / `default-web` exactly as before.
+        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx, {
+          itemRoles: repoRoles,
+        }),
       )
       .catch((err: unknown) => {
         console.warn(
