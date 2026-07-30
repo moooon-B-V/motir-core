@@ -2,13 +2,19 @@ import { MotirClient, type ReadyItemSummary, type SearchItemSummary } from './mc
 import { sprintFilter } from './render.js';
 import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
-import { getCredential, normalizeServerUrl } from './config/userConfig.js';
+import { resolveServerUrl } from './serverResolve.js';
+import { resolveCredential } from './config/userConfig.js';
 
 // Shared plumbing for the commands that talk to a linked project: resolve the
-// `.motir.json` binding (walked up from cwd), look up the server's stored PAT,
-// and open ONE connected MCP client. Every read/dispatch command runs inside a
-// session so the connect + close (and the not-linked / not-logged-in errors)
-// live in one place.
+// `.motir.json` binding (walked up from cwd), resolve the server + its
+// credential through the shared ladders, and open ONE connected MCP client.
+// Every read/dispatch command runs inside a session so the connect + close (and
+// the not-linked / not-logged-in errors) live in one place.
+//
+// The link supplies the PROJECT; the SERVER goes through `resolveServerUrl` so
+// `MOTIR_SERVER` can point a linked checkout at another instance without
+// rewriting `.motir.json` (with no env set, the link is the next rung down, so
+// this resolves to exactly what it always did).
 
 export interface ProjectSession {
   link: FoundLink;
@@ -22,11 +28,11 @@ export interface ProjectSession {
  * caller MUST close the client — prefer {@link withProjectSession}. */
 export async function openProjectSession(): Promise<ProjectSession> {
   const link = requireLink();
-  const serverUrl = normalizeServerUrl(link.config.serverUrl);
-  const cred = getCredential(serverUrl);
+  const serverUrl = resolveServerUrl();
+  const cred = resolveCredential(serverUrl);
   if (!cred) {
     throw new CliError(`Not logged in to ${serverUrl}.`, {
-      hint: 'Run `motir auth login` first.',
+      hint: 'Run `motir auth login`, or set MOTIR_TOKEN.',
     });
   }
   const client = new MotirClient({ serverUrl, token: cred.token });

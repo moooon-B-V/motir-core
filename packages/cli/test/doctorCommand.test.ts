@@ -264,7 +264,7 @@ describe('doctorCommand', () => {
     return {
       findLink: () => null,
       resolveServerUrl: () => 'https://motir.test',
-      hasCredential: () => false,
+      credentialOrigin: () => null,
       probeServer: async () => ({ ok: false as const }),
       resolveRepos: () => [],
       probeAgent: async () => ({ onPath: false }),
@@ -307,6 +307,28 @@ describe('doctorCommand', () => {
     expect(stdout).not.toContain('BYOK preflight');
   });
 
+  it('--json names the credential SOURCE and never carries the token (MOTIR-1876)', async () => {
+    await doctorCommand(
+      { json: true },
+      {
+        ...emptyProbe(),
+        credentialOrigin: () => 'environment (MOTIR_TOKEN)',
+        probeServer: async () => ({
+          ok: true as const,
+          toolCount: 1,
+          user: { name: 'Yue', email: 'yue@example.com' },
+        }),
+      },
+    );
+
+    const parsed = JSON.parse(stdout) as { checks: { id: string; detail?: string }[] };
+    const auth = parsed.checks.find((c) => c.id === 'auth');
+    expect(auth?.detail).toContain('via environment (MOTIR_TOKEN)');
+    // The probe returns an ORIGIN, never a value — so no token can reach the
+    // machine-readable output even by accident.
+    expect(stdout).not.toContain('pat_');
+  });
+
   it('leaves the exit code at zero when only warnings are reported', async () => {
     await doctorCommand(
       {},
@@ -317,7 +339,7 @@ describe('doctorCommand', () => {
           path: '/work/.motir.json',
           config: { serverUrl: 'https://motir.test', workspace: 'moooon', project: 'MOTIR' },
         }),
-        hasCredential: () => true,
+        credentialOrigin: () => '/home/tester/.config/motir/config.json',
         probeServer: async () => ({
           ok: true as const,
           toolCount: 1,
@@ -388,7 +410,7 @@ describe('the real probe, against a temp home', () => {
     const configDir = join(home, '.config', 'motir');
     mkdirSync(configDir, { recursive: true });
 
-    expect(probe.hasCredential('https://motir.test')).toBe(false);
+    expect(probe.credentialOrigin('https://motir.test')).toBeNull();
     writeFileSync(
       join(configDir, 'config.json'),
       JSON.stringify({
@@ -396,7 +418,9 @@ describe('the real probe, against a temp home', () => {
         agentCommand: 'codex --full-auto',
       }),
     );
-    expect(probe.hasCredential('https://motir.test/')).toBe(true);
+    // Present, and NAMED by its origin — the real config path, so the doctor row
+    // can say where the credential came from without ever opening it.
+    expect(probe.credentialOrigin('https://motir.test/')).toBe(join(configDir, 'config.json'));
     expect(probe.configuredAgentCommand()).toBe('codex --full-auto');
 
     // A repo override resolves relative to the link root; a convention repo is

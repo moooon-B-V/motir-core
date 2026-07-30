@@ -364,6 +364,47 @@ describe('auth + linking', () => {
     }
   });
 
+  it('runs the WHOLE read surface on MOTIR_TOKEN alone, with no config file (MOTIR-1876)', async () => {
+    // The CI / container / fresh-box shape, through the REAL binary: no `auth
+    // login` ever runs, the config home does not exist, and the entire
+    // configuration is two env vars. Before the ladder, `MOTIR_TOKEN` was read at
+    // login only, so this machine had no route in at all — which is why the
+    // sandbox had to bind-mount a host-minted credential.
+    const fx = await makeWorkItemFixture();
+    const { token } = await mintToken(fx);
+    const item = await leaf(fx, 'Reachable on the env credential');
+    const noConfig = ws.path('never-created-config-home');
+    const env = {
+      MOTIR_CONFIG_HOME: noConfig,
+      MOTIR_TOKEN: token,
+      MOTIR_SERVER: server.url,
+    };
+
+    // `link` first — it is itself a consumer of the ladder, and it writes the
+    // (secret-free) project binding the read commands need.
+    const link = await ws.run(['link', '--project', fx.projectIdentifier], { env });
+    expect(link.exitCode).toBe(0);
+
+    for (const command of [['ready'], ['status'], ['open', item.key]]) {
+      const result = await ws.run(command, { env });
+      expect(result.exitCode, `${command.join(' ')}: ${result.stderr}`).toBe(0);
+    }
+
+    // `doctor` reports the credential as present and NAMES the tier it came from.
+    const doctor = await ws.run(['doctor', '--json'], { env });
+    const report = JSON.parse(doctor.stdout) as {
+      checks: { id: string; status: string; detail?: string }[];
+    };
+    const auth = report.checks.find((c) => c.id === 'auth');
+    expect(auth?.status).toBe('pass');
+    expect(auth?.detail).toContain('via environment (MOTIR_TOKEN)');
+    expect(doctor.stdout).not.toContain(token);
+
+    // Nothing was persisted anywhere — the property the read-only sandbox mount
+    // depends on, asserted by absence so it holds regardless of uid.
+    expect(existsSync(noConfig)).toBe(false);
+  });
+
   it('resolves `.motir.json` by walking UP from a subdirectory', async () => {
     const { fx } = await linkedProject();
     await leaf(fx, 'Visible from anywhere');

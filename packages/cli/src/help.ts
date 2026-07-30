@@ -2,6 +2,7 @@ import { Command, Help, type Option } from 'commander';
 import { AGENT_PROFILES } from './agentProfiles.js';
 import { CliError } from './errors.js';
 import { out } from './output.js';
+import { DEFAULT_SERVER_URL } from './serverResolve.js';
 
 // The CURATED help surface. Commander gives `motir help [cmd]`, `motir <cmd>
 // --help` and `-h` for free, but its default rendering is one undifferentiated
@@ -74,15 +75,25 @@ const ENVIRONMENT_TOPIC: HelpTopic = {
     [
       'ENVIRONMENT VARIABLES',
       '',
-      '  Motir reads six environment variables. None is required — each one',
+      '  Motir reads seven environment variables. None is required — each one',
       '  overrides a default, and every value stays where you put it: the CLI',
       '  never echoes a variable back.',
       '',
       '  MOTIR_TOKEN',
-      '    The personal access token `motir auth login` stores. Read only at',
-      '    login, and only when --token is absent; every later command uses the',
-      '    stored credential instead.',
-      '    Precedence:  --token <pat>  >  MOTIR_TOKEN  >  interactive prompt',
+      '    A personal access token, honoured by EVERY command. Set it and there',
+      '    is no login step and no file: nothing is written to disk, which is',
+      '    what makes it the tier for CI, a container, or any box whose config',
+      '    dir is read-only. It outranks a stored credential — so a stale one',
+      '    exported in a shell profile silently wins; `motir auth status` names',
+      '    the source it used for exactly that reason. Empty counts as unset.',
+      '    Precedence:  --token <pat>  >  MOTIR_TOKEN  >  config.json',
+      '',
+      '  MOTIR_SERVER',
+      '    Which Motir server to talk to — the self-hosting counterpart of the',
+      '    default, ' + DEFAULT_SERVER_URL + '. It outranks the .motir.json link',
+      '    because a container has no link to walk up to. Empty counts as unset.',
+      '    Precedence:  --server <url>  >  MOTIR_SERVER  >  .motir.json  >',
+      '                 the single stored server  >  ' + DEFAULT_SERVER_URL,
       '',
       '  MOTIR_AGENT',
       '    The coding agent Motir preflights on your behalf — a full command',
@@ -133,10 +144,11 @@ const FILES_TOPIC: HelpTopic = {
       '  that lives in your repo.',
       '',
       '  ~/.config/motir/config.json          (secret — never commit)',
-      '    The credential store. Your personal access token lives here and ONLY',
-      '    here, written chmod 600 inside a 0700 directory. Keyed by server URL,',
-      '    so one machine can hold tokens for several Motir servers. Also holds',
-      '    `agentCommand`, the coding agent you configured.',
+      '    The credential store — the only FILE a personal access token is ever',
+      '    written to, chmod 600 inside a 0700 directory. Keyed by server URL, so',
+      '    one machine can hold tokens for several Motir servers. Also holds',
+      '    `agentCommand`, the coding agent you configured. (MOTIR_TOKEN is the',
+      '    other way to supply a token, and it is never written anywhere.)',
       '    Relocate it with MOTIR_CONFIG_HOME or XDG_CONFIG_HOME',
       '    (`motir help environment`).',
       '',

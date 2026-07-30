@@ -3,7 +3,7 @@ import { CliError } from '../errors.js';
 import { info, out } from '../output.js';
 import { isInteractive, promptLine } from '../prompts.js';
 import { resolveServerUrl } from '../serverResolve.js';
-import { getCredential } from '../config/userConfig.js';
+import { resolveCredential } from '../config/userConfig.js';
 import {
   findLink,
   overrideRepoNames,
@@ -28,11 +28,13 @@ export interface LinkOptions {
   repo?: string;
 }
 
-/** Get the token for `serverUrl` or fail with the standard login hint. */
+/** Get the token for `serverUrl` (env tier first) or fail with the login hint. */
 function tokenFor(serverUrl: string): string {
-  const cred = getCredential(serverUrl);
+  const cred = resolveCredential(serverUrl);
   if (!cred) {
-    throw new CliError(`Not logged in to ${serverUrl}.`, { hint: 'Run `motir auth login` first.' });
+    throw new CliError(`Not logged in to ${serverUrl}.`, {
+      hint: 'Run `motir auth login`, or set MOTIR_TOKEN.',
+    });
   }
   return cred.token;
 }

@@ -35,7 +35,7 @@ function fakeProbe(over: Partial<DoctorProbe> = {}): DoctorProbe {
   return {
     findLink: () => LINK,
     resolveServerUrl: () => 'https://motir.test',
-    hasCredential: () => true,
+    credentialOrigin: () => '/home/tester/.config/motir/config.json',
     probeServer: async () => SERVER_OK,
     resolveRepos: () => [],
     probeAgent: async () => ({
@@ -79,12 +79,31 @@ describe('runDoctor — the happy path', () => {
     expect(check(report, 'project').detail).toContain('42 work items');
   });
 
+  it('NAMES the credential source on the auth row, whichever tier supplied it', async () => {
+    // "Why am I the wrong account" is answerable from the report itself: a stale
+    // MOTIR_TOKEN in a shell profile outranks a fresh login silently, so the
+    // tier that won belongs on the row (MOTIR-1876).
+    const fromEnv = await runDoctor(
+      {},
+      fakeProbe({ credentialOrigin: () => 'environment (MOTIR_TOKEN)' }),
+    );
+    expect(check(fromEnv, 'auth').detail).toContain('via environment (MOTIR_TOKEN)');
+
+    const fromFile = await runDoctor({}, fakeProbe());
+    expect(check(fromFile, 'auth').detail).toContain('via /home/tester/.config/motir/config.json');
+  });
+
+  it('points a not-logged-in auth row at the ENV tier as well as login', async () => {
+    const report = await runDoctor({}, fakeProbe({ credentialOrigin: () => null }));
+    expect(check(report, 'auth').remediation).toContain('MOTIR_TOKEN');
+  });
+
   it('never asks the server for anything when there is no stored credential', async () => {
     let called = false;
     const report = await runDoctor(
       {},
       fakeProbe({
-        hasCredential: () => false,
+        credentialOrigin: () => null,
         probeServer: async () => {
           called = true;
           return SERVER_OK;

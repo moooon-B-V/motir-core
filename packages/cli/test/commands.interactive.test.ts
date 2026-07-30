@@ -25,6 +25,7 @@ vi.mock('../src/prompts.js', () => prompts);
 const { authLogin } = await import('../src/commands/auth.js');
 const { linkCommand } = await import('../src/commands/link.js');
 const { getCredential, setCredential } = await import('../src/config/userConfig.js');
+const { DEFAULT_SERVER_URL } = await import('../src/serverResolve.js');
 
 let server: TestMcpServer;
 let root: string;
@@ -70,8 +71,11 @@ describe('motir auth login, interactively', () => {
 
     await authLogin({});
 
-    // The URL prompt offers a sensible default rather than an empty line.
-    expect(prompts.promptLine).toHaveBeenCalledWith('Server URL', 'http://localhost:3000');
+    // The URL prompt offers the HOSTED default, not a dev server: the common case
+    // is app.motir.co, and suggesting localhost made a zero-argument login
+    // impossible for every user who is not running the app themselves.
+    expect(prompts.promptLine).toHaveBeenCalledWith('Server URL', DEFAULT_SERVER_URL);
+    expect(DEFAULT_SERVER_URL).toBe('https://app.motir.co');
     expect(prompts.promptSecret).toHaveBeenCalledWith('Personal access token');
     expect(getCredential(server.url)?.token).toBe(TOKEN);
   });

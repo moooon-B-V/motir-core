@@ -13,7 +13,7 @@ import {
   type FoundLink,
   type ResolvedRepo,
 } from '../config/linkConfig.js';
-import { getAgentCommand, getCredential, normalizeServerUrl } from '../config/userConfig.js';
+import { getAgentCommand, normalizeServerUrl, resolveCredential } from '../config/userConfig.js';
 import {
   doctorExitCode,
   renderDoctorReport,
@@ -166,10 +166,10 @@ export function defaultDoctorProbe(): DoctorProbe {
   return {
     findLink: () => findLink(),
     resolveServerUrl: () => resolveServerUrl(),
-    hasCredential: (serverUrl) => getCredential(serverUrl) !== undefined,
+    credentialOrigin: (serverUrl) => resolveCredential(serverUrl)?.origin ?? null,
     probeServer: async ({ serverUrl, projectKey }) => {
       const url = normalizeServerUrl(serverUrl);
-      const cred = getCredential(url);
+      const cred = resolveCredential(url);
       if (!cred) return { ok: false, error: { message: `Not logged in to ${url}.` } };
       const client = new MotirClient({ serverUrl: url, token: cred.token });
       return probeServerWith(client, projectKey);

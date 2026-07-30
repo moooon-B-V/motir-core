@@ -1,4 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,8 +19,13 @@ import {
   statusCommand,
 } from '../src/commands/read.js';
 import { collectReady, openProjectSession, withProjectSession } from '../src/session.js';
-import { resolveServerUrl } from '../src/serverResolve.js';
-import { getCredential, setCredential } from '../src/config/userConfig.js';
+import { DEFAULT_SERVER_URL, resolveServerUrl } from '../src/serverResolve.js';
+import {
+  envToken,
+  getCredential,
+  resolveCredential,
+  setCredential,
+} from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import { DEFAULT_TOOLS, startTestMcpServer, type TestMcpServer } from './helpers/mcpTestServer.js';
 
@@ -37,6 +49,7 @@ let root: string;
 let cwd: string;
 
 const TOKEN = 'pat_test_token_value';
+const STORED_USER = { id: 'u1', name: 'Yue', email: 'yue@motir.test' };
 
 beforeAll(async () => {
   server = await startTestMcpServer({ token: TOKEN, tools: DEFAULT_TOOLS });
@@ -168,25 +181,192 @@ describe('motir auth', () => {
 
 // ── which server ────────────────────────────────────────────────────────────
 
-describe('resolveServerUrl — flag, then link, then the single stored server', () => {
+describe('resolveServerUrl — the ladder, rung by rung (MOTIR-1876)', () => {
   it('prefers the explicit flag, normalized', () => {
     expect(resolveServerUrl('https://app.motir.co/')).toBe('https://app.motir.co');
   });
 
-  it('falls back to the link, then to the one configured server', async () => {
+  it('walks --server > MOTIR_SERVER > .motir.json > the single stored > the default', async () => {
+    // Rung 5 (the floor): nothing configured at all still resolves — this is the
+    // fresh box / CI runner / container that has never run a login.
+    expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL);
+    expect(DEFAULT_SERVER_URL).toBe('https://app.motir.co');
+
+    // Rung 4 — exactly one stored server.
     setCredential('https://only.motir.test', { token: 't' });
     expect(resolveServerUrl()).toBe('https://only.motir.test');
 
+    // Rung 3 — the link beats the store.
     await linked();
+    expect(resolveServerUrl()).toBe(server.url);
+
+    // Rung 2 — the env beats the link (a container has no link to walk up to),
+    // and is normalized on the way through.
+    vi.stubEnv('MOTIR_SERVER', 'https://env.motir.test/');
+    expect(resolveServerUrl()).toBe('https://env.motir.test');
+
+    // Rung 1 — the flag beats everything.
+    expect(resolveServerUrl('https://flag.motir.test')).toBe('https://flag.motir.test');
+  });
+
+  it('treats an EMPTY MOTIR_SERVER as unset rather than as a server', async () => {
+    await linked();
+    vi.stubEnv('MOTIR_SERVER', '   ');
     expect(resolveServerUrl()).toBe(server.url);
   });
 
-  it('refuses when there is NO server, and when there are several', () => {
-    expect(() => resolveServerUrl()).toThrow(/No Motir server configured/);
-
+  it('still refuses when SEVERAL stored servers leave it genuinely ambiguous', () => {
     setCredential('https://a.motir.test', { token: 'a' });
     setCredential('https://b.motir.test', { token: 'b' });
+
+    // Logging in to two servers IS an expressed intent, so falling through to a
+    // third host neither names would defeat the point of the ordering.
     expect(() => resolveServerUrl()).toThrow(/Multiple servers are configured/);
+
+    // …unless the default host is one of them — then it is the canonical
+    // default, not a guess (the same call `gh` makes with several hosts).
+    setCredential(DEFAULT_SERVER_URL, { token: 'hosted' });
+    expect(resolveServerUrl()).toBe(DEFAULT_SERVER_URL);
+  });
+});
+
+// ── the env credential tier ─────────────────────────────────────────────────
+
+describe('the credential ladder — MOTIR_TOKEN above the stored config (MOTIR-1876)', () => {
+  /** Write ONLY the link — no credential, so the env tier is the only route in. */
+  function linkOnly(project = 'PROD'): void {
+    writeFileSync(
+      join(root, '.motir.json'),
+      JSON.stringify({ serverUrl: server.url, workspace: 'acme', project }) + '\n',
+    );
+  }
+
+  it('resolves the env token with NO config file at all, and reports its source', () => {
+    vi.stubEnv('MOTIR_TOKEN', TOKEN);
+
+    const cred = resolveCredential('https://app.motir.co');
+    expect(cred?.token).toBe(TOKEN);
+    expect(cred?.source).toBe('environment');
+    expect(cred?.origin).toBe('environment (MOTIR_TOKEN)');
+    // The env tier is not server-scoped (GH_TOKEN's shape): one exported value is
+    // the credential for whatever server the run resolves to.
+    expect(resolveCredential('https://self-hosted.motir.test')?.token).toBe(TOKEN);
+  });
+
+  it('OVERRIDES a different stored token for the same server — and defers when unset', () => {
+    setCredential(server.url, { token: 'stored-token', user: STORED_USER });
+
+    vi.stubEnv('MOTIR_TOKEN', 'env-token');
+    expect(resolveCredential(server.url)?.token).toBe('env-token');
+    expect(resolveCredential(server.url)?.source).toBe('environment');
+
+    vi.stubEnv('MOTIR_TOKEN', '');
+    const stored = resolveCredential(server.url);
+    expect(stored?.token).toBe('stored-token');
+    expect(stored?.source).toBe('config');
+    expect(stored?.origin).toBe(join(home, 'motir', 'config.json'));
+    // The stored tier keeps the recorded owner; the env tier cannot know one.
+    expect(stored?.user).toEqual(STORED_USER);
+  });
+
+  it('treats an EMPTY / whitespace MOTIR_TOKEN as UNSET, not as a token', () => {
+    // `gh` shipped this exact bug (cli/cli#7800): an empty GH_TOKEN outranked a
+    // good stored credential, turning "no credential" into a 401 far from its
+    // cause. `FOO=` in a compose file and an unresolved CI secret both land here.
+    for (const blank of ['', '   ', '\n']) {
+      vi.stubEnv('MOTIR_TOKEN', blank);
+      expect(envToken()).toBeUndefined();
+      expect(resolveCredential(server.url)).toBeUndefined();
+    }
+
+    vi.stubEnv('MOTIR_TOKEN', `  ${TOKEN}  `);
+    expect(envToken()).toBe(TOKEN);
+  });
+
+  it('runs `ready` / `status` / `show` / `link` on the env token alone, writing NOTHING', async () => {
+    // The sandbox / CI shape: an empty config home, no stored credential, the
+    // whole configuration in two env vars. `MOTIR_SERVER` points at the test
+    // server here because a unit test cannot reach the real host — that the
+    // ladder's floor IS `https://app.motir.co` is asserted in the ladder suite.
+    const empty = join(root, 'no-config-here');
+    vi.stubEnv('MOTIR_CONFIG_HOME', empty);
+    vi.stubEnv('MOTIR_TOKEN', TOKEN);
+    vi.stubEnv('MOTIR_SERVER', server.url);
+    linkOnly();
+    const io = capture();
+
+    await readyCommand({});
+    await statusCommand({});
+    await openCommand('PROD-1', { print: true });
+    await linkCommand({ project: 'PROD' });
+
+    expect(server.calls.map((c) => c.name)).toContain('list_ready');
+    expect(io.stdout()).toContain('PROD-1');
+    // Nothing was persisted: no config dir, no config file, no token on disk.
+    // This is what makes the tier work on a READ-ONLY mount — and it is asserted
+    // by absence rather than by permissions, so it cannot go vacuous as root.
+    expect(existsSync(empty)).toBe(false);
+  });
+
+  it('works with the config dir READ-ONLY — no EROFS/EACCES escapes (MOTIR-1836 class)', async () => {
+    const locked = join(root, 'locked-config');
+    mkdirSync(locked, { recursive: true });
+    chmodSync(locked, 0o500);
+    try {
+      vi.stubEnv('MOTIR_CONFIG_HOME', locked);
+      vi.stubEnv('MOTIR_TOKEN', TOKEN);
+      vi.stubEnv('MOTIR_SERVER', server.url);
+      linkOnly();
+      capture();
+
+      await expect(readyCommand({})).resolves.toBeUndefined();
+
+      expect(existsSync(join(locked, 'motir'))).toBe(false);
+    } finally {
+      // Always restore the mode, or the temp-dir cleanup cannot remove it.
+      chmodSync(locked, 0o700);
+    }
+  });
+
+  it('`auth status` names the SOURCE and still never prints the token', async () => {
+    vi.stubEnv('MOTIR_TOKEN', TOKEN);
+    const io = capture();
+
+    await authStatus({ server: server.url });
+
+    expect(io.stdout()).toContain('Source:    environment (MOTIR_TOKEN)');
+    expect(io.stdout()).toContain('Token:     pat_test_token…');
+    expect(io.stdout()).not.toContain(TOKEN);
+  });
+
+  it('`auth status` names the CONFIG path when the credential came from the file', async () => {
+    setCredential(server.url, { token: TOKEN });
+    const io = capture();
+
+    await authStatus({ server: server.url });
+
+    expect(io.stdout()).toContain(`Source:    ${join(home, 'motir', 'config.json')}`);
+  });
+
+  it('`auth logout` says the env var still overrides, instead of claiming success', async () => {
+    setCredential(server.url, { token: TOKEN });
+    vi.stubEnv('MOTIR_TOKEN', TOKEN);
+    const io = capture();
+
+    await authLogout({ server: server.url });
+
+    expect(io.stderr()).toContain(`Logged out of ${server.url}`);
+    expect(io.stderr()).toContain('MOTIR_TOKEN is still set — it overrides');
+  });
+
+  it('a not-logged-in command points at BOTH tiers, not just login', async () => {
+    linkOnly();
+    capture();
+
+    await expect(openProjectSession()).rejects.toThrow(/Not logged in/);
+    await expect(openProjectSession()).rejects.toThrow(
+      expect.objectContaining({ hint: expect.stringContaining('MOTIR_TOKEN') }),
+    );
   });
 });
 
