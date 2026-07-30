@@ -2,9 +2,9 @@
 
 **Status:** accepted · **Date:** 2026-07-30 · **Card:** MOTIR-1898 (Story MOTIR-1775 —
 establish the project's repository set at plan approval) · **Evidence pinned at:**
-`motir-core` `origin/main` @ `f224089d`, `motir-ai` `origin/main` @ `93afca4`,
-`nextjs-prisma-vercel-starter` `.github/workflows/ci.yml` · **Vendor pricing read
-2026-07-30** (sources in §9)
+`motir-core` `origin/main` @ `a5ac04a2` (**includes the MOTIR-1893 ownership amendment**),
+`motir-ai` `origin/main` @ `93afca4`, `nextjs-prisma-vercel-starter`
+`.github/workflows/ci.yml` · **Vendor pricing + API status read 2026-07-30** (sources in §9)
 
 Motir hosts some of its users' repositories, so Motir pays some of their CI bill. This
 record prices that: the **included allowance** every seat carries, the **rate** the
@@ -19,7 +19,7 @@ supplies the numbers and the mechanics; it does not re-open the model.
 
 ## Context
 
-### The cost, and how much of it Motir actually carries
+### The cost — and it applies to EVERY new project, not a subset
 
 `docs/decisions/project-repository-set.md` §3 establishes every new project's repository
 set. Private-repo Actions minutes bill to the **repository owner**, so where Motir owns
@@ -27,28 +27,32 @@ the repo, Motir pays for the CI — from the first `motir run` onward, because e
 dispatch ends in a PR and every PR runs CI. That is why this is not an Epic 9 concern: it
 starts the day the pre-Epic-9 loop works.
 
-**But Motir does not own every project's repos, and the card that raised this overstated
-the exposure.** MOTIR-1898's own framing — _"Story MOTIR-1775 puts every new project's
-repositories in Motir's own GitHub org"_ — is not what the repo-set ADR decided. §3.1 vs
-§3.3 split on whether the user has connected a GitHub identity:
+**The 2026-07-30 amendment (Yue · MOTIR-1893) makes that universal.** _"Every repository
+Motir CREATES for a new project is created under Motir's own organization, for both
+audiences, with no branch on what the user has."_ The earlier §3.1/§3.2 branch — repos in
+the user's account when a GitHub identity is connected — is **superseded**. So the metered
+population is **every newly created project repository**, and the amendment says so in its
+own standing-consequences note: _"Every new project's repositories live there, so their
+Actions minutes and storage bill to Motir."_
 
-| Repo-set ADR | Situation                 | Repos created in   | Who GitHub bills | Metered here |
-| ------------ | ------------------------- | ------------------ | ---------------- | ------------ |
-| §3.1 / §3.2  | GitHub identity connected | the user's account | **the user**     | **no**       |
-| §3.3         | no GitHub identity        | **Motir's org**    | **Motir**        | **yes**      |
-| §3.4 → 711   | after the 9.3.7 handoff   | the user's account | **the user**     | **no**       |
+Only two paths reach a repo Motir does **not** pay for, and both are exits rather than
+alternatives:
 
-This is recorded in shipped schema, not inferred: `Project.repoSetOwnership`
-(`ProjectRepoOwnership` = `user` | `motir`) and `Project.repoSetTargetAccount`, both
-SET-level on `Project` because §3.5 forbids a half-and-half set. So the metered population
-is **projects with `repoSetOwnership = 'motir'`** — the non-technical user who never
-connected a GitHub account. Everyone else's minutes are billed to them by GitHub and are
-none of Motir's business.
+| Path                                        | Repo lives in      | Who GitHub bills | Metered here |
+| ------------------------------------------- | ------------------ | ---------------- | ------------ |
+| **Created** for a new project (the default) | **Motir's org**    | **Motir**        | **yes**      |
+| **Connect-existing** (code the user has)    | the user's account | the user         | no           |
+| **After the 9.3.7 handoff** (MOTIR-711)     | the user's account | the user         | no           |
 
-That materially changes the economics and is what makes §1's number affordable: the
-per-seat allowance is denominated for every seat, but it only ever **drains** for
-Motir-hosted projects. A user whose repos are their own consumes zero of it and can never
-see an overage.
+This is the full exposure, not a fraction of it: **every org that dispatches drains the
+pool.** §1's numbers are set against that, and §1.5 states the risk it creates rather than
+discounting it.
+
+The hosting org is a **GitHub** org (MOTIR-1779, working login `motir-projects`), created
+through `POST /orgs/{org}/repos` with an org-scoped provisioning App. **Motir never creates
+a GitLab repository** — GitLab is reachable only through connect-existing, i.e. a namespace
+the user already owns and GitLab already bills them for. §5.5 records what follows for the
+meter.
 
 ### What one dispatch actually costs — derived from the starter's own CI
 
@@ -127,14 +131,13 @@ worst case is **13–24%**, and the 36%/54% seat-only rows are the honest ceilin
 one shape that pays seats without AI — a tracker-only org, which by construction dispatches
 nothing and drains nothing.
 
-Combined with the §Context finding that only `repoSetOwnership = 'motir'` projects meter
-at all, expected cost is far below every row above.
+**These rows are the LIVE case, not a remote ceiling** — see §1.5. Since MOTIR-1893 every
+created repo is Motir-owned, so there is no subset of projects that quietly costs nothing.
 
 **1.2 · Why a 1,000-minute per-org floor, and why 1,000.** A pure `seats × 300` pool
-starves exactly the user this hosting model exists for — the solo non-technical founder
-who has no GitHub account, which is the §3.3 case where Motir owns the repos in the first
-place. At 300 minutes a solo user gets ~7 dispatches a month; the product's own loop is
-not usable at that rate.
+starves exactly the user this hosting model exists for — the solo founder whose whole
+project lives in Motir's org and who has no second machine to run CI on. At 300 minutes a
+solo user gets ~7 dispatches a month; the product's own loop is not usable at that rate.
 
 The floor binds for orgs of **1–3 members** (3 × 300 = 900 < 1,000); a 4-person org
 (1,200) clears it. At full drain it costs **$6.00/org/month**, 24% of the $25 Standard AI
@@ -171,6 +174,26 @@ price discrimination on a cost Motir passes through near-cost. **Revisit trigger
 it is recognisable:** measured consumption showing a tier's median org routinely past its
 pool while a cheaper tier's sits under half — i.e. the pool tracking plan size in practice.
 That is a datum MOTIR-1896's meter produces; it is not guessable now.
+
+**1.5 · The risk this number carries, stated rather than discounted.** Because MOTIR-1893
+made every created repo Motir-owned, **§1.1's table is the expected case, not a tail
+case** — there is no population of self-hosted-by-the-user projects diluting it. Two
+things bound the exposure, and neither is a guess:
+
+- **A tracker-only org drains nothing.** Consuming the pool requires dispatches, which
+  require a plan, which burns credits — so the 36%/54% seat-only rows describe an org that
+  by construction generates no CI at all. The orgs that DO drain are the ones paying $25–$150
+  of AI, where the ratio is 13–24%.
+- **The credit gate is the backstop.** An org cannot dispatch indefinitely on an empty
+  balance: §6.2 refuses at zero, so unbounded consumption is not reachable even in the worst
+  case.
+
+What is genuinely unknown is the **utilisation rate** — what fraction of the pool a typical
+org actually burns. Every figure above is full-drain, and full drain is unlikely; but the
+honest position is that Motir does not know the real number yet. **The first month of
+MOTIR-1896's meter is the check**, and §1.4's revisit trigger is how the 300 gets corrected
+if it is wrong. Nothing here should be read as "this is safe" — it is "this is bounded, and
+measured shortly."
 
 ### §2 — 1 credit = 1 Linux-equivalent minute
 
@@ -291,20 +314,29 @@ consequences, both deliberate:
   when it ran. (Binding on MOTIR-1901: charge on the metering event, not by re-summing the
   period.)
 
-### §5 — Attribution: meter a run iff its repo resolves to a Motir-OWNED project
+### §5 — Attribution: meter a run iff MOTIR'S ORG owns the repository
 
-**5.1 · The predicate, in one sentence.** A completed workflow run is metered **if and only
-if**, at completion, its repository resolves to an established `ProjectRepo` row whose
-`Project.repoSetOwnership = 'motir'`. Everything else is a no-op — not an error, not a
-zero-credit debit, simply not metered.
+**5.1 · The predicate keys on the REPOSITORY OWNER, not on a project column.** A completed
+workflow run is metered **if and only if its repository's owner login is Motir's
+provisioning org** (`GITHUB_FALLBACK_ORG`, MOTIR-1779). Everything else is a no-op — not an
+error, not a zero-credit debit, simply not metered.
 
-**5.2 · The chain**, every hop verified in shipped schema:
+The owner login is the right key because **it is exactly what GitHub bills on**: private-repo
+Actions minutes bill to the repository owner, so "does Motir pay for this run?" and "is the
+owner Motir's org?" are the same question. `Project.repoSetOwnership` is a good
+_reporting_ signal but the wrong _gate_ — it is SET-level on `Project`, so it cannot
+express a set containing both a created row and a connect-existing row, and it would drift
+from reality on any path that moves a repo without updating the column. Reading the owner
+cannot drift, because it is the billing fact itself.
+
+**5.2 · The chain**, every hop verified in shipped schema. The gate is at the top; the rest
+resolves WHOM to charge:
 
 ```
-workflow_run (owner/name)
+workflow_run (owner/name)   ── gate: owner == GITHUB_FALLBACK_ORG  (Motir pays)
   → GithubRepo            (the mirror; owner/name is the identity GitHub reports)
   → ProjectRepo           (via githubRepoId @unique — at most one project row per repo)
-  → Project               (projectId)  ── gate: repoSetOwnership = 'motir'
+  → Project               (projectId)
   → Workspace             (workspaceId)
   → Organization          (organizationId)  ── the pool + the ledger are keyed here
 ```
@@ -312,19 +344,69 @@ workflow_run (owner/name)
 `resolveTenantOrg` already performs the last two hops and returns `{ organizationId,
 isMeta }`; §4.4's bypass reads the same flag.
 
-**5.3 · The edge cases, each decided:**
+**5.3 · Since MOTIR-1893 the gate passes for every CREATED repo.** The amendment removed
+the what-the-user-has branch, so a newly created project repository is always in Motir's
+org and always metered. The predicate is unchanged by that — it just stops being selective,
+which is the §1.5 risk.
 
-| Situation                                            | Behaviour                                                                                                                                                                                                                              |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repo in the installation belonging to **no project** | **Not metered.** A user's own repo connected for code-graph is not in Motir's org and Motir is not billed for it.                                                                                                                      |
-| Project **deleted** (`ProjectRepo` cascade-removed)  | **Not metered**, and the run is **logged**. There is no org to charge; Motir absorbs it. The log is the signal, not silence.                                                                                                           |
-| Project with `repoSetOwnership = 'user'` or NULL     | **Not metered.** GitHub bills the user directly (repo-set ADR §3.1); charging would bill for compute Motir never bought.                                                                                                               |
-| Repo **transferred** to the user (MOTIR-711 / 9.3.7) | **Metering STOPS at the transfer.** The flow flips `repoSetOwnership` to `user`; §5.1's predicate is evaluated per run, so runs completing after the flip are not metered. Minutes metered before it stay attributed and stay charged. |
-| Run reported **twice**                               | **Counted once** — idempotent on the GitHub run id (MOTIR-1896's duplicate-report test).                                                                                                                                               |
+**5.4 · The edge cases, each decided:**
 
-**5.4 · The predicate is evaluated at RUN COMPLETION, not at dispatch**, which is what
-makes the transfer case fall out with no special handling: it is one read of a column that
-the handoff flow already writes.
+| Situation                                            | Behaviour                                                                                                                                                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connect-existing** repo (the user's own account)   | **Not metered** — the owner is not Motir's org, and GitHub bills the user directly. Charging would bill for compute Motir never bought.                                                       |
+| Repo in the installation belonging to **no project** | **Not metered.** A repo connected only for code-graph is in the user's account.                                                                                                               |
+| Repo in Motir's org whose **project was deleted**    | **Metered as a cost, charged to nobody, and LOGGED.** Motir is still billed by GitHub, but the chain resolves no org. The log is the signal — silence here would hide real spend.             |
+| Repo **transferred** to the user (MOTIR-711 / 9.3.7) | **Metering STOPS at the transfer**, because the owner login changes at the transfer itself. §5.5 is the one edge that needs care. Minutes metered before it stay attributed and stay charged. |
+| A **GitLab** project's pipelines                     | **Never metered** — Motir creates no GitLab repos (§Context); a connected GitLab namespace is the user's and GitLab bills them. §5.6.                                                         |
+| Run reported **twice**                               | **Counted once** — idempotent on the GitHub run id (MOTIR-1896's duplicate-report test).                                                                                                      |
+
+**5.5 · The transfer edge — read the owner from the RUN, not from the mirror.** Because the
+gate is the owner login, a transfer flips it automatically; but the `GithubRepo` mirror row
+may still hold the pre-transfer `owner` until a webhook reconciles it. So the meter takes
+the owner from **the run's own payload**, not from the mirror, and treats the mirror purely
+as the join to the project. A run that completes after the transfer then correctly falls
+outside the gate even if the mirror is briefly stale. (Binding on MOTIR-1896.)
+
+**5.6 · GitLab is out of scope for the meter, and that is structural, not an omission.**
+Motir creates repositories only in its own **GitHub** org (MOTIR-1779 —
+`POST /orgs/{org}/repos`); the shipped GitLab provider (`provider: 'gitlab'` on the shared
+installation model) exists for **connect-existing** only, which by definition reaches a
+namespace the user owns and GitLab already bills them for. There is therefore no GitLab
+compute Motir pays for, and the meter needs no GitLab read. **If that ever changes** — a
+decision to create repos on GitLab — it is a new card and an amendment here, and §9 records
+where GitLab's usage data would come from so the option stays costed rather than unknown.
+
+**5.7 · The predicate is evaluated at RUN COMPLETION, not at dispatch**, which is what
+makes the transfer case fall out with no special handling.
+
+**5.8 · ⚠️ WHERE the minutes come from — a hard constraint on MOTIR-1896, because the
+obvious endpoint is being switched off.** MOTIR-1896 owns the mechanism choice, but two of
+the three candidates are closing down and it must not build on them:
+
+| Source                                            | Gives                                                                                                                  | Status                                                                                      |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `GET /repos/{o}/{r}/actions/runs/{id}/timing`     | `billable` per OS: `total_ms`, `jobs`, `job_runs[]` — exactly what we want                                             | ❌ **Closing down** — _"This endpoint is in the process of closing down."_                  |
+| `GET /orgs/{org}/settings/billing/actions`        | org totals + `minutes_used_breakdown` by OS                                                                            | ❌ **Closing down** (product-specific billing APIs, 2025-09-26 changelog)                   |
+| `GET /organizations/{org}/settings/billing/usage` | `usageItems[]`: `date`, `product`, `sku` (e.g. "Actions Linux"), `quantity`, `unitType: minutes`, **`repositoryName`** | ✅ The enhanced-billing replacement — but **summarised by SKU/repo/day, no per-run detail** |
+| `GET /repos/{o}/{r}/actions/runs/{id}/jobs`       | per job: `started_at`, `completed_at`, `labels`, `runner_name`, `run_attempt`                                          | ✅ Not deprecated — the durable per-run source                                              |
+
+**The recommended shape, which the acceptance criteria already fit:**
+
+- **Real-time + attributable:** the `workflow_run` **completion webhook** (not currently
+  handled — the shipped `parseCiStatusEvent` covers `check_run`/`check_suite` and carries no
+  timing) → read that run's **jobs**, and compute
+  `Σ ceil(per-job wall-clock minutes) × multiplier(labels)`. **Per-job rounding UP is not
+  optional** — it is how GitHub bills, and summing the run's wall clock instead would
+  undercount a 4-job suite badly. Idempotent on **`(run_id, run_attempt)`**, since a re-run
+  is a new attempt that bills again.
+- **Reconciliation:** the enhanced-billing **usage endpoint** monthly, filtered to
+  `product: Actions`. It carries `repositoryName`, so it reconciles per repo against the
+  meter's own sum. Drift is **logged, not silently trusted in either direction** — the
+  webhook path is the operational meter; the billing report is the audit.
+
+This also means the ADR's own margin depends on the meter matching GitHub's billing within
+a tolerance MOTIR-1896 should state. §3.3's stored raw wall-clock + multiplier is what makes
+that reconciliation possible after the fact.
 
 ### §6 — Two thresholds, two named states, and only one of them stops anything
 
@@ -469,22 +551,45 @@ secondary catalog or a paraphrase (`notes.html` #88 — the DeepSeek/OpenRouter 
 - **Motir** — `lib/billing/catalog.ts` (`BILLING_CATALOG`): the $5/$40 seat plan, the AI
   ladder, and the 1,000-credits-for-$10 top-up that fixes a credit at ~$0.01.
 
-**Prices drift.** Every number above is dated, and the multipliers of §3 are
+**API sources for §5.8 (the meter's read):**
+
+- **`/timing` is closing down** — _"This endpoint is in the process of closing down"_:
+  <https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#get-workflow-run-usage>
+  · the notice:
+  <https://github.blog/changelog/2025-02-02-actions-get-workflow-usage-and-get-workflow-run-usage-endpoints-closing-down/>
+- **Product-specific billing APIs are closing down** (including
+  `/orgs/{org}/settings/billing/actions`):
+  <https://github.blog/changelog/2025-09-26-product-specific-billing-apis-are-closing-down/>
+- **The enhanced-billing usage endpoint** (`usageItems[]` with `sku`, `quantity`,
+  `unitType`, `repositoryName`): <https://docs.github.com/en/rest/billing/usage> ·
+  <https://docs.github.com/en/billing/tutorials/automate-usage-reporting>
+- **Workflow jobs** (`started_at` / `completed_at` / `labels` / `run_attempt`, not
+  deprecated): <https://docs.github.com/en/rest/actions/workflow-jobs?apiVersion=2022-11-28>
+- **GitLab, for the §5.6 "if that ever changes" case only** — compute usage is tracked
+  monthly per namespace and per project (`ci_namespace_monthly_usages` /
+  `ci_project_monthly_usages`, surfaced on the group usage-quotas page and in GraphQL);
+  per-job `duration` is on the jobs API and the pipeline webhook:
+  <https://docs.gitlab.com/ci/pipelines/compute_minutes/>
+
+**Prices and endpoints drift.** Every number above is dated, the multipliers of §3 are
 effective-dated in storage so a repricing is a new row rather than a code change plus a
-backfill.
+backfill, and §5.8 records which endpoints are sunsetting so the meter is not built on one.
 
 ## Consequences
 
 **The four gated cards, and what each takes from here** — the test of this ADR is that
 none of them needs a further question:
 
-- **MOTIR-1896 (motir-core, the meter).** Normalize by §3's cost-proportional multipliers,
-  storing raw wall clock + runner label + multiplier applied. Key per-period rows by
-  **calendar month UTC** (§4.5) — a pure function of the run timestamp, so the meter reads
-  no billing state. Attribute by §5's predicate, gating on
-  `Project.repoSetOwnership = 'motir'`; the four edge cases in §5.3 are each a decided
-  behaviour. Idempotent on the GitHub run id. The table is workspace-scoped (`workspace_id`
-  - RLS) per the shipped contract.
+- **MOTIR-1896 (motir-core, the meter).** Read per §5.8 — **not** `/timing` and **not** the
+  product-specific billing API, both of which are closing down: accumulate from the
+  `workflow_run` completion webhook plus that run's **jobs**, summing `ceil()` per job, and
+  reconcile monthly against the enhanced-billing usage endpoint. Normalize by §3's
+  cost-proportional multipliers, storing raw wall clock + runner label + multiplier applied.
+  Key per-period rows by **calendar month UTC** (§4.5) — a pure function of the run
+  timestamp, so the meter reads no billing state. Gate on **the run's own repository owner**
+  being Motir's org (§5.1, §5.5), not on a project column; the edge cases in §5.4 are each a
+  decided behaviour. Idempotent on **`(run_id, run_attempt)`**. The table is
+  workspace-scoped (`workspace_id` + RLS) per the shipped contract.
 - **MOTIR-1901 (motir-core, the allowance + overage).** Pool = `max(members × 300, 1000)`,
   recomputed from membership at read (§4.2, §4.6), with the no-subscription case (§4.3) and
   the `isMeta` bypass (§4.4). Charge **incrementally, at the metering event, against the
@@ -502,18 +607,26 @@ none of them needs a further question:
   the seven items of §7.3 — including the two states named in §6 and the deliberate
   reset-date mismatch §4.5 creates.
 
-**Three corrections this ADR makes to its own card, recorded so they are not re-derived:**
+**Two corrections this ADR makes to its own card, recorded so they are not re-derived:**
 
-1. **The exposure is narrower than stated.** MOTIR-1898 said Story 1775 puts every
-   project's repos in Motir's org; the accepted repo-set ADR §3.1/§3.3 puts them in the
-   **user's** account whenever a GitHub identity is connected. Only
-   `repoSetOwnership = 'motir'` projects cost Motir anything, and that is what makes §1's
-   number affordable.
-2. **`Windows ×2 / macOS ×10` is the wrong basis.** Those are included-minutes drain
+1. **`Windows ×2 / macOS ×10` is the wrong basis.** Those are included-minutes drain
    multipliers, not price ratios; the real ratios are ×1.67 and ×10.33 (§3.2).
-3. **~20 minutes per dispatch undercounts by roughly half.** The starter's CI runs on
+2. **~20 minutes per dispatch undercounts by roughly half.** The starter's CI runs on
    `pull_request` **and** `push: main`, so a merged dispatch bills the suite twice —
    ~39 minutes, and that is a floor (§Context).
+
+**And one correction this ADR makes to ITSELF, kept visible rather than quietly edited
+out.** A draft of this record claimed the exposure was narrower than the card said — that
+§3.1/§3.3 of the repo-set ADR put repos in the user's account whenever a GitHub identity
+was connected, so only some projects cost Motir anything. **That was wrong**: it was read
+against a `main` that predated the **2026-07-30 MOTIR-1893 amendment**, which removed the
+branch and made every created repo Motir-owned. The card's original framing was right. The
+number and the floor are unchanged — they never rested on that claim, since §1.1's
+load-bearing argument is the AI-plan denominator, not a smaller metered population — but
+the margin of safety is thinner than the draft implied, which is why **§1.5 now states the
+risk explicitly** instead of discounting it. (Method note for the next reader: this ADR's
+Status line pins the exact `origin/main` SHA it was written against, and the amendment
+landed between the initial read and the write. Re-fetch before trusting a §-reference.)
 
 **What is deliberately NOT decided here**, so nobody reads silence as an answer:
 
