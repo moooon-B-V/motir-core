@@ -48,6 +48,10 @@ const { truncateAuthTables } = await import('../helpers/db');
 
 const BASE_URL = 'http://localhost:3000';
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Allowance for the app clock vs. the DB's `CURRENT_TIMESTAMP`, and for however long an
+ * insert takes on a loaded runner. Any timestamp assertion here is a WINDOW, never an
+ * equality — see `describe`'s lifetime assertion for what an exact one costs. */
+const CLOCK_SKEW_MS = 5_000;
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -475,10 +479,25 @@ describe('describe — claim + what is connecting', () => {
     expect(described.clientId).toBe(CLI_CLIENT_ID);
     // "asked for N seconds ago" is computed by the page from `askedAt`, so it has to be
     // the grant's real creation instant, and `expiresAt` the 15m the ADR decided.
-    expect(new Date(described.askedAt).getTime()).toBeGreaterThanOrEqual(before);
-    expect(new Date(described.expiresAt).getTime() - new Date(described.askedAt).getTime()).toBe(
-      15 * 60 * 1000,
-    );
+    //
+    // The span is asserted with a TOLERANCE, not exactly: `expiresAt` is stamped by the
+    // plugin in JS (`Date.now() + ms('15m')`) while `askedAt` is the row's
+    // `@default(now())` — two INDEPENDENT clock readings, so they differ by however long
+    // the insert took plus any app↔DB skew. An exact `toBe(900_000)` passes locally and
+    // then loses by a millisecond on a loaded runner (it read 899_999 in CI); what the
+    // ADR actually decided is the 15-minute lifetime, which is what this checks.
+    // Same reason `before` gets a skew allowance rather than a bare `>=`: `created_at` is
+    // `DEFAULT CURRENT_TIMESTAMP`, so `askedAt` is the DATABASE's clock while `before` is
+    // this process's. Bounded on BOTH sides — what matters is that `askedAt` is the real
+    // creation instant (not epoch, not null, not stale), which a window proves and an
+    // exact comparison only pretends to.
+    const askedAtMs = new Date(described.askedAt).getTime();
+    expect(askedAtMs).toBeGreaterThan(before - CLOCK_SKEW_MS);
+    expect(askedAtMs).toBeLessThan(Date.now() + CLOCK_SKEW_MS);
+
+    const lifetimeMs = new Date(described.expiresAt).getTime() - askedAtMs;
+    expect(lifetimeMs).toBeGreaterThan(14 * 60 * 1000);
+    expect(lifetimeMs).toBeLessThanOrEqual(15 * 60 * 1000 + CLOCK_SKEW_MS);
 
     // THE SIDE EFFECT that makes this one call instead of two: approve refuses an
     // unclaimed grant, so a page that rendered these facts can now actually approve.
