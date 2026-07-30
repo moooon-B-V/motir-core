@@ -3446,11 +3446,17 @@ model PlanItem {
   /// NULL for `add` until it materializes (then the created id); the EXISTING
   /// target for `modify` / `remove`.
   workItemId     String?    @map("work_item_id")
-  /// `add` ONLY — the new node's proposed fields (title, descriptionMd, type,
-  /// priority, executor). The add's values live HERE (no WorkItem exists yet).
+  /// `add` ONLY — the new node's proposed fields (title, kind, descriptionMd,
+  /// type, priority, executor, storyPoints, estimateMinutes, explanationMd,
+  /// explanationSource, planningProvenance, targetRepo). The add's values live
+  /// HERE (no WorkItem exists yet). `PlanItemProposedFields` in `lib/dto/plans.ts`
+  /// is the authoritative shape — this list is a reader's summary of it, so keep
+  /// the two in step when the shape grows.
   proposedFields Json?      @map("proposed_fields")
   /// `modify` ONLY — the sparse changed fields ({ title?, descriptionMd?,
-  /// priority?, type?, blockedByAdd?, blockedByRemove? }).
+  /// priority?, type?, storyPoints?, estimateMinutes?, targetRepo?,
+  /// blockedByAdd?, blockedByRemove? }); see `PlanItemPatch` in
+  /// `lib/dto/plans.ts` for the authoritative shape.
   patch          Json?
   /// `add` (and edge changes): a parent ref that may point at a real workItemId
   /// OR another PlanItem in the SAME plan (an intra-plan temp-ref, `planItem:<id>`),
