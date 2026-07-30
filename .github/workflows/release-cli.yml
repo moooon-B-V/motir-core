@@ -18,14 +18,28 @@
 #
 # This file is the copy `release-design-system.yml`'s header prescribes: same
 # shape, with `PACKAGE`/`PKG_DIR`, the `on.push.tags` prefix and the tag-strip
-# prefix changed. ONE deliberate divergence: auth is the long-lived `NPM_TOKEN`
-# Actions secret (provisioned by MOTIR-662), not OIDC Trusted Publishing.
-# Trusted Publishing needs a publisher configured on npmjs.com PER PACKAGE, and
-# `@motir/cli` has none — its `0.0.1` name-claim was published by hand with that
-# token. Provenance is still generated: `--provenance` needs `id-token: write`
-# and a `repository` field, not a trusted publisher. Migrating this lane to OIDC
-# later is a two-line change — drop `registry-url` + `NODE_AUTH_TOKEN` once the
-# publisher exists.
+# prefix changed — auth INCLUDED, as of MOTIR-1890.
+#
+# Auth is OIDC "Trusted Publishing": GitHub mints a short-lived id-token that npm
+# exchanges for a one-time publish credential, so there is NO long-lived
+# `NPM_TOKEN` secret to leak, rotate, or silently let expire. It requires a
+# Trusted Publisher configured on npmjs.com for this package (org `moooon-B-V` /
+# repo `motir-core` / this workflow filename) — provisioned by MOTIR-1891.
+#
+# WHY the lane moved off the token it shipped with: the `cli-v0.1.0` tag push on
+# 2026-07-30 was the FIRST CI use of `NPM_TOKEN` (the `0.0.1` name-claim was
+# published by hand from a laptop), and it FAILED — `npm error 404 Not Found -
+# PUT https://registry.npmjs.org/@motir%2fcli`. **A 404 on PUT for a scoped
+# package that demonstrably exists is npm's MASKED auth failure**: npm answers
+# 404 rather than 401/403 so an unauthorized caller cannot probe which private
+# scoped packages exist. Nothing rehearsed it, either — the `dry_run` path below
+# builds, tests and packs but SKIPS the publish, so it validates everything
+# except auth. A credential no lane can test until release day is the failure
+# mode OIDC removes, not a token that needed better rotation hygiene.
+#
+# Provenance is unchanged and still explicit: `--provenance` needs
+# `id-token: write` and a `repository` field, both of which this lane and
+# packages/cli/package.json already carry.
 name: Release @motir/cli
 
 on:
@@ -67,10 +81,16 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          # Writes the .npmrc that points npm at the public registry and maps
-          # NODE_AUTH_TOKEN onto it. Without this the publish step would
-          # authenticate as nobody.
-          registry-url: 'https://registry.npmjs.org'
+          # Deliberately NO `registry-url`. On a Trusted Publish npm resolves the
+          # registry itself and mints its own credential from the OIDC token;
+          # setup-node's .npmrc exists only to map NODE_AUTH_TOKEN, and writing
+          # one with no token is how you get an anonymous publish (npm's masked
+          # 404 — see the header).
+
+      # OIDC Trusted Publishing needs npm >= 11.5.1; node 22 ships npm 10.x.
+      # Same step, same reason, as release-design-system.yml.
+      - name: Upgrade npm for OIDC Trusted Publishing
+        run: npm install -g npm@latest
 
       - run: pnpm install --frozen-lockfile
         env:
@@ -147,5 +167,3 @@ jobs:
           steps.published.outputs.already == 'false' &&
           !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         run: pnpm --filter "$PACKAGE" exec npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
