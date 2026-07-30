@@ -3,6 +3,28 @@
 **Status:** accepted · **Date:** 2026-07-28 · **Card:** MOTIR-1804 (Story 7.9, the
 Motir CLI) · **Supersedes:** the `targetRepo` half of the cancelled MOTIR-860 (7.7.3)
 
+> **Amended 2026-07-30 (MOTIR-1783, Story MOTIR-1775).** Two decisions below were
+> written when the workspace's connected repos were the only repo registry Motir had.
+> `project_repository` (MOTIR-1780) now records a **project's** repository set, so:
+>
+> - **§2's validation domain is the ITEM'S PROJECT's set**, not the workspace's
+>   connected repos — a pin naming a **sibling project's** repo is now the typed
+>   error it always should have been. The domain includes rows whose repository is
+>   not created yet: a plan pins repositories before it creates them (the set ADR
+>   §5.1), so validation catches typos, not planning ahead.
+> - **§3's dispatch default is the project's SINGLE established repo**, not the
+>   workspace's single connected one. The refusal to guess at two or more is
+>   unchanged, and is now pinned by a test so it cannot creep back.
+>
+> A project with **no** set — every project created before that table — resolves and
+> validates against the workspace's connected repos exactly as described below; that
+> is the compatibility rung, and it answers only for a MISSING set, never underneath
+> one that exists. The dispatch payload additionally carries the resolved repo's
+> **clone URL + default branch** (`targetRepoCloneUrl` / `targetRepoDefaultBranch`,
+> derived from the mirror row — see `lib/repos/cloneUrl.ts`), because a bare name only
+> answers an agent that already has the checkout. Details:
+> `docs/decisions/project-repository-set.md` (§5 and its Consequences).
+
 ## Context
 
 A Motir project spans **several repos**. The planning rule "ONE SUBTASK = ONE REPO =

@@ -161,10 +161,12 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof ReporterNotInWorkspaceError ||
     err instanceof AssigneeNotInWorkspaceError ||
     err instanceof TypeNotAllowedOnKindError ||
-    // Target-repo validation (MOTIR-1804): a `targetRepo` naming a repo outside
-    // the workspace's connected set on create_work_item / update_work_item. The
-    // message NAMES the connected repos, so the agent self-corrects in one hop
-    // instead of guessing — the MCP analogue of the route's 422.
+    // Target-repo validation (MOTIR-1804; project-scoped in MOTIR-1783): a
+    // `targetRepo` naming a repo outside the item's PROJECT repository set (or,
+    // for a project with no set, the workspace's connected repos) on
+    // create_work_item / update_work_item. The message NAMES the repos of the
+    // scope it checked, so the agent self-corrects in one hop instead of
+    // guessing — the MCP analogue of the route's 422.
     err instanceof UnknownTargetRepoError ||
     // Story-point value validation (7.8.21): a malformed `storyPoints` on
     // create_work_item / update_work_item — out of the Decimal(6, 2) range,

@@ -1,6 +1,7 @@
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { UnknownTargetRepoError } from './errors';
+import { UnknownTargetRepoError, type UnknownTargetRepoScope } from './errors';
 import type { ServiceContext } from './serviceContext';
 
 // Per-item REPO ATTRIBUTION (Story 7.9 · MOTIR-1804) — the rebuilt producer half
@@ -13,12 +14,19 @@ import type { ServiceContext } from './serviceContext';
 //
 //   1. NORMALIZE the authored value — trim, and accept the `owner/name` ref form
 //      as an alias for the bare `name` the CLI keys on.
-//   2. VALIDATE it against the workspace's CONNECTED repo set (the 7.10.3
-//      installation mirror). One repo registry, not two: a pin that names a repo
-//      Motir isn't connected to is a typo, and a typed error is far better than
-//      a dispatch that sends an agent to a directory that will never exist.
+//   2. VALIDATE it against a repo DOMAIN. One repo registry, not two: a pin that
+//      names a repo Motir isn't connected to is a typo, and a typed error is far
+//      better than a dispatch that sends an agent to a directory that will never
+//      exist.
 //   3. RESOLVE the dispatch value — the explicit pin when there is one, else the
-//      workspace's SINGLE connected repo (the unambiguous default), else null.
+//      domain's SINGLE repo (the unambiguous default), else null.
+//
+// ⚠️ WHICH DOMAIN is no longer this module's decision (MOTIR-1783). A project now
+// carries its own repository SET (`project_repository`, MOTIR-1780), and that set
+// — not "the workspace's connected repos" — is what an item's pin means. The
+// scope ladder (the project's set, else the workspace's connected repos for a
+// project that predates the set) lives in `lib/workItems/dispatchRepo.ts`; this
+// module owns the workspace-scoped domain + the SCOPE-FREE policy both consume.
 //
 // Why resolution happens at DISPATCH and not at CREATE: the connected set moves
 // (repos get connected and disconnected). Baking today's default into every row
@@ -34,12 +42,27 @@ import type { ServiceContext } from './serviceContext';
 // write transaction — never nested inside a `db.$transaction`.
 
 /** The bare repo NAME the CLI keys checkouts on (`motir-core`), plus the
- *  `owner/name` ref it came from — enough to explain an ambiguity in an error. */
+ *  `owner/name` ref it came from — enough to explain an ambiguity in an error —
+ *  and the coordinates an agent that has NO checkout yet needs to make one. */
 export interface ConnectedRepoName {
   /** The bare repo name — the value stored in `work_item.targetRepo`. */
   name: string;
   /** `owner/name`, the display form used in error messages. */
   repoRef: string;
+  /**
+   * The HTTPS clone URL (MOTIR-1783), or `null` when Motir cannot derive one —
+   * an unknown provider, or a name that exists only as a PLAN (a proposed set
+   * row whose repository has not been created yet). Derived from the
+   * coordinates, never stored (see `lib/repos/cloneUrl.ts`).
+   */
+  cloneUrl: string | null;
+  /**
+   * The repository's default branch, or `null` for a name Motir knows only as a
+   * plan. The agent branches from this; `null` means "Motir does not know", not
+   * "main" — assuming a default is the same guess this module refuses to make
+   * about which repo an ambiguous item belongs to.
+   */
+  defaultBranch: string | null;
 }
 
 /**
@@ -58,7 +81,12 @@ export async function listConnectedRepoNames(ctx: ServiceContext): Promise<Conne
   const byName = new Map<string, ConnectedRepoName>();
   for (const repo of repos) {
     if (!byName.has(repo.name)) {
-      byName.set(repo.name, { name: repo.name, repoRef: `${repo.owner}/${repo.name}` });
+      byName.set(repo.name, {
+        name: repo.name,
+        repoRef: `${repo.owner}/${repo.name}`,
+        cloneUrl: repoCloneUrl(repo),
+        defaultBranch: repo.defaultBranch,
+      });
     }
   }
   return [...byName.values()];
@@ -84,48 +112,96 @@ export function normalizeTargetRepo(value: string | null | undefined): string | 
 }
 
 /**
- * Normalize + VALIDATE an authored `targetRepo` against the workspace's
- * connected repo set, returning the value to store (`null` clears the pin).
+ * Normalize + VALIDATE an authored `targetRepo` against a repo DOMAIN, returning
+ * the value to store (`null` clears the pin). PURE — the caller supplies the
+ * domain, which is what lets the project-scoped ladder
+ * (`lib/workItems/dispatchRepo.ts`) reuse this policy verbatim instead of
+ * re-deriving it.
  *
  * Matching is case-insensitive — git-host repo names are, and a pin that differs
- * only in case names the same checkout. The STORED value is the connected repo's
+ * only in case names the same checkout. The STORED value is the domain repo's
  * own casing, so the column and `.motir.json` can never disagree on the
  * directory name. An unknown name throws `UnknownTargetRepoError` (422 at the
  * route layer, a self-correctable tool error over MCP) naming the known set.
- *
- * MUST be called OUTSIDE the caller's write transaction — it opens its own
- * workspace context (see the module header).
  */
-export async function resolveAuthoredTargetRepo(
+export function matchAuthoredTargetRepo(
   value: string | null | undefined,
-  ctx: ServiceContext,
-): Promise<string | null> {
+  domain: ConnectedRepoName[],
+  scope: UnknownTargetRepoScope = 'workspace',
+): string | null {
   const name = normalizeTargetRepo(value);
   if (name === null) return null;
-  const connected = await listConnectedRepoNames(ctx);
-  const match = connected.find((r) => r.name.toLowerCase() === name.toLowerCase());
+  const match = domain.find((r) => r.name.toLowerCase() === name.toLowerCase());
   if (!match) {
     throw new UnknownTargetRepoError(
       name,
-      connected.map((r) => r.repoRef),
+      domain.map((r) => r.repoRef),
+      scope,
     );
   }
   return match.name;
 }
 
 /**
- * The DISPATCH value: the explicit pin when the item carries one, else the
- * workspace's single connected repo when that is unambiguous, else `null`.
+ * The resolved dispatch REPO: which repo to run an item in, and — new in
+ * MOTIR-1783 — how to obtain it. `null` when Motir cannot say which repo, which
+ * is a real answer the CLI acts on (it falls back to its link-root rule).
  *
- * "Exactly one connected repo" is the only safe default — with two or more there
- * is no non-arbitrary choice, and a wrong repo sends the agent's cwd into the
- * wrong checkout, which is worse than no answer at all (the CLI's documented
- * fallback for `null` is the link root, where a human notices immediately).
+ * `cloneUrl` / `defaultBranch` are independently nullable: a pin can name a repo
+ * whose coordinates Motir does not know (a set row that is still a PLAN, or a
+ * pin that outlived its connection), and echoing the recorded NAME while
+ * admitting the rest is unknown beats dropping the routing decision entirely.
+ */
+export interface ResolvedDispatchRepo {
+  /** The bare repo NAME the CLI keys `<root>/<name>` on. */
+  name: string;
+  /** The HTTPS clone URL, or `null` when Motir does not know it. */
+  cloneUrl: string | null;
+  /** The repo's default branch, or `null` when Motir does not know it. */
+  defaultBranch: string | null;
+}
+
+/**
+ * The DISPATCH repo: the explicit pin when the item carries one, else the
+ * domain's single repo when that is unambiguous, else `null`.
+ *
+ * "Exactly one repo" is the only safe default — with two or more there is no
+ * non-arbitrary choice, and a wrong repo sends the agent's cwd into the wrong
+ * checkout, which is worse than no answer at all (the CLI's documented fallback
+ * for `null` is the link root, where a human notices immediately).
+ *
+ * A PIN always wins, even when the domain does not contain it: the pin is a
+ * recorded decision, and the domain can legitimately lag it (a row whose repo is
+ * not created yet, a repo disconnected after the pin was authored). Such a pin
+ * resolves with NULL coordinates — the name Motir was told, and an honest "I
+ * cannot tell you where it lives".
+ */
+export function resolveDispatchRepo(
+  pinned: string | null,
+  domain: ConnectedRepoName[],
+): ResolvedDispatchRepo | null {
+  if (pinned !== null) {
+    const match = domain.find((r) => r.name.toLowerCase() === pinned.toLowerCase());
+    return {
+      name: pinned,
+      cloneUrl: match?.cloneUrl ?? null,
+      defaultBranch: match?.defaultBranch ?? null,
+    };
+  }
+  const only = domain.length === 1 ? domain[0]! : null;
+  if (!only) return null;
+  return { name: only.name, cloneUrl: only.cloneUrl, defaultBranch: only.defaultBranch };
+}
+
+/**
+ * The dispatch repo NAME alone — {@link resolveDispatchRepo} projected to the
+ * field `ReadyItemDispatchDto.targetRepo` has carried since MOTIR-1804. Kept as
+ * its own export so the shipped name-only callers (and their tests) read
+ * unchanged.
  */
 export function resolveDispatchTargetRepo(
   pinned: string | null,
-  connected: ConnectedRepoName[],
+  domain: ConnectedRepoName[],
 ): string | null {
-  if (pinned !== null) return pinned;
-  return connected.length === 1 ? connected[0]!.name : null;
+  return resolveDispatchRepo(pinned, domain)?.name ?? null;
 }

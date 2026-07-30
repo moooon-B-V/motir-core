@@ -154,10 +154,9 @@ import type {
 } from '@/lib/dto/workItemLinks';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
-  listConnectedRepoNames,
-  resolveAuthoredTargetRepo,
-  resolveDispatchTargetRepo,
-} from '@/lib/workItems/targetRepo';
+  resolveAuthoredTargetRepoInProject,
+  resolveItemDispatchRepo,
+} from '@/lib/workItems/dispatchRepo';
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -695,14 +694,20 @@ export const workItemsService = {
     // column default (unestimated). Throws `InvalidEstimateError` (422).
     const storyPoints = validateStoryPoints(input.storyPoints ?? null);
 
-    // Target repo (Story 7.9 · MOTIR-1804): normalize the authored value (bare
-    // name or `owner/name`) and validate it against the workspace's CONNECTED
-    // repo set. BEFORE the key-allocation transaction for two reasons — an
-    // unknown repo never burns a work-item key, AND the resolver opens its OWN
-    // workspace context (the `github_repo` RLS policies are workspace-keyed), so
-    // it must not run nested inside our transaction. Throws
-    // `UnknownTargetRepoError` (422); omitted/null/blank → unpinned.
-    const targetRepo = await resolveAuthoredTargetRepo(input.targetRepo, ctx);
+    // Target repo (Story 7.9 · MOTIR-1804; project-scoped in MOTIR-1783):
+    // normalize the authored value (bare name or `owner/name`) and validate it
+    // against THIS PROJECT's repository set — else, for a project with no set,
+    // the workspace's connected repos. BEFORE the key-allocation transaction for
+    // two reasons — an unknown repo never burns a work-item key, AND the
+    // resolver opens its OWN workspace context (the `project_repository` /
+    // `github_repo` RLS policies are workspace-keyed), so it must not run nested
+    // inside our transaction. Throws `UnknownTargetRepoError` (422);
+    // omitted/null/blank → unpinned.
+    const targetRepo = await resolveAuthoredTargetRepoInProject(
+      input.targetRepo,
+      input.projectId,
+      ctx,
+    );
 
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
@@ -1095,15 +1100,26 @@ export const workItemsService = {
     const nextStoryPoints =
       patch.storyPoints !== undefined ? validateStoryPoints(patch.storyPoints) : undefined;
 
-    // Target repo (Story 7.9 · MOTIR-1804): normalize + validate the pin against
-    // the workspace's connected repo set BEFORE the transaction — the same rule
-    // create uses (the patch surface is never looser), and the resolver opens its
-    // OWN workspace context, so it must not run nested inside the row lock's
-    // transaction. `undefined` → leave untouched; `null` / a blank string clears.
-    const nextTargetRepo =
-      patch.targetRepo !== undefined
-        ? await resolveAuthoredTargetRepo(patch.targetRepo, ctx)
-        : undefined;
+    // Target repo (Story 7.9 · MOTIR-1804; project-scoped in MOTIR-1783):
+    // normalize + validate the pin against THIS ITEM's project repo set BEFORE
+    // the transaction — the same rule create uses (the patch surface is never
+    // looser), and the resolver opens its OWN workspace context, so it must not
+    // run nested inside the row lock's transaction. `undefined` → leave
+    // untouched; `null` / a blank string clears. The project is read here (not
+    // taken from the locked row) precisely BECAUSE the validation cannot run
+    // inside the lock; a concurrent re-parent cannot move an item across
+    // projects (`CrossProjectParentError`), so the project this validates
+    // against is the project the write lands in.
+    let nextTargetRepo: string | null | undefined;
+    if (patch.targetRepo !== undefined) {
+      const pre = await workItemRepository.findById(id);
+      if (!pre) throw new WorkItemNotFoundError(id);
+      nextTargetRepo = await resolveAuthoredTargetRepoInProject(
+        patch.targetRepo,
+        pre.projectId,
+        ctx,
+      );
+    }
 
     // Description mentions (Subtask 5.1.6): when the patch carries a body with
     // mention tokens, resolve the viewable-member set BEFORE the transaction
@@ -3970,15 +3986,16 @@ async function buildReadyDispatchDto(
   row: ReadyCandidateRow,
   ctx: ServiceContext,
 ): Promise<ReadyItemDispatchDto> {
-  const [parentRow, blockerLinks, readiness, connectedRepos] = await Promise.all([
+  const [parentRow, blockerLinks, readiness, dispatchRepo] = await Promise.all([
     row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
     workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by'),
     workItemsService.getReadiness(row.id, ctx),
-    // The workspace's connected repo set (Story 7.9 · MOTIR-1804) — the domain
-    // the item's `targetRepo` resolves against. Read here, alongside the other
-    // dispatch decorations, because it is only needed for the ONE item being
-    // dispatched (never for the list read).
-    listConnectedRepoNames(ctx),
+    // WHICH repo to run this in, resolved against the item's PROJECT repo set —
+    // else, for a project with no set, the workspace's connected repos (Story
+    // MOTIR-1775 · MOTIR-1783, narrowing MOTIR-1804's workspace-only scope).
+    // Read here, alongside the other dispatch decorations, because it is only
+    // needed for the ONE item being dispatched (never for the list read).
+    resolveItemDispatchRepo(row.targetRepo, row.projectId, ctx),
   ]);
   const blockerRows = (await workItemRepository.findByIds(blockerLinks.map((l) => l.toId)))
     .slice()
@@ -3989,10 +4006,14 @@ async function buildReadyDispatchDto(
     parent: parentRow ? { identifier: parentRow.identifier } : null,
     contextRefs: extractContextRefs(row.descriptionMd),
     sessionBranch: readiness.inheritedSessionBranch,
-    // WHICH repo to run this in (Story 7.9 · MOTIR-1804): the item's explicit
-    // pin, else the workspace's SINGLE connected repo, else null — never a guess
-    // across an ambiguous set. The CLI maps this name to a checkout path.
-    targetRepo: resolveDispatchTargetRepo(row.targetRepo, connectedRepos),
+    // WHICH repo to run this in (Story 7.9 · MOTIR-1804 · MOTIR-1783): the
+    // item's explicit pin, else the project's SINGLE repo, else null — never a
+    // guess across an ambiguous set. The CLI maps this name to a checkout path;
+    // the clone URL + default branch are what an agent WITHOUT that checkout
+    // needs, and are null (present, never omitted) whenever Motir cannot say.
+    targetRepo: dispatchRepo?.name ?? null,
+    targetRepoCloneUrl: dispatchRepo?.cloneUrl ?? null,
+    targetRepoDefaultBranch: dispatchRepo?.defaultBranch ?? null,
   };
   return toReadyItemDispatchDto(row, blockerRows, dispatchCtx);
 }

@@ -248,17 +248,41 @@ to `excludeIds`.
 **Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null }`
 (`null` when nothing is ready). `ReadyItemDispatchDto` extends `ReadyItemDto`
 with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, `runCommand`
-(`motir run <key>`), `sessionBranch`, and `targetRepo`.
+(`motir run <key>`), `sessionBranch`, `targetRepo`, `targetRepoCloneUrl`, and
+`targetRepoDefaultBranch`.
 
 **`targetRepo` — WHICH repo to run this in** (MOTIR-1804): the bare repo name
 (`"motir-core"`) the CLI maps to a checkout via `.motir.json` (`motir link add
 <repo> <path>`), so an item targeting repo B dispatches with the agent's cwd
 inside B's checkout even when invoked from repo A. **Resolved**, unlike the raw
 pin on `WorkItemDto`: the item's explicit `targetRepo` when it has one, else the
-workspace's **single** connected repo when it has exactly one, else `null`.
-`null` means Motir cannot say — with two or more connected repos and no pin it
-never guesses; the CLI falls back to its link-root rule. See
-`docs/decisions/target-repo-attribution.md`.
+**single** repo of the item's project when it has exactly one, else `null`.
+`null` means Motir cannot say — with two or more repos and no pin it never
+guesses; the CLI falls back to its link-root rule.
+
+The domain is the **project's repository set** (`project_repository`,
+MOTIR-1780 · MOTIR-1783). A project that has **no** set — every project created
+before that table — still resolves against the **workspace's connected repos**,
+unchanged; that fallback answers only for a missing set, never underneath one
+that exists (a project whose repositories are all still planned resolves to
+`null`, not to a workspace repo it did not choose). See
+`docs/decisions/target-repo-attribution.md` and
+`docs/decisions/project-repository-set.md`.
+
+**`targetRepoCloneUrl` / `targetRepoDefaultBranch` — HOW to obtain it**
+(MOTIR-1783): `targetRepo` is a bare NAME, which answers an agent that already
+has the checkout; these two answer one that does not. The HTTPS clone URL
+(`"https://github.com/moooon/motir-core.git"`, derived from the connected repo's
+coordinates) and the branch a fresh clone lands on (`"main"`).
+
+Both are **nullable and always present** — a null value, never an omitted key,
+never `""`. They are `null` whenever Motir cannot know them: no repo resolved at
+all; the pin names a repository that does not exist **yet** (a set row still
+being planned — `targetRepo` is still served, because the routing decision
+stands) or is no longer connected; or the repo's provider is one this build
+cannot address. `targetRepoDefaultBranch` is deliberately **not** defaulted to
+`"main"`: a guessed branch is the same class of error as a guessed repo, and a
+consumer can only fall back sensibly if it can tell the two apart.
 
 #### `claim_next_ready`
 
@@ -283,7 +307,10 @@ id is passed.
 
 **Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null, reason? }`.
 On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
-`status` now in the `in_progress` category). When nothing could be claimed,
+`status` now in the `in_progress` category) — including `targetRepo` and its
+`targetRepoCloneUrl` / `targetRepoDefaultBranch` coordinates, resolved
+identically (see `next_ready` above for the project-scoped rule and the null
+semantics). When nothing could be claimed,
 `item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
 claimed the last one — or check there is unblocked work to start). Scope token:
 `work_items:write` (it flips status).
@@ -305,15 +332,21 @@ not only a ready one — so re-printing an in-progress item's prompt is safe.
 | `key`           | string | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                             |
 | `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
 
-**Output** — `structuredContent`: `{ key, prompt, targetRepo, workflowMode, sessionBranch }`.
+**Output** — `structuredContent`:
+`{ key, prompt, targetRepo, targetRepoCloneUrl, targetRepoDefaultBranch, workflowMode, sessionBranch }`.
 
 - **`prompt`** — the full text, in four sections: **CONTEXT** (project, item,
   sizing, repo, parent, satisfied dependencies, the context refs and the card
   body), **WHAT TO DO**, **ACCEPTANCE CRITERIA**, **GIT WORKFLOW**. The card's
   `## Acceptance criteria` and `## Context refs` sections are lifted into their
   own sections rather than repeated inside the body.
-- **`targetRepo`** — the same RESOLVED repo `next_ready` returns (see
-  `next_ready` above and `docs/decisions/target-repo-attribution.md`).
+- **`targetRepo`** — the same RESOLVED repo `next_ready` returns, through the
+  same project-scoped resolution (see `next_ready` above and
+  `docs/decisions/target-repo-attribution.md`), so the two dispatch surfaces can
+  never route differently.
+- **`targetRepoCloneUrl`** / **`targetRepoDefaultBranch`** — the same clone
+  coordinates `next_ready` returns, with the same null semantics (present with a
+  null value whenever Motir cannot say).
 - **`workflowMode`** — `"per_item_pr"` (branch from `origin/main`, one PR, stop)
   or `"session_lineage"` (branch from / integrate into the inherited session
   branch, then call `mark_integrated`). **Chosen server-side** from the item's
@@ -386,21 +419,21 @@ passing a `parentKey` alongside `kind: "epic"` is rejected with
 `ILLEGAL_PARENT_TYPE` (MOTIR-1345 — the AI planner generates the whole tree,
 epics included, so the agent surface can create one).
 
-| Input                | Type                                                | Required | Notes                                                                                                                                                                         |
-| -------------------- | --------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                            |
-| `kind`               | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                     |
-| `title`              | string                                              | yes      | The title (one line).                                                                                                                                                         |
-| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                |
-| `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                    |
-| `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                 |
-| `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                      |
-| `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                   |
-| `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped. |
-| `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                               |
-| `targetRepo`         | string \| null                                      | no       | WHICH repo the item ships in — bare repo name (`"motir-core"`) or `"owner/name"`. Must name a **connected** repo (else `UNKNOWN_TARGET_REPO`). Omit/`null` → unpinned.        |
-| `plannedWithHarness` | string                                              | no       | Self-reported planning **harness** (e.g. `"Claude Code"`, `"Codex"`). Recorded as planning provenance alongside the server-set source `mcp`. Omit → unrecorded.               |
-| `plannedWithModel`   | string                                              | no       | Self-reported planning **model** (e.g. `"claude-opus-4-8"`, `"deepseek-chat"`). Recorded as planning provenance. Omit → unrecorded.                                           |
+| Input                | Type                                                | Required | Notes                                                                                                                                                                                         |
+| -------------------- | --------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                                            |
+| `kind`               | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                                     |
+| `title`              | string                                              | yes      | The title (one line).                                                                                                                                                                         |
+| `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                                |
+| `descriptionMd`      | string                                              | no       | Markdown description body.                                                                                                                                                                    |
+| `priority`           | priority enum                                       | no       | Omit for the project default.                                                                                                                                                                 |
+| `storyPoints`        | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                                      |
+| `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                                   |
+| `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped.                 |
+| `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                                               |
+| `targetRepo`         | string \| null                                      | no       | WHICH repo the item ships in — bare repo name (`"motir-core"`) or `"owner/name"`. Must name a repo in **this project's** repository set (else `UNKNOWN_TARGET_REPO`). Omit/`null` → unpinned. |
+| `plannedWithHarness` | string                                              | no       | Self-reported planning **harness** (e.g. `"Claude Code"`, `"Codex"`). Recorded as planning provenance alongside the server-set source `mcp`. Omit → unrecorded.                               |
+| `plannedWithModel`   | string                                              | no       | Self-reported planning **model** (e.g. `"claude-opus-4-8"`, `"deepseek-chat"`). Recorded as planning provenance. Omit → unrecorded.                                                           |
 
 **Output** — `structuredContent`: the created `WorkItemDto`.
 
@@ -415,18 +448,26 @@ The leaf-authoring fields (`estimateMinutes`, `type`, `executor`, `storyPoints`,
 fully-specified in a single call rather than a create-then-update round-trip. The
 same service rules apply as on the patch path: `type`/`executor` are leaf-only
 (an epic/story kind is rejected), setting `type` without an explicit `executor`
-seeds it from the type default, and `targetRepo` is validated against the
-workspace's connected repo set.
+seeds it from the type default, and `targetRepo` is validated against this
+project's repository set.
 
 **`targetRepo` — pinning the repo an item ships in** (MOTIR-1804). This is what
 makes _one subtask = one repo = one PR_ enforceable in the product rather than
 only in the planner's rules, and it is what routes the CLI: `motir link add
 <repo> <path>` maps a repo NAME to a checkout, and this field says which name the
 item belongs to. Accepts the bare name or `"owner/name"` (normalized to the
-name), matched case-insensitively against the workspace's connected repos and
-stored with the connected repo's own casing. An unknown name is rejected with
-`UNKNOWN_TARGET_REPO`, whose message lists the connected repos. See
-`docs/decisions/target-repo-attribution.md`.
+name), matched case-insensitively against **this project's repository set** and
+stored with that repo's own casing. An unknown name is rejected with
+`UNKNOWN_TARGET_REPO`, whose message lists the names the project accepts.
+
+The validation domain is every row of the project's set — including rows whose
+repository has not been **created yet** (MOTIR-1783). A plan pins repositories
+before it creates them, so a pin at `proposed` is ordinary; what validation
+catches is the typo and the **sibling project's** repo, which workspace-wide
+validation used to accept. A project with no set of its own still validates
+against the workspace's connected repos, unchanged. See
+`docs/decisions/target-repo-attribution.md` and
+`docs/decisions/project-repository-set.md`.
 
 #### `transition_status`
 
@@ -513,24 +554,24 @@ The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected)
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
 
-| Input             | Type                                | Required | Notes                                                                                          |
-| ----------------- | ----------------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `key`             | string                              | yes      | Work item identifier, e.g. `"PROD-7"`.                                                         |
-| `title`           | string                              | no       | New title.                                                                                     |
-| `descriptionMd`   | string \| null                      | no       | New description; `null` clears it.                                                             |
-| `explanationMd`   | string \| null                      | no       | New explanation ("why"); `null` clears it.                                                     |
-| `priority`        | `lowest…highest`                    | no       | New priority.                                                                                  |
-| `type`            | work type \| null                   | no       | Leaf items only; `null` clears it. First set seeds the executor.                               |
-| `executor`        | `"coding_agent" \| "human"` \| null | no       | Leaf items only; `null` clears it.                                                             |
-| `estimateMinutes` | number \| null                      | no       | Estimated minutes (time); `null` clears it.                                                    |
-| `storyPoints`     | number \| null                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it. |
-| `targetRepo`      | string \| null                      | no       | Repo the item ships in — bare name or `"owner/name"`; must be a connected repo. `null` clears. |
-| `assigneeId`      | string \| null                      | no       | Assignee user id (must be a workspace member); `null` unassigns.                               |
-| `dueDate`         | string (ISO-8601) \| null           | no       | Due date; `null` clears it.                                                                    |
+| Input             | Type                                | Required | Notes                                                                                                    |
+| ----------------- | ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `key`             | string                              | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                   |
+| `title`           | string                              | no       | New title.                                                                                               |
+| `descriptionMd`   | string \| null                      | no       | New description; `null` clears it.                                                                       |
+| `explanationMd`   | string \| null                      | no       | New explanation ("why"); `null` clears it.                                                               |
+| `priority`        | `lowest…highest`                    | no       | New priority.                                                                                            |
+| `type`            | work type \| null                   | no       | Leaf items only; `null` clears it. First set seeds the executor.                                         |
+| `executor`        | `"coding_agent" \| "human"` \| null | no       | Leaf items only; `null` clears it.                                                                       |
+| `estimateMinutes` | number \| null                      | no       | Estimated minutes (time); `null` clears it.                                                              |
+| `storyPoints`     | number \| null                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.           |
+| `targetRepo`      | string \| null                      | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears. |
+| `assigneeId`      | string \| null                      | no       | Assignee user id (must be a workspace member); `null` unassigns.                                         |
+| `dueDate`         | string (ISO-8601) \| null           | no       | Due date; `null` clears it.                                                                              |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
 assignee, a `type`/`executor` on a non-leaf, an out-of-range `storyPoints` value,
-or a `targetRepo` outside the workspace's connected repo set
+or a `targetRepo` outside this project's repository set
 (`UNKNOWN_TARGET_REPO`) returns a typed error.
 
 #### `change_kind`
