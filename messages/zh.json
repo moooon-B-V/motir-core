@@ -2198,6 +2198,24 @@
     "apiTokens": {
       "heading": "API 令牌",
       "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
+      "cli": {
+        "title": "连接 CLI",
+        "subtitle": "在终端里运行 Motir——<mono>motir next</mono>、<mono>motir run</mono>、<mono>motir auto</mono>。",
+        "step1": "1 · 安装",
+        "step2": "2 · 登录",
+        "copyInstall": "复制安装命令",
+        "copySignIn": "复制登录命令",
+        "next": "<mono>motir login</mono> 会显示一个短代码并在浏览器中打开 Motir。在那里确认后终端即已连接——不需要手动复制任何令牌。",
+        "headless": "这台机器上没有浏览器？<mono>motir login</mono> 会打印代码和链接，你可以在任意设备上打开，因此 SSH 会话和容器都用同一条命令。若是无人值守的 agent，改为设置 <mono>MOTIR_TOKEN</mono>。",
+        "guide": "阅读 CLI 指南",
+        "tie": "已确认的终端会以 <code>CLI · {host}</code> 出现在下方列表中——在那里吊销它即可断开该终端。",
+        "tieEmpty": "已确认的终端将以 <code>CLI · {host}</code> 出现在下方列表中。",
+        "copyFailed": "复制失败——请手动选中并复制该命令。",
+        "toast": {
+          "title": "已复制",
+          "body": "粘贴到终端并按回车。"
+        }
+      },
       "card": {
         "title": "你的令牌",
         "subtitle": "仅在创建时显示一次，之后只保存哈希值。",
