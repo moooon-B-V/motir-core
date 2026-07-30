@@ -6,6 +6,16 @@ establish the project's repository set at plan approval) · **Evidence pinned at
 `motir-ai` `origin/main` @ `93afca4`, `nextjs-prisma-vercel-starter`
 `.github/workflows/ci.yml` · **Vendor pricing + API status read 2026-07-30** (sources in §9)
 
+**Amended:** 2026-07-30 (MOTIR-1906) — **§6 enforcement**: `ci_credits_exhausted` now
+**pauses GitHub Actions** on the org's Motir-owned repositories, not only refuses the next
+dispatch. §6.3's dispatch-only enforcement is **superseded in place** (kept below, marked),
+§6.4's overshoot bound is **corrected**, §6.5's state machine gains an Actions column, and
+**§7.3 item 5 is rewritten** to a two-option decision for an admin and an alert for a
+member. See
+[the amendment](#amendment-2026-07-30-motir-1906--the-refusal-is-enforced-at-the-compute-not-only-at-dispatch).
+Nothing in §1–§5 or §8–§9 changes: the numbers, the rate, the normalization, the pool and
+the attribution stand. The planning defect is logged as MOTIR-1909.
+
 Motir hosts some of its users' repositories, so Motir pays some of their CI bill. This
 record prices that: the **included allowance** every seat carries, the **rate** the
 overage draws from the credit ledger, how the pool is **pooled and reset**, how minutes
@@ -434,6 +444,14 @@ motir-core `CiCreditsExhaustedError` with a stable `code`, carrying the org, the
 and the pool state, so the surface can render _why_ rather than a generic failure. Never a
 raw provider payload.
 
+> ⚠️ **SUPERSEDED IN PART by the 2026-07-30 amendment (MOTIR-1906) below.** §6.3 as written
+> makes the dispatch path the **only** gate, which does not stop the spend: GitHub bills on
+> any push or PR to a Motir-owned repository, and four routes reach that without a dispatch
+> (Amendment §A). The dispatch refusal is **kept** — it fails before the user waits on a
+> run and it is the only gate that can carry a typed, renderable reason — but it is no
+> longer the enforcement point. **Amendment §A adds the repo-side pause that makes this
+> refusal true.**
+
 **6.4 · The balance MAY go transiently negative, by at most the cost of runs already in
 flight — and that is accepted, not a bug.** CI cannot be un-run: a run that starts while
 the balance is positive and completes after it crosses zero still consumed real compute.
@@ -443,14 +461,321 @@ recorded honestly in the ledger rather than clamped at zero, which would lose th
 Motir paid for it. This mirrors the AI side's contract, where `≤ 0` means exhausted rather
 than asserting the balance can never be negative.
 
-**6.5 · The state machine, complete:**
+> ⚠️ **CORRECTED by the 2026-07-30 amendment (MOTIR-1906) — the bound above was stated
+> against the wrong event.** "Runs already in flight" bounds the overshoot only if dispatch
+> is the sole trigger, which Amendment §A disproves: with a dispatch-only gate the overshoot
+> is **unbounded**, because a collaborator push, a fix-up commit, a `manual`-lane push or a
+> repo-resident trigger keeps billing indefinitely. The corrected bound is stated against
+> the **pause**, in **Amendment §H**. The rest of 6.4 stands: the invariant is a refusal,
+> not a non-negative balance, and the ledger records the overshoot rather than clamping it.
 
-| State                  | Condition                        | Dispatch    | Charged               |
-| ---------------------- | -------------------------------- | ----------- | --------------------- |
-| `within_allowance`     | period consumption < pool        | allowed     | nothing               |
-| `drawing_on_credits`   | consumption ≥ pool, balance > 0  | allowed     | 1 credit / Lin-eq min |
-| `ci_credits_exhausted` | consumption ≥ pool, balance ≤ 0  | **refused** | in-flight only        |
-| _(bypassed)_           | `isMeta`, or `MOTIR_CLOUD=false` | allowed     | nothing               |
+**6.5 · The state machine, complete** (the **Actions** column added by the 2026-07-30
+amendment; `ci_credits_exhausted` has TWO effects, not one):
+
+| State                  | Condition                        | Dispatch    | Actions on the org's Motir-owned repos | Charged               |
+| ---------------------- | -------------------------------- | ----------- | -------------------------------------- | --------------------- |
+| `within_allowance`     | period consumption < pool        | allowed     | enabled                                | nothing               |
+| `drawing_on_credits`   | consumption ≥ pool, balance > 0  | allowed     | enabled (**warned** — Amendment §D)    | 1 credit / Lin-eq min |
+| `ci_credits_exhausted` | consumption ≥ pool, balance ≤ 0  | **refused** | **PAUSED** (Amendment §A)              | in-flight only        |
+| _(bypassed)_           | `isMeta`, or `MOTIR_CLOUD=false` | allowed     | untouched — no call is made            | nothing               |
+
+#### Amendment 2026-07-30 (MOTIR-1906) — the refusal is ENFORCED AT THE COMPUTE, not only at dispatch
+
+**Status:** accepted · **Date:** 2026-07-30 · **Card:** MOTIR-1906 · **Evidence pinned at:**
+`motir-core` `origin/main` @ `02e7ba96` · **GitHub REST permission table, budgets docs and
+Actions-settings docs re-read 2026-07-30** (sources in §I)
+
+**What this amendment changes, in one line.** §6.2 rejected _"run it and go negative"_ as a
+policy and §6.3 then put the gate on the **dispatch** path — but dispatch is not the path
+that spends the minutes. **GitHub bills on any push or PR to a Motir-owned repository.** So
+the shipped answer to _"what happens when the CI time is over the limit"_ was: the org keeps
+burning Motir's money, indefinitely — the outcome this record's own §6.2 rejected. This
+amendment adds the enforcement that makes the refusal true, supersedes §6.3's
+dispatch-only enforcement in place, corrects §6.4's overshoot bound, and rewrites §7.3
+item 5. It does **not** re-open §1–§5: the numbers, the rate, the normalization, the pool
+and the attribution are unchanged. The planning defect is logged as MOTIR-1909.
+
+##### §A — The enforcement point: pause Actions PER REPOSITORY
+
+**`PUT /repos/{owner}/{repo}/actions/permissions` with `{ "enabled": false }` → `204`**, over
+the org's Motir-owned repository rows (§C's fan-out). Re-enable is the same call with
+`{ "enabled": true }`. GitHub's repository Actions-settings page states the effect plainly:
+_"When you disable GitHub Actions, no workflows run in your repository."_
+
+**It needs no new App permission and no user consent — verified, not assumed.** GitHub's
+permissions-required-for-GitHub-Apps reference lists the endpoint under **Repository
+permissions for `"Administration"`**, `write`, available to an **installation access token
+(IAT)**. That is the _same_ repository permission the provisioning App (MOTIR-1779) already
+holds on Motir's org for `POST /orgs/{org}/repos` (repo creation) and
+`PUT /repos/{owner}/{repo}/collaborators/{username}` (MOTIR-1900's invite), which the same
+table lists under the same heading. **No registration change, no two-sided re-consent, no
+funnel cost** — and that is the load-bearing check, because `notes.html` #180 is exactly the
+lesson of deciding a mechanism without pricing the permission it commits everyone to.
+
+**The four candidates, and why the other three lose:**
+
+| Candidate                                                                | Verdict                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Per-repository `PUT /repos/{o}/{r}/actions/permissions`**              | **CHOSEN.** No new permission; per-tenant by construction; N is 1–4 per project, so the fan-out is cheap and §5.8's rate limits are a non-issue.                                                                                                                                                                                                                        |
+| `PUT /orgs/{org}/actions/permissions` + `enabled_repositories: selected` | **Rejected on two independent grounds.** (1) The same reference lists it under **Organization permissions for `"Administration"`** — a **different** permission the provisioning App does not carry, so it would be a registration change to buy nothing. (2) It is ONE shared mutable list across every tenant: a write-contention point and an org-wide blast radius. |
+| Revoke the collaborator's push access                                    | **Rejected.** Reaches only path 1 of four, and it removes the access MOTIR-1900 exists to grant. Motir would take away a user's access to their own code to save $0.006/minute.                                                                                                                                                                                         |
+| A GitHub **budget** with _stop usage when budget limit is reached_       | **Rejected as the tenant gate** — see §E. Budgets can be scoped to a single repository, so this is technically reachable, but it is denominated in **GitHub dollars over GitHub's billing period** and cannot be moved by a Motir top-up. Wrong control loop, and it would put the reset outside Motir's hands.                                                         |
+| Do nothing at the repo; keep only the dispatch gate                      | **Rejected — it is the status quo, i.e. the outcome §6.2 already rejected.**                                                                                                                                                                                                                                                                                            |
+
+**BOTH gates stay.** The dispatch refusal (§6.2–6.3) keeps its real virtue — the user finds
+out _before_ waiting on a run — and it is the only gate that can raise a typed,
+renderable `CiCreditsExhaustedError`. The repo pause is what makes that refusal true.
+
+**The four non-dispatch spend paths, each closed by name:**
+
+| Path                                                                              | What the pause does to it                                                                                                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 · The admin collaborator's own push** (MOTIR-1900)                            | The push still lands — access is untouched, which is the point — but **no workflow runs**. Motir stops the compute without touching the user's access to their code. |
+| **2 · Fix-up commits on an already-dispatched branch**                            | Same. The claim gate is consulted once; the repo gate is consulted by GitHub on every trigger.                                                                       |
+| **3 · `implementationSource: manual`** (MOTIR-1775 correction #2)                 | Hand-executed work never claims, so the dispatch gate never sees it. The repo gate is the only one it meets — and it meets it.                                       |
+| **4 · Repo-resident triggers** — `push: main`, schedules, Dependabot, a UI re-run | All are workflow triggers on the repository, and all are covered by _"no workflows run in your repository."_                                                         |
+
+**The grace-window argument, answered rather than dismissed.** Pausing a repository IS a
+heavier act than refusing a queue, and a user mid-debug losing CI is a real cost. But a
+grace window of extra funded minutes is **"run it and go negative", time-boxed** — the thing
+§6.2 rejected — and it would be reinvented under a friendlier name. **Decision: no grace
+minutes; the warning moves EARLIER instead.** `drawing_on_credits` (§6.1) already exists,
+already means "you are now paying per minute", and is already visible on the panel — that is
+where the §D surface appears **before** the damage, and no fourth state is introduced to
+carry it. A user who reaches balance ≤ 0 has passed a state that told them, on the surface
+they pay from, that they were spending.
+
+##### §B — The RESUME trigger, and its stated latency
+
+- **Primary — an event.** The credit ledger's transition to `balance > 0` (a top-up, or a
+  plan renewal crediting the allotment) enqueues a resume. Same posture as the pause (§F):
+  after the local commit, degrading gracefully.
+- **Secondary — the calendar-month reset.** At the §4.5 boundary the pool refills, so every
+  org paused for pool-exhaustion-with-no-balance resumes.
+- **Backstop — the same convergent sweep that re-asserts the pause** (§F) also re-asserts
+  the resume, on a schedule. **Interval: 15 minutes.**
+- **Worst case, stated: 15 minutes from payment to CI working**, and typically under one
+  (the event path). **This number goes in the copy, not in the implementer's head** — §D
+  requires the Add-credits option to say it.
+- **Read-time repair is rejected.** The paused state is the state a user pays money to
+  leave; a repair that only runs when somebody happens to load a page leaves it stuck for
+  exactly the user who paid and then closed the tab.
+
+##### §C — WHICH repositories are paused
+
+**Exhaustion is an ORG fact (§4.1: one pool, one balance, per org), so the pause fans out
+across the org** — every Motir-owned repository row of every project in every workspace of
+that organization. **Not** only the repos that consumed: the balance is shared, so a
+per-project scope would let a second project go on spending the balance the first one
+exhausted.
+
+**The selector is the repository's OWNER LOGIN — `owner == GITHUB_FALLBACK_ORG` — read the
+same way §5.1 gates the meter, never `Project.repoSetOwnership`.** §5.1's reasoning applies
+unchanged: the column is SET-level so it cannot express a mixed set, and it drifts on any
+path that moves a repo, while the owner login is the billing fact itself. Using the same
+predicate for the meter and the pause also means the set Motir pauses is exactly the set
+Motir pays for — the two can never disagree.
+
+**A `connect-existing` row is OUT of the pause's scope, always, and for three reasons that
+each suffice.** (1) The user owns it and GitHub bills them, so §5.4 already excludes it from
+metering — pausing a repo Motir never paid for would punish a user for a bill they are
+already covering. (2) It is outside what the ownership decision grants: MOTIR-1893 makes
+Motir-owned a hosting arrangement, not authority over the user's own account. (3) It would
+not work anyway — the provisioning App's `Administration: write` is on **Motir's org**, so
+the call has no permission against a repository in the user's account.
+
+##### §D — What the user sees (the shape is Yue's, 2026-07-30; the details are decided here)
+
+> **"The UI should show the user the options to add credits or take over the repo if the
+> user is an admin; show an alert message to a non-admin user."**
+
+**Where it appears — ONE decision surface, N pointers.** The full two-option state renders
+in exactly one place: the **billing panel's "Motir CI" line** (§7.1). The establish surface's
+repo rows and any refused dispatch show a **short paused state plus a link to that line** —
+never a second copy of the decision. A decision screen duplicated across three surfaces is
+three surfaces to keep in sync and three chances to diverge; the shipped AI paywall already
+works this way.
+
+**Admin (`AiAccessDTO.canManageBilling === true`) — two options, equal weight, no default.**
+Neither renders as the `primary` variant; both are peers, each with its consequence stated
+under it, because one keeps the hosted arrangement and one ends it and dressing either as
+_the_ answer is Motir's thumb on the scale.
+
+| Option                                       | What it says                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Add credits**                              | The shipped top-up path. The copy **states §B's latency explicitly** — CI resumes within a minute of the payment landing, at most 15 — rather than implying it is instant.                                                                                                                                                                                                                                             |
+| **Move the repositories to your own GitHub** | MOTIR-711, framed honestly as _GitHub bills you for Actions directly from then on, and Motir stops charging CI credits_ — the standing ownership promise being exercised, not a punishment. The copy states its **real costs**: a GitHub account you own, an **asynchronous transfer you must accept on GitHub**, and a **re-install of the Motir App** on the new owner so dispatch keeps working. Never "one click". |
+
+**⚠️ "An admin with no GitHub identity" is the DEFAULT case, not a degradation — the card's
+premise is corrected here.** Verified against shipped code: motir-core's only social provider
+is **Google** (`lib/auth/index.ts` `socialProviders`), and no table links a **user** to a
+GitHub account — the only GitHub identity anywhere is the workspace-level
+`GithubInstallation` (`accountLogin` / `accountType`), which exists only for
+connect-existing. So **no admin has a stored GitHub identity today.** Consequences, binding
+on MOTIR-1902/1903 and MOTIR-711:
+
+- The takeover option is **never hidden, never disabled, and never gated on a stored
+  identity** — gating it on one would hide it from every user.
+- **MOTIR-711 owns collecting the destination** inside its own flow (which account or org
+  receives the transfer, and the GitHub-side acceptance). The billing panel's job is to
+  offer the choice and state its costs, not to resolve an identity it does not have.
+
+**Member (`canManageBilling === false`) — an alert, never a dead control.** It mirrors the
+shipped AI-paywall member variant in shape and register (`messages/en.json` →
+`"askOwner": "Ask an owner to upgrade"`): what happened, that CI is paused, and **who can
+fix it**.
+
+- **It routes; it does not name.** Decided: the alert says "an organization owner", not a
+  list of people. Naming owners leaks org membership to a member who may not be entitled to
+  see it, and the shipped paywall already routes without naming — consistency beats the
+  marginal convenience of a name.
+- **Never render a disabled "Add credits" button.** A control a user cannot use is worse
+  than a sentence explaining why.
+
+**Two binding constraints on the cards this gates:**
+
+- **MOTIR-1902 — it is a DECISION screen, so it is measured against real laptop viewports**:
+  both options and both consequence lines visible **without scrolling**, not just "designed".
+- **MOTIR-1903 — every new string is a new `en.json` key with a matching `zh.json` key**, or
+  the i18n-catalog parity gate fails the PR.
+
+##### §E — Motir's OWN org-level budget: a tripwire, never a valve
+
+**Verified from GitHub's budgets documentation, 2026-07-30:** a budget can be scoped to _"the
+whole organization or a single repository within the organization"_; GitHub notifies at
+_"75%, 90%, or 100% of a defined budget"_; and _stop usage when budget limit is reached_ is
+an **option** — without it, _"you will be notified by email if you exceed your budget, but
+usage **will not** be stopped."_ Separately, GitHub emails _"when your included GitHub
+Actions usage reaches 90% and 100% during a billing period."_
+
+**The decision: ONE org-wide Actions budget on `motir-projects`, with `stop usage` OFF.**
+
+- **`stop usage` must stay OFF, and this is the load-bearing part.** Turning it on would make
+  **GitHub** perform precisely the org-wide, cross-tenant shutdown that must never be the
+  tenant gate: every customer's CI dies at once because one org overspent. Worse, it is
+  **invisible to the meter** — MOTIR-1896 accumulates from `workflow_run` **completions**, so
+  a run GitHub never starts emits nothing, consumption reads as zero, and the billing panel
+  goes on saying everything is fine. The tenant gate is §A/§C. **The budget is a tripwire,
+  not a valve.**
+- **The number: $500 / month, initially.** Sized from this ADR's own model rather than
+  guessed: an org at full drain costs `max(members × 300, 1000) × $0.006`, i.e. **$6.00** for
+  a solo org at the floor and **$10.80** for a 6-seat org. $500 is ~83,000 Linux-equivalent
+  minutes — roughly **46 fully-drained 6-seat orgs**, or ~2,100 merged dispatches at
+  §Context's ~39 minutes. At present scale (the dogfood org) that is ~50× headroom, so it
+  cannot bind in normal operation, while still capping a runaway at a survivable number.
+- **Alerts at 75% / 90% / 100%**, to a **monitored address**. MOTIR-1908 records the actual
+  recipients as **named individuals** — an alert going to an unread address is not an alert.
+- **Revisit trigger, named so it is recognisable:** monthly org spend crossing **40% of the
+  budget in two consecutive months** → raise it, in the same pass that re-derives §1's 300
+  from the meter's first real numbers (§1.4).
+- **The org-wide limit may NEVER be used as the per-tenant gate**, for the shared-fate reason
+  above. Recorded here so it cannot be reintroduced as a shortcut.
+
+**What the product does if it binds anyway.** Nothing automatic, deliberately. Binding
+requires ignoring three escalating alerts against a limit sized ~50× over current exposure,
+so it is an **ops event, not a product state** — and building a product state for it would
+mean inventing a UI for a condition that has never occurred. **A polling alarm on
+`GET /organizations/{org}/settings/billing/usage` (§5.8) is therefore a decided NO, not a
+deferral**, on the same reasoning §"deliberately NOT decided" gives for a dispatch rate
+limiter: no observed problem, no consumer. MOTIR-1908 records the manual read path so
+headroom is checkable without waiting for an alert, and confirms **from observation** what
+binding actually does.
+
+##### §F — Idempotency and failure posture of the pause
+
+- **The paused state is STORED per row, not re-derived.** The pause is a fact about a
+  **remote** system; deriving it from the balance would let the DB believe "should be paused"
+  while GitHub still has Actions enabled, with nothing reconciling the two. Store the
+  intent; converge to it. (MOTIR-1907 picks the column shape.)
+- **A convergent sweep re-asserts intent** — the same 15-minute sweep as §B. N repositories
+  means N independent calls with **no transaction over them**, so partial failure is the
+  normal case, not the exception: a run where half the calls fail must leave the intent
+  recorded and let the next sweep finish the job.
+- **Idempotent in both directions.** `PUT …/actions/permissions` is a set-state call
+  returning `204`, so re-pausing a paused repo and re-enabling an enabled one are **no-ops,
+  not errors**.
+- **It runs AFTER the local commit and degrades gracefully** (log + enqueue a retry) — the
+  shipped side-effects-outside-tx rule this record already states in §8.6. A GitHub outage
+  **never** rolls back the metering write and **never** fails the request.
+- **`isMeta` and `MOTIR_CLOUD=false` bypass it entirely — no call is made**, exactly as §4.4
+  and §8.5 bypass the meter and the pool. moooon B.V. pays its own GitHub bill; a self-hoster
+  has no Motir-owned repositories at all.
+- **One honest unknown, named rather than assumed.** GitHub documents that _"no workflows
+  run in your repository"_ after a disable, but does **not** document what happens to a run
+  already **queued or in progress** at that moment. **MOTIR-1907 must measure it and record
+  the answer**; §H's bound is stated the conservative way so that it holds either way.
+
+##### §G — A repo transferred while the org is exhausted
+
+**Rule: the transfer RESUMES Actions on the repository, unconditionally — even while the org
+is still exhausted.** Once GitHub bills the user, Motir has no reason to hold their CI off,
+and §5.4 already stops metering at the transfer. A repo arriving at its new owner with
+Actions dead would be the worst possible first impression of _"it's yours"_.
+
+**Ordering is part of the rule, because getting it backwards is a latent bug: re-enable
+BEFORE the transfer.** While the repository is still in Motir's org the provisioning App
+holds `Administration: write` on it; after the transfer it sits in the user's account and
+that credential no longer reaches it. Binding on MOTIR-711.
+
+**And the corollary falls out of §C for free:** a transferred repo's owner login is no longer
+`GITHUB_FALLBACK_ORG`, so it leaves the pause fan-out automatically — the same property that
+makes §5.5's metering stop at the transfer.
+
+##### §H — §6.4's overshoot bound, corrected
+
+The old bound — _"the cost of runs already in flight (~39 minutes each)"_ — held only under
+the dispatch-only gate's own false premise. **With a dispatch-only gate the overshoot is not
+bounded at all**, because paths 1–4 keep billing after the refusal. **The corrected bound,
+stated against the pause:**
+
+```
+overshoot  ≤  (runs triggered between balance ≤ 0 and the pause converging on that repo)
+            + (runs already in flight when the pause lands)
+```
+
+- The **first term** is bounded by §B's convergence: sub-minute on the event path, **≤ 15
+  minutes** if the event is dropped and the sweep is what catches it.
+- The **second term** is bounded by concurrent in-flight runs at ~39 Linux-equivalent
+  minutes each — and is stated **conservatively**, assuming a disable does **not** cancel an
+  in-progress run, because §F records that GitHub does not document either way. If
+  MOTIR-1907's measurement shows queued runs are cancelled, the real bound is smaller than
+  this one; it will never be larger.
+
+Unchanged from §6.4: the invariant is a **refusal**, not a non-negative balance, and the
+overshoot is recorded honestly in the ledger rather than clamped at zero.
+
+##### §I — Sources for this amendment (read 2026-07-30)
+
+- **Permissions required for GitHub Apps** — the table that pins every endpoint below to a
+  permission and to installation-token availability:
+  <https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps>
+  - `PUT /repos/{owner}/{repo}/actions/permissions` → **Repository permissions for
+    `"Administration"`**, `write`, UAT + **IAT**.
+  - `GET /repos/{owner}/{repo}/actions/permissions` → same heading, `read`, UAT + IAT.
+  - `PUT /orgs/{org}/actions/permissions` → **Organization permissions for
+    `"Administration"`**, `write` — the different permission §A rejects.
+  - `POST /orgs/{org}/repos` and `PUT /repos/{owner}/{repo}/collaborators/{username}` →
+    **Repository permissions for `"Administration"`**, `write` — the grant MOTIR-1779 already
+    provisions, which is why §A costs nothing.
+- **Actions permissions endpoints** (body fields `enabled` / `allowed_actions` /
+  `sha_pinning_required`; `204 No Content`): <https://docs.github.com/en/rest/actions/permissions>
+- **Managing GitHub Actions settings for a repository** — _"When you disable GitHub Actions,
+  no workflows run in your repository."_:
+  <https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository>
+- **GitHub budgets** — scope (_"the whole organization or a single repository within the
+  organization"_), the 75/90/100% alerts, and _"you will be notified by email if you exceed
+  your budget, but usage will not be stopped"_ without _stop usage_:
+  <https://docs.github.com/en/billing/tutorials/set-up-budgets>
+- **GitHub Actions billing** — _"If your account does not have a valid payment method on
+  file, usage is blocked once you use up your quota"_, plus the 90%/100% included-usage
+  emails: <https://docs.github.com/en/billing/concepts/product-billing/github-actions>
+- **GitLab compute quota** — the mirror that also gates the compute:
+  <https://docs.gitlab.com/ci/pipelines/compute_minutes/>
+- **Shipped motir-core, read at `02e7ba96`:** `lib/dto/aiAccess.ts` (`canManageBilling`),
+  `lib/services/billingService.ts` (`isOrgOwnerRole`), `messages/en.json`
+  (`"askOwner": "Ask an owner to upgrade"` — the member variant §D mirrors),
+  `lib/auth/index.ts` (`socialProviders` — **Google only**, the fact behind §D's correction),
+  `lib/github/appAuth.ts` (`mintInstallationToken`), `design/billing/design-notes.md`.
 
 ### §7 — The user sees a THIRD line on the billing panel: "Motir CI"
 
@@ -478,9 +803,23 @@ This is the non-duplication rule `design/billing/design-notes.md` already sets b
    differs from the seat line's renewal date and the panel must not imply they coincide.
 4. **`drawing_on_credits`** — "420 minutes over your included minutes · 420 credits drawn
    this period", linking to the AI balance.
-5. **`ci_credits_exhausted`** — "Dispatch paused — out of credits", using the owner/member
+5. **`ci_credits_exhausted`** — ~~"Dispatch paused — out of credits", using the owner/member
    split the shipped AI paywall already uses (`AiAccessDTO.canManageBilling`: an owner gets
-   "Top up"; a member gets the routed-to-an-owner variant).
+   "Top up"; a member gets the routed-to-an-owner variant).~~ **SUPERSEDED 2026-07-30
+   (MOTIR-1906).** The old line is wrong on two counts: it names the wrong effect (what is
+   paused is **CI**, not only dispatch — §6.5), and it offers the admin **one** option where
+   Yue's directive fixes **two**. **Rewritten:**
+
+   **The state is "CI is paused", and it is a two-option DECISION for whoever can act and an
+   ALERT for whoever cannot.** The full specification — the two admin options with their real
+   costs, the §B resume latency the copy must state, the member alert that routes without
+   naming, why no "Add credits" button is ever rendered disabled, why the takeover is never
+   gated on a stored GitHub identity (no admin has one today), the one-decision-surface /
+   N-pointers rule, and the viewport + i18n constraints on MOTIR-1902 / MOTIR-1903 — is
+   **§D of the 2026-07-30 amendment above**, which MOTIR-1902 draws and MOTIR-1903 builds
+   from. It keeps the shipped owner/member split (`AiAccessDTO.canManageBilling`) the old
+   line already named.
+
 6. **The zero-consumption case is not an empty state** — an org whose repos are all
    user-owned (§Context) has a pool it will never draw on. The line says so plainly rather
    than showing "0 of 1,000" as if something were wrong.
@@ -605,7 +944,25 @@ none of them needs a further question:
   not a planning turn. Nothing else about the ledger changes.
 - **MOTIR-1902 → MOTIR-1903 (the billing panel).** A third line, "Motir CI" (§7.1), with
   the seven items of §7.3 — including the two states named in §6 and the deliberate
-  reset-date mismatch §4.5 creates.
+  reset-date mismatch §4.5 creates. **Item 5 is the amendment's §D**, not §7.3's original
+  line: a two-option decision for an admin, an alert for a member, measured against a real
+  laptop viewport, with `zh.json` parity on every new string.
+- **MOTIR-1907 (motir-core, the repo-side pause) — added by the 2026-07-30 amendment.**
+  `PUT /repos/{o}/{r}/actions/permissions` over the org's Motir-owned rows only (§A, §C),
+  authenticated with the provisioning App's existing `Administration: write` and adding **no
+  new permission**. Store the intent per row and re-assert it with a 15-minute convergent
+  sweep; resume on the ledger's balance-positive event with that sweep as the backstop (§B).
+  After the local commit, degrading gracefully; idempotent both ways; `isMeta` and
+  `MOTIR_CLOUD=false` bypassed (§F). It must also **measure** what a disable does to a run
+  already queued or in progress and record it (§F).
+- **MOTIR-1908 (manual, the org budget) — added by the 2026-07-30 amendment.** One org-wide
+  Actions budget on `motir-projects` at **$500/month with `stop usage` OFF**, alerts at
+  **75 / 90 / 100%** to named recipients (§E). Record the value, the date, the recipients, and
+  what binding does from observation — and that this limit is **never** the per-tenant gate.
+- **MOTIR-711 (the takeover) — constrained by the amendment.** Re-enable Actions on each
+  repository **before** the transfer, while the provisioning credential still reaches it
+  (§G), and own the collection of the transfer destination, since motir-core stores no
+  per-user GitHub identity (§D).
 
 **Two corrections this ADR makes to its own card, recorded so they are not re-derived:**
 
@@ -640,7 +997,10 @@ landed between the initial read and the write. Re-fetch before trusting a §-ref
   bound burst. Nothing today needs it, and inventing a limiter with no observed problem
   would be work with no consumer.
 
-**Related planning bug.** MOTIR-1904 records that this card's earlier revision promised its
+**Related planning bugs.** MOTIR-1904 records that this card's earlier revision promised its
 implementers "no further questions" while its "what the user sees" answer had no owning
 surface — the gap MOTIR-1902/1903 now close, and which §7 is written to specification level
-because of.
+because of. **MOTIR-1909** records the larger one the 2026-07-30 amendment corrects: this
+record REJECTED "run it and go negative" in §6.2 and then placed the refusal on the
+**dispatch** path, which is not the path that spends the money — a mechanism the reasoning
+assumed existed rather than a hole in the reasoning.
