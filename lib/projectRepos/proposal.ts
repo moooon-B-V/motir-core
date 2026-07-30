@@ -1,4 +1,4 @@
-import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
+import type { ProjectRepoProposalSignalDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import {
   PROJECT_REPO_ROLES,
   SEED_SOURCE_PLATFORM_STARTER,
@@ -29,20 +29,25 @@ import {
  * order. Machine-readable on purpose: the establish-step UI (MOTIR-1782) maps it
  * to its own copy rather than rendering {@link ProposedRepoRow.reason}, which is
  * an English fallback for logs and PR/debug output, not a localized string.
+ *
+ * The derivation's name for {@link ProjectRepoProposalSignalDto} — the SAME type,
+ * not a parallel one, since MOTIR-1892 made the signal a persisted column and
+ * therefore part of the wire shape. The ladder's per-rung documentation and its
+ * runtime list live with the DTO and `lib/projectRepos/vocabulary.ts`
+ * respectively; this alias keeps the derivation reading in its own vocabulary
+ * without admitting a second spelling of the same three values.
+ *
+ *   * `plan-item-role` — §0.1.1, a repo ROLE pinned on the generated tree. The
+ *     primary signal: the plan is the only artifact that describes what is
+ *     actually being built, and it is what makes a frontend/backend split produce
+ *     two rows with nobody asked a question. Reaches this module through
+ *     {@link RepoSetSignals.itemRoles}; see its doc for who fills it.
+ *   * `preplan-platform` — §0.1.2, the pre-plan session's `platform`, which fixes
+ *     the PRIMARY row's role when the tree carries no roles.
+ *   * `default-web` — §0.1.4, the thin-signal default: exactly one `web` row,
+ *     because that is what the one default platform starter is.
  */
-export type RepoProposalSignal =
-  /** §0.1.1 — a repo ROLE pinned on the generated tree. The primary signal: the
-   *  plan is the only artifact that describes what is actually being built, and
-   *  it is what makes a frontend/backend split produce two rows with nobody
-   *  asked a question. Reaches this module through
-   *  {@link RepoSetSignals.itemRoles}; see its doc for who fills it. */
-  | 'plan-item-role'
-  /** §0.1.2 — the pre-plan session's `platform`, which fixes the PRIMARY row's
-   *  role when the tree carries no roles. */
-  | 'preplan-platform'
-  /** §0.1.4 — the thin-signal default: exactly one `web` row, because that is
-   *  what the one default platform starter is. */
-  | 'default-web';
+export type RepoProposalSignal = ProjectRepoProposalSignalDto;
 
 /**
  * The signals a repo-set proposal may be derived from (ADR §0.1), gathered by

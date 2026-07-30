@@ -4158,6 +4158,31 @@ model ProjectRepo {
   /// inferred (revoked token, not an org admin, name collision, template policy,
   /// rate limit). Null in every other state; cleared on a retry.
   failureReason String?          @map("failure_reason")
+  /// WHY Motir proposed this row — the ADR §0.1 rung the derivation climbed to
+  /// (MOTIR-1892), so the establish step can show what was inferred on a LATER
+  /// page load and a wrong proposal is arguable rather than mysterious. Without
+  /// it the reasoning existed only in the proposal run's own return value, and
+  /// the proposer runs ONCE (it refuses to touch a set that already has rows).
+  ///
+  /// NULLABLE, and null is the honest answer in two cases that need no backfill:
+  /// a row the USER added (there is no Motir inference to explain) and every row
+  /// written before this column existed. It also SURVIVES a user's edit — the
+  /// signal records what Motir inferred at proposal time, and a rename does not
+  /// rewrite that history.
+  ///
+  /// A STRING, not an enum, for the same reason `seedSource` is one: §0.1 is a
+  /// LADDER that gains rungs, each new rung already needs a derivation branch and
+  /// UI copy, so an enum would add a migration to a change that is a code change
+  /// anyway — and a second place to drift. The signal drives NO behaviour (unlike
+  /// `role`, which selects the seed source and resolves repo pins); it is
+  /// explanatory metadata. The closed union `ProjectRepoProposalSignalDto` +
+  /// `PROJECT_REPO_PROPOSAL_SIGNALS` + the set service's validation are what keep
+  /// the column from holding a rung the ADR does not name.
+  ///
+  /// Only the machine-readable SIGNAL is stored, never the derivation's English
+  /// `reason`: that gloss is a log/PR fallback and is not a localized string, so
+  /// persisting it would put untranslated prose on a rendered surface.
+  proposalSignal String?         @map("proposal_signal")
   /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.

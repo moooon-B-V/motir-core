@@ -2,6 +2,7 @@ import type { GithubRepo, Project, ProjectRepo } from '@prisma/client';
 import type {
   ProjectRepoDto,
   ProjectRepoOwnershipDto,
+  ProjectRepoProposalSignalDto,
   ProjectRepoRoleDto,
   ProjectRepoSetDto,
   ProjectRepoStateDto,
@@ -40,6 +41,11 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     seedSource: row.seedSource,
     state: row.state as ProjectRepoStateDto,
     failureReason: row.failureReason,
+    // Narrowed, not validated: the set service rejects any value outside ADR
+    // §0.1's ladder at the only writer, so a row that reaches here carries a
+    // signal the UI can map to copy — or null, which is the honest answer for a
+    // user-added row and for every row written before MOTIR-1892.
+    proposalSignal: row.proposalSignal as ProjectRepoProposalSignalDto | null,
     realizedRepo: row.githubRepo ? toRealizedDto(row.githubRepo) : null,
     // BOTH halves, deliberately: a settled state whose mirror row has since been
     // deleted is NOT established (the repository no longer exists), even though

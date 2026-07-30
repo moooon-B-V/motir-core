@@ -13,6 +13,7 @@ import { projectRepoProposalService } from '@/lib/services/projectRepoProposalSe
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { ProjectRepoNameTakenError } from '@/lib/projectRepos/errors';
 import {
+  PROJECT_REPO_PROPOSAL_SIGNALS,
   SEED_SOURCE_INITIALISED,
   SEED_SOURCE_PLATFORM_STARTER,
 } from '@/lib/projectRepos/vocabulary';
@@ -126,6 +127,58 @@ describe('projectRepoProposalService.proposeRepositorySet — deriving + persist
     expect(result.rows[0]!.reason.length).toBeGreaterThan(0);
     // The persisted rows come back too, so a caller need not re-read the set.
     expect(result.created.map((r) => r.id)).toEqual((await readSet(fx)).map((r) => r.id));
+  });
+
+  it('PERSISTS why each row is there, so a LATER page load can still show it (MOTIR-1892)', async () => {
+    // The proposer runs exactly once — it refuses to touch a set that already has
+    // rows — so a signal that lived only in the result above would be gone by the
+    // time the establish step renders the set. Read it back from the DATABASE.
+    const fx = await makeWorkItemFixture();
+
+    const result = await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+    if (!result.proposed) throw new Error('unreachable');
+
+    const rows = await readSet(fx);
+    expect(rows.map((r) => r.proposalSignal)).toEqual(['default-web']);
+    // The row the caller was handed and the row on a later read say the SAME
+    // thing — a divergence here would mean the write dropped it.
+    expect(result.created.map((r) => r.proposalSignal)).toEqual(rows.map((r) => r.proposalSignal));
+    // Every persisted signal is one the ADR names, and it matches the rung the
+    // derivation reported.
+    for (const [i, row] of rows.entries()) {
+      expect(PROJECT_REPO_PROPOSAL_SIGNALS).toContain(row.proposalSignal!);
+      expect(row.proposalSignal).toBe(result.rows[i]!.signal);
+    }
+    // Only the machine-readable signal is stored: the English gloss is a log /
+    // PR-output fallback, not a localized string, so it must not reach a column a
+    // UI renders.
+    expect(JSON.stringify(rows)).not.toContain(result.rows[0]!.reason);
+  });
+
+  it('persists the PLATFORM rung when the pre-plan session names one', async () => {
+    const fx = await makeWorkItemFixture();
+    vi.mocked(getPreplanState).mockResolvedValue(preplanWith({ platform: 'mobile' }));
+
+    await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+
+    const rows = await readSet(fx);
+    expect(rows.map((r) => [r.role, r.proposalSignal])).toEqual([['mobile', 'preplan-platform']]);
+  });
+
+  it('persists the PLAN-ROLE rung on every row of a multi-repo set', async () => {
+    // The primary signal (§0.1.1), and the case that makes the column earn its
+    // keep: a two-row set the user did not ask for needs to say what split it.
+    const fx = await makeWorkItemFixture();
+
+    await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx, {
+      itemRoles: ['web', 'api'],
+    });
+
+    const rows = await readSet(fx);
+    expect(rows.map((r) => [r.role, r.proposalSignal])).toEqual([
+      ['web', 'plan-item-role'],
+      ['api', 'plan-item-role'],
+    ]);
   });
 
   it('reads the PLATFORM signal from the pre-plan session (§0.1.2)', async () => {
