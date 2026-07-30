@@ -23,6 +23,7 @@ import {
   type CiFeedbackResult,
 } from './changeRequestCiFeedback';
 import { ciMinutesMeterService, type MeterWorkflowRunOutcome } from './ciMinutesMeterService';
+import { ciAllowanceService } from './ciAllowanceService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -273,6 +274,34 @@ export const githubWebhookService = {
 
     try {
       const result = await ciMinutesMeterService.meterWorkflowRun(run, installationId);
+
+      // MOTIR-1901 — the ENTITLEMENT half. The metering write has committed, so
+      // now decide how many of those minutes were free and charge the rest
+      // (`ci-minutes-allowance.md` §4.6: charge INCREMENTALLY at the metering
+      // event, against the pool as it stood then, never by re-summing the
+      // period). Only a freshly `metered` run reaches it: a `duplicate` was
+      // counted once already and every other outcome added no consumption, so
+      // the charger has nothing to account for.
+      //
+      // Best-effort, exactly like the metering call it follows: a charge failure
+      // must not fail the delivery. The consumption row is durable either way,
+      // and the charger's own watermark means the NEXT metered run for this org
+      // accounts for whatever this attempt missed — nothing is lost by acking.
+      if (result.outcome === 'metered') {
+        try {
+          await ciAllowanceService.chargeForMeteredRun({
+            organizationId: result.organizationId,
+            periodStart: result.periodStart,
+          });
+        } catch (err) {
+          console.error('[githubWebhookService] CI-overage charge failed; delivery acked', {
+            runId: run.runId,
+            organizationId: result.organizationId,
+            error: err instanceof Error ? err.message : 'unknown',
+          });
+        }
+      }
+
       return { event: 'workflow_run', outcome: result.outcome };
     } catch (err) {
       console.error('[githubWebhookService] CI-minutes metering failed; delivery acked', {

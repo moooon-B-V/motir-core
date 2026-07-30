@@ -509,6 +509,12 @@ model Organization {
   // meaningless without the org.
   ciWorkflowRunUsages CiWorkflowRunUsage[]
   ciPeriodUsages      CiPeriodUsage[]
+  // What that consumption has been CHARGED (Story MOTIR-1775 · MOTIR-1901) — one
+  // row per org per period. Org-scoped rather than workspace-scoped, unlike the
+  // two metering tables above, because the POOL and the credit ledger are both
+  // org-level (§4.1) and a charge spanning an org's workspaces has no single
+  // workspace to belong to.
+  ciPeriodCharges     CiPeriodCharge[]
 
   @@map("organization")
 }
@@ -4402,6 +4408,67 @@ model CiPeriodUsage {
   /// The org's "used this period" read (§Consequences, MOTIR-1901's one input).
   @@index([organizationId, periodStart])
   @@map("ci_period_usage")
+}
+
+/// What an org's CI consumption has been CHARGED in a period (Story MOTIR-1775 ·
+/// MOTIR-1901) — the ENTITLEMENT half's only durable state, and the row every
+/// charge locks `FOR UPDATE` before deciding anything.
+///
+/// ORG-scoped, not workspace-scoped (deliberately unlike `CiPeriodUsage`): the
+/// pool is org-level (§4.1) and the credit ledger is one balance per org, so a
+/// charge that spans an org's workspaces has no single workspace to belong to.
+/// Its RLS policy therefore gates on `app.organization_id` (plus the
+/// `app.system_admin` escape the webhook-driven charger needs), not on
+/// `app.workspace_id`.
+///
+/// The three counters are NOT redundant, and conflating them re-introduces the
+/// exact bugs §4.6 forbids — see `computeIncrementalCharge` for the full
+/// reasoning:
+///   * `accountedMinutes` — the WATERMARK: consumption already weighed against
+///     the pool. Charging is incremental against this, which is what stops a
+///     mid-period seat REMOVAL (a smaller pool) from back-billing minutes that
+///     were free when they ran.
+///   * `chargedMinutes` — of those, how many fell beyond the pool. Fractional, so
+///     the sub-credit remainder carries instead of being rounded away each event.
+///   * `chargedCredits` / `debitedCredits` — whole credits BOOKED locally vs.
+///     CONFIRMED by motir-ai's ledger. They differ exactly while a cross-boundary
+///     debit is outstanding (§8.6 makes it a post-commit side effect that may
+///     fail), and the gap is what lets the next metering event retry it.
+model CiPeriodCharge {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+
+  /// Midnight UTC on the 1st of the calendar month (§4.5) — the same key the
+  /// meter's period rows use, computed by the same `periodStartFor`.
+  periodStart DateTime @map("period_start")
+
+  /// Consumption already weighed against the pool (the watermark).
+  accountedMinutes Decimal @default(0) @map("accounted_minutes") @db.Decimal(14, 2)
+  /// Of the accounted minutes, those beyond the pool (fractional carry included).
+  chargedMinutes   Decimal @default(0) @map("charged_minutes") @db.Decimal(14, 2)
+  /// Whole credits booked locally for this period's overage.
+  chargedCredits   Int     @default(0) @map("charged_credits")
+  /// Whole credits motir-ai's ledger has CONFIRMED. Never exceeds `chargedCredits`.
+  debitedCredits   Int     @default(0) @map("debited_credits")
+
+  /// The idempotency key of a debit that was attempted but not confirmed, and the
+  /// credits it carried. At most one is outstanding at a time: the next charge
+  /// event RETRIES this exact ref first (motir-ai is idempotent on it and reports
+  /// `idempotent: true` when it had in fact landed), which is the only way to
+  /// resolve a timed-out debit without risking a double charge. A new debit is
+  /// never issued while one is pending — the outstanding delta is simply carried
+  /// by `chargedCredits - debitedCredits` until the pending one clears.
+  pendingDebitRef     String? @map("pending_debit_ref")
+  pendingDebitCredits Int     @default(0) @map("pending_debit_credits")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// One charge row per org per period — the lock target and the upsert key.
+  @@unique([organizationId, periodStart])
+  @@map("ci_period_charge")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).

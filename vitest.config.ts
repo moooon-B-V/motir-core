@@ -384,6 +384,14 @@ export default defineConfig({
         'lib/repositories/ciWorkflowRunUsageRepository.ts',
         'lib/repositories/ciPeriodUsageRepository.ts',
         'lib/jobs/definitions/ciMinutesReconcile.ts',
+        // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes ENTITLEMENT (the
+        // charging half of the same decision). Gated for the reason the meter's
+        // comment above anticipates: these modules DECIDE what to bill and when
+        // to refuse a dispatch, so an untested branch here is a wrong charge or a
+        // wrongly-blocked customer.
+        'lib/ciMetering/allowance.ts',
+        'lib/services/ciAllowanceService.ts',
+        'lib/repositories/ciPeriodChargeRepository.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -408,6 +416,10 @@ export default defineConfig({
         },
         'lib/repositories/ciPeriodUsageRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/ciMinutesReconcile.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes entitlement.
+        'lib/ciMetering/allowance.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciAllowanceService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/ciPeriodChargeRepository.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 5.7 · Subtask 5.7.6 — notification-preference channel gate.
         'lib/services/notificationPreferencesService.ts': {
           branches: 90,

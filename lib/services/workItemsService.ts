@@ -157,6 +157,7 @@ import {
   resolveAuthoredTargetRepoInProject,
   resolveItemDispatchRepo,
 } from '@/lib/workItems/dispatchRepo';
+import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -3630,6 +3631,14 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    // The CI-credit gate (MOTIR-1901 · `ci-minutes-allowance.md` §6.2–6.3). It
+    // sits HERE, in the service, rather than in the route, because there are
+    // three dispatch entry points (`POST /api/ready/next`, the `next_ready` MCP
+    // tool, and `claimNextReady` below) and a gate on one of them is a gate a
+    // caller can walk around. Throws `CiCreditsExhaustedError` only at balance
+    // ≤ 0 past the pool; every other state — including motir-ai being
+    // unreachable — proceeds.
+    await ciAllowanceService.assertDispatchAllowed(ctx);
     const exclude = new Set(filter.excludeIds ?? []);
     const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter);
     const chosen = all.find((r) => !exclude.has(r.id));
@@ -3662,6 +3671,11 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    // The CI-credit gate, checked BEFORE the claim (§6.3 — the refusal fails
+    // before the user waits on a run). Deliberately ahead of the claim
+    // transaction, not inside it: a refusal must not consume a candidate, and
+    // flipping an item to `in_progress` and then refusing would strand it.
+    await ciAllowanceService.assertDispatchAllowed(ctx);
     // The project's ready leaves in dispatch rank order (priority encodes the
     // in-sprint leverage `motir plan sprint` re-ranks to — so this rank IS
     // "most-unblocking first"). When an active `sprintId` is given, scope to it

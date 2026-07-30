@@ -348,6 +348,47 @@ export interface RawUsageResponse {
   recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
 }
 
+// POST /v1/credits/ci-overage (MOTIR-1899 · motir-ai `docs/contract.md` §2.4) —
+// charge an org's ledger for CI-minutes OVERAGE, the ledger's first NON-AI debit
+// source.
+//
+// The whole minutes side stays in motir-core (`docs/decisions/ci-minutes-allowance.md`
+// §8.1, because the pool derives from org MEMBERSHIP, which only motir-core
+// holds): motir-ai never learns what a minute is, and receives WHOLE CREDITS
+// already converted at §2's rate.
+export interface CiOverageDebitInput {
+  coreOrganizationId: string;
+  /** Whole credits of overage (integer ≥ 1), already converted. */
+  credits: number;
+  /**
+   * The caller's own token for the metering state that produced this charge — the
+   * IDEMPOTENCY key. motir-ai stores it namespaced (`ci_overage:<token>`) on a
+   * globally-unique column, so a redelivered report debits exactly once and a
+   * future non-AI source cannot collide. It is deliberately NOT a
+   * `planningTurnId`: that hook is AI-turn-shaped and a CI charge has no turn.
+   */
+  externalRef: string;
+  /** Optional free text recorded with the transaction. */
+  reason?: string;
+}
+
+export interface RawCiOverageDebitResponse {
+  transactionId: string;
+  aiOrganizationId: string;
+  /** Signed, as stored on the ledger (negative for a debit). */
+  credits: number;
+  balanceAfter: number;
+  /**
+   * `balanceAfter <= 0` — the SHARED exhaustion threshold. This endpoint refuses
+   * nothing itself and invents no second threshold; it reports the state so
+   * motir-core's dispatch gate can refuse the NEXT dispatch (§6.2).
+   */
+  exhausted: boolean;
+  /** True when this matched an existing debit and wrote nothing — the signal a
+   *  retried, previously-timed-out debit had in fact landed. */
+  idempotent: boolean;
+}
+
 // ── Stripe AI-subscription lifecycle read (Subtask 8.1.13) ───────────────────
 // The raw GET /v1/stripe/subscription wire body (motir-ai's
 // stripeBillingService.SubscriptionDto). `status` is the Stripe lifecycle value

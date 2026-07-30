@@ -4,6 +4,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 
 // POST /api/ready/next (Subtask 7.0.5) — the DISPATCH half of the agent-dispatch
@@ -164,6 +165,18 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    // The CI-credit refusal (MOTIR-1901 · `ci-minutes-allowance.md` §6.2–6.3).
+    // 402 mirrors motir-ai's own `out_of_credits` status for the AI paywall, so
+    // the two exhaustion conditions read the same way to a client. The body
+    // carries the entitlement DETAIL — minutes used against the pool, and the
+    // balance — because §6.3 requires the surface to be able to say WHY rather
+    // than render a generic failure.
+    if (err instanceof CiCreditsExhaustedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, ci: err.detail },
+        { status: 402 },
+      );
     }
     throw err;
   }
