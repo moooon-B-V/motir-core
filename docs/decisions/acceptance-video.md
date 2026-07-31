@@ -227,6 +227,58 @@ fall back to an `integration`-scoped API token otherwise.**
   rotation, and scoping for one endpoint. (Epic 9's _hosted_ runner uses its own
   service principal inside its sandbox — explicitly out of scope here.)
 
+#### Amendment 2026-07-31 (Yue · MOTIR-1937) — WHICH RUN may publish a story's receipt
+
+The original decision settled **how** CI authenticates and never said **which runs**
+may publish. That gap had a live cost, so the answer is recorded here rather than
+left to be re-derived from `ci.yml`.
+
+**What went wrong.** The `acceptance-video` leg's only gate was a branch-prefix skip
+(`seed/` / `design/` / `docs/`), so every ordinary `subtask/*` PR ran the whole lane.
+Combined with two properties decided elsewhere — publishing **supersedes** (§2's
+retention rule) and the target story comes from the **recording's own sidecar**, which
+outranks the PR ref (MOTIR-1684) — any code PR republished the receipts of every story
+that has a chaptered spec. Measured on the MOTIR-1781 PR (Actions run `30651989797`):
+a pure repo-provisioning card with no user-observable surface republished **seven**
+already-accepted stories, with clips recorded off its branch that nobody watched. That
+also contradicted `plan-rules.md` (MOTIR-1644), which scopes acceptance video to
+user-facing stories.
+
+**The rejected fix, and why.** "Publish only from `main`" is simpler and **breaks the
+feature**. The acceptance gate is `acceptanceEvidenceService.decide()`: approve moves
+the story `in_review → done`, and the workflow rejects it for a story that is not
+`in_review`. `in_review` is the **PR-OPEN** state — the status sync flips the card to
+`done` on MERGE. Publishing post-merge would land the receipt after the story was
+already Done, so the reviewer would never get to watch-then-approve. MOTIR-1627 states
+the intended timing directly: "when MOTIR-1627 is `in_review`, its acceptance panel
+shows the video … and the story is accepted by watching its own video + Approve."
+
+**The decision — OWNERSHIP, not branch.** A run publishes the receipts for the
+acceptance specs **it changed**, and nothing else.
+
+| Run                                              | Records + checks | Publishes                        |
+| ------------------------------------------------ | ---------------- | -------------------------------- |
+| PR that changes `tests/e2e/acceptance-X.spec.ts` | yes              | **only X's story**               |
+| PR that changes no acceptance spec               | yes              | **nothing**                      |
+| Push to `main`                                   | yes              | **nothing** (the PR already did) |
+
+- The recording carries its producing spec in `recording-meta.json` (`specFile`), and
+  CI passes the PR's changed acceptance specs; the uploader publishes a recording only
+  when the two match.
+- **The checks stay on every run.** Discovery, story resolution and the watchability
+  floor (§2's amendment / MOTIR-1772) run regardless and report through the annotation
+  - job-summary channels, including a non-zero exit for an unpaced clip. Deferring them
+    to the owning run is the MOTIR-1905 blind spot, where a broken acceptance gate looked
+    green for days.
+- **Fails closed.** An empty or unset owned-set owns nothing, so a workflow edit that
+  drops it rehearses rather than resurrecting the bug; likewise a recording whose
+  sidecar carries no `specFile`.
+
+**Deliberately unchanged:** eligibility (decision 1), retention/supersede semantics
+(§2), the org toggle (§3), and the auth mechanism above. Distinct from MOTIR-1911 —
+one clip exceeding the per-file cap is a size problem, not a question of which run
+publishes. The starter's own acceptance lane is MOTIR-1941.
+
 ---
 
 ## Consequences

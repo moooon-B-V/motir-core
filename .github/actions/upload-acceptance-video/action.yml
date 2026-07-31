@@ -54,6 +54,25 @@ inputs:
     description: The Playwright acceptance lane's output dir.
     required: false
     default: out/playwright-output-acceptance
+  changed-specs:
+    description: >
+      The acceptance spec files THIS run changed, whitespace- or comma-separated
+      (`git diff --name-only <base> HEAD -- 'tests/e2e/acceptance*.spec.ts'` drops
+      in unchanged). A recording is published only when its own spec is in this
+      list (MOTIR-1937).
+
+      ⚠️ REQUIRED in practice. Publishing SUPERSEDES a story's current evidence,
+      and each recording targets its OWN declared story rather than the PR's — so
+      a run that publishes everything it recorded replaces the receipts of every
+      story that has an acceptance spec. Leaving this empty is FAIL-CLOSED: the
+      run rehearses (discovers, resolves, checks watchability) and writes nothing.
+
+      Gate on the changed spec rather than on the branch: the acceptance panel's
+      approve edge is `in_review → done`, and `in_review` is the PR-OPEN state, so
+      the receipt must be written while the PR is open or the reviewer can never
+      watch-then-approve.
+    required: false
+    default: ''
   produced-by:
     description: The E2E subtask key that produced the video (e.g. MOTIR-1638).
     required: false
@@ -76,4 +95,5 @@ runs:
         ACCEPTANCE_FALLBACK_STORY_KEY: ${{ inputs.fallback-story-key }}
         ACCEPTANCE_OUTPUT_DIR: ${{ inputs.output-dir }}
         ACCEPTANCE_PRODUCED_BY: ${{ inputs.produced-by }}
+        ACCEPTANCE_CHANGED_SPECS: ${{ inputs.changed-specs }}
       run: node scripts/upload-acceptance-video.mjs

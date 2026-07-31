@@ -99,10 +99,19 @@ export const test = base.extend<AcceptanceFixtures>({
     // a marker is a START offset, so a single-chapter recording's last marker is
     // ~0 no matter how long the clip is. Its own sidecar, so `chapters.json`
     // keeps the exact array shape the publish endpoint already consumes.
+    // `specFile` (MOTIR-1937) — the repo-relative path of the spec that produced
+    // this recording, so the uploader can match a recording back to the PR that
+    // OWNS it. Publishing supersedes a story's current evidence, so a run must
+    // only publish the receipts for specs it actually changed; without this the
+    // only key available was the recording's declared STORY, which every run
+    // resolves identically no matter whose branch it is on.
     const metaFile = path.join(testInfo.outputDir, 'recording-meta.json');
     fs.writeFileSync(
       metaFile,
-      JSON.stringify({ totalSeconds: Math.max(0, (Date.now() - start) / 1000) }),
+      JSON.stringify({
+        totalSeconds: Math.max(0, (Date.now() - start) / 1000),
+        specFile: path.relative(process.cwd(), testInfo.file),
+      }),
     );
     await testInfo.attach('recording-meta', { path: metaFile, contentType: 'application/json' });
   },
