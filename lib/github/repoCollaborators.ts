@@ -36,11 +36,20 @@ import { provisioningAuth, RepoProvisioningError } from '@/lib/github/repoProvis
 
 const GITHUB_API = 'https://api.github.com';
 
-/** The permission granted. ADMIN, per the card: the repository is the user's in
- *  every sense but the account it sits under, so they get the rights they would
- *  have had if it had been created in their own — including the settings needed to
- *  take it over later (MOTIR-711). */
-const COLLABORATOR_PERMISSION = 'admin';
+/**
+ * The permission granted — PER INVITEE, not one value for the product
+ * (MOTIR-1910; `docs/decisions/project-repository-set.md` §3 Q2).
+ *
+ * `admin` was originally the only level, justified by the TAKEOVER path: the
+ * repository is the approving user's in every sense but the account it sits
+ * under, so they get the rights they would have had if it had been created in
+ * their own — including the settings needed to take it over later (MOTIR-711).
+ * That reasoning is OWNER-shaped, and only the owner walks a transfer.
+ *
+ * A TEAMMATE gets `push`: clone, branch, push — everything the work needs, and
+ * nothing that could transfer, rename or delete the project's repositories.
+ */
+export type CollaboratorPermission = 'push' | 'admin';
 
 /** Any GitHub refusal or transport failure while granting or reading access.
  *  Carries the STATUS and a short detail, never the raw body — the same contract
@@ -78,6 +87,11 @@ export interface CollaboratorTarget {
   repo: string;
   /** The GitHub LOGIN to invite — always a connected identity's, never typed. */
   login: string;
+}
+
+/** A {@link CollaboratorTarget} plus what to grant it — the invite's full input. */
+export interface CollaboratorInvite extends CollaboratorTarget {
+  permission: CollaboratorPermission;
 }
 
 async function request(
@@ -123,21 +137,23 @@ function path(target: CollaboratorTarget): string {
 
 export const repoCollaboratorClient = {
   /**
-   * Invite `login` to `owner/repo` as an admin collaborator — and RE-invite by the
-   * same call, which is why "Resend invitation" needs nothing of its own.
+   * Invite `login` to `owner/repo` at `permission` — and RE-invite by the same
+   * call, which is why "Resend invitation" needs nothing of its own.
    *
    * IDEMPOTENT. A repeat on a pending invitation updates it rather than creating a
    * second; a call for an account that already has access answers `204` and is
    * reported as {@link CollaboratorInviteResult.alreadyHasAccess}. So a retry
    * after a crash between the GitHub call and the row write costs one request and
-   * converges on the same state.
+   * converges on the same state. Re-sending at a DIFFERENT permission also
+   * converges — GitHub updates the pending invitation's level rather than adding
+   * one — which is what makes a role change safe to re-apply.
    */
-  async invite(target: CollaboratorTarget): Promise<CollaboratorInviteResult> {
+  async invite(target: CollaboratorInvite): Promise<CollaboratorInviteResult> {
     const { token } = await provisioningAuth();
     const res = await request(path(target), {
       method: 'PUT',
       token,
-      body: JSON.stringify({ permission: COLLABORATOR_PERMISSION }),
+      body: JSON.stringify({ permission: target.permission }),
     });
 
     // 204: already a collaborator (an org member, or an earlier invitation they

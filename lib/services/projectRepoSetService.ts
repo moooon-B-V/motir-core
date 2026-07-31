@@ -1,9 +1,15 @@
-import { Prisma, type ProjectRepoRole, type ProjectRepoState } from '@prisma/client';
+import {
+  Prisma,
+  type ProjectRepoCollaboratorPermission,
+  type ProjectRepoRole,
+  type ProjectRepoState,
+} from '@prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { projectRepoCollaboratorRepository } from '@/lib/repositories/projectRepoCollaboratorRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoPinService } from '@/lib/services/projectRepoPinService';
@@ -428,7 +434,7 @@ export const projectRepoSetService = {
       }
     });
     // A freshly-created row is `proposed`, so it is unrealized by construction.
-    return toProjectRepoDto({ ...row, githubRepo: null });
+    return toProjectRepoDto({ ...row, githubRepo: null, collaborators: [] });
   },
 
   /**
@@ -487,7 +493,11 @@ export const projectRepoSetService = {
           },
           tx,
         );
-        return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+        return toProjectRepoDto({
+          ...updated,
+          githubRepo: row.githubRepo,
+          collaborators: row.collaborators,
+        });
       } catch (err) {
         translateUniqueViolation(err, { projectId: row.projectId, name: name ?? row.name });
       }
@@ -567,7 +577,7 @@ export const projectRepoSetService = {
     });
     // A freshly-created row is `proposed`, so it is unrealized by construction —
     // which is also the point: re-planning UN-claims whatever the old row held.
-    return toProjectRepoDto({ ...created, githubRepo: null });
+    return toProjectRepoDto({ ...created, githubRepo: null, collaborators: [] });
   },
 
   /**
@@ -607,7 +617,11 @@ export const projectRepoSetService = {
 
       if (target === null) return toProjectRepoDto(row);
       const updated = await projectRepoRepository.update(rowId, { position: target }, tx);
-      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+      return toProjectRepoDto({
+        ...updated,
+        githubRepo: row.githubRepo,
+        collaborators: row.collaborators,
+      });
     });
   },
 
@@ -695,7 +709,11 @@ export const projectRepoSetService = {
         );
       }
       const updated = await projectRepoRepository.update(rowId, { state, failureReason }, tx);
-      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+      return toProjectRepoDto({
+        ...updated,
+        githubRepo: row.githubRepo,
+        collaborators: row.collaborators,
+      });
     });
   },
 
@@ -792,47 +810,66 @@ export const projectRepoSetService = {
     return attached;
   },
 
-  // ── Collaborator access (MOTIR-1900) ──────────────────────────────────────
+  // ── Collaborator access (MOTIR-1900, per-member since MOTIR-1910) ─────────
 
   /**
-   * Record that `login` was INVITED to this row's repository as a collaborator.
+   * Record that `userId`'s GitHub account was INVITED to this row's repository at
+   * `permission`.
    *
-   * Runs under the row's lock, because this is a read-derived write: whether the
-   * row is already accepted decides what may be written, so that answer must not
-   * move between the read and the write. Two concurrent grant passes (a poll and
-   * a **Resend**, two tabs, two members) therefore serialize here rather than
-   * interleaving — the GitHub call itself is idempotent, so the only thing at
-   * risk was the row, and the lock is what protects it.
+   * Runs under the row's lock AND the collaborator record's own `FOR UPDATE`,
+   * because this is a read-derived write: whether the record is already accepted
+   * decides what may be written, so that answer must not move between the read and
+   * the write. Two concurrent grant passes (a poll and a **Resend**, two tabs, an
+   * all-members sweep racing one member's retry) therefore serialize here rather
+   * than interleaving — the GitHub call itself is idempotent, so the only thing at
+   * risk was the record, and the locks are what protect it.
    *
-   * ⚠️ `collaboratorAcceptedAt` IS NEVER CLEARED. `alreadyHasAccess` sets it (a
-   * `204` means the account can already clone, with no invitation to accept), and
-   * a plain re-invite leaves an existing stamp exactly as it was. The alternative
-   * — writing `accepted: false` on every invite — is the lost update this lock
-   * exists to prevent: a re-send racing an acceptance would report the user as
-   * merely invited forever, and the row would tell them to accept an invitation
-   * they had already accepted.
+   * ⚠️ `acceptedAt` IS NEVER CLEARED. `alreadyHasAccess` sets it (a `204` means the
+   * account can already clone, with no invitation to accept), and a plain re-invite
+   * leaves an existing stamp exactly as it was. The alternative — writing
+   * `accepted: false` on every invite — is the lost update these locks exist to
+   * prevent: a re-send racing an acceptance would report the member as merely
+   * invited forever, and the surface would tell them to accept an invitation they
+   * had already accepted.
+   *
+   * ⚠️ The ROW lock is taken as well as the record's, and deliberately: it is what
+   * serialises this write against a concurrent state TRANSITION of the repository
+   * row itself, so an invitation can never be recorded against a row that is
+   * simultaneously being re-planned out from under it.
    */
   async recordCollaboratorInvite(
     rowId: string,
-    input: { login: string; invitationUrl: string | null; alreadyHasAccess: boolean },
+    input: {
+      userId: string;
+      login: string;
+      permission: ProjectRepoCollaboratorPermission;
+      invitationUrl: string | null;
+      alreadyHasAccess: boolean;
+    },
     ctx: ServiceContext,
-  ): Promise<ProjectRepoDto> {
-    return inLockedRow(rowId, ctx, async (row, tx) => {
+  ): Promise<void> {
+    await inLockedRow(rowId, ctx, async (_row, tx) => {
       const now = new Date();
-      const updated = await projectRepoRepository.update(
+      const existing = await projectRepoCollaboratorRepository.findForUpdate(
         rowId,
+        input.userId,
+        ctx.workspaceId,
+        tx,
+      );
+      await projectRepoCollaboratorRepository.upsert(
+        { projectRepoId: rowId, userId: input.userId, workspaceId: ctx.workspaceId },
         {
-          collaboratorLogin: input.login,
-          collaboratorInvitedAt: now,
-          collaboratorInvitationUrl: input.invitationUrl,
-          // Set it, or keep whatever is already there — never null it.
-          ...(input.alreadyHasAccess && row.collaboratorAcceptedAt === null
-            ? { collaboratorAcceptedAt: now }
-            : {}),
+          githubLogin: input.login,
+          permission: input.permission,
+          invitedAt: now,
+          invitationUrl: input.invitationUrl,
+          // Keep an existing stamp; set one only when GitHub just told us the
+          // account already has access. Never null.
+          acceptedAt:
+            existing?.acceptedAt ?? (input.alreadyHasAccess ? now : (existing?.acceptedAt ?? null)),
         },
         tx,
       );
-      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
     });
   },
 
@@ -843,17 +880,22 @@ export const projectRepoSetService = {
    * a repeated refresh never rewrites when access was first seen. Locked for the
    * same read-derived reason as the invite write above.
    */
-  async recordCollaboratorAccepted(rowId: string, ctx: ServiceContext): Promise<ProjectRepoDto> {
-    return inLockedRow(rowId, ctx, async (row, tx) => {
-      if (row.collaboratorAcceptedAt !== null) return toProjectRepoDto(row);
-      const updated = await projectRepoRepository.update(
+  async recordCollaboratorAccepted(
+    rowId: string,
+    userId: string,
+    ctx: ServiceContext,
+  ): Promise<void> {
+    await inLockedRow(rowId, ctx, async (_row, tx) => {
+      const existing = await projectRepoCollaboratorRepository.findForUpdate(
         rowId,
-        // The pending invitation is gone the moment it is accepted, so its URL
-        // goes with it rather than being left to point at a 404.
-        { collaboratorAcceptedAt: new Date(), collaboratorInvitationUrl: null },
+        userId,
+        ctx.workspaceId,
         tx,
       );
-      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+      // No record, or already stamped: nothing to do. The monotonicity is the
+      // point — a repeated refresh must never rewrite WHEN access was first seen.
+      if (!existing || existing.acceptedAt !== null) return;
+      await projectRepoCollaboratorRepository.markAccepted(existing.id, new Date(), tx);
     });
   },
 
@@ -889,7 +931,7 @@ export const projectRepoSetService = {
           tx,
         );
         const realized = await projectRepoRepository.findById(rowId, ctx.workspaceId, tx);
-        return toProjectRepoDto(realized ?? { ...updated, githubRepo: null });
+        return toProjectRepoDto(realized ?? { ...updated, githubRepo: null, collaborators: [] });
       } catch (err) {
         translateUniqueViolation(err, { projectId: row.projectId, githubRepoId });
       }

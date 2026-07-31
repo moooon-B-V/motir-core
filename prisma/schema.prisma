@@ -199,6 +199,11 @@ model User {
   // (the apiTokens pattern). Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   githubIdentity              GithubIdentity?
+  // The repositories this user has been invited to as a collaborator on the code
+  // Motir made for their team (MOTIR-1910). Cascade: the record is about a person
+  // reaching a repository, so it dies with the person (the githubIdentity
+  // pattern). Modelled on both sides per the FK-`@relation` rule.
+  projectRepoCollaborators    ProjectRepoCollaborator[]
   // The user's per-source import OAuth identities (Story 7.16 · MOTIR-1653) —
   // the encrypted token store the per-vendor connect flows (7.16.11–13) and the
   // import routes read/write through (0..N, one per source × workspace).
@@ -635,6 +640,9 @@ model Workspace {
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos             ProjectRepo[]
+  /// The per-member collaborator records on this workspace's repositories
+  /// (MOTIR-1910). Cascade: they are tenant-scoped rows with no life of their own.
+  projectRepoCollaborators ProjectRepoCollaborator[]
   // Metered CI consumption — the per-run audit rows and the per-period rollup
   // (Story MOTIR-1775 · MOTIR-1896). Workspace-scoped tenant data (the
   // workspace_id + RLS contract) even though the POOL is resolved per org, so a
@@ -4203,41 +4211,41 @@ enum PlanChangeTurnRole {
 /// `@relation`s on BOTH sides with the same actions the SQL uses (the
 /// FK-`@relation` rule), so `migrate dev` reports no drift.
 model ProjectRepo {
-  id             String           @id @default(cuid())
-  workspaceId    String           @map("workspace_id")
-  projectId      String           @map("project_id")
+  id                    String                    @id @default(cuid())
+  workspaceId           String                    @map("workspace_id")
+  projectId             String                    @map("project_id")
   /// WHAT this repository is (ADR §1.1) — a fixed six-value enum, because the role
   /// drives real behaviour: it selects what the repo is seeded from (§2) and it is
   /// the key a work item's repo pin resolves through (§5). An open string could do
   /// neither without a lookup table that would be this enum, less safely.
   /// A role MAY repeat (§1.2) — two services are two `api` rows.
-  role           ProjectRepoRole
+  role                  ProjectRepoRole
   /// The free-form label the enum deliberately does not carry (ADR §1.1) — `api` +
   /// "billing" versus `api` + "search". Distinguishes repeated roles for a human;
   /// never a resolution key (an ambiguous role resolves to null, §5.3, rather than
   /// being disambiguated by a label nobody validated).
-  label          String?
+  label                 String?
   /// The INTENDED repo name, editable per row until the row is established (ADR
   /// §1.4/§1.5). Unique per project (see `@@unique`). Once realized this is still
   /// the authored intent — the authoritative checkout name is the realized repo's
   /// own `name`, which is what the read layer prefers (a rename on the host must
   /// not silently re-point a dispatch).
-  name           String
+  name                  String
   /// WHAT the repo is seeded from (ADR §2), recorded as a STRING, not a boolean or
   /// a two-value enum: when the multi-stack starter registry lands (MOTIR-709 /
   /// 9.3.5) a row's seed source becomes a registry key and §2's table becomes its
   /// default map — no migration, no second code path. Values today come from
   /// `lib/projectRepos/vocabulary.ts`.
-  seedSource     String           @map("seed_source")
+  seedSource            String                    @map("seed_source")
   /// The per-row ESTABLISH state (ADR §4.1). Rows are INDEPENDENT: one may fail or
   /// be skipped while the others succeed, and nothing is rolled back (a created
   /// repository is a real artifact in the user's own account — §4.2). `failed` is
   /// RESUMABLE, not terminal.
-  state          ProjectRepoState @default(proposed)
+  state                 ProjectRepoState          @default(proposed)
   /// Why a `failed` row failed, so partial establishment is RECORDED rather than
   /// inferred (revoked token, not an org admin, name collision, template policy,
   /// rate limit). Null in every other state; cleared on a retry.
-  failureReason  String?          @map("failure_reason")
+  failureReason         String?                   @map("failure_reason")
   /// WHY Motir proposed this row — the ADR §0.1 rung the derivation climbed to
   /// (MOTIR-1892), so the establish step can show what was inferred on a LATER
   /// page load and a wrong proposal is arguable rather than mysterious. Without
@@ -4262,7 +4270,7 @@ model ProjectRepo {
   /// Only the machine-readable SIGNAL is stored, never the derivation's English
   /// `reason`: that gloss is a log/PR fallback and is not a localized string, so
   /// persisting it would put untranslated prose on a rendered surface.
-  proposalSignal String?          @map("proposal_signal")
+  proposalSignal        String?                   @map("proposal_signal")
   /// ── The CI-Actions INTENT (MOTIR-1907) ──────────────────────────────────
   ///
   /// The DESIRED Actions state for this row: `true` means "Motir wants GitHub
@@ -4271,7 +4279,7 @@ model ProjectRepo {
   /// the fan-out is N GitHub calls with NO transaction over them: half can fail,
   /// and a durable intent is what lets the next sweep finish the job instead of
   /// losing it (§6.5).
-  ciActionsDisabled Boolean @default(false) @map("ci_actions_disabled")
+  ciActionsDisabled     Boolean                   @default(false) @map("ci_actions_disabled")
   /// When the intent above last CHANGED. Paired with `ciActionsAppliedAt` this
   /// is the whole convergence predicate — a row needs (re-)asserting exactly
   /// when `ciActionsAppliedAt IS NULL OR ciActionsAppliedAt < ciActionsIntentAt`.
@@ -4280,10 +4288,10 @@ model ProjectRepo {
   /// be cleared by the same code that sets it, so a crash between the GitHub call
   /// and the clear leaves it lying. Comparing two stamps is derivable state — it
   /// cannot desynchronise, and a re-run recomputes the same answer.
-  ciActionsIntentAt DateTime? @map("ci_actions_intent_at")
+  ciActionsIntentAt     DateTime?                 @map("ci_actions_intent_at")
   /// When the intent was last SUCCESSFULLY asserted on the host. NULL means it
   /// never has been (a fresh row, or every attempt so far failed).
-  ciActionsAppliedAt DateTime? @map("ci_actions_applied_at")
+  ciActionsAppliedAt    DateTime?                 @map("ci_actions_applied_at")
   /// ── The TAKE-IT-OVER saga (MOTIR-711) ───────────────────────────────────
   ///
   /// Where this row sits in the handoff that moves a Motir-owned repository to
@@ -4316,44 +4324,19 @@ model ProjectRepo {
   /// Why a `failed` takeover failed, so a stalled handoff is RECORDED rather
   /// than inferred. Cleared on every retry, exactly like `failureReason`.
   takeoverFailureReason String?                   @map("takeover_failure_reason")
-  /// ── COLLABORATOR ACCESS — the user's way IN to their own code (MOTIR-1900) ─
+  /// ── COLLABORATOR ACCESS — the TEAM's way IN to their own code ──────────────
   ///
   /// Every repository Motir creates lives in Motir's own org and is PRIVATE (ADR
-  /// §3 amendment), so the person who approved the plan cannot clone it until
-  /// Motir invites their GitHub account as an admin collaborator. These four
-  /// columns record that invitation per row.
+  /// §3 amendment), so nobody on the team can clone it until Motir invites their
+  /// GitHub account as a collaborator. That record is `ProjectRepoCollaborator`
+  /// — ONE ROW PER (repository × user), not columns on this row.
   ///
-  /// The three states the UI renders (`design/repository-set` §5) are DERIVED
-  /// from these, never stored as a fourth enum column — the same reasoning the
-  /// CI-Actions intent above uses: a stored state has to be cleared by the code
-  /// that set it, so a crash between the GitHub call and the write leaves it
-  /// lying, whereas two nullable stamps cannot desynchronise and a re-read
-  /// recomputes the same answer.
-  ///
-  ///   accepted     ⟺ collaborator_accepted_at IS NOT NULL
-  ///   invited      ⟺ collaborator_invited_at IS NOT NULL (and not accepted)
-  ///   not_invited  ⟺ neither
-  ///
-  /// WHOSE login it is, recorded rather than re-derived: the account invited is
-  /// the one the ACTOR had connected at invite time (`GithubIdentity.githubLogin`
-  /// — never a typed handle, which would let a typo invite a stranger to a
-  /// private repository). Recording it is what lets a LATER visitor see which
-  /// account actually got access instead of being told about their own.
-  collaboratorLogin         String?   @map("collaborator_login")
-  /// When the invitation was last SENT. Re-sending re-stamps it; accepting does
-  /// not clear it (the row keeps the history of both events).
-  collaboratorInvitedAt     DateTime? @map("collaborator_invited_at")
-  /// When the invitee was first OBSERVED to have access — either GitHub reported
-  /// them an existing collaborator at invite time (a `204`, no invitation to
-  /// accept) or a later refresh read found them one. NULL means "not observed
-  /// accepted", never "declined": GitHub owns the acceptance, so Motir shows what
-  /// it can see rather than pretending to know more.
-  collaboratorAcceptedAt    DateTime? @map("collaborator_accepted_at")
-  /// GitHub's `html_url` for the pending invitation — the target of **Open the
-  /// invitation**. Stored because the invitation lives on GitHub and there is no
-  /// way to reconstruct the URL from the repo coordinates alone. NULL once the
-  /// invite was unnecessary (a `204`) or when none has been sent.
-  collaboratorInvitationUrl String?   @map("collaborator_invitation_url")
+  /// ⚠️ It STARTED as four singular columns here (MOTIR-1900), which could hold
+  /// exactly one person: the approving user. MOTIR-1910 replaced them with the
+  /// join table, because a project's code is reachable by a TEAM and "how many
+  /// can there be?" is answered by the membership, not by one. The four columns
+  /// were migrated into it, not dropped — see the migration's backfill.
+  collaborators         ProjectRepoCollaborator[]
   /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.
@@ -4367,16 +4350,16 @@ model ProjectRepo {
   /// realized repo and its state still reading honestly. A disconnected repo is
   /// not a lost plan — the role + name + seed source survive so the row can be
   /// re-established.
-  githubRepoId   String?          @unique @map("github_repo_id")
+  githubRepoId          String?                   @unique @map("github_repo_id")
   /// ORDER within the set, and it is MEANINGFUL: the first row is the project's
   /// PRIMARY repo (ADR §1.3) — what a single-repo project's one row is, and the
   /// deterministic tie-break anywhere the set needs one. Order carries NO dispatch
   /// meaning; an item is never routed by position. A fractional index (the same
   /// `String @db.Text` + `lib/workItems/positioning` scheme as `work_item` /
   /// `board_column`), so a row is reordered with one write.
-  position       String           @db.Text
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
+  position              String                    @db.Text
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -4390,6 +4373,128 @@ model ProjectRepo {
   @@index([workspaceId])
   @@index([projectId])
   @@map("project_repository")
+}
+
+/// What a collaborator may DO with the repository (Story MOTIR-1775 · MOTIR-1910,
+/// specified by `docs/decisions/project-repository-set.md` §3 Q2).
+///
+/// PER INVITEE, not one value for the product — which is the whole point of the
+/// enum existing. MOTIR-1900 pinned `admin` as a module constant and justified it
+/// by the TAKEOVER path: the repository is the approving user's "in every sense
+/// but the account it sits under… including the settings needed to take it over
+/// later (MOTIR-711)". That reasoning is OWNER-shaped — only the owner walks the
+/// transfer — so a teammate gets `push`: clone, branch, push, and nothing that
+/// could transfer, rename or delete the project's repositories.
+///
+/// Deliberately NOT the full GitHub role vocabulary (`pull`/`triage`/`maintain`
+/// exist too). Motir grants what its own decision named and nothing speculative;
+/// a level earns a value here when a card decides it needs one.
+enum ProjectRepoCollaboratorPermission {
+  /// Clone, branch, push. The default for every teammate.
+  push
+  /// Everything `push` allows plus repository settings — reserved to the
+  /// approving user, and what the MOTIR-1900 backfill stamps on their row so no
+  /// access already granted is silently downgraded by the migration.
+  admin
+
+  @@map("project_repo_collaborator_permission")
+}
+
+/// ONE person's access to ONE repository Motir made (Story MOTIR-1775 ·
+/// MOTIR-1910) — the record of the collaborator invitation, per `(repository,
+/// user)`.
+///
+/// ⚠️ WHY A TABLE AND NOT COLUMNS. MOTIR-1900 recorded this as four nullable
+/// columns on `project_repository`, which is exactly one collaborator per
+/// repository — the approving user. Every other member of the workspace was
+/// therefore locked out of their own project's code, with nowhere in the schema
+/// to record letting them in. The count was never a property of the repository;
+/// it is a property of the TEAM, so the shape is a join table whose degenerate
+/// case is one row.
+///
+/// ⚠️ ROWS ARE INDEPENDENT, exactly like the repository rows they hang off (ADR
+/// §4.2). One member's GitHub refusal leaves every other member's row untouched
+/// and rolls nothing back: a real invitation was sent to the others, and undoing
+/// it to make a report look tidy would be a lie about the world. So there is no
+/// transaction spanning the host calls — each row is committed as it resolves.
+///
+/// STATE IS DERIVED, never stored (`lib/projectRepos/access.ts`), for the same
+/// reason the `ci_actions_*` intent columns are: a stored state must be CLEARED
+/// by whatever set it, so a crash between the GitHub call and the write leaves it
+/// lying. Two nullable stamps recompute the same answer on every read:
+///
+///   accepted     ⟺ accepted_at IS NOT NULL
+///   invited      ⟺ invited_at IS NOT NULL (and not accepted)
+///   not_invited  ⟺ neither  (a row exists, e.g. an earlier failed attempt)
+///
+/// A member with NO ROW is `not_invited` too — the honest answer, and why the
+/// read left-joins members rather than requiring a row to exist first.
+model ProjectRepoCollaborator {
+  id String @id @default(cuid())
+
+  /// The tenant, carried on the row itself because RLS does not traverse foreign
+  /// keys — the policy predicates on THIS column, never on a join through
+  /// `project_repository`. Same reasoning as that table's own `workspace_id`.
+  workspaceId   String @map("workspace_id")
+  projectRepoId String @map("project_repository_id")
+
+  /// WHO — a real Motir user, never a typed GitHub handle. This FK is the
+  /// safety property: an invitation can only ever be aimed at someone the
+  /// workspace already contains, so a typo cannot invite a stranger to a private
+  /// repository (MOTIR-1900's own warning, made structural).
+  userId String @map("user_id")
+
+  /// The GitHub login invited, SNAPSHOT at invite time from that user's own
+  /// `GithubIdentity` (which is `@unique` on `userId` and holds their OAuth
+  /// token — Motir cannot OAuth on anyone's behalf, so this is only ever their
+  /// own connected account).
+  ///
+  /// Recorded rather than re-derived on read for the reason MOTIR-1900 gave: if
+  /// the member later disconnects or reconnects a DIFFERENT GitHub account, the
+  /// invitation that is live on GitHub is still the OLD login's — and the row
+  /// must say which account actually holds access, not which one the user
+  /// happens to have connected today.
+  githubLogin String @map("github_login")
+
+  /// What was granted (ADR §3 Q2). Defaults to `push`; the approving user's
+  /// backfilled row carries `admin`.
+  permission ProjectRepoCollaboratorPermission @default(push)
+
+  /// When the invitation was last SENT. Re-sending re-stamps it; accepting does
+  /// NOT clear it, so the row keeps both events. NULL means no invitation has
+  /// gone out yet — a row can exist un-invited when an earlier attempt failed.
+  invitedAt DateTime? @map("invited_at")
+
+  /// When this account was first OBSERVED to hold access — either GitHub
+  /// answered the invite `204` ("already a collaborator", no invitation to
+  /// accept) or a later refresh read found them one. NULL means "not observed
+  /// accepted", NEVER "declined": GitHub owns acceptance and tells Motir nothing
+  /// when it happens, so Motir shows what it can see rather than pretending to
+  /// know more. Monotonic — a repeat refresh never rewrites the first sighting.
+  acceptedAt DateTime? @map("accepted_at")
+
+  /// GitHub's `html_url` for the PENDING invitation — the target of **Open the
+  /// invitation**. Stored because the invitation is a GitHub object that cannot
+  /// be reconstructed from `owner/name`. Cleared on acceptance, so the link never
+  /// points at an invitation that no longer exists.
+  invitationUrl String? @map("invitation_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectRepo ProjectRepo @relation(fields: [projectRepoId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One record per person per repository. This is what makes the invite
+  /// IDEMPOTENT at the database level: a retry after a crash between the GitHub
+  /// call and the write upserts the same row rather than recording a second
+  /// invitation for the same account.
+  @@unique([projectRepoId, userId])
+  @@index([workspaceId])
+  @@index([projectRepoId])
+  @@index([userId])
+  @@map("project_repository_collaborator")
 }
 
 /// ONE completed GitHub Actions workflow run whose compute MOTIR PAID FOR (Story

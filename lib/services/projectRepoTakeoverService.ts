@@ -285,7 +285,11 @@ export const projectRepoTakeoverService = {
         },
         tx,
       );
-      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+      return toProjectRepoDto({
+        ...updated,
+        githubRepo: row.githubRepo,
+        collaborators: row.collaborators,
+      });
     });
   },
 
@@ -322,7 +326,11 @@ export const projectRepoTakeoverService = {
         },
         tx,
       );
-      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+      return toProjectRepoDto({
+        ...updated,
+        githubRepo: row.githubRepo,
+        collaborators: row.collaborators,
+      });
     });
   },
 
