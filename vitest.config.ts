@@ -392,6 +392,15 @@ export default defineConfig({
         'lib/ciMetering/allowance.ts',
         'lib/services/ciAllowanceService.ts',
         'lib/repositories/ciPeriodChargeRepository.ts',
+        // Story MOTIR-1775 · MOTIR-1781 — the repo-CREATION primitive. Gated
+        // because its failure modes are IRREVERSIBLE in a way a normal service's
+        // are not: an untested branch here creates a second repository, adopts one
+        // that belongs to another tenant, or loses the record of a repository that
+        // now exists in Motir's org with nothing pointing at it. There is no
+        // rollback for any of those (ADR §4.2), so the branch coverage IS the
+        // safety net.
+        'lib/github/repoProvisioning.ts',
+        'lib/services/projectRepoProvisioningService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -617,6 +626,15 @@ export default defineConfig({
         'lib/services/codeGraphIndexService.ts': { functions: 90, lines: 90 },
         'lib/github/indexEnqueue.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/webhookSignature.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-1775 · MOTIR-1781 — the repo-creation primitive (see the
+        // `include` note): every branch of it either makes a repository exist or
+        // decides whose an existing one is, and neither is undoable.
+        'lib/github/repoProvisioning.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/projectRepoProvisioningService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'lib/ai/codeContext.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 7.30 · Subtask MOTIR-1732 — the plan-change conversation, the
         // planning-workspace host contract, and the rail's client state machine.

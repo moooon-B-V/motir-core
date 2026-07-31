@@ -277,10 +277,37 @@ Three findings from those transcripts:
 2. **The generate endpoint's error shape is DIFFERENT.** `errors` is an array of **strings**
    (`["Could not clone: …"]`), not of objects — a shared error parser that reads `errors[0].message` (correct
    for `/user/repos` and `/orgs/{org}/repos`) will read `undefined` here. Detect the collision on the **422
-   status plus a case-insensitive `already exists` match on `message`**, not on the `errors` element shape.
+   status plus a case-insensitive `already exists` match**, not on the `errors` element shape.
+
+   > **Correction, 2026-07-31 (MOTIR-1781) — "a match on `message`" was too narrow, and the transcripts
+   > above are the evidence.** The phrase reaches the top-level `message` on the **generate** endpoint only
+   > (`"Could not clone: Name already exists on this account"`). Both `POST /user/repos` and
+   > `POST /orgs/{org}/repos` answer with the generic `message: "Repository creation failed."` and carry the
+   > real phrase inside `errors[].message`. A detector reading `message` alone therefore misses **every
+   > org-create collision** — which is the path every non-`web` row takes since the 2026-07-30 ownership
+   > amendment, and the path a re-run's idempotency depends on. The rule this finding MEANT: match the 422
+   > status plus a case-insensitive `already exists` **anywhere in the body's message strings** — the
+   > top-level `message` OR any `errors` entry, each read shape-tolerantly (a string as itself, an object
+   > via its `.message`). That binds to no single shape, which is the finding's actual content. Implemented
+   > as `isNameCollision` in `lib/github/repoProvisioning.ts`; both shapes are pinned by
+   > `tests/github/repoProvisioning.test.ts`.
+
 3. **A 422 is not proof that _Motir_ created it.** An unrelated repo of the same name collides identically. A
    row that 422s must be resolved as "name taken — connect it, or choose another name" and shown to the user,
    never silently adopted as this project's repo.
+
+   > **Amended, 2026-07-31 (MOTIR-1781) — this is right for the design it was written against, and the
+   > design changed underneath it.** When it was written, a repo could be created in the USER's own account,
+   > where an unrelated repo of the same name is entirely plausible. The 2026-07-30 amendment to
+   > `docs/decisions/project-repository-set.md` makes **Motir's own org the only home for a created repo**,
+   > so a collision there is Motir's own artifact — overwhelmingly a previous attempt that created the repo
+   > and did not survive to attach it. Refusing to adopt would then make a crash mid-row permanently
+   > unrecoverable except by renaming, which is the one thing this finding rightly forbids. So the creation
+   > primitive **adopts, with the check this finding is really asking for**: the existing repository is read
+   > back, and it is claimed only if no OTHER project's set row already holds it (`findConnectedByName`
+   > ahead of the mirror write, plus `attachRealizedRepo`'s `github_repo_id` unique index as the
+   > tenant-blind backstop). A repo that belongs to someone else still fails the row as "name taken", and
+   > nothing is ever silently renamed.
 
 ### 4.4 Template seeding N times from one starter — verified
 

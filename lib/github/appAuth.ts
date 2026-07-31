@@ -15,22 +15,51 @@ import type { InstallationToken } from '@/lib/git/types';
 // it (through the GitProvider seam); routes never do. Config is read at CALL
 // time (never module load), so a self-hosted deploy that never wires the GitHub
 // App does not crash on boot — the flow simply isn't reachable.
+//
+// TWO APPS, one primitive (Story MOTIR-1775 · MOTIR-1779 / MOTIR-1781). The
+// `role` argument selects WHICH GitHub App registration signs the JWT, because
+// `docs/decisions/project-repository-set.md`'s 2026-07-30 amendment keeps them
+// deliberately separate and a shared credential would erase that separation:
+//
+//   * `'user-facing'` (default) — the App every user installs (MOTIR-890).
+//     Least privilege, `Administration` NOT among its permissions. Every shipped
+//     caller means this one, which is why it is the default and no call site
+//     changed when the second role landed.
+//   * `'provisioning'` — the "Motir Studio" App, installed ONLY on Motir's own
+//     org, holding `Administration: write` there and nowhere else. It is what
+//     creates every new project's repositories. It can never reach a repository
+//     a user owns, because it is not installed anywhere a user owns.
+//
+// Folding the two into one registration would force `Administration: write` onto
+// the App users install, which the amendment records as a funnel loss (a repo
+// admin can no longer install an App that requests it) and a two-sided
+// re-consent. So the split is the decision; this parameter is how the code keeps
+// it. The token cache is keyed by ROLE + installation id for the same reason —
+// two Apps' tokens for the same numeric installation id are different secrets.
 
-const APP_ID_ENV = 'GITHUB_APP_ID';
-const PRIVATE_KEY_ENV = 'GITHUB_APP_PRIVATE_KEY';
+/** WHICH GitHub App registration a credential is minted from. See the module
+ *  header: the split is an ADR decision, not an implementation detail. */
+export type GithubAppRole = 'user-facing' | 'provisioning';
+
+const APP_ENV: Record<GithubAppRole, { appId: string; privateKey: string }> = {
+  'user-facing': { appId: 'GITHUB_APP_ID', privateKey: 'GITHUB_APP_PRIVATE_KEY' },
+  provisioning: { appId: 'GITHUB_STUDIO_APP_ID', privateKey: 'GITHUB_STUDIO_APP_PRIVATE_KEY' },
+};
+
 const GITHUB_API = 'https://api.github.com';
 
 // Re-mint this many ms BEFORE the reported expiry so an in-flight call never
 // races the boundary (GitHub installation tokens last ~1h; a 60s skew is ample).
 const EXPIRY_SKEW_MS = 60_000;
 
-/** The GitHub App credentials (`GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY`) are
- *  not configured on this deployment. Read at call time so an instance that
- *  never wires the App can't reach the flow rather than crashing on boot. */
+/** The GitHub App credentials for the requested role are not configured on this
+ *  deployment. Read at call time so an instance that never wires the App can't
+ *  reach the flow rather than crashing on boot. */
 export class GithubAppNotConfiguredError extends Error {
   readonly code = 'GITHUB_APP_NOT_CONFIGURED' as const;
-  constructor() {
-    super(`GitHub App is not configured. Set ${APP_ID_ENV} and ${PRIVATE_KEY_ENV}.`);
+  constructor(role: GithubAppRole = 'user-facing') {
+    const env = APP_ENV[role];
+    super(`GitHub App (${role}) is not configured. Set ${env.appId} and ${env.privateKey}.`);
     this.name = 'GithubAppNotConfiguredError';
   }
 }
@@ -50,10 +79,11 @@ interface AppConfig {
   privateKeyPem: string;
 }
 
-function resolveConfig(): AppConfig {
-  const appId = process.env[APP_ID_ENV];
-  const rawKey = process.env[PRIVATE_KEY_ENV];
-  if (!appId || !rawKey) throw new GithubAppNotConfiguredError();
+function resolveConfig(role: GithubAppRole): AppConfig {
+  const env = APP_ENV[role];
+  const appId = process.env[env.appId];
+  const rawKey = process.env[env.privateKey];
+  if (!appId || !rawKey) throw new GithubAppNotConfiguredError(role);
   // Env commonly stores the PEM with escaped newlines (`\n`); restore real
   // newlines so the crypto layer can parse it. A key already carrying literal
   // newlines is left unchanged.
@@ -65,13 +95,18 @@ const b64url = (input: Buffer | string): string => Buffer.from(input).toString('
 
 /**
  * Build a signed App JWT (RS256). `nowSeconds` is injectable for tests and
- * defaults to the wall clock. `iat` is backdated 60s to tolerate clock skew
- * between us and GitHub (GitHub's documented guidance); `exp` stays under the
- * 10-minute ceiling. Throws {@link GithubAppNotConfiguredError} when unwired or
- * {@link GithubAppTokenError} when the key can't sign.
+ * defaults to the wall clock; `role` selects the App registration and defaults
+ * to the user-facing one, so every shipped caller reads unchanged. `iat` is
+ * backdated 60s to tolerate clock skew between us and GitHub (GitHub's
+ * documented guidance); `exp` stays under the 10-minute ceiling. Throws
+ * {@link GithubAppNotConfiguredError} when unwired or {@link GithubAppTokenError}
+ * when the key can't sign.
  */
-export function createAppJwt(nowSeconds: number = Math.floor(Date.now() / 1000)): string {
-  const { appId, privateKeyPem } = resolveConfig();
+export function createAppJwt(
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+  role: GithubAppRole = 'user-facing',
+): string {
+  const { appId, privateKeyPem } = resolveConfig(role);
   const header = { alg: 'RS256', typ: 'JWT' };
   const payload = {
     iat: nowSeconds - 60,
@@ -91,23 +126,30 @@ export function createAppJwt(nowSeconds: number = Math.floor(Date.now() / 1000))
 }
 
 // In-memory installation-token cache — process-local, NEVER persisted. Keyed by
-// the provider installation id.
+// ROLE + the provider installation id: the two Apps mint different secrets, and
+// GitHub's installation ids are per-App, so the role has to be part of the key
+// for the cache to be sound rather than merely usually-right.
 const cache = new Map<string, InstallationToken>();
 
 /**
  * Mint (or return a still-valid cached) installation access token for
- * `installationId`. Minted from the App JWT, scoped by GitHub to the
- * installation's repos, cached until `EXPIRY_SKEW_MS` before its reported expiry,
- * then re-minted. NEVER persisted. Throws {@link GithubAppNotConfiguredError}
- * (unwired) or {@link GithubAppTokenError} (endpoint / shape failure).
+ * `installationId`. Minted from the App JWT of `role` (default: the user-facing
+ * App), scoped by GitHub to the installation's repos, cached until
+ * `EXPIRY_SKEW_MS` before its reported expiry, then re-minted. NEVER persisted.
+ * Throws {@link GithubAppNotConfiguredError} (unwired) or
+ * {@link GithubAppTokenError} (endpoint / shape failure).
  */
-export async function mintInstallationToken(installationId: string): Promise<InstallationToken> {
-  const cached = cache.get(installationId);
+export async function mintInstallationToken(
+  installationId: string,
+  role: GithubAppRole = 'user-facing',
+): Promise<InstallationToken> {
+  const key = `${role}:${installationId}`;
+  const cached = cache.get(key);
   if (cached && cached.expiresAt.getTime() - EXPIRY_SKEW_MS > Date.now()) {
     return cached;
   }
 
-  const jwt = createAppJwt();
+  const jwt = createAppJwt(undefined, role);
   let res: Response;
   try {
     res = await fetch(`${GITHUB_API}/app/installations/${installationId}/access_tokens`, {
@@ -136,7 +178,7 @@ export async function mintInstallationToken(installationId: string): Promise<Ins
   }
 
   const token: InstallationToken = { token: body.token, expiresAt: new Date(body.expires_at) };
-  cache.set(installationId, token);
+  cache.set(key, token);
   return token;
 }
 
