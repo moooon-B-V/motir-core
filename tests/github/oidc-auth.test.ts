@@ -181,6 +181,56 @@ describe('authenticateGithubOidc', () => {
     expect(result).toEqual({ ok: false, status: 403, reason: 'repo_not_connected' });
   });
 
+  it('authenticates a SHARED-installation repo into the workspace that OWNS it', async () => {
+    // MOTIR-1931 — the cross-tenant AUTHENTICATION defect, and the reason the
+    // ambiguity guard above could not have saved us. Two tenants' repos behind
+    // ONE Motir provisioning installation (bound to no workspace): each
+    // `owner/name` is globally unique, so `findConnectedByName` returns exactly
+    // one row and the guard never fires. Reading the tenant off the installation
+    // therefore yielded NULL — or, before the column was nullable, whichever
+    // workspace happened to hold the shared row: a verified Actions token from
+    // tenant A's repo authenticating as tenant B, acting as B's owner.
+    const a = await makeWorkspace('shared-a@example.com');
+    const b = await makeWorkspace('shared-b@example.com');
+    const installation = await db.githubInstallation.create({
+      data: {
+        installationId: 'motir-provisioning-oidc',
+        workspaceId: null,
+        accountLogin: 'motir-projects',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+    });
+    await db.githubRepo.createMany({
+      data: [
+        {
+          installationId: installation.id,
+          workspaceId: a.workspace.id,
+          repoId: '920001',
+          owner: 'motir-projects',
+          name: 'alpha-web',
+          defaultBranch: 'main',
+        },
+        {
+          installationId: installation.id,
+          workspaceId: b.workspace.id,
+          repoId: '920002',
+          owner: 'motir-projects',
+          name: 'bravo-web',
+          defaultBranch: 'main',
+        },
+      ],
+    });
+
+    await expect(
+      authenticateGithubOidc(oidcReq(await mintToken({ repository: 'motir-projects/alpha-web' }))),
+    ).resolves.toEqual({ ok: true, userId: a.user.id, workspaceId: a.workspace.id });
+
+    await expect(
+      authenticateGithubOidc(oidcReq(await mintToken({ repository: 'motir-projects/bravo-web' }))),
+    ).resolves.toEqual({ ok: true, userId: b.user.id, workspaceId: b.workspace.id });
+  });
+
   it('matches the repository claim case-insensitively (GitHub coordinates are)', async () => {
     const { user, workspace } = await makeWorkspace('f@example.com');
     await connectRepo(workspace.id, 'inst-f');

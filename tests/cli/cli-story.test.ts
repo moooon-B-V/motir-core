@@ -129,6 +129,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
   await db.githubRepo.create({
     data: {
       installationId: inst.id,
+      workspaceId: fx.workspaceId,
       repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
       owner: 'moooon',
       name,

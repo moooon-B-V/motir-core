@@ -12,7 +12,13 @@ import { type GithubInstallation, type Prisma } from '@prisma/client';
 
 export interface UpsertGithubInstallationInput {
   installationId: string;
-  workspaceId: string;
+  /** The workspace whose OWN grant this is, or NULL for Motir's shared
+   *  provisioning installation (MOTIR-1931), which is owned by no tenant — its
+   *  repos carry their own `workspace_id`. Widened here so the substrate can
+   *  EXPRESS the shared row; note that `githubInstallationService.persistInstallation`
+   *  still requires a `workspaceId: string`, which is what keeps the destructive
+   *  reconcile (`deleteExcept`) unreachable on the shared path. */
+  workspaceId: string | null;
   accountLogin: string;
   accountType: string;
 }
@@ -52,7 +58,11 @@ export const githubInstallationRepository = {
     return tx.githubInstallation.findFirst({ where: { workspaceId, provider } });
   },
 
-  /** Look up by GitHub's numeric installation id (the webhook's key). */
+  /** Look up by GitHub's numeric installation id (the webhook's key). The row's
+   *  `workspaceId` is NULL for Motir's shared provisioning installation, so a
+   *  caller must NOT read it to route, attribute, or authenticate — the delivery's
+   *  repo row answers that (MOTIR-1931). This read still SELECTS which mirror rows
+   *  a delivery may touch. */
   async findByInstallationId(
     installationId: string,
     tx: Prisma.TransactionClient,

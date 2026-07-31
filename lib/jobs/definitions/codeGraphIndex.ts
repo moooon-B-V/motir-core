@@ -29,6 +29,9 @@ export const codeGraphIndex = defineJob(
     return ctx.step.run('index-repo', () =>
       services.codeGraph.indexRepoIntoWorkspaceProjects({
         installationId: data.installationId,
+        // Carried on the payload since MOTIR-1500 and now LOAD-BEARING
+        // (MOTIR-1931): it is the repo's own tenant, stamped at enqueue.
+        workspaceId: data.workspaceId,
         repoOwner: data.repoOwner,
         repoName: data.repoName,
         defaultBranch: data.defaultBranch,

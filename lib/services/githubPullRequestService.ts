@@ -1,5 +1,5 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { toLinkedPullRequestDto, toPullRequestLinkCandidateDto } from '@/lib/mappers/githubMappers';
@@ -32,7 +32,11 @@ export const githubPullRequestService = {
    * (title / repo owner+name / number) — the detail-page Combobox fetches this
    * per debounced keystroke. Gates the current item to the caller's workspace
    * (cross-workspace / missing → 404). Throws {@link GithubNotConnectedError}
-   * when the workspace has no installation (the disconnected banner). An
+   * when the workspace has no connected or created REPO (the disconnected
+   * banner) — asked of the repo rows, not of the installation (MOTIR-1931): a
+   * project whose repos Motir CREATED has no installation of its own, and
+   * asking the old question would have made this picker permanently
+   * "not connected" for it. An
    * empty/short query returns `[]` (the picker prompts "type to search"). PRs
    * already linked to the CURRENT item are dropped (they're already shown);
    * a PR linked to ANOTHER item is kept with its `linkedTo` takeover chip.
@@ -48,9 +52,9 @@ export const githubPullRequestService = {
       const item = await workItemRepository.findById(currentItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(currentItemId);
-      return githubInstallationRepository.findByWorkspaceId(ctx.workspaceId, tx);
+      return githubRepoRepository.listByWorkspace(ctx.workspaceId, tx);
     });
-    if (!connected) throw new GithubNotConnectedError();
+    if (connected.length === 0) throw new GithubNotConnectedError();
 
     if (query.trim().length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
     const rows = await githubPullRequestRepository.searchCandidates(
@@ -82,7 +86,14 @@ export const githubPullRequestService = {
         throw new WorkItemNotFoundError(currentItemId);
 
       const pr = await githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
-      if (!pr || pr.repo.installation.workspaceId !== ctx.workspaceId)
+      // The REPO row is the tenant (MOTIR-1931), not its installation. A `!==`
+      // against a now-nullable column still compiles, so the compiler could not
+      // name this site the way it named the other ten — but the behaviour is the
+      // same class: for a repo behind Motir's shared provisioning installation
+      // `installation.workspaceId` is NULL, so this gate rejected every hosted
+      // repo's PR (fail-CLOSED, so never a leak — but the explicit item→PR link
+      // affordance would have been permanently broken for created repos).
+      if (!pr || pr.repo.workspaceId !== ctx.workspaceId)
         throw new GithubPullRequestNotFoundError(pullRequestId);
 
       const updated = await githubPullRequestRepository.setWorkItemLink(

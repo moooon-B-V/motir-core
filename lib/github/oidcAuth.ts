@@ -99,7 +99,15 @@ export async function authenticateGithubOidc(req: Request): Promise<OidcAuthResu
   if (!match || rest.length > 0) {
     return { ok: false, status: 403, reason: 'repo_not_connected' };
   }
-  const workspaceId = match.installation.workspaceId;
+  // The tenant is the REPO row's own workspace (MOTIR-1931), never the parent
+  // installation's. This is the sharpest of the ten sweep sites: with every
+  // tenant's created repos in ONE Motir org a coordinate IS globally unique, so
+  // the ambiguity guard above can never fire for a hosted repo — reading the
+  // tenant off the shared installation would have let a verified Actions token
+  // from workspace A's repo authenticate as workspace B, acting as B's owner. The
+  // guard stays (it still catches the same public repo connected under two
+  // tenants' own installations); it is simply no longer load-bearing.
+  const workspaceId = match.workspaceId;
 
   // Actor = the workspace owner (the ADR §4 keyless-actor decision): OIDC has no
   // user, but `Attachment.uploaderUserId` is required. A `db` read, no context

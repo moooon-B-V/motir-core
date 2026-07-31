@@ -89,6 +89,7 @@ async function makeScenario(email: string, opts: { withRepo?: boolean } = {}) {
       await githubRepoRepository.upsert(
         {
           installationId: connection.id,
+          workspaceId: workspace.id,
           repoId: PROJECT_ID,
           owner: 'octocat',
           name: 'acme',

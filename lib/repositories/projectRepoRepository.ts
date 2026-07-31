@@ -42,6 +42,7 @@ interface JoinedRow {
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
   repoProvider: string | null;
+  repoWorkspaceId: string | null;
   repoInstallationId: string | null;
   repoHostId: string | null;
   repoOwner: string | null;
@@ -74,6 +75,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
         : {
             id: r.repoRowId,
             provider: r.repoProvider!,
+            workspaceId: r.repoWorkspaceId!,
             installationId: r.repoInstallationId!,
             repoId: r.repoHostId!,
             owner: r.repoOwner!,
@@ -98,10 +100,14 @@ export const projectRepoRepository = {
    * `$queryRaw` in a repository is the sanctioned escape (CLAUDE.md's layer
    * contract lists it as a legal single operation).
    *
-   * RLS still applies to BOTH sides: `project_repository` by its own
-   * `workspace_id`, and `github_repo` through its parent installation's. So a
-   * mirror row belonging to another tenant simply does not join — the realized
-   * half comes back null rather than leaking.
+   * RLS still applies to BOTH sides, and since MOTIR-1931 both gate the SAME way:
+   * on the row's OWN `workspace_id`. So a mirror row belonging to another tenant
+   * simply does not join — the realized half comes back null rather than leaking
+   * — while a repo Motir CREATED for this workspace now DOES join, and the row
+   * reads `established: true`. Before that change `github_repo` gated through its
+   * parent installation, and a created repo sits behind the shared provisioning
+   * installation: the join returned NULL, `established` was false, and
+   * `toProjectRepoNames` dropped the row, so the repo was never dispatchable.
    *
    * `ORDER BY position` matches every other positioned table in this schema
    * (`work_item` / `board_column` / `workflow_status`), so the set sorts by the
@@ -133,6 +139,7 @@ export const projectRepoRepository = {
         pr."updated_at"        AS "updatedAt",
         gr."id"                AS "repoRowId",
         gr."provider"          AS "repoProvider",
+        gr."workspace_id"      AS "repoWorkspaceId",
         gr."installation_id"   AS "repoInstallationId",
         gr."repo_id"           AS "repoHostId",
         gr."owner"             AS "repoOwner",

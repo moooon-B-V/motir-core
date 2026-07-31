@@ -609,7 +609,15 @@ model Workspace {
   planItems                PlanItem[]
   // GitHub App installations on this workspace (Story 7.10 · MOTIR-891) — "Grant
   // 2" of the GitHub integration (repo access). Cascade with the workspace.
+  // A workspace's OWN installation only — Motir's shared provisioning
+  // installation is bound to NO workspace (MOTIR-1931); its repos are tenanted
+  // through `githubRepos` below, not through here.
   githubInstallations      GithubInstallation[]
+  // Connected/created repositories owned by this workspace (MOTIR-1931). Tenancy
+  // is a property of the REPO, not of the installation: one shared provisioning
+  // installation holds every tenant's created repos, so the repo row is what says
+  // whose they are. Cascade with the workspace.
+  githubRepos              GithubRepo[]
   // Issue-import runs + their external-id → work-item map (Story 7.16 · MOTIR-939).
   // Workspace-scoped tenant data — cascade with the workspace.
   imports                  Import[]
@@ -3638,7 +3646,15 @@ model GithubInstallation {
   /// connect. UNIQUE (one row per connection); the webhook + token paths key on
   /// it. DISTINCT from `id`, the internal cuid PK.
   installationId        String    @unique @map("installation_id")
-  workspaceId           String    @map("workspace_id")
+  /// The workspace whose OWN grant this is — NULL for Motir's shared
+  /// provisioning installation, which is owned by no tenant (MOTIR-1931, the
+  /// 2026-07-31 amendment to `docs/decisions/project-repository-set.md`). Every
+  /// tenant's Motir-created repos sit behind that ONE installation, so it cannot
+  /// name a workspace; the repo row carries the tenancy instead. NULL is also the
+  /// guard that makes `deleteExcept` unreachable on the shared path:
+  /// `persistInstallation` requires a `workspaceId: string`, so the reconcile
+  /// cannot even be formed for a shared installation.
+  workspaceId           String?   @map("workspace_id")
   accountLogin          String    @map("account_login")
   accountType           String    @map("account_type")
   /// The connection's access token, encrypted at rest — NULL for GitHub (minted
@@ -3654,7 +3670,7 @@ model GithubInstallation {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   repos     GithubRepo[]
 
   @@index([workspaceId])
@@ -3672,6 +3688,14 @@ model GithubRepo {
   /// FK → GithubInstallation.id (the internal cuid, NOT GitHub's numeric
   /// installation id). The parent installation this repo was selected on.
   installationId String   @map("installation_id")
+  /// WHOSE this repo is (MOTIR-1931). Tenancy is a property of the REPOSITORY,
+  /// not of the installation: Motir's provisioning org holds every tenant's
+  /// created repos behind ONE installation, so workspace A's repo and workspace
+  /// B's repo differ by repository, never by installation. This column is the
+  /// ONLY tenancy read — the installation still SELECTS which mirror rows a
+  /// delivery may touch, the repo row ATTRIBUTES them. Mirrors `ProjectRepo`,
+  /// which already gates on its own `workspace_id` rather than a join through.
+  workspaceId    String   @map("workspace_id")
   /// GitHub's numeric repository id (as a string) — stable across renames.
   repoId         String   @map("repo_id")
   owner          String
@@ -3681,6 +3705,11 @@ model GithubRepo {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   installation        GithubInstallation   @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  /// The owning tenant (MOTIR-1931) — modelled on BOTH sides, like every other FK
+  /// in this schema (the CLAUDE.md migration rule). Cascade: a deleted workspace
+  /// takes its mirrored repos with it, exactly as it did when they hung off the
+  /// installation.
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   pullRequests        GithubPullRequest[]
   /// Metered CI runs on this repo (Story MOTIR-1775 · MOTIR-1896). SetNull, like
   /// `ProjectRepo.githubRepoId`: disconnecting the repo must not delete the
@@ -3697,6 +3726,7 @@ model GithubRepo {
 
   @@unique([installationId, repoId])
   @@index([installationId])
+  @@index([workspaceId])
   @@map("github_repo")
 }
 

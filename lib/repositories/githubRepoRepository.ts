@@ -7,6 +7,11 @@ import { db } from '@/lib/db';
 
 export interface UpsertGithubRepoInput {
   installationId: string;
+  /** WHOSE this repo is (MOTIR-1931) — the row's own tenancy, not the parent
+   *  installation's. Required on every write: Motir's shared provisioning
+   *  installation holds several tenants' repos, so the installation cannot
+   *  answer this. */
+  workspaceId: string;
   repoId: string;
   owner: string;
   name: string;
@@ -36,11 +41,17 @@ export const githubRepoRepository = {
    *  GitHub installation only): the CLI routes on a CHECKOUT, and a GitLab-connected
    *  repo is checked out exactly like a GitHub one, so narrowing by provider here
    *  would reject a legitimate pin. Read inside a context transaction (the
-   *  `github_repo` / `github_installation` RLS policies are workspace-keyed), so it
-   *  takes `tx`. Empty when the workspace has no connection at all. */
+   *  `github_repo` RLS policy is workspace-keyed), so it takes `tx`. Empty when
+   *  the workspace has no connected or created repo at all.
+   *
+   *  Filters on the repo's OWN `workspace_id` (MOTIR-1931), not on a join through
+   *  the installation: a repo Motir CREATES for this workspace sits behind the
+   *  shared provisioning installation, which is bound to no workspace at all — the
+   *  old join dropped every such repo from the set, so a created repo was not a
+   *  legal `targetRepo` and no agent could be told to build in it. */
   async listByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
     return tx.githubRepo.findMany({
-      where: { installation: { is: { workspaceId } } },
+      where: { workspaceId },
       orderBy: [{ owner: 'asc' }, { name: 'asc' }],
     });
   },
@@ -66,6 +77,9 @@ export const githubRepoRepository = {
    *  `@default` applies) and update (the field is left untouched). */
   async upsert(input: UpsertGithubRepoInput, tx: Prisma.TransactionClient): Promise<GithubRepo> {
     const { installationId, repoId, ...rest } = input;
+    // `rest` carries `workspaceId`, so a re-selection re-stamps the owning tenant
+    // as well as the coordinates — the row's tenancy is refreshed, never inherited
+    // from whatever wrote it first.
     return tx.githubRepo.upsert({
       where: { installationId_repoId: { installationId, repoId } },
       create: { installationId, repoId, ...rest },
@@ -90,13 +104,15 @@ export const githubRepoRepository = {
   /** One connected repo by `(owner, name)` within a WORKSPACE — the code-scanning
    *  proxy's resolution (MOTIR-1605) from an audit `repoRef` to the tenant's
    *  installation. Owner/name match case-insensitively (GitHub coordinates are
-   *  case-insensitive). The `installation.workspaceId` filter scopes the lookup
-   *  to the caller's own workspace (defense-in-depth alongside the withWorkspaceContext
-   *  RLS gate on `github_installation`) — a repo connected under another tenant's
-   *  installation can never resolve. Includes the parent installation (its
-   *  provider + numeric `installationId` drive the token mint). Null when the
-   *  repo isn't connected in this workspace. Read inside a context transaction, so
-   *  it takes `tx`. */
+   *  case-insensitive). The filter is the repo's OWN `workspace_id` (MOTIR-1931),
+   *  which scopes the lookup to the caller's own workspace (defense-in-depth
+   *  alongside the `withWorkspaceContext` RLS gate on `github_repo`) — another
+   *  tenant's repo can never resolve, and a repo Motir CREATED for this workspace
+   *  now DOES (the old join through the installation missed it, because the shared
+   *  provisioning installation belongs to no workspace). Includes the parent
+   *  installation (its provider + numeric `installationId` drive the token mint).
+   *  Null when the repo isn't connected in this workspace. Read inside a context
+   *  transaction, so it takes `tx`. */
   async findConnectedByWorkspaceAndName(
     workspaceId: string,
     owner: string,
@@ -107,7 +123,7 @@ export const githubRepoRepository = {
       where: {
         owner: { equals: owner, mode: 'insensitive' },
         name: { equals: name, mode: 'insensitive' },
-        installation: { is: { workspaceId } },
+        workspaceId,
       },
       include: { installation: true },
     });
@@ -121,7 +137,12 @@ export const githubRepoRepository = {
    *  Returns EVERY match so the caller can reject an AMBIGUOUS coordinate (the
    *  same repo connected under two workspaces) rather than silently pick one —
    *  it never scopes to a workspace because the caller has none yet. Read-only →
-   *  no `tx`. Includes the parent installation (its `workspaceId` is the tenant). */
+   *  no `tx`. Includes the parent installation (its provider drives the token
+   *  mint); the TENANT is the row's own `workspaceId` (MOTIR-1931), never the
+   *  installation's — under one shared provisioning org a coordinate is globally
+   *  unique, so the ambiguity guard below could never fire for a hosted repo and
+   *  reading the tenant off the installation would have authenticated an Actions
+   *  run into whichever workspace held the shared row. */
   async findConnectedByName(
     owner: string,
     name: string,
@@ -160,7 +181,15 @@ export const githubRepoRepository = {
 
   /** Reconcile the selected set: delete every repo on this installation whose
    *  `repo_id` is NOT in `keepRepoIds` (a de-selected repo). An empty keep set
-   *  deletes them all (`NOT IN ()` is always true). Returns the delete count. */
+   *  deletes them all (`NOT IN ()` is always true). Returns the delete count.
+   *
+   *  ONLY correct for a workspace's OWN installation, where one reconcile sees
+   *  that workspace's whole selection. It is NEVER reachable for Motir's shared
+   *  provisioning installation (MOTIR-1931): its only caller is
+   *  `githubInstallationService.persistInstallation`, which requires a
+   *  `workspaceId: string`, and a shared installation's `workspaceId` is NULL —
+   *  so the call cannot be formed. That is a reachability property, not a
+   *  caution: there is no flag to forget to check. */
   async deleteExcept(
     installationId: string,
     keepRepoIds: string[],

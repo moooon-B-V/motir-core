@@ -27,6 +27,14 @@ export const githubInstallationService = {
    * webhook, system context). Input is already normalized through the provider
    * seam (`NormalizedRepo[]`). Upserts the installation, upserts each selected
    * repo, then deletes any repo no longer selected. Returns the token-free DTO.
+   *
+   * THE USER-INSTALLATION PATH ONLY (MOTIR-1931). `workspaceId` is a required
+   * `string`, and a shared provisioning installation has none — so this method,
+   * and with it the destructive `deleteExcept` prune, cannot be called for one.
+   * That is deliberate: `fetchInstallationRepos` returns EVERY tenant's repos for
+   * a shared installation, so a reconcile here would both delete the repos it did
+   * not fetch and leak the ones it did. Motir-created repos are persisted one row
+   * at a time by the creation primitive (MOTIR-1781), never reconciled.
    */
   async persistInstallation(input: {
     workspaceId: string;
@@ -48,6 +56,10 @@ export const githubInstallationService = {
         await githubRepoRepository.upsert(
           {
             installationId: installation.id,
+            // The repo's OWN tenancy (MOTIR-1931) — the same workspace this
+            // installation is bound to, since this path only ever runs for a
+            // workspace's own grant.
+            workspaceId: input.workspaceId,
             repoId: repo.providerRepoId,
             owner: repo.owner,
             name: repo.name,

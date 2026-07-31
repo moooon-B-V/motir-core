@@ -109,13 +109,13 @@ export async function applyCiStatusFeedback(
       event.context,
       tx,
     );
-    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
-      installation.workspaceId,
-      tx,
-    );
+    // `repo.workspaceId`, never `installation.workspaceId` (MOTIR-1931) — the repo
+    // row carries the tenancy; the installation only supplies the provider
+    // discriminator that picks the right noun for the feedback comment.
+    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
     return {
       kind: 'resolved' as const,
-      workspaceId: installation.workspaceId,
+      workspaceId: repo.workspaceId,
       provider: installation.provider as GitProviderId,
       workItemId: workItem.id,
       prId: cr.id,

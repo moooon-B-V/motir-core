@@ -89,7 +89,14 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
     },
   });
   await db.githubRepo.create({
-    data: { installationId: inst.id, repoId: `repo-${rand}`, owner, name, defaultBranch: 'main' },
+    data: {
+      installationId: inst.id,
+      workspaceId: fx.workspaceId,
+      repoId: `repo-${rand}`,
+      owner,
+      name,
+      defaultBranch: 'main',
+    },
   });
   return `${owner}/${name}`;
 }

@@ -105,6 +105,7 @@ describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
 
     const res = await codeGraphIndexService.indexRepoIntoWorkspaceProjects({
       installationId: 'inst-cg',
+      workspaceId: workspace.id,
       repoOwner: 'moooon',
       repoName: 'acme',
       defaultBranch: 'main',
@@ -153,6 +154,7 @@ describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
 
     const res = await codeGraphIndexService.indexRepoIntoWorkspaceProjects({
       installationId: 'inst-empty',
+      workspaceId: workspace.id,
       repoOwner: 'moooon',
       repoName: 'r',
       defaultBranch: 'main',
@@ -167,6 +169,7 @@ describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
   it('no-ops when the installation is gone', async () => {
     const res = await codeGraphIndexService.indexRepoIntoWorkspaceProjects({
       installationId: 'inst-nope',
+      workspaceId: 'ws-gone',
       repoOwner: 'moooon',
       repoName: 'r',
       defaultBranch: 'main',

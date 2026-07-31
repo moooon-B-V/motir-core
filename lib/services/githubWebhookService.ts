@@ -64,8 +64,22 @@ const HANDLED_PR_ACTIONS = new Set(['opened', 'reopened', 'closed']);
 
 export type GithubWebhookResult =
   | { event: 'ignored'; reason: string }
-  | { event: 'installation'; outcome: 'synced' | 'removed' | 'skipped_unbound' | 'malformed' }
-  | { event: 'installation_repositories'; outcome: 'synced' | 'skipped_unbound' | 'malformed' }
+  // `skipped_shared_installation` is DISTINCT from `skipped_unbound` on purpose
+  // (MOTIR-1931): unbound means "nobody connected this yet", shared means "this is
+  // Motir's own provisioning installation and reconcile does not apply to it".
+  | {
+      event: 'installation';
+      outcome:
+        | 'synced'
+        | 'removed'
+        | 'skipped_unbound'
+        | 'skipped_shared_installation'
+        | 'malformed';
+    }
+  | {
+      event: 'installation_repositories';
+      outcome: 'synced' | 'skipped_unbound' | 'skipped_shared_installation' | 'malformed';
+    }
   | {
       event: 'push';
       outcome:
@@ -131,8 +145,7 @@ export const githubWebhookService = {
       return { event: 'installation', outcome: 'removed' };
     }
 
-    const synced = await reconcileInstallation(installationId, body);
-    return { event: 'installation', outcome: synced ? 'synced' : 'skipped_unbound' };
+    return { event: 'installation', outcome: await reconcileInstallation(installationId, body) };
   },
 
   async handleInstallationRepositories(
@@ -140,8 +153,10 @@ export const githubWebhookService = {
   ): Promise<GithubWebhookResult> {
     const installationId = readInstallationId(body);
     if (!installationId) return { event: 'installation_repositories', outcome: 'malformed' };
-    const synced = await reconcileInstallation(installationId, body);
-    return { event: 'installation_repositories', outcome: synced ? 'synced' : 'skipped_unbound' };
+    return {
+      event: 'installation_repositories',
+      outcome: await reconcileInstallation(installationId, body),
+    };
   },
 
   /**
@@ -178,7 +193,10 @@ export const githubWebhookService = {
       if (!repo) return { kind: 'unknown_repo' as const };
       return {
         kind: 'resolved' as const,
-        workspaceId: installation.workspaceId,
+        // The REPO says whose this is (MOTIR-1931). The installation only
+        // selected which mirror rows this delivery may touch — under Motir's
+        // shared provisioning installation it names no workspace at all.
+        workspaceId: repo.workspaceId,
         repoOwner: repo.owner,
         repoName: repo.name,
         defaultBranch: repo.defaultBranch,
@@ -347,16 +365,28 @@ async function resolveGithubCiContext(
 /** Reconcile an installation's selected repos from GitHub's authoritative set —
  *  the `installation` (non-delete) + `installation_repositories` path. Only an
  *  ALREADY-bound installation is reconciled (the workspace binding is the connect
- *  flow's job); an unbound delivery is a no-op returning `false`. Fetches the
- *  current repo set through the seam and hands it to `persistInstallation`. */
+ *  flow's job); an unbound delivery is a no-op. Fetches the current repo set
+ *  through the seam and hands it to `persistInstallation`.
+ *
+ *  Returns WHY it did or didn't run, because the three reasons mean different
+ *  things operationally (MOTIR-1931): `unbound` is "nobody has connected this
+ *  installation yet", `shared` is "this is Motir's own provisioning installation
+ *  and reconcile does not apply to it". A shared installation's authoritative
+ *  repo set spans EVERY tenant, so reconciling it would delete the repos this
+ *  delivery did not fetch and leak the ones it did. */
 async function reconcileInstallation(
   installationId: string,
   body: Record<string, unknown>,
-): Promise<boolean> {
+): Promise<'synced' | 'skipped_unbound' | 'skipped_shared_installation'> {
   const existing = await withSystemContext((tx) =>
     githubInstallationRepository.findByInstallationId(installationId, tx),
   );
-  if (!existing) return false;
+  if (!existing) return 'skipped_unbound';
+  // The NULL is the guard, not a flag: `persistInstallation` requires a
+  // `workspaceId: string`, so the call below simply cannot be formed for a shared
+  // installation — this branch names that fact rather than enforcing it.
+  const workspaceId = existing.workspaceId;
+  if (workspaceId === null) return 'skipped_shared_installation';
 
   // The repos already persisted BEFORE this reconcile — the baseline we diff the
   // authoritative set against, so we index only NEWLY-added repos (a re-selection
@@ -371,7 +401,7 @@ async function reconcileInstallation(
     installationId,
   );
   await githubInstallationService.persistInstallation({
-    workspaceId: existing.workspaceId,
+    workspaceId,
     installation: {
       installationId,
       accountLogin:
@@ -385,11 +415,11 @@ async function reconcileInstallation(
   // repo (MOTIR-1500). Never blocks or fails the grant mirror.
   await enqueueNewlyAddedRepos({
     installationId,
-    workspaceId: existing.workspaceId,
+    workspaceId,
     repos,
     existingRepoIds,
   });
-  return true;
+  return 'synced';
 }
 
 /** Resolve the GitHub connection + repo + bound author for a change-request event
@@ -413,9 +443,11 @@ async function resolveGithubChangeRequestContext(
     tx,
   );
   if (!repo) return { kind: 'unknown_repo' };
+  // The REPO row is the tenant (MOTIR-1931) — for the membership lookup here and
+  // for everything the shared sync does downstream.
   const authorBoundUserId = await resolveBoundMember(
     readAuthorGithubUserId(body),
-    installation.workspaceId,
+    repo.workspaceId,
     tx,
   );
   return { kind: 'resolved', installation, repo, authorBoundUserId };

@@ -74,6 +74,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
   await db.githubRepo.create({
     data: {
       installationId: inst.id,
+      workspaceId: fx.workspaceId,
       repoId: `repo-${rand}`,
       owner: 'acme',
       name: 'widgets',

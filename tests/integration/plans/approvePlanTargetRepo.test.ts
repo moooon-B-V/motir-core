@@ -64,6 +64,7 @@ async function connectRepo(workspaceId: string, name: string, owner = 'acme'): P
   return db.githubRepo.create({
     data: {
       installationId: inst.id,
+      workspaceId: workspaceId,
       repoId: `${name}-${Math.random().toString(36).slice(2, 10)}`,
       owner,
       name,

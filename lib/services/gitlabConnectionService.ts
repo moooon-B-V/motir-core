@@ -251,6 +251,11 @@ export const gitlabConnectionService = {
         await githubRepoRepository.upsert(
           {
             installationId: conn.id,
+            // The row's own tenancy (MOTIR-1931). A GitLab connection is never
+            // shared (`ci-minutes-allowance.md` §5.6), so this is always the
+            // connection's workspace — but the column is the gate the
+            // `github_repo` RLS policy now reads, so it must be stamped here too.
+            workspaceId: ctx.workspaceId,
             repoId: match.providerRepoId,
             owner: match.owner,
             name: match.name,

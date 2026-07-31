@@ -77,6 +77,7 @@ async function connectRepo(
   await db.githubRepo.create({
     data: {
       installationId: inst.id,
+      workspaceId: fx.workspaceId,
       repoId: `repo-${rand}`,
       owner,
       name,
