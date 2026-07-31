@@ -129,6 +129,65 @@ export interface ProjectRepoSetDto {
   targetAccount: string | null;
 }
 
+/**
+ * A repository the user ALREADY has that a row may be pointed at — one option of
+ * the establish step's "Use one of mine" picker (MOTIR-1782).
+ *
+ * Sourced from the workspace's GitHub INSTALLATION (grant 2), which is the only
+ * honest source: the picker must offer exactly the repositories the user granted
+ * Motir and nothing else, so "Motir never sees the rest" stays true on screen as
+ * well as in the copy. `id` is the internal `GithubRepo.id` the connect action
+ * takes — never a host id, so a caller cannot point a row at a repository this
+ * workspace has not connected.
+ */
+export interface ProjectRepoConnectCandidateDto {
+  /** Internal `GithubRepo.id` — the value the connect action receives. */
+  id: string;
+  owner: string;
+  name: string;
+  /** `owner/name` — the display form the picker shows. */
+  repoRef: string;
+  defaultBranch: string;
+  /** Already claimed by a row of THIS project's set — offered but not selectable
+   *  (a repository backs at most one row; the `github_repo_id` unique index is the
+   *  real guard, and showing why beats a 409 the user cannot predict). */
+  claimed: boolean;
+}
+
+/**
+ * Everything the establish step renders in ONE read (MOTIR-1782): the set itself
+ * plus the two GitHub facts the technical path needs.
+ *
+ * The GitHub halves are the DEFAULT path's business exactly zero times — nothing
+ * on it asks for a permission — so they are carried as plain nullable facts rather
+ * than a "grant state": `githubLogin` is grant 1 (identity, present once the actor
+ * has connected) and `connectCandidates` is grant 2 (the installation's repos,
+ * empty without one). Their absence is what the "I already have code" door hands
+ * off to the shipped 7.10 pane FOR; it is never a warning on the main line.
+ */
+export interface ProjectRepoEstablishViewDto {
+  set: ProjectRepoSetDto;
+  /**
+   * The account a CREATED repository lands in — Motir's own provisioning org
+   * (ADR §3 amendment), or null on a deployment that cannot provision at all (a
+   * self-hosted instance with no `GITHUB_FALLBACK_ORG`).
+   *
+   * Rendered as the row's FIXED `owner /` prefix on the technical path, which is
+   * the honest form: the owner is not the user's to choose, so it is shown, not
+   * offered. Null simply drops the prefix — the row still names the repository,
+   * and a create attempt on such a deployment fails with the not-configured
+   * reason rather than being pre-empted by a state this design never drew.
+   */
+  hostOwner: string | null;
+  /** The actor's connected GitHub login (grant 1), or null when not connected. */
+  githubLogin: string | null;
+  /** Whether the WORKSPACE has a GitHub App installation (grant 2). */
+  hasInstallation: boolean;
+  /** The repositories the installation grants, for the "Use one of mine" picker.
+   *  Empty without an installation — the picker then hands off to 7.10. */
+  connectCandidates: ProjectRepoConnectCandidateDto[];
+}
+
 /** Input to `projectRepoSetService.addRow` — appends a row to the end of the set.
  *  `seedSource` defaults from the role via ADR §2's table; `state` is always
  *  `proposed` (nothing is created until the set is confirmed). */

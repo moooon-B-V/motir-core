@@ -2,7 +2,7 @@ import { Prisma, type ProjectRepoRole, type ProjectRepoState } from '@prisma/cli
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { keyForAppend } from '@/lib/workItems/positioning';
+import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -94,6 +94,22 @@ const TARGET_ACCOUNT_MAX = 100;
  * editable in EVERY state: it is a human annotation that drives nothing.
  */
 const PLAN_EDITABLE_STATES: readonly ProjectRepoState[] = ['proposed', 'failed'];
+
+/**
+ * The SETTLED states a row may be RE-PLANNED out of (`replanRow`) — the two that
+ * settled without making anything: `skipped` (deliberately code-less) and
+ * `connected` (an existing repository was pointed at; nothing was created and
+ * nothing in it changed).
+ *
+ * `created` is deliberately absent. A created repository is a real artifact
+ * (ADR §4.2), and quietly replacing the row that records it would make
+ * "Motir created this" disappear from the set; dropping it is the user's explicit
+ * **Remove**, not a side effect of changing their mind about the mode. `creating`
+ * is absent because a creation is in flight under that exact name, and `proposed`
+ * / `failed` are absent because they are already re-planned states — the row is
+ * editable in place.
+ */
+const REPLANNABLE_STATES: readonly ProjectRepoState[] = ['skipped', 'connected'];
 
 /** Trim + shape-validate an intended repo name. */
 function validateName(raw: string): string {
@@ -497,6 +513,102 @@ export const projectRepoSetService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
       (tx) => projectRepoRepository.deleteById(rowId, tx),
     );
+  },
+
+  /**
+   * RE-PLAN a settled-but-empty-handed row: drop it and put a FRESH `proposed`
+   * row in its place, carrying the same role, name, label, seed source, derivation
+   * signal and position.
+   *
+   * This is the ADR §4.1 note made callable. A settled state has no outgoing edge
+   * ON PURPOSE — "this repository was created" must never be quietly overwritten
+   * by "actually, skip it" — and the ADR's own prescribed way to change one's mind
+   * is to REMOVE the row and add a fresh one. That is exactly what this does, in
+   * ONE transaction so the set is never briefly missing the row, and only from
+   * {@link REPLANNABLE_STATES} (the two settlements that made nothing). It is what
+   * the establish step's **Create it after all** (on a skipped row) and
+   * **Let Motir host it** (on a connected one) call; widening it to `created`
+   * would be an ADR change, not a code change.
+   *
+   * The row's IDENTITY changes — a new id — because the old decision is genuinely
+   * over. `proposalSignal` is deliberately carried across: it records what Motir
+   * inferred at proposal time, and the user re-planning the row does not rewrite
+   * that history (the same reason an edit does not clear it).
+   */
+  async replanRow(rowId: string, ctx: ServiceContext): Promise<ProjectRepoDto> {
+    const created = await inLockedRow(rowId, ctx, async (row, tx) => {
+      if (!REPLANNABLE_STATES.includes(row.state)) {
+        // Not an illegal-TRANSITION: nothing is being transitioned. The row's
+        // state simply makes re-planning the wrong operation, and the caller's
+        // correct move is `removeRow` (or, for an unsettled row, editing it in
+        // place) — which the 422 says rather than implying a hop exists.
+        throw new ProjectRepoInvalidFieldError(
+          'state',
+          `a ${row.state} row cannot be re-planned (only ${REPLANNABLE_STATES.join(' or ')} rows can); remove it instead.`,
+        );
+      }
+      // Delete FIRST: the `(project_id, name)` unique index would otherwise reject
+      // the replacement, since it carries the same name by design.
+      await projectRepoRepository.deleteById(rowId, tx);
+      return projectRepoRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId: row.projectId,
+          role: row.role,
+          label: row.label,
+          name: row.name,
+          seedSource: row.seedSource,
+          proposalSignal: row.proposalSignal,
+          state: 'proposed',
+          position: row.position,
+        },
+        tx,
+      );
+    });
+    // A freshly-created row is `proposed`, so it is unrealized by construction —
+    // which is also the point: re-planning UN-claims whatever the old row held.
+    return toProjectRepoDto({ ...created, githubRepo: null });
+  },
+
+  /**
+   * MOVE a row one place up or down the set — the keyboard-operable reorder the
+   * establish step exposes as **Move up** / **Move down**.
+   *
+   * Order is MEANINGFUL: the first row is the project's PRIMARY repository (ADR
+   * §1.3), so this is a real decision, not a display preference. A row already at
+   * the edge it is asked to move toward is a NO-OP that returns the row unchanged
+   * rather than an error — a double-press on the top row is not a failure, and the
+   * UI disables those controls anyway.
+   *
+   * Legal in EVERY state. Reordering says which repository is primary; it neither
+   * touches a repository nor claims anything about one, so a settled row reorders
+   * exactly like a proposed one.
+   */
+  async moveRow(
+    rowId: string,
+    direction: 'up' | 'down',
+    ctx: ServiceContext,
+  ): Promise<ProjectRepoDto> {
+    return inLockedRow(rowId, ctx, async (row, tx) => {
+      // Read the ordered set INSIDE the same transaction that holds the row lock,
+      // so the neighbours the new key is computed between cannot move underneath
+      // it (the lock-before-read-derived-update rule — the key is derived from the
+      // neighbours' positions).
+      const rows = await projectRepoRepository.listByProject(row.projectId, ctx.workspaceId, tx);
+      const index = rows.findIndex((r) => r.id === rowId);
+      const target =
+        direction === 'up'
+          ? index <= 0
+            ? null
+            : keyBetweenSafe(rows[index - 2]?.position ?? null, rows[index - 1]!.position)
+          : index === -1 || index >= rows.length - 1
+            ? null
+            : keyBetweenSafe(rows[index + 1]!.position, rows[index + 2]?.position ?? null);
+
+      if (target === null) return toProjectRepoDto(row);
+      const updated = await projectRepoRepository.update(rowId, { position: target }, tx);
+      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+    });
   },
 
   /**

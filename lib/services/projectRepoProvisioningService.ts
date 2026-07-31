@@ -90,6 +90,22 @@ export interface EstablishRowResult {
   failureCode?: string;
 }
 
+/** Narrowing options for {@link projectRepoProvisioningService.establishSet}. */
+export interface EstablishSetOptions {
+  /**
+   * Attempt ONLY this row, leaving every sibling untouched (`not_attempted`).
+   *
+   * This is the establish step's **Retry** on a single failed row (MOTIR-1782):
+   * rows are independent (ADR §4.2), so retrying one must not silently re-attempt
+   * a sibling the user has not asked about again. Absent = the whole set, which is
+   * the first run and the "Try again" on the default path.
+   *
+   * A row id that is not in this project's set simply matches nothing, so the run
+   * attempts nothing — the same honest answer as a set whose rows are all settled.
+   */
+  rowId?: string;
+}
+
 export interface EstablishSetResult {
   projectId: string;
   /** One entry per row of the set, in set order — including the ones this run
@@ -119,7 +135,11 @@ export const projectRepoProvisioningService = {
    * not existing, or the actor not being allowed to edit it — which is the access
    * gate `projectRepoSetService` already owns.
    */
-  async establishSet(projectId: string, ctx: ServiceContext): Promise<EstablishSetResult> {
+  async establishSet(
+    projectId: string,
+    ctx: ServiceContext,
+    options: EstablishSetOptions = {},
+  ): Promise<EstablishSetResult> {
     // Browse-gated read of the whole set (a missing / other-tenant project 404s
     // here, before anything touches GitHub); every write below is edit-gated by
     // the set service itself.
@@ -129,6 +149,14 @@ export const projectRepoProvisioningService = {
     const results: EstablishRowResult[] = [];
     // SEQUENTIAL on purpose — see the module header.
     for (const row of rows) {
+      // A single-row run reports every OTHER row as `not_attempted` rather than
+      // omitting it: the result still describes the whole set, so a caller renders
+      // from one result (the contract `EstablishSetResult.rows` states) whether it
+      // asked for one row or all of them.
+      if (options.rowId !== undefined && row.id !== options.rowId) {
+        results.push({ rowId: row.id, name: row.name, outcome: 'not_attempted', row });
+        continue;
+      }
       if (!UNRESOLVED_STATES.includes(row.state)) {
         results.push({
           rowId: row.id,

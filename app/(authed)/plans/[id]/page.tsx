@@ -5,9 +5,12 @@ import { ChevronLeft } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { planReviewService } from '@/lib/services/planReviewService';
+import { projectsService } from '@/lib/services/projectsService';
+import { projectRepoEstablishService } from '@/lib/services/projectRepoEstablishService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { PlanDetail } from '@/components/planning/PlanDetail';
+import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 
 // The PLAN DETAIL route (Story 7.21 · Subtask 7.4.5 / MOTIR-847) — `/plans/[id]`,
 // the generation-review MODE of the canvas+chat workspace (MOTIR-1193). It MOUNTS
@@ -44,6 +47,33 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
     throw err;
   }
 
+  // The ESTABLISH STEP (Story MOTIR-1775 · MOTIR-1782). Once the plan is approved
+  // its items are already in the backlog, and the next thing it needs is somewhere
+  // for its code to live — so the step takes the CANVAS pane while the review rail
+  // stays, still reading "Approved". Read here rather than in the island because
+  // the island cannot render a step it has no data for, and a `router.refresh()`
+  // (the rail's own update path) re-runs this read.
+  //
+  // Read ONLY for an approved plan: a `planned` / `generating` / `declined` plan
+  // has nothing to establish, and asking would be a wasted GitHub round-trip on
+  // every plan page-view. A repo-set read failure NEVER breaks the plan page — the
+  // plan is the page's subject and the step is an addition to it — so it degrades
+  // to "no step" and the permanent door (MOTIR-1764) still leads back.
+  let repoView: ProjectRepoEstablishViewDto | null = null;
+  let projectKey: string | null = null;
+  if (review.status === 'approved') {
+    try {
+      const project = await projectsService.assertProjectInWorkspace(
+        review.projectId,
+        ctx.workspaceId,
+      );
+      projectKey = project.identifier;
+      repoView = await projectRepoEstablishService.getEstablishView(review.projectId, ctx);
+    } catch (err) {
+      console.error('[plans/[id]] could not read the project repository set:', err);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <header className="flex items-center gap-2">
@@ -63,7 +93,15 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
           height so it fills the main area without a double scrollbar (topnav +
           the shell's py-6 + this header ≈ 10rem of chrome above it). */}
       <div className="h-[calc(100dvh-10rem)] min-h-[34rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
-        <PlanDetail initialReview={review} ariaLabel={t('canvasAria')} />
+        <PlanDetail
+          initialReview={review}
+          ariaLabel={t('canvasAria')}
+          repositorySet={
+            repoView && projectKey && repoView.set.rows.length > 0
+              ? { projectKey, view: repoView }
+              : null
+          }
+        />
       </div>
     </div>
   );

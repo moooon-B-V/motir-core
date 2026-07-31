@@ -45,12 +45,26 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
   }
 }
 
+/**
+ * The one PLAIN LINE the approved outcome gains about the project's code (Story
+ * MOTIR-1775 · MOTIR-1782) — `ready` when every row of the repository set has
+ * settled, `unfinished` while any is still unresolved, null when the project has
+ * no set at all.
+ *
+ * ⚠️ A LINE, never a count and never a repository name. The rail is the surface a
+ * non-technical user reads to confirm their plan is safe; putting "2 of 3
+ * repositories created" here would smuggle the whole technical vocabulary onto
+ * the default path through the back door.
+ */
+export type PlanCodeOutcome = 'ready' | 'unfinished';
+
 export interface PlanReviewRailProps {
   review: PlanReviewDto;
   onApprove: () => void;
   onDecline: () => void;
   busy: boolean;
   errorCode: string | null;
+  codeOutcome?: PlanCodeOutcome | null;
 }
 
 export function PlanReviewRail({
@@ -59,6 +73,7 @@ export function PlanReviewRail({
   onDecline,
   busy,
   errorCode,
+  codeOutcome,
 }: PlanReviewRailProps) {
   const t = useTranslations('planReview');
   const decided = review.status === 'approved' || review.status === 'declined';
@@ -139,7 +154,7 @@ export function PlanReviewRail({
           </p>
         ) : null}
         {decided ? (
-          <DecidedOutcome review={review} t={t} />
+          <DecidedOutcome review={review} t={t} codeOutcome={codeOutcome ?? null} />
         ) : (
           <>
             <Button
@@ -191,10 +206,13 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
 function DecidedOutcome({
   review,
   t,
+  codeOutcome,
 }: {
   review: PlanReviewDto;
   t: ReturnType<typeof useTranslations>;
+  codeOutcome: PlanCodeOutcome | null;
 }) {
+  const tRepo = useTranslations('repositorySet');
   const approved = review.status === 'approved';
   return (
     <div className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3">
@@ -206,6 +224,19 @@ function DecidedOutcome({
         )}
         {approved ? t('approvedOutcome', { n: review.itemCount }) : t('declinedOutcome')}
       </p>
+      {approved && codeOutcome ? (
+        <p
+          data-testid="plan-code-outcome"
+          className="flex items-center gap-1.5 text-sm text-(--el-text-secondary)"
+        >
+          {codeOutcome === 'ready' ? (
+            <Check className="size-4 shrink-0 text-(--el-success)" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
+          )}
+          {codeOutcome === 'ready' ? tRepo('outcomeReady') : tRepo('finishSetupLink')}
+        </p>
+      ) : null}
       {approved ? (
         <Link
           href="/items"
