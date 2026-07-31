@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +32,14 @@ import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 // approve when items have drifted. Seeded from the server read; `router.refresh`
 // can't reach a client island's `useState` seed, so state updates flow through
 // this island's own refetch on every mutation + poll tick (the page-state rule).
+//
+// APPROVE is the page-state contract's "a mutation touching BOTH does BOTH" case
+// (MOTIR-1947): it changes this island (the review → `approved`, via `refetch`)
+// AND a surface rendered on the SERVER — the establish step, which the page reads
+// only for an approved plan and hands down as `repositorySet`. A refetch cannot
+// produce that prop and a refresh cannot reach this island's state, so approve
+// does both. Decline and the proposal inline edit do NOT refresh: neither reveals
+// a server-rendered surface, and surface kind 1 (the edited cell) must not.
 
 const POLL_MS = 2500;
 
@@ -54,15 +63,21 @@ export interface PlanDetailProps {
 
 export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDetailProps) {
   const t = useTranslations('planReview');
+  const router = useRouter();
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
   // The one line the rail's approved outcome carries about the project's code.
-  // SEEDED from the server read so a page load is already correct, then kept
-  // current by the step reporting its own outcome — the rail is a sibling client
+  // DERIVED from the server read so a page load is already correct, then taken
+  // over by the step reporting its own outcome — the rail is a sibling client
   // component, so nothing here needs a server round-trip to say "your code is
   // ready".
-  const [codeOutcome, setCodeOutcome] = useState<PlanCodeOutcome | null>(() =>
-    codeOutcomeOf(repositorySet?.view ?? null),
-  );
+  //
+  // Derived rather than `useState`-seeded (MOTIR-1947): the seed of a client
+  // island runs ONCE at mount, so the prop the approve refresh delivers would be
+  // ignored and the rail would carry no code line in the very breath it starts
+  // saying "Approved". Only the step's OWN report is state, and null there simply
+  // means "the step has not spoken yet" — it never emits null itself.
+  const [reportedCodeOutcome, setReportedCodeOutcome] = useState<PlanCodeOutcome | null>(null);
+  const codeOutcome = reportedCodeOutcome ?? codeOutcomeOf(repositorySet?.view ?? null);
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -97,22 +112,42 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
   }, [review.status, refetch]);
 
   const runAction = useCallback(
-    async (action: (id: string) => Promise<unknown>) => {
+    async (
+      action: (id: string) => Promise<unknown>,
+      { refreshServerSurfaces = false }: { refreshServerSurfaces?: boolean } = {},
+    ) => {
       setBusy(true);
       setErrorCode(null);
       try {
         await action(planId);
         await refetch();
+        // The other half of the contract: re-run the page's SERVER read so a
+        // surface only it can produce (the establish step) appears in this same
+        // page view. Opt-in per action — a refresh nothing on the page needs is
+        // a wasted round-trip, and on the wrong surface it is a bug.
+        if (refreshServerSurfaces) router.refresh();
       } catch (err) {
         setErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
         // A 409 means a concurrent reviewer already decided — refetch to show it.
-        if (err instanceof PlanRequestError && err.status === 409) await refetch().catch(() => {});
+        // The decision was still an approval, so the server surface it reveals is
+        // just as due as on our own success.
+        if (err instanceof PlanRequestError && err.status === 409) {
+          await refetch().catch(() => {});
+          if (refreshServerSurfaces) router.refresh();
+        }
       } finally {
         setBusy(false);
         setConfirmOpen(false);
       }
     },
-    [planId, refetch],
+    [planId, refetch, router],
+  );
+
+  // Approving REVEALS the establish step, which only the server can render — so
+  // this is the one action that also refreshes (MOTIR-1947).
+  const approve = useCallback(
+    () => runAction(approvePlanRequest, { refreshServerSurfaces: true }),
+    [runAction],
   );
 
   const onApprove = useCallback(() => {
@@ -120,8 +155,8 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
       setConfirmOpen(true);
       return;
     }
-    void runAction(approvePlanRequest);
-  }, [review.stale, runAction]);
+    void approve();
+  }, [review.stale, approve]);
 
   const onDecline = useCallback(() => void runAction(declinePlanRequest), [runAction]);
 
@@ -206,7 +241,7 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
               initialView={repositorySet.view}
               backlogHref="/items"
               connectHref="/settings/workspace/github"
-              onOutcomeChange={setCodeOutcome}
+              onOutcomeChange={setReportedCodeOutcome}
             />
           ) : (
             <PlanReviewCanvas
@@ -241,12 +276,7 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
           <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={busy}>
             {t('staleConfirmCancel')}
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => void runAction(approvePlanRequest)}
-            loading={busy}
-            disabled={busy}
-          >
+          <Button variant="primary" onClick={() => void approve()} loading={busy} disabled={busy}>
             {t('staleConfirmApprove')}
           </Button>
         </div>
