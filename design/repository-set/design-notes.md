@@ -1,13 +1,14 @@
 # `design/repository-set/` — design notes
 
-**The area index. It now covers TWO surfaces**, which are the two halves of one promise: where a
-project's code comes to live, and what the standing _"it's yours — move it whenever you want"_
-actually opens onto.
+**The area index. It now covers THREE surfaces** — the three things a project's code has to answer:
+where it comes to live, who on the team can get into it, and what the standing _"it's yours — move
+it whenever you want"_ actually opens onto.
 
 | Surface                                                          | Asset                                                                                                   | Card                                                         | Sections |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- |
 | **The establish step** at plan approval                          | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png) | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)         | §0–§13   |
-| **The take-it-over flow** — move a repository to your own GitHub | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                         | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga) | **§14**  |
+| **The take-it-over flow** — move a repository to your own GitHub | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                         | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga) | §14      |
+| **Team code access** — who else on the team can clone it         | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)             | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API) | **§15**  |
 
 **Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** §0–§13 are the design
 reference for the step at plan approval that gives an approved plan somewhere for its code to live —
@@ -19,7 +20,7 @@ acceptance video walk.
   truth, built from the real design system. Its `.png` export
   ([`repository-set.png`](./repository-set.png)) is the board/PR-visible face.
 - **Definition of done (three files, PER SURFACE):** `design-notes.md` +
-  `<surface>.mock.html` + `<surface>.png`. All five files are committed.
+  `<surface>.mock.html` + `<surface>.png`. All seven files are committed.
 - **Scope:** pixels and copy only. No React, no route, no `en.json` entries — those are
   MOTIR-1782's / MOTIR-1900's / MOTIR-1939's.
 
@@ -1095,3 +1096,420 @@ The room is a settings page, so route each surface by HOW it renders (the enforc
   cannot honour would be a worse promise than none.
 - **The code-context surface** — MOTIR-1764. When it lands it can mount this same room as a
   component; the route chosen here exists today, which is why it was chosen.
+
+---
+
+# 15. `team-access.mock.html` — WHO ELSE ON THE TEAM CAN CLONE THE CODE
+
+**Story MOTIR-1775 · subtask MOTIR-1944 (design gate, Principle #13).** §15 is the layout source of
+truth for **MOTIR-1945** (the surface), which renders against **MOTIR-1910**'s per-member record and
+DTO.
+
+- **Asset of record:** [`team-access.mock.html`](./team-access.mock.html) — the source of truth,
+  built from the real design system. Its `.png` export ([`team-access.png`](./team-access.png)) is
+  the board/PR-visible face.
+- **Scope:** pixels and copy only. No React, no route, no `en.json` entries, no schema — those are
+  MOTIR-1945's and MOTIR-1910's.
+
+## 15.1 · The answer in one line
+
+**Access to a project's code is a property of the people who can already edit the project — so it is
+drawn as a list of PEOPLE, in project settings, beside the pane that already lists them.** Every
+member sees where everyone stands; only an admin can act on someone else; and the one action a
+person can only take for themselves — connecting GitHub — is offered on their own row and nowhere
+else.
+
+## 15.2 · Every decided answer came from MOTIR-1943 — this asset decides ONE thing
+
+`docs/decisions/project-repository-set.md` §3, _"Amendment 2026-07-31 (Yue · MOTIR-1943) — TEAM
+access"_, answers five questions. **Nothing in this asset re-opens one**, and each is cited where it
+is drawn:
+
+| Q      | The decision                                                                                                                      | Where it is DRAWN                                                                                      |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Q1** | The invitable set = the members the shipped `canEdit` policy returns true for, enumerated with `assignableMembersService` scoping | Panel 1's two cards — **People** (invitable) and **Not eligible** — and panel 2's `not eligible` state |
+| **Q2** | A teammate is invited at `push`; the approving user keeps `admin`. **Per-invitee data**, not one product-wide value               | The trailing `Pill` on each row, and the per-repository permission chip in panel 3's expansion         |
+| **Q3** | `Connect GitHub` is offered to a member for their OWN identity only; a viewer of that row sees a reason, never a dead action      | Panels 2 (`not_invited` · seen by someone else) and 4 (the same row, seen by Dana)                     |
+| **Q4** | Project settings, **on or beside** _Access & members_ — "a section within that pane or a sibling pane is MOTIR-1944's to draw"    | §15.3 decides it; panel 0 draws both doors                                                             |
+| **Q5** | No new CI guard — the pool grows with the members added to it, and MOTIR-1907's gate is count-independent                         | Nothing meters, caps, warns about spend or refuses a push anywhere in the asset                        |
+
+**The one open thing this card decides is Q4's remainder: section vs. sibling pane.** It is a
+**sibling pane**, and §15.3 gives the reasons.
+
+## 15.3 · Placement and the access path — one room, two doors
+
+**The room is `/settings/project/code-access`** — a new entry in the `Access` group of
+`lib/settings/projectSettingsNav.ts`, directly under `members`:
+
+```ts
+{ id: 'code-access', group: 'access', href: '/settings/project/code-access',
+  icon: KeyRound, labelKey: 'nav.codeAccess', access: browse },
+```
+
+**Why a sibling pane rather than a section inside Access & members** — four reasons, in the order
+they mattered:
+
+1. **It is a table with its own states, not a field.** Six per-member states, four non-happy page
+   states, two viewpoints and a second (per-repository) dimension. The Access & members pane is
+   already a `max-w-[42rem]` column carrying a four-option access control, a member editor and the
+   build-in-public card; a matrix appended to its foot would be the least-read thing on the longest
+   page in the area.
+2. **The registry IS the shipped mount, and it comes with a guard.** `projectSettingsNav.ts` states
+   its own extension rule — _"A later admin story mounts its page by ADDING an entry here — no
+   layout change"_ — and drives the rail, the ⌘K deep links, and a **totality test** that pairs every
+   `settings/project/**/page.tsx` route 1:1 with an entry. A pane cannot silently lose its door; a
+   section inside another pane has no such guard.
+3. **A teammate has to reach it, and `browse` is the right gate.** Both panes are browse-gated, so a
+   non-admin reaches this one exactly as easily — and unlike the members pane, this one has something
+   a non-admin can DO (connect their own GitHub). Burying that inside an admin-shaped editor would
+   contradict Q3's whole point.
+4. **The data's scope matches.** `ProjectRepo` is project-scoped, so a project-settings home is the
+   scope the rows already have.
+
+**The two doors, each drawn as a real affordance inside its host (panel 0):**
+
+| #   | Door                                                         | Host                                      | Why it exists                                                                                                                                                                                                |
+| --- | ------------------------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | The **`Code access`** rail row                               | the project-settings area                 | The permanent way in — a rail entry with `KeyRound`, second in the `Access` group. This is the mount; without it there is no page.                                                                           |
+| 2   | The **`Code access` card** at the foot of _Access & members_ | the shipped `ProjectMembersSettings` pane | The two panes answer the same question one level apart. It carries the COUNT (`4 of 5 people who can edit can clone this project's code`), so "is anybody locked out?" is answered without leaving the pane. |
+
+**Why door 2 carries a number and not just a label.** The failure this whole Story exists to fix was
+INVISIBLE: five of six people could not clone their own project's code and nothing said so anywhere.
+A door labelled only "Code access" would reproduce that — the count is what makes the gap legible
+from the surface people already visit.
+
+**Rejected placements, and by whom.** The code-context surface (MOTIR-1764) and the plan-approval
+step were both ruled out by MOTIR-1943 Q4 — the first is about index freshness rather than people,
+the second by §5's own words ("a teammate is not standing at plan approval"). Neither is re-argued
+here. `/settings/project/repositories` (§14.4's room) was NOT chosen either: that room is about the
+REPOSITORIES — ownership, transfer, state — and Q4 decided the people axis owns this surface. The two
+rooms are one rail apart and each is one click from the other.
+
+## 15.4 · Drawn against SHIPPED reality — what was RENDERED first
+
+Every surface this composes into already exists, so it was **rendered before anything was drawn** —
+a production build (`pnpm exec next build` + `next start`) of `origin/main` @ `cac445bb`, signed in
+against a seeded six-person workspace (Northwind / project Atlas), screenshotted at 1440 wide. Not
+reasoned from the `.tsx` (`notes.html` **#73**).
+
+| Rendered                                                      | What the render CHANGED about the drawing                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/settings/project/members` (page + `ProjectMembersSettings`) | The member row is mirrored element for element: `flex items-center gap-3 border-b border-(--el-border-soft) py-3`, a `size-8 rounded-full bg-(--el-text)` initials disc, `min-w-0 flex-1` name/email column, trailing controls. The pane column is `max-w-[42rem]`, the title is `font-serif text-3xl`, and the `Card` header is heading + count `Pill` on the left with the control on the right — all copied from the render, not guessed. |
+| The project-settings **rail** (SidebarNav's settings swap)    | The real group order is General / Access / Work / Automation, with `Members & access` alone in Access — so the new row lands as the SECOND Access entry, and panel 0 draws the rail with its real header (`Back to Atlas` + the `AT` / Atlas / ATL identity block).                                                                                                                                                                          |
+| `gitSettingsPrimitives.tsx` `IdentityHeader`                  | Reused as-is for the connected-account line in panel 4 — the `--el-avatar-fallback` disc, `@login`, the `Pill severity="success"` **Verified** badge, the caption, and the trailing **Use a different account**. Not a redrawn stand-in (the same #73 fix §5's panel 3b applied).                                                                                                                                                            |
+| `design/repository-set/repository-set.mock.html` panel 4      | The invitation line is **composed**, not redrawn: same icons, same words, same `--el-*` roles, same forward paths.                                                                                                                                                                                                                                                                                                                           |
+
+The token and icon layers of the mock are **generated** from `@motir/design-system/theme.css` and
+`lucide-react` (the octocat path verbatim from `components/icons/GithubMark.tsx`), so no value is
+retyped and the asset cannot drift from the shipped layer.
+
+## 15.5 · The matrix is two-dimensional — and it is drawn MEMBER-primary
+
+**N members × M repositories, granted per repository.** The surface has to pick an axis, and it picks
+the member:
+
+- **The member axis carries the DECISIONS.** Eligibility (Q1) and a connected identity (Q3) are
+  properties of a PERSON and settle every repository in the set at once. The repository axis varies
+  only the invitation mechanics — and even that rarely, because `projectRepoAccessService.grantAccess`
+  walks the whole set with one login in one pass.
+- **The question the surface answers is person-shaped.** "Can Dana clone our code?" — not "who is on
+  atlas-api?". That is also the grammar of the pane beside it, which is the point of putting them
+  side by side.
+- **Repo-primary would multiply the rows by M and the reasons by nothing.** Six people on a
+  three-repo project is 18 rows, of which 12 restate a reason that belongs to a person.
+
+**So: the SET is named once, at the top of the card** — one `mono` chip per repository, the M axis
+made visible without repeating it 6 times — and each member is one row.
+
+**The row's headline is a ROLL-UP across the set, and it never averages away disagreement:**
+
+| Across the set                  | The row reads                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| every repository `accepted`     | **Has access** · `@login` can clone and push to all 3                        |
+| any repository failed           | **Couldn't invite** · GitHub turned the invitation down on _repo_            |
+| some `invited`, some `accepted` | the pending word, with the count on the expander (`3 repositories · 2 sent`) |
+| every repository `not_invited`  | **Not invited yet** + the reason (identity or nothing asked yet)             |
+
+**The expansion is the second dimension, on demand** (panel 3): a per-repository list — octocat +
+mono repo name + the **permission chip** (Q2: `push` for a teammate, `admin` for the approving user)
+
+- that repository's state word. It **opens by default when the repositories disagree** and stays
+  closed when they agree, so the common three-repo case reads as one line and the case that genuinely
+  needs three lines gets them.
+
+**Design it as a SET whose degenerate case is one.** A single-repo project renders the identical
+markup: one chip in the set strip, and rows that never open because one repository cannot disagree
+with itself. There is no second code path and no "if M === 1" copy.
+
+## 15.6 · The states — every one drawn, with its reason and its forward path
+
+The first three ARE `design/repository-set` §5's vocabulary, derived by
+`lib/projectRepos/access.ts` (`PROJECT_REPO_ACCESS_STATES` = `not_invited | invited | accepted`).
+**There is no second vocabulary.** The last three are not row states at all — they are reasons a
+member has no row to be in, which is exactly why they could not exist on the single-user step.
+
+| State                                                 | Icon + word (`--el-*` on the ICON)                    | The reason it shows                                                      | Forward path                                                          |
+| ----------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `accepted`                                            | `BadgeCheck` · **Has access** · `--el-success`        | `@login` can clone and push to all _N_                                   | **none** — settled, so nothing is offered                             |
+| `invited`                                             | `Mail` · **Invitation sent** · `--el-info`            | to `@login`, waiting to be accepted on GitHub                            | **Resend invitation** (+ **Open the invitation** on the per-repo row) |
+| `not_invited`, identity present                       | `UserPlus` · **Not invited yet** · `--el-warning`     | `@login` is ready to be invited                                          | **Invite**                                                            |
+| `not_invited`, no identity — **someone else looking** | `UserPlus` · **Not invited yet** · `--el-warning`     | _Name_ hasn't connected a GitHub account, + "Only _Name_ can connect it" | **none, deliberately** — not even a disabled control (Q3)             |
+| `not_invited`, no identity — **the member themself**  | `UserPlus` · **Not invited yet** · `--el-warning`     | Motir doesn't know your GitHub account yet                               | **Connect GitHub** (grant 1 — identity only)                          |
+| invite failed                                         | `TriangleAlert` · **Couldn't invite** · `--el-danger` | GitHub turned the invitation down on _repo_                              | **Try again**                                                         |
+| not eligible (Q1)                                     | `ShieldOff` · **No code access** · `--el-icon-muted`  | Viewers can read _Project_ but not edit it                               | **Change role** → Access & members                                    |
+
+**Rules that hold across all seven:**
+
+- **An icon AND a word, never colour alone** — §5's rule, kept. Colour lives on the ICON; the word
+  carries the meaning; the reason follows after a `·` separator in `--el-text-secondary`.
+- **A failure never fails the person.** An invitation GitHub refuses leaves the repository row
+  `created` and the repository real (MOTIR-1900's degrade-gracefully contract, and the reason
+  `inviteAfterEstablish` swallows). So `Couldn't invite` is red on ONE line inside a row that is
+  otherwise fine, and the header count counts what is TRUE (`4 of 5 can clone`) rather than what was
+  attempted.
+- **Not eligible is its own CARD, not a greyed row in the list.** Q1's exclusion is a statement about
+  the project's roles, not a pending task — mixing it into the actionable list would read as "this
+  one is stuck", which is the opposite of what it means.
+- **`not_invited` uses `role="status"`** on the no-identity variant, inherited from §5 panel 4: it is
+  the state that changes without the user acting on this page (they connect elsewhere and come back).
+
+## 15.7 · The teammate's own view (panel 4) — the same table, one row different
+
+`Connect GitHub` is offered **only on your own row**, and the pane leads with the shipped identity
+card when you have no identity at all. Three things are load-bearing:
+
+1. **It asks for grant 1 (identity) only.** `GithubIdentity.githubLogin` is the single thing Motir
+   needs to invite somebody — the same field MOTIR-1900 reads. The repository-access install (grant 2)
+   is NOT asked for here, because nothing on this surface reads a repository the member owns.
+2. **A handle is never typed.** The account invited is the one CONNECTED, for the reason MOTIR-1900's
+   own comment gives: a typed handle proves nothing, and a typo invites a **stranger** to a private
+   repository.
+3. **Every other row reads exactly as it does for an admin** — with a `Pill`-free `note` stating in
+   words that inviting somebody, and changing who is eligible, is an admin's to do. The controls do
+   not vanish and are not disabled-with-a-tooltip; they were never that member's to begin with.
+
+After connecting, the row settles through the same two states as everyone else's (`Invitation sent`
+→ `Has access`) and the header card is replaced by the shipped `IdentityHeader` line.
+
+## 15.8 · Empty, loading, partial, refused (panel 5)
+
+| State                            | What it says                                                                                                                                                                                                      |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A · no repositories yet**      | `EmptyState` — _"Atlas has no code yet"_ + what will happen at plan approval + **Review the plan**. Not an error, and not an empty table.                                                                         |
+| **B · the set is mid-establish** | The count `Pill` becomes **Setting up** (`LoaderCircle`), a peach `alert` names the repository still being made, and the rows are skeletons. Says explicitly that leaving loses nothing (the ADR's resumability). |
+| **C · a partial set**            | `skipped` and `connected` rows are shown in the set strip but excluded from the count — the reason `needsCollaboratorInvite` gives in code. A partial set therefore needs NO special case.                        |
+| **D · GitHub refused**           | A rose `alert` above the list states the scope of the failure (_1 of 3 invitations for Jonas Vik_), insists the repositories are fine, and offers **Try again**.                                                  |
+
+## 15.9 · Primitives — every element, and what it is
+
+| Element                                         | Primitive                                                                | Notes                                                                                                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The pane column                                 | the shipped settings page shell                                          | `mx-auto max-w-[42rem] flex flex-col gap-6`; `font-serif text-3xl font-semibold` title + `text-sm text-(--el-text-muted)` subtitle.         |
+| **People** / **Not eligible** containers        | `Card` with `header`                                                     | Header = `h2 text-base font-semibold` + a count `Pill tone="neutral"`, control on the right — the shipped Members-card shape.               |
+| Each person                                     | the shipped `ProjectMembersSettings` `<li>`                              | `flex gap-3 border-b border-(--el-border-soft) py-3 last:border-b-0`; `items-start` (not `items-center`) because the row grew a state line. |
+| Initials disc                                   | the shipped disc                                                         | `size-8 rounded-full bg-(--el-text) text-(--el-text-inverted) text-xs font-semibold`, `aria-hidden`.                                        |
+| The repository SET strip                        | `Pill tone="neutral"` + `font-mono`                                      | One chip per repository, with the octocat. The only place a repository is named at the top level.                                           |
+| The state line                                  | icon + word, `--el-text-strong`                                          | **Never** a `Pill`: these rows sit on an untinted card, and §5 already fixed this vocabulary as icon + word.                                |
+| Permission (`push` / `admin`)                   | `Pill tone="neutral"`                                                    | Per-invitee (Q2). On the row for the roll-up, on each per-repo line in the expansion.                                                       |
+| Project role (`Admin`)                          | `Pill memberRole="admin"`                                                | Only where the role IS the answer (the approving user). The shipped role-chip hue map, unchanged.                                           |
+| **Invite** / **Connect GitHub** / **Try again** | `Button variant="secondary" size="sm"`                                   | The row's trailing control. `Connect GitHub` carries the octocat, exactly as the shipped connect button does.                               |
+| **Resend invitation** / **Change role**         | `Button variant="ghost" size="sm"`                                       | Quieter, because they are recoveries rather than the main move.                                                                             |
+| The lead connect card (panel 4)                 | `Card` + the shipped `IdentityHeader` shape + `Button variant="primary"` | The one primary button on the surface — it is the one thing the signed-in member can do.                                                    |
+| The per-repository expansion                    | a `--el-surface-soft` box at `--radius-card`                             | Not a nested Card: it is a detail OF the row, and a second card border inside a card reads as a second object.                              |
+| Empty state                                     | `EmptyState`                                                             | Icon disc (`--el-card-icon-bg` / `--el-card-icon-fg`) + title + body + one secondary action.                                                |
+| Mid-establish / refused banners                 | the shipped notice shapes                                                | `--el-warning-surface` (peach) for "still working", `--el-danger-surface` (rose) for "GitHub refused".                                      |
+| The admin-only note (panel 4)                   | the `--el-notice-info-bg` callout                                        | Same shape the members pane uses for its read-only note.                                                                                    |
+
+## 15.10 · Token roles — colour (`--el-*`) and shape
+
+**Colour.** Every value is a palette token; nothing is a raw hue.
+
+| Role                                         | Token                                                                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Page ink · secondary · muted · faint         | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-faint`                                |
+| The state WORD                               | `--el-text-strong`                                                                                         |
+| `accepted` icon                              | `--el-success`                                                                                             |
+| `invited` icon                               | `--el-info`                                                                                                |
+| `not_invited` icon                           | `--el-warning`                                                                                             |
+| invite-failed icon                           | `--el-danger`                                                                                              |
+| not-eligible icon + word                     | `--el-icon-muted` + `--el-text-muted` (inactive, NOT a severity)                                           |
+| Card surface · border · soft border          | `--el-card` · `--el-border` · `--el-border-soft`                                                           |
+| The per-repo expansion fill                  | `--el-surface-soft`                                                                                        |
+| Count / permission chips                     | `--el-chip-bg` + `--el-chip-border` + `--el-text-secondary`                                                |
+| `Admin` role chip                            | `--el-role-admin` + `--el-text-strong`                                                                     |
+| `Verified` badge                             | `--el-tint-mint` + `--el-text-strong` (the shipped `Pill severity="success"`)                              |
+| Mid-establish banner · GitHub-refused banner | `--el-warning-surface` / `--el-warning-text` · `--el-danger-surface` / `--el-danger-surface-text`          |
+| The admin-only note                          | `--el-notice-info-bg` + `--el-text-strong`                                                                 |
+| Primary CTA (Connect GitHub, panel 4)        | `--el-accent` + `--el-accent-text`                                                                         |
+| Rail: surface · border · active row          | `--el-sidebar-bg` · `--el-sidebar-border` · `--el-sidebar-item-bg-active`, active glyph `--el-icon-active` |
+| Identity disc                                | `--el-avatar-fallback` + `--el-text-inverted`                                                              |
+| Empty-state icon disc                        | `--el-card-icon-bg` + `--el-card-icon-fg`                                                                  |
+
+**AA contrast (finding #35).** Every hued surface carries the hue in the BACKGROUND with
+`--el-text-strong` ink; no state is signalled by colour alone anywhere — each carries an icon and a
+word.
+
+**Shape.** `--radius-card` (cards, the expansion box, banners, the empty state) · `--radius-btn` +
+`--height-btn-sm` / `--height-btn-md` + `--spacing-btn-x` / `--spacing-btn-x-sm` (buttons) ·
+`--radius-badge` + `--spacing-chip-x/y` (pills and repo chips) · `--radius-control` +
+`--height-control` + `--spacing-control-x/y` (rail rows) · `--radius-input` + `--height-input`
+(the combobox in the door-2 repro) · `--spacing-card-padding` (card padding) · `--shadow-elevated`
+(the mock's panel frames only). No raw `rounded-*` / `p-*` / `h-*` anywhere.
+
+## 15.11 · Copy — every string, as `en.json` keys
+
+Namespace `settings.codeAccess.*` unless noted. MOTIR-1945 owns the entries; this is the spec.
+
+### The doors
+
+| Key                       | String                                                                    |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `settings.nav.codeAccess` | Code access                                                               |
+| `doorCard.title`          | Code access                                                               |
+| `doorCard.summary`        | {granted} of {eligible} people who can edit can clone this project's code |
+
+### The room
+
+| Key                  | String                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `title`              | Code access                                                                                                               |
+| `subtitle`           | Who on **{projectName}** can clone and push to the repositories Motir made for it.                                        |
+| `peopleHeading`      | People                                                                                                                    |
+| `countPill`          | {granted} of {eligible} can clone                                                                                         |
+| `refresh`            | Refresh                                                                                                                   |
+| `setLabel`           | {count, plural, one {# repository} other {# repositories}}:                                                               |
+| `notEligibleHeading` | Not eligible                                                                                                              |
+| `notEligibleBody`    | Code access follows the project's own edit permission. Someone who can't edit {projectName} is never invited to its code. |
+| `youSuffix`          | ` (you)` — reuses the shipped `settings.access.youSuffix`                                                                 |
+
+### The states
+
+| Key                         | String                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `state.accepted`            | Has access                                                                                             |
+| `state.acceptedReason`      | **@{login}** can clone and push to all {count}                                                         |
+| `state.acceptedReasonOne`   | **@{login}** can clone and push to **{repo}**                                                          |
+| `state.invited`             | Invitation sent                                                                                        |
+| `state.invitedReason`       | to **@{login}**, waiting to be accepted on GitHub                                                      |
+| `state.notInvited`          | Not invited yet                                                                                        |
+| `state.notInvitedReady`     | **@{login}** is ready to be invited                                                                    |
+| `state.notInvitedOther`     | {name} hasn't connected a GitHub account                                                               |
+| `state.notInvitedOtherNote` | Only {name} can connect it — Motir invites the account a person connects, never one typed in for them. |
+| `state.notInvitedSelf`      | Motir doesn't know your GitHub account yet                                                             |
+| `state.failed`              | Couldn't invite                                                                                        |
+| `state.failedReason`        | GitHub turned the invitation down on **{repo}**                                                        |
+| `state.ineligible`          | No code access                                                                                         |
+| `state.ineligibleViewer`    | Viewers can read {projectName} but not edit it                                                         |
+| `expand`                    | {count, plural, one {# repository} other {# repositories}}                                             |
+| `expandPartial`             | {count, plural, one {# repository} other {# repositories}} · {sent} sent                               |
+
+### The actions
+
+| Key              | String                  |
+| ---------------- | ----------------------- |
+| `invite`         | Invite                  |
+| `resend`         | Resend invitation       |
+| `openInvitation` | Open the invitation     |
+| `retry`          | Try again               |
+| `connect`        | Connect GitHub          |
+| `changeRole`     | Change role             |
+| `useDifferent`   | Use a different account |
+
+### The member's own header + the read-only note
+
+| Key                    | String                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `self.title`           | You aren't connected to GitHub yet                                                                                                         |
+| `self.body`            | {projectName}'s code is private. Connect GitHub and Motir invites you to {count, plural, one {the repository} other {all # repositories}}. |
+| `self.identityCaption` | The GitHub account Motir invites to this project's code                                                                                    |
+| `self.verified`        | Verified                                                                                                                                   |
+| `readOnlyNote`         | You can see where everyone stands. Inviting somebody, and changing who's eligible, is a project admin's to do.                             |
+
+### Empty, loading, partial, refused
+
+| Key                   | String                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `empty.title`         | {projectName} has no code yet                                                                                                                                            |
+| `empty.body`          | When a plan is approved, Motir creates this project's repositories — and everyone who can edit {projectName} gets invited to them. There is nothing to grant until then. |
+| `empty.action`        | Review the plan                                                                                                                                                          |
+| `establishing.pill`   | Setting up                                                                                                                                                               |
+| `establishing.banner` | Motir is still creating **{repo}**. Invitations go out as each repository lands — nothing here is lost if you leave.                                                     |
+| `partialNote`         | Only the repositories Motir made are counted. A repository the team already owns is reached through GitHub, not through Motir.                                           |
+| `failedBanner`        | GitHub wouldn't take {failed} of {total} invitations for **{name}**. The repositories are fine — only the invitation failed, and it can be sent again.                   |
+
+### Accessible names — the superstring audit
+
+Each per-row control's accessible name carries the member, so `getByRole('button', { name: 'Invite' })`
+can never match two rows — and no name is a superstring of another (the `e2e-selector-contract`
+lesson):
+
+| Control                  | Accessible name                         |
+| ------------------------ | --------------------------------------- |
+| Invite                   | `Invite {name}`                         |
+| Resend invitation        | `Resend invitation for {name}`          |
+| Try again                | `Retry invitation for {name}`           |
+| Connect GitHub (own row) | `Connect GitHub`                        |
+| Change role              | `Change {name}'s project role`          |
+| The expander             | `Show per-repository access for {name}` |
+| Refresh                  | `Refresh access from GitHub`            |
+
+## 15.12 · a11y
+
+- The people list is a `<ul role="list">` of `<li>`; the initials disc is `aria-hidden` and the name
+  is the row's text (mirrors the shipped members list).
+- **The expander is a `<button aria-expanded>`** controlling the per-repository region by
+  `aria-controls`; the chevron rotates and is `aria-hidden`. Never a click handler on a `<div>`.
+- **`role="status"`** on the `not_invited` line, so a member who connects in another tab and returns
+  hears the change (inherited from §5 panel 4).
+- **The refused banner is `role="alert"`**; the mid-establish banner is `role="status"` (it resolves
+  on its own and must not interrupt).
+- Every state carries an **icon and a word** — colour is never the only cue, so the whole surface is
+  legible in greyscale and to a colour-blind reader.
+- **No disabled control anywhere.** Q3's "you can't act on this" is expressed by the control being
+  ABSENT plus a sentence saying why — a disabled button with a tooltip would promise an action that
+  is not merely unavailable but not theirs.
+- The rail row is a link with `aria-current="page"` when active — the shipped `Sidebar` behaviour, no
+  change.
+
+## 15.13 · Page state after this surface's mutations (the enforced contract)
+
+Three mutations, and each names the surfaces it touches (`motir-core/CLAUDE.md`'s three-mechanism
+rule):
+
+1. **Invite / Resend / Retry (one member).** Touches (a) that member's row and its per-repository
+   detail, (b) the header **count** `Pill`, (c) the **door-2 card's count** on the Access & members
+   pane. (a) is the acting row — keep the optimistic value, the response IS the confirmation, no
+   refresh of that cell. (b) is server-rendered on this page → `router.refresh()`. (c) is on ANOTHER
+   route, so it re-reads on next navigation; there is nothing to bump.
+2. **Refresh (the whole set).** `refreshAccess` re-reads GitHub for every pending invitation and
+   stamps the accepted ones. It returns the rows, so the list updates from the RESPONSE, and
+   `router.refresh()` follows for the count. It is an explicit button rather than a poll for the
+   reason `projectRepoAccessService.refreshAccess` documents: GitHub owns acceptance and tells Motir
+   nothing when it happens.
+3. **Connect GitHub (the member's own).** Leaves the app and returns via OAuth, so the page REMOUNTS
+   — no client-island tick is needed. On return, the lead card is gone and the member's own row shows
+   the identity; if the invite pass ran on callback it may already read `Invitation sent`.
+
+**If the people list is built as a client island** seeded from `useState(initialRows)` — which it
+should be, since it owns optimistic per-row pending state — then `router.refresh()` CANNOT reach it,
+and each mutation must reconcile the island from its own response (seq-guarded per row, the shipped
+`fetchSeq` pattern). This is the exact 6.11.7 shape the contract exists to prevent.
+
+## 15.14 · Explicitly OUT of scope here
+
+- **The mechanism** — MOTIR-1910: the per-`(repository × user)` record, the `canEdit` +
+  assignable-members enumeration, the permission column and the owner's `admin` backfill, the invite
+  and refresh endpoints, the DTO. Its states are drawn; none of its schema is designed here.
+- **The five answered questions** — MOTIR-1943. Cited, never re-decided.
+- **The GitHub connect / install screens** — 7.10. Only the hand-off is drawn, as the shipped
+  components.
+- **The establish step and the take-it-over flow** — §0–§14 above. Their vocabulary is composed; not
+  one of their panels is changed.
+- **CI spend** — MOTIR-1901 / MOTIR-1907. Q5 decided no new guard, so nothing here meters, warns or
+  refuses.
+- **Changing a project role** — the shipped Access & members pane. `Change role` is a link to it, not
+  a control this surface owns.
+- **Removing someone's code access** — deliberately not drawn. MOTIR-1943 decides who is invited, not
+  how a grant is revoked, and `projectRepoAccessService` has no revoke path; a control the service
+  cannot honour would be a worse promise than none. When a revoke lands it belongs on this row.
+- **Org-wide or cross-project access** — `ProjectRepo` is project-scoped and so is this pane.
