@@ -269,6 +269,62 @@ export interface ProjectRepoEstablishViewDto {
   connectCandidates: ProjectRepoConnectCandidateDto[];
 }
 
+/**
+ * Another project in the same workspace whose code Motir also hosts — one entry
+ * of the takeover room's paused banner (MOTIR-1939).
+ *
+ * ⚠️ IT EXISTS TO CLOSE A SCOPE GAP, not to decorate. The billing panel's
+ * `Move repositories` door is ORG-scoped, but a takeover is per ROW and rows
+ * belong to a PROJECT — so a user who arrives from billing must be told, in
+ * words, that moving this project's repositories does not move the others'.
+ * Carrying the other projects as LINKS is what keeps the ADR's "ONE decision
+ * surface, N pointers" shape intact (design §14.4).
+ */
+export interface OtherHostedProjectDto {
+  id: string;
+  /** The project's workspace-unique key ("MOTIR") — the settings deep link. */
+  identifier: string;
+  name: string;
+}
+
+/**
+ * Everything the TAKE-IT-OVER room renders in ONE server read (MOTIR-1939) —
+ * `/settings/project/repositories`, the surface the ownership promise's door and
+ * the billing panel's `Move repositories` button both land on.
+ *
+ * It is a READ MODEL, deliberately: the saga itself is MOTIR-711's and nothing
+ * here performs a step of it. The room composes the set, the actor's GitHub
+ * identity, and the org-wide CI truth so the page can be server-rendered and its
+ * header updated by `router.refresh()` (the page-state contract, §14.10).
+ */
+export interface ProjectRepoRoomViewDto {
+  projectId: string;
+  rows: ProjectRepoDto[];
+  /** The account a Motir-CREATED repository sits under, or null on a deployment
+   *  that cannot provision. */
+  hostOwner: string | null;
+  /** The actor's connected GitHub login (grant 1), or null when not connected —
+   *  the fact that decides between the picker and MOTIR-1900's connect prompt. */
+  githubLogin: string | null;
+  githubAvatarUrl: string | null;
+  /**
+   * Where the `awaiting_reinstall` row's **Install on GitHub** hands off — the
+   * SHIPPED App-install screen (`githubAppInstallUrl()`), never a faked in-app
+   * repository picker. Null when no App slug is configured (a self-hosted
+   * deployment that registered none), which drops the button rather than
+   * offering a link to nowhere.
+   */
+  installHref: string | null;
+  /**
+   * Whether the organization's CI is PAUSED for want of credits — the banner's
+   * whole condition, read from the one service that owns the entitlement state
+   * so this surface and the billing panel can never disagree about it.
+   */
+  ciPaused: boolean;
+  /** The OTHER projects in this workspace whose code Motir also hosts. */
+  otherHostedProjects: OtherHostedProjectDto[];
+}
+
 /** Input to `projectRepoSetService.addRow` — appends a row to the end of the set.
  *  `seedSource` defaults from the role via ADR §2's table; `state` is always
  *  `proposed` (nothing is created until the set is confirmed). */
