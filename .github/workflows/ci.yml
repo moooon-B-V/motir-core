@@ -669,21 +669,43 @@ jobs:
       # gate — one unpaced spec suppressing every story's receipt — looked green
       # for days, and the raw job log was the only place it was visible.
       #
-      # ⚠️ ONLY `main` PUBLISHES — a PR REHEARSES (MOTIR-1937). `ACCEPTANCE_PUBLISH_MODE`
-      # below is `publish` only on a push to `main`; every other run (every PR) is a
-      # DRY RUN. Publishing supersedes: a new row for a story retires the prior one
-      # and unlinks its video for the orphan-GC, and each recording targets its OWN
-      # declared story rather than the PR's — so before this gate, any ordinary code
-      # PR replaced the receipts of every story that has a chaptered spec (measured:
-      # the MOTIR-1781 PR republished seven). `plan-rules.md` scopes acceptance video
-      # to USER-FACING stories; this is CI honouring that.
+      # ⚠️ A RUN PUBLISHES ONLY THE SPECS IT CHANGED (MOTIR-1937). The step below
+      # writes evidence for a recording only when THIS PR changed that recording's
+      # acceptance spec. Publishing supersedes (a new row retires the story's prior
+      # evidence and unlinks its video for the orphan-GC) and each recording targets
+      # its OWN declared story rather than the PR's — so before this gate, any
+      # ordinary code PR replaced the receipts of every story with a chaptered spec
+      # (measured: the MOTIR-1781 PR republished seven). `plan-rules.md` scopes
+      # acceptance video to USER-FACING stories; this is CI honouring that.
       #
-      # The STEP still runs on PRs, deliberately — it is not `if`-gated on the branch.
-      # Discovery, story resolution and the MOTIR-1772 watchability floor are real
-      # checks a PR should pay for, and gating the whole step would push them
-      # post-merge, recreating the MOTIR-1905 blind spot. A PR gets every signal
-      # except the write. The uploader FAILS CLOSED: anything but an explicit
-      # `publish` is a dry run, so forgetting this variable cannot resurrect the bug.
+      # WHY OWNERSHIP AND NOT A BRANCH GATE. Publishing only from `main` would be
+      # simpler and would BREAK the feature: the acceptance panel's approve edge is
+      # `in_review → done`, and `in_review` is the PR-OPEN state (the status sync
+      # flips the card to `done` on MERGE). The receipt therefore has to be written
+      # while the PR is open, or the reviewer never gets to watch-then-approve.
+      # A story's acceptance-E2E PR publishes its own story; everyone else publishes
+      # nothing.
+      #
+      # The uploader FAILS CLOSED — an empty/unset list owns nothing — so a workflow
+      # edit that drops this variable rehearses instead of resurrecting the bug.
+      - name: Which acceptance specs does this run own?
+        if: matrix.id == 'acceptance-video' && success()
+        id: owned-specs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # A push to `main` owns nothing: the PR that changed the spec already
+          # published the receipt while its story was in review, and re-publishing
+          # post-merge would only supersede it with an identical clip.
+          if [ -z "${BASE_SHA}" ]; then
+            echo "push build — no PR diff, so this run owns no acceptance spec."
+            echo "specs=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SPECS=$(git diff --name-only "${BASE_SHA}" HEAD -- 'tests/e2e/acceptance*.spec.ts' | tr '\n' ' ')
+          echo "owned acceptance specs: ${SPECS:-<none>}"
+          echo "specs=${SPECS}" >> "$GITHUB_OUTPUT"
       - name: Publish the acceptance video
         if: matrix.id == 'acceptance-video' && success()
         continue-on-error: true
@@ -694,7 +716,7 @@ jobs:
           ACCEPTANCE_PR_TITLE: ${{ github.event.pull_request.title }}
           ACCEPTANCE_FALLBACK_STORY_KEY: MOTIR-1627
           ACCEPTANCE_PRODUCED_BY: MOTIR-1638
-          ACCEPTANCE_PUBLISH_MODE: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'publish' || 'dry-run' }}
+          ACCEPTANCE_CHANGED_SPECS: ${{ steps.owned-specs.outputs.specs }}
         run: node scripts/upload-acceptance-video.mjs
       # Always upload the report — pass-runs are useful for debugging flakes, and
       # the report is small. The trace/video/screenshot artifacts only exist for

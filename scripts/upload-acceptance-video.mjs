@@ -47,43 +47,68 @@ const DEFAULT_OUTPUT_DIR = 'out/playwright-output-acceptance';
 const DEFAULT_OIDC_AUDIENCE = 'motir-acceptance-video';
 
 /**
- * Whether this run may actually POST evidence, or only REHEARSE the publish
- * (MOTIR-1937).
+ * The acceptance SPECS this run is allowed to publish for — the repo-relative
+ * paths of the `acceptance*.spec.ts` files the PR actually changed (MOTIR-1937).
  *
- * WHY THIS EXISTS. Publishing is `supersede`-on-create: a new row for a story
- * marks the prior current one superseded and unlinks its video so the orphan-GC
+ * WHY OWNERSHIP IS THE GATE. Publishing is `supersede`-on-create: a new row for
+ * a story retires the prior current one and unlinks its video so the orphan-GC
  * reclaims it (`acceptanceEvidenceService`). And the target story comes from the
- * RECORDING's own `acceptance-story.json` sidecar, which outranks the PR ref
- * ({@link resolveStoryKey}) — so every recording publishes to ITS OWN story no
- * matter which branch ran the lane. Combine those two with a CI lane whose only
- * gate is a branch-name prefix, and any ordinary code PR replaced the acceptance
- * receipts of every story with a chaptered spec: measured on the MOTIR-1781 PR
- * (run 30651989797), which republished seven already-accepted stories. Those
- * clips were recorded off an unrelated branch and nobody watched them, which is
- * the opposite of what an acceptance receipt is for.
+ * RECORDING's own sidecar, which outranks the PR ref ({@link resolveStoryKey}) —
+ * so every recording resolves to ITS OWN story no matter whose branch ran the
+ * lane. With a CI lane gated only on a branch-name prefix, any ordinary code PR
+ * therefore replaced the receipts of every story that has a chaptered spec:
+ * measured on the MOTIR-1781 PR (run 30651989797), which republished seven
+ * already-accepted stories with clips nobody watched.
  *
- * `plan-rules.md` (the MOTIR-1644 rule) already scopes acceptance video to
- * USER-FACING stories — "a NON-UI Story … is EXEMPT: it accepts on its tests
- * alone". This is CI catching up with that rule.
+ * WHY NOT JUST GATE ON `main`. Because that breaks the feature. The acceptance
+ * panel's approve edge is `in_review → done` (`acceptanceEvidenceService.decide`,
+ * which the workflow rejects for a story that is not `in_review`), and
+ * `in_review` is the PR-OPEN state — the status sync flips the card to `done` on
+ * MERGE. So the receipt has to be published FROM the PR, while the story is in
+ * review, or the reviewer never gets to watch-then-approve and the gate is dead.
+ * MOTIR-1627 says exactly this: "when MOTIR-1627 is in_review, its acceptance
+ * panel shows the video … and the story is accepted by watching its own video".
  *
- * WHY A DRY RUN RATHER THAN SKIPPING THE STEP. Everything before the POST is a
- * real check that a PR SHOULD pay for: the recordings exist, each declares a
- * resolvable story, and each clip is watchable (the MOTIR-1772 floor). Gating
- * the whole step on `main` would move all of that post-merge — exactly the
- * blind spot MOTIR-1905 was filed for, where a broken acceptance gate looked
- * green for days. So a PR still discovers, resolves, assesses, annotates and
- * summarises; it just never writes.
+ * So the right key is not the branch but OWNERSHIP: a run publishes the receipts
+ * for the specs it changed, and nothing else. The story's acceptance-E2E PR
+ * publishes its own story (during `in_review`, as designed); an unrelated PR
+ * changes no acceptance spec, matches no recording, and writes nothing.
  *
- * FAIL-CLOSED. Anything other than an explicit `publish` is a dry run —
- * including an unset variable. A workflow that forgets to pass the mode
- * therefore rehearses rather than silently superseding production evidence, and
- * a local run of this script can never touch a real story by accident.
+ * FAIL-CLOSED. An unset / empty variable yields an EMPTY set, which publishes
+ * nothing. A workflow that forgets to pass it rehearses rather than silently
+ * superseding production evidence, and a local run can never touch a real story.
+ *
+ * Accepts newline-, comma- or whitespace-separated paths (`git diff --name-only`
+ * output drops in unchanged) and normalises a leading `./`.
  *
  * @param {Record<string, string | undefined>} [env]
- * @returns {'publish' | 'dry-run'}
+ * @returns {Set<string>}
  */
-export function resolvePublishMode(env = process.env) {
-  return env['ACCEPTANCE_PUBLISH_MODE'] === 'publish' ? 'publish' : 'dry-run';
+export function resolveOwnedSpecs(env = process.env) {
+  const raw = env['ACCEPTANCE_CHANGED_SPECS'] ?? '';
+  return new Set(
+    raw
+      .split(/[\s,]+/)
+      .map((s) => s.trim().replace(/^\.\//, ''))
+      .filter(Boolean),
+  );
+}
+
+/**
+ * Whether `recording` was produced by one of the specs this run owns.
+ *
+ * A recording with NO `specFile` (a legacy sidecar written before MOTIR-1937, or
+ * a non-chaptered suite) is NOT owned — the same fail-closed posture: an
+ * unidentifiable recording is exactly the case where guessing would resurrect
+ * the bug.
+ *
+ * @param {{ specFile?: string | null }} meta
+ * @param {Set<string>} ownedSpecs
+ */
+export function isOwnedRecording(meta, ownedSpecs) {
+  const specFile = meta?.specFile;
+  if (typeof specFile !== 'string' || specFile.length === 0) return false;
+  return ownedSpecs.has(specFile.replace(/^\.\//, ''));
 }
 
 /**
@@ -266,7 +291,14 @@ export function readRecordingMeta(file) {
   if (!file) return null;
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return typeof parsed?.totalSeconds === 'number' ? parsed : null;
+    // Return the whole sidecar whenever it is an object. It used to be dropped
+    // unless it carried a numeric `totalSeconds`, which was fine while duration
+    // was its only field — but MOTIR-1937 added `specFile`, and discarding a
+    // meta with no duration would make an un-timed recording unownable and so
+    // silently unpublishable. `assessWatchability` applies its OWN
+    // `typeof meta?.totalSeconds === 'number'` guard and abstains when absent,
+    // so the watchability contract is unchanged.
+    return parsed !== null && typeof parsed === 'object' ? parsed : null;
   } catch {
     return null;
   }
@@ -517,13 +549,16 @@ export async function main() {
   // weakened: an unwatchable clip is still never published, and the step still
   // fails.
   ciSummary('### Acceptance videos\n');
-  const assessed = targets.map((t) => ({
-    ...t,
-    verdict: assessWatchability({
-      chapters: readChapters(t.recording.chapters),
-      meta: readRecordingMeta(t.recording.recordingMeta),
-    }),
-  }));
+  const assessed = targets.map((t) => {
+    // Read the meta ONCE — the watchability verdict and the MOTIR-1937 ownership
+    // gate both key off it (`totalSeconds` and `specFile` respectively).
+    const meta = readRecordingMeta(t.recording.recordingMeta);
+    return {
+      ...t,
+      meta,
+      verdict: assessWatchability({ chapters: readChapters(t.recording.chapters), meta }),
+    };
+  });
   const unwatchable = assessed.filter((t) => !t.verdict.watchable);
   const publishable = assessed.filter((t) => t.verdict.watchable);
 
@@ -561,28 +596,39 @@ export async function main() {
     if (count > 1) console.log(`Note: ${count} recordings target ${storyKey} — publishing all.`);
   }
 
-  // DRY RUN — everything above ran for real; nothing below writes (MOTIR-1937).
+  // OWNERSHIP GATE (MOTIR-1937) — publish only the receipts for the acceptance
+  // specs THIS run changed; everything else is a rehearsal.
   //
-  // This is the branch a pull request takes. The recordings were discovered,
-  // every story resolved, and every clip assessed against the watchability floor
-  // — all of which stay reported and annotated — but no evidence is POSTed, so a
-  // PR can never supersede a story's receipt with a clip recorded off its branch.
-  //
-  // It still exits NON-ZERO for an unwatchable clip. That is the point of running
-  // the gate on PRs at all: pacing is a defect the PR author can fix, and
-  // `continue-on-error` keeps it from blocking the merge while the annotation
-  // makes it visible. A publish FAILURE cannot occur here — nothing is published.
-  const mode = resolvePublishMode();
-  if (mode !== 'publish') {
+  // Applied AFTER the watchability assessment on purpose, so a PR still pays for
+  // every check: the recordings were discovered, each story resolved, and each
+  // clip measured against the MOTIR-1772 floor — all reported and annotated. Only
+  // the WRITE is scoped. Skipping the work entirely for un-owned recordings would
+  // move those checks to whichever run does own them, which is how a broken
+  // acceptance gate stayed invisible for days (MOTIR-1905).
+  const ownedSpecs = resolveOwnedSpecs();
+  const owned = publishable.filter((t) => isOwnedRecording(t.meta, ownedSpecs));
+  const rehearsed = publishable.filter((t) => !owned.includes(t));
+
+  for (const { storyKey, recording, meta } of rehearsed) {
     console.log(
-      `Dry run (ACCEPTANCE_PUBLISH_MODE=${process.env['ACCEPTANCE_PUBLISH_MODE'] ?? 'unset'}) — ` +
-        `${publishable.length} recording(s) resolved and assessed, none published. ` +
-        'Acceptance evidence is written only by the push-to-main run, so a PR never supersedes ' +
-        "a story's receipt with a clip recorded off its branch.",
+      `  rehearsed: ${path.basename(recording.dir)} → ${storyKey} — this run did not change ` +
+        `${meta?.specFile ?? 'its spec'}, so its receipt is left as it is.`,
     );
+  }
+  if (rehearsed.length > 0) {
     ciSummary(
-      `- ℹ️ Dry run — ${publishable.length} recording(s) checked, none published (evidence is written on \`main\` only).`,
+      `- ℹ️ ${rehearsed.length} recording(s) checked but not published — this run does not own their specs.`,
     );
+  }
+
+  if (owned.length === 0) {
+    console.log(
+      `Nothing to publish: ${publishable.length} watchable recording(s), none produced by a spec ` +
+        `this run changed (${ownedSpecs.size} owned spec(s)). A story's receipt is written by the ` +
+        'PR that changes its acceptance spec, so an unrelated run never supersedes it.',
+    );
+    // An unwatchable clip is still a defect worth failing on — the author of a
+    // pacing regression is whoever is looking at this run.
     if (unwatchable.length > 0) {
       console.error(
         `${unwatchable.length} unwatchable recording(s) out of ${targets.length} — reported above.`,
@@ -591,6 +637,11 @@ export async function main() {
     }
     return;
   }
+
+  console.log(
+    `Publishing ${owned.length} of ${publishable.length} recording(s) — the ones produced by the ` +
+      `acceptance spec(s) this run changed: ${[...ownedSpecs].join(', ')}.`,
+  );
 
   // Keyless GitHub OIDC first (MOTIR-1650); fall back to the MOTIR_UPLOAD_TOKEN
   // PAT for a repo not connected via the App. Neither present → opt-in no-op
@@ -624,7 +675,7 @@ export async function main() {
   // one story's bad publish cannot cost the others their receipt; the step still
   // exits non-zero at the end, so a partial publish is never silently green.
   let failed = 0;
-  for (const { recording, storyKey, verdict } of publishable) {
+  for (const { recording, storyKey, verdict } of owned) {
     try {
       const result = await uploadAcceptanceVideo({
         baseUrl,
@@ -653,7 +704,8 @@ export async function main() {
   }
 
   console.log(
-    `Published ${publishable.length - failed} of ${targets.length} acceptance recording(s).`,
+    `Published ${owned.length - failed} of ${owned.length} owned acceptance recording(s) ` +
+      `(${targets.length} recorded in this run).`,
   );
   // Non-zero on EITHER kind of problem — an unwatchable clip is as much a broken
   // acceptance gate as a failed upload, and both must survive `continue-on-error`

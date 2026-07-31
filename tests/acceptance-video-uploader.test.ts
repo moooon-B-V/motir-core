@@ -16,7 +16,8 @@ import {
   findRecordings,
   main,
   parseWorkItemKey,
-  resolvePublishMode,
+  isOwnedRecording,
+  resolveOwnedSpecs,
   resolveStoryKey,
   uploadAcceptanceVideo,
 } from '../scripts/upload-acceptance-video.mjs';
@@ -40,9 +41,17 @@ function writeRecording(
     trace?: boolean;
     chapters?: string | null;
     storyKey?: string | null;
-    /** Writes the MOTIR-1772 `recording-meta.json`; omit for an unpaced/legacy
-     *  recording (no sidecar → the watchability guard abstains). */
+    /** Adds `totalSeconds` to `recording-meta.json`; omit for an unpaced/legacy
+     *  recording (no duration → the watchability guard abstains). */
     totalSeconds?: number;
+    /** The spec that produced the recording (MOTIR-1937's ownership key).
+     *  Defaults to `tests/e2e/<name>.spec.ts`; pass `null` for a LEGACY sidecar
+     *  written before the field existed. */
+    specFile?: string | null;
+    /** Whether THIS run "changed" that spec — i.e. whether the recording is
+     *  publishable (MOTIR-1937). Defaults to true so the publish cases keep
+     *  asserting publishing; the ownership cases pass `false`. */
+    owned?: boolean;
   } = {},
 ): string {
   const dir = path.join(root, name);
@@ -56,12 +65,31 @@ function writeRecording(
       path.join(dir, 'acceptance-story.json'),
       JSON.stringify({ storyKey: opts.storyKey }),
     );
-  if (opts.totalSeconds !== undefined)
-    fs.writeFileSync(
-      path.join(dir, 'recording-meta.json'),
-      JSON.stringify({ totalSeconds: opts.totalSeconds }),
-    );
+  // `recording-meta.json` now always exists: it carries `specFile` (the
+  // MOTIR-1937 ownership key) as well as the optional duration. A watchability
+  // verdict still abstains when `totalSeconds` is absent.
+  const specFile = opts.specFile === undefined ? specFileFor(name) : opts.specFile;
+  fs.writeFileSync(
+    path.join(dir, 'recording-meta.json'),
+    JSON.stringify({
+      ...(opts.totalSeconds !== undefined ? { totalSeconds: opts.totalSeconds } : {}),
+      ...(specFile ? { specFile } : {}),
+    }),
+  );
+  // Own it by DEFAULT — the run "changed" this spec — so every pre-existing
+  // publish case keeps asserting publish behaviour rather than silently
+  // asserting the gate. An ownership case opts out with `owned: false`.
+  if (specFile && opts.owned !== false) {
+    const current = process.env['ACCEPTANCE_CHANGED_SPECS'] ?? '';
+    process.env['ACCEPTANCE_CHANGED_SPECS'] = `${current} ${specFile}`.trim();
+  }
   return dir;
+}
+
+/** The spec path `writeRecording` stamps a recording with, derived from its
+ *  Playwright output-dir name (`<spec>-<title>-chromium` → the spec file). */
+function specFileFor(recordingDirName: string): string {
+  return `tests/e2e/${recordingDirName}.spec.ts`;
 }
 
 /**
@@ -485,9 +513,9 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // appended to by the tests.
     'GITHUB_ACTIONS',
     'GITHUB_STEP_SUMMARY',
-    // MOTIR-1937 — the publish/dry-run gate. In ENV_KEYS so each test starts
-    // from a known mode rather than inheriting the ambient one.
-    'ACCEPTANCE_PUBLISH_MODE',
+    // MOTIR-1937 — the spec-ownership gate. In ENV_KEYS so each test starts from
+    // a known owned-set rather than inheriting the ambient one.
+    'ACCEPTANCE_CHANGED_SPECS',
   ] as const;
   const saved: Record<string, string | undefined> = {};
 
@@ -499,11 +527,10 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // PAT auth (no OIDC vars → keyless path is skipped).
     process.env['MOTIR_UPLOAD_TOKEN'] = 'motir_pat_test';
     process.env['MOTIR_BASE_URL'] = 'https://app.motir.co';
-    // These cases assert PUBLISH behaviour, so they run as the push-to-main lane
-    // does (MOTIR-1937). The uploader fails closed, so without this every test
-    // here would silently become a dry run and assert nothing about publishing —
-    // the dry-run cases below opt back out explicitly.
-    process.env['ACCEPTANCE_PUBLISH_MODE'] = 'publish';
+    // Start owning NOTHING; `writeRecording` adds each fixture's spec as it is
+    // created (MOTIR-1937), so a publish case owns exactly what it recorded and
+    // an ownership case opts out per recording with `owned: false`.
+    process.env['ACCEPTANCE_CHANGED_SPECS'] = '';
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -707,24 +734,34 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // ── Only `main` publishes; a PR rehearses (MOTIR-1937) ────────────────────
+  // ── A run publishes only the specs it OWNS (MOTIR-1937) ──────────────────
   //
   // The bug: publishing supersedes, and each recording targets its OWN declared
   // story, so any code PR replaced the receipts of every story with a chaptered
-  // spec. What is pinned here is that a dry run keeps every CHECK and drops only
-  // the WRITE — the reason it is a dry run rather than a skipped step.
+  // spec. The gate is OWNERSHIP, not the branch — the acceptance panel's approve
+  // edge is `in_review → done` and `in_review` is the PR-OPEN state, so a story's
+  // receipt has to be published FROM its own PR or the reviewer can never
+  // watch-then-approve.
 
-  describe('dry run', () => {
-    it('publishes NOTHING — the case that cost seven stories their receipts', async () => {
+  describe('the ownership gate', () => {
+    it('publishes NOTHING for a PR that changed no acceptance spec — the seven-story case', async () => {
       const dir = tmpDir();
-      writeRecording(dir, 'acceptance-augment-replan-chromium', { storyKey: 'MOTIR-811' });
-      writeRecording(dir, 'acceptance-plan-change-chromium', { storyKey: 'MOTIR-1726' });
-      writeRecording(dir, 'acceptance-video-dogfood-chromium', { storyKey: 'MOTIR-1627' });
+      // Exactly the MOTIR-1781 shape: a backend PR whose lane still recorded
+      // three specs, none of which it touched.
+      writeRecording(dir, 'acceptance-augment-replan-chromium', {
+        storyKey: 'MOTIR-811',
+        owned: false,
+      });
+      writeRecording(dir, 'acceptance-plan-change-chromium', {
+        storyKey: 'MOTIR-1726',
+        owned: false,
+      });
+      writeRecording(dir, 'acceptance-video-dogfood-chromium', {
+        storyKey: 'MOTIR-1627',
+        owned: false,
+      });
       process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
-      // A backend PR, exactly like MOTIR-1781's: no acceptance spec of its own,
-      // and the three recordings each declare a story it has nothing to do with.
       process.env['ACCEPTANCE_PR_REF'] = 'subtask/MOTIR-1781-repo-creation-primitive';
-      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
       const fetchMock = stubFetch();
 
       await main();
@@ -733,11 +770,32 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       expect(putBlobMock).not.toHaveBeenCalled();
     });
 
-    it('FAILS CLOSED — an unset mode is a dry run, so a forgetful workflow cannot publish', async () => {
+    it('publishes ONLY the story whose spec this PR changed, not its siblings', async () => {
+      // The story acceptance-E2E PR: it owns one spec, and the other two
+      // recordings in the lane must be left exactly as they are.
       const dir = tmpDir();
-      writeRecording(dir, 'acceptance-chromium', { storyKey: 'MOTIR-1627' });
+      writeRecording(dir, 'acceptance-cadence-chromium', { storyKey: 'MOTIR-813' });
+      writeRecording(dir, 'acceptance-plan-change-chromium', {
+        storyKey: 'MOTIR-1726',
+        owned: false,
+      });
+      writeRecording(dir, 'acceptance-video-dogfood-chromium', {
+        storyKey: 'MOTIR-1627',
+        owned: false,
+      });
       process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
-      delete process.env['ACCEPTANCE_PUBLISH_MODE'];
+      const fetchMock = stubFetch();
+
+      await main();
+
+      expect(publishedStories(fetchMock)).toEqual(['MOTIR-813']);
+    });
+
+    it('FAILS CLOSED — an unset owned-set publishes nothing', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-chromium', { storyKey: 'MOTIR-1627', owned: false });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      delete process.env['ACCEPTANCE_CHANGED_SPECS'];
       const fetchMock = stubFetch();
 
       await main();
@@ -745,14 +803,25 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('still RESOLVES every story and reports them — the checks a PR should pay for', async () => {
+    it('does NOT own a recording whose sidecar predates the specFile field', async () => {
       const dir = tmpDir();
-      writeRecording(dir, 'acceptance-a-chromium', { storyKey: 'MOTIR-811' });
-      writeRecording(dir, 'acceptance-b-chromium', { storyKey: 'MOTIR-1726' });
+      writeRecording(dir, 'acceptance-legacy-chromium', {
+        storyKey: 'MOTIR-1627',
+        specFile: null,
+      });
       process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
-      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
-      // Re-spy and hold the reference rather than naming `console.log` in the
-      // assertion — the file's convention for the no-console lint rule.
+      process.env['ACCEPTANCE_CHANGED_SPECS'] = 'tests/e2e/acceptance-legacy-chromium.spec.ts';
+      const fetchMock = stubFetch();
+
+      await main();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('still RESOLVES and REPORTS an un-owned recording — the checks a PR pays for', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-a-chromium', { storyKey: 'MOTIR-811', owned: false });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       stubFetch();
 
@@ -760,26 +829,24 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
 
       const logged = logSpy.mock.calls.flat().join('\n');
       expect(logged).toContain('MOTIR-811');
-      expect(logged).toContain('MOTIR-1726');
-      expect(logged).toContain('Dry run');
+      expect(logged).toContain('rehearsed');
     });
 
-    it('still FAILS on an unwatchable clip — the MOTIR-1772 floor is a PR-time check', async () => {
-      // The whole reason this is a dry run and not a skipped step: pacing is a
-      // defect the PR author can fix, and moving the gate to `main` would put it
-      // back post-merge — the MOTIR-1905 blind spot.
+    it('still FAILS on an unwatchable clip it does not own — the floor is a PR-time check', async () => {
+      // Why the gate is applied AFTER the watchability assessment: pacing is a
+      // defect whoever is looking at this run can fix, and deferring the check to
+      // the owning run is the MOTIR-1905 blind spot.
       const dir = tmpDir();
       writeRecording(dir, 'acceptance-raced-chromium', {
         storyKey: 'MOTIR-811',
+        owned: false,
         chapters: JSON.stringify([
           { label: 'one', tSeconds: 0.5 },
           { label: 'two', tSeconds: 3.0 },
         ]),
         totalSeconds: 9.5,
       });
-      writeRecording(dir, 'acceptance-good-chromium', { storyKey: 'MOTIR-1627' });
       process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
-      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
       process.env['GITHUB_ACTIONS'] = 'true';
       const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -788,46 +855,81 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       await main();
 
       expect(exit).toHaveBeenCalledWith(1);
-      // Annotated, so `continue-on-error` cannot hide it (MOTIR-1905's contract).
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('::error::Unwatchable acceptance video for MOTIR-811'),
       );
-      // …and still nothing was written.
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('needs no credential — a dry run never authenticates', async () => {
+    it('needs no credential when it owns nothing', async () => {
       const dir = tmpDir();
-      writeRecording(dir, 'acceptance-chromium', { storyKey: 'MOTIR-1627' });
+      writeRecording(dir, 'acceptance-chromium', { storyKey: 'MOTIR-1627', owned: false });
       process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
-      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
       delete process.env['MOTIR_UPLOAD_TOKEN'];
       const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
-      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await main();
 
       expect(exit).not.toHaveBeenCalled();
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Dry run'));
     });
   });
 });
 
-// ── The publish/dry-run gate (MOTIR-1937) ────────────────────────────────────
+// ── The spec-OWNERSHIP gate (MOTIR-1937) ────────────────────────────────────
 
-describe('resolvePublishMode', () => {
-  it('publishes ONLY on an explicit publish', () => {
-    expect(resolvePublishMode({ ACCEPTANCE_PUBLISH_MODE: 'publish' })).toBe('publish');
+describe('resolveOwnedSpecs', () => {
+  it('parses the `git diff --name-only` output shape verbatim', () => {
+    expect(
+      resolveOwnedSpecs({
+        ACCEPTANCE_CHANGED_SPECS:
+          'tests/e2e/acceptance-a.spec.ts\ntests/e2e/acceptance-b.spec.ts\n',
+      }),
+    ).toEqual(new Set(['tests/e2e/acceptance-a.spec.ts', 'tests/e2e/acceptance-b.spec.ts']));
+  });
+
+  it('accepts space- and comma-separated lists, and strips a leading ./', () => {
+    expect(
+      resolveOwnedSpecs({ ACCEPTANCE_CHANGED_SPECS: './a.spec.ts, b.spec.ts  c.spec.ts' }),
+    ).toEqual(new Set(['a.spec.ts', 'b.spec.ts', 'c.spec.ts']));
   });
 
   it.each([
-    ['dry-run', { ACCEPTANCE_PUBLISH_MODE: 'dry-run' }],
     ['unset', {}],
-    ['empty', { ACCEPTANCE_PUBLISH_MODE: '' }],
-    ['a typo', { ACCEPTANCE_PUBLISH_MODE: 'Publish' }],
-    ['a truthy-looking value', { ACCEPTANCE_PUBLISH_MODE: 'true' }],
-  ])('is a dry run for %s — the gate fails closed', (_label, env) => {
-    expect(resolvePublishMode(env)).toBe('dry-run');
+    ['empty', { ACCEPTANCE_CHANGED_SPECS: '' }],
+    ['whitespace only', { ACCEPTANCE_CHANGED_SPECS: '  \n ' }],
+  ])('owns NOTHING for %s — the gate fails closed', (_label, env) => {
+    expect(resolveOwnedSpecs(env)).toEqual(new Set());
+  });
+});
+
+describe('isOwnedRecording', () => {
+  const owned = new Set(['tests/e2e/acceptance-cadence.spec.ts']);
+
+  it('owns a recording whose spec this run changed', () => {
+    expect(isOwnedRecording({ specFile: 'tests/e2e/acceptance-cadence.spec.ts' }, owned)).toBe(
+      true,
+    );
+  });
+
+  it('normalises a leading ./ on the recording side too', () => {
+    expect(isOwnedRecording({ specFile: './tests/e2e/acceptance-cadence.spec.ts' }, owned)).toBe(
+      true,
+    );
+  });
+
+  it('does NOT own a sibling spec the run did not touch', () => {
+    expect(isOwnedRecording({ specFile: 'tests/e2e/acceptance-cli-connect.spec.ts' }, owned)).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ['a legacy sidecar with no specFile', {}],
+    ['a null specFile', { specFile: null }],
+    ['an empty specFile', { specFile: '' }],
+    ['no meta at all', null],
+  ])('does NOT own %s — an unidentifiable recording is never published', (_label, meta) => {
+    expect(isOwnedRecording(meta as { specFile?: string | null }, owned)).toBe(false);
   });
 });
 
