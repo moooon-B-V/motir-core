@@ -401,6 +401,23 @@ export default defineConfig({
         // safety net.
         'lib/github/repoProvisioning.ts',
         'lib/services/projectRepoProvisioningService.ts',
+        // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
+        // Gated for a different reason than the primitive above: the whole card
+        // is a claim about what must NOT be on screen (no repository name, count,
+        // role or GitHub error on the default path — the `notes.html` #151 rule),
+        // and a claim like that only holds while the branches that could leak it
+        // are exercised. The routes are the wire contract behind it, including the
+        // one state a client may never write.
+        'lib/services/projectRepoEstablishService.ts',
+        'lib/projectRepos/errorResponse.ts',
+        'lib/planning/repositorySetClient.ts',
+        'components/planning/repositories/RepositorySetStep.tsx',
+        'components/planning/repositories/RepositoryRow.tsx',
+        'app/api/projects/[key]/repositories/route.ts',
+        'app/api/projects/[key]/repositories/[rowId]/route.ts',
+        'app/api/projects/[key]/repositories/[rowId]/state/route.ts',
+        'app/api/projects/[key]/repositories/[rowId]/move/route.ts',
+        'app/api/projects/[key]/repositories/establish/route.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -631,6 +648,49 @@ export default defineConfig({
         // decides whose an existing one is, and neither is undoable.
         'lib/github/repoProvisioning.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/projectRepoProvisioningService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-1775 · MOTIR-1782 — the establish step + its wire contract.
+        'lib/services/projectRepoEstablishService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/projectRepos/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/repositorySetClient.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/repositories/RepositorySetStep.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'components/planning/repositories/RepositoryRow.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/projects/[key]/repositories/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/projects/[key]/repositories/[rowId]/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/projects/[key]/repositories/[rowId]/state/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/projects/[key]/repositories/[rowId]/move/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/projects/[key]/repositories/establish/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

@@ -9,8 +9,9 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
-import { PlanReviewRail } from '@/components/planning/PlanReviewRail';
+import { PlanReviewRail, type PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
 import { ProposalEditModal } from '@/components/planning/ProposalEditModal';
+import { RepositorySetStep } from '@/components/planning/repositories/RepositorySetStep';
 import {
   approvePlanRequest,
   declinePlanRequest,
@@ -20,6 +21,7 @@ import {
 } from '@/lib/planning/planReviewClient';
 import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { UpdateProposalInput } from '@/lib/dto/plans';
+import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 
 // The plan-detail island (Subtask 7.4.5 / MOTIR-847) — the generation-review MODE
 // of the canvas+chat workspace shell (MOTIR-1193). It composes the proposed-plan
@@ -35,11 +37,32 @@ const POLL_MS = 2500;
 export interface PlanDetailProps {
   initialReview: PlanReviewDto;
   ariaLabel?: string;
+  /**
+   * The project's repository SET, when the plan is approved and the project has
+   * one (Story MOTIR-1775 · MOTIR-1782). Present → the canvas pane holds the
+   * ESTABLISH STEP instead of the proposals: once the plan has materialized, the
+   * canvas of proposals has served its purpose, and replacing it is the truthful
+   * use of the space. The rail is untouched and still reads "Approved", which is
+   * what lets the user see their plan is safe while they answer.
+   *
+   * Null → nothing changes (an un-decided plan, a declined one, a project with no
+   * set, or a repo-set read that failed — the step is an addition to this page,
+   * never a precondition for it).
+   */
+  repositorySet?: { projectKey: string; view: ProjectRepoEstablishViewDto } | null;
 }
 
-export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
+export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDetailProps) {
   const t = useTranslations('planReview');
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
+  // The one line the rail's approved outcome carries about the project's code.
+  // SEEDED from the server read so a page load is already correct, then kept
+  // current by the step reporting its own outcome — the rail is a sibling client
+  // component, so nothing here needs a server round-trip to say "your code is
+  // ready".
+  const [codeOutcome, setCodeOutcome] = useState<PlanCodeOutcome | null>(() =>
+    codeOutcomeOf(repositorySet?.view ?? null),
+  );
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -177,13 +200,23 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
       <PlanningWorkspace
         className="h-full w-full"
         canvas={
-          <PlanReviewCanvas
-            items={review.items}
-            version={version}
-            ariaLabel={ariaLabel ?? t('canvasAria')}
-            // Editable only while planned — an approved/declined plan is immutable.
-            onEditAdd={review.status === 'planned' ? onEditAdd : undefined}
-          />
+          repositorySet ? (
+            <RepositorySetStep
+              projectKey={repositorySet.projectKey}
+              initialView={repositorySet.view}
+              backlogHref="/items"
+              connectHref="/settings/workspace/github"
+              onOutcomeChange={setCodeOutcome}
+            />
+          ) : (
+            <PlanReviewCanvas
+              items={review.items}
+              version={version}
+              ariaLabel={ariaLabel ?? t('canvasAria')}
+              // Editable only while planned — an approved/declined plan is immutable.
+              onEditAdd={review.status === 'planned' ? onEditAdd : undefined}
+            />
+          )
         }
         chat={
           <PlanReviewRail
@@ -192,6 +225,7 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
             onDecline={onDecline}
             busy={busy}
             errorCode={errorCode}
+            codeOutcome={codeOutcome}
           />
         }
       />
@@ -229,4 +263,23 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
       />
     </>
   );
+}
+
+/**
+ * The one line the approved outcome gains about the project's code — `ready` once
+ * every row of the set has SETTLED, `unfinished` while any is still unresolved
+ * (proposed, creating or failed), and null when there is no set to speak of.
+ *
+ * "Settled" is the ADR §4.1 word: `created`, `connected` and `skipped` all count,
+ * because a deliberately skipped row is a finished decision, not an unfinished
+ * one — telling the user to "finish setting up repositories" they chose to go
+ * without would be a nag about a choice they already made.
+ */
+function codeOutcomeOf(
+  view: { set: { rows: { state: string }[] } } | null,
+): PlanCodeOutcome | null {
+  if (!view || view.set.rows.length === 0) return null;
+  const settled = (state: string) =>
+    state === 'created' || state === 'connected' || state === 'skipped';
+  return view.set.rows.every((r) => settled(r.state)) ? 'ready' : 'unfinished';
 }

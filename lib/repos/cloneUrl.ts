@@ -58,3 +58,14 @@ export function repoCloneUrl(repo: RepoCoordinates): string | null {
       return null;
   }
 }
+
+/**
+ * The repository's WEB url — the link-out a human follows to see their code
+ * (MOTIR-1782's established rows). Same derivation as {@link repoCloneUrl} minus
+ * the `.git` suffix, and `null` on the same unknown-provider terms, so the two can
+ * never disagree about which host a repository lives on.
+ */
+export function repoWebUrl(repo: RepoCoordinates): string | null {
+  const clone = repoCloneUrl(repo);
+  return clone === null ? null : clone.replace(/\.git$/, '');
+}
