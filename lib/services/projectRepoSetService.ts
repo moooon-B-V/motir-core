@@ -6,6 +6,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRepoPinService } from '@/lib/services/projectRepoPinService';
 import {
   toProjectRepoDto,
   toProjectRepoSetDto,
@@ -619,8 +620,45 @@ export const projectRepoSetService = {
    *
    * Called by the creation primitive (MOTIR-1781) AFTER its GitHub work completes —
    * never with a transaction held open across that round-trip.
+   *
+   * POST-COMMIT, this fires the role → repo-name RESOLUTION (MOTIR-1913): a row
+   * reaching an established state is exactly the moment items pinned to its role
+   * can finally be told which repository they ship in. It is wired HERE rather than
+   * in each caller because this method is the ONE seam every establish path goes
+   * through — the creation primitive's `created` hop and the establish UI's
+   * connect-existing `connected` hop alike — so neither has to remember it and
+   * neither can drift. Best-effort by design: the repository EXISTS and the row IS
+   * established by the time this runs, and failing the attach over a derived pin
+   * would report a settled row as failed. The pass is idempotent, so the next
+   * establish (or an explicit re-run) completes what a dropped one missed.
    */
   async attachRealizedRepo(
+    rowId: string,
+    githubRepoId: string,
+    ctx: ServiceContext,
+  ): Promise<ProjectRepoDto> {
+    const attached = await this.attachRealizedRepoRow(rowId, githubRepoId, ctx);
+    try {
+      // A SEPARATE transaction, deliberately: the pass locks the project's WHOLE
+      // set, and taking that lock while `inLockedRow` still held one row of it
+      // would let two concurrent attaches on different rows acquire the set in
+      // different orders — a deadlock. Sequencing them is what keeps one lock
+      // order (set, then work items) for every writer.
+      await projectRepoPinService.resolvePins(attached.projectId, ctx);
+    } catch (err) {
+      console.error(
+        `[projectRepoSetService] could not resolve repo pins for project ${attached.projectId} ` +
+          `after establishing row ${rowId}:`,
+        err,
+      );
+    }
+    return attached;
+  },
+
+  /** {@link attachRealizedRepo} WITHOUT the post-commit pin resolution — the row
+   *  write on its own, in its one locked transaction. Split out so the resolution
+   *  reads a COMMITTED set rather than joining the lock that produced it. */
+  async attachRealizedRepoRow(
     rowId: string,
     githubRepoId: string,
     ctx: ServiceContext,

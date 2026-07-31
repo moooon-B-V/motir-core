@@ -2,6 +2,7 @@ import {
   Prisma,
   type EstimationStatistic,
   type Executor,
+  type ProjectRepoRole,
   type WorkItem,
   type WorkItemKind,
   type WorkItemPriority,
@@ -386,6 +387,92 @@ export const workItemRepository = {
       SELECT "id" FROM "work_item" WHERE "id" = ${id} FOR UPDATE
     `;
     return rows[0] ?? null;
+  },
+
+  /**
+   * Every repo ROLE that some UNPINNED item of a project carries, with how many
+   * items carry it (Story MOTIR-1775 · MOTIR-1913) — the work the role → repo-name
+   * resolution has left to do, in one grouped read rather than a scan per role.
+   *
+   * "Unpinned" is `targetRepo IS NULL`, and that predicate is the whole
+   * non-clobbering rule: a pin set by a human, or by a §5.4 settled-name proposal,
+   * is an EXPLICIT decision, and a derived resolution must never overwrite one.
+   * There is no second column recording who pinned an item, and none is needed —
+   * "already pinned" is exactly the state a derived pass must leave alone.
+   *
+   * Archived items are INCLUDED: archiving is a soft remove, the role is still
+   * recorded on the row, and an item restored later should carry the pin its
+   * siblings got rather than be the one card that mysteriously has none.
+   */
+  async countUnpinnedByRepoRole(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ role: ProjectRepoRole; count: number }>> {
+    const grouped = await tx.workItem.groupBy({
+      by: ['targetRepoRole'],
+      where: { projectId, workspaceId, targetRepo: null, targetRepoRole: { not: null } },
+      _count: { _all: true },
+    });
+    return grouped.map((g) => ({ role: g.targetRepoRole!, count: g._count._all }));
+  },
+
+  /**
+   * LOCK (`SELECT … FOR UPDATE`) and return the ids of a project's items that
+   * carry `role` and are still unpinned — the guarding read of MOTIR-1913's
+   * read-derived pin write.
+   *
+   * The lock is what makes "find the unpinned items of this role, then write them"
+   * safe under two concurrent establish calls: the loser blocks here, and by the
+   * time it proceeds the winner's `targetRepo` has committed, so these rows no
+   * longer match and it writes nothing. The `WHERE targetRepo IS NULL` predicate
+   * alone would already prevent a lost UPDATE under READ COMMITTED, but the ids
+   * are also what the pass records revisions against, and those must describe rows
+   * it actually changed.
+   *
+   * `ORDER BY "id"` for the same reason `projectRepoRepository.lockByProject` uses
+   * it — two passes take the rows in one order and queue instead of deadlocking.
+   * Callers take the `project_repository` lock BEFORE this one.
+   */
+  async lockUnpinnedIdsByRepoRole(
+    projectId: string,
+    workspaceId: string,
+    role: ProjectRepoRole,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "work_item"
+      WHERE "projectId" = ${projectId}
+        AND "workspaceId" = ${workspaceId}
+        AND "targetRepoRole" = ${role}::"project_repo_role"
+        AND "targetRepo" IS NULL
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * Write one repo NAME onto many items — the pin half of MOTIR-1913's resolution,
+   * applied to ids the caller has already locked and validated.
+   *
+   * `targetRepo: null` stays in the WHERE as a belt-and-suspenders guard: it costs
+   * nothing, and it means that even a caller that skipped the lock can only ever
+   * fill a hole, never overwrite an explicit pin. Returns the number of rows
+   * actually written, which is what makes a re-run OBSERVABLY a no-op rather than
+   * assumed to be one.
+   */
+  async pinTargetRepoByIds(
+    ids: string[],
+    targetRepo: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.workItem.updateMany({
+      where: { id: { in: ids }, targetRepo: null },
+      data: { targetRepo },
+    });
+    return result.count;
   },
 
   async findByIdentifier(
