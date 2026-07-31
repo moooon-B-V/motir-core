@@ -64,11 +64,11 @@ export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance*.spec.ts'],
   // MOTIR-921: resolve `server-only` to an empty stub for the RUNNER only (see
-  // tsconfig.playwright.json). A spec that seeds through a service reaching
+  // tsconfig.node.json). A spec that seeds through a service reaching
   // lib/ai/motirAiClient otherwise dies at import, before collection. Same
   // decision, same stub, as vitest.config.ts; the Next build still enforces the
   // real boundary.
-  tsconfig: './tsconfig.playwright.json',
+  tsconfig: './tsconfig.node.json',
   timeout: 90_000,
   // Assertion headroom for CI load. This lane now runs a PRODUCTION build (see
   // webServer below, MOTIR-1682), so there is NO on-demand cold-compile cost on

@@ -1,0 +1,40 @@
+{
+  // Module resolution for the NODE-SIDE RUNNERS (Subtask MOTIR-921, widened by
+  // MOTIR-1901).
+  //
+  // Identical to the root tsconfig except for ONE added path mapping:
+  // `server-only` → the empty stub `tests/stubs/server-only.ts`.
+  //
+  // `import 'server-only'` is a Next BUILD-TIME marker with no plain-node
+  // resolution — Next resolves it (to a no-op on the server, to a throw inside a
+  // client bundle) so a server-only module can never reach the browser. Anything
+  // that loads app code in PLAIN NODE therefore dies at import with
+  // ERR_MODULE_NOT_FOUND / MODULE_NOT_FOUND the moment its import graph reaches
+  // `lib/ai/motirAiClient` — before doing any work. Three runners are in that
+  // position, and all three now resolve the same way against the same stub:
+  //
+  //   * vitest      — the `server-only` alias in `vitest.config.ts`.
+  //   * Playwright  — `tsconfig:` in all three `playwright.*.config.ts`.
+  //   * tsx scripts — `--tsconfig` on every `tsx` entry in package.json.
+  //
+  // ⚠️ WHY THIS IS NO LONGER "PLAYWRIGHT-ONLY". It was, until MOTIR-1901's
+  // dispatch gate gave `workItemsService` an edge to `motirAiClient`. That single
+  // edge is reachable from `projectsService` / `boardsService` — i.e. from nearly
+  // every seed script and E2E helper — so the SAME failure then hit the tsx seed
+  // CHILD PROCESS (`scripts/seedCollabFixture.ts` → … → motirAiClient), which a
+  // Playwright-scoped tsconfig cannot reach. Widening the existing mechanism is
+  // deliberately preferred over adding a third one, and the file is named for the
+  // job it does (node-side runners) rather than for one of its callers.
+  //
+  // The BOUNDARY IS UNAFFECTED: this file is loaded only by those runners, never
+  // by `next build` / `tsc` / eslint, so the real open-core guard the marker
+  // exists for keeps being enforced everywhere it matters. The stub is empty, so
+  // a module importing it gains nothing — it simply stops throwing on resolution.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./tests/stubs/server-only.ts"]
+    }
+  }
+}

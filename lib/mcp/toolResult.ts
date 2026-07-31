@@ -57,6 +57,7 @@ import {
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
+import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
@@ -271,6 +272,16 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof McpMissingContextError) {
+    return toolError(err.code, err.message);
+  }
+  // The CI-credit dispatch refusal (MOTIR-1901 · `ci-minutes-allowance.md`
+  // §6.2–6.3). `next_ready` / `claim_next_ready` are dispatch paths, so an
+  // exhausted org hits this instead of receiving work. The message already names
+  // the minutes used, the pool, and the balance — §6.3 requires the surface to be
+  // able to say WHY — so an agent reads CI_CREDITS_EXHAUSTED and stops honestly
+  // rather than retrying against an opaque internal error. The sibling condition
+  // one domain over (`MOTIR_AI_OUT_OF_CREDITS`) is mapped the same way above.
+  if (err instanceof CiCreditsExhaustedError) {
     return toolError(err.code, err.message);
   }
   throw err;

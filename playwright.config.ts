@@ -108,6 +108,12 @@ process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
  */
 export default defineConfig({
   testDir: 'tests/e2e',
+  // MOTIR-921: resolve `server-only` to an empty stub for the RUNNER only (see
+  // tsconfig.node.json). A spec that seeds through a service reaching
+  // lib/ai/motirAiClient otherwise dies at import, before collection. Same
+  // decision, same stub, as vitest.config.ts and the acceptance config; the Next
+  // build still enforces the real boundary.
+  tsconfig: './tsconfig.node.json',
   // MOTIR-1565 — the harness readiness gate. Runs AFTER the two webServers
   // below report their `url` ready, but BEFORE the first spec. Playwright's
   // built-in `url` check treats any status < 404 as ready, so a redirecting

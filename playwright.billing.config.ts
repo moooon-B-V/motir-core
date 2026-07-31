@@ -48,6 +48,12 @@ process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/billing-cloud.spec.ts'],
+  // MOTIR-921: resolve `server-only` to an empty stub for the RUNNER only (see
+  // tsconfig.node.json). A spec that seeds through a service reaching
+  // lib/ai/motirAiClient otherwise dies at import, before collection. Same
+  // decision, same stub, as vitest.config.ts and the acceptance config; the Next
+  // build still enforces the real boundary.
+  tsconfig: './tsconfig.node.json',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false,

@@ -18,11 +18,13 @@ import {
   type JobView,
 } from './errors';
 import type {
+  CiOverageDebitInput,
   JobContextBag,
   JobKind,
   JobStreamEvent,
   PreplanStateQuery,
   Problem,
+  RawCiOverageDebitResponse,
   RawJobResponse,
   RawPreplanSession,
   RawPreplanStateResponse,
@@ -177,6 +179,38 @@ export async function getOrgUsage(query: UsageQuery): Promise<RawUsageResponse> 
   }
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawUsageResponse;
+}
+
+// POST /v1/credits/ci-overage — charge an org's credit ledger for CI-minutes
+// OVERAGE (MOTIR-1899's endpoint; `docs/decisions/ci-minutes-allowance.md` §8.6).
+//
+// The caller (`ciAllowanceService`) invokes this as a BEST-EFFORT side effect
+// AFTER its own charge transaction commits: the debit crosses the open-core
+// boundary, so it must never roll back the local record and never fail a request
+// (the shipped side-effects-outside-tx rule; `notes.html` #39). This function
+// still THROWS a typed error on failure — swallowing belongs at the call site,
+// which is the layer that knows the write is already durable and can decide to
+// retry the same `externalRef`.
+//
+// Idempotent on `externalRef`, and the response's `idempotent: true` is load-
+// bearing rather than informational: it is the ONLY way to learn that a debit
+// which timed out had in fact landed, which is what lets a retry be safe.
+export async function debitCiOverage(
+  input: CiOverageDebitInput,
+): Promise<RawCiOverageDebitResponse> {
+  const { url, serviceToken } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/credits/ci-overage`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawCiOverageDebitResponse;
 }
 
 // GET /v1/stripe/subscription — the org's AI-pool Stripe subscription lifecycle
