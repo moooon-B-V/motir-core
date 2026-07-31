@@ -49,11 +49,11 @@ export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/billing-cloud.spec.ts'],
   // MOTIR-921: resolve `server-only` to an empty stub for the RUNNER only (see
-  // tsconfig.playwright.json). A spec that seeds through a service reaching
+  // tsconfig.node.json). A spec that seeds through a service reaching
   // lib/ai/motirAiClient otherwise dies at import, before collection. Same
   // decision, same stub, as vitest.config.ts and the acceptance config; the Next
   // build still enforces the real boundary.
-  tsconfig: './tsconfig.playwright.json',
+  tsconfig: './tsconfig.node.json',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false,
