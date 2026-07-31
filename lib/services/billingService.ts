@@ -1,4 +1,5 @@
 import { organizationsService } from '@/lib/services/organizationsService';
+import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -98,9 +99,19 @@ export const billingService = {
     // boundary; a motir-ai outage throws a MotirAiError the route maps to 502 (the
     // design's "couldn't load billing" state), never a fake zero. The subscription
     // read returns an EMPTY shape (status: null) for a free org — not an error.
-    const [usage, subscription] = await Promise.all([
+    //
+    // (4) ③ Motir CI (MOTIR-1903) — the entitlement state MOTIR-1901 already
+    // EXPOSES as a readable service result, taken whole rather than re-derived
+    // here: re-resolving the pool or re-reading the balance on this surface is
+    // exactly how two surfaces come to disagree about whether an org is
+    // exhausted. It carries its own balance read (and its own `balance: null`
+    // treatment for a boundary blip), which is why the panel can render the
+    // balance-unavailable state at all — the AI line's read having succeeded
+    // does not make the CI line's read succeed.
+    const [usage, subscription, ci] = await Promise.all([
       getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
       getOrgSubscription({ coreOrganizationId: input.organizationId }),
+      ciAllowanceService.getEntitlementState(input.organizationId, new Date()),
     ]);
 
     return {
@@ -109,6 +120,7 @@ export const billingService = {
       isMeta: org?.isMeta ?? false,
       motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
+      ci,
       catalog: BILLING_CATALOG,
     };
   },
