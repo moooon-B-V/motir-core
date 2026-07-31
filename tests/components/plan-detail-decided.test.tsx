@@ -18,6 +18,12 @@ vi.mock('@/components/planning/PlanReviewCanvas', () => ({
   PlanReviewCanvas: () => <div data-testid="plan-review-canvas" />,
 }));
 
+// The island reads the router to refresh the page's SERVER read on approve
+// (MOTIR-1947); a unit render has no app-router context to invariant against.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 import { PlanDetail } from '@/components/planning/PlanDetail';
 
 afterEach(cleanup);
