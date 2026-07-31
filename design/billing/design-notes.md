@@ -41,9 +41,10 @@ the same primitives — no design→code gap.
 > Code follow-ups blocked on this asset: **8.1.16 / MOTIR-1303** (seat toggle +
 > drop the note) and **8.1.17 / MOTIR-1304** (pricing blocks).
 
-| Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
+| Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                        |
+| **Motir CI — the third billed line** (AMENDMENT)       | **`ci-line.mock.html`** (HTML mockup) | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file. |
 
 ## What this area is
 
@@ -668,3 +669,205 @@ Tier-0 under `--el-*`) — verified.
 The full string set is added to the app's locale files (en + zh, the shipped
 locale set) by the 8.1.7 / 8.1.8 code subtasks under the new `billing` namespace.
 en is the source; keep it byte-stable as other locales are added.
+
+---
+
+# Amendment 2026-07-30 — the Motir CI line (MOTIR-1902)
+
+**Asset:** `ci-line.mock.html` + `ci-line.png` (this file is the third of the
+three). **Base asset amended:** `billing.mock.html` + `billing.png` + everything
+above in this file.
+
+**What this amendment adds:** exactly one thing — a **third billed line, "Motir
+CI"**, on the billing settings panel, in all the states it can hold.
+
+**What it leaves UNTOUCHED — explicitly:**
+
+- **① The Motir (seats) line and ② the Motir AI line.** Reproduced verbatim in
+  panel 1 so the new line is reviewed in its real neighbourhood; not one token,
+  string or control of either is changed.
+- **The access path.** Organization settings → Billing & plans is shipped and
+  already drawn (base panel 1). This amendment draws **no new door** — the CI line
+  is new content inside a room the user can already reach.
+- **The storefront (base panels 5–6), the paywall (7), the role gating (4), the
+  subscription lifecycle states (3), and the payment card.** Untouched.
+- **The base `<style>` block and the lucide sprite** are spliced into
+  `ci-line.mock.html` **byte-identically** (asserted at build time), so the two
+  assets cannot drift. New CSS is additive only and namespaced `.ci-*` where a
+  collision was possible — see "Collisions found" below.
+
+## Where each behaviour came from (nothing here is invented)
+
+| Behaviour drawn                                                            | Decided by                                                                        |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| A **third line**, not a second usage kind on the AI line, not a breakdown  | `docs/decisions/ci-minutes-allowance.md` **§7.1** (MOTIR-1898)                    |
+| The pool `max(members × 300, 1000)` and the "300 min × 6 seats" derivation | **§1**, **§1.2** (the floor), **§7.3.2**                                          |
+| "1 credit per minute" and the credits-drawn figure                         | **§2**, **§7.3.4**                                                                |
+| "Resets 1 Aug" + it deliberately differs from the seat renewal             | **§4.5** (calendar month, UTC) — the panel must say so, not let the user assume   |
+| An org with **no seat subscription still gets a full pool**                | **§4.3**                                                                          |
+| META org → no CI line; self-host → the page 404s                           | **§4.4**, **§8.5**, **§7.3.7**                                                    |
+| `drawing_on_credits` is **visible**, not silent, and blocks nothing        | **§6.1**, **§6.5**                                                                |
+| Zero consumption is **not an empty state**                                 | **§7.3.6**                                                                        |
+| The exhausted state is **"CI is paused"**, not "dispatch paused"           | Amendment 2026-07-30 (MOTIR-1906) **§A**, **§6.5** — Actions are paused too       |
+| **Two options for an admin, an alert for a member**                        | Amendment **§D** (Yue's directive, 2026-07-30)                                    |
+| "resumes within a minute, at most 15" in the Add-credits copy              | Amendment **§B** (the resume latency, which §D requires the copy to state)        |
+| The takeover's real costs; never gated on a stored GitHub identity         | Amendment **§D** (motir-core's only social provider is Google — no admin has one) |
+| The member alert routes to "an organization owner" **without naming**      | Amendment **§D** (naming leaks org membership; mirrors `en.json` `askOwner`)      |
+| **One decision surface, N pointers**                                       | Amendment **§D**                                                                  |
+| A `connect-existing` repo is never paused                                  | Amendment **§C**                                                                  |
+| Every FIGURE on the line                                                   | `lib/dto/ciAllowance.ts` — `CiEntitlementStateDTO` (MOTIR-1901)                   |
+
+**Every number is traceable to a read.** `poolMinutes` · `consumedMinutes` ·
+`remainingMinutes` · `overageMinutes` · `chargedCredits` · `memberCount` ·
+`floorApplied` · `periodEnd` · `balance` · `state` · `applicable`. Nothing is
+drawn that no read supplies; the admin/member split is the shipped
+`AiAccessDTO.canManageBilling`.
+
+## Primitives composed (no new primitive is introduced)
+
+- **`Card`** — the CI line itself, same head/body grammar as ① and ②
+  (`--radius-card`, `--shadow-card`, `--spacing-card-padding`).
+- **`Meter` — the SHIPPED one**, `BillingClient.tsx`'s `Meter({ pct, low })`. It
+  already carries the `low` → `--el-warning` variant this line needs, so the
+  usage bar is a **reuse, not a new primitive**. The only addition is a 2px
+  **pool-boundary tick** (`.meter.over .tick`, filled `--el-page-bg`) marking
+  where the included pool ends inside a full bar.
+- **`Pill`** — `Included` (mint), `Drawing on credits` (yellow), `CI paused`
+  (yellow), `Nothing to bill` (neutral). Hue in the tint BACKGROUND with
+  `--el-text-strong` text — AA-safe, finding #35.
+- **`Button`** — `secondary` only, for both decision options (see below).
+- **The `banner` / `note` / `state` / `Skeleton` family** — reused as-is from the
+  base for the paused banner, the advisory notes, the error state and the loading
+  row. The base `.sk` shimmer is reused verbatim, not redefined.
+
+## Colour + shape roles (additions only — the base table above still governs)
+
+| Element                                | Token                                              | Why                                                                                                                                   |
+| -------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Motir CI product glyph** (`i-zap`)   | `--el-tint-peach` bg + `--el-text-strong`          | The THIRD product hue. mint = Motir, lavender = Motir AI, so CI takes the unused peach slot — a different tint slot, never a new hue. |
+| **`Included` pill**                    | `--el-tint-mint` + `--el-text-strong`, `i-check`   | Healthy, same family as the AI line's `Active`.                                                                                       |
+| **`Drawing on credits` pill + banner** | `--el-tint-yellow` + `--el-text-strong`, `i-coins` | Warning family: you are now paying per minute — but nothing is blocked.                                                               |
+| **`CI paused` pill + banner**          | `--el-tint-yellow` + `--el-text-strong`, `i-pause` | **Warning, NOT danger** — the base table already fixes this for the paused state ("nothing is broken").                               |
+| **Meter fill, within allowance**       | `--el-accent`                                      | The shipped `Meter` default.                                                                                                          |
+| **Meter fill, past the pool**          | `--el-warning`                                     | The shipped `Meter low` variant — same signal as the AI line's low-balance meter.                                                     |
+| **Pool-boundary tick**                 | `--el-page-bg`                                     | A notch, not a colour — reads on any palette.                                                                                         |
+| **Pool derivation line**               | `--el-text-muted`, figures `--el-text-secondary`   | Explains the number without competing with it.                                                                                        |
+| **Decision option card**               | `--el-page-bg` on `--el-border`, `--radius-card`   | Two peers; neither is tinted, so neither reads as the recommended one.                                                                |
+| **Cross-link to the AI balance**       | `--el-link`                                        | The §7.2 non-duplication rule: CI reports minutes and links for the balance.                                                          |
+
+Shape: `--radius-card` (cards, banners, option cards), `--radius-badge` (pills,
+meter), `--radius-control` (glyph, repo rows), `--spacing-card-padding`,
+`--spacing-control-x/y`, `--height-btn-*`, `--shadow-card`. No Tier-0
+`--color-*`, no raw `rounded-*`/`p-*`/`h-*`. Dark mode verified — every colour
+flips through Tier 0 under `--el-*`.
+
+## The exhausted state — the part MOTIR-1903 must get exactly right
+
+**It is a DECISION, so it was MEASURED, not just drawn** (amendment §D). Rendered
+in a real **1280 × 800** laptop viewport (≈700 px of usable page):
+
+| Measurement                         | Result     |
+| ----------------------------------- | ---------- |
+| CI card top (paused state, hoisted) | **85 px**  |
+| Both consequence lines end by       | **367 px** |
+| Both option buttons end by          | **415 px** |
+| Fold                                | 700 px     |
+
+- **Neither option is `primary`.** Both are `secondary` peers. One keeps the
+  hosted arrangement and one ends it; dressing either as _the_ answer is Motir's
+  thumb on the scale.
+- **Each option states its real cost under it.** Add credits → "CI resumes within
+  a minute of the payment landing — at most 15" (§B's latency, in the copy, not in
+  the implementer's head). Move the repositories → a GitHub account you own, a
+  transfer you accept on GitHub, and an app re-install — **never "one click"**.
+- **The member variant renders NO disabled control.** A control a user cannot use
+  is worse than a sentence explaining why. It routes to "an organization owner"
+  and names nobody.
+
+### ⚠️ The one ordering rule this amendment adds (panel 8)
+
+Measured on the real page: in the normal order the CI card is **third and starts
+at 756 px** — below a 700 px fold. A paused admin would land _above_ the decision
+and have to scroll to find it, which fails §D's constraint in practice even
+though the block itself fits. **Rule: when `state === 'ci_credits_exhausted'`,
+the Motir CI card renders FIRST in the stack; otherwise it keeps third
+position.** This orders by urgency without adding a second decision surface,
+without a page-level banner to keep in sync, and without changing the CONTENT of
+① or ② — they are byte-identical, just below. **MOTIR-1903 must implement this
+ordering**, not only the card.
+
+## Two corrections to MOTIR-1902's own card, made against the record
+
+1. **"An org with no seat subscription" is NOT a render-nothing case.** The card
+   grouped it with self-host and the meta org under "not applicable"; ADR **§4.3**
+   decides the opposite — the pool is `max(members × 300, 1000)` regardless of
+   subscription, because a free-tracker org can hold a paid AI plan. It renders a
+   **normal** line (panel 5, right). Drawing it as "nothing" would have shipped
+   the wrong branch.
+2. **A state the card did not list is required by the DTO: `balance: null`**
+   (motir-ai unreachable). It is a real value, is **never** treated as exhaustion —
+   refusing on a transport blip would fail closed on Motir's own outage — and must
+   **not** render as a misleading zero. Drawn in panel 6: the minutes half renders
+   from local data; only the credits half says it is unavailable.
+
+## Collisions found while composing (recorded so MOTIR-1903 does not repeat them)
+
+Composing INTO a shipped asset is not the same as drawing beside it. Three real
+defects surfaced only by rendering, not by reading:
+
+1. **`.opt` already exists in the base** as the org-menu row (`align-items:
+center; cursor: pointer`). The new decision-option cards silently inherited it
+   and rendered centre-aligned. Renamed to **`.ci-opt` / `.ci-opts`**.
+2. **`.sk` already exists** as a gradient shimmer. A redefinition would have
+   downgraded it to a flat fill — the base one is reused verbatim instead.
+3. **`.desc` is scoped as `.line .desc`.** Used outside the base's
+   `.line > .meta` wrapper it falls back to default body size. Every `.desc` in
+   this asset sits inside that wrapper.
+
+**The lesson for the code card:** the CI line is a new component in an existing
+client component; reuse `Meter`, `StatusPill`'s grammar and the card shell rather
+than introducing parallel ones.
+
+## Copy strings (en — the `billing` namespace; MOTIR-1903 adds each with a `zh` twin)
+
+Every string below needs a matching `zh.json` key or the i18n-catalog parity gate
+fails the PR (amendment §D).
+
+- Line: **"Motir CI"** / **"The CI minutes Motir pays for on the repositories it
+  hosts for you."**
+- States: **"Included"** · **"Drawing on credits"** · **"CI paused"** ·
+  **"Nothing to bill"**.
+- Usage: **"Minutes used this month"** / **"{used} of {pool} minutes"** /
+  **"{left} minutes left"** / **"{over} minutes over"**.
+- Derivation: **"Your included minutes: {perSeat} min × {n} seats"** /
+  **"Your included minutes: 1,000 minute minimum"**.
+- Reset: **"Resets {date} — CI minutes run on the calendar month, so this is not
+  the same date as your Motir AI renewal."**
+- Overage: **"You're past your included minutes — CI is now drawing credits."** /
+  **"{over} minutes over · {credits} credits drawn this period, at 1 credit per
+  minute. Nothing is blocked."**
+- Zero consumption: **"All of this project's repositories are your own"**, so
+  GitHub bills you for Actions directly and Motir isn't paying for any CI. Your
+  **"{pool} included minutes"** are there if you ever ask Motir to host a
+  repository.
+- Paused (admin): **"CI is paused — your credits ran out."** + the usage sentence
+  - **"no workflows run"** on the repositories Motir hosts for you, and new work
+    can't be dispatched. **"Nothing has been deleted, and your code is untouched."**
+- Option A: **"Add credits"** / **"Top up your Motir AI balance. CI keeps running
+  on Motir's repositories and the overage keeps drawing 1 credit per minute."** /
+  **"CI resumes within a minute of the payment landing — at most 15."**
+- Option B: **"Move the repositories to your own GitHub"** / **"GitHub bills you
+  for Actions directly from then on, and Motir stops charging CI credits. The code
+  is yours either way — this changes who pays for the compute."** / **"Needs a
+  GitHub account you own, a transfer you accept on GitHub (it isn't instant), and
+  re-installing the Motir app so dispatch keeps working."**
+- Paused (member): **"CI is paused — this organization is out of credits."** +
+  **"…until an organization owner adds credits or moves the repositories to your
+  own GitHub."** + the lock note **"Billing for this organization is managed by
+  its owners. There is no action for you here — this line is informational."**
+- Balance unreachable: **"Your credit balance is temporarily unavailable. Your
+  minutes are accurate and nothing is paused — only the balance figure is
+  missing."**
+- Pointers: **"Can't start this work — CI is paused"** / **"Manage CI minutes"** /
+  **"CI is paused on the repositories Motir hosts — your own repositories are
+  untouched, because GitHub bills those to you."**
