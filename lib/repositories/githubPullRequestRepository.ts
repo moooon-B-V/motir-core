@@ -153,7 +153,11 @@ export const githubPullRequestRepository = {
     ];
     if (asNumber !== null && Number.isSafeInteger(asNumber)) match.push({ number: asNumber });
     return db.githubPullRequest.findMany({
-      where: { repo: { is: { installation: { is: { workspaceId } } } }, OR: match },
+      // Gate on the REPO row's own `workspace_id` (MOTIR-1931), not a join through
+      // the installation: a PR on a repo Motir created sits behind the shared
+      // provisioning installation, which is bound to no workspace, so the old
+      // join would never have matched it.
+      where: { repo: { is: { workspaceId } }, OR: match },
       include: { repo: true, workItem: { select: { identifier: true } } },
       orderBy: { updatedAt: 'desc' },
       take,

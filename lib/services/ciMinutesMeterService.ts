@@ -137,11 +137,14 @@ export const ciMinutesMeterService = {
     //     read under `withOrgServiceWriteContext`.
     //
     // A pleasant consequence: because the project-repo row is read under the
-    // INSTALLATION's workspace GUC, RLS itself enforces that a repo can only be
-    // attributed inside the tenant that holds its installation. A row belonging
-    // to another workspace is invisible rather than merely unexpected, so
-    // cross-tenant mis-attribution is structurally impossible, not just
-    // unlikely.
+    // REPO's workspace GUC, RLS itself enforces that a repo can only be
+    // attributed inside the tenant that owns it. A row belonging to another
+    // workspace is invisible rather than merely unexpected, so cross-tenant
+    // mis-attribution is structurally impossible, not just unlikely. (That is
+    // also why the pre-MOTIR-1931 bug degraded to under-billing rather than
+    // cross-tenant over-billing: bound to the WRONG tenant's GUC, the
+    // `project_repository` read resolved nothing and the run fell into §5.4's
+    // "metered as a cost, charged to nobody, and LOGGED" bucket.)
     const connection = await withSystemContext(async (tx) => {
       const installation = await githubInstallationRepository.findByInstallationId(
         installationId,
@@ -156,7 +159,12 @@ export const ciMinutesMeterService = {
       if (!repo) return { kind: 'unknown_repo' as const };
       return {
         kind: 'connected' as const,
-        workspaceId: installation.workspaceId,
+        // The REPO row is the payer (MOTIR-1931). The §5.1 owner-login gate above
+        // still QUALIFIES the run — "does Motir pay GitHub for this?" — but it can
+        // no longer IDENTIFY anyone: once every tenant's repos live in Motir's org
+        // the owner login is true for all of them. The installation cannot answer
+        // either; it is shared, and its `workspaceId` is NULL.
+        workspaceId: repo.workspaceId,
         githubRepoId: repo.id,
       };
     });

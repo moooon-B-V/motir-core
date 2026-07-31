@@ -53,11 +53,25 @@ async function seedInstallation(fx: WorkItemFixture, account = 'acme') {
   });
 }
 
-/** Seed a repo under an existing installation. Returns its `owner/name` ref. */
-async function seedRepo(inst: { id: string }, owner: string, name: string) {
+/** Seed a repo under an existing installation. Returns its `owner/name` ref. The
+ *  row carries its OWN `workspace_id` (MOTIR-1931) — here the installation's, since
+ *  these fixtures model a workspace's own grant. */
+async function seedRepo(
+  inst: { id: string; workspaceId: string | null },
+  owner: string,
+  name: string,
+) {
   const rand = Math.random().toString(36).slice(2, 8);
+  if (!inst.workspaceId) throw new Error('seedRepo needs a workspace-bound installation');
   await db.githubRepo.create({
-    data: { installationId: inst.id, repoId: `repo-${rand}`, owner, name, defaultBranch: 'main' },
+    data: {
+      installationId: inst.id,
+      workspaceId: inst.workspaceId,
+      repoId: `repo-${rand}`,
+      owner,
+      name,
+      defaultBranch: 'main',
+    },
   });
   return `${owner}/${name}`;
 }

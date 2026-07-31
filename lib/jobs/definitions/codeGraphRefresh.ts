@@ -38,6 +38,9 @@ export const codeGraphRefresh = defineJob(
     return ctx.step.run('refresh-repo', () =>
       services.codeGraph.indexRepoIntoWorkspaceProjects({
         installationId: data.installationId,
+        // The repo's own tenant, stamped at enqueue from `repo.workspaceId`
+        // (MOTIR-1931) — never re-derived from the shared installation.
+        workspaceId: data.workspaceId,
         repoOwner: data.repoOwner,
         repoName: data.repoName,
         defaultBranch: data.defaultBranch,

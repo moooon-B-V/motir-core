@@ -183,6 +183,7 @@ describe('githubRepoRepository.deleteByInstallationAndRepoId', () => {
       githubRepoRepository.upsert(
         {
           installationId: conn.id,
+          workspaceId: workspace.id,
           repoId: '77',
           owner: 'o',
           name: 'n',

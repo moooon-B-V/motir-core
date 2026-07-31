@@ -20,13 +20,14 @@ import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 // delegates to `billingService`. This service owns the repository reads (through
 // the leaves), the RLS context, and the boundary calls.
 //
-// TENANCY (the RESOLVED current-stage fan-out): a GitHub installation binds to a
-// WORKSPACE (`GithubInstallation.workspaceId`, no project), but motir-ai's
-// code-graph tenant is PROJECT-scoped (the planner resolves `aiProjectId` from a
-// planning job's `projectId`). So this slice resolves the installation's
-// workspace → its `organizationId` → ALL its projects, and calls motir-ai ONCE
-// PER PROJECT with the SAME tarball bytes. A repo installed at a workspace is
-// therefore indexed into each of that workspace's projects' code-graph stores.
+// TENANCY (the RESOLVED current-stage fan-out): a repo belongs to a WORKSPACE
+// (`GithubRepo.workspaceId` since MOTIR-1931 — NOT the installation's, which is
+// NULL for Motir's shared provisioning installation), but motir-ai's code-graph
+// tenant is PROJECT-scoped (the planner resolves `aiProjectId` from a planning
+// job's `projectId`). So this slice takes the repo's workspace off the job
+// payload, resolves its `organizationId` → ALL its projects, and calls motir-ai
+// ONCE PER PROJECT with the SAME tarball bytes. A repo connected or created for a
+// workspace is therefore indexed into each of that workspace's projects' stores.
 //
 // The precise repo↔project association this fan-out wanted NOW EXISTS
 // (MOTIR-1780): `project_repository` is a project's repository SET, one row per
@@ -47,6 +48,14 @@ import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 export interface IndexRepoInput {
   /** GitHub's numeric installation id (as a string) — the token-minting key. */
   installationId: string;
+  /** The workspace whose repo this is (MOTIR-1931) — stamped from the REPO row at
+   *  enqueue time (`handlePush` resolves `repo.workspaceId`; the reconcile/bind
+   *  path passes the workspace it just persisted the repo under), and already
+   *  carried by both job payloads. NOT re-derived from the installation here: a
+   *  Motir-created repo hangs off the shared provisioning installation, which
+   *  names no workspace, so that hop would fan the index out into the wrong
+   *  tenant's projects — or none. */
+  workspaceId: string;
   repoOwner: string;
   repoName: string;
   /** The ref to index — the repo's default branch. */
@@ -73,16 +82,18 @@ export const codeGraphIndexService = {
         input.installationId,
         tx,
       );
+      // The installation is still read — it supplies the provider discriminator
+      // the tarball fetch dispatches on — but NOT the tenant (MOTIR-1931).
       if (!installation) return { kind: 'installation_missing' as const };
 
-      const workspace = await workspaceRepository.findByIdInTx(installation.workspaceId, tx);
+      const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
       if (!workspace) return { kind: 'workspace_missing' as const };
 
-      const projects = await projectRepository.findByWorkspace(installation.workspaceId, tx);
+      const projects = await projectRepository.findByWorkspace(input.workspaceId, tx);
       return {
         kind: 'resolved' as const,
         providerId: installation.provider as GitProviderId,
-        workspaceId: installation.workspaceId,
+        workspaceId: input.workspaceId,
         organizationId: workspace.organizationId,
         projectIds: projects.map((p) => p.id),
       };

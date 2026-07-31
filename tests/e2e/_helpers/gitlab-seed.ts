@@ -71,6 +71,7 @@ export async function seedGitlabProject(
     await githubRepoRepository.upsert(
       {
         installationId: conn.id,
+        workspaceId: workspaceId,
         repoId: project.providerRepoId,
         owner: project.owner,
         name: project.name,

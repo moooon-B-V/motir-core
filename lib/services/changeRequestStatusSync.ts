@@ -70,11 +70,14 @@ export type ChangeRequestSyncResult = {
 };
 
 /** The connection + repo + resolved author a provider hands the shared sync, once
- *  it has resolved them from its own payload shape. `authorBoundUserId` is the
- *  change-request author's Motir user id ONLY when they are a member of the
- *  connection's workspace (so the edit gate passes) — null otherwise (the sync
- *  then attributes to the workspace owner). GitLab always passes null (it has no
- *  bound-identity table). */
+ *  it has resolved them from its own payload shape. The TENANT comes from
+ *  `repo.workspaceId` (MOTIR-1931), never from `installation.workspaceId` — the
+ *  installation selects which mirror rows a delivery may touch, the repo row says
+ *  whose they are, and a shared provisioning installation has no workspace of its
+ *  own. `authorBoundUserId` is the change-request author's Motir user id ONLY when
+ *  they are a member of THAT workspace (so the edit gate passes) — null otherwise
+ *  (the sync then attributes to the workspace owner). GitLab always passes null
+ *  (it has no bound-identity table). */
 export interface ChangeRequestSyncContext {
   installation: GithubInstallation;
   repo: GithubRepo;
@@ -133,7 +136,12 @@ export async function syncChangeRequestStatus(
         : null;
       linkedManually = manual !== null;
     } else {
-      workItem = await resolveWorkItem(installation.workspaceId, cr, tx);
+      // `repo.workspaceId`, never `installation.workspaceId` (MOTIR-1931): the
+      // installation SELECTED this repo, the repo row says whose it is. Under
+      // Motir's shared provisioning installation the installation names no
+      // workspace at all, and under a user's own grant the two are equal — so
+      // this is the one tenancy read on both paths.
+      workItem = await resolveWorkItem(repo.workspaceId, cr, tx);
       linkedManually = false;
     }
 
@@ -176,13 +184,10 @@ export async function syncChangeRequestStatus(
         ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
         : false;
 
-    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
-      installation.workspaceId,
-      tx,
-    );
+    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
     return {
       kind: 'resolved' as const,
-      workspaceId: installation.workspaceId,
+      workspaceId: repo.workspaceId,
       projectId: workItem.projectId,
       workItemId: workItem.id,
       currentStatus: workItem.status,

@@ -48,6 +48,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     githubRepo: {
       id: 'gr-1',
       provider: 'github',
+      workspaceId: 'ws-1',
       installationId: 'inst-1',
       repoId: '1',
       owner: 'acme',

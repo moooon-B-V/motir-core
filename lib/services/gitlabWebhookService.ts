@@ -154,7 +154,11 @@ export const gitlabWebhookService = {
     // head at run time, so debounced/coalesced pushes index the newest state once.
     await enqueueCodeGraphRefresh({
       installationId: repo.installation.installationId,
-      workspaceId: repo.installation.workspaceId,
+      // The repo row's own tenancy (MOTIR-1931). A GitLab connection is never
+      // shared, so this equals the connection's workspace — but the nullable
+      // column on the installation is what forces the honest read, and the shared
+      // GitHub path needs exactly this shape.
+      workspaceId: repo.workspaceId,
       repoOwner: repo.owner,
       repoName: repo.name,
       defaultBranch: repo.defaultBranch,
