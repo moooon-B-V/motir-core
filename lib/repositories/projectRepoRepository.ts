@@ -52,6 +52,10 @@ interface JoinedRow {
   takeoverTransferredAt: Date | null;
   takeoverCompletedAt: Date | null;
   takeoverFailureReason: string | null;
+  collaboratorLogin: string | null;
+  collaboratorInvitedAt: Date | null;
+  collaboratorAcceptedAt: Date | null;
+  collaboratorInvitationUrl: string | null;
   // The realized `github_repo` half — every column NULL when the row is
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
@@ -90,6 +94,10 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     takeoverTransferredAt: r.takeoverTransferredAt,
     takeoverCompletedAt: r.takeoverCompletedAt,
     takeoverFailureReason: r.takeoverFailureReason,
+    collaboratorLogin: r.collaboratorLogin,
+    collaboratorInvitedAt: r.collaboratorInvitedAt,
+    collaboratorAcceptedAt: r.collaboratorAcceptedAt,
+    collaboratorInvitationUrl: r.collaboratorInvitationUrl,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     githubRepo:
@@ -167,6 +175,10 @@ export const projectRepoRepository = {
         pr."takeover_transferred_at" AS "takeoverTransferredAt",
         pr."takeover_completed_at" AS "takeoverCompletedAt",
         pr."takeover_failure_reason" AS "takeoverFailureReason",
+        pr."collaborator_login"          AS "collaboratorLogin",
+        pr."collaborator_invited_at"     AS "collaboratorInvitedAt",
+        pr."collaborator_accepted_at"    AS "collaboratorAcceptedAt",
+        pr."collaborator_invitation_url" AS "collaboratorInvitationUrl",
         pr."created_at"        AS "createdAt",
         pr."updated_at"        AS "updatedAt",
         gr."id"                AS "repoRowId",

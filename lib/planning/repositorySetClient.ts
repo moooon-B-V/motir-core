@@ -5,6 +5,7 @@ import type {
   ProjectRepoEstablishViewDto,
 } from '@/lib/dto/projectRepos';
 import type { EstablishSetResult } from '@/lib/services/projectRepoProvisioningService';
+import type { GrantAccessResult } from '@/lib/services/projectRepoAccessService';
 
 // Client reads/writes of the repository-SET API (Story MOTIR-1775 · MOTIR-1782) —
 // the seam the establish step at plan approval goes through, so no client
@@ -142,4 +143,36 @@ export function establishRepositorySet(
     method: 'POST',
     body: JSON.stringify(rowId ? { rowId } : {}),
   });
+}
+
+/**
+ * Invite the acting member's connected GitHub account to the repositories Motir
+ * created — the access step's return trip after **Connect GitHub**, and, with
+ * `rowId`, a single row's **Resend invitation** (MOTIR-1900).
+ *
+ * A `login: null` result is the CONNECT PROMPT, not a failure: the user has no
+ * GitHub identity for Motir to invite yet.
+ */
+export function grantRepositoryAccess(
+  projectKey: string,
+  rowId?: string,
+): Promise<GrantAccessResult> {
+  return send(`${base(projectKey)}/access`, {
+    method: 'POST',
+    body: JSON.stringify(rowId ? { rowId } : {}),
+  });
+}
+
+/** Re-read GitHub for the PENDING invitations and settle the accepted ones.
+ *  Its own call, never folded into the poll — see the route's header. */
+export async function refreshRepositoryAccess(
+  projectKey: string,
+  signal?: AbortSignal,
+): Promise<ProjectRepoDto[]> {
+  const res = await fetch(`${base(projectKey)}/access`, {
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (!res.ok) throw new RepositorySetRequestError(res.status, await readError(res));
+  return (await res.json()) as ProjectRepoDto[];
 }

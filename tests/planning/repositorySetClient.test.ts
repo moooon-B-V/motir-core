@@ -5,8 +5,10 @@ import {
   connectRepositoryRow,
   establishRepositorySet,
   fetchRepositorySet,
+  grantRepositoryAccess,
   moveRepositoryRow,
   patchRepositoryRow,
+  refreshRepositoryAccess,
   removeRepositoryRow,
   replanRepositoryRow,
   skipRepositoryRow,
@@ -145,5 +147,74 @@ describe('the repository-set client', () => {
     expect(err).toBeInstanceOf(RepositorySetRequestError);
     expect(err.status).toBe(500);
     expect(err.code).toBeNull();
+  });
+});
+
+// ── COLLABORATOR ACCESS (MOTIR-1900) ────────────────────────────────────────
+//
+// Same three properties, and one more that matters here: the access calls are
+// what stand between a user and their own code, so a swallowed failure would
+// look like "we invited you" while nothing was sent.
+
+describe('the collaborator-access client', () => {
+  it('grants access for the WHOLE set with an empty body', async () => {
+    const calls = stub({ json: () => ({ rows: [], login: 'yuezhu', invited: 1, failed: 0 }) });
+
+    const result = await grantRepositoryAccess('MOTIR');
+
+    expect(calls[0]!.url).toBe('/api/projects/MOTIR/repositories/access');
+    expect(calls[0]!.method).toBe('POST');
+    // No `rowId` at all, rather than `rowId: undefined` — the route reads the
+    // key's presence, so the two are not interchangeable.
+    expect(calls[0]!.body).toEqual({});
+    expect(result.login).toBe('yuezhu');
+  });
+
+  it('narrows the grant to ONE row for a per-row Resend', async () => {
+    const calls = stub({ json: () => ({ rows: [], login: 'yuezhu', invited: 1, failed: 0 }) });
+
+    await grantRepositoryAccess('MOTIR', 'row-1');
+
+    // Rows are independent: a resend on one must not re-send its siblings', and
+    // the row id is the only thing that keeps that true across the wire.
+    expect(calls[0]!.body).toEqual({ rowId: 'row-1' });
+  });
+
+  it('encodes the project key on the access path', async () => {
+    const calls = stub({ json: () => ({ rows: [], login: null, invited: 0, failed: 0 }) });
+    await grantRepositoryAccess('MY PROJ');
+    expect(calls[0]!.url).toBe('/api/projects/MY%20PROJ/repositories/access');
+  });
+
+  it('turns a refused grant into the typed error, carrying the code', async () => {
+    stub({ ok: false, status: 403, json: () => ({ code: 'FORBIDDEN' }) });
+
+    await expect(grantRepositoryAccess('MOTIR')).rejects.toMatchObject({
+      name: 'RepositorySetRequestError',
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('refreshes the pending invitations with a GET, and returns the rows', async () => {
+    const calls = stub({ json: () => [{ id: 'row-1' }] });
+
+    const rows = await refreshRepositoryAccess('MOTIR');
+
+    expect(calls[0]!.url).toBe('/api/projects/MOTIR/repositories/access');
+    expect(calls[0]!.method).toBe('GET');
+    // A bare ARRAY, not an establish view — the step folds this straight into
+    // `view.set.rows`, so the shape is load-bearing.
+    expect(rows).toEqual([{ id: 'row-1' }]);
+  });
+
+  it('throws the typed error when the refresh is refused — never a silent empty set', async () => {
+    stub({ ok: false, status: 500, json: () => ({}) });
+
+    // Returning `[]` here would blank every row the user could see.
+    const err = await refreshRepositoryAccess('MOTIR').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RepositorySetRequestError);
+    expect((err as RepositorySetRequestError).status).toBe(500);
+    expect((err as RepositorySetRequestError).code).toBeNull();
   });
 });

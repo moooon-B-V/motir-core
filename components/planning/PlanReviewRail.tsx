@@ -56,7 +56,17 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
  * repositories created" here would smuggle the whole technical vocabulary onto
  * the default path through the back door.
  */
-export type PlanCodeOutcome = 'ready' | 'unfinished';
+/**
+ * What the approved outcome says about the project's CODE.
+ *
+ *   * `ready`        — every row of the set settled AND the user can reach the
+ *     repositories Motir made them.
+ *   * `needs_access` — the repositories exist but nobody has been invited to
+ *     them yet (MOTIR-1900). Distinct from `unfinished` because the user's next
+ *     step is different: nothing is left to SET UP, only to get INTO.
+ *   * `unfinished`   — a row is still proposed, creating or failed.
+ */
+export type PlanCodeOutcome = 'ready' | 'needs_access' | 'unfinished';
 
 export interface PlanReviewRailProps {
   review: PlanReviewDto;
@@ -234,7 +244,11 @@ function DecidedOutcome({
           ) : (
             <AlertTriangle className="size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
           )}
-          {codeOutcome === 'ready' ? tRepo('outcomeReady') : tRepo('finishSetupLink')}
+          {codeOutcome === 'ready'
+            ? tRepo('outcomeReady')
+            : codeOutcome === 'needs_access'
+              ? tRepo('outcomeNeedsAccess')
+              : tRepo('finishSetupLink')}
         </p>
       ) : null}
       {approved ? (

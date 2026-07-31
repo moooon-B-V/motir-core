@@ -90,6 +90,16 @@ function installGitHub(): void {
         if (actionsStatus !== 204) return json(actionsStatus, { message: 'nope' });
         return new Response(null, { status: 204 });
       }
+      // MOTIR-1900's collaborator invitation, which `attachRealizedRepo` fires
+      // post-commit — so the fixture's own establish hop reaches it. Served (not
+      // just tolerated) so the fixture builds a row the way production does; it
+      // is best-effort in the service, and `hostCallSequence` ignores it.
+      if (u.endsWith(`/orgs/${MOTIR_ORG}/installation`)) {
+        return json(200, { id: Number(INSTALLATION_ID) });
+      }
+      if (u.includes('/collaborators/')) {
+        return json(201, { id: 1, html_url: 'https://github.com/invitation/1' });
+      }
       if (u.includes('/actions/runs/')) {
         // The workflow-jobs read the SHIPPED meter makes. One 10-minute
         // ubuntu-latest job — the amount is irrelevant here; whether it is
@@ -123,12 +133,24 @@ function installGitHub(): void {
   );
 }
 
-/** Which host calls were made, in order — the instrument behind the §G ordering
- *  assertion. Token mints are noise here and are filtered out. */
+/**
+ * The takeover's OWN two host calls, in the order they were made — the instrument
+ * behind the §G ordering assertion.
+ *
+ * ⚠️ CLASSIFIES BY EXACT ENDPOINT and drops everything else, deliberately. An
+ * "everything that isn't /transfer is the Actions call" fallback silently absorbs
+ * any OTHER GitHub call in the fixture's path and reports it as an extra
+ * `actions` — which is exactly what happened when MOTIR-1900 wired a collaborator
+ * invitation into `attachRealizedRepo`, a seam this file's fixture uses. The
+ * ordering assertion must be about these two calls and nothing else, or an
+ * unrelated card's new side effect breaks it.
+ */
 function hostCallSequence(): string[] {
-  return calls
-    .filter((c) => !c.url.includes('/access_tokens'))
-    .map((c) => (c.url.endsWith('/transfer') ? 'transfer' : 'actions'));
+  return calls.flatMap((c) => {
+    if (c.url.endsWith('/transfer') && c.method === 'POST') return ['transfer'];
+    if (c.url.endsWith('/actions/permissions') && c.method === 'PUT') return ['actions'];
+    return [];
+  });
 }
 
 /**
@@ -446,6 +468,54 @@ describe('the `repository` transferred delivery', () => {
       repository: { id: '1', name: 'x', owner: { login: 'y' } },
     });
     expect(result).toMatchObject({ event: 'ignored' });
+  });
+
+  // A webhook body is the one input Motir does not control, so every field the
+  // handler reads is asserted to degrade into a typed `malformed` no-op rather
+  // than a 500 — a 500 makes GitHub retry a delivery no retry can fix.
+  it.each([
+    ['no repository object at all', { action: 'transferred' }],
+    ['a repository that is not an object', { action: 'transferred', repository: 'nope' }],
+    [
+      'no repository id',
+      { action: 'transferred', repository: { name: 'x', owner: { login: 'y' } } },
+    ],
+    ['no owner object', { action: 'transferred', repository: { id: '1', name: 'x' } }],
+    [
+      'a non-string owner login',
+      { action: 'transferred', repository: { id: '1', name: 'x', owner: { login: 42 } } },
+    ],
+    [
+      'a non-string repo name',
+      { action: 'transferred', repository: { id: '1', name: null, owner: { login: 'y' } } },
+    ],
+  ])('is a typed no-op for a delivery with %s', async (_label, body) => {
+    expect(await githubWebhookService.handleEvent('repository', body)).toEqual({
+      event: 'repository',
+      outcome: 'malformed',
+    });
+  });
+
+  it('accepts a NUMERIC repository id, as GitHub actually sends it', async () => {
+    // The mirror stores the id as a string; GitHub sends a JSON number. Coercing
+    // is what lets the row be found at all — a bug here reads as `unknown_repo`.
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await motirOwnedRow(fx, 'acme-web', { repoId: '900001' });
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    const result = await githubWebhookService.handleEvent('repository', {
+      action: 'transferred',
+      // A NUMBER, not a string — and no `default_branch`, which is optional.
+      repository: { id: 900001, name: 'acme-web', owner: { login: NEW_OWNER } },
+    });
+
+    expect(result).toEqual({ event: 'repository', outcome: 'applied' });
+    // The optional branch was absent, so the stored one is left alone.
+    expect(await db.githubRepo.findFirstOrThrow({ where: { repoId: '900001' } })).toMatchObject({
+      owner: NEW_OWNER,
+      defaultBranch: 'main',
+    });
   });
 });
 

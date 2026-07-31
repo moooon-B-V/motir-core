@@ -764,7 +764,97 @@ export const projectRepoSetService = {
         err,
       );
     }
+
+    // POST-COMMIT, BEST-EFFORT — grant the actor ACCESS to the repository that
+    // now exists (MOTIR-1900). Wired at this same seam, and for the same reason
+    // the pin resolution is: a row reaching an established state is exactly the
+    // moment there is something to be let into, and this is the ONE method every
+    // establish path goes through, so no caller has to remember it and none can
+    // drift.
+    //
+    // Only a row Motir CREATED needs it — a `connected` row is the user's own
+    // repository — and the service applies that rule itself, so this call stays
+    // unconditional and the rule stays in one place.
+    //
+    // LAZILY IMPORTED to keep the module graph acyclic: the access service
+    // orchestrates over THIS service (it reads the set and writes the rows), so a
+    // top-level import here would close a cycle. Same shape as `plansService`'s
+    // lazy reach for the repo-set proposal.
+    try {
+      const { projectRepoAccessService } = await import('@/lib/services/projectRepoAccessService');
+      await projectRepoAccessService.inviteAfterEstablish(rowId, attached.projectId, ctx);
+    } catch (err) {
+      console.error(
+        `[projectRepoSetService] could not grant collaborator access after establishing row ${rowId}:`,
+        err,
+      );
+    }
     return attached;
+  },
+
+  // ── Collaborator access (MOTIR-1900) ──────────────────────────────────────
+
+  /**
+   * Record that `login` was INVITED to this row's repository as a collaborator.
+   *
+   * Runs under the row's lock, because this is a read-derived write: whether the
+   * row is already accepted decides what may be written, so that answer must not
+   * move between the read and the write. Two concurrent grant passes (a poll and
+   * a **Resend**, two tabs, two members) therefore serialize here rather than
+   * interleaving — the GitHub call itself is idempotent, so the only thing at
+   * risk was the row, and the lock is what protects it.
+   *
+   * ⚠️ `collaboratorAcceptedAt` IS NEVER CLEARED. `alreadyHasAccess` sets it (a
+   * `204` means the account can already clone, with no invitation to accept), and
+   * a plain re-invite leaves an existing stamp exactly as it was. The alternative
+   * — writing `accepted: false` on every invite — is the lost update this lock
+   * exists to prevent: a re-send racing an acceptance would report the user as
+   * merely invited forever, and the row would tell them to accept an invitation
+   * they had already accepted.
+   */
+  async recordCollaboratorInvite(
+    rowId: string,
+    input: { login: string; invitationUrl: string | null; alreadyHasAccess: boolean },
+    ctx: ServiceContext,
+  ): Promise<ProjectRepoDto> {
+    return inLockedRow(rowId, ctx, async (row, tx) => {
+      const now = new Date();
+      const updated = await projectRepoRepository.update(
+        rowId,
+        {
+          collaboratorLogin: input.login,
+          collaboratorInvitedAt: now,
+          collaboratorInvitationUrl: input.invitationUrl,
+          // Set it, or keep whatever is already there — never null it.
+          ...(input.alreadyHasAccess && row.collaboratorAcceptedAt === null
+            ? { collaboratorAcceptedAt: now }
+            : {}),
+        },
+        tx,
+      );
+      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+    });
+  },
+
+  /**
+   * Record that the invited account has been OBSERVED to have access.
+   *
+   * Idempotent and monotonic: a row already stamped keeps its ORIGINAL stamp, so
+   * a repeated refresh never rewrites when access was first seen. Locked for the
+   * same read-derived reason as the invite write above.
+   */
+  async recordCollaboratorAccepted(rowId: string, ctx: ServiceContext): Promise<ProjectRepoDto> {
+    return inLockedRow(rowId, ctx, async (row, tx) => {
+      if (row.collaboratorAcceptedAt !== null) return toProjectRepoDto(row);
+      const updated = await projectRepoRepository.update(
+        rowId,
+        // The pending invitation is gone the moment it is accepted, so its URL
+        // goes with it rather than being left to point at a 404.
+        { collaboratorAcceptedAt: new Date(), collaboratorInvitationUrl: null },
+        tx,
+      );
+      return toProjectRepoDto({ ...updated, githubRepo: row.githubRepo });
+    });
   },
 
   /** {@link attachRealizedRepo} WITHOUT the post-commit pin resolution — the row
