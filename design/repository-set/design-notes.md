@@ -1,18 +1,27 @@
 # `design/repository-set/` — design notes
 
-**Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** The design reference for
-the step at plan approval that gives an approved plan somewhere for its code to live — and then
-gives the user a way to reach it. It is the layout source of truth for **MOTIR-1782** (the
+**The area index. It now covers TWO surfaces**, which are the two halves of one promise: where a
+project's code comes to live, and what the standing _"it's yours — move it whenever you want"_
+actually opens onto.
+
+| Surface                                                          | Asset                                                                                                   | Card                                                         | Sections |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- |
+| **The establish step** at plan approval                          | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png) | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)         | §0–§13   |
+| **The take-it-over flow** — move a repository to your own GitHub | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                         | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga) | **§14**  |
+
+**Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** §0–§13 are the design
+reference for the step at plan approval that gives an approved plan somewhere for its code to live —
+and then gives the user a way to reach it. It is the layout source of truth for **MOTIR-1782** (the
 approval-step UI) and **MOTIR-1900** (collaborator access), and the surface **MOTIR-1785**'s E2E +
 acceptance video walk.
 
 - **Asset of record:** [`repository-set.mock.html`](./repository-set.mock.html) — the source of
   truth, built from the real design system. Its `.png` export
   ([`repository-set.png`](./repository-set.png)) is the board/PR-visible face.
-- **Definition of done (three files):** `design-notes.md` + `repository-set.mock.html` +
-  `repository-set.png`. All three are committed.
+- **Definition of done (three files, PER SURFACE):** `design-notes.md` +
+  `<surface>.mock.html` + `<surface>.png`. All five files are committed.
 - **Scope:** pixels and copy only. No React, no route, no `en.json` entries — those are
-  MOTIR-1782's / MOTIR-1900's.
+  MOTIR-1782's / MOTIR-1900's / MOTIR-1939's.
 
 ---
 
@@ -713,10 +722,376 @@ own poll, and `router.refresh()` is neither how it starts nor how it finishes.
 - **The code-context / index-freshness surface, and the code-blind planning signal** — MOTIR-1764
   (Story MOTIR-1754). Pointed at as the durable home of the set and of unfinished access; none of it
   drawn.
-- **The claim / transfer flow** — MOTIR-711 (9.3.7). Only the promise and its door are drawn.
+- **The claim / transfer flow** — ~~MOTIR-711 (9.3.7). Only the promise and its door are drawn.~~
+  **Superseded 2026-07-31: it is now DRAWN, in this same area — [`takeover.mock.html`](./takeover.mock.html), §14
+  below (MOTIR-1938 design → MOTIR-1939 surface; MOTIR-711 keeps the backend saga).** This line is
+  the reason MOTIR-1938 exists: the promise and its door shipped while the room behind them did
+  not, so the shipped `OwnershipPromise` renders the door UNLINKED on purpose. §14 is what lets
+  MOTIR-1939 link it.
 - **The repo-set table, the derivation service, the creation primitive** — MOTIR-1780 / 1881 / 1781.
   Behaviour is quoted; no schema or service is designed here.
 - **The hosted agent, and anything that makes panel 8b real** — Epic 9. Panel 8 records the
   consequence; it does not design the agent, its dispatch, or the CI metering that gates it.
 - **The multi-stack scaffold registry** — MOTIR-709 (9.3.5). The notes say honestly that a non-web
   repo starts near-empty until then, rather than implying a scaffold that does not exist.
+
+---
+
+---
+
+# 14. `takeover.mock.html` — the TAKE-IT-OVER flow
+
+**Subtask MOTIR-1938 (design gate, Principle #13).** The design reference for moving a
+Motir-hosted repository to the user's own GitHub: the per-row action, the target picker, the costs
+stated before the commit, and the asynchronous transfer + App re-install drawn as **durable,
+re-promptable states**. Layout source of truth for **MOTIR-1939** (the surface); the saga behind it
+is **MOTIR-711**.
+
+- **Asset of record:** [`takeover.mock.html`](./takeover.mock.html); `.png` export
+  [`takeover.png`](./takeover.png) (full-page, light theme, `deviceScaleFactor: 2`, width 1200).
+- **Scope:** pixels and copy only. No React, no route, no `en.json` entries — MOTIR-1939's.
+
+## 14.1 · The answer in one line
+
+**Every Motir-hosted row carries one secondary action — `Move to my GitHub` — and everything after
+it lives on the ROW, not in a dialog.** The decision (which account, and what it costs) is a modal;
+the _waiting_ is a durable row state that survives a reload, says what the user must go and do, and
+re-prompts every time it is seen.
+
+## 14.2 · The flow was GROUNDED, not invented — every source, and what it decided
+
+Nothing in this asset is a new product decision. Each element traces to a decided source:
+
+| Drawn thing                                                                                                           | Decided by                                                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The state machine `requested → transfer_pending → awaiting_reinstall → done`, plus `failed`                           | **MOTIR-711** — _"model the states explicitly … so a transfer nobody accepts, or a re-install nobody finishes, is re-promptable rather than a wedged repo"_                                                                                                                  |
+| **Per ROW, not per project**; taking over one row of three must not wedge the others (panel 8)                        | **MOTIR-711** — _"Per ROW, not per project. … Taking over one row of three is legitimate and must not wedge the others."_                                                                                                                                                    |
+| `transfer_pending` is a real state, **not a spinner**; a personal-account target must accept ON GitHub (panels 4, 7b) | **MOTIR-711** step 2 — _"the call is asynchronous, and for a personal-account target the new owner must accept on GitHub, so `transfer_pending` is a real state resolved by a webhook or a poll, not a spinner"_                                                             |
+| `awaiting_reinstall` exists at all, and why dispatch stops (panel 5)                                                  | **MOTIR-711** — _"a GitHub App installation is account-scoped … the flow must re-establish the grant on the new owner, or dispatch and the code-graph index silently stop working"_                                                                                          |
+| Reaching `done` needs a real new installation, not just the transfer (panel 6)                                        | **MOTIR-711** step 4 — _"do not mark done on the transfer alone"_                                                                                                                                                                                                            |
+| The already-yours row is a clean **no-op with no control** (panel 1)                                                  | **MOTIR-711** (_"a no-op for a row the user already owns"_) + ADR `project-repository-set.md` §3 / the 2026-07-30 amendment (a set mixes ownership only via a deliberate connect-existing row)                                                                               |
+| The three cost lines, and the ban on "one click" (panel 3)                                                            | **`ci-minutes-allowance.md` §D** — the takeover option _"states its **real costs**: a GitHub account you own, an **asynchronous transfer you must accept on GitHub**, and a **re-install of the Motir App** on the new owner so dispatch keeps working. Never 'one click.'"_ |
+| The billing framing sentence, quoted verbatim (panel 3)                                                               | **§D** — _"GitHub bills you for Actions directly from then on, and Motir stops charging CI credits"_                                                                                                                                                                         |
+| "Actions come back on … even while your organization is out of credits" (panels 1, 3)                                 | **§G** — _"the transfer RESUMES Actions on the repository, unconditionally — even while the org is still exhausted"_                                                                                                                                                         |
+| Motir stops billing this repo's CI after the move (panel 6)                                                           | **§5.4** — _"Metering STOPS at the transfer, because the owner login changes at the transfer itself"_                                                                                                                                                                        |
+| The no-identity state reuses MOTIR-1900's connect prompt rather than drawing a second one (panel 2d)                  | **MOTIR-711** (_"the service returns the typed error the surface renders as MOTIR-1900's connect prompt"_) + this card's own instruction                                                                                                                                     |
+| The takeover option is never hidden or gated on a stored identity                                                     | **§D** — _"never hidden, never disabled, and never gated on a stored identity — gating it on one would hide it from every user"_                                                                                                                                             |
+
+**The design adds no state, no ordering and no policy of its own.** Where it had to choose, it chose
+presentation (which surface a state lives on, what a line says), never behaviour.
+
+## 14.3 · Drawn against SHIPPED reality — what was RENDERED first
+
+Three of the things this asset composes already exist as running code or as shipped design assets.
+Per `notes.html` **#73** — _"'design against shipped reality' means SEE the pixels, not read the
+code"_ — all of them were **rendered before anything was drawn**, and the mock mirrors those renders:
+
+1. **`components/planning/repositories/RepositoryRow.tsx` — shipped code (MOTIR-1782, merged in
+   `cefe76c9`).** ⚠️ **The card's premise that "the repo-set step ships as a mock" was already stale
+   when this ran** — MOTIR-1782 landed the step as real components, so the row was rendered headless
+   from its own source + the real compiled `globals.css` (a throwaway happy-dom render → Tailwind v4
+   via `@tailwindcss/postcss` → Playwright). What the render corrected, that reading the `.tsx`
+   alone would not have:
+   - the row is a **flex pair** — a `min-w-0 flex-1` main column plus a `shrink-0` control column —
+     not the mock's horizontal action group;
+   - its padding is **`--spacing-card-padding` (24px)**, not the 16px `repository-set.mock.html`
+     drew, so a takeover row is visibly roomier than the establish-step row it descends from;
+   - the state is an **icon + a WORD** in `--el-text-strong`, and the tint sits on the ROW
+     (`--el-success-surface` / `--el-notice-info-bg`), never in a `Pill`.
+2. **`gitSettingsPrimitives.tsx` — `IdentityHeader` + `GrantRow`, shipped code.** Rendered the same
+   way. Panel 5b **reuses** them; it does not redraw a stand-in (the exact MOTIR-1196 failure #73
+   records).
+3. **The two host design assets** — `repository-set.mock.html` panel 1 (the promise + its door) and
+   `design/billing/ci-line.mock.html` panel 2 (the exhausted `Move repositories` option). Rendered
+   with Playwright and **composed verbatim, including their copy**. Neither is redrawn.
+
+**The shipped door is deliberately dead, and that is this card's whole reason for existing.**
+`RepositorySetStep.tsx` renders the promise but _not_ its link, with the reason in a source comment:
+_"a link to a 404 is a worse broken promise than no link, and a surface that draws a door owes a
+real entrance."_ §14 is the entrance that lets MOTIR-1939 light it.
+
+## 14.4 · Placement and the access path — three doors, one room
+
+**The room is `/settings/project/repositories`.** Not a modal, not a page invented for the flow, and
+not the code-context surface (MOTIR-1764) — that does not exist yet, and designing a room inside an
+unbuilt host is the mistake-#130 shape (_"a design DEFERRED a capability to a 'downstream' that does
+not provide it"_).
+
+**Why the project-settings area is the shipped answer, verified at rung 2.**
+`lib/settings/projectSettingsNav.ts` is a typed REGISTRY that drives three surfaces at once — the
+settings rail, the ⌘K deep links, and a **totality test** that pairs every
+`settings/project/**/page.tsx` route 1:1 with a registry entry. Its own comment states the
+extension mechanism: _"A later admin story mounts its page by ADDING an entry here — no layout
+change."_ So the new entry — `id: 'repositories'`, `group: 'general'`, `icon: FolderGit2`,
+`access: browse` — is **not an extra surface this design invented**; it is the mount, and a page
+without it fails the totality test.
+
+**The three doors (panel 0), each drawn as a real affordance inside its host:**
+
+| #   | Door                                                | Host                                                                          | Where it lands                             |
+| --- | --------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------ |
+| 1   | `How moving it works` link in the ownership promise | the establish step, `/plans/[id]` (shipped mock + shipped `OwnershipPromise`) | `/settings/project/repositories`           |
+| 2   | `Move repositories` secondary button                | the exhausted `Motir CI` billing card, `/settings/organization/billing`       | the same room, for this project            |
+| 3   | `Repositories` rail row                             | the project-settings area itself                                              | the same room — the **permanent** way back |
+
+**Door 3 is what makes the flow re-enterable**, and it is not optional: a `transfer_pending` that
+sits for days must be reachable from somewhere that is always there, not only from an approval step
+the user left weeks ago.
+
+**⚠️ The org→project scope gap, drawn rather than papered over.** Door 2 lives on the **org**
+billing panel, but a takeover is **per ROW** and rows belong to a **project**. So the room's header
+carries the org-wide truth back: the paused banner names the _other_ projects Motir still hosts,
+each a link, and says in words that moving this project's repositories does not move theirs. That
+keeps ADR §D's _"ONE decision surface, N pointers"_ intact — the billing line remains the decision
+surface and the room remains the place the decision is carried out — without letting an org-scoped
+button silently act on one project and abandon the rest.
+
+## 14.5 · The panels
+
+| Panel                        | What it draws                                                                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 · The doors**            | All three entrances, haloed, inside repros of their host surfaces, plus where each lands.                                                                                              |
+| **1 · The room**             | `/settings/project/repositories` in the shipped settings shell: the paused-org banner, two `created` rows each with `Move to my GitHub`, and the already-yours row with **no action**. |
+| **2 · Pick the target**      | 2a orgs loaded (personal first) · 2b the org lookup in flight · 2c the lookup failed, degraded not blocked · 2d **no GitHub identity** → MOTIR-1900's connect prompt, reused.          |
+| **3 · The costs**            | The confirm step: the three real costs, each with its consequence, plus §D's verbatim billing sentence and §G's Actions-come-back reassurance.                                         |
+| **4 · `transfer_pending`**   | The row as a durable waiting state — what to do, where, and a re-prompt.                                                                                                               |
+| **5 · `awaiting_reinstall`** | 5a the row (with the dispatch consequence stated) · 5b the **shipped** install hand-off it points at, not redrawn.                                                                     |
+| **6 · `done`**               | The row settles into the same shape a connect-existing row has always had — `Yours` — plus the one thing that really changed: who pays.                                                |
+| **7 · `failed` + recovery**  | The single true failure (red), beside the two **non**-failures (peach) — an unaccepted transfer and an unfinished re-install, each re-promptable.                                      |
+| **8 · One row of three**     | The set mid-move: three ownerships, three states, all legal at once, with a summary that counts the truth.                                                                             |
+
+### Why the decision is a modal and the state is not
+
+Everything in panels 2–3 is transient — pick a target, read the costs, confirm — so it is a
+`Modal`. Everything in panels 4–7 **outlives that dialog**, survives a reload and must be
+re-promptable, so it lives on the ROW. That split is precisely what stops `transfer_pending` from
+being drawn as a spinner in a dialog nobody kept open, which is the failure MOTIR-711 names.
+
+### Why the org list has three states, and the personal account has none
+
+⚠️ **Rung-2 constraint, read from the shipped schema.** `GithubIdentity` (`prisma/schema.prisma`)
+stores exactly one login — the user's **personal** `githubLogin` — plus their encrypted token. There
+is **no stored organization list anywhere**, so the orgs are a live `GET /user/orgs`, which can be
+slow and can fail. An instantly-populated org list would be a drawing of a system that does not
+exist. The **personal account is never behind that call**, which is what lets a failed lookup
+degrade to a working picker (2c) instead of a blocked flow.
+
+**And the org target has a real third-party PERMISSION price, stated once.** Transferring into an
+organization needs permission to create repositories there; GitHub refuses it otherwise. That is
+said once under the list — not repeated on every org row, and not used to hide the option. This is
+`notes.html` **#180**'s lesson applied one surface over: the failure mode it records is deciding
+whose account a repository goes to _without pricing the third-party permission that answer commits
+you to_. Panel 7a draws the refusal honestly rather than pretending it cannot happen.
+
+> **Open question for MOTIR-711, recorded rather than assumed.** MOTIR-711 specifies the acceptance
+> step for a **personal-account** target. Whether an ORG target also requires an acceptance/approval
+> hop is a GitHub API semantic this design did not verify and does not decide. **The drawn states
+> are correct under either answer** — `transfer_pending` is a durable, re-promptable state for any
+> target, and `done` is gated on a real installation — so MOTIR-1939 needs no design change
+> whichever way MOTIR-711 resolves it. Flagged here so it is a checked assumption, not a silent one.
+
+## 14.6 · Primitives — every element, and what it is
+
+| Element                                                                      | Primitive                                     | Notes                                                                                                                                                                       |
+| ---------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each repository row                                                          | **the shipped `RepositoryRow` shape**         | `flex gap-3 rounded-(--radius-card) border p-(--spacing-card-padding)`; `min-w-0 flex-1` main column + `shrink-0` aside. Mirrored from a real render.                       |
+| Role chip (`web` / `api` / `shared`)                                         | `Pill` `tone="neutral"`, `font-mono`          | The only pill on a row — it has its own border and reads on every tint.                                                                                                     |
+| State (`Created` / `Yours` / waiting / `Couldn't move it`)                   | icon + word, `--el-text-strong`               | **Never** a `Pill` on a tinted row: `Pill severity="danger"` and `--el-danger-surface` are the same token value, so it would be invisible (finding #35, inherited from §9). |
+| `Move to my GitHub`, `Accept it on GitHub`, `Install on GitHub`, `Try again` | `Button variant="secondary" size="sm"`        | Lives in the row's shipped `RowActions` strip — the same slot `Let Motir host it` already occupies. **No new row affordance is introduced.**                                |
+| `Check again`, `Pick a different account`                                    | `Button variant="ghost" size="sm"`            | The quieter half of a recovery pair.                                                                                                                                        |
+| `Move this repository`, `Continue`, `Connect GitHub`                         | `Button variant="primary"`                    | One primary per modal step, never two.                                                                                                                                      |
+| `Cancel`, `Back`, `Later`                                                    | `Button variant="ghost"`                      |                                                                                                                                                                             |
+| The decision dialog                                                          | `Modal`                                       | `--radius-modal` + `--shadow-modal`.                                                                                                                                        |
+| The target picker                                                            | `Combobox`-family listbox                     | Grouped: **Your account** then **Your organizations**; the selected option carries a check, not colour alone.                                                               |
+| The costs block                                                              | `Card`-family callout on `--el-surface-soft`  | Not a `Pill` list and not fine print — it is the step's substance.                                                                                                          |
+| The billing consequence                                                      | notice on `--el-notice-info-bg`               | Informational, not a warning: it states a fact, not a risk.                                                                                                                 |
+| The paused-org banner                                                        | notice on `--el-warning-surface`              | Mirrors the shipped billing card's own paused register.                                                                                                                     |
+| Section eyebrows                                                             | `SectionLabel`                                |                                                                                                                                                                             |
+| The re-install hand-off                                                      | **the shipped `IdentityHeader` + `GrantRow`** | From `gitSettingsPrimitives.tsx`, rendered and reused — 7.10 owns that pane; this flow links into it and adds nothing to it.                                                |
+| The org-lookup spinner                                                       | `Spinner`                                     | One row inside the listbox, `role="status"`.                                                                                                                                |
+| Settings rail + pane                                                         | the shipped settings AREA shell               | `SidebarNav` groups (General / Access / Work / Automation) from `PROJECT_SETTINGS_NAV`.                                                                                     |
+
+## 14.7 · Token roles — colour (`--el-*`) and shape
+
+**Three ownership/attention registers, each a palette token, each paired with an icon + a word.
+No state is ever carried by colour alone, and no colour is invented** (the `--el-*`-only rule; the
+`:root` block in the mock is GENERATED from `@motir/design-system/theme.css`, so nothing is retyped).
+
+| Register              | Fill                   | Ink                        | Means                                                                                                                                                                                                |
+| --------------------- | ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Motir-hosted, settled | `--el-success-surface` | `--el-text-strong`         | Created and running, Motir pays the CI. Same token the shipped `created` row uses.                                                                                                                   |
+| **Yours**             | `--el-notice-info-bg`  | `--el-text-strong`         | The user owns it. **Deliberately the same fill the shipped `connected` row uses** — a repo that was taken over and a repo that was brought in are the same thing, which is the point of the promise. |
+| **Waiting on you**    | `--el-warning-surface` | `--el-warning-text`        | `transfer_pending` / `awaiting_reinstall`. A third register on purpose: not settled, not broken — _the next move is yours, on GitHub_.                                                               |
+| Failed                | `--el-danger-surface`  | `--el-danger-surface-text` | **Only** a request GitHub refused. An unaccepted transfer is NOT tinted as an error.                                                                                                                 |
+
+| Element                        | Colour role                                                                                              | Shape role                                                                                              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Row container                  | fill per the table above; `border-(--el-border-soft)` on a tint, `--el-border` untinted                  | `--radius-card` · `--spacing-card-padding`                                                              |
+| State icon                     | `--el-success` / `--el-info` / `--el-warning` / `--el-danger`                                            | —                                                                                                       |
+| Repo reference                 | `--el-link` (→ `--el-link-pressed`), mono; `--el-text` when there is nothing to link to yet              | —                                                                                                       |
+| External-link + octocat glyphs | `--el-icon-muted`                                                                                        | —                                                                                                       |
+| Helper / consequence copy      | `--el-text-helper`, escalating to `--el-text` for the load-bearing clause                                | —                                                                                                       |
+| Role chip                      | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                              | `--radius-badge` · `--spacing-chip-x/y`                                                                 |
+| Buttons                        | `--el-accent` / `--el-accent-text`; secondary `--el-button-border`                                       | `--radius-btn` · `--height-btn-sm\|md` · `--spacing-btn-x(-sm)`                                         |
+| Modal                          | `--el-card` + `--el-border`                                                                              | `--radius-modal` · `--shadow-modal` · `--spacing-card-padding`                                          |
+| Listbox + its options          | `--el-card`, active `--el-option-active-bg`, check `--el-accent-on-surface`                              | `--radius-card` (container) · `--radius-control` + `--spacing-control-x/y` (rows) · `--shadow-elevated` |
+| Costs block                    | `--el-surface-soft` + `--el-border-soft`                                                                 | `--radius-card`                                                                                         |
+| Billing-consequence notice     | `--el-notice-info-bg`, glyph `--el-info`                                                                 | `--radius-card`                                                                                         |
+| Paused-org banner              | `--el-warning-surface` / `--el-warning-text`, glyph `--el-warning`                                       | `--radius-card`                                                                                         |
+| Identity avatar                | `--el-avatar-fallback` + `--el-text-inverted`                                                            | circular (not style-dependent)                                                                          |
+| `Verified` badge               | `--el-tint-mint` + `--el-text-strong`                                                                    | `--radius-badge`                                                                                        |
+| Grant-row icon tile            | `--el-card-icon-bg` + `--el-card-icon-fg`                                                                | `--radius-control`                                                                                      |
+| Settings rail                  | `--el-sidebar-bg` / `--el-sidebar-border`; active row `--el-sidebar-item-bg-active` + `--el-icon-active` | `--radius-control` · `--spacing-control-x/y`                                                            |
+| Row menu button                | `--el-text-secondary`                                                                                    | `--radius-control` · `--height-control`                                                                 |
+
+**AA holds by construction:** every tint carries `--el-text-strong` / `--el-warning-text` /
+`--el-danger-surface-text` (all charcoal-family), never a mid-grey, and no page-level surface is
+tinted.
+
+## 14.8 · Copy — every string, as `en.json` keys
+
+Namespace **`repositoryTakeover`**, except the two keys that belong to surfaces it extends.
+⚠️ **Every key below needs a matching `zh.json` key or the i18n-catalog parity gate fails the PR**
+(the same rule §10 carries).
+
+### The keys that belong to surfaces this extends
+
+| Key                         | English               |
+| --------------------------- | --------------------- |
+| `repositorySet.promiseDoor` | `How moving it works` |
+| `settings.nav.repositories` | `Repositories`        |
+
+_(`repositorySet.promise` is already shipped and unchanged. `promiseDoor` is the **one** string this
+flow adds to the establish step — the link the shipped `OwnershipPromise` currently withholds.)_
+
+### The room
+
+| Key                   | English                                                                                                                                      |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`               | `Repositories`                                                                                                                               |
+| `lead`                | `Where {projectName}'s code lives. Motir hosts the repositories it created for you — move any of them to your own GitHub whenever you want.` |
+| `summary`             | `{moving} moving · {hosted} hosted by Motir · {yours} yours`                                                                                 |
+| `pausedTitle`         | `CI is paused — this organization is out of credits.`                                                                                        |
+| `pausedBody`          | `Moving a repository to your own GitHub turns its Actions back on and GitHub bills you for them from then on.`                               |
+| `pausedOtherProjects` | `Motir also hosts repositories for {projects} — moving this project's does not move theirs.`                                                 |
+| `addCreditsInstead`   | `Add credits instead`                                                                                                                        |
+
+### The row
+
+| Key                    | English                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `moveAction`           | `Move to my GitHub`                                                                                                                                                                        |
+| `stateYours`           | `Yours`                                                                                                                                                                                    |
+| `yoursDetail`          | `You already own this one — nothing to move, and Motir never bills its CI.`                                                                                                                |
+| `statePending`         | `Waiting for you to accept on GitHub`                                                                                                                                                      |
+| `statePendingStale`    | `Still waiting for you to accept on GitHub`                                                                                                                                                |
+| `pendingDetail`        | `GitHub sent the transfer to {login}. It stays here until you accept it there — nothing expires on Motir's side, and the repository keeps working in the meantime.`                        |
+| `pendingDetailStale`   | `Sent to {login} on {date} and not accepted yet. Nothing is wrong and nothing was lost — the repository is still here and still working. Accept it on GitHub to finish, or just leave it.` |
+| `acceptOnGithub`       | `Accept it on GitHub`                                                                                                                                                                      |
+| `checkAgain`           | `Check again`                                                                                                                                                                              |
+| `stateReinstall`       | `Install Motir on {login}`                                                                                                                                                                 |
+| `stateReinstallStale`  | `Install Motir on {login} to finish`                                                                                                                                                       |
+| `reinstallDetail`      | `The repository is yours — the transfer went through. Install the Motir app on {login} and tick {repo} when GitHub asks which repositories it may see.`                                    |
+| `reinstallDetailStale` | `It's yours and it stays yours. Motir just can't reach it to dispatch work until the app is installed on {login} with this repository selected.`                                           |
+| `reinstallConsequence` | `Until you do, Motir can't dispatch work to this repository — your plan and your history are untouched.`                                                                                   |
+| `installOnGithub`      | `Install on GitHub`                                                                                                                                                                        |
+| `doneDetail`           | `Moved to {login} on {date}. GitHub bills you for Actions on it from now on, and Motir no longer charges CI credits for it. Dispatch is working.`                                          |
+| `stateFailed`          | `Couldn't move it`                                                                                                                                                                         |
+| `failedOrgPermission`  | `GitHub declined the transfer to {owner} — you need permission to create repositories in that organization. The repository is still here and still works; nothing was changed.`            |
+| `tryAgain`             | `Try again`                                                                                                                                                                                |
+| `pickDifferentAccount` | `Pick a different account`                                                                                                                                                                 |
+
+### The decision (modal)
+
+| Key                        | English                                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modalEyebrow`             | `Move a repository`                                                                                                                                                                   |
+| `modalEyebrowStep2`        | `Move a repository · step 2 of 2`                                                                                                                                                     |
+| `modalTitle`               | `Move {repo} to your GitHub`                                                                                                                                                          |
+| `modalTitleTarget`         | `Move {repo} to {login}`                                                                                                                                                              |
+| `modalLead`                | `Motir transfers this repository out of its organization and into yours. Your work items, history and dispatch stay exactly where they are.`                                          |
+| `targetLabel`              | `Where should it go?`                                                                                                                                                                 |
+| `targetGroupPersonal`      | `Your account`                                                                                                                                                                        |
+| `targetGroupOrgs`          | `Your organizations`                                                                                                                                                                  |
+| `targetPersonalCaption`    | `Your personal GitHub account`                                                                                                                                                        |
+| `orgsLoading`              | `Looking up your organizations…`                                                                                                                                                      |
+| `orgsLoadingHint`          | `You can go ahead with your personal account — the lookup only adds organizations.`                                                                                                   |
+| `orgsFailed`               | `Motir couldn't reach your GitHub organizations just now, so only your personal account is listed.`                                                                                   |
+| `orgsRetry`                | `Try again`                                                                                                                                                                           |
+| `orgPermissionNote`        | `Moving into an organization needs permission to create repositories there — GitHub refuses the transfer otherwise, and Motir says so rather than silently hiding the option.`        |
+| `costsHeading`             | `What this takes`                                                                                                                                                                     |
+| `costAccount`              | `A GitHub account you own.`                                                                                                                                                           |
+| `costAccountDetail`        | `It goes to {login}, the account you connected.`                                                                                                                                      |
+| `costTransfer`             | `A transfer you accept on GitHub. It isn't instant.`                                                                                                                                  |
+| `costTransferDetail`       | `GitHub asks {login} to accept it. Nothing moves until you do, and nothing expires on Motir's side while you take your time.`                                                         |
+| `costReinstall`            | `Re-installing the Motir app on the new owner.`                                                                                                                                       |
+| `costReinstallDetail`      | `An app installation belongs to an account, so it does not travel with the repository. Until you re-install, Motir can't dispatch work to it.`                                        |
+| `billingConsequence`       | `GitHub bills you for Actions directly from then on, and Motir stops charging CI credits.`                                                                                            |
+| `billingConsequenceDetail` | `The code is yours either way — this changes who pays for the compute. Actions come back on for this repository as part of the move, even while your organization is out of credits.` |
+| `confirmCta`               | `Move this repository`                                                                                                                                                                |
+| `back`                     | `Back`                                                                                                                                                                                |
+| `cancel`                   | `Cancel`                                                                                                                                                                              |
+| `connectTitle`             | `Connect GitHub first`                                                                                                                                                                |
+| `connectWhy`               | `Motir needs one thing to move a repository to you: the GitHub account it belongs to. It is the same account it invites you to your code with — you'll see which one.`                |
+
+_(`connectTitle`'s body copy and its `Connect GitHub` / `Later` actions are **MOTIR-1900's**
+existing strings, reused verbatim. This flow adds no second connect prompt.)_
+
+**The copy rule that governs all of it, quoted from `ci-minutes-allowance.md` §D: never "one
+click."** No string above says "instantly", "in one click", "just", or "simply". `costTransfer`
+says the opposite in the affirmative — _"It isn't instant"_ — because the ADR's honesty requirement
+is the point of the whole panel, not a caveat under it.
+
+## 14.9 · a11y
+
+- **Every state is icon + word**, never colour alone; the words are distinct
+  (`Created` / `Yours` / `Waiting for you to accept on GitHub` / `Install Motir on {login}` /
+  `Couldn't move it`), so a screen-reader user gets the same state a sighted one does.
+- **The waiting states are `role="status"`**; the transfer failure is `role="alert"` — a refusal
+  interrupts, a wait does not.
+- **The org-lookup spinner row is `role="status"`** with a real label
+  (`Looking up your organizations…`), never a bare animated element.
+- **Accessible names carry the repository**, because a room lists several rows and
+  `Move to my GitHub` × 3 is ambiguous: each row's action takes an `aria-label` of the form
+  `Move {repo} to my GitHub`. Same for `Check again` / `Install on GitHub`.
+- **No superstring collisions** with the establish step's names: `Move to my GitHub` is not a
+  superstring of any shipped `repositorySet` label, and `Yours` is a new state word rather than a
+  reuse of `Connected` (which stays the establish step's).
+- **The listbox rows carry no action buttons** — a `role="option"` cannot hold one
+  (the `listbox-row-actions` a11y rule); the permission note is a helper under the list, not a
+  control inside it.
+- **The picker is operable without the org lookup**: the personal option is present and selectable
+  from first paint, so a failed or slow network never traps keyboard focus in an empty listbox.
+
+## 14.10 · Page state after the takeover's mutations
+
+The room is a settings page, so route each surface by HOW it renders (the enforced contract):
+
+1. **The row that was acted on** — the mutation returns the row's new state; keep the optimistic
+   value. Do **not** `router.refresh()` the row's own cell.
+2. **The header summary** (`{moving} moving · {hosted} hosted by Motir · {yours} yours`) and the
+   paused banner — server-rendered from the set read, so `router.refresh()` updates them.
+3. **`transfer_pending` / `awaiting_reinstall` resolve OUT OF BAND** — by MOTIR-711's `repository`
+   `transferred` webhook or an installation landing, neither of which is a click on this page. So
+   `Check again` is a real re-read, and the row is a **polled async job** (the same fourth mechanism
+   §12 records for `creating → created`), not something `router.refresh()` can be relied on to
+   settle.
+
+## 14.11 · Explicitly OUT of scope here
+
+- **The saga itself** — MOTIR-711: the Actions re-enable ordering (§G), the transfer call, the
+  `repository` `transferred` webhook handler, idempotency, the row lock. Its states are drawn; none
+  of its code, credentials or failure taxonomy is designed here.
+- **The GitHub connect / install screens** — 7.10. Only the hand-off is drawn, and it is the shipped
+  components, reused.
+- **The connect prompt** — MOTIR-1900. Reused, not redesigned.
+- **The billing panel's exhausted state** — MOTIR-1902 / MOTIR-1903. Its `Move repositories` option
+  is composed as a door; nothing about that card is changed here.
+- **The establish step** — MOTIR-1778 / MOTIR-1782 (§0–§13 above). The only thing this asset adds to
+  it is the one `promiseDoor` string.
+- **Bulk / org-wide takeover** — not drawn, because MOTIR-711 is explicitly **per row**. The room
+  names the other projects Motir hosts and links to them; it does not offer to move them.
+- **Cancelling a pending transfer** — not drawn: MOTIR-711 models no cancel, and a control the saga
+  cannot honour would be a worse promise than none.
+- **The code-context surface** — MOTIR-1764. When it lands it can mount this same room as a
+  component; the route chosen here exists today, which is why it was chosen.
