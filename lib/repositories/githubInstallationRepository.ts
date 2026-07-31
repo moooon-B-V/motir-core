@@ -70,6 +70,27 @@ export const githubInstallationRepository = {
     return tx.githubInstallation.findUnique({ where: { installationId } });
   },
 
+  /**
+   * Whether the App is installed on a given ACCOUNT — the takeover's completion
+   * probe (MOTIR-711): after a repository has moved to the user's own GitHub,
+   * this answering non-null is what proves the loop survived the handoff.
+   *
+   * Matched case-INSENSITIVELY because GitHub logins are, and the login being
+   * compared arrives from three different places (the user's stored identity, the
+   * `repository` webhook's payload, and whatever the requester typed) which need
+   * not agree on casing. `mode: 'insensitive'` costs an index here, which is
+   * acceptable: this runs once per takeover completion check, over a table with
+   * one row per installation — never in a hot path.
+   */
+  async findByAccountLogin(
+    accountLogin: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation | null> {
+    return tx.githubInstallation.findFirst({
+      where: { accountLogin: { equals: accountLogin, mode: 'insensitive' } },
+    });
+  },
+
   /** Create-or-refresh the installation, keyed on the unique GitHub
    *  `installation_id` (a re-install / repo-selection change refreshes in place). */
   async upsert(

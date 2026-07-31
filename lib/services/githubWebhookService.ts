@@ -25,6 +25,7 @@ import {
 import { ciMinutesMeterService, type MeterWorkflowRunOutcome } from './ciMinutesMeterService';
 import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
+import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -100,6 +101,14 @@ export type GithubWebhookResult =
         | 'unknown_installation'
         | 'failed';
     }
+  | {
+      // The TAKE-IT-OVER saga's confirmation (MOTIR-711). `already_applied` is the
+      // REDELIVERY outcome and is a success, not a warning; `owner_mismatch` is a
+      // transfer to somewhere other than what the row recorded — the mirror is
+      // still updated (the coordinates are a fact) but no saga is driven by it.
+      event: 'repository';
+      outcome: 'applied' | 'already_applied' | 'unknown_repo' | 'owner_mismatch' | 'malformed';
+    }
   | ChangeRequestSyncResult
   | CiFeedbackResult;
 
@@ -130,6 +139,8 @@ export const githubWebhookService = {
         return this.handleCiStatus(body);
       case 'workflow_run':
         return this.handleWorkflowRun(body);
+      case 'repository':
+        return this.handleRepository(body);
       default:
         // `ping` and every event we don't sync land here — a fast 2xx no-op.
         return { event: 'ignored', reason: `unhandled_event:${eventType}` };
@@ -147,6 +158,45 @@ export const githubWebhookService = {
     }
 
     return { event: 'installation', outcome: await reconcileInstallation(installationId, body) };
+  },
+
+  /**
+   * Handle a `repository` delivery — the TAKE-IT-OVER saga's confirmation
+   * (MOTIR-711). Only the `transferred` action is of interest: it is the moment a
+   * Motir-owned repository has ACTUALLY moved to the user's account, which is the
+   * one thing the saga must never assume from its own `202`.
+   *
+   * ⚠️ IDEMPOTENT UNDER REDELIVERY, which is not optional — GitHub retries, and a
+   * redelivery must not advance a saga twice or re-stamp a mirror that has since
+   * moved on. The service re-reads the row UNDER ITS LOCK and returns
+   * `already_applied` when the hop is no longer legal.
+   *
+   * ⚠️ IT NEVER THROWS FOR A REPOSITORY IT DOES NOT KNOW. Motir's provisioning
+   * installation sees deliveries for repositories that belong to no project row,
+   * and a 500 here would make GitHub retry a delivery no retry can fix.
+   */
+  async handleRepository(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    if (body['action'] !== 'transferred') {
+      return { event: 'ignored', reason: `unhandled_repository_action:${String(body['action'])}` };
+    }
+    const repo = asRecord(body['repository']);
+    const owner = repo ? asRecord(repo['owner']) : null;
+    const providerRepoId = repo ? readId(repo['id']) : null;
+    const newOwner = owner ? owner['login'] : null;
+    const repoName = repo ? repo['name'] : null;
+
+    if (!providerRepoId || typeof newOwner !== 'string' || typeof repoName !== 'string') {
+      return { event: 'repository', outcome: 'malformed' };
+    }
+
+    const { outcome } = await projectRepoTakeoverService.applyTransferred({
+      providerRepoId,
+      newOwner,
+      repoName,
+      defaultBranch:
+        typeof repo?.['default_branch'] === 'string' ? repo['default_branch'] : undefined,
+    });
+    return { event: 'repository', outcome };
   },
 
   async handleInstallationRepositories(
@@ -504,6 +554,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+/** A GitHub numeric id as the string the mirror stores it as (MOTIR-711 reads the
+ *  transferred repository's own id — the only field that survives a transfer that
+ *  also RENAMES, which is why the saga matches on it rather than on the name). */
+function readId(value: unknown): string | null {
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : null;
 }
 
 /** GitHub's numeric installation id (as a string — the stored key) from the

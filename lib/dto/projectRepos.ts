@@ -20,6 +20,37 @@ export type ProjectRepoStateDto =
 /** Wire form of the Prisma `ProjectRepoOwnership` enum (ADR §3). */
 export type ProjectRepoOwnershipDto = 'user' | 'motir';
 
+/** Wire form of the Prisma `ProjectRepoTakeoverState` enum (MOTIR-711) — where a
+ *  row sits in the handoff to the user's own GitHub. */
+export type ProjectRepoTakeoverStateDto =
+  | 'requested'
+  | 'transfer_pending'
+  | 'awaiting_reinstall'
+  | 'done'
+  | 'failed';
+
+/**
+ * The TAKE-IT-OVER saga's state on one row (MOTIR-711), or `null` on the
+ * `ProjectRepoDto` when no handoff has ever been requested.
+ *
+ * The two middle states are WAITS ON A HUMAN acting on github.com — accepting the
+ * transfer, installing the App — so a consumer must render them as durable,
+ * re-promptable steps with something to go do, never as a spinner.
+ */
+export interface ProjectRepoTakeoverDto {
+  state: ProjectRepoTakeoverStateDto;
+  /** The GitHub login the repository is being handed to. */
+  targetOwner: string | null;
+  requestedAt: string | null;
+  /** When the repository actually moved (the `transferred` webhook), not when it
+   *  was asked for. Null while awaiting the new owner's accept. */
+  transferredAt: string | null;
+  /** When the App was observed installed under the new owner — the proof the loop
+   *  survived. A completed transfer alone never sets this. */
+  completedAt: string | null;
+  failureReason: string | null;
+}
+
 /**
  * WHY a proposed row is in the set — the ADR §0.1 signal that produced it, in
  * ladder order (MOTIR-1892). Persisted on the row so the establish-step UI
@@ -109,6 +140,10 @@ export interface ProjectRepoDto {
    * `resolveProjectRepoNames`, which filters on exactly this.
    */
   established: boolean;
+  /** Where this row sits in the TAKE-IT-OVER handoff (MOTIR-711), or null when
+   *  none has ever been requested — which is the common case, and is why this is
+   *  nullable rather than an "idle" state the surface would have to hide. */
+  takeover: ProjectRepoTakeoverDto | null;
   /** Fractional order key. The FIRST row of the ordered set is the project's
    *  PRIMARY repo (ADR §1.3); order carries no dispatch meaning. */
   position: string;

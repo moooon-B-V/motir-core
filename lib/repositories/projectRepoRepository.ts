@@ -1,4 +1,9 @@
-import { Prisma, type ProjectRepo, type ProjectRepoRole } from '@prisma/client';
+import {
+  Prisma,
+  type ProjectRepo,
+  type ProjectRepoRole,
+  type ProjectRepoTakeoverState,
+} from '@prisma/client';
 import { db } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 
@@ -41,6 +46,12 @@ interface JoinedRow {
   ciActionsDisabled: boolean;
   ciActionsIntentAt: Date | null;
   ciActionsAppliedAt: Date | null;
+  takeoverState: ProjectRepoTakeoverState | null;
+  takeoverTargetOwner: string | null;
+  takeoverRequestedAt: Date | null;
+  takeoverTransferredAt: Date | null;
+  takeoverCompletedAt: Date | null;
+  takeoverFailureReason: string | null;
   // The realized `github_repo` half — every column NULL when the row is
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
@@ -73,6 +84,12 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     ciActionsDisabled: r.ciActionsDisabled,
     ciActionsIntentAt: r.ciActionsIntentAt,
     ciActionsAppliedAt: r.ciActionsAppliedAt,
+    takeoverState: r.takeoverState,
+    takeoverTargetOwner: r.takeoverTargetOwner,
+    takeoverRequestedAt: r.takeoverRequestedAt,
+    takeoverTransferredAt: r.takeoverTransferredAt,
+    takeoverCompletedAt: r.takeoverCompletedAt,
+    takeoverFailureReason: r.takeoverFailureReason,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     githubRepo:
@@ -144,6 +161,12 @@ export const projectRepoRepository = {
         pr."ci_actions_disabled"   AS "ciActionsDisabled",
         pr."ci_actions_intent_at"  AS "ciActionsIntentAt",
         pr."ci_actions_applied_at" AS "ciActionsAppliedAt",
+        pr."takeover_state" AS "takeoverState",
+        pr."takeover_target_owner" AS "takeoverTargetOwner",
+        pr."takeover_requested_at" AS "takeoverRequestedAt",
+        pr."takeover_transferred_at" AS "takeoverTransferredAt",
+        pr."takeover_completed_at" AS "takeoverCompletedAt",
+        pr."takeover_failure_reason" AS "takeoverFailureReason",
         pr."created_at"        AS "createdAt",
         pr."updated_at"        AS "updatedAt",
         gr."id"                AS "repoRowId",
@@ -452,5 +475,73 @@ export const projectRepoRepository = {
       SET "ci_actions_applied_at" = "ci_actions_intent_at"
       WHERE "id" = ${id}
     `;
+  },
+
+  // ── The TAKE-IT-OVER saga (MOTIR-711) ─────────────────────────────────────
+
+  /**
+   * Every row whose takeover is IN FLIGHT, across one workspace — the resume
+   * pass's input, and what a "you have an unfinished handoff" prompt reads.
+   *
+   * `done` and `failed` are both excluded, for different reasons: `done` needs
+   * nothing, and `failed` is only resumed by the USER asking again (re-issuing a
+   * transfer that GitHub already refused, unprompted and on a timer, would hammer
+   * the API for a condition only a human can clear).
+   */
+  async listTakeoverInFlightByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepoWithRealized[]> {
+    return tx.projectRepo.findMany({
+      where: {
+        workspaceId,
+        takeoverState: { in: ['requested', 'transfer_pending', 'awaiting_reinstall'] },
+      },
+      include: { githubRepo: true },
+      orderBy: { position: 'asc' },
+    });
+  },
+
+  /**
+   * The row whose takeover is awaiting THIS repository moving to THIS owner — how
+   * the `repository` `transferred` webhook finds its saga.
+   *
+   * Matched on the realized mirror's provider repo id (via the join) rather than
+   * on the name, because a transfer can be accompanied by a RENAME and the id is
+   * the only thing that survives both. The target owner is checked
+   * case-insensitively by the caller, not here — SQL's `citext` is not in play and
+   * a `mode: 'insensitive'` filter would silently not use the index.
+   */
+  async findByRealizedProviderRepoId(
+    providerRepoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepoWithRealized | null> {
+    return tx.projectRepo.findFirst({
+      where: { githubRepo: { repoId: providerRepoId } },
+      include: { githubRepo: true },
+    });
+  },
+
+  /**
+   * Write the takeover fields of one row.
+   *
+   * A narrow, single-op write taking an explicit patch rather than reusing
+   * `update`, so the saga's columns can only be moved through the service that
+   * owns the machine — the same reason the CI-Actions intent has its own writers
+   * rather than being reachable via a general-purpose update.
+   */
+  async setTakeover(
+    id: string,
+    data: {
+      takeoverState: ProjectRepoTakeoverState | null;
+      takeoverTargetOwner?: string | null;
+      takeoverRequestedAt?: Date | null;
+      takeoverTransferredAt?: Date | null;
+      takeoverCompletedAt?: Date | null;
+      takeoverFailureReason?: string | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo> {
+    return tx.projectRepo.update({ where: { id }, data });
   },
 };

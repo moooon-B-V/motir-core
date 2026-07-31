@@ -48,6 +48,14 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     ciActionsDisabled: false,
     ciActionsIntentAt: null,
     ciActionsAppliedAt: null,
+    // The TAKE-IT-OVER saga (MOTIR-711) — likewise part of the row's shape and
+    // irrelevant to name resolution; null means no handoff was ever requested.
+    takeoverState: null,
+    takeoverTargetOwner: null,
+    takeoverRequestedAt: null,
+    takeoverTransferredAt: null,
+    takeoverCompletedAt: null,
+    takeoverFailureReason: null,
     createdAt: now,
     updatedAt: now,
     githubRepo: {

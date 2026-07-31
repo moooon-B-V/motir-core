@@ -33,6 +33,9 @@ const ROW_DEFAULTS = {
   proposalSignal: null,
   realizedRepo: null,
   established: false,
+  // The TAKE-IT-OVER saga (MOTIR-711) — null is the common case: no handoff has
+  // ever been requested for this row.
+  takeover: null,
   createdAt: '2026-07-30T10:00:00.000Z',
   updatedAt: '2026-07-30T10:00:00.000Z',
 } as const;

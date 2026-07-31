@@ -91,3 +91,90 @@ export class ProjectRepoInvalidFieldError extends Error {
     this.name = 'ProjectRepoInvalidFieldError';
   }
 }
+
+// ── The TAKE-IT-OVER saga (MOTIR-711) ───────────────────────────────────────
+
+/**
+ * The row is not Motir's to hand over. Two shapes, one answer:
+ *
+ *   * a `connected` row — the repository was ALREADY the user's and they merely
+ *     pointed Motir at it, so a takeover is the already-yours NO-OP (ADR §3.5's
+ *     only way a set mixes ownership), not an error the caller must recover from;
+ *   * an unrealized row (`proposed` / `creating` / `skipped` / `failed`) — there
+ *     is no repository on the host to move at all.
+ *
+ * Distinguished by `reason` so the surface can render "already yours" as the
+ * calm state it is rather than as a failure. → 409
+ */
+export class ProjectRepoNotTransferableError extends Error {
+  readonly code = 'PROJECT_REPO_NOT_TRANSFERABLE' as const;
+  constructor(
+    ref: string,
+    readonly reason: 'already_yours' | 'not_realized',
+  ) {
+    super(
+      reason === 'already_yours'
+        ? `Project repository row ${ref} is a repository you already own — there is nothing to transfer.`
+        : `Project repository row ${ref} has no repository on the host to transfer.`,
+    );
+    this.name = 'ProjectRepoNotTransferableError';
+  }
+}
+
+/**
+ * An illegal hop in the takeover machine — most often a SECOND takeover request
+ * for a row whose handoff is already in flight or already `done`. This is also
+ * the lost-race guard: the row is locked and its takeover state re-read inside
+ * the transaction, so a concurrent request's loser observes the already-moved
+ * state and lands here rather than issuing a second transfer for one repository.
+ * Names the legal targets so a caller self-corrects. → 409
+ */
+export class ProjectRepoTakeoverStateError extends Error {
+  readonly code = 'PROJECT_REPO_ILLEGAL_TAKEOVER' as const;
+  constructor(
+    ref: string,
+    readonly from: string,
+    readonly to: string,
+    readonly allowed: readonly string[],
+  ) {
+    super(
+      allowed.length === 0
+        ? `Project repository row ${ref} takeover is ${from}, a settled state with no legal transition (attempted ${to}).`
+        : `Project repository row ${ref} takeover cannot move ${from} → ${to}. Allowed: ${allowed.join(', ')}.`,
+    );
+    this.name = 'ProjectRepoTakeoverStateError';
+  }
+}
+
+/**
+ * The requesting user has no connected GitHub identity, so there is no account to
+ * transfer the repository TO.
+ *
+ * A FIRST-CLASS typed error rather than a generic 422 because the surface's
+ * correct response is not an error banner but MOTIR-1900's connect prompt — the
+ * user is one OAuth hop from being able to do this, and telling them so is the
+ * whole difference between a dead end and a next step. → 409
+ */
+export class GithubIdentityRequiredError extends Error {
+  readonly code = 'GITHUB_IDENTITY_REQUIRED' as const;
+  constructor() {
+    super('Connect your GitHub account before taking a repository over.');
+    this.name = 'GithubIdentityRequiredError';
+  }
+}
+
+/**
+ * GitHub refused the transfer itself (the target does not exist, Motir's App
+ * cannot administer the repository, a name collision in the target account, a
+ * rate limit). The row is left `failed` WITH this reason recorded, so the handoff
+ * is re-promptable rather than mysterious. → 502 — the failure is upstream, and a
+ * 4xx would blame the caller for something they cannot fix by changing the
+ * request.
+ */
+export class RepoTransferRefusedError extends Error {
+  readonly code = 'REPO_TRANSFER_REFUSED' as const;
+  constructor(readonly detail: string) {
+    super(`GitHub refused the repository transfer: ${detail}`);
+    this.name = 'RepoTransferRefusedError';
+  }
+}
