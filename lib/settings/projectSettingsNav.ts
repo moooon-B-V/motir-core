@@ -4,6 +4,7 @@ import {
   Columns3,
   FolderGit2,
   Gauge,
+  KeyRound,
   SlidersHorizontal,
   Sparkles,
   Tag,
@@ -126,6 +127,24 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/members',
     icon: Users,
     labelKey: 'nav.members',
+    access: browse,
+  },
+  {
+    id: 'code-access',
+    group: 'access',
+    href: '/settings/project/code-access',
+    icon: KeyRound,
+    labelKey: 'nav.codeAccess',
+    // Story MOTIR-1775 · MOTIR-1945 — who on the team can clone the project's
+    // code. A SIBLING pane rather than a section inside Members & access
+    // (design/repository-set §15.3): it is a table with six per-member states,
+    // four page states and a second per-repository dimension, and the registry
+    // is what gives it a door that cannot silently disappear (the totality
+    // test). BROWSE-gated on purpose — unlike the members pane, this one has
+    // something a NON-admin can do: connect their own GitHub, which is the one
+    // action nobody can take on their behalf (ADR §3 Q3). The write is re-gated
+    // in projectRepoAccessService (edit), so the gate stays legible rather than
+    // the page vanishing.
     access: browse,
   },
   {

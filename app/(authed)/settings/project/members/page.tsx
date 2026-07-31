@@ -4,9 +4,13 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
+import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { isWorkspaceManager } from '@/lib/projects/roles';
+import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectMembersSettings } from './_components/ProjectMembersSettings';
+import { CodeAccessDoorCard } from './_components/CodeAccessDoorCard';
 
 // Project Members + Access settings — server component (Subtask 6.4.5). Reads
 // the active project, the project's members + access level (through the 6.4.4
@@ -37,13 +41,20 @@ export default async function ProjectMembersPage() {
 
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
-  const [members, access, workspaceMembers, workspace, wsRole] = await Promise.all([
-    projectMembersService.listMembers(actor),
-    projectMembersService.getAccess(actor),
-    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
-    workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
-    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
-  ]);
+  const [members, access, workspaceMembers, workspace, wsRole, codeAccess, repos] =
+    await Promise.all([
+      projectMembersService.listMembers(actor),
+      projectMembersService.getAccess(actor),
+      workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+      workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
+      workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
+      // Door 2's count (MOTIR-1945) — read here rather than inside the card so
+      // the card stays a pure presentational leaf and the reads still go out in
+      // one parallel batch.
+      projectRepoAccessService.listTeamAccess(ctx.projectId, ctx),
+      projectRepoSetService.listByProject(ctx.projectId, ctx),
+    ]);
+  const codeAccessCounts = teamAccessSummary(codeAccess, repos);
 
   const myMembership = members.find((m) => m.userId === ctx.userId);
   const canManage = isWorkspaceManager(wsRole) || myMembership?.role === 'admin';
@@ -69,6 +80,12 @@ export default async function ProjectMembersPage() {
         workspaceMembers={workspaceMembers}
         currentUserId={ctx.userId}
         canManage={canManage}
+      />
+
+      <CodeAccessDoorCard
+        granted={codeAccessCounts.granted}
+        eligible={codeAccessCounts.eligible}
+        hasCode={repos.some((repo) => repo.established)}
       />
     </div>
   );

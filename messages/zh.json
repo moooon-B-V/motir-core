@@ -1183,6 +1183,7 @@
       },
       "details": "详情",
       "members": "成员与访问",
+      "codeAccess": "代码访问",
       "workflow": "工作流",
       "board": "面板",
       "estimation": "估算",
@@ -1663,6 +1664,83 @@
       "changeRoleErrorTitle": "无法更改角色",
       "errorLastAdmin": "这是唯一的项目管理员——请先指定另一名管理员。",
       "errorGeneric": "出了点问题，请重试。"
+    },
+    "codeAccess": {
+      "title": "代码访问",
+      "subtitle": "谁可以克隆并推送到 Motir 为 <strong>{projectName}</strong> 创建的仓库。",
+      "peopleHeading": "成员",
+      "countPill": "{eligible} 人中有 {granted} 人可以克隆",
+      "refresh": "刷新",
+      "refreshLabel": "从 GitHub 刷新访问状态",
+      "refreshError": "Motir 暂时联系不上 GitHub。什么都没有改变——请稍后再试。",
+      "setLabel": "{count} 个仓库：",
+      "setChip": {
+        "notCreated": "尚未创建",
+        "yours": "你们自己的"
+      },
+      "notEligibleHeading": "不符合条件",
+      "notEligibleBody": "代码访问跟随项目本身的编辑权限。不能编辑{projectName}的人永远不会被邀请加入它的代码。",
+      "doorCard": {
+        "title": "代码访问",
+        "summary": "能编辑本项目的 {eligible} 人中，有 {granted} 人可以克隆它的代码",
+        "action": "打开代码访问",
+        "noCode": "Motir 还没有为这个项目创建任何仓库"
+      },
+      "state": {
+        "accepted": "已有访问权限",
+        "acceptedReason": "<strong>@{login}</strong> 可以克隆并推送到全部 {count} 个仓库",
+        "acceptedReasonOne": "<strong>@{login}</strong> 可以克隆并推送到 <strong>{repo}</strong>",
+        "invited": "邀请已发送",
+        "invitedReason": "已发给 <strong>@{login}</strong>，等待在 GitHub 上接受",
+        "notInvited": "尚未邀请",
+        "notInvitedReady": "<strong>@{login}</strong> 可以邀请了",
+        "notInvitedOther": "{name}还没有连接 GitHub 账号",
+        "notInvitedOtherNote": "只有{name}本人能连接——Motir 只邀请本人连接的账号，绝不邀请别人替他填的账号。",
+        "notInvitedSelf": "Motir 还不知道你的 GitHub 账号",
+        "failed": "邀请没能发出",
+        "failedReason": "GitHub 拒绝了 <strong>{repo}</strong> 上的这次邀请",
+        "ineligible": "没有代码访问权限",
+        "ineligibleViewer": "查看者可以阅读{projectName}，但不能编辑它",
+        "nothingToGrant": "暂无可授予的访问",
+        "nothingToGrantReason": "Motir 没有为这个项目创建仓库"
+      },
+      "permission": {
+        "push": "推送",
+        "admin": "管理员"
+      },
+      "expand": "{count} 个仓库",
+      "expandPartial": "{count} 个仓库 · 已发出 {sent} 个",
+      "expandLabel": "展开{name}在各仓库的访问情况",
+      "invite": "邀请",
+      "inviteLabel": "邀请{name}",
+      "resend": "重新发送邀请",
+      "resendLabel": "给{name}重新发送邀请",
+      "openInvitation": "打开邀请",
+      "openInvitationLabel": "打开{name}在 {repo} 的邀请",
+      "retry": "重试",
+      "retryLabel": "重试邀请{name}",
+      "connect": "连接GitHub",
+      "changeRole": "更改角色",
+      "changeRoleLabel": "更改{name}的项目角色",
+      "useDifferent": "换一个账号",
+      "self": {
+        "title": "你还没有连接 GitHub",
+        "body": "{projectName}的代码是私有的。连接 GitHub，Motir 就会邀请你加入全部 {count} 个仓库。",
+        "identityCaption": "Motir 邀请加入本项目代码的 GitHub 账号",
+        "verified": "已验证"
+      },
+      "readOnlyNote": "你可以看到每个人的状态。邀请他人、更改谁符合条件，是项目管理员的事。",
+      "empty": {
+        "title": "{projectName}还没有代码",
+        "body": "计划获批后，Motir 会创建这个项目的仓库——能编辑{projectName}的每个人都会收到邀请。在那之前没有可授予的访问。",
+        "action": "查看计划"
+      },
+      "establishing": {
+        "pill": "正在创建",
+        "banner": "Motir 还在创建 <strong>{repo}</strong>。每个仓库创建好，邀请就会发出——你离开也不会丢失任何东西。"
+      },
+      "partialNote": "只统计 Motir 创建的仓库。团队本来就拥有的仓库通过 GitHub 访问，不经过 Motir。",
+      "failedBanner": "GitHub 拒绝了给<strong>{name}</strong>的 {total} 个邀请中的 {failed} 个。仓库本身没问题——只是邀请没发出去，可以再发一次。"
     },
     "buildInPublic": {
       "liveBadge": "公开中",

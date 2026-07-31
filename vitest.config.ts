@@ -418,6 +418,15 @@ export default defineConfig({
         'app/api/projects/[key]/repositories/[rowId]/state/route.ts',
         'app/api/projects/[key]/repositories/[rowId]/move/route.ts',
         'app/api/projects/[key]/repositories/establish/route.ts',
+        // Story MOTIR-1775 · MOTIR-1945 — the TEAM code-access surface. Gated on
+        // the same reasoning: the card's load-bearing claims are about who may
+        // ACT (a connect prompt on your own row and nobody else's, no control at
+        // all where the action was never yours, a refusal that never fails the
+        // repository), and a claim like that holds only while the branches that
+        // could break it are exercised. The view model carries the roll-up those
+        // claims are made of.
+        'lib/projectRepos/teamAccessView.ts',
+        'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx',
         // Story MOTIR-1775 · MOTIR-1939 — the TAKE-IT-OVER surface. Gated because
         // the card is a set of claims about STATE that only hold while the
         // branches expressing them are exercised: that a waiting state is a
@@ -673,6 +682,13 @@ export default defineConfig({
           lines: 90,
         },
         'lib/projectRepos/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-1775 · MOTIR-1945 — the team code-access surface.
+        'lib/projectRepos/teamAccessView.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story MOTIR-1775 · MOTIR-1939 — the take-it-over room (see the
         // `include` note).
         'lib/github/userOrgs.ts': { branches: 90, functions: 90, lines: 90 },
