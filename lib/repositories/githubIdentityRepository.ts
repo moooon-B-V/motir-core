@@ -27,6 +27,29 @@ export const githubIdentityRepository = {
     return tx.githubIdentity.findUnique({ where: { userId } });
   },
 
+  /**
+   * The connected GitHub logins for MANY users, keyed by `userId` (MOTIR-1910).
+   *
+   * The team code-access read asks "which of these N members has an account Motir
+   * can invite?", and asking it one member at a time is N round-trips to build one
+   * table. Selects only the two columns that answer it — never the encrypted
+   * token, which nothing outside `githubIdentityService` may read.
+   *
+   * A member with no identity is simply ABSENT from the result, which is the
+   * honest shape: the caller renders that as "no connected GitHub account", the
+   * one state only that member can resolve.
+   */
+  async findLoginsByUserIds(
+    userIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<GithubIdentity, 'userId' | 'githubLogin'>[]> {
+    if (userIds.length === 0) return [];
+    return tx.githubIdentity.findMany({
+      where: { userId: { in: userIds } },
+      select: { userId: true, githubLogin: true },
+    });
+  },
+
   /** Resolve a GitHub user (by their numeric GitHub user id, `@unique`) to the
    *  bound Motir identity — the REVERSE of `findByUserId`, needed by the webhook
    *  status sync (MOTIR-892) to attribute a PR-driven transition to the PR

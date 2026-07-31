@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { Project } from '@prisma/client';
 import {
   canBrowse,
@@ -300,6 +301,66 @@ export const projectAccessService = {
   canBrowse,
   canEdit,
   canManageProject,
+
+  /**
+   * Resolve `canEdit` for MANY users at once (MOTIR-1910) — "which of these
+   * people may change this project?", answered by the same policy every single-
+   * actor gate uses.
+   *
+   * Built for team code access (`docs/decisions/project-repository-set.md` §3
+   * Q1): a repository Motir created is handed to exactly the members who can
+   * already edit the project, so the grant reuses the product's own membership
+   * rule rather than inventing a second one for code. Anything else asking "who
+   * on this project can act?" belongs here too — the point is that the answer has
+   * ONE implementation.
+   *
+   * ⚠️ TWO FULL MEMBERSHIP READS, not one per user. The policy needs BOTH roles
+   * for each candidate (a workspace owner/admin passes regardless of project
+   * membership; an `open` project needs no project membership at all), so a
+   * per-user resolve would be 2N round-trips to answer one question about a team.
+   * The two lists are workspace-bounded and small.
+   *
+   * A user absent from BOTH lists resolves to `(null, null)` and is denied by the
+   * null-workspace-role rail — the correct answer for someone who is not in the
+   * workspace, and the reason this cannot accidentally admit a stranger.
+   */
+  async resolveCanEditForUsers(
+    projectId: string,
+    userIds: string[],
+    ctx: AccessActorContext,
+  ): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (userIds.length === 0) return result;
+
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      async (tx) => {
+        const [workspaceMembers, projectMembers] = await Promise.all([
+          workspaceMembershipRepository.findMembersByWorkspace(ctx.workspaceId, tx),
+          projectMembershipRepository.findMembersByProject(projectId, tx),
+        ]);
+        const workspaceRoles = new Map(workspaceMembers.map((m) => [m.userId, m.role]));
+        const projectRoles = new Map(projectMembers.map((m) => [m.userId, m.role]));
+
+        for (const userId of userIds) {
+          result.set(
+            userId,
+            canEdit({
+              accessLevel: project.accessLevel,
+              workspaceRole: workspaceRoles.get(userId) ?? null,
+              projectRole: projectRoles.get(userId) ?? null,
+            }),
+          );
+        }
+        return result;
+      },
+    );
+  },
 
   /**
    * Assert the actor may BROWSE the project — gate the read paths. Throws

@@ -10,7 +10,11 @@ import type {
   RealizedProjectRepoDto,
 } from '@/lib/dto/projectRepos';
 import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
-import { toAccessDto } from '@/lib/projectRepos/access';
+import {
+  findOwnerAccessRecord,
+  toAccessDto,
+  type ProjectRepoAccessColumns,
+} from '@/lib/projectRepos/access';
 
 // Prisma `ProjectRepo` row (+ its joined `GithubRepo`) → API DTO (Story
 // MOTIR-1775 · MOTIR-1780). The single place the persisted enums narrow to their
@@ -18,9 +22,21 @@ import { toAccessDto } from '@/lib/projectRepos/access';
 // computed — so no Prisma row leaks past the service boundary (the 4-layer rule)
 // and no consumer re-derives establishment.
 
-/** A `ProjectRepo` row with its realized repo joined (`include: { githubRepo }`) —
- *  the shape `projectRepoRepository`'s reads return. */
-export type ProjectRepoWithRealized = ProjectRepo & { githubRepo: GithubRepo | null };
+/**
+ * A `ProjectRepo` row with its realized repo joined (`include: { githubRepo }`)
+ * and its collaborator records — the shape `projectRepoRepository`'s reads
+ * return.
+ *
+ * `collaborators` carries only the columns the derivation reads. It is the WHOLE
+ * set for the row, not pre-filtered, because the mapper picks the `admin` record
+ * out of it (ADR §3 Q2) and a caller with the set in hand can answer both "whose
+ * access does the establish step show?" and "who else is on this repository?"
+ * without a second read.
+ */
+export type ProjectRepoWithRealized = ProjectRepo & {
+  githubRepo: GithubRepo | null;
+  collaborators: ProjectRepoAccessColumns[];
+};
 
 function toRealizedDto(repo: GithubRepo): RealizedProjectRepoDto {
   return {
@@ -66,9 +82,12 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
           failureReason: row.takeoverFailureReason,
         }
       : null,
-    // Derived from the row's two `collaborator_*` stamps, never a stored state
-    // (MOTIR-1900) — see `lib/projectRepos/access.ts` for why.
-    access: toAccessDto(row),
+    // The APPROVING USER's access — derived from their collaborator record's two
+    // stamps, never a stored state (MOTIR-1900) — see `lib/projectRepos/access.ts`
+    // for why. It is the `admin` record specifically (ADR §3 Q2 reserves that
+    // level to them), which is what keeps this field answering the same question
+    // it always has now that a row can hold a whole team's records (MOTIR-1910).
+    access: toAccessDto(findOwnerAccessRecord(row.collaborators)),
     position: row.position,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

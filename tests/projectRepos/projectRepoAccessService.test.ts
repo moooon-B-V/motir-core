@@ -442,12 +442,16 @@ describe('acceptance is OBSERVED, never assumed', () => {
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
     collaborators.add(`acme-web:${LOGIN}`);
     await projectRepoAccessService.refreshAccess(fx.projectId, fx.ctx);
-    const first = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    const first = await db.projectRepoCollaborator.findFirstOrThrow({
+      where: { projectRepoId: rowId },
+    });
 
     await projectRepoAccessService.refreshAccess(fx.projectId, fx.ctx);
-    const second = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    const second = await db.projectRepoCollaborator.findFirstOrThrow({
+      where: { projectRepoId: rowId },
+    });
 
-    expect(second.collaboratorAcceptedAt).toEqual(first.collaboratorAcceptedAt);
+    expect(second.acceptedAt).toEqual(first.acceptedAt);
   });
 
   it('an already-accepted row is not re-invited by a later pass', async () => {
@@ -499,15 +503,17 @@ describe('concurrency — two grant passes race', () => {
     collaborators.add(`acme-web:${LOGIN}`);
 
     // The lost update this lock exists to prevent: an invite write that cleared
-    // `collaboratorAcceptedAt` would tell a user who HAS access to go accept an
-    // invitation that no longer exists.
+    // `acceptedAt` would tell a user who HAS access to go accept an invitation
+    // that no longer exists.
     await Promise.all([
       projectRepoAccessService.refreshAccess(fx.projectId, fx.ctx),
       projectRepoAccessService.grantAccess(fx.projectId, fx.ctx),
     ]);
 
-    const stored = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
-    expect(stored.collaboratorAcceptedAt).not.toBeNull();
+    const stored = await db.projectRepoCollaborator.findFirstOrThrow({
+      where: { projectRepoId: rowId },
+    });
+    expect(stored.acceptedAt).not.toBeNull();
     expect((await readRow(fx, rowId)).access.state).toBe('accepted');
   });
 });

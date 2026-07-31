@@ -97,6 +97,123 @@ export type ProjectRepoProposalSignalDto = 'plan-item-role' | 'preplan-platform'
  */
 export type ProjectRepoAccessStateDto = 'not_invited' | 'invited' | 'accepted';
 
+/**
+ * What a collaborator may DO with the repository (MOTIR-1910; ADR §3 Q2).
+ *
+ * PER INVITEE. A teammate gets `push` — clone, branch, push; the approving user
+ * keeps `admin`, which additionally carries the repository settings the TAKEOVER
+ * path (MOTIR-711) needs and that only they walk.
+ */
+export type ProjectRepoCollaboratorPermissionDto = 'push' | 'admin';
+
+/**
+ * Why a member cannot be invited, or null when they can (MOTIR-1910).
+ *
+ * The two reasons are distinct because they have different OWNERS, and a consumer
+ * must render them differently:
+ *
+ *   * `role_cannot_edit`   — the product's own access policy does not let this
+ *     person change the project (`canEdit`), so it does not hand them its code.
+ *     SETTLED: nothing on this surface moves it, only a role change elsewhere.
+ *   * `no_github_identity` — they have no connected GitHub account, so there is
+ *     no account to invite. ACTIONABLE, but by THAT MEMBER ALONE: Motir cannot
+ *     OAuth on anyone's behalf, so a teammate viewing this row gets an
+ *     explanation and never a button (ADR §3 Q3).
+ */
+export type ProjectRepoMemberAccessReasonDto = 'role_cannot_edit' | 'no_github_identity' | null;
+
+/**
+ * ONE member's access to ONE repository of the project's set (MOTIR-1910) — the
+ * row the team code-access surface (MOTIR-1945) renders.
+ *
+ * Every candidate member appears, INCLUDING the ones who cannot be invited: a
+ * surface that silently omitted them would answer "who has access?" with a list
+ * that quietly excludes the people the reader is most likely looking for. The
+ * `reason` is what makes each absence legible.
+ */
+export interface ProjectRepoMemberAccessDto {
+  /** The Motir user — the invitation is aimed at a person, never a typed handle. */
+  userId: string;
+  name: string;
+  email: string;
+  /**
+   * Whether this member is in the invitable set — exactly the members the shipped
+   * project-access policy's `canEdit` admits (ADR §3 Q1), which is the same rule
+   * the product enforces for changing anything else in the project.
+   */
+  eligible: boolean;
+  /**
+   * The GitHub login that HOLDS (or was offered) the access, when a record
+   * exists; otherwise the member's currently connected login; null when they have
+   * neither.
+   *
+   * The record's snapshot WINS over the live identity on purpose: if a member
+   * reconnects a different GitHub account, the invitation live on GitHub still
+   * belongs to the old one, and the row must say which account actually has
+   * access rather than which one they happen to have connected today.
+   */
+  login: string | null;
+  /** What was granted, or null when no invitation record exists yet. */
+  permission: ProjectRepoCollaboratorPermissionDto | null;
+  /** Where this member stands. `not_invited` covers both "no record at all" and
+   *  "a record whose invitation never went out" — indistinguishable to a reader,
+   *  and identically resolved by inviting. */
+  state: ProjectRepoAccessStateDto;
+  /** Why they cannot be invited, or null when nothing is in the way. Independent
+   *  of `state`: an INELIGIBLE member who was invited before their role changed
+   *  keeps their real `accepted` state and gains a reason. */
+  reason: ProjectRepoMemberAccessReasonDto;
+  /** Where **Open the invitation** points, for a PENDING invitation only. */
+  invitationUrl: string | null;
+  invitedAt: string | null;
+  acceptedAt: string | null;
+}
+
+/**
+ * The team's access to ONE repository of the set (MOTIR-1910).
+ *
+ * Carried per repository rather than per member because access is GRANTED per
+ * repository — a partially-established set has real repositories some members can
+ * reach and rows that do not exist yet, and flattening that would report a
+ * half-truth for both.
+ */
+export interface ProjectRepoTeamAccessRowDto {
+  /** The `ProjectRepo.id` this access belongs to. */
+  rowId: string;
+  /** `owner/name` of the realized repository, for a surface that names it. Null
+   *  on a row with no repository yet. */
+  repoRef: string | null;
+  /**
+   * Whether this row can hold invitations at all — a `created` row with a live
+   * realized repository. False for `connected` (the user's own repository, not
+   * Motir's to share), `skipped`, `failed`, and anything unestablished.
+   */
+  invitable: boolean;
+  members: ProjectRepoMemberAccessDto[];
+}
+
+/** The whole team-access read for a project (MOTIR-1910) — every repository of
+ *  the set crossed with every candidate member, in one call, so a surface renders
+ *  the matrix without an N+1 per row. */
+export interface ProjectRepoTeamAccessDto {
+  projectId: string;
+  rows: ProjectRepoTeamAccessRowDto[];
+}
+
+/** What one team-access invite pass DID — the counts a surface reports and the
+ *  rows it re-renders from. */
+export interface GrantTeamAccessResultDto {
+  access: ProjectRepoTeamAccessDto;
+  /** How many `(repository × member)` invitations this pass sent or re-sent. */
+  invited: number;
+  /** How many GitHub refused. Their records are unchanged and stay retryable —
+   *  nothing is rolled back, and no sibling is affected. */
+  failed: number;
+  /** How many eligible members were skipped for want of a connected GitHub
+   *  account. Not a failure: it is the state their own connect prompt resolves. */
+  skippedNoIdentity: number;
+}
+
 /** The access half of a row — its state plus the two facts the UI renders. */
 export interface ProjectRepoAccessDto {
   state: ProjectRepoAccessStateDto;

@@ -1,6 +1,7 @@
 import {
   Prisma,
   type ProjectRepo,
+  type ProjectRepoCollaboratorPermission,
   type ProjectRepoRole,
   type ProjectRepoTakeoverState,
 } from '@prisma/client';
@@ -25,6 +26,25 @@ import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 // `app.workspace_id` GUC gates the rows; the `workspaceId` argument on each read
 // is the belt-and-suspenders app-level scope (a cross-tenant id returns null →
 // 404, never 403 — the no-existence-leak posture).
+
+/**
+ * The collaborator columns every `ProjectRepo` read joins — exactly the ones the
+ * derivation in `lib/projectRepos/access.ts` consumes, and no more.
+ *
+ * A `select` rather than `true` on purpose: the record also holds `userId` and the
+ * tenant id, which the access DERIVATION has no business seeing (it decides over
+ * stamps + login + permission alone). Narrowing here is what lets
+ * `ProjectRepoAccessColumns` stay a small structural type a fixture can satisfy.
+ */
+const COLLABORATOR_COLUMNS = {
+  select: {
+    githubLogin: true,
+    permission: true,
+    invitedAt: true,
+    acceptedAt: true,
+    invitationUrl: true,
+  },
+} as const;
 
 /** The raw row shape {@link projectRepoRepository.listByProject}'s LEFT JOIN
  *  returns, before it is reassembled into {@link ProjectRepoWithRealized}. */
@@ -52,10 +72,16 @@ interface JoinedRow {
   takeoverTransferredAt: Date | null;
   takeoverCompletedAt: Date | null;
   takeoverFailureReason: string | null;
-  collaboratorLogin: string | null;
-  collaboratorInvitedAt: Date | null;
-  collaboratorAcceptedAt: Date | null;
-  collaboratorInvitationUrl: string | null;
+  // The APPROVING USER's collaborator record (the `admin` one — ADR §3 Q2), or
+  // all-NULL when the row has none. Only that record is joined here: this read
+  // feeds the establish step, which asks "can *I* reach my code?", and joining a
+  // whole team's records onto every row would fan the set read out by member
+  // count to answer a question it never asks. The team matrix is its own read.
+  ownerLogin: string | null;
+  ownerPermission: ProjectRepoCollaboratorPermission | null;
+  ownerInvitedAt: Date | null;
+  ownerAcceptedAt: Date | null;
+  ownerInvitationUrl: string | null;
   // The realized `github_repo` half — every column NULL when the row is
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
@@ -94,10 +120,22 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     takeoverTransferredAt: r.takeoverTransferredAt,
     takeoverCompletedAt: r.takeoverCompletedAt,
     takeoverFailureReason: r.takeoverFailureReason,
-    collaboratorLogin: r.collaboratorLogin,
-    collaboratorInvitedAt: r.collaboratorInvitedAt,
-    collaboratorAcceptedAt: r.collaboratorAcceptedAt,
-    collaboratorInvitationUrl: r.collaboratorInvitationUrl,
+    // Zero or one record — the mapper then picks the `admin` one out of it, which
+    // is exactly what the JOIN already selected. Keeping the shape a LIST (rather
+    // than a nullable field) means this read and the Prisma-`include` reads below
+    // return the same type, so the mapper has one code path.
+    collaborators:
+      r.ownerLogin === null
+        ? []
+        : [
+            {
+              githubLogin: r.ownerLogin,
+              permission: r.ownerPermission!,
+              invitedAt: r.ownerInvitedAt,
+              acceptedAt: r.ownerAcceptedAt,
+              invitationUrl: r.ownerInvitationUrl,
+            },
+          ],
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     githubRepo:
@@ -175,10 +213,11 @@ export const projectRepoRepository = {
         pr."takeover_transferred_at" AS "takeoverTransferredAt",
         pr."takeover_completed_at" AS "takeoverCompletedAt",
         pr."takeover_failure_reason" AS "takeoverFailureReason",
-        pr."collaborator_login"          AS "collaboratorLogin",
-        pr."collaborator_invited_at"     AS "collaboratorInvitedAt",
-        pr."collaborator_accepted_at"    AS "collaboratorAcceptedAt",
-        pr."collaborator_invitation_url" AS "collaboratorInvitationUrl",
+        oc."github_login"      AS "ownerLogin",
+        oc."permission"        AS "ownerPermission",
+        oc."invited_at"        AS "ownerInvitedAt",
+        oc."accepted_at"       AS "ownerAcceptedAt",
+        oc."invitation_url"    AS "ownerInvitationUrl",
         pr."created_at"        AS "createdAt",
         pr."updated_at"        AS "updatedAt",
         gr."id"                AS "repoRowId",
@@ -193,6 +232,11 @@ export const projectRepoRepository = {
         gr."updated_at"        AS "repoUpdatedAt"
       FROM "project_repository" pr
       LEFT JOIN "github_repo" gr ON gr."id" = pr."github_repo_id"
+      -- The APPROVING USER's record only: permission = 'admin' is what selects it
+      -- (ADR §3 Q2), and there is at most one per row, so this stays a to-one
+      -- join and the set read stays one statement per set — not one per member.
+      LEFT JOIN "project_repository_collaborator" oc
+        ON oc."project_repository_id" = pr."id" AND oc."permission" = 'admin'
       WHERE pr."project_id" = ${projectId} AND pr."workspace_id" = ${workspaceId}
       ORDER BY pr."position" ASC
     `;
@@ -209,7 +253,7 @@ export const projectRepoRepository = {
     const client = tx ?? db;
     return client.projectRepo.findFirst({
       where: { id, workspaceId },
-      include: { githubRepo: true },
+      include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },
     });
   },
 
@@ -229,7 +273,7 @@ export const projectRepoRepository = {
     const client = tx ?? db;
     return client.projectRepo.findMany({
       where: { projectId, role, workspaceId },
-      include: { githubRepo: true },
+      include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },
       orderBy: { position: 'asc' },
     });
   },
@@ -388,7 +432,7 @@ export const projectRepoRepository = {
   ): Promise<ProjectRepoWithRealized[]> {
     return tx.projectRepo.findMany({
       where: { workspaceId, state: 'created', githubRepoId: { not: null } },
-      include: { githubRepo: true },
+      include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },
       orderBy: { position: 'asc' },
     });
   },
@@ -509,7 +553,7 @@ export const projectRepoRepository = {
         workspaceId,
         takeoverState: { in: ['requested', 'transfer_pending', 'awaiting_reinstall'] },
       },
-      include: { githubRepo: true },
+      include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },
       orderBy: { position: 'asc' },
     });
   },
@@ -530,7 +574,7 @@ export const projectRepoRepository = {
   ): Promise<ProjectRepoWithRealized | null> {
     return tx.projectRepo.findFirst({
       where: { githubRepo: { repoId: providerRepoId } },
-      include: { githubRepo: true },
+      include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },
     });
   },
 
