@@ -1,0 +1,2579 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Team code access — who on the team can clone (MOTIR-1944)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE TEAM CODE-ACCESS SURFACE: which members of
+      the project can clone its repositories, the per-member invitation state
+      across the whole repo SET, the teammate's own connect prompt, and the DOOR
+      that leads to all of it. Story MOTIR-1775 · subtask MOTIR-1944. Layout
+      source of truth for MOTIR-1945 (the surface); the mechanism behind it is
+      MOTIR-1910.
+
+      ── EVERY DECIDED ANSWER COMES FROM MOTIR-1943, NOT FROM THIS ASSET ──
+      docs/decisions/project-repository-set.md §3, "Amendment 2026-07-31 (Yue ·
+      MOTIR-1943) — TEAM access". Nothing below re-opens one of its questions:
+        · Q1 the invitable set = the members `canEdit` returns true for,
+          enumerated with assignableMembersService's access-level scoping — NOT a
+          raw non-viewer ProjectMembership query. So a project VIEWER is never
+          invited, and a workspace owner/admin passes regardless of membership.
+        · Q2 a teammate is invited at `push`; the approving user keeps `admin`.
+          The permission is PER-INVITEE data, drawn on the row.
+        · Q3 `Connect GitHub` is offered to a member only for THEIR OWN identity.
+          Someone looking at a teammate with no identity sees a REASON, never an
+          action they cannot take. A handle is never typed in.
+        · Q4 the surface lives in PROJECT SETTINGS, on or beside `Access &
+          members`. Which of those two it is was explicitly left to this card —
+          §0 of design-notes.md decides it (a sibling pane in the same `Access`
+          group) and gives the reasons.
+        · Q5 no new CI guard. Nothing here meters, caps or refuses a push.
+
+      ── THE STATE VOCABULARY IS INHERITED, NOT INVENTED ──
+      `design/repository-set/design-notes.md` §5 panel 4 already fixed the three
+      invitation states, their icons, their --el-* roles, their copy and their
+      forward paths, and `lib/projectRepos/access.ts` derives them
+      (`PROJECT_REPO_ACCESS_STATES` = not_invited | invited | accepted). This
+      asset REUSES that vocabulary verbatim and adds only what a per-MEMBER view
+      needs and a per-owner view could not have: the two NOT-ELIGIBLE reasons Q1
+      and Q3 create, and the invite FAILURE that MOTIR-1900's degrade-gracefully
+      contract already allows but the single-user step could never show.
+
+      ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
+      Every surface this composes into ALREADY EXISTS, so all of it was RENDERED
+      first — a production build (`next build` + `next start`) of `origin/main`
+      @ cac445bb against a seeded 6-person workspace, screenshotted at 1440 wide,
+      NOT reasoned from the .tsx (notes.html mistake #73):
+        · app/(authed)/settings/project/members/page.tsx + ProjectMembersSettings
+          — the pane this sits beside. The member ROW grammar below is its
+          `<li>` element for element: `flex items-center gap-3 border-b
+          border-(--el-border-soft) py-3`, a `size-8 rounded-full bg-(--el-text)`
+          initials disc, a `min-w-0 flex-1` name/email column, then the trailing
+          controls. Same `max-w-[42rem]` column, same serif page title, same
+          `Card` header shape (heading + count `Pill` left, control right).
+        · The project-settings RAIL (SidebarNav's settings swap, driven by
+          lib/settings/projectSettingsNav.ts) — the door. Its groups in the
+          render are General / Access / Work / Automation; the new row is the
+          second entry of ACCESS, under `Members & access`.
+        · app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx
+          `IdentityHeader` — reused as-is for the connected-account line, exactly
+          as design/repository-set §5's panel 3b already does.
+        · design/repository-set/repository-set.mock.html panel 4 — the invitation
+          line, composed, not redrawn.
+
+      Token + icon layers are GENERATED from @motir/design-system/theme.css and
+      lucide-react, so no value is retyped and the mock cannot drift. The octocat
+      path is verbatim from components/icons/GithubMark.tsx. The ONLY raw values
+      authored anywhere below are the non-semantic board backdrop and the canvas
+      grid-dot texture — never a card, pill, state fill, border or text colour.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --neu-light: rgba(255, 255, 255, 0.05);
+        --neu-shadow: rgba(0, 0, 0, 0.44);
+      }
+
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      /* ═══ MOCK CHROME — the review board these panels sit on ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        background: #d8d6d0;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        font-family: var(--font-sans);
+        color: var(--el-text);
+        background-image: radial-gradient(#c6c3bc 1px, transparent 1px);
+        background-size: 22px 22px;
+      }
+      .board {
+        max-width: 1160px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+      .board > header h1 {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        max-width: 76ch;
+        line-height: 1.6;
+      }
+      .panel-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 10px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+      }
+      .panel-note {
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+        margin: 0 0 14px;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel-note code,
+      .board code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+
+      /* ═══ SHIPPED PRIMITIVES — mirrored from components/ui/* ═══ */
+      .i {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
+      }
+      .i.xs {
+        width: 12px;
+        height: 12px;
+      }
+      .i.lg {
+        width: 20px;
+        height: 20px;
+      }
+      .gh {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+        stroke: none;
+        flex: none;
+      }
+      /* Button — variants + sizes from components/ui/Button */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      /* Card */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: var(--spacing-md);
+      }
+      .card-head h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-head .titles {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      /* Pill */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-admin {
+        background: var(--el-role-admin);
+        color: var(--el-text-strong);
+      }
+      .pill-member {
+        background: var(--el-role-member);
+        color: var(--el-text-strong);
+      }
+      .pill-viewer {
+        background: var(--el-role-viewer);
+        color: var(--el-text-strong);
+      }
+      .pill-success {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      /* Combobox trigger */
+      .combo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text-muted);
+        min-width: 0;
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+
+      /* ═══ THE APP SHELL + SETTINGS AREA — mirrored from the RENDER ═══ */
+      .shell {
+        display: flex;
+        flex-direction: column;
+        background: var(--el-page-bg);
+        min-height: 0;
+      }
+      .topbar {
+        height: 56px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .ws {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ws .sq {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .topbar .right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--el-text-secondary);
+      }
+      .avatar-sm {
+        width: 26px;
+        height: 26px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .area {
+        display: flex;
+        align-items: stretch;
+        min-height: 560px;
+      }
+      .rail {
+        width: 200px;
+        flex: none;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 14px 10px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .rail .back {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .rail .ident {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px var(--spacing-control-x) 10px;
+      }
+      .rail .ident .sq {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .rail .ident .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .rail .ident .ky {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        font-family: var(--font-mono);
+      }
+      .rail .eyebrow,
+      .rail .grp {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        padding: 12px var(--spacing-control-x) 4px;
+      }
+      .rail .eyebrow {
+        padding-top: 4px;
+      }
+      .rail .sep {
+        height: 1px;
+        background: var(--el-sidebar-border);
+        margin: 6px var(--spacing-control-x);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row .i {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.on {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+        border: 1px solid var(--el-border);
+      }
+      .rail-row.on .i {
+        color: var(--el-icon-active);
+      }
+      .pane {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 24px 40px;
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .pane-col {
+        max-width: 42rem;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .pane-title {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .pane-title h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-title p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+
+      /* ═══ THE SET STRIP — the M axis, named once ═══ */
+      .set {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: var(--spacing-md);
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .set .lbl {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-right: 2px;
+      }
+      .repo-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid var(--el-chip-border);
+        background: var(--el-chip-bg);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ═══ THE MEMBER ROW — the shipped ProjectMembersSettings <li> ═══ */
+      .people {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .person {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .person:last-child {
+        border-bottom: 0;
+      }
+      .disc {
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 1px;
+      }
+      .who {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .who .nm {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .who .nm .you {
+        font-weight: 400;
+        color: var(--el-text-muted);
+      }
+      .who .em {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      /* The invitation line — the SAME grammar as design/repository-set §5
+         panel 4: an icon AND a word, never colour alone, then the reason. */
+      .inv {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .inv .word {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .inv .sep {
+        color: var(--el-text-faint);
+      }
+      .inv b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .inv.ok .word .i {
+        color: var(--el-success);
+      }
+      .inv.pending .word .i {
+        color: var(--el-info);
+      }
+      .inv.none .word .i {
+        color: var(--el-warning);
+      }
+      .inv.bad .word .i {
+        color: var(--el-danger);
+      }
+      .inv.off .word {
+        color: var(--el-text-muted);
+      }
+      .inv.off .word .i {
+        color: var(--el-icon-muted);
+      }
+      .aside {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-top: 2px;
+      }
+      /* The per-repo expansion — the SECOND dimension, on demand */
+      .more {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--el-link);
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+      }
+      .perrepo {
+        margin-top: 8px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .perrepo .r {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .perrepo .r .nm {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+      }
+      .perrepo .r .st {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .perrepo .r.ok .st .i {
+        color: var(--el-success);
+      }
+      .perrepo .r.pending .st .i {
+        color: var(--el-info);
+      }
+      .perrepo .r.bad .st .i {
+        color: var(--el-danger);
+      }
+      .perrepo .r.none .st .i {
+        color: var(--el-warning);
+      }
+
+      /* Callouts + banners */
+      .note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        background: var(--el-notice-info-bg);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        line-height: 1.5;
+      }
+      .note .i {
+        color: var(--el-text-strong);
+        margin-top: 1px;
+      }
+      .alert {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .alert.warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .alert.bad {
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+        padding: 28px 16px;
+      }
+      .empty .ic {
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        background: var(--el-card-icon-bg);
+        color: var(--el-card-icon-fg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .empty h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        max-width: 44ch;
+        line-height: 1.55;
+      }
+      .skeleton {
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        height: 10px;
+      }
+      /* IdentityHeader — mirrored from gitSettingsPrimitives.tsx */
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .identity .disc {
+        width: 40px;
+        height: 40px;
+        background: var(--el-avatar-fallback);
+        font-size: 14px;
+        margin: 0;
+      }
+      .identity .col {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .identity .top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .identity .lg {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .identity .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* Door halo + gallery */
+      .halo {
+        position: relative;
+        outline: 2px solid var(--el-accent);
+        outline-offset: 3px;
+        border-radius: var(--radius-control);
+      }
+      .doortag {
+        position: absolute;
+        top: -8px;
+        right: 6px;
+        transform: translateY(-100%);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: var(--radius-badge);
+        padding: 3px 8px;
+        white-space: nowrap;
+      }
+      .gallery {
+        padding: 20px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        background: var(--el-surface-soft);
+      }
+      .state {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .state .cap {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .state .cap code {
+        align-self: flex-start;
+      }
+      .state .box {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 4px 14px;
+      }
+      .twoup {
+        align-items: start;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        padding: 20px;
+        background: var(--el-surface-soft);
+      }
+      .frame {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .frame .cap {
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        padding: 10px 14px 0;
+      }
+      .frame .in {
+        padding: 12px 14px 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-key-round" viewBox="0 0 24 24">
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <symbol id="i-mail" viewBox="0 0 24 24">
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </symbol>
+        <symbol id="i-badge-check" viewBox="0 0 24 24">
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol id="i-user-plus" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" x2="19" y1="8" y2="14" />
+          <line x1="22" x2="16" y1="11" y2="11" />
+        </symbol>
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <symbol id="i-circle-alert" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </symbol>
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-external-link" viewBox="0 0 24 24">
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+        <symbol id="i-shield-off" viewBox="0 0 24 24">
+          <path d="m2 2 20 20" />
+          <path
+            d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"
+          />
+          <path
+            d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"
+          />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24">
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </symbol>
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <symbol id="i-workflow" viewBox="0 0 24 24">
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </symbol>
+        <symbol id="i-columns-3" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </symbol>
+        <symbol id="i-gauge" viewBox="0 0 24 24">
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 24 24">
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <symbol id="i-box" viewBox="0 0 24 24">
+          <path
+            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+          />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        </symbol>
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <symbol id="i-bot" viewBox="0 0 24 24">
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </symbol>
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 24 24">
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </symbol>
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="i-send" viewBox="0 0 24 24">
+          <path
+            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+          />
+          <path d="m21.854 2.147-10.94 10.939" />
+        </symbol>
+        <symbol id="i-file-warning" viewBox="0 0 24 24">
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            fill="currentColor"
+            stroke="none"
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.3-.54-1.53.11-3.19 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.89.12 3.19.77.84 1.23 1.92 1.23 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="board">
+      <header>
+        <h1>Team code access — who on the team can clone this project</h1>
+        <p>
+          MOTIR-1944 · Story MOTIR-1775. Every repository Motir creates is Motir-owned and
+          <b>private</b>, and MOTIR-1900 lets exactly one person in — the member who approved the
+          plan. This is the surface that lets in everyone else, drawn against the answers
+          <b>MOTIR-1943</b> already decided and the invitation vocabulary
+          <code>design/repository-set</code> §5 already owns. Rendered against the shipped
+          <code>/settings/project/members</code> pane and settings rail before anything was drawn.
+        </p>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 0 — THE DOORS
+           ══════════════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="panel-label">Panel 0 · <b>The doors — where you get in</b></div>
+        <p class="panel-note">
+          MOTIR-1943 Q4 decided the surface is
+          <b>project settings, on or beside Access &amp; members</b>, and left "a section within
+          that pane or a sibling pane" to this card. It is a <b>sibling pane</b> in the same
+          <code>Access</code> group — <code>id: 'code-access'</code>,
+          <code>href: '/settings/project/code-access'</code>, <code>icon: KeyRound</code>,
+          <code>access: browse</code> — registered directly under <code>members</code> in
+          <code>lib/settings/projectSettingsNav.ts</code>. That registry is the SHIPPED extension
+          mechanism ("a later admin story mounts its page by ADDING an entry here — no layout
+          change") and it drives the rail, the ⌘K deep link and a totality test at once, so the door
+          cannot be forgotten. <b>Door 2</b> is the pointer at the foot of Access &amp; members: the
+          two panes answer the same question one level apart, so the pane a person is already
+          standing in says where the other half lives.
+        </p>
+        <div class="panel">
+          <div class="twoup">
+            <div class="frame">
+              <div class="cap">Door 1 · the settings rail (the permanent way back)</div>
+              <div class="in" style="padding: 12px 0 0">
+                <div class="rail" style="width: 100%; border-right: 0">
+                  <div class="back">
+                    <svg class="i"><use href="#i-arrow-left" /></svg>
+                    Back to Atlas
+                  </div>
+                  <div class="ident">
+                    <span class="sq">AT</span>
+                    <span>
+                      <span class="nm" style="display: block">Atlas</span>
+                      <span class="ky">ATL</span>
+                    </span>
+                  </div>
+                  <div class="eyebrow">Project settings</div>
+                  <div class="grp">General</div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                    Details
+                  </div>
+                  <div class="sep"></div>
+                  <div class="grp">Access</div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-users" /></svg>
+                    Members &amp; access
+                  </div>
+                  <div style="position: relative; margin: 26px 0 2px">
+                    <div class="rail-row on halo">
+                      <svg class="i"><use href="#i-key-round" /></svg>
+                      Code access
+                      <span class="doortag">New entry</span>
+                    </div>
+                  </div>
+                  <div class="sep"></div>
+                  <div class="grp">Work</div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-workflow" /></svg>
+                    Workflow
+                  </div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-columns-3" /></svg>
+                    Boards
+                  </div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-gauge" /></svg>
+                    Estimation
+                  </div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-tag" /></svg>
+                    Fields
+                  </div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-box" /></svg>
+                    Components
+                  </div>
+                  <div class="sep"></div>
+                  <div class="grp">Automation</div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-sparkles" /></svg>
+                    AI planning
+                  </div>
+                  <div class="rail-row">
+                    <svg class="i"><use href="#i-bot" /></svg>
+                    Rules
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="frame">
+              <div class="cap">Door 2 · the foot of Access &amp; members (the shipped pane)</div>
+              <div class="in">
+                <div class="card" style="padding: 16px">
+                  <div class="card-head" style="margin-bottom: 10px">
+                    <div class="titles">
+                      <h2>Members</h2>
+                      <span class="pill pill-neutral">
+                        <svg class="i xs"><use href="#i-users" /></svg>
+                        6
+                      </span>
+                    </div>
+                    <span class="combo" style="width: 11rem; height: var(--height-btn-sm)">
+                      Add a member…
+                      <svg class="i xs"><use href="#i-chevron-down" /></svg>
+                    </span>
+                  </div>
+                  <ul class="people">
+                    <li class="person" style="align-items: center">
+                      <span class="disc" style="margin: 0">M</span>
+                      <span class="who">
+                        <span class="nm">Marcus Reed</span>
+                        <span class="em">marcus@northwind.test</span>
+                      </span>
+                      <span class="pill pill-member">Member</span>
+                    </li>
+                    <li class="person" style="align-items: center">
+                      <span class="disc" style="margin: 0">T</span>
+                      <span class="who">
+                        <span class="nm">Tom Bekele</span>
+                        <span class="em">tom@northwind.test</span>
+                      </span>
+                      <span class="pill pill-viewer">Viewer</span>
+                    </li>
+                  </ul>
+                  <div style="position: relative; margin-top: 34px">
+                    <a
+                      class="halo"
+                      href="#"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 10px 12px;
+                        border: 1px solid var(--el-border);
+                        border-radius: var(--radius-card);
+                        text-decoration: none;
+                      "
+                    >
+                      <svg class="i lg" style="color: var(--el-icon-active)">
+                        <use href="#i-key-round" />
+                      </svg>
+                      <span style="flex: 1; min-width: 0">
+                        <span
+                          style="
+                            display: block;
+                            font-size: 13.5px;
+                            font-weight: 600;
+                            color: var(--el-text);
+                          "
+                          >Code access</span
+                        >
+                        <span style="display: block; font-size: 12px; color: var(--el-text-muted)"
+                          >4 of 5 people who can edit can clone this project's code</span
+                        >
+                      </span>
+                      <svg class="i" style="color: var(--el-icon-muted)">
+                        <use href="#i-chevron-right" />
+                      </svg>
+                      <span class="doortag">Cross-link</span>
+                    </a>
+                  </div>
+                </div>
+                <p
+                  style="
+                    margin: 12px 2px 0;
+                    font-size: 12px;
+                    line-height: 1.55;
+                    color: var(--el-text-secondary);
+                  "
+                >
+                  The count is the whole point of the pointer: it answers "is anybody locked out?"
+                  without leaving the pane, and it is the only place project membership and code
+                  access are stated side by side.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 1 — THE ROOM
+           ══════════════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="panel-label">
+          Panel 1 · <b>The room — /settings/project/code-access, an owner looking at the team</b>
+        </div>
+        <p class="panel-note">
+          The matrix is <b>N members × M repositories</b> and access is granted per repository, so
+          the surface has to choose an axis. It is <b>member-primary</b>: one row per invitable
+          member, with the repository SET named once at the top and the per-repo breakdown available
+          on the row. The reason is that the axis carrying the DECISIONS is the member — eligibility
+          (Q1) and a connected identity (Q3) are properties of a person and settle every repository
+          at once — while the repository axis varies only the invitation mechanics. It also puts the
+          surface in the same person-first grammar as the pane beside it.
+          <b>A set of three is the shape, not the exception</b>: the row summarises across the set
+          and only opens when the repositories disagree.
+        </p>
+        <div class="panel">
+          <div class="shell">
+            <div class="topbar">
+              <span class="ws">
+                <span class="sq">N</span>
+                Northwind
+                <svg class="i xs"><use href="#i-chevron-down" /></svg>
+              </span>
+              <span class="right">
+                <svg class="i"><use href="#i-search" /></svg>
+                <svg class="i"><use href="#i-plus" /></svg>
+                <span class="avatar-sm">O</span>
+              </span>
+            </div>
+            <div class="area">
+              <div class="rail">
+                <div class="back">
+                  <svg class="i"><use href="#i-arrow-left" /></svg>
+                  Back to Atlas
+                </div>
+                <div class="ident">
+                  <span class="sq">AT</span>
+                  <span>
+                    <span class="nm" style="display: block">Atlas</span>
+                    <span class="ky">ATL</span>
+                  </span>
+                </div>
+                <div class="eyebrow">Project settings</div>
+                <div class="grp">General</div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                  Details
+                </div>
+                <div class="sep"></div>
+                <div class="grp">Access</div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-users" /></svg>
+                  Members &amp; access
+                </div>
+                <div class="rail-row on">
+                  <svg class="i"><use href="#i-key-round" /></svg>
+                  Code access
+                </div>
+                <div class="sep"></div>
+                <div class="grp">Work</div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-workflow" /></svg>
+                  Workflow
+                </div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-columns-3" /></svg>
+                  Boards
+                </div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-gauge" /></svg>
+                  Estimation
+                </div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-tag" /></svg>
+                  Fields
+                </div>
+                <div class="rail-row">
+                  <svg class="i"><use href="#i-box" /></svg>
+                  Components
+                </div>
+              </div>
+              <div class="pane">
+                <div class="pane-col">
+                  <div class="pane-title">
+                    <h1>Code access</h1>
+                    <p>
+                      Who on <b>Atlas</b> can clone and push to the repositories Motir made for it.
+                    </p>
+                  </div>
+
+                  <div class="card">
+                    <div class="card-head">
+                      <div class="titles">
+                        <h2>People</h2>
+                        <span class="pill pill-neutral">
+                          <svg class="i xs"><use href="#i-users" /></svg>
+                          4 of 5 can clone
+                        </span>
+                      </div>
+                      <button class="btn btn-ghost btn-sm" type="button">
+                        <svg class="i xs"><use href="#i-refresh-cw" /></svg>
+                        Refresh
+                      </button>
+                    </div>
+
+                    <div class="set">
+                      <span class="lbl">3 repositories:</span>
+                      <span class="repo-chip">
+                        <svg class="gh" style="width: 12px; height: 12px">
+                          <use href="#i-github" /></svg
+                        >motir-projects/atlas-web
+                      </span>
+                      <span class="repo-chip">
+                        <svg class="gh" style="width: 12px; height: 12px">
+                          <use href="#i-github" /></svg
+                        >motir-projects/atlas-api
+                      </span>
+                      <span class="repo-chip">
+                        <svg class="gh" style="width: 12px; height: 12px">
+                          <use href="#i-github" /></svg
+                        >motir-projects/atlas-shared
+                      </span>
+                    </div>
+
+                    <ul class="people">
+                      <li class="person">
+                        <span class="disc">O</span>
+                        <span class="who">
+                          <span class="nm">Olivia Owner <span class="you">(you)</span></span>
+                          <span class="em">olivia@northwind.test</span>
+                          <span class="inv ok">
+                            <span class="word">
+                              <svg class="i"><use href="#i-badge-check" /></svg>
+                              Has access
+                            </span>
+                            <span class="sep">·</span>
+                            <span><b>@oliviaowner</b> can clone and push to all 3</span>
+                          </span>
+                        </span>
+                        <span class="aside">
+                          <span class="pill pill-admin">Admin</span>
+                        </span>
+                      </li>
+
+                      <li class="person">
+                        <span class="disc">M</span>
+                        <span class="who">
+                          <span class="nm">Marcus Reed</span>
+                          <span class="em">marcus@northwind.test</span>
+                          <span class="inv ok">
+                            <span class="word">
+                              <svg class="i"><use href="#i-badge-check" /></svg>
+                              Has access
+                            </span>
+                            <span class="sep">·</span>
+                            <span><b>@marcusreed</b> can clone and push to all 3</span>
+                          </span>
+                        </span>
+                        <span class="aside">
+                          <span class="pill pill-neutral">Push</span>
+                        </span>
+                      </li>
+
+                      <li class="person">
+                        <span class="disc">P</span>
+                        <span class="who">
+                          <span class="nm">Priya Nair</span>
+                          <span class="em">priya@northwind.test</span>
+                          <span class="inv pending">
+                            <span class="word">
+                              <svg class="i"><use href="#i-mail" /></svg>
+                              Invitation sent
+                            </span>
+                            <span class="sep">·</span>
+                            <span>to <b>@priyanair</b>, waiting to be accepted on GitHub</span>
+                          </span>
+                          <button class="more" type="button">
+                            <svg class="i xs"><use href="#i-chevron-right" /></svg>
+                            3 repositories
+                          </button>
+                        </span>
+                        <span class="aside">
+                          <button class="btn btn-ghost btn-sm" type="button">
+                            Resend invitation
+                          </button>
+                        </span>
+                      </li>
+
+                      <li class="person">
+                        <span class="disc">D</span>
+                        <span class="who">
+                          <span class="nm">Dana Ostrowski</span>
+                          <span class="em">dana@northwind.test</span>
+                          <span class="inv none" role="status">
+                            <span class="word">
+                              <svg class="i"><use href="#i-user-plus" /></svg>
+                              Not invited yet
+                            </span>
+                            <span class="sep">·</span>
+                            <span>Dana hasn't connected a GitHub account</span>
+                          </span>
+                          <span
+                            style="
+                              margin-top: 4px;
+                              font-size: 12px;
+                              color: var(--el-text-muted);
+                              line-height: 1.5;
+                            "
+                          >
+                            Only Dana can connect it — Motir invites the account a person connects,
+                            never one typed in for them.
+                          </span>
+                        </span>
+                        <span class="aside"></span>
+                      </li>
+
+                      <li class="person">
+                        <span class="disc">S</span>
+                        <span class="who">
+                          <span class="nm">Sofia Marchetti</span>
+                          <span class="em">sofia@northwind.test</span>
+                          <span class="inv none">
+                            <span class="word">
+                              <svg class="i"><use href="#i-user-plus" /></svg>
+                              Not invited yet
+                            </span>
+                            <span class="sep">·</span>
+                            <span><b>@sofiam</b> is ready to be invited</span>
+                          </span>
+                        </span>
+                        <span class="aside">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="gh"><use href="#i-github" /></svg>
+                            Invite
+                          </button>
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div class="card">
+                    <div class="card-head" style="margin-bottom: 10px">
+                      <div class="titles">
+                        <h2>Not eligible</h2>
+                        <span class="pill pill-neutral">1</span>
+                      </div>
+                    </div>
+                    <p
+                      style="
+                        margin: 0 0 10px;
+                        font-size: 12.5px;
+                        color: var(--el-text-muted);
+                        line-height: 1.55;
+                      "
+                    >
+                      Code access follows the project's own edit permission. Someone who can't edit
+                      Atlas is never invited to its code.
+                    </p>
+                    <ul class="people">
+                      <li class="person">
+                        <span class="disc">T</span>
+                        <span class="who">
+                          <span class="nm">Tom Bekele</span>
+                          <span class="em">tom@northwind.test</span>
+                          <span class="inv off">
+                            <span class="word">
+                              <svg class="i"><use href="#i-shield-off" /></svg>
+                              No code access
+                            </span>
+                            <span class="sep">·</span>
+                            <span>Viewers can read Atlas but not edit it</span>
+                          </span>
+                        </span>
+                        <span class="aside">
+                          <a class="btn btn-ghost btn-sm link" href="#">Change role</a>
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 2 — EVERY PER-MEMBER STATE
+           ══════════════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="panel-label">
+          Panel 2 · <b>Every per-member state, drawn — with its reason and its forward path</b>
+        </div>
+        <p class="panel-note">
+          Six states, and each one carries an <b>icon and a word</b>, never colour alone — the rule
+          <code>design/repository-set</code> §5 set for the three invitation states, extended to the
+          three a per-MEMBER view adds. The first three ARE §5's vocabulary (<code>accepted</code> /
+          <code>invited</code> / <code>not_invited</code>, derived by
+          <code>lib/projectRepos/access.ts</code>); there is no second vocabulary. The last three
+          are not row states at all — they are reasons a member has no row to be in, which is
+          exactly why they could not exist on the single-user step.
+        </p>
+        <div class="panel">
+          <div class="gallery">
+            <div class="state">
+              <div class="cap">
+                <code>accepted</code>
+                <span
+                  >Settled — the only state in which a person can actually clone. Nothing is
+                  offered, because nothing is left to do.</span
+                >
+              </div>
+              <div class="box">
+                <div class="person" style="border-bottom: 0">
+                  <span class="disc">M</span>
+                  <span class="who">
+                    <span class="nm">Marcus Reed</span>
+                    <span class="em">marcus@northwind.test</span>
+                    <span class="inv ok">
+                      <span class="word">
+                        <svg class="i"><use href="#i-badge-check" /></svg>
+                        Has access
+                      </span>
+                      <span class="sep">·</span>
+                      <span><b>@marcusreed</b> can clone and push to all 3</span>
+                    </span>
+                  </span>
+                  <span class="aside"><span class="pill pill-neutral">Push</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="state">
+              <div class="cap">
+                <code>invited</code>
+                <span
+                  >Sent, not yet accepted. GitHub owns the acceptance, so Motir shows the truth and
+                  a way back to it rather than pretending to know more.</span
+                >
+              </div>
+              <div class="box">
+                <div class="person" style="border-bottom: 0">
+                  <span class="disc">P</span>
+                  <span class="who">
+                    <span class="nm">Priya Nair</span>
+                    <span class="em">priya@northwind.test</span>
+                    <span class="inv pending">
+                      <span class="word">
+                        <svg class="i"><use href="#i-mail" /></svg>
+                        Invitation sent
+                      </span>
+                      <span class="sep">·</span>
+                      <span>to <b>@priyanair</b>, waiting to be accepted on GitHub</span>
+                    </span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-ghost btn-sm" type="button">Resend invitation</button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="state">
+              <div class="cap">
+                <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px"
+                  ><code>not_invited</code> · has an identity</span
+                >
+                <span
+                  >Motir knows the account and simply hasn't asked yet — an invitable person, so the
+                  action is offered right here.</span
+                >
+              </div>
+              <div class="box">
+                <div class="person" style="border-bottom: 0">
+                  <span class="disc">S</span>
+                  <span class="who">
+                    <span class="nm">Sofia Marchetti</span>
+                    <span class="em">sofia@northwind.test</span>
+                    <span class="inv none">
+                      <span class="word">
+                        <svg class="i"><use href="#i-user-plus" /></svg>
+                        Not invited yet
+                      </span>
+                      <span class="sep">·</span>
+                      <span><b>@sofiam</b> is ready to be invited</span>
+                    </span>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-secondary btn-sm" type="button">
+                      <svg class="gh"><use href="#i-github" /></svg>
+                      Invite
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="state">
+              <div class="cap">
+                <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px"
+                  ><code>not_invited</code> · no GitHub identity — <b>seen by someone else</b></span
+                >
+                <span
+                  >MOTIR-1943 Q3: a reason, and no action the viewer could take. There is no
+                  affordance here at all — not a disabled one — because nothing about this row is
+                  theirs to fix.</span
+                >
+              </div>
+              <div class="box">
+                <div class="person" style="border-bottom: 0">
+                  <span class="disc">D</span>
+                  <span class="who">
+                    <span class="nm">Dana Ostrowski</span>
+                    <span class="em">dana@northwind.test</span>
+                    <span class="inv none" role="status">
+                      <span class="word">
+                        <svg class="i"><use href="#i-user-plus" /></svg>
+                        Not invited yet
+                      </span>
+                      <span class="sep">·</span>
+                      <span>Dana hasn't connected a GitHub account</span>
+                    </span>
+                    <span
+                      style="
+                        margin-top: 4px;
+                        font-size: 12px;
+                        color: var(--el-text-muted);
+                        line-height: 1.5;
+                      "
+                    >
+                      Only Dana can connect it — Motir invites the account a person connects, never
+                      one typed in for them.
+                    </span>
+                  </span>
+                  <span class="aside"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="state">
+              <div class="cap">
+                <code>invite failed</code>
+                <span
+                  >GitHub refused. The row it belongs to is still <code>created</code> and the
+                  repository still exists — an invitation failure NEVER fails the row (MOTIR-1900's
+                  degrade-gracefully contract), so this is red on ONE line, not on the person.</span
+                >
+              </div>
+              <div class="box">
+                <div class="person" style="border-bottom: 0">
+                  <span class="disc">J</span>
+                  <span class="who">
+                    <span class="nm">Jonas Vik</span>
+                    <span class="em">jonas@northwind.test</span>
+                    <span class="inv bad">
+                      <span class="word">
+                        <svg class="i"><use href="#i-triangle-alert" /></svg>
+                        Couldn't invite
+                      </span>
+                      <span class="sep">·</span>
+                      <span>GitHub turned the invitation down on <b>atlas-api</b></span>
+                    </span>
+                    <button class="more" type="button">
+                      <svg class="i xs"><use href="#i-chevron-right" /></svg>
+                      3 repositories · 2 sent
+                    </button>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-secondary btn-sm" type="button">Try again</button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="state">
+              <div class="cap">
+                <code>not eligible</code>
+                <span
+                  >Q1: the invitable set is the people the shipped <code>canEdit</code> policy lets
+                  edit the project. A viewer is not one of them — settled, with the one thing that
+                  would change it.</span
+                >
+              </div>
+              <div class="box">
+                <div class="person" style="border-bottom: 0">
+                  <span class="disc">T</span>
+                  <span class="who">
+                    <span class="nm">Tom Bekele</span>
+                    <span class="em">tom@northwind.test</span>
+                    <span class="inv off">
+                      <span class="word">
+                        <svg class="i"><use href="#i-shield-off" /></svg>
+                        No code access
+                      </span>
+                      <span class="sep">·</span>
+                      <span>Viewers can read Atlas but not edit it</span>
+                    </span>
+                  </span>
+                  <span class="aside">
+                    <a class="btn btn-ghost btn-sm link" href="#">Change role</a>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 3 — THE SECOND DIMENSION
+           ══════════════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="panel-label">
+          Panel 3 · <b>The second dimension — a row opened, per repository</b>
+        </div>
+        <p class="panel-note">
+          The summary line is a <b>roll-up across the set</b>, and it is honest about disagreement
+          rather than averaging it away: <code>Has access</code> only when every repository is
+          accepted, <code>Couldn't invite</code> the moment one failed, otherwise the count. A row
+          <b>opens by default when the repositories disagree</b> and stays closed when they agree —
+          so the three-repo case reads as one line, and the case that actually needs three lines
+          gets them. The per-repo list is where Q2's permission lives too: <code>push</code> for a
+          teammate, <code>admin</code> for the person who approved the plan.
+        </p>
+        <div class="panel">
+          <div style="padding: 20px; background: var(--el-surface-soft)">
+            <div class="card" style="max-width: 42rem; margin: 0 auto">
+              <ul class="people">
+                <li class="person">
+                  <span class="disc">J</span>
+                  <span class="who">
+                    <span class="nm">Jonas Vik</span>
+                    <span class="em">jonas@northwind.test</span>
+                    <span class="inv bad">
+                      <span class="word">
+                        <svg class="i"><use href="#i-triangle-alert" /></svg>
+                        Couldn't invite
+                      </span>
+                      <span class="sep">·</span>
+                      <span>GitHub turned the invitation down on <b>atlas-api</b></span>
+                    </span>
+                    <button class="more" type="button" aria-expanded="true">
+                      <svg class="i xs"><use href="#i-chevron-down" /></svg>
+                      3 repositories · 2 sent
+                    </button>
+                    <div class="perrepo">
+                      <div class="r pending">
+                        <svg class="gh" style="color: var(--el-icon-muted)">
+                          <use href="#i-github" />
+                        </svg>
+                        <span class="nm">motir-projects/atlas-web</span>
+                        <span class="pill pill-neutral">push</span>
+                        <span class="st">
+                          <svg class="i xs"><use href="#i-mail" /></svg>
+                          Invitation sent
+                        </span>
+                      </div>
+                      <div class="r bad">
+                        <svg class="gh" style="color: var(--el-icon-muted)">
+                          <use href="#i-github" />
+                        </svg>
+                        <span class="nm">motir-projects/atlas-api</span>
+                        <span class="pill pill-neutral">push</span>
+                        <span class="st">
+                          <svg class="i xs"><use href="#i-triangle-alert" /></svg>
+                          Couldn't invite
+                        </span>
+                      </div>
+                      <div class="r pending">
+                        <svg class="gh" style="color: var(--el-icon-muted)">
+                          <use href="#i-github" />
+                        </svg>
+                        <span class="nm">motir-projects/atlas-shared</span>
+                        <span class="pill pill-neutral">push</span>
+                        <span class="st">
+                          <svg class="i xs"><use href="#i-mail" /></svg>
+                          Invitation sent
+                        </span>
+                      </div>
+                    </div>
+                  </span>
+                  <span class="aside">
+                    <button class="btn btn-secondary btn-sm" type="button">Try again</button>
+                  </span>
+                </li>
+
+                <li class="person">
+                  <span class="disc">O</span>
+                  <span class="who">
+                    <span class="nm">Olivia Owner <span class="you">(you)</span></span>
+                    <span class="em">olivia@northwind.test</span>
+                    <span class="inv ok">
+                      <span class="word">
+                        <svg class="i"><use href="#i-badge-check" /></svg>
+                        Has access
+                      </span>
+                      <span class="sep">·</span>
+                      <span><b>@oliviaowner</b> can clone and push to all 3</span>
+                    </span>
+                    <button class="more" type="button" aria-expanded="true">
+                      <svg class="i xs"><use href="#i-chevron-down" /></svg>
+                      3 repositories
+                    </button>
+                    <div class="perrepo">
+                      <div class="r ok">
+                        <svg class="gh" style="color: var(--el-icon-muted)">
+                          <use href="#i-github" />
+                        </svg>
+                        <span class="nm">motir-projects/atlas-web</span>
+                        <span class="pill pill-neutral">admin</span>
+                        <span class="st">
+                          <svg class="i xs"><use href="#i-badge-check" /></svg>
+                          Has access
+                        </span>
+                      </div>
+                      <div class="r ok">
+                        <svg class="gh" style="color: var(--el-icon-muted)">
+                          <use href="#i-github" />
+                        </svg>
+                        <span class="nm">motir-projects/atlas-api</span>
+                        <span class="pill pill-neutral">admin</span>
+                        <span class="st">
+                          <svg class="i xs"><use href="#i-badge-check" /></svg>
+                          Has access
+                        </span>
+                      </div>
+                      <div class="r ok">
+                        <svg class="gh" style="color: var(--el-icon-muted)">
+                          <use href="#i-github" />
+                        </svg>
+                        <span class="nm">motir-projects/atlas-shared</span>
+                        <span class="pill pill-neutral">admin</span>
+                        <span class="st">
+                          <svg class="i xs"><use href="#i-badge-check" /></svg>
+                          Has access
+                        </span>
+                      </div>
+                    </div>
+                  </span>
+                  <span class="aside"><span class="pill pill-admin">Admin</span></span>
+                </li>
+              </ul>
+            </div>
+            <p
+              style="
+                max-width: 42rem;
+                margin: 14px auto 0;
+                font-size: 12.5px;
+                line-height: 1.6;
+                color: var(--el-text-secondary);
+              "
+            >
+              A <code>connected</code> row — a repository the team already owned and granted Motir —
+              carries no invitation line at all and is left out of the count, for the reason
+              <code>needsCollaboratorInvite</code> gives in code: inviting somebody to a repository
+              they already own is at best a no-op. The same is true of a <code>skipped</code> row,
+              which is why a partial set needs no special case.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 4 — THE TEAMMATE'S OWN VIEW
+           ══════════════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="panel-label">
+          Panel 4 · <b>The same table, seen by the teammate — the connect prompt lands here</b>
+        </div>
+        <p class="panel-note">
+          MOTIR-1943 Q3 in one screen: <b>Dana, signed in as Dana</b>. Her own row is the only one
+          that offers <code>Connect GitHub</code>, and it is offered because it is the one thing she
+          — and nobody else — can do. Every other row reads exactly as it did for the owner. The
+          prompt is the <b>shipped</b> connect pane's grant 1 (identity), the same
+          <code>GithubIdentity.githubLogin</code> MOTIR-1900 reads: no repository permission is
+          asked for, because none is needed to be invited to one. This is also why this pane exists
+          rather than living inside the plan-approval step — a teammate is never standing at plan
+          approval, and this is a surface they actually reach.
+        </p>
+        <div class="panel">
+          <div style="padding: 20px; background: var(--el-surface-soft)">
+            <div style="max-width: 42rem; margin: 0 auto">
+              <div class="pane-title" style="margin-bottom: 20px">
+                <h1>Code access</h1>
+                <p>Who on <b>Atlas</b> can clone and push to the repositories Motir made for it.</p>
+              </div>
+
+              <div class="card" style="margin-bottom: 16px">
+                <div class="identity">
+                  <span class="disc">D</span>
+                  <span class="col">
+                    <span class="top">
+                      <span class="lg">You aren't connected to GitHub yet</span>
+                    </span>
+                    <span class="cap"
+                      >Atlas's code is private. Connect GitHub and Motir invites you to all 3
+                      repositories.</span
+                    >
+                  </span>
+                  <button class="btn btn-primary" type="button">
+                    <svg class="gh"><use href="#i-github" /></svg>
+                    Connect GitHub
+                  </button>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div class="titles">
+                    <h2>People</h2>
+                    <span class="pill pill-neutral">
+                      <svg class="i xs"><use href="#i-users" /></svg>
+                      4 of 5 can clone
+                    </span>
+                  </div>
+                </div>
+                <div class="set">
+                  <span class="lbl">3 repositories:</span>
+                  <span class="repo-chip">
+                    <svg class="gh" style="width: 12px; height: 12px">
+                      <use href="#i-github" /></svg
+                    >motir-projects/atlas-web
+                  </span>
+                  <span class="repo-chip">
+                    <svg class="gh" style="width: 12px; height: 12px">
+                      <use href="#i-github" /></svg
+                    >motir-projects/atlas-api
+                  </span>
+                  <span class="repo-chip">
+                    <svg class="gh" style="width: 12px; height: 12px">
+                      <use href="#i-github" /></svg
+                    >motir-projects/atlas-shared
+                  </span>
+                </div>
+                <ul class="people">
+                  <li class="person">
+                    <span class="disc">D</span>
+                    <span class="who">
+                      <span class="nm">Dana Ostrowski <span class="you">(you)</span></span>
+                      <span class="em">dana@northwind.test</span>
+                      <span class="inv none" role="status">
+                        <span class="word">
+                          <svg class="i"><use href="#i-user-plus" /></svg>
+                          Not invited yet
+                        </span>
+                        <span class="sep">·</span>
+                        <span>Motir doesn't know your GitHub account yet</span>
+                      </span>
+                    </span>
+                    <span class="aside">
+                      <button class="btn btn-secondary btn-sm" type="button">
+                        <svg class="gh"><use href="#i-github" /></svg>
+                        Connect GitHub
+                      </button>
+                    </span>
+                  </li>
+                  <li class="person">
+                    <span class="disc">O</span>
+                    <span class="who">
+                      <span class="nm">Olivia Owner</span>
+                      <span class="em">olivia@northwind.test</span>
+                      <span class="inv ok">
+                        <span class="word">
+                          <svg class="i"><use href="#i-badge-check" /></svg>
+                          Has access
+                        </span>
+                        <span class="sep">·</span>
+                        <span><b>@oliviaowner</b> can clone and push to all 3</span>
+                      </span>
+                    </span>
+                    <span class="aside"><span class="pill pill-admin">Admin</span></span>
+                  </li>
+                  <li class="person">
+                    <span class="disc">P</span>
+                    <span class="who">
+                      <span class="nm">Priya Nair</span>
+                      <span class="em">priya@northwind.test</span>
+                      <span class="inv pending">
+                        <span class="word">
+                          <svg class="i"><use href="#i-mail" /></svg>
+                          Invitation sent
+                        </span>
+                        <span class="sep">·</span>
+                        <span>to <b>@priyanair</b>, waiting to be accepted on GitHub</span>
+                      </span>
+                    </span>
+                    <span class="aside"></span>
+                  </li>
+                </ul>
+                <div class="note" style="margin-top: 14px">
+                  <svg class="i"><use href="#i-info" /></svg>
+                  <span
+                    >You can see where everyone stands. Inviting somebody, and changing who's
+                    eligible, is a project admin's to do.</span
+                  >
+                </div>
+              </div>
+            </div>
+            <p
+              style="
+                max-width: 42rem;
+                margin: 14px auto 0;
+                font-size: 12.5px;
+                line-height: 1.6;
+                color: var(--el-text-secondary);
+              "
+            >
+              Once she connects, her row settles through the SAME two states everyone else's does —
+              <code>Invitation sent</code>, then <code>Has access</code> — and the header card
+              disappears, replaced by the shipped <code>IdentityHeader</code> line below.
+            </p>
+            <div class="card" style="max-width: 42rem; margin: 14px auto 0">
+              <div class="identity">
+                <span class="disc">D</span>
+                <span class="col">
+                  <span class="top">
+                    <span class="lg">@danaostrowski</span>
+                    <span class="pill pill-success">
+                      <svg class="i xs"><use href="#i-badge-check" /></svg>
+                      Verified
+                    </span>
+                  </span>
+                  <span class="cap">The GitHub account Motir invites to this project's code</span>
+                </span>
+                <button class="btn btn-ghost btn-sm" type="button">Use a different account</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 5 — EMPTY, LOADING, PARTIAL, ERROR
+           ══════════════════════════════════════════════════════════════════ -->
+      <section>
+        <div class="panel-label">
+          Panel 5 ·
+          <b>Empty · loading · partial · refused — the four states that aren't the happy one</b>
+        </div>
+        <p class="panel-note">
+          None of these is a dead end, and none of them is an error page. The pane always renders;
+          what changes is how much it can honestly say. <b>Refused</b> is the one worth reading
+          twice: GitHub turning an invitation down must never fail the repository row, so the
+          failure is stated per person, the repositories stay <code>created</code>, and the count at
+          the top counts what is TRUE rather than what was attempted.
+        </p>
+        <div class="panel">
+          <div class="twoup">
+            <div class="frame">
+              <div class="cap">A · No repositories yet</div>
+              <div class="in">
+                <div class="card" style="padding: 8px">
+                  <div class="empty">
+                    <span class="ic">
+                      <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    </span>
+                    <h3>Atlas has no code yet</h3>
+                    <p>
+                      When a plan is approved, Motir creates this project's repositories — and
+                      everyone who can edit Atlas gets invited to them. There is nothing to grant
+                      until then.
+                    </p>
+                    <a class="btn btn-secondary btn-sm" href="#">Review the plan</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="frame">
+              <div class="cap">B · The set is still being made</div>
+              <div class="in">
+                <div class="card" style="padding: 16px">
+                  <div class="card-head" style="margin-bottom: 12px">
+                    <div class="titles">
+                      <h2>People</h2>
+                      <span class="pill pill-neutral">
+                        <svg class="i xs"><use href="#i-loader-circle" /></svg>
+                        Setting up
+                      </span>
+                    </div>
+                  </div>
+                  <div class="alert warn" style="margin-bottom: 12px">
+                    <svg class="i"><use href="#i-circle-alert" /></svg>
+                    <span
+                      >Motir is still creating <b>atlas-shared</b>. Invitations go out as each
+                      repository lands — nothing here is lost if you leave.</span
+                    >
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 14px; padding: 4px 0">
+                    <div style="display: flex; gap: 12px; align-items: center">
+                      <span
+                        class="skeleton"
+                        style="width: 32px; height: 32px; border-radius: 9999px"
+                      ></span>
+                      <span style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+                        <span class="skeleton" style="width: 42%"></span>
+                        <span class="skeleton" style="width: 62%"></span>
+                      </span>
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center">
+                      <span
+                        class="skeleton"
+                        style="width: 32px; height: 32px; border-radius: 9999px"
+                      ></span>
+                      <span style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+                        <span class="skeleton" style="width: 36%"></span>
+                        <span class="skeleton" style="width: 55%"></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="frame">
+              <div class="cap">C · A partial set — one row skipped, one already yours</div>
+              <div class="in">
+                <div class="card" style="padding: 16px">
+                  <div class="set" style="margin-bottom: 12px">
+                    <span class="lbl">3 repositories:</span>
+                    <span class="repo-chip">
+                      <svg class="gh" style="width: 12px; height: 12px">
+                        <use href="#i-github" /></svg
+                      >atlas-web
+                    </span>
+                    <span class="repo-chip" style="opacity: 0.6">atlas-api · not created</span>
+                    <span class="repo-chip">northwind/atlas-shared · yours</span>
+                  </div>
+                  <ul class="people">
+                    <li class="person">
+                      <span class="disc">M</span>
+                      <span class="who">
+                        <span class="nm">Marcus Reed</span>
+                        <span class="em">marcus@northwind.test</span>
+                        <span class="inv ok">
+                          <span class="word">
+                            <svg class="i"><use href="#i-badge-check" /></svg>
+                            Has access
+                          </span>
+                          <span class="sep">·</span>
+                          <span><b>@marcusreed</b> can clone and push to <b>atlas-web</b></span>
+                        </span>
+                      </span>
+                      <span class="aside"><span class="pill pill-neutral">Push</span></span>
+                    </li>
+                  </ul>
+                  <p
+                    style="
+                      margin: 10px 0 0;
+                      font-size: 12px;
+                      color: var(--el-text-muted);
+                      line-height: 1.55;
+                    "
+                  >
+                    Only the repositories Motir made are counted. A repository the team already owns
+                    is reached through GitHub, not through Motir.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="frame">
+              <div class="cap">D · GitHub refused — the row survives it</div>
+              <div class="in">
+                <div class="card" style="padding: 16px">
+                  <div class="alert bad" style="margin-bottom: 12px">
+                    <svg class="i"><use href="#i-triangle-alert" /></svg>
+                    <span
+                      >GitHub wouldn't take 1 of 3 invitations for <b>Jonas Vik</b>. The
+                      repositories are fine — only the invitation failed, and it can be sent
+                      again.</span
+                    >
+                  </div>
+                  <ul class="people">
+                    <li class="person">
+                      <span class="disc">J</span>
+                      <span class="who">
+                        <span class="nm">Jonas Vik</span>
+                        <span class="em">jonas@northwind.test</span>
+                        <span class="inv bad">
+                          <span class="word">
+                            <svg class="i"><use href="#i-triangle-alert" /></svg>
+                            Couldn't invite
+                          </span>
+                          <span class="sep">·</span>
+                          <span>GitHub turned the invitation down on <b>atlas-api</b></span>
+                        </span>
+                      </span>
+                      <span class="aside">
+                        <button class="btn btn-secondary btn-sm" type="button">Try again</button>
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
