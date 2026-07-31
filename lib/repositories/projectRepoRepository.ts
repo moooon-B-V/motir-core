@@ -38,6 +38,9 @@ interface JoinedRow {
   position: string;
   createdAt: Date;
   updatedAt: Date;
+  ciActionsDisabled: boolean;
+  ciActionsIntentAt: Date | null;
+  ciActionsAppliedAt: Date | null;
   // The realized `github_repo` half — every column NULL when the row is
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
@@ -67,6 +70,9 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     proposalSignal: r.proposalSignal,
     githubRepoId: r.githubRepoId,
     position: r.position,
+    ciActionsDisabled: r.ciActionsDisabled,
+    ciActionsIntentAt: r.ciActionsIntentAt,
+    ciActionsAppliedAt: r.ciActionsAppliedAt,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     githubRepo:
@@ -135,6 +141,9 @@ export const projectRepoRepository = {
         pr."proposal_signal"   AS "proposalSignal",
         pr."github_repo_id"    AS "githubRepoId",
         pr."position"          AS "position",
+        pr."ci_actions_disabled"   AS "ciActionsDisabled",
+        pr."ci_actions_intent_at"  AS "ciActionsIntentAt",
+        pr."ci_actions_applied_at" AS "ciActionsAppliedAt",
         pr."created_at"        AS "createdAt",
         pr."updated_at"        AS "updatedAt",
         gr."id"                AS "repoRowId",
@@ -284,5 +293,130 @@ export const projectRepoRepository = {
   async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.projectRepo.deleteMany({ where: { id } });
     return result.count;
+  },
+
+  // ── The CI-Actions intent (MOTIR-1907) ────────────────────────────────────
+
+  /**
+   * Every MOTIR-OWNED, realized row in one workspace, with its mirror — the
+   * fan-out's unit of work.
+   *
+   * `state: 'created'` is the ownership test and it is exact: that state is
+   * reachable ONLY through `proposed → creating → created` (see
+   * `lib/projectRepos/transitions.ts`), i.e. only via the repo-creation
+   * primitive. A `connected` row is a repository the USER already owned and
+   * merely pointed Motir at — GitHub bills THEM for it, so Motir must never touch
+   * its Actions settings. Reading the ownership off the state (rather than off a
+   * separate flag someone has to remember to set) is what makes that guarantee
+   * structural.
+   *
+   * `githubRepoId: { not: null }` because an unrealized row has no repository on
+   * the host to act on at all.
+   */
+  async listMotirCreatedByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepoWithRealized[]> {
+    return tx.projectRepo.findMany({
+      where: { workspaceId, state: 'created', githubRepoId: { not: null } },
+      include: { githubRepo: true },
+      orderBy: { position: 'asc' },
+    });
+  },
+
+  /**
+   * The rows in one workspace whose INTENT is not yet asserted on the host —
+   * the convergence predicate, and the sweep's entire input.
+   *
+   * Expressed as raw SQL because it compares two COLUMNS
+   * (`applied_at < intent_at`), which Prisma's filter DSL cannot express; the
+   * partial index in the same migration is built on exactly this predicate. A
+   * NULL `applied_at` is "never asserted", which is why it is a separate OR arm
+   * rather than something the comparison would cover (SQL's NULL comparison
+   * yields NULL, not true — the trap this spells out).
+   *
+   * ⚠️ `ci_actions_intent_at IS NOT NULL` is the arm that keeps this from
+   * matching EVERY row. A freshly created repo has no intent and no applied
+   * stamp, and "no intent" is not "unconverged" — the default (Actions enabled)
+   * is already the desired state. Without this arm every untouched repository in
+   * every Motir-hosted workspace would look pending forever, and each sweep would
+   * issue a pointless `enabled: true` PUT for it — the exact runaway the
+   * no-op/idempotency criterion is meant to exclude.
+   */
+  async listCiActionsPendingByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "project_repository"
+      WHERE "workspace_id" = ${workspaceId}
+        AND "state" = 'created'
+        AND "github_repo_id" IS NOT NULL
+        AND "ci_actions_intent_at" IS NOT NULL
+        AND ("ci_actions_applied_at" IS NULL
+             OR "ci_actions_applied_at" < "ci_actions_intent_at")
+      ORDER BY "position" ASC
+    `;
+  },
+
+  /**
+   * Record the DESIRED Actions state on a set of rows, stamping when the intent
+   * changed.
+   *
+   * ⚠️ `ci_actions_disabled: { not: disabled }` in the WHERE is load-bearing, not
+   * an optimisation: it makes the write a no-op for rows that ALREADY hold this
+   * intent, so `ci_actions_intent_at` does not advance and a row that is already
+   * settled is not dragged back into the pending set. Without it, every
+   * entitlement pass would re-stamp every row and the sweep would re-issue a
+   * GitHub call per repo per pass, forever. Returns how many rows actually
+   * changed.
+   */
+  async setCiActionsIntent(
+    ids: string[],
+    disabled: boolean,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.projectRepo.updateMany({
+      where: { id: { in: ids }, ciActionsDisabled: { not: disabled } },
+      data: { ciActionsDisabled: disabled, ciActionsIntentAt: at },
+    });
+    return result.count;
+  },
+
+  /** How many rows in this workspace Motir is currently holding DISABLED — the
+   *  resume pass's "is this tenant affected at all?" probe, so an hourly job
+   *  costs one cheap count per Motir-hosted workspace instead of an entitlement
+   *  read per organization. */
+  async countCiActionsDisabledByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.projectRepo.count({ where: { workspaceId, ciActionsDisabled: true } });
+  },
+
+  /**
+   * Mark one row's intent as successfully asserted on the host. Called ONLY after
+   * GitHub has accepted the change — a failed call leaves the stamp behind the
+   * intent, which is exactly what keeps the row in the sweep.
+   *
+   * ⚠️ IT COPIES `ci_actions_intent_at` RATHER THAN STAMPING A CLOCK, and that is
+   * a correctness requirement, not tidiness. "Applied" means *this* intent has
+   * been asserted, so the honest value is the intent's own timestamp — and
+   * copying it makes convergence an EQUALITY between two values from ONE clock.
+   * Stamping `now()` instead mixes clock domains: the caller's `at` (a passed-in
+   * instant — the metering event's, or a test's) against the writer's wall clock,
+   * which can sit on either side of it. When wall-clock `now` runs AHEAD of the
+   * intent's `at`, `applied > intent` and the row reads converged the moment it
+   * is stamped — including for an intent whose call never happened. That is a
+   * silently under-enforced tenant, and it is what this shape makes impossible.
+   */
+  async markCiActionsApplied(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.$executeRaw`
+      UPDATE "project_repository"
+      SET "ci_actions_applied_at" = "ci_actions_intent_at"
+      WHERE "id" = ${id}
+    `;
   },
 };

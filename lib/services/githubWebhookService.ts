@@ -24,6 +24,7 @@ import {
 } from './changeRequestCiFeedback';
 import { ciMinutesMeterService, type MeterWorkflowRunOutcome } from './ciMinutesMeterService';
 import { ciAllowanceService } from './ciAllowanceService';
+import { ciActionsGateService } from './ciActionsGateService';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -313,6 +314,31 @@ export const githubWebhookService = {
           });
         } catch (err) {
           console.error('[githubWebhookService] CI-overage charge failed; delivery acked', {
+            runId: run.runId,
+            organizationId: result.organizationId,
+            error: err instanceof Error ? err.message : 'unknown',
+          });
+        }
+
+        // MOTIR-1907 — the REPOSITORY half. The charge above has committed, so
+        // the org's entitlement state is now settled for this run and the
+        // repository-side stop can be brought in line with it: at
+        // `ci_credits_exhausted`, disable Actions on every repository Motir owns
+        // for this org; on any other state, re-enable what this gate disabled.
+        //
+        // This is the natural trigger because it is the moment the state can
+        // CHANGE — an org crosses into exhausted by consuming minutes, and a
+        // metered run is exactly that consumption being recorded.
+        //
+        // Its own try/catch, separate from the charge's, and for a different
+        // reason: the two are independent side effects and a failure in either
+        // must not suppress the other. Best-effort like everything else on this
+        // path (§8.6) — the intent is persisted transactionally inside the gate,
+        // so a failure here loses nothing that the next sweep will not finish.
+        try {
+          await ciActionsGateService.syncForOrganization(result.organizationId);
+        } catch (err) {
+          console.error('[githubWebhookService] CI-Actions gate failed; delivery acked', {
             runId: run.runId,
             organizationId: result.organizationId,
             error: err instanceof Error ? err.message : 'unknown',

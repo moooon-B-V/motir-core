@@ -43,6 +43,11 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     proposalSignal: null,
     githubRepoId: 'gr-1',
     position: 'a0',
+    // The CI-Actions intent (MOTIR-1907) — irrelevant to name resolution, but
+    // part of the row's shape, so the fixture carries its default.
+    ciActionsDisabled: false,
+    ciActionsIntentAt: null,
+    ciActionsAppliedAt: null,
     createdAt: now,
     updatedAt: now,
     githubRepo: {
