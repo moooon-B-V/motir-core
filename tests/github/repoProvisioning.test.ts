@@ -436,6 +436,18 @@ describe('the 422 collision — matched on STATUS + message, never on the `error
     );
   });
 
+  it('does NOT treat a 422 with no message and no errors as a collision', async () => {
+    installFetch([
+      (c) => (c.method === 'POST' && c.url.includes('/generate') ? json(422, {}) : null),
+    ]);
+
+    // Nothing to match the phrase in, so it is not a collision — the row fails
+    // rather than adopting a repository nobody said exists.
+    await expect(repoProvisioningClient.provisionRepository(webRow)).rejects.toBeInstanceOf(
+      RepoProvisioningApiError,
+    );
+  });
+
   it('does NOT treat a non-collision 422 as a collision', async () => {
     installFetch([
       (c) =>
@@ -666,6 +678,22 @@ describe('no raw GitHub payload escapes', () => {
       providerRepoId: '12',
     });
     expect(logged).toHaveBeenCalled();
+  });
+
+  it('rejects a repository read carrying an id but no name', async () => {
+    installFetch([
+      (c) =>
+        c.method === 'POST' && c.url.includes('/generate')
+          ? json(201, { id: 5, name: webRow.name })
+          : null,
+      (c) => (c.method === 'GET' ? json(200, { id: 5, default_branch: 'main' }) : null),
+    ]);
+
+    // Half a repository is not a repository: without a NAME there is no checkout
+    // coordinate to record, so this fails rather than mirroring a nameless row.
+    await expect(repoProvisioningClient.provisionRepository(webRow)).rejects.toBeInstanceOf(
+      RepoProvisioningApiError,
+    );
   });
 
   it('rejects a repository read whose shape it cannot use', async () => {

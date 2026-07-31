@@ -509,12 +509,48 @@ describe('the establish run is honest about what it did NOT do', () => {
     expect(await readState(rowId, fx)).toMatchObject({ state: 'failed' });
   });
 
+  it('LOSES the claim race deterministically: a row claimed after the read is not attempted', async () => {
+    const fx = await makeWorkItemFixture();
+    const oneId = await addRow(fx, 'web', 'acme-web');
+    const twoId = await addRow(fx, 'api', 'acme-api');
+
+    // The exact TOCTOU the claim closes, staged rather than raced: row 2 is
+    // `proposed` when the set is READ, and another run claims it before this run
+    // reaches its `markCreating`. The hop is legality-checked under the row's
+    // lock, so this run loses it and backs off — WITHOUT having asked GitHub for
+    // a repository.
+    //
+    // Deliberately not two concurrent `establishSet` calls: which one wins there
+    // is a timing question, so the branch under test would only sometimes run.
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        if (body?.['name'] === 'acme-web') await projectRepoSetService.markCreating(twoId, fx.ctx);
+        return realFetch(url, init);
+      }),
+    );
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(result.rows.map((r) => [r.rowId, r.outcome])).toEqual([
+      [oneId, 'created'],
+      [twoId, 'not_attempted'],
+    ]);
+    // The loser left the row exactly as the winner holds it, and never created.
+    expect(await readState(twoId, fx)).toMatchObject({ state: 'creating' });
+    expect(existingRepos.has('acme-api')).toBe(false);
+    expect(await db.githubRepo.count()).toBe(1);
+  });
+
   it('two runs racing the same set: one creates, the other backs off — never two repositories', async () => {
     const fx = await makeWorkItemFixture();
     const rowId = await addRow(fx, 'web', 'acme-web');
 
-    // The real race the claim exists for: `markCreating` is legality-checked
-    // under the row's lock, so exactly one of these can take the row.
+    // The same guard under a REAL race. Which run wins is timing, so this asserts
+    // only the invariant that must hold either way; the branch itself is pinned
+    // deterministically by the test above.
     const [a, b] = await Promise.all([
       projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx),
       projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx),
@@ -622,6 +658,51 @@ describe('the establish run is honest about what it did NOT do', () => {
     // The first project keeps its repository, and there is still exactly one.
     expect(await readState(first.id, fx)).toMatchObject({ state: 'created', established: true });
     expect(await db.githubRepo.count()).toBe(1);
+  });
+
+  it('reports honestly when the actor loses ACCESS mid-run — the repository still exists', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    const rowId = await addRow(fx, 'web', 'acme-web');
+
+    // The actor is removed from the workspace while their repository is being
+    // created. Every write after that point is refused — including the one that
+    // would record the failure — and the repository on GitHub is NOT deleted to
+    // make the record tidy (ADR §4.2).
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        if (body?.['name'] === 'acme-web') {
+          await db.workspaceMembership.deleteMany({
+            where: { userId: fx.ownerId, workspaceId: fx.workspaceId },
+          });
+        }
+        return realFetch(url, init);
+      }),
+    );
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // An unclassifiable failure gets the generic sentence and the `UNEXPECTED`
+    // code; the detail goes to the log, never to the row.
+    expect(result.rows[0]).toMatchObject({
+      rowId,
+      outcome: 'failed',
+      failureCode: 'UNEXPECTED',
+    });
+    expect(result.rows[0]!.failureReason).toContain('acme-web');
+    // The failure could not even be written to the row — which is logged and
+    // survived, not thrown.
+    expect(result.rows[0]!.row).toBeNull();
+    expect(logged).toHaveBeenCalled();
+    // The repository exists and is mirrored. Read raw: the actor can no longer
+    // read through the service at all.
+    expect(await db.githubRepo.count()).toBe(1);
+    await expect(db.projectRepo.findUniqueOrThrow({ where: { id: rowId } })).resolves.toMatchObject(
+      { state: 'creating' },
+    );
   });
 
   it('returns an empty result for a project with no set at all', async () => {
