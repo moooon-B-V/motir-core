@@ -16,6 +16,17 @@ member. See
 Nothing in §1–§5 or §8–§9 changes: the numbers, the rate, the normalization, the pool and
 the attribution stand. The planning defect is logged as MOTIR-1909.
 
+**Amended:** 2026-07-31 (Yue · MOTIR-1915) — **the SUBSTRATE**: project CI stops running on
+GitHub-hosted runners and runs on **Motir-operated ephemeral self-hosted runners**, for
+repositories in `motir-projects` only. **§1–§4 are UNCHANGED** (the allowance, the rate, the
+normalization method and the pool are all denominated in Linux-equivalent minutes and are
+indifferent to who owns the machine); §5 is unchanged **except §5.8's reconciliation source**,
+whose text is corrected; §6–§8 are unchanged. The amendment adds a **new runner family at a
+deliberate ×1.00**, a **runner-selection seam** that keeps a handed-over repo portable, and a
+**second meter** for Motir's own cost. See
+[the amendment](#amendment-2026-07-31-yue--motir-1915--project-ci-runs-on-motirs-own-runner-fleet).
+Everything it records is BUILT by MOTIR-1916; the planning defect is logged as MOTIR-1917.
+
 Motir hosts some of its users' repositories, so Motir pays some of their CI bill. This
 record prices that: the **included allowance** every seat carries, the **rate** the
 overage draws from the credit ledger, how the pool is **pooled and reset**, how minutes
@@ -258,6 +269,12 @@ wall-clock alongside" requirement, and this section is why.)
 Motir has not priced is the safe direction — it never over-bills a user for a rate nobody
 decided. The log entry is the signal to add the row.
 
+> ⚠️ **EXTENDED by the 2026-07-31 amendment (MOTIR-1915) — the Motir fleet is a PRICED
+> family at ×1.00, which is not the same thing as this fallback.** §3.4's ×1.00 means _"no
+> row exists yet"_ and logs; the fleet's ×1.00 is a **decided product rate** and must not
+> log. The distinction, the family's classification rule, and why the fleet is NOT priced at
+> its cost ratio are **§M** of the amendment; the row itself is MOTIR-1923's.
+
 ### §4 — The pool is org-level, derived from membership, and resets on the calendar month
 
 **4.1 · Pooled at the ORG, never per member.** Credits are org-level (`AiOrganization` —
@@ -417,6 +434,16 @@ the three candidates are closing down and it must not build on them:
 This also means the ADR's own margin depends on the meter matching GitHub's billing within
 a tolerance MOTIR-1896 should state. §3.3's stored raw wall-clock + multiplier is what makes
 that reconciliation possible after the fact.
+
+> ⚠️ **CORRECTED by the 2026-07-31 amendment (MOTIR-1915) — the reconciliation source stops
+> covering the metered population.** The **webhook + jobs** half of 5.8 is unchanged and is
+> exactly why the substrate change costs the meter nothing (self-hosted jobs are reported by
+> the same jobs endpoint). The **audit** half is not: the enhanced-billing usage endpoint
+> reports **GitHub-BILLED minutes only**, so once a repo's CI runs on the fleet its
+> `product: Actions` rows go to ~0 while the meter keeps counting — the audit would log
+> unbounded drift on every repo, every month, and the signal would be worthless. The
+> corrected scope, and where the fleet's own audit source comes from instead, is **§Q** of
+> the amendment. The code change is MOTIR-1924's; this text is the record.
 
 ### §6 — Two thresholds, two named states, and only one of them stops anything
 
@@ -914,6 +941,330 @@ secondary catalog or a paraphrase (`notes.html` #88 — the DeepSeek/OpenRouter 
 effective-dated in storage so a repricing is a new row rather than a code change plus a
 backfill, and §5.8 records which endpoints are sunsetting so the meter is not built on one.
 
+### Amendment 2026-07-31 (Yue · MOTIR-1915) — project CI runs on MOTIR'S OWN RUNNER FLEET
+
+**Status:** accepted · **Date:** 2026-07-31 · **Card:** MOTIR-1915 · **Evidence pinned at:**
+`motir-core` `origin/main` @ `2fde16c5` (includes MOTIR-1901's shipped allowance),
+`nextjs-prisma-vercel-starter` + `nextjs-prisma-vercel-starter-with-design`
+`.github/workflows/**` · **GitHub contexts / expressions / self-hosted-label docs read
+2026-07-31** (sources in §R). Lettering continues the 2026-07-30 amendment's §A–§I.
+
+**The directive (Yue, 2026-07-30):** _"we drop the github CI minutes, we use our own CI
+minutes and charge the user for that."_ Project CI stops running on GitHub-hosted runners
+and runs on **Motir-operated ephemeral self-hosted runners**.
+
+**What this amendment changes, in one line.** The **substrate** under the metered minute —
+and almost nothing else. This record priced, metered and enforced a minute without ever
+asking who owns the compute that produces it; the answer turns out to be _"Motir does"_,
+which changes Motir's cost basis by roughly an order of magnitude and changes the
+customer-facing model **not at all**. **§1–§4 are UNCHANGED** — the allowance, the rate, the
+cost-ratio normalization method and the pool are all denominated in _Linux-equivalent
+minutes_, a unit deliberately defined against a price ratio rather than against a machine, so
+none of them has a dependency on who owns the runner. §5 is unchanged **except §5.8's
+reconciliation source** (§Q). §6–§8 are unchanged. What the amendment adds is a runner
+family, a portability seam, and a second meter. The planning defect — that the compute itself
+was an unowned deliverable through four decision cards — is logged as **MOTIR-1917**.
+
+**Everything recorded here is BUILT by MOTIR-1916.** This is a `decision` card: it fixes the
+shapes, it ships no behaviour. It also **does not re-scope MOTIR-1779**, whose permission set
+stays exactly as registered (§O).
+
+#### §J — SCOPE: the fleet serves `motir-projects`. Motir's OWN repos keep GitHub-hosted runners
+
+**Every repository in `moooon-B-V` — `motir-core`, `motir-ai`, `motir-gateway`, `motir-meta`,
+the two starters — keeps `runs-on: ubuntu-latest` and keeps billing to Motir's own GitHub
+plan.** This is a deliberate exclusion, not an oversight, and it is the one place where _not_
+dogfooding is the correct call. Three independent reasons, each sufficient:
+
+1. **Do not put your own release path on infrastructure you are still building.** If the
+   fleet degrades while `motir-core`'s CI depends on it, Motir loses the ability to ship the
+   fix _for the fleet_. Product outages and development capacity must not share a failure
+   domain.
+2. **`motir-core` is the heaviest CI Motir has, and is representative of no customer
+   project.** Measured at `origin/main` @ `2fde16c5`: **31 jobs / 141.6 job-minutes** per run
+   — eight `runs-on` sites in `.github/workflows/ci.yml` expanded by a 3-shard Vitest matrix,
+   an 11-leg Playwright `include:` matrix and a 9-job sandbox-image matrix. The metered
+   customer workload this ADR is written against is the **starter's** ~39 minutes (§Context).
+   Self-operating the 141-minute one while the fleet is new inverts the risk.
+3. **The two orgs need OPPOSITE settings, and a spending limit is per-org.**
+   `motir-projects` gets a **$0** limit so a GitHub-hosted run there fails loudly as a
+   misconfiguration (MOTIR-1908); `moooon-B-V` needs a **real, non-zero** limit because
+   GitHub-hosted _is_ its intended substrate. One account cannot hold both — an independent,
+   concrete reason the project repos must not live in `moooon-B-V`, on top of the ones
+   `project-repository-set.md` already gives.
+
+#### §K — What SURVIVES the substrate change — verified against shipped code, not assumed
+
+The change is far narrower than it looks, because the shipped meter is already
+runner-agnostic. Verified at `origin/main` @ `2fde16c5`:
+
+| Survives                       | Why, with the evidence                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The meter (MOTIR-1896)**     | `lib/services/ciMinutesMeterService.ts:253` reads the run's jobs through `provider.fetchWorkflowRunJobs`, which `lib/git/providers/github.ts:331` implements as the attempt-scoped `GET /repos/{o}/{r}/actions/runs/{id}/attempts/{n}/jobs`. **Self-hosted jobs are reported by that same endpoint**, with real `started_at` / `completed_at` / `labels` — so fleet runs are metered the day the fleet exists. **MOTIR-1896 needs NO change.** |
+| **The rate table (§3.3)**      | `lib/ciMetering/runnerRates.ts:65` is already the effective-dated `(family, effectiveFrom)` table §3.3 specified, and each metered row stores raw wall clock + label + applied multiplier. A new runner family is **a new row, never a backfill** — which is exactly the shape this amendment needs.                                                                                                                                           |
+| **The dispatch gate (§6.3)**   | `lib/services/ciAllowanceService.ts` shipped `getEntitlementState` + the zero-balance refusal (MOTIR-1901, merged 2026-07-30). The refusal is about a balance, not about a machine.                                                                                                                                                                                                                                                            |
+| **Pool, attribution, panel**   | §4, §5 and §7 are denominated in Linux-equivalent minutes and keyed on the repository OWNER. Neither quantity mentions a runner.                                                                                                                                                                                                                                                                                                               |
+| **The `isMeta` bypass (§4.4)** | The meta org skips the meter and the pool, and so skips this decision too — see §O for the axis trap this creates.                                                                                                                                                                                                                                                                                                                             |
+
+This is why §1–§4 are marked UNCHANGED rather than re-derived: nothing in them referenced the
+substrate in the first place.
+
+#### §L — Question 1: does the customer-facing price change? **NO. Nothing in §1 or §2 is re-opened.**
+
+The allowance (**300 Linux-equivalent min/seat/month**, 1,000-minute per-org floor) and the
+rate (**1 credit = 1 Linux-equivalent minute**) were derived from GitHub's `$0.006`/min
+Linux 2-core numéraire. Motir's own fleet cost is roughly **$0.0005–0.001/min** on spot
+compute — a **6–12× lower cost basis for the identical workload**.
+
+**Decision: keep the customer-facing numbers exactly as shipped; re-derive nothing.** Three
+reasons:
+
+- **The allowance was set against the value a seat gets, not against Motir's margin.** §1's
+  load-bearing argument is the AI-plan denominator — how many dispatches a funded plan
+  implies — and that argument does not move when Motir's cost per minute does.
+- **§1's numbers shipped days ago and are a user-visible commitment.** Re-pricing them on the
+  same week is churn against a promise, in exchange for nothing the user asked for.
+- **The improved margin is what funds the fleet's own operating cost**, which §P makes a real,
+  metered line rather than an assumption.
+
+**Recorded as a MARGIN note, not as a rate change:** at the shipped §2 rate a
+Linux-equivalent minute retails at ~$0.01 and now costs Motir ~$0.0005–0.001 instead of
+$0.006 — the §2.2 "40% gross margin" figure holds only for the GitHub-hosted remainder, and
+overage on fleet-run CI is materially better than that. **If a future decision wants to pass
+the saving on, it re-opens §1 with its OWN card** — not this one, and not silently. Note the
+precondition: MOTIR-1924 is what makes the real margin _measurable_, so any such re-opening
+should wait on it rather than on the estimate above.
+
+#### §M — Question 2: the Motir fleet family meters at **×1.00 — a PRODUCT decision, deliberately NOT a cost ratio**
+
+§3.1 defines the multiplier as a **price ratio against the Linux 2-core numéraire**, and its
+purpose is to make heterogeneous runners comparable **to the customer**. Pricing the fleet at
+its true cost ratio (~×0.1) would silently hand every org ~10× more effective CI — which is
+decision §L by the back door, made in a rate table instead of in the open.
+
+**Decision: the fleet's runner spec is fixed to be LINUX-2-CORE-EQUIVALENT, and the family
+meters at ×1.00 — parity with what the user was already promised.** So §3's table now carries
+one row whose multiplier is a _product_ decision while every other row remains a cost ratio,
+and **the ADR says so explicitly**, because an undocumented ×1.00 reads to the next reader as
+a missing row rather than a decided one.
+
+**⚠️ The fleet's `runs-on` LABEL is load-bearing, and the shipped classifier is why.**
+`classifyRunner` (`lib/ciMetering/runnerRates.ts:116`) walks a job's labels and returns on the
+**first substring match**, in this order: a larger-runner pattern (`N-core` / `large` /
+`xlarge`) → `unknown`; then `macos`/`osx`, `windows`, `arm`, and finally
+`ubuntu`|`linux` → `linux_x64`. Two failure modes fall straight out of that, and both are
+silent:
+
+- **A label containing `linux` classifies as the GitHub `linux_x64` family** — a _priced_ row
+  — so the fleet would meter at ×1.00 while being **indistinguishable from GitHub-hosted
+  Linux** in `runnerBreakdown`, and MOTIR-1923's row would never be exercised. The numbers
+  would be right and the attribution would be wrong, which is the worst kind of correct.
+- **A label containing `2-core` / `large` classifies as `unknown`** — the §3.4 fallback —
+  which meters at the same ×1.00 but **logs a warning on every single fleet run forever**,
+  drowning the one signal §3.4 exists to give.
+
+**Binding on MOTIR-1916's cards:**
+
+1. **Register fleet runners with `--no-default-labels`** and exactly one distinctive custom
+   label (GitHub otherwise auto-assigns `self-hosted` + the OS + the architecture — see §R).
+2. **The label must contain none of** `ubuntu`, `linux`, `arm`, `windows`, `macos`, `osx`,
+   and must not match `N-core` / `large` / `xlarge`. A name like **`motir-runner`** satisfies
+   both; `motir-linux-2core` fails both.
+3. **MOTIR-1923 adds a `motir_fleet` family** to `RunnerFamily`, a `classifyRunner` rule that
+   matches that exact label **before** the OS matches, and an effective-dated
+   `multiplier: 1.0` row carrying the §L rationale — so a fleet job is priced, attributed to
+   its own family, and does **not** trip §3.4's warning.
+4. **`usdPerMinute` on that row records MOTIR'S OWN cost, not GitHub's**, and is therefore
+   the one place where the row's price and its multiplier are deliberately not a ratio of
+   each other. Say so in the row's comment, or the next reader will "fix" it.
+
+**An honest unknown, named rather than assumed** (following §F's precedent): GitHub's REST
+reference for workflow jobs lists `labels` in the response schema without defining whether it
+reports the labels **requested** by `runs-on` or the labels the **runner** carries. The rules
+above are written to hold **either way** — a `--no-default-labels` runner with one custom
+label produces the same single-element set under both readings. **MOTIR-1920 must record which
+it is** from the first real fleet run, and MOTIR-1923's classification rule is then confirmed
+rather than assumed.
+
+#### §N — Question 3: a handed-over repo — the runner-selection seam, verified against GitHub's expression semantics
+
+This is the one question with a **user-visible failure mode**. MOTIR-711 transfers a
+Motir-owned repo to the user's own GitHub. If the starter's workflows hardcode
+`runs-on: [self-hosted, motir]`, a transferred repo has **zero runners**: its CI queues
+silently, and GitHub drops the queued jobs after 24 hours. The user's takeaway would be
+_"Motir handed me a repo whose CI is broken"_ — at the exact moment the product is trying to
+prove the opposite.
+
+**Decision: the workflow selects its runner through a configuration VARIABLE with a
+GitHub-hosted default.**
+
+```yaml
+runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+```
+
+`MOTIR_RUNNER` is set at the **org level on `motir-projects`** while Motir owns the repo, and
+is simply absent in the user's account after the transfer. The repo is then **portable by
+construction**: it runs on Motir's fleet for free while Motir hosts it, and on the new
+owner's own GitHub minutes the moment they own it — **with no edit to the workflow file, and
+nothing for MOTIR-711 to remember to do.**
+
+**Verified against GitHub's own docs, not assumed** (the card required this; sources in §R):
+
+- **`vars` is available in `runs-on`.** The contexts reference's availability table lists
+  `jobs.<job_id>.runs-on` with the contexts _"github, needs, strategy, matrix, vars,
+  inputs"_. This is the load-bearing check — a context not on that row would make the whole
+  expression a non-starter.
+- **An unset variable is an empty string.** _"If a configuration variable has not been set,
+  the return value of a context referencing the variable will be an empty string"_, and _"if
+  you attempt to dereference a nonexistent property, it will evaluate to an empty string"_.
+- **An empty string is falsy.** The expressions reference: _"in conditionals, falsy values
+  (`false`, `0`, `-0`, `""`, `''`, `null`) are coerced to `false`"_. So the `||` fallback
+  resolves to `ubuntu-latest` when the variable is absent — the explicit
+  `${{ vars.MOTIR_RUNNER != '' && … }}` form the card offered as a hedge is **not needed**.
+- **A single custom label is a valid `runs-on`.** A job is queued on a runner carrying **all**
+  the labels listed, so one distinctive label selects the fleet — which is also what §M
+  requires for classification.
+
+**Consequences, each owned:**
+
+- **MOTIR-1925 / MOTIR-1926** apply the seam to the two starters — **5 job sites** in
+  `nextjs-prisma-vercel-starter` (4 in `ci.yml` + 1 in `cleanup-preview-deployments.yml`) and
+  **6** in `nextjs-prisma-vercel-starter-with-design` (5 + 1), counted at `origin/main` on
+  2026-07-31. **Every** site, or a transferred repo half-works, which is worse than not
+  working.
+- **MOTIR-711 (the takeover) gains no new step from this**, and that is the point: the
+  fallback is what makes the handoff safe, instead of a "remember to rewrite the workflows"
+  item that will eventually be forgotten. It should still **assert** the transferred repo's
+  first run picks `ubuntu-latest`, because the failure is silent and a queued job looks like
+  a slow job.
+- **§J's exclusion is expressed by the same seam:** `moooon-B-V` simply never sets
+  `MOTIR_RUNNER`, so Motir's own repos take the `ubuntu-latest` default with no per-repo
+  configuration and no divergent workflow files.
+- **MOTIR-1908's $0 limit is the fail-fast for this path.** If `MOTIR_RUNNER` is
+  mis-set or unset on `motir-projects`, jobs fall back to GitHub-hosted and the $0 spending
+  limit turns a silent cost into a loud failure.
+
+#### §O — Label-scope the `workflow_job` listener; `isMeta` and `moooon-B-V` are DIFFERENT AXES
+
+**The `workflow_job` `queued` event fires for GitHub-hosted jobs too** — including every one
+of `motir-core`'s 31 jobs, which land in the same App installation. A provisioning listener
+that reacts to _"we received a queued event"_ would silently pull Motir's own 141-job-minute
+matrix onto the fleet — the precise outcome §J exists to prevent, arriving through the back
+door.
+
+**Binding on MOTIR-1920: provision ONLY for jobs whose requested labels name the Motir
+runner.** Scope by **label**, not by receipt of an event, and not by repository owner alone —
+label is the only signal that survives a repo being added to the org later. (There is no
+`workflow_job` handler in the repo today — verified by grep at `2fde16c5` — so this is a
+constraint on new code, not a correction to shipped code.)
+
+**And the axis trap, stated because the two coincide today and will not always:**
+
+| Axis                             | What it is                              | Where it is known                                                       |
+| -------------------------------- | --------------------------------------- | ----------------------------------------------------------------------- |
+| `Organization.isMeta`            | a **Motir tenant** flag (§4.4)          | after `resolveTenantOrg` — i.e. after a repo→project→workspace→org join |
+| `moooon-B-V` vs `motir-projects` | a **GitHub org** the repository sits in | on the webhook payload itself                                           |
+
+They point at the same set of repositories **right now**, which is exactly what makes the
+confusion cheap to make and expensive to find. **The fleet exclusion must be enforced on the
+GitHub-org/label axis**, because the `workflow_job` listener decides whether to provision
+**before** it has any tenant context — and a tenant lookup is not available at that moment
+for a repo that has no project row at all.
+
+#### §P — The customer-facing MINUTE and MOTIR'S COST are now two quantities with two meters
+
+Before the fleet, these were the same number seen from two sides: GitHub billed Motir for the
+minute it also charged the user for. **They are now independent.**
+
+| Quantity                         | Unit                     | Measured by                                                              | Owner                |
+| -------------------------------- | ------------------------ | ------------------------------------------------------------------------ | -------------------- |
+| **What the customer is charged** | Linux-equivalent minutes | `ciMinutesMeterService` — Actions job wall-clock × multiplier (§3, §5.8) | shipped (MOTIR-1896) |
+| **What the fleet costs Motir**   | container-seconds → USD  | **nothing today** — the cloud account running the runners                | **MOTIR-1924**       |
+
+Neither existing meter observes the second one: the 9.0 gateway meters **tokens**, and
+`ciMinutesMeterService` meters **Actions job wall-clock**. A container that boots, idles
+waiting for a job, runs for four minutes and is torn down costs real money in a dimension
+nothing in Motir currently reads. **MOTIR-1924 owns that meter**, attributed to the org so
+the two numbers are comparable per tenant — which is what makes the §L margin a measurement
+rather than an estimate, and therefore the precondition for ever re-opening §1.
+
+#### §Q — §5.8's reconciliation, corrected: **GitHub-billed rows only**
+
+§5.8 pairs the operational meter (webhook + jobs) with a monthly **audit** against the
+enhanced-billing usage endpoint (`GET /organizations/{org}/settings/billing/usage`,
+`product: Actions`), reconciled per repo via `repositoryName`.
+
+**That endpoint reports what GitHub BILLED. Post-migration it reports ~0 for a fleet-run
+repo** while the meter keeps counting a full month of minutes — so the audit would flag
+**every repo, every month, at ~100% drift**, and a signal that always fires is not a signal.
+The shipped `ciMinutesReconciliationService` compares metered totals against report lines it
+selects with `isActionsComputeLine` (`lib/services/ciMinutesReconciliationService.ts:69`) and
+warns past a tolerance — correct code, now pointed at a population that no longer matches.
+
+**Corrected scope, in text; the code change is MOTIR-1924's:**
+
+1. **The GitHub-billing audit covers GitHub-BILLED runs only** — the reconciliation compares
+   the metered subset whose runner family is GitHub-hosted against the usage report, and
+   **excludes fleet-run minutes from both sides**. §3.3's stored runner label per row is what
+   makes that split possible after the fact, with no schema change.
+2. **The fleet's own audit source is the cloud provider's usage/billing export** for the
+   runner account, reconciled against §P's container-seconds meter. Two substrates, two
+   reports, two reconciliations — never one report asked to explain both.
+3. **A repo that MIGRATES mid-month is reconciled per source, not per repo-month.** Because
+   each metered row already stores its runner label, a month containing both is split by the
+   same predicate, and no row needs re-writing.
+4. **Zero GitHub-billed minutes on a repo is a valid, expected state** — it must not be
+   reported as 100% drift. It is the success condition of this amendment.
+
+#### §R — Sources for this amendment (read 2026-07-31)
+
+**Vendor documentation:**
+
+- **Contexts reference** — the context-availability table (`jobs.<job_id>.runs-on` →
+  _"github, needs, strategy, matrix, vars, inputs"_), _"if a configuration variable has not
+  been set, the return value of a context referencing the variable will be an empty string"_,
+  and _"if you attempt to dereference a nonexistent property, it will evaluate to an empty
+  string"_: <https://docs.github.com/en/actions/reference/workflows-and-actions/contexts>
+- **Expressions reference** — _"in conditionals, falsy values (`false`, `0`, `-0`, `""`,
+  `''`, `null`) are coerced to `false`"_, the basis for the `||` fallback:
+  <https://docs.github.com/en/actions/reference/workflows-and-actions/expressions>
+- **Variables reference** — configuration-variable precedence (environment > repository >
+  organization), which is why `MOTIR_RUNNER` is set at the ORG level and can still be
+  overridden per repo:
+  <https://docs.github.com/en/actions/reference/workflows-and-actions/variables>
+- **Using labels with self-hosted runners** — a self-hosted runner is automatically assigned
+  `self-hosted`, an OS label (`linux` / `windows` / `macOS`) and an architecture label
+  (`x64` / `ARM` / `ARM64`); `--no-default-labels` suppresses them; custom labels may be used
+  alone:
+  <https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-labels>
+- **Using self-hosted runners in a workflow** — a job is queued on a runner carrying **all**
+  the labels listed in `runs-on`:
+  <https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/use-in-a-workflow>
+- **Workflow jobs REST reference** — the jobs endpoint the meter reads; note its schema lists
+  `labels` **without** defining requested-vs-runner semantics, which is the §M honest unknown:
+  <https://docs.github.com/en/rest/actions/workflow-jobs?apiVersion=2022-11-28>
+- **Self-hosted runner registration token** —
+  `POST /orgs/{org}/actions/runners/registration-token`, listed under **Organization
+  permissions for `"Self-hosted runners"`**, `write` — a **different** section from the
+  repository permissions MOTIR-1779 registers (§O's consequence for MOTIR-1916):
+  <https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps>
+
+**Shipped `motir-core`, read at `origin/main` @ `2fde16c5`:**
+
+- `lib/services/ciMinutesMeterService.ts:253` — the jobs-API read that makes §K's
+  "MOTIR-1896 needs no change" true.
+- `lib/git/providers/github.ts:331` — the attempt-scoped
+  `/runs/{id}/attempts/{n}/jobs` call behind it.
+- `lib/ciMetering/runnerRates.ts:65,116` — the effective-dated rate table and
+  `classifyRunner`'s ordered substring matching, the basis for §M's label constraints.
+- `lib/services/ciMinutesReconciliationService.ts:69` — `isActionsComputeLine`, the audit
+  filter §Q re-scopes.
+- `lib/services/ciAllowanceService.ts` — MOTIR-1901's shipped entitlement + refusal.
+- `.github/workflows/ci.yml` — the eight `runs-on` sites and three matrices behind §J's
+  31-job figure; also the `docs/`-prefix branch gate this amendment's own PR rides.
+- `nextjs-prisma-vercel-starter` (5 job sites) and
+  `nextjs-prisma-vercel-starter-with-design` (6), counted for §N.
+
 ## Consequences
 
 **The four gated cards, and what each takes from here** — the test of this ADR is that
@@ -962,7 +1313,47 @@ none of them needs a further question:
 - **MOTIR-711 (the takeover) — constrained by the amendment.** Re-enable Actions on each
   repository **before** the transfer, while the provisioning credential still reaches it
   (§G), and own the collection of the transfer destination, since motir-core stores no
-  per-user GitHub identity (§D).
+  per-user GitHub identity (§D). **Added by the 2026-07-31 amendment:** it gains no new
+  workflow-rewriting step — §N's `vars.MOTIR_RUNNER` fallback makes the repo portable by
+  construction — but it should **assert** the transferred repo's first run lands on
+  `ubuntu-latest`, because the alternative failure is a silently queued job, not an error.
+
+**The fleet cards, added by the 2026-07-31 amendment (MOTIR-1915) — all under Story
+MOTIR-1916**, which builds everything that amendment records:
+
+- **MOTIR-1918 (decision, what runs the runners).** Reuse Epic 9's container-per-run
+  orchestrator (MOTIR-685), a managed runner provider, or ARC — and the interface that lets it
+  be swapped. The fleet's spec is constrained by **§M**: Linux-2-core-**equivalent**, because
+  the ×1.00 row is a parity promise, not a measurement of whatever hardware is convenient.
+- **MOTIR-1920 (motir-core, the `workflow_job` queued handler).** **LABEL-SCOPED** (§O):
+  provision only for jobs whose requested labels name the Motir runner — never on "an event
+  arrived", which would pull `motir-core`'s own 31-job matrix onto the fleet. It must also
+  **record** whether the jobs API's `labels` reports requested or runner-side labels (§M's
+  honest unknown), which confirms MOTIR-1923's classification rule.
+- **MOTIR-1923 (motir-core, price the fleet family).** A `motir_fleet` `RunnerFamily`, a
+  `classifyRunner` rule matching the fleet label **before** the OS matches, and an
+  effective-dated **×1.00** row whose comment carries §L/§M's rationale — a **product** rate,
+  not a cost ratio, and not §3.4's unpriced fallback. Its `usdPerMinute` records Motir's own
+  cost, so that row alone is deliberately not a ratio of its own price.
+- **MOTIR-1924 (motir-core, meter what the fleet COSTS + re-scope the reconciliation).**
+  Persist per-runner container-seconds and cost attributed to the org (§P — the second meter,
+  since neither the gateway nor `ciMinutesMeterService` observes it), and re-scope §5.8's
+  audit to **GitHub-billed rows only**, with the cloud provider's usage export as the fleet's
+  own audit source (§Q). Zero GitHub-billed minutes on a repo is the SUCCESS state, not 100%
+  drift.
+- **MOTIR-1925 / MOTIR-1926 (the two starters, the runner-selection seam).**
+  `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` at **every** job site — 5 in
+  `nextjs-prisma-vercel-starter`, 6 in `nextjs-prisma-vercel-starter-with-design` — verified
+  against GitHub's contexts/expressions semantics in §N. Half-applied is worse than not
+  applied.
+- **MOTIR-1908 (manual) — re-pointed, not re-scoped.** The `motir-projects` spending limit
+  becomes the **fail-fast for the `ubuntu-latest` fallback path** (§J.3, §N): $0 there, a real
+  non-zero limit on `moooon-B-V`, which one account cannot express.
+- **MOTIR-1896 needs NO change, and MOTIR-1779 is NOT modified.** §K records why the meter
+  survives verbatim (the jobs endpoint reports self-hosted jobs), so no later card re-opens
+  it. MOTIR-1779's permission set stays exactly as registered; the **`Self-hosted runners`
+  ORGANIZATION permission** the registration-token endpoint needs is a different section of
+  the permissions page and belongs to MOTIR-1916 as its only consumer (§O, §R).
 
 **Two corrections this ADR makes to its own card, recorded so they are not re-derived:**
 
@@ -995,7 +1386,15 @@ landed between the initial read and the write. Re-fetch before trusting a §-ref
   wanted, it is a new card and an amendment here — not a gap to fill quietly.
 - **Rate-limiting or concurrency caps on dispatch.** The pool bounds spend; it does not
   bound burst. Nothing today needs it, and inventing a limiter with no observed problem
-  would be work with no consumer.
+  would be work with no consumer. _(2026-07-31: the fleet DOES need an in-flight cap, but
+  that is a capacity limit on Motir's own machines, not a customer entitlement — it belongs to
+  MOTIR-1916, not here.)_
+- **Whether the §1 allowance is re-derived from the fleet's cheaper cost basis.** §L says
+  explicitly **not now**, and records the new basis as a margin note. Passing the saving on is
+  a re-opening of §1 with its own card, and it should wait on MOTIR-1924 making the margin a
+  measurement rather than an estimate.
+- **Which orchestrator runs the fleet.** §M fixes what the runner must be _equivalent to_;
+  MOTIR-1918 decides what actually runs it.
 
 **Related planning bugs.** MOTIR-1904 records that this card's earlier revision promised its
 implementers "no further questions" while its "what the user sees" answer had no owning
@@ -1003,4 +1402,9 @@ surface — the gap MOTIR-1902/1903 now close, and which §7 is written to speci
 because of. **MOTIR-1909** records the larger one the 2026-07-30 amendment corrects: this
 record REJECTED "run it and go negative" in §6.2 and then placed the refusal on the
 **dispatch** path, which is not the path that spends the money — a mechanism the reasoning
-assumed existed rather than a hole in the reasoning.
+assumed existed rather than a hole in the reasoning. **MOTIR-1917** records the third and
+largest: this record priced the minute (§1–§3), metered it (§5) and enforced it (§6 + the
+2026-07-30 amendment) across four decision cards **without ever asking who owns the compute**
+— so the compute itself was an unowned deliverable, and the answer, once asked, changed
+Motir's cost basis by an order of magnitude while changing the customer model not at all
+(2026-07-31 amendment).
