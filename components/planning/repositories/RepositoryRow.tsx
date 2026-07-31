@@ -3,6 +3,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  BadgeCheck,
   ChevronDown,
   ChevronUp,
   CircleCheckBig,
@@ -10,9 +11,11 @@ import {
   ExternalLink,
   Link as LinkIcon,
   Loader2,
+  Mail,
   SkipForward,
   Sparkles,
   TriangleAlert,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Combobox } from '@/components/ui/Combobox';
@@ -88,6 +91,10 @@ export interface RepositoryRowProps {
   onRemove: (rowId: string) => void;
   onMove: (rowId: string, direction: 'up' | 'down') => void;
   onRetry: (rowId: string) => void;
+  /** Send (or re-send) this row's collaborator invitation — the row-scoped
+   *  **Resend invitation** (MOTIR-1900). Row-scoped on purpose: rows are
+   *  independent, so re-sending one must not quietly re-send its siblings. */
+  onResendInvitation: (rowId: string) => void;
 }
 
 export function RepositoryRow({
@@ -107,6 +114,7 @@ export function RepositoryRow({
   onRemove,
   onMove,
   onRetry,
+  onResendInvitation,
 }: RepositoryRowProps) {
   const t = useTranslations('repositorySet');
   const fieldId = useId();
@@ -159,6 +167,22 @@ export function RepositoryRow({
               {row.state === 'created' ? t('createdDetail') : t('connectedDetail')}
             </p>
           </>
+        ) : null}
+
+        {/* The INVITATION — a sub-state OF a created row, never a row state of
+            its own (MOTIR-1900, design panel 4). The row keeps its own tint and
+            state word; this is an extra line inside it, which is what makes the
+            two axes independent: `created` is about the repository existing,
+            `invited`/`accepted` is about the user being able to reach it, and
+            neither can fail the other. A `connected` row is the user's OWN
+            repository, so it has nothing to be invited to. */}
+        {row.state === 'created' ? (
+          <RowInvitation
+            row={row}
+            busy={busy}
+            connectHref={grantMoreHref}
+            onResend={() => onResendInvitation(row.id)}
+          />
         ) : null}
 
         {row.state === 'skipped' ? (
@@ -404,6 +428,105 @@ function RowState({ row }: { row: ProjectRepoDto }) {
     default:
       return null;
   }
+}
+
+/**
+ * The row's INVITATION line — the third of the design's three access states, with
+ * its own icon AND word (never colour alone), plus the one way forward each state
+ * has.
+ *
+ * `accepted` is settled and offers nothing, which is deliberate: GitHub owns the
+ * acceptance, so once the account can clone there is nothing for Motir to do and
+ * nothing honest to offer. `not invited` is a `role="status"` because it is a
+ * standing condition the user can resolve, not an error the row raised — the
+ * repository was created successfully.
+ */
+function RowInvitation({
+  row,
+  busy,
+  connectHref,
+  onResend,
+}: {
+  row: ProjectRepoDto;
+  busy: boolean;
+  connectHref: string;
+  onResend: () => void;
+}) {
+  const t = useTranslations('repositorySet');
+  const { state, login, invitationUrl } = row.access;
+  const line = 'inline-flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)';
+
+  if (state === 'accepted') {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className={line}>
+          <BadgeCheck className="size-4 shrink-0 text-(--el-success)" aria-hidden="true" />
+          {t('stateAccepted')}
+        </span>
+        {login ? (
+          <p className="min-w-0 text-sm text-(--el-text-helper)">
+            {t('acceptedRowDetail', { login: `@${login}` })}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (state === 'invited') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className={line}>
+          <Mail className="size-4 shrink-0 text-(--el-info)" aria-hidden="true" />
+          {t('stateInvited')}
+        </span>
+        {login ? (
+          <p className="min-w-0 text-sm text-(--el-text-helper)">
+            {t('invitedRowDetail', { login: `@${login}` })}
+          </p>
+        ) : null}
+        <RowActions>
+          {invitationUrl ? (
+            // The `Button` primitive renders a real `<button>` and has no
+            // `asChild`, and the invitation is a NAVIGATION out to GitHub — so
+            // this is an anchor wearing the secondary/sm shape rather than a
+            // button faking a link (which would lose middle-click, open-in-new-tab
+            // and the link role a screen reader announces).
+            <a
+              href={invitationUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex h-(--height-btn-sm) items-center gap-1.5 rounded-(--radius-btn) border border-(--el-button-border) px-3 font-sans text-xs font-medium text-(--el-text) hover:bg-(--el-surface)"
+            >
+              {t('openInvitation')}
+              <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+            </a>
+          ) : null}
+          <QuietAction onClick={onResend} disabled={busy}>
+            {t('resendInvitation')}
+          </QuietAction>
+        </RowActions>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span role="status" className={line}>
+        <UserPlus className="size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
+        {t('stateNotInvited')}
+      </span>
+      <p className="min-w-0 text-sm text-(--el-text-helper)">{t('notInvitedDetail')}</p>
+      <RowActions>
+        <a
+          href={connectHref}
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          <GithubMark className="size-3.5" aria-hidden />
+          {t('connectGithub')}
+        </a>
+      </RowActions>
+    </div>
+  );
 }
 
 /** The realized repository, as a link out to the host. */

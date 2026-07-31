@@ -405,6 +405,28 @@ function initialisedDescription(input: ProvisionRepoInput): string {
   );
 }
 
+// ── The provisioning credential, as ONE reader ──────────────────────────────
+
+/** Motir's org, the Studio App's installation on it, and a fresh installation
+ *  token — everything a call against a Motir-OWNED repository needs.
+ *
+ *  Exported so the COLLABORATOR boundary (`lib/github/repoCollaborators.ts`,
+ *  MOTIR-1900) authenticates through the same path rather than re-deriving the
+ *  org, re-resolving the installation and re-minting the token. "Which org does
+ *  Motir own, and with which credential?" keeps exactly one reader — the same
+ *  discipline `provisioningOrgLogin()` enforces one layer down — so an invite can
+ *  never be sent against a different org than the repository was created in. */
+export async function provisioningAuth(): Promise<{
+  org: string;
+  installationId: string;
+  token: string;
+}> {
+  const org = requireOrg();
+  const installationId = await resolveProvisioningInstallationId(org);
+  const { token } = await mintProvisioningToken(installationId);
+  return { org, installationId, token };
+}
+
 // ── The client ──────────────────────────────────────────────────────────────
 
 export const repoProvisioningClient = {
@@ -427,9 +449,7 @@ export const repoProvisioningClient = {
    * the backstop. Nothing is ever renamed.
    */
   async provisionRepository(input: ProvisionRepoInput): Promise<ProvisionedRepo> {
-    const org = requireOrg();
-    const installationId = await resolveProvisioningInstallationId(org);
-    const { token } = await mintProvisioningToken(installationId);
+    const { org, installationId, token } = await provisioningAuth();
     const auth = { authorization: `Bearer ${token}` };
 
     const templated = input.seedSource === SEED_SOURCE_PLATFORM_STARTER;

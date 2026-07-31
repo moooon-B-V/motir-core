@@ -276,10 +276,18 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
  * without would be a nag about a choice they already made.
  */
 function codeOutcomeOf(
-  view: { set: { rows: { state: string }[] } } | null,
+  view: { set: { rows: { state: string; access: { state: string } }[] } } | null,
 ): PlanCodeOutcome | null {
   if (!view || view.set.rows.length === 0) return null;
   const settled = (state: string) =>
     state === 'created' || state === 'connected' || state === 'skipped';
-  return view.set.rows.every((r) => settled(r.state)) ? 'ready' : 'unfinished';
+  if (!view.set.rows.every((r) => settled(r.state))) return 'unfinished';
+  // Settled is not the same as REACHABLE (MOTIR-1900). A repository Motir created
+  // lives in Motir's org and is private, so a `created` row nobody has been
+  // invited to is code the user cannot clone — the rail says so rather than
+  // claiming it is ready. A `connected` row is the user's own repository and a
+  // `skipped` row has none, so neither raises the question.
+  const reachable = (row: { state: string; access: { state: string } }) =>
+    row.state !== 'created' || row.access.state !== 'not_invited';
+  return view.set.rows.every(reachable) ? 'ready' : 'needs_access';
 }

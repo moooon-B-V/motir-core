@@ -41,6 +41,10 @@ interface JoinedRow {
   ciActionsDisabled: boolean;
   ciActionsIntentAt: Date | null;
   ciActionsAppliedAt: Date | null;
+  collaboratorLogin: string | null;
+  collaboratorInvitedAt: Date | null;
+  collaboratorAcceptedAt: Date | null;
+  collaboratorInvitationUrl: string | null;
   // The realized `github_repo` half — every column NULL when the row is
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
@@ -73,6 +77,10 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     ciActionsDisabled: r.ciActionsDisabled,
     ciActionsIntentAt: r.ciActionsIntentAt,
     ciActionsAppliedAt: r.ciActionsAppliedAt,
+    collaboratorLogin: r.collaboratorLogin,
+    collaboratorInvitedAt: r.collaboratorInvitedAt,
+    collaboratorAcceptedAt: r.collaboratorAcceptedAt,
+    collaboratorInvitationUrl: r.collaboratorInvitationUrl,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     githubRepo:
@@ -144,6 +152,10 @@ export const projectRepoRepository = {
         pr."ci_actions_disabled"   AS "ciActionsDisabled",
         pr."ci_actions_intent_at"  AS "ciActionsIntentAt",
         pr."ci_actions_applied_at" AS "ciActionsAppliedAt",
+        pr."collaborator_login"          AS "collaboratorLogin",
+        pr."collaborator_invited_at"     AS "collaboratorInvitedAt",
+        pr."collaborator_accepted_at"    AS "collaboratorAcceptedAt",
+        pr."collaborator_invitation_url" AS "collaboratorInvitationUrl",
         pr."created_at"        AS "createdAt",
         pr."updated_at"        AS "updatedAt",
         gr."id"                AS "repoRowId",

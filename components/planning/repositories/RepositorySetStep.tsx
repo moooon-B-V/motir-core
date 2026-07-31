@@ -3,18 +3,30 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { CircleCheckBig, Loader2, Lock, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
+import {
+  CircleCheckBig,
+  ExternalLink,
+  Loader2,
+  Lock,
+  Plus,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { GithubMark } from '@/components/icons/GithubMark';
+import { IdentityHeader } from '@/app/(authed)/settings/workspace/_components/gitSettingsPrimitives';
 import { RepositoryRow } from '@/components/planning/repositories/RepositoryRow';
+import type { PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
 import {
   addRepositoryRow,
   connectRepositoryRow,
   establishRepositorySet,
   fetchRepositorySet,
+  grantRepositoryAccess,
   moveRepositoryRow,
   patchRepositoryRow,
+  refreshRepositoryAccess,
   removeRepositoryRow,
   replanRepositoryRow,
   skipRepositoryRow,
@@ -58,8 +70,9 @@ const POLL_MS = 1500;
 type DefaultState = 'idle' | 'working' | 'ready' | 'failed';
 
 /** Which surface the step is showing. `own` is the short confirmation behind "I
- *  already have code"; `set` is the technical path's editable rows. */
-type Mode = 'default' | 'own' | 'set';
+ *  already have code"; `set` is the technical path's editable rows; `access` is
+ *  the step that gets the user INTO the code Motir just made (MOTIR-1900). */
+type Mode = 'default' | 'own' | 'set' | 'access';
 
 export interface RepositorySetStepProps {
   /** The project's key — how the repository-set API is addressed. */
@@ -72,8 +85,9 @@ export interface RepositorySetStepProps {
   connectHref: string;
   /**
    * Reports the ONE line the review rail's approved outcome carries about the
-   * project's code — `ready` once every row has settled, `unfinished` while any
-   * is still unresolved.
+   * project's code — `ready` once every row has settled AND the user can reach
+   * what Motir made them, `needs_access` when the code exists but nobody has been
+   * invited to it (MOTIR-1900), `unfinished` while any row is still unresolved.
    *
    * A CALLBACK rather than a `router.refresh()`, because the rail is not a
    * server-rendered surface here: it is a sibling client component fed by the
@@ -83,7 +97,7 @@ export interface RepositorySetStepProps {
    * three-surface page-state contract is about routing each surface to the
    * mechanism that reaches it, not about always reaching for the same one.)
    */
-  onOutcomeChange?: (outcome: 'ready' | 'unfinished') => void;
+  onOutcomeChange?: (outcome: PlanCodeOutcome) => void;
 }
 
 export function RepositorySetStep({
@@ -98,6 +112,7 @@ export function RepositorySetStep({
   const [busy, setBusy] = useState(false);
   const [failedAction, setFailedAction] = useState(false);
   const [establishing, setEstablishing] = useState(false);
+  const [accessFailed, setAccessFailed] = useState(false);
   const [connectingRows, setConnectingRows] = useState<readonly string[]>([]);
   // The technical path needs GRANT 2 (the installation): it is what lets Motir
   // read a repository the user already owns, and what fills the picker. Grant 1
@@ -140,10 +155,19 @@ export function RepositorySetStep({
 
   // Tell the rail what to say about the code, and ONLY when the answer actually
   // changes — a poll tick that finds the same state must not re-render the rail.
-  const outcomeRef = useRef<'ready' | 'unfinished' | null>(null);
+  //
+  // ACCESS is part of the answer (MOTIR-1900): a set whose rows all settled but
+  // whose repositories the user cannot reach is not finished, and the rail says
+  // so ("Finish setting up access") rather than claiming the code is ready. A
+  // user who chose **Later** therefore leaves with an honest outcome and a door.
+  const outcomeRef = useRef<PlanCodeOutcome | null>(null);
   useEffect(() => {
     if (rows.length === 0) return;
-    const outcome = rows.every(isSettled) ? 'ready' : 'unfinished';
+    const outcome: PlanCodeOutcome = !rows.every(isSettled)
+      ? 'unfinished'
+      : rows.every(hasAccess)
+        ? 'ready'
+        : 'needs_access';
     if (outcome === outcomeRef.current) return;
     outcomeRef.current = outcome;
     onOutcomeChange?.(outcome);
@@ -189,6 +213,52 @@ export function RepositorySetStep({
     [projectKey, refetch],
   );
 
+  /**
+   * Send (or re-send) the collaborator invitations — the access step's return
+   * trip after **Connect GitHub**, and a row's **Resend invitation**.
+   *
+   * The RESPONSE IS THE CONFIRMATION (the three-surface page-state contract, and
+   * design §12's note that this now covers the invitation sub-state too): the
+   * grant returns the rows it just wrote, so they are kept rather than re-read.
+   * `router.refresh()` is not reached for either — this step is a client island,
+   * and the rail is told through `onOutcomeChange`.
+   */
+  const grantAccess = useCallback(
+    async (rowId?: string) => {
+      setBusy(true);
+      setAccessFailed(false);
+      try {
+        const result = await grantRepositoryAccess(projectKey, rowId);
+        setView((prev) => ({ ...prev, set: { ...prev.set, rows: result.rows } }));
+        // Only a GitHub refusal is an error worth showing. A `login: null` is the
+        // honest "you have not connected yet" state, which the panel already
+        // renders as the connect prompt rather than as a failure.
+        if (result.failed > 0) setAccessFailed(true);
+      } catch {
+        setAccessFailed(true);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [projectKey],
+  );
+
+  // Settle any PENDING invitation the user has since accepted on GitHub. Its own
+  // call, and only on entering the access step: GitHub tells Motir nothing when an
+  // invitation is accepted, so a read is the only way to learn it — but putting
+  // that read on the 1.5s set poll would spend a host request per row per tick to
+  // discover something that changes once.
+  useEffect(() => {
+    if (mode !== 'access') return;
+    const ctrl = new AbortController();
+    void refreshRepositoryAccess(projectKey, ctrl.signal)
+      .then((fresh) => setView((prev) => ({ ...prev, set: { ...prev.set, rows: fresh } })))
+      .catch(() => {
+        /* best-effort — the row keeps saying what it last knew */
+      });
+    return () => ctrl.abort();
+  }, [mode, projectKey]);
+
   const setConnecting = useCallback((rowId: string, on: boolean) => {
     setConnectingRows((prev) =>
       on ? [...new Set([...prev, rowId])] : prev.filter((id) => id !== rowId),
@@ -228,6 +298,26 @@ export function RepositorySetStep({
           backlogHref={backlogHref}
           onContinue={() => void establish()}
           onIHaveCode={() => setMode(connected ? 'set' : 'own')}
+          onGetAccess={() => setMode('access')}
+        />
+      </StepShell>
+    );
+  }
+
+  // ── The ACCESS step — the main line continues here (MOTIR-1900) ──────────
+  if (mode === 'access') {
+    return (
+      <StepShell>
+        <AccessStep
+          login={view.githubLogin}
+          avatarUrl={view.githubAvatarUrl}
+          rows={rows}
+          busy={busy}
+          failed={accessFailed}
+          backlogHref={backlogHref}
+          connectHref={connectHref}
+          onGrant={() => void grantAccess()}
+          onLater={() => setMode('default')}
         />
       </StepShell>
     );
@@ -300,6 +390,7 @@ export function RepositorySetStep({
               void run(() => moveRepositoryRow(projectKey, rowId, direction))
             }
             onRetry={(rowId) => void establish(rowId)}
+            onResendInvitation={(rowId) => void grantAccess(rowId)}
           />
         ))}
       </div>
@@ -370,12 +461,16 @@ function DefaultPath({
   backlogHref,
   onContinue,
   onIHaveCode,
+  onGetAccess,
 }: {
   state: DefaultState;
   busy: boolean;
   backlogHref: string;
   onContinue: () => void;
   onIHaveCode: () => void;
+  /** `created` is the one state that CONTINUES: the code now exists, and the next
+   *  thing the user needs is a way to reach it (design §4's table). */
+  onGetAccess: () => void;
 }) {
   const t = useTranslations('repositorySet');
   return (
@@ -452,12 +547,28 @@ function DefaultPath({
           </>
         ) : null}
         {state === 'ready' ? (
-          <Link
-            href={backlogHref}
-            className="text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-          >
-            {t('goToBacklog')}
-          </Link>
+          <>
+            {/* The main line CONTINUES into the access step: repositories are
+                created under Motir's org and are private, so "your code is
+                ready" is only half true until the user can reach it. Before
+                Epic 9's hosted agent every user runs their own agent locally,
+                which is why this is the primary rather than an aside (design
+                §7 / panel 8a). */}
+            <Button
+              variant="primary"
+              onClick={onGetAccess}
+              disabled={busy}
+              leftIcon={<GithubMark className="size-4" aria-hidden />}
+            >
+              {t('connectGithub')}
+            </Button>
+            <Link
+              href={backlogHref}
+              className="text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+            >
+              {t('goToBacklog')}
+            </Link>
+          </>
         ) : null}
         {state === 'failed' ? (
           <>
@@ -478,6 +589,161 @@ function DefaultPath({
             </QuietButton>
           </>
         ) : null}
+      </div>
+    </>
+  );
+}
+
+/**
+ * THE ACCESS STEP (MOTIR-1900 — design panels 3 + 3b): getting the user into the
+ * code Motir just made them.
+ *
+ * Three properties are load-bearing and each is rendered, not merely asserted:
+ *
+ *   1. **It comes AFTER approval, and after the code exists.** Nothing about
+ *      GitHub can cost the user their plan — it is already in the backlog — or
+ *      their repositories, which are already made.
+ *   2. **It is not a gate.** `Later` is a real answer that leaves everything
+ *      intact; the rail's outcome then says what is unfinished.
+ *   3. **It asks for no PERMISSION.** Motir needs exactly one thing — the user's
+ *      GitHub username — which is grant 1 (identity) of the shipped connect pane.
+ *      The repository-access install is grant 2 and is needed only for
+ *      connect-existing. No re-consent, upgrade or org-owner state is rendered,
+ *      because none is asked for.
+ *
+ * ⚠️ THE ACCOUNT IS CONNECTED, NEVER TYPED — and therefore SHOWN. There is no
+ * "type your GitHub username" field: a typed handle proves nothing and a typo
+ * would invite a STRANGER to a private repository. Once connected, the shipped
+ * `IdentityHeader` renders which account it is, with a way to change it that
+ * re-runs the connect rather than opening a field.
+ */
+function AccessStep({
+  login,
+  avatarUrl,
+  rows,
+  busy,
+  failed,
+  backlogHref,
+  connectHref,
+  onGrant,
+  onLater,
+}: {
+  login: string | null;
+  avatarUrl: string | null;
+  rows: readonly ProjectRepoDto[];
+  busy: boolean;
+  failed: boolean;
+  backlogHref: string;
+  connectHref: string;
+  onGrant: () => void;
+  onLater: () => void;
+}) {
+  const t = useTranslations('repositorySet');
+  const tGithub = useTranslations('github');
+
+  // The single pending invitation's door. Only offered when there is exactly ONE
+  // — with a multi-repo set there is no single "the invitation" to open, and the
+  // per-row lines on the technical path are where each is reached.
+  const pending = rows.filter((r) => r.access.state === 'invited' && r.access.invitationUrl);
+  const invitationUrl = pending.length === 1 ? pending[0]!.access.invitationUrl : null;
+  const anyInvited = rows.some((r) => r.access.state !== 'not_invited');
+
+  return (
+    <>
+      <div className="flex flex-col gap-3">
+        <SectionLabel label={t('overline')} />
+        <h2 className="font-serif text-[28px] leading-tight font-semibold text-(--el-text)">
+          {login && anyInvited ? t('invitedTitle') : t('accessTitle')}
+        </h2>
+        <p className="text-sm leading-relaxed text-(--el-text-secondary)">
+          {login && anyInvited ? t('invitedDetail') : t('accessLead')}
+        </p>
+      </div>
+
+      {login ? (
+        // The shipped `IdentityHeader`, not a redrawn stand-in — the same
+        // component the Git settings pane puts a Disconnect button on, so the
+        // account the user sees here is the account the product knows.
+        <IdentityHeader
+          login={login}
+          avatarUrl={avatarUrl}
+          verified={tGithub('identity.verified')}
+          caption={t('identityCaption')}
+          trailing={
+            <Link
+              href={connectHref}
+              className="text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+            >
+              {t('useOtherAccount')}
+            </Link>
+          }
+        />
+      ) : (
+        <p className="text-sm text-(--el-text-helper)">{t('accessWhichAccount')}</p>
+      )}
+
+      {failed ? (
+        <p role="alert" className="text-sm font-medium text-(--el-danger)">
+          {t('accessError')}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-4">
+        {login ? (
+          <>
+            {invitationUrl ? (
+              <a
+                href={invitationUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) font-sans text-sm font-medium text-(--el-accent-text) hover:opacity-90"
+              >
+                {t('openInvitation')}
+                <ExternalLink className="size-4 shrink-0" aria-hidden="true" />
+              </a>
+            ) : (
+              <Button
+                variant="primary"
+                onClick={onGrant}
+                loading={busy}
+                disabled={busy}
+                leftIcon={<GithubMark className="size-4" aria-hidden />}
+              >
+                {anyInvited ? t('resendInvitation') : t('connectGithub')}
+              </Button>
+            )}
+            {anyInvited ? (
+              <QuietButton onClick={onGrant} disabled={busy}>
+                {t('resendInvitation')}
+              </QuietButton>
+            ) : null}
+          </>
+        ) : (
+          // No identity: the ONE thing Motir needs. The hand-off is the shipped
+          // 7.10 connect pane — this surface redraws none of it.
+          <Link
+            href={connectHref}
+            className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) font-sans text-sm font-medium text-(--el-accent-text) hover:opacity-90"
+          >
+            <GithubMark className="size-4" aria-hidden />
+            {t('connectGithub')}
+          </Link>
+        )}
+        {/* `Later` leaves with everything intact — the plan is in the backlog and
+            the repositories exist. The rail then reads "Finish setting up
+            access", and MOTIR-1764's code-context surface is the permanent door
+            back. Chosen over "Not now", which this surface already uses at the
+            technical path's set footer (two controls with the same accessible
+            name on one route is the superstring/scoping problem). */}
+        <QuietButton onClick={onLater} disabled={busy}>
+          {t('accessLater')}
+        </QuietButton>
+        <Link
+          href={backlogHref}
+          className="text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          {t('goToBacklog')}
+        </Link>
       </div>
     </>
   );
@@ -540,6 +806,19 @@ function QuietButton({
  *  settled — it is resumable at any later visit. */
 function isSettled(row: ProjectRepoDto): boolean {
   return row.state === 'created' || row.state === 'connected' || row.state === 'skipped';
+}
+
+/**
+ * Can the user REACH this row's repository (MOTIR-1900)?
+ *
+ * TRUE for every row that raises no access question at all — a `connected` row is
+ * the user's own repository and a `skipped` row has none — so only a repository
+ * MOTIR created and nobody has been invited to counts as unfinished. `invited`
+ * counts as reached: Motir has done everything it can, and the remaining step is
+ * the user's to take on GitHub.
+ */
+function hasAccess(row: ProjectRepoDto): boolean {
+  return row.state !== 'created' || row.access.state !== 'not_invited';
 }
 
 /**
