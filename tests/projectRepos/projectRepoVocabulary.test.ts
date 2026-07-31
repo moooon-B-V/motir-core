@@ -48,6 +48,12 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     ciActionsDisabled: false,
     ciActionsIntentAt: null,
     ciActionsAppliedAt: null,
+    // The collaborator invitation (MOTIR-1900) — likewise part of the shape and
+    // irrelevant here: access is orthogonal to which names a row resolves to.
+    collaboratorLogin: null,
+    collaboratorInvitedAt: null,
+    collaboratorAcceptedAt: null,
+    collaboratorInvitationUrl: null,
     createdAt: now,
     updatedAt: now,
     githubRepo: {

@@ -4284,6 +4284,44 @@ model ProjectRepo {
   /// When the intent was last SUCCESSFULLY asserted on the host. NULL means it
   /// never has been (a fresh row, or every attempt so far failed).
   ciActionsAppliedAt DateTime? @map("ci_actions_applied_at")
+  /// ── COLLABORATOR ACCESS — the user's way IN to their own code (MOTIR-1900) ─
+  ///
+  /// Every repository Motir creates lives in Motir's own org and is PRIVATE (ADR
+  /// §3 amendment), so the person who approved the plan cannot clone it until
+  /// Motir invites their GitHub account as an admin collaborator. These four
+  /// columns record that invitation per row.
+  ///
+  /// The three states the UI renders (`design/repository-set` §5) are DERIVED
+  /// from these, never stored as a fourth enum column — the same reasoning the
+  /// CI-Actions intent above uses: a stored state has to be cleared by the code
+  /// that set it, so a crash between the GitHub call and the write leaves it
+  /// lying, whereas two nullable stamps cannot desynchronise and a re-read
+  /// recomputes the same answer.
+  ///
+  ///   accepted     ⟺ collaborator_accepted_at IS NOT NULL
+  ///   invited      ⟺ collaborator_invited_at IS NOT NULL (and not accepted)
+  ///   not_invited  ⟺ neither
+  ///
+  /// WHOSE login it is, recorded rather than re-derived: the account invited is
+  /// the one the ACTOR had connected at invite time (`GithubIdentity.githubLogin`
+  /// — never a typed handle, which would let a typo invite a stranger to a
+  /// private repository). Recording it is what lets a LATER visitor see which
+  /// account actually got access instead of being told about their own.
+  collaboratorLogin         String?   @map("collaborator_login")
+  /// When the invitation was last SENT. Re-sending re-stamps it; accepting does
+  /// not clear it (the row keeps the history of both events).
+  collaboratorInvitedAt     DateTime? @map("collaborator_invited_at")
+  /// When the invitee was first OBSERVED to have access — either GitHub reported
+  /// them an existing collaborator at invite time (a `204`, no invitation to
+  /// accept) or a later refresh read found them one. NULL means "not observed
+  /// accepted", never "declined": GitHub owns the acceptance, so Motir shows what
+  /// it can see rather than pretending to know more.
+  collaboratorAcceptedAt    DateTime? @map("collaborator_accepted_at")
+  /// GitHub's `html_url` for the pending invitation — the target of **Open the
+  /// invitation**. Stored because the invitation lives on GitHub and there is no
+  /// way to reconstruct the URL from the repo coordinates alone. NULL once the
+  /// invite was unnecessary (a `204`) or when none has been sent.
+  collaboratorInvitationUrl String?   @map("collaborator_invitation_url")
   /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.

@@ -89,6 +89,7 @@ export const projectRepoEstablishService = {
       // prefix the user sees is the org a create would actually land in.
       hostOwner: provisioningOrgLogin(),
       githubLogin: identity?.githubLogin ?? null,
+      githubAvatarUrl: identity?.avatarUrl ?? null,
       hasInstallation: installation !== null,
       connectCandidates,
     };

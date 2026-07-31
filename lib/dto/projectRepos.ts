@@ -44,6 +44,44 @@ export type ProjectRepoOwnershipDto = 'user' | 'motir';
 export type ProjectRepoProposalSignalDto = 'plan-item-role' | 'preplan-platform' | 'default-web';
 
 /**
+ * Whether the user can REACH the repository behind a row (MOTIR-1900).
+ *
+ * A repository Motir creates lives in Motir's own org and is private, so the
+ * person who approved the plan cannot clone it until Motir invites their GitHub
+ * account as an admin collaborator. This is that invitation's state — DERIVED
+ * from the row's two `collaborator_*` stamps by `lib/projectRepos/access.ts`,
+ * never stored as its own column.
+ *
+ * ⚠️ ORTHOGONAL to `state`, by construction: `state` says whether the repository
+ * EXISTS, this says whether the user can get INTO it, and neither can fail the
+ * other. An invitation failure leaves a `created` row `created` (the repository
+ * is real and nothing is rolled back); a `skipped` row has nothing to be invited
+ * to and simply stays `not_invited`.
+ *
+ *   * `accepted`    — the account is a collaborator and can clone and push.
+ *   * `invited`     — an invitation is pending on GitHub, waiting to be accepted.
+ *   * `not_invited` — none has been sent. On a `created` row that is the state
+ *     the connect prompt exists to resolve; on any other row it is simply the
+ *     absence of a question.
+ */
+export type ProjectRepoAccessStateDto = 'not_invited' | 'invited' | 'accepted';
+
+/** The access half of a row — its state plus the two facts the UI renders. */
+export interface ProjectRepoAccessDto {
+  state: ProjectRepoAccessStateDto;
+  /**
+   * The GitHub login that was invited, or null when none has been. Recorded at
+   * invite time rather than re-derived from the reader's own identity: a LATER
+   * visitor must see which account actually got access, not be told about theirs.
+   */
+  login: string | null;
+  /** Where **Open the invitation** points, for a PENDING invitation only. Null
+   *  once accepted (the invitation no longer exists) and null when the account
+   *  already had access, which produces no invitation at all. */
+  invitationUrl: string | null;
+}
+
+/**
  * The REALIZED repository behind a set row — the connected `GithubRepo` mirror
  * row, present only once creation or connect-existing has completed.
  *
@@ -109,6 +147,10 @@ export interface ProjectRepoDto {
    * `resolveProjectRepoNames`, which filters on exactly this.
    */
   established: boolean;
+  /** Whether the user can REACH this row's repository, and via which account
+   *  (MOTIR-1900). Always present — `not_invited` is the honest answer for a row
+   *  nobody has been invited to, including every row that predates this card. */
+  access: ProjectRepoAccessDto;
   /** Fractional order key. The FIRST row of the ordered set is the project's
    *  PRIMARY repo (ADR §1.3); order carries no dispatch meaning. */
   position: string;
@@ -181,6 +223,10 @@ export interface ProjectRepoEstablishViewDto {
   hostOwner: string | null;
   /** The actor's connected GitHub login (grant 1), or null when not connected. */
   githubLogin: string | null;
+  /** The actor's GitHub avatar (grant 1), for the shipped `IdentityHeader` the
+   *  access step reuses so the user can SEE which account Motir invited
+   *  (MOTIR-1900). Null when not connected, or when GitHub had no avatar. */
+  githubAvatarUrl: string | null;
   /** Whether the WORKSPACE has a GitHub App installation (grant 2). */
   hasInstallation: boolean;
   /** The repositories the installation grants, for the "Use one of mine" picker.

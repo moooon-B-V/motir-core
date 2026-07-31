@@ -9,6 +9,7 @@ import type {
   RealizedProjectRepoDto,
 } from '@/lib/dto/projectRepos';
 import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
+import { toAccessDto } from '@/lib/projectRepos/access';
 
 // Prisma `ProjectRepo` row (+ its joined `GithubRepo`) → API DTO (Story
 // MOTIR-1775 · MOTIR-1780). The single place the persisted enums narrow to their
@@ -51,6 +52,9 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     // deleted is NOT established (the repository no longer exists), even though
     // the plan it records survives.
     established: isEstablishedState(row.state) && row.githubRepo !== null,
+    // Derived from the row's two `collaborator_*` stamps, never a stored state
+    // (MOTIR-1900) — see `lib/projectRepos/access.ts` for why.
+    access: toAccessDto(row),
     position: row.position,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

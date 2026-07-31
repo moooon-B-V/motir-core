@@ -33,6 +33,9 @@ const ROW_DEFAULTS = {
   proposalSignal: null,
   realizedRepo: null,
   established: false,
+  // The collaborator invitation (MOTIR-1900) — a sub-state OF a created row, so
+  // the default is the honest "nobody has been invited to this yet".
+  access: { state: 'not_invited', login: null, invitationUrl: null },
   createdAt: '2026-07-30T10:00:00.000Z',
   updatedAt: '2026-07-30T10:00:00.000Z',
 } as const;
@@ -56,6 +59,7 @@ function view(
     set: { projectId: 'proj-1', rows, ownership: null, targetAccount: null },
     hostOwner: 'motir-projects',
     githubLogin: null,
+    githubAvatarUrl: null,
     hasInstallation: false,
     connectCandidates: [],
     ...over,
@@ -96,6 +100,7 @@ function renderRow(r: ProjectRepoDto, opts: { total?: number } = {}) {
       onRemove={() => {}}
       onMove={() => {}}
       onRetry={() => {}}
+      onResendInvitation={() => {}}
     />,
   );
 }
@@ -782,6 +787,7 @@ describe('a row, in the states the flow cannot be driven into', () => {
         onRemove={() => {}}
         onMove={() => {}}
         onRetry={() => {}}
+        onResendInvitation={() => {}}
       />,
     );
     expect(container.textContent).not.toContain('/');
@@ -845,6 +851,7 @@ describe('a row, in the states the flow cannot be driven into', () => {
         onRemove={() => {}}
         onMove={() => {}}
         onRetry={() => {}}
+        onResendInvitation={() => {}}
       />,
     );
 
@@ -892,6 +899,7 @@ describe('a row, in the states the flow cannot be driven into', () => {
         onRemove={() => {}}
         onMove={() => {}}
         onRetry={() => {}}
+        onResendInvitation={() => {}}
       />,
     );
 
@@ -940,6 +948,7 @@ describe('a row, in the states the flow cannot be driven into', () => {
         onRemove={() => {}}
         onMove={() => {}}
         onRetry={() => {}}
+        onResendInvitation={() => {}}
       />,
     );
 
@@ -1044,6 +1053,7 @@ describe('a row’s ways forward all fire', () => {
       onRemove: vi.fn(),
       onMove: vi.fn(),
       onRetry: vi.fn(),
+      onResendInvitation: vi.fn(),
     };
   }
 
@@ -1106,7 +1116,11 @@ describe('a row’s ways forward all fire', () => {
     const h = handlers();
     mount(row({ id: 'r1', role: 'web', name: 'acme-web', state: 'created' }), h);
     expect(screen.getByText('acme-web')).toBeTruthy();
-    expect(screen.queryByRole('link')).toBeNull();
+    // No link to the REPOSITORY — there is nothing to link to. Scoped by name
+    // rather than asserting the row holds no link at all, because a `created`
+    // row also carries its invitation line (MOTIR-1900), whose `not invited`
+    // state offers a Connect GitHub door that is not this assertion's business.
+    expect(screen.queryByRole('link', { name: /acme-web/ })).toBeNull();
   });
 
   it('maps EVERY derivation signal to its own copy, never to a raw key', () => {
@@ -1119,5 +1133,401 @@ describe('a row’s ways forward all fire', () => {
       expect(screen.getByText(expected)).toBeTruthy();
       cleanup();
     }
+  });
+});
+
+// ── THE ACCESS STEP (MOTIR-1900 · design/repository-set §5, panels 3 + 4) ────
+//
+// Repositories Motir creates live in Motir's org and are PRIVATE, so "your code
+// is ready" is only half true until the user can reach it. What is asserted here
+// is that the surface tells that truth: the main line continues into the access
+// step, the account is SHOWN rather than typed, `Later` is a real answer, and
+// each of the three invitation states carries an icon AND a word plus its one way
+// forward.
+
+const ACCESS = {
+  notInvited: { state: 'not_invited', login: null, invitationUrl: null },
+  invited: {
+    state: 'invited',
+    login: 'yuezhu',
+    invitationUrl: 'https://github.com/motir-projects/acme-web/invitations',
+  },
+  accepted: { state: 'accepted', login: 'yuezhu', invitationUrl: null },
+} as const;
+
+/** A settled, Motir-created row — the only shape that raises an access question. */
+function createdRow(access: ProjectRepoDto['access']): ProjectRepoDto {
+  return row({
+    id: 'r1',
+    role: 'web',
+    name: 'acme-web',
+    state: 'created',
+    established: true,
+    access,
+    realizedRepo: {
+      id: 'gr-1',
+      provider: 'github',
+      owner: 'motir-projects',
+      name: 'acme-web',
+      repoRef: 'motir-projects/acme-web',
+      defaultBranch: 'main',
+    },
+  });
+}
+
+/**
+ * Serve BOTH shapes the access step reads: the set (`GET ../repositories`, an
+ * establish view) and the acceptance refresh (`GET ../repositories/access`, a
+ * bare row array). Getting the second wrong is not a detail — the step folds its
+ * result straight into `view.set.rows`.
+ */
+function stubAccessFetch(v: ProjectRepoEstablishViewDto) {
+  return stubFetch((url) => (String(url).endsWith('/access') ? v.set.rows : v));
+}
+
+/** Every row callback, so a click can be asserted to reach the right one. */
+function rowHandlers() {
+  return {
+    onConnectingChange: vi.fn(),
+    onRename: vi.fn(),
+    onConnect: vi.fn(),
+    onReplan: vi.fn(),
+    onSkip: vi.fn(),
+    onRemove: vi.fn(),
+    onMove: vi.fn(),
+    onRetry: vi.fn(),
+    onResendInvitation: vi.fn(),
+  };
+}
+
+function mountRow(r: ProjectRepoDto, h: ReturnType<typeof rowHandlers>) {
+  return renderWithIntl(
+    <RepositoryRow
+      row={r}
+      index={0}
+      total={1}
+      hostOwner="motir-projects"
+      candidates={[]}
+      grantMoreHref="/settings/workspace/github"
+      busy={false}
+      connecting={false}
+      {...h}
+    />,
+  );
+}
+
+describe('the main line continues into the access step', () => {
+  it('a READY set offers Connect GitHub as the primary, with the backlog as the quiet way out', async () => {
+    const v = view([createdRow(ACCESS.notInvited)]);
+    stubAccessFetch(v);
+    renderStep(v);
+
+    // The code exists — and the next thing the user needs is a way to reach it.
+    expect(await screen.findByText('Your code is ready')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Connect GitHub' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Go to my backlog' })).toBeTruthy();
+  });
+
+  it('asks for the ACCOUNT, never a username FIELD — a typed handle would invite a stranger', async () => {
+    const v = view([createdRow(ACCESS.notInvited)]);
+    stubAccessFetch(v);
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+
+    expect(await screen.findByText('Get access to your code')).toBeTruthy();
+    expect(screen.getByText(/Motir invites the GitHub account you connect/)).toBeTruthy();
+    // The hand-off is the shipped connect pane; there is no field to mistype into.
+    expect(screen.getByRole('link', { name: /Connect GitHub/ })).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('SHOWS which account got access once connected, with a way to change it', async () => {
+    const v = view([createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubAccessFetch(v);
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+
+    // The shipped `IdentityHeader`, so the account on screen is the account the
+    // product knows — and correcting it re-runs the connect rather than opening
+    // a field.
+    expect(await screen.findByText('@yuezhu')).toBeTruthy();
+    expect(screen.getByText('This is the account Motir invited')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Use a different account' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open the invitation/ })).toBeTruthy();
+  });
+
+  it('LATER is a real answer — it leaves with everything intact', async () => {
+    const v = view([createdRow(ACCESS.notInvited)]);
+    stubAccessFetch(v);
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Later' }));
+
+    // Back to the settled step, plan and code untouched. `Later` (not "Not now",
+    // which this surface already uses at the technical path's footer).
+    expect(await screen.findByText('Your code is ready')).toBeTruthy();
+  });
+
+  it('has no axe violations on the access step', async () => {
+    const v = view([createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubAccessFetch(v);
+    const { container } = renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    await screen.findByText('@yuezhu');
+
+    const results = await axe.run(container);
+    expect(results.violations).toEqual([]);
+  });
+});
+
+describe('a created row’s INVITATION line', () => {
+  it('reads `Invitation sent` with its two ways forward', () => {
+    const h = rowHandlers();
+    mountRow(createdRow(ACCESS.invited), h);
+
+    expect(screen.getByText('Invitation sent')).toBeTruthy();
+    expect(screen.getByText(/to @yuezhu, waiting to be accepted on GitHub/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open the invitation/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Resend invitation' }));
+    // Row-scoped: rows are independent, so a resend must not touch a sibling.
+    expect(h.onResendInvitation).toHaveBeenCalledWith('r1');
+  });
+
+  it('reads `You have access` and offers nothing once accepted — GitHub owns it from there', () => {
+    mountRow(createdRow(ACCESS.accepted), rowHandlers());
+
+    expect(screen.getByText('You have access')).toBeTruthy();
+    expect(screen.getByText(/@yuezhu can clone and push/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Resend invitation' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Open the invitation/ })).toBeNull();
+  });
+
+  it('reads `Not invited yet` as a STATUS with a connect door — not an error', () => {
+    const { container } = mountRow(createdRow(ACCESS.notInvited), rowHandlers());
+
+    const status = container.querySelector('[role="status"]');
+    expect(status?.textContent).toContain('Not invited yet');
+    expect(screen.getByText(/Motir doesn.t know your GitHub account yet/)).toBeTruthy();
+    // The repository was created successfully — this is a standing condition the
+    // user can resolve, so it is never `role="alert"`.
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(screen.getByRole('link', { name: /Connect GitHub/ })).toBeTruthy();
+  });
+
+  it('is never rendered on a CONNECTED row — that repository is already the user’s own', () => {
+    mountRow(
+      row({
+        id: 'r1',
+        role: 'web',
+        name: 'their-monorepo',
+        state: 'connected',
+        established: true,
+        access: ACCESS.notInvited,
+      }),
+      rowHandlers(),
+    );
+
+    expect(screen.queryByText('Not invited yet')).toBeNull();
+    expect(screen.queryByText('Invitation sent')).toBeNull();
+  });
+
+  it('states are distinguishable WITHOUT colour — each carries an icon and a word', () => {
+    for (const [access, word] of [
+      [ACCESS.invited, 'Invitation sent'],
+      [ACCESS.accepted, 'You have access'],
+      [ACCESS.notInvited, 'Not invited yet'],
+    ] as const) {
+      cleanup();
+      mountRow(createdRow(access), rowHandlers());
+      // An icon AND a word, so `invited` and `accepted` are told apart without hue.
+      expect(screen.getByText(word).querySelector('svg')).toBeTruthy();
+    }
+  });
+});
+
+describe('the access step SENDS the invitations', () => {
+  /** A `created` row nobody has been invited to, for a CONNECTED user — the one
+   *  shape whose access-step primary is the grant button rather than a link out. */
+  const connectedNotInvited = () =>
+    view([createdRow(ACCESS.notInvited)], { githubLogin: 'yuezhu', githubAvatarUrl: null });
+
+  /** Serve the three reads the step makes, so only the POST changes anything:
+   *  the set (`GET ../repositories`), the acceptance refresh (`GET ../access`,
+   *  a bare array) and the grant (`POST ../access`). */
+  function stubAccess(opts: {
+    rows: ProjectRepoDto[];
+    refreshed?: ProjectRepoDto[];
+    grant?: unknown;
+    view: ProjectRepoEstablishViewDto;
+  }) {
+    return stubFetch((url, init) => {
+      const u = String(url);
+      if (u.endsWith('/access')) {
+        if (init?.method === 'POST') {
+          return opts.grant ?? { rows: opts.rows, login: 'yuezhu', invited: 1, failed: 0 };
+        }
+        return opts.refreshed ?? opts.rows;
+      }
+      return opts.view;
+    });
+  }
+
+  function posts(spy: ReturnType<typeof stubFetch>) {
+    return spy.mock.calls.filter(
+      ([u, init]) => String(u).endsWith('/access') && (init as RequestInit)?.method === 'POST',
+    );
+  }
+
+  it('POSTs the grant and keeps the RESPONSE as the confirmation', async () => {
+    const v = connectedNotInvited();
+    const spy = stubAccess({
+      rows: [createdRow(ACCESS.notInvited)],
+      grant: { rows: [createdRow(ACCESS.invited)], login: 'yuezhu', invited: 1, failed: 0 },
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    // The access step for a connected-but-uninvited user: the primary IS the grant.
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    // The rows the grant RETURNED are kept — the step does not re-read the set to
+    // learn what it was just told (design §12: the response IS the confirmation,
+    // and a refresh here would only risk a visible revert).
+    expect(await screen.findByRole('link', { name: /Open the invitation/ })).toBeTruthy();
+    expect(posts(spy)).toHaveLength(1);
+    expect(JSON.parse(String((posts(spy)[0]![1] as RequestInit).body))).toEqual({});
+  });
+
+  it('reports a GitHub refusal — a `failed` count is an error the user must see', async () => {
+    const v = connectedNotInvited();
+    stubAccess({
+      rows: [createdRow(ACCESS.notInvited)],
+      grant: { rows: [createdRow(ACCESS.notInvited)], login: 'yuezhu', invited: 0, failed: 1 },
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      "Motir couldn't send the invitation",
+    );
+  });
+
+  it('reports a failed REQUEST the same way — a throw is not silence', async () => {
+    const v = connectedNotInvited();
+    stubFetch((url, init) => {
+      if (String(url).endsWith('/access') && init?.method === 'POST') throw new Error('network');
+      return String(url).endsWith('/access') ? [createdRow(ACCESS.notInvited)] : v;
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      "Motir couldn't send the invitation",
+    );
+  });
+
+  it('a `login: null` response is the CONNECT PROMPT, never an error', async () => {
+    const v = connectedNotInvited();
+    const spy = stubAccess({
+      rows: [createdRow(ACCESS.notInvited)],
+      grant: { rows: [createdRow(ACCESS.notInvited)], login: null, invited: 0, failed: 0 },
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    // Not having connected is a state the panel already renders as a prompt (off
+    // `githubLogin`, not off this response). Showing it as a failure would blame
+    // the user for a step they never took — so `failed: 0` raises nothing, even
+    // though nothing was invited.
+    await waitFor(() => expect(posts(spy)).toHaveLength(1));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('REFRESHES the pending invitations on entering the step, and folds them in', async () => {
+    const v = view([createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    const spy = stubAccess({
+      rows: [createdRow(ACCESS.invited)],
+      // The user accepted on GitHub while Motir was not looking.
+      refreshed: [createdRow(ACCESS.accepted)],
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+
+    // GitHub tells Motir nothing when an invitation is accepted, so entering the
+    // step is when it asks — and the answer replaces the rows on screen. The
+    // pending invitation's door goes with it rather than pointing at a 404.
+    await waitFor(() =>
+      expect(
+        spy.mock.calls.some(
+          ([u, init]) =>
+            String(u).endsWith('/access') && ((init as RequestInit)?.method ?? 'GET') === 'GET',
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: /Open the invitation/ })).toBeNull(),
+    );
+  });
+
+  it('survives a refresh that fails — the row keeps saying what it last knew', async () => {
+    const v = view([createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubFetch((url, init) => {
+      if (String(url).endsWith('/access') && (init?.method ?? 'GET') === 'GET') {
+        throw new Error('refresh unreachable');
+      }
+      return v;
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+
+    // Best-effort: an unreachable refresh must not blank the invitation the user
+    // can see, and must not surface as a failure they cannot act on.
+    expect(await screen.findByText('@yuezhu')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open the invitation/ })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a row’s Resend reaches the client with that row’s id', async () => {
+    // A created row PLUS an unresolved one, so the default path reads `failed`
+    // and still offers the door into the technical path — which is the only
+    // surface that renders a per-row Resend.
+    const rows = [
+      createdRow(ACCESS.invited),
+      row({ id: 'r2', role: 'api', name: 'acme-api', state: 'failed', failureReason: 'nope' }),
+    ];
+    const v = view(rows, {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+      hasInstallation: true,
+    });
+    const spy = stubAccess({ rows, view: v });
+    renderStep(v);
+
+    fireEvent.click(screen.getByRole('button', { name: 'I already have code' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Resend invitation' }));
+
+    await waitFor(() => {
+      expect(posts(spy)).toHaveLength(1);
+      // Row-scoped, so a resend never touches a sibling's invitation.
+      expect(JSON.parse(String((posts(spy)[0]![1] as RequestInit).body))).toEqual({ rowId: 'r1' });
+    });
   });
 });
