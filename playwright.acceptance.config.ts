@@ -1,6 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
+import { generateKeyPairSync } from 'node:crypto';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
+import {
+  E2E_GITHUB_APP_SLUG,
+  E2E_GITHUB_CLIENT_ID,
+  E2E_GITHUB_CLIENT_SECRET,
+  E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  E2E_PROVISIONING_ORG,
+} from './tests/e2e/_helpers/github-const';
 
 // Dedicated ACCEPTANCE-VIDEO E2E lane (Story MOTIR-1627 · Subtask MOTIR-1632;
 // per-story support MOTIR-1700).
@@ -59,6 +67,31 @@ const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
 const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-billing-fixture.json');
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
+
+// ── The GitHub repo-provisioning seam (MOTIR-1785) ───────────────────────────
+//
+// The repository-set journey establishes repositories SERVER-side, so the fake
+// GitHub lives in the Next process (lib/test-github-repos-mock.ts, behind
+// E2E_TEST_GITHUB_REPOS=1). NO REAL REPOSITORY IS EVER CREATED by this suite.
+//
+// The two paths are set on the RUNNER too (not only in `webServer.env`), because
+// the spec is the other half of the seam: it WRITES the control file to say what
+// GitHub should do, and READS the journal to assert the exact outbound request
+// bodies the two boundaries sent. Same split as the billing fixture above.
+const MOTIR_GITHUB_CONTROL_PATH = path.resolve('/tmp/motir-acceptance-github-control.json');
+const MOTIR_GITHUB_JOURNAL_PATH = path.resolve('/tmp/motir-acceptance-github-journal.jsonl');
+process.env['MOTIR_GITHUB_CONTROL_PATH'] ??= MOTIR_GITHUB_CONTROL_PATH;
+process.env['MOTIR_GITHUB_JOURNAL_PATH'] ??= MOTIR_GITHUB_JOURNAL_PATH;
+
+/** The Studio App's credentials. The private key is GENERATED per run rather than
+ *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
+ *  unchanged), and a PEM in the repo is a secret-scanner finding for no benefit. */
+const E2E_STUDIO_APP_ID = '424242';
+const { privateKey: E2E_STUDIO_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -151,6 +184,24 @@ export default defineConfig({
         MOTIR_AI_URL,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
         MOTIR_AI_BILLING_FIXTURE_PATH,
+        // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
+        E2E_TEST_GITHUB_REPOS: '1',
+        MOTIR_GITHUB_CONTROL_PATH,
+        MOTIR_GITHUB_JOURNAL_PATH,
+        GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+        GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+        GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,
+        // The identity/installation the seed binds are read back on this surface;
+        // the App slug is what the settings pane the step hands off to renders.
+        GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+        GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
+        // The access step's "connect" is a REAL identity OAuth round-trip, not a
+        // seeded row: the recorded journey's whole point is that a user with no
+        // GitHub account connects one and the invitation follows. Same seam
+        // github.spec.ts drives (test-oauth-mock's synthetic `e2e-octocat`).
+        E2E_TEST_OAUTH: '1',
+        GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
+        GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
       },
     },
     {
