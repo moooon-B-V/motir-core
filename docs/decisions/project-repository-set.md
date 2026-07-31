@@ -11,6 +11,15 @@ kept below, marked, with the reversal recorded in
 [the amendment](#amendment-2026-07-30-yue--motir-1893--a-new-projects-repos-are-always-motir-owned).
 Nothing in §0–§2 or §4–§6 changes.
 
+**Amended:** 2026-07-31 (Yue · MOTIR-1930) — **§3's tenancy consequence**: because every
+project's repos now sit behind ONE shared installation, the mirror's `installation → workspace`
+binding no longer identifies a tenant. `github_repo` gains its own `workspace_id`,
+`github_installation.workspace_id` becomes nullable, every delivery resolves its workspace
+through the REPO row, and the shared installation never reconciles. Recorded in
+[the tenancy amendment](#amendment-2026-07-31-yue--motir-1930--the-provisioning-orgs-mirror-is-per-workspace-and-tenancy-moves-onto-the-repo-row).
+It **overturns nothing** — §3 and its 2026-07-30 amendment stand unchanged; this closes what
+they cost. Nothing in §0–§2 or §4–§6 changes.
+
 The recorded architecture every other card in MOTIR-1775 builds to. It decides six
 things: what fixes the **number** of repositories a project has (§0), the **role**
 vocabulary and naming (§1), what **seeds** a repo the default starter does not fit (§2),
@@ -353,6 +362,270 @@ secondary, with no account picker for created rows; MOTIR-1900 grants the user c
 access to each created repo; MOTIR-711 (9.3.7) becomes the standard hand-off, not an edge
 case. The planning defect this amendment corrects is logged as MOTIR-1897.
 
+#### Amendment 2026-07-31 (Yue · MOTIR-1930) — the provisioning org's mirror is PER-WORKSPACE, and tenancy moves onto the repo row
+
+**Why this exists.** The amendment above put **every** project's repositories in **one**
+Motir org, behind **one** GitHub App installation. Nothing then re-examined the mirror that
+assumption broke: `GithubInstallation` binds an installation to exactly ONE workspace, and
+every tenancy read in the product resolves _installation → workspace_. This amendment
+closes that consequence. It changes no decision in §3 — it records what §3 costs and what
+the shape must therefore be. Surfaced by `motir run MOTIR-1781` (2026-07-31) under the
+run-time claim gate: the creation primitive could not satisfy its own acceptance criterion
+("associated with the project, and in the installation") because the shipped mirror cannot
+represent one installation seen by more than one workspace.
+
+**The decision, in three rulings:**
+
+1. **Tenancy is a property of the REPOSITORY, not of the installation.** `github_repo`
+   gains its own `workspace_id` and its own RLS predicate; `github_installation.workspace_id`
+   becomes **nullable**, and `NULL` means _"Motir's shared provisioning installation, owned
+   by no tenant"_. `installation_id` stays `@unique` — one installation is still one row.
+2. **Every inbound delivery resolves its workspace through the REPO row.** The installation
+   still selects which mirror rows a delivery may touch; the repo row says whose they are.
+   `installation.workspaceId` is never again read to route, attribute, or authenticate.
+3. **The shared installation never goes through `persistInstallation`.** `deleteExcept` is
+   unreachable on the Motir-hosted path, by construction rather than by care.
+
+##### The contradiction — verified at `motir-core` `origin/main` @ `a87d53f4`, not assumed
+
+Six facts, each re-verifiable at the citation. They compound in order.
+
+1. **One org, one installation, every tenant.** `.env.example:177-188` — `GITHUB_FALLBACK_ORG`
+   is a single org login, and the "Motir Studio" App (`GITHUB_STUDIO_APP_ID` /
+   `GITHUB_STUDIO_APP_PRIVATE_KEY`) is _"private (installable solely on the account that owns
+   it)"_. Every workspace's created repos therefore sit behind **one** installation id.
+2. **The mirror binds that installation to exactly ONE workspace.** `prisma/schema.prisma`,
+   `model GithubInstallation`: `installationId String @unique`, with a single non-null
+   `workspaceId`.
+3. **And re-binds it on the next write.** `lib/repositories/githubInstallationRepository.ts:65-75`
+   — `upsert({ where: { installationId }, update: rest })`, where `rest` **includes
+   `workspaceId`**. The second workspace to establish a set silently moves Motir's
+   provisioning installation to itself.
+4. **Taking the first workspace's repos with it.** `githubInstallationService.persistInstallation`
+   then calls `githubRepoRepository.deleteExcept` (`lib/repositories/githubRepoRepository.ts:164-173`)
+   — every `GithubRepo` of that installation not in _this_ run's list is **deleted**.
+   Workspace A's mirrored repos are pruned by workspace B's establish.
+5. **A repo mirrored under another tenant's installation is INVISIBLE, so the row never reads
+   as established.** `prisma/migrations/20260703120000_add_github_installation_repo_pr/migration.sql:120-140`
+   — `github_repo`'s RLS policy joins through `github_installation.workspace_id`.
+   `projectRepoRepository.listByProject`'s LEFT JOIN therefore returns the realized half as
+   NULL (its own comment says so, `lib/repositories/projectRepoRepository.ts:41-43`), so
+   `ProjectRepoDto.established` is `false` (`lib/mappers/projectRepoMappers.ts:53`) and
+   `toProjectRepoNames` (`lib/projectRepos/names.ts`) drops the row — the repo is never
+   dispatchable. That defeats the Story's own criterion, "an agent is told where to build".
+6. **Every downstream consumer resolves installation → ONE workspace.**
+   `githubWebhookService.ts:168 / 330 / 357 / 408` (push→index, CI status, reconcile, PR
+   status sync), `ciMinutesMeterService.ts:146` (**which workspace gets billed**),
+   `codeGraphIndexService.ts:72`. Unchanged, every created repo's PR, CI and index events
+   route to whichever single workspace currently holds the row.
+
+**Two further consequences the surfacing card did not name, found while verifying it.** Both
+are load-bearing, and the second is the sharpest argument for the shape chosen below.
+
+7. **A created repo is undispatchable for a SECOND, independent reason.**
+   `githubRepoRepository.listByWorkspace` (`:41`) reads
+   `where: { installation: { is: { workspaceId } } }` — the workspace's connected repo set,
+   which is the validation domain and default source for `work_item.targetRepo`
+   (`lib/workItems/targetRepo.ts:79`, MOTIR-1804). A repo created for workspace A joins
+   through an installation bound to B, so it is absent from A's connected set even before
+   fact 5's `established` path is reached. `findConnectedByWorkspaceAndName` (`:100`, the
+   code-scanning proxy, MOTIR-1605) has the same join and the same hole.
+8. **The keyless-OIDC trust seam authenticates a CI job into the WRONG TENANT.**
+   `lib/github/oidcAuth.ts:102` — after `jwtVerify` validates the token, the tenant is
+   `match.installation.workspaceId`. The repo is resolved globally by `(owner, name)`
+   (`githubRepoRepository.findConnectedByName`, `:125`), and the guard against picking a
+   tenant arbitrarily is _"reject when the coordinate matches more than one row"_. In one
+   shared org a coordinate is globally unique, so **that guard can never fire for a hosted
+   repo** — the read succeeds, returns one row, and reads the tenant off the shared
+   installation. A verified OIDC token from workspace A's repo would authenticate as
+   workspace B, acting as B's owner. This is the one consequence that is a cross-tenant
+   **authentication** defect rather than a routing or visibility one.
+
+**None of this is reachable today** only because nothing has ever created a repo in the
+provisioning org. That is the whole window this amendment lands in.
+
+##### 1 · The shape — `github_repo` carries its own `workspace_id` (option b)
+
+**Decided: (b).** `github_repo` becomes workspace-scoped in its own right — a `workspace_id`
+column with a direct RLS predicate — and the provisioning installation is held **once**,
+with `github_installation.workspace_id` **nullable**.
+
+**Why, in four points:**
+
+- **Tenancy genuinely IS a property of the repo here.** Workspace A's repo and workspace B's
+  repo differ by repository, not by installation — they share the installation by
+  construction. A column on the row that actually varies is the honest model; a discriminator
+  on the row that does not vary is not.
+- **The schema already has this exact precedent, one table over.** `project_repository`
+  carries its own `workspace_id` and gates on it directly — its migration comment says so
+  in terms: _"the gate is the row's OWN `workspace_id`, not a join through"_
+  (`prisma/migrations/20260730115208_add_project_repository_set/migration.sql:107-119`).
+  Making `github_repo` match it removes an inconsistency rather than adding one.
+- **Nullable `workspace_id` on the installation converts a silent mis-route into a compile
+  error.** This is the decisive practical argument. Every one of the ten call sites in §2
+  reads `installation.workspaceId` as a `string`; making it `string | null` makes TypeScript
+  name each one. The sweep below is a checklist for the reviewer, but the compiler is what
+  guarantees it is complete — no site can be missed by oversight.
+- **`installation_id` stays `@unique`, so "an installation" keeps meaning an installation.**
+  The token mint (`lib/github/appAuth.ts:104`, keyed on the host installation id), the GitLab
+  `FOR UPDATE` refresh lock (`githubInstallationRepository.lockByInstallationId`) and the
+  uninstall delete (`deleteByInstallationId`) all continue to address exactly one row.
+
+**Rejected — (a) N `GithubInstallation` rows, one per workspace** (relax to
+`@@unique([installationId, workspaceId])`). The cheapest diff, and it fixes visibility for
+free: each workspace's repos hang off its own installation row, so the existing
+`github_repo` / `github_pull_request` RLS joins keep working with **no policy rewrite**, and
+`deleteExcept(installation.id, …)` scopes itself. **Its cost is that it buys none of the
+sweep and damages the invariant.** `findByInstallationId` is a `findUnique` today; under (a)
+it returns an arbitrary one of N, so all ten sites must change **anyway** — but silently,
+with no type change to force them. Meanwhile `lockByInstallationId` would lock N rows (the
+GitLab token-rotation guard degrades from a lock to a race), `deleteByInstallationId` would
+delete every tenant's row on one uninstall, and the column comment _"UNIQUE (one row per
+connection)"_ becomes false — the invariant survives only by convention on the paths where N
+happens to be 1. Paying a real correctness cost for a sweep it does not shorten is the wrong
+trade. (a) also does **not** settle question 3: `fetchInstallationRepos` returns the whole
+shared org, so a per-workspace reconcile would still upsert every tenant's repos into one
+row — a leak in place of a delete.
+
+**Rejected — (c) Motir-hosted rows bypass the mirror** (`ProjectRepo` carries its own
+realized `owner` / `name` / `defaultBranch` / host repo id). Conceptually the cleanest, and
+the only shape that widens no tenancy-bearing index. **It breaks the PR→work-item loop.**
+`GithubPullRequest.repoId` is a required FK to `GithubRepo.id` with `@@unique([repoId, number])`
+(`prisma/schema.prisma`, `model GithubPullRequest`), and `GithubCheckRun` hangs off that. A
+hosted repo would have no `GithubRepo` row, so the status sync — the mechanism that flips a
+card to Done on merge, for **every** new project — would have nowhere to write, and would
+need either a parallel PR table or a polymorphic FK. It also dissolves
+`ProjectRepo.githubRepoId @unique` (the "at most one project claims a repo" guarantee that
+`attachRealizedRepo` enforces, `lib/services/projectRepoSetService.ts:623`), the
+`established` rule (`row.githubRepo !== null`), and `repoCloneUrl`'s coordinate source — then
+adds a permanent second resolution path in the webhook, meter, code-graph and dispatch. The
+largest consequence of the three, as the surfacing card anticipated, and larger than it
+looked: the cost is not "a second routing path", it is the PR loop.
+
+##### 2 · The resolution rule — the installation SELECTS, the repo row ATTRIBUTES
+
+**The rule.** An inbound delivery carries `installation.id` (shared) and `repository.id`
+(per-repo). Resolution keeps both hops and changes only which one answers _whose_:
+
+```
+installation_id (delivery)  → GithubInstallation   — WHICH mirror rows this delivery may touch
+  + repository.id           → GithubRepo           — via @@unique([installationId, repoId])
+                            → repo.workspace_id    — WHOSE it is        ← the only tenancy read
+```
+
+Keying on `(installationId, repoId)` — not on `repoId` alone — is deliberate. `repo_id` is
+**not** globally unique: two tenants may legitimately connect the same public repository
+under their own installations, and `findConnectedByName`'s existing ambiguity guard exists for
+exactly that. The compound unique index already in the schema disambiguates without a new
+read, so this rule needs **no new repository method** — only a change to which field the
+workspace is taken from. The GitLab webhook path already resolves repo-first
+(`gitlabWebhookService.ts:143 / 176 / 190` via `findByRepoIdAndProvider`); this brings the
+GitHub path to the posture the newer provider already chose.
+
+**The sweep — every call site that must adopt it.** All ten currently read
+`installation.workspaceId`; each becomes a `null` at the type level under this amendment.
+
+| Call site                                                           | What it resolves today                                                   | After                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `githubWebhookService.ts:168` (`handlePush`)                        | the workspace the code-graph refresh job is enqueued for                 | `repo.workspaceId`                                                                               |
+| `githubWebhookService.ts:330` (`resolveGithubCiContext`)            | the installation handed to the shared CI-feedback consumer               | `repo.workspaceId`                                                                               |
+| `githubWebhookService.ts:357` (`reconcileInstallation`)             | the workspace the whole reconcile is performed for                       | **skip guard** — see question 3; not a re-route                                                  |
+| `githubWebhookService.ts:408` (`resolveGithubChangeRequestContext`) | PR status sync's tenant **and** `resolveBoundMember`'s membership lookup | `repo.workspaceId` (both)                                                                        |
+| `ciMinutesMeterService.ts:146`                                      | **who gets billed** — the workspace the attribution chain starts in      | `repo.workspaceId`; see the meter section below                                                  |
+| `codeGraphIndexService.ts:72`                                       | installation → workspace → **all** its projects (the index fan-out)      | `repo.workspaceId`; the fan-out itself stays MOTIR-1754's                                        |
+| `githubRepoRepository.ts:41` (`listByWorkspace`)                    | the workspace's connected repo set → the `targetRepo` domain (`:79`)     | filter on the repo's own `workspace_id`                                                          |
+| `githubRepoRepository.ts:100` (`findConnectedByWorkspaceAndName`)   | the code-scanning proxy's repo→tenant read (MOTIR-1605)                  | filter on the repo's own `workspace_id`                                                          |
+| `oidcAuth.ts:102` (via `findConnectedByName`, `:125`)               | **the authenticated tenant** of a keyless CI caller                      | `match.workspaceId`; the ambiguity guard stays, it is no longer load-bearing                     |
+| `gitlabConnectionService.ts:104`                                    | the GitLab connection's workspace                                        | **unchanged semantics** — never shared (§5.6 of the CI ADR); must handle the now-nullable column |
+
+The last row is in the list precisely because it does **not** change meaning: a nullable
+column touches it, and a sweep that omits a site because it is correct is how the next
+reader loses the guarantee that the list is complete.
+
+##### 3 · Reconcile — the shared installation never reaches `persistInstallation`
+
+**`deleteExcept` is NOT reachable on the Motir-hosted path.** Stated as a reachability
+property, not a caution.
+
+`persistInstallation` is correct for a user's own installation, where one reconcile sees that
+workspace's whole selection: it fetches GitHub's authoritative repo set and prunes anything
+absent. For the shared installation it is wrong twice over — `fetchInstallationRepos` returns
+**every tenant's** repos, so a scoped reconcile would both delete the repos it did not fetch
+and **leak** the ones it did into whichever workspace ran it.
+
+So the shared path does not reconcile at all:
+
+- **Creation writes one row.** MOTIR-1781 upserts exactly the `GithubRepo` it just created,
+  stamped with the creating project's `workspace_id`, and calls `attachRealizedRepo`. It
+  never calls `persistInstallation`, so no code path can reach `deleteExcept` with a
+  provisioning-installation id.
+- **The webhook skips it.** `reconcileInstallation` (`githubWebhookService.ts:357`) must
+  return a typed **`skipped_shared_installation`** outcome — not `synced`, not `skipped_unbound`
+  — for any delivery whose installation row has `workspace_id IS NULL`. A distinct outcome
+  because the two mean different things operationally: unbound is "nobody connected this
+  yet", shared is "this is ours and reconcile does not apply".
+- **The null IS the guard.** A shared installation has no workspace to reconcile _for_, so
+  the code cannot form the call: `persistInstallation` requires a `workspaceId: string`.
+  There is no flag to forget to check.
+- **Disconnect stays available and stays narrow.** `deleteByInstallationAndRepoId` (the
+  single-repo delete) is unaffected — removing one hosted repo is still a legitimate,
+  bounded write.
+
+##### 4 · What the CI meter bills, and how the workspace is attributed
+
+Cross-references `ci-minutes-allowance.md` §5.1–§5.2, which this amendment **narrows without
+overturning**.
+
+**The owner gate stands, as a QUALIFIER.** §5.1 meters a run iff its repository's owner login
+is `GITHUB_FALLBACK_ORG` (`lib/ciMetering/config.ts:49`, read from the run's own payload per
+§5.5). That remains exactly right: it answers _"does Motir pay for this run?"_, which is the
+billing fact itself. §5.3 already recorded that the gate stops being selective once every
+created repo is Motir-owned.
+
+**What it can no longer do is attribute.** The owner login is now true for every tenant's
+repos, so it qualifies a run for metering and identifies **nobody** to charge. Attribution
+comes from the repo row: `repo.workspaceId` → `ProjectRepo` (via `githubRepoId @unique`) →
+project → workspace → organization. §5.2's documented chain is unchanged — it always ran
+through `ProjectRepo`; what changes is the workspace the chain is _entered_ under.
+
+**The concrete failure this prevents, and its direction.** `ciMinutesMeterService.ts:146`
+binds `withWorkspaceServiceContext(installation.workspaceId)` and reads `project_repository`
+under it. That table's RLS gates purely on `app.workspace_id` with no system escape, so a
+hosted repo read under the wrong tenant's GUC resolves **no** project row, and the run lands
+in §5.4's _"metered as a cost, charged to nobody, and LOGGED"_ bucket. The defect therefore
+degrades to **systematic under-billing**, not cross-tenant over-billing: Motir would pay for
+every project's CI and invoice no one, loudly, in the log. Worth stating plainly — RLS holds
+the safety line even while routing is wrong, which is why this is a correctness bug found in
+a design review rather than an incident. The service's own comment claims cross-tenant
+mis-attribution is "structurally impossible"; that claim survives this amendment intact, and
+it is what converts the bug into silence rather than harm.
+
+**No change to what a run costs, to §3's normalization, or to the pool.** Only which
+workspace the chain starts in.
+
+##### 5 · What this asks of the not-yet-built cards
+
+Recorded so the sweep is visible; **no card below is re-scoped by this amendment.**
+
+The schema change, the RLS policy rewrite and the ten-site sweep are **MOTIR-1931**'s, in
+one PR — they are one contract, and landing the nullable column without the sweep is the
+window in which the mis-routing is live. This amendment ships **no schema or app change**.
+
+MOTIR-1781 (the creation primitive) is unblocked: it can now write a mirror row that its own
+project can see, and its "in the installation" criterion becomes satisfiable. Through it,
+**MOTIR-1782** (the approval-step UI reads `established` off a row that is finally true),
+**MOTIR-1900** (collaborator invites, which act per created repo), **MOTIR-1913** (role →
+`targetRepo` resolution, which reads `toProjectRepoNames` — fact 5 — and the workspace's
+connected set — fact 7) and **MOTIR-711** (the take-it-over transfer, which must move a
+repo's tenancy with it) all depend on this shape and none of them changes because of it.
+
+The planning defect this amendment corrects — the ownership reversal moved every tenant's
+repos behind one installation without re-checking the mirror — is logged as **MOTIR-1932**.
+It is the second instance of a recorded class: _a card's preconditions include the
+ENTITY/KEY it hangs on, not only the data-source mechanism it reads_ (`notes.html`, the
+motir-ai org-identity finding). There the key was absent across a service boundary; here it
+was present but no longer identifying. Both are the same check, missed the same way.
+
 ### §4 — Rows are INDEPENDENT, failure is honest, and the step is resumable
 
 **4.1 · The per-row lifecycle:**
@@ -507,6 +780,14 @@ MOTIR-1782), never of a second branch in the model.
 - **Nothing here re-decides the GitHub App model** (7.10, shipped) and nothing re-scopes the
   coding convention from project to repo (a 7.14 change). §1's per-row role is deliberately
   compatible with a per-repo convention landing later.
+- **The connected-repo mirror becomes a TENANCY-BEARING table** _(2026-07-31 amendment)_.
+  `github_repo` carries its own `workspace_id` and its own RLS predicate;
+  `github_installation.workspace_id` is nullable, and null means the shared provisioning
+  installation. Every installation→workspace read in the product moves to the repo row (the
+  ten-site sweep), and the shared installation never reconciles. This is the first place a
+  GitHub row's tenant is not derivable from its installation, and it is a property of §3's
+  one-org decision rather than of the repo set itself. MOTIR-1931 lands it; MOTIR-1932 logs
+  the planning defect.
 
 ## Deferred to the spike — asserted nowhere in this document
 
@@ -553,4 +834,21 @@ deliberately stops short and points at (d).
   (two-sided re-consent).
 - `motir-meta/notes.html` — the collapse-to-one-repo lesson (MOTIR-1775) and #103
   (cardinality is a cross-story contract) this ADR is the correction to; planning bug
-  MOTIR-1887.
+  MOTIR-1887. For the 2026-07-31 amendment: the org-identity finding — _a card's
+  preconditions include the ENTITY/KEY it hangs on, not only the data-source mechanism it
+  reads_ — of which the mirror's tenancy key is the second instance; planning bug
+  MOTIR-1932.
+- Read by the 2026-07-31 tenancy amendment:
+  `prisma/migrations/20260703120000_add_github_installation_repo_pr/migration.sql` (the
+  `github_installation` / `github_repo` / `github_pull_request` RLS policies, and the
+  join-through-installation predicate it replaces) ·
+  `prisma/migrations/20260730115208_add_project_repository_set/migration.sql` (the row's-OWN
+  `workspace_id` predicate it mirrors) · `lib/repositories/githubInstallationRepository.ts`
+  (`upsert` re-binds `workspaceId`; `findByInstallationId`) ·
+  `lib/repositories/githubRepoRepository.ts` (`deleteExcept`, `listByWorkspace`,
+  `findConnectedByName`, `findByRepoIdAndProvider`) · `lib/services/githubWebhookService.ts`
+  · `lib/services/ciMinutesMeterService.ts` · `lib/github/oidcAuth.ts` — the sweep's ten
+  sites.
+- `docs/decisions/ci-minutes-allowance.md` §5.1–§5.2 — the owner-login gate the tenancy
+  amendment narrows to a QUALIFIER, and the attribution chain it re-enters through the repo
+  row.
