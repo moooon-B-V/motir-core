@@ -754,17 +754,23 @@ function OwnershipPromise() {
   return (
     <div className="flex max-w-prose gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-card-padding)">
       <Lock className="mt-0.5 size-5 shrink-0 text-(--el-icon-muted)" aria-hidden="true" />
-      {/* ⚠️ The design draws a `How moving it works` DOOR beside this promise,
-          leading into MOTIR-711's transfer flow. It is NOT rendered here because
-          that flow does not exist yet and neither does any page explaining it — a
-          link to a 404 is a worse broken promise than no link, and a surface that
-          draws a door owes a real entrance. MOTIR-711 adds it with the room it
-          opens onto. The PROMISE itself — the line MOTIR-1785's acceptance video
-          must show — is here. */}
+      {/* THE DOOR IS NOW LIT (MOTIR-1939). It was withheld until this commit
+          because the room behind it did not exist — "a link to a 404 is a worse
+          broken promise than no link, and a surface that draws a door owes a real
+          entrance". `/settings/project/repositories` is that entrance, and this
+          is door 1 of the three the design draws (§14.4). A plain `Link`, not a
+          button: it is a navigation, and the promise is a standing statement
+          rather than a control. */}
       <p className="min-w-0 text-sm leading-relaxed text-(--el-text-secondary)">
         {t.rich('promise', {
           b: (chunks) => <strong className="font-semibold text-(--el-text)">{chunks}</strong>,
-        })}
+        })}{' '}
+        <Link
+          href="/settings/project/repositories"
+          className="font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          {t('promiseDoor')}
+        </Link>
       </p>
     </div>
   );

@@ -107,8 +107,13 @@ describe('projectSettingsNav registry — grouping', () => {
   it('groups in rail order, only non-empty groups, entries within their group', () => {
     const groups = groupSettingsNav(PROJECT_SETTINGS_NAV);
     expect(groups.map((g) => g.group)).toEqual(SETTINGS_NAV_GROUP_ORDER);
+    // `repositories` (MOTIR-1939) joins General BELOW Details: it is the
+    // TAKE-IT-OVER room's permanent door, and a `transfer_pending` that sits for
+    // days has to be reachable from the rail rather than only from the approval
+    // step the user left weeks ago.
     expect(groups.find((g) => g.group === 'general')?.entries.map((e) => e.id)).toEqual([
       'details',
+      'repositories',
     ]);
     expect(groups.find((g) => g.group === 'work')?.entries.map((e) => e.id)).toEqual([
       'workflow',
