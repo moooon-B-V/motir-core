@@ -1,0 +1,2633 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Take it over — move your repositories to your own GitHub (MOTIR-1938)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE TAKE-IT-OVER FLOW: the per-row takeover
+      action, the target picker, the costs stated before the user commits, and the
+      asynchronous transfer + App re-install drawn as DURABLE, re-promptable states.
+      Story MOTIR-1775 · subtask MOTIR-1938. Layout source of truth for MOTIR-1939
+      (the surface), which implements it; the saga behind it is MOTIR-711.
+
+      ── THE FLOW WAS GROUNDED, NOT INVENTED ──
+      Every state, every ordering rule and every cost line below is quoted from a
+      decided source. Nothing here is a new product decision:
+        · MOTIR-711 — the saga: `requested → transfer_pending → awaiting_reinstall
+          → done`, plus `failed`; PER ROW, not per project; a connect-existing row
+          is a clean no-op; a user with no GithubIdentity gets a typed error the
+          surface renders as MOTIR-1900's connect prompt.
+        · docs/decisions/ci-minutes-allowance.md §5.4 — metering STOPS at the
+          transfer (the owner login changes). §G — the transfer re-enables Actions
+          UNCONDITIONALLY, even while the org is exhausted, and re-enable happens
+          BEFORE the transfer. §D — the two-option exhausted state, and its binding
+          copy rule: framed as "GitHub bills you for Actions directly from then
+          on", stating its real costs — a GitHub account you own, an asynchronous
+          transfer you accept on GitHub, and an App re-install — NEVER "one click".
+        · docs/decisions/project-repository-set.md §3 + the 2026-07-30 amendment
+          (MOTIR-1893) — every repo Motir creates is Motir-owned and claimable; a
+          set mixes ownership only via a deliberate connect-existing row.
+
+      ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
+      Three surfaces this composes ALREADY EXIST, so all three were RENDERED before
+      anything was drawn — not reasoned from source (notes.html mistake #73):
+        · components/planning/repositories/RepositoryRow.tsx (SHIPPED as code by
+          MOTIR-1782, merged in cefe76c9 — the card's "ships as a mock" premise was
+          stale by the time this ran). Rendered headless from its own source + the
+          real compiled globals.css: the row is a FLEX pair — a `min-w-0 flex-1`
+          main column plus a shrink-0 control column — at `p-(--spacing-card-padding)`
+          (24px, NOT the 16px the earlier mock drew), `rounded-(--radius-card)`,
+          tinted `--el-success-surface` when `created` and `--el-notice-info-bg`
+          when `connected`, with the state as an ICON + a WORD in
+          `--el-text-strong` and the repo as a mono `--el-link` + external-link
+          glyph. The rows below mirror that render element for element; the
+          takeover action is one more entry in the row's SHIPPED `RowActions`
+          strip (the flex-wrap gap-2 row where `Let Motir host it` already sits).
+        · app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx —
+          `IdentityHeader` + `GrantRow`, rendered the same way. Panel 5's
+          re-install hand-off REUSES them rather than redrawing a stand-in.
+        · design/repository-set/repository-set.mock.html panel 1 and
+          design/billing/ci-line.mock.html panel 2 — the two shipped design assets
+          that draw this flow's DOORS. Rendered with Playwright and composed as
+          they actually are. Neither is redrawn.
+
+      ── WHAT THIS ASSET ADDS TO ITS AREA ──
+      `repository-set.mock.html` draws the step where a project's code is
+      ESTABLISHED. This one draws what the standing ownership promise on that step
+      actually opens onto. Same area, same primitives, same copy register; the
+      `design-notes.md` beside them indexes both.
+
+      Token + icon layers are GENERATED from @motir/design-system/theme.css and
+      lucide-react, so no value is retyped and the mock cannot drift. The octocat
+      path is verbatim from components/icons/GithubMark.tsx. The ONLY raw values
+      authored anywhere below are the non-semantic board backdrop and the canvas
+      grid-dot texture — never a card, pill, state fill, border or text colour.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.i.lg {
+        width: 18px;
+        height: 18px;
+      }
+      svg.i.xl {
+        width: 20px;
+        height: 20px;
+      }
+      svg.gh {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: currentColor;
+      }
+      svg.gh.lg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ═══ SHIPPED PRIMITIVES — classes mirror the cva recipes ═══ */
+      /* Button (packages/design-system/src/components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      /* Card */
+      .card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      /* Pill */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-progress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* Input + FormField */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .field > label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .helper {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-helper);
+        margin: 0;
+      }
+      .helper.xs {
+        font-size: 12px;
+      }
+      /* SectionLabel */
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Spinner */
+      .spin {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      /* QuietAction — the shipped RepositoryRow affordance */
+      .quiet {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      /* Combobox trigger */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .combo.disabled {
+        opacity: 0.6;
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .listbox .opt .sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .listbox .grp {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      /* Modal */
+      .modal {
+        border-radius: var(--radius-modal);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 34rem;
+      }
+      .modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .modal-head h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .scrim {
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* ═══ THE SHIPPED REPOSITORY ROW — mirrored from RepositoryRow.tsx ═══
+         A FLEX pair (min-w-0 flex-1 main + shrink-0 aside) at
+         p-(--spacing-card-padding). Verified by rendering the real component. */
+      .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        min-width: 0;
+      }
+      /* state fills — every one a palette token, never an invented hue */
+      .row.created {
+        background: var(--el-success-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row.yours {
+        background: var(--el-notice-info-bg);
+        border-color: var(--el-border-soft);
+      }
+      .row.needsyou {
+        background: var(--el-warning-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row.failed {
+        background: var(--el-danger-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row-main {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .row-head {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .row-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .row-state.ok svg {
+        color: var(--el-success);
+      }
+      .row-state.info svg {
+        color: var(--el-info);
+      }
+      .row-state.wait svg {
+        color: var(--el-warning);
+      }
+      .row-state.bad {
+        color: var(--el-danger-surface-text);
+      }
+      .row-state.bad svg {
+        color: var(--el-danger);
+      }
+      .repo-link {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .repo-link .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 14px;
+        color: var(--el-link);
+      }
+      .repo-link .name.plain {
+        color: var(--el-text);
+      }
+      .repo-link .ghm {
+        color: var(--el-icon-muted);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .row-aside {
+        display: flex;
+        flex: none;
+        flex-direction: column;
+        gap: 4px;
+        align-self: flex-start;
+      }
+      .alert {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-danger-surface-text);
+      }
+      .alert svg {
+        color: var(--el-danger);
+        margin-top: 2px;
+      }
+
+      /* ═══ THE ROOM — /settings/project/repositories ═══ */
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        overflow: hidden;
+        min-height: 460px;
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active svg {
+        color: var(--el-icon-active);
+      }
+      .set-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 28px;
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-head p {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+
+      /* callouts — every fill a palette token */
+      .note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .note svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .note .door {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .banner.warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .banner.warn svg {
+        color: var(--el-warning);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner.info {
+        background: var(--el-notice-info-bg);
+        color: var(--el-text-strong);
+      }
+      .banner.info svg {
+        color: var(--el-info);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner b {
+        font-weight: 600;
+      }
+
+      /* the COSTS block — the ADR's three real costs, before the commit */
+      .costs {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 14px 16px;
+      }
+      .costs > .h {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .costs ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .costs li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .costs li svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .costs li b {
+        font-weight: 600;
+      }
+      .costs li .sub {
+        display: block;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* IdentityHeader — mirrored from gitSettingsPrimitives.tsx (rendered) */
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .identity .av {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        width: 40px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-avatar-fallback);
+        color: var(--el-text-inverted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .identity .who {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        flex: 1;
+      }
+      .identity .top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .identity .login {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .identity .cap {
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      /* GrantRow — mirrored from gitSettingsPrimitives.tsx (rendered) */
+      .grant {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .grant .tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 36px;
+        width: 36px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-card-icon-bg);
+        color: var(--el-card-icon-fg);
+      }
+      .grant .body {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .grant .body strong {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .grant .body p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* the DOOR strip + host-surface repros */
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        gap: 12px;
+        align-items: stretch;
+      }
+      .flow .arrow {
+        color: var(--el-icon-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .frame {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+      }
+      .frame .fcap {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .frame p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .lands {
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-accent);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+        padding: 14px 16px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      /* the DOOR itself, haloed so the reader SEES it */
+      .halo {
+        position: relative;
+        border-radius: var(--radius-control);
+        outline: 2px solid var(--el-accent);
+        outline-offset: 3px;
+      }
+      .doortag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-callout-bg);
+        color: var(--el-callout-text);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      /* the step canvas (repository-set step repro) */
+      .shell {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-canvas);
+        overflow: hidden;
+      }
+      .step-pane {
+        padding: 24px;
+        background:
+          radial-gradient(circle at 1px 1px, rgba(15, 15, 15, 0.06) 1px, transparent 0) 0 0 / 22px
+            22px,
+          var(--el-canvas);
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 30rem;
+      }
+      .step h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      /* the billing card repro */
+      .bill {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        overflow: hidden;
+      }
+      .bill .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        padding: 14px 16px;
+      }
+      .bill .head strong {
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .bill .body {
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .opts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .opt-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .opt-card h5 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .opt-card .cons {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        flex: 1;
+      }
+      .opt-card .cost {
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+
+      /* galleries */
+      .gallery {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+      .twoup {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+      .state {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 16px;
+      }
+      .state > .cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .state > .cap span {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      figcaption {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      @media (max-width: 980px) {
+        .flow,
+        .twoup,
+        .opts {
+          grid-template-columns: 1fr;
+        }
+        .settings {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-mail" viewBox="0 0 24 24">
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </symbol>
+        <symbol id="i-badge-check" viewBox="0 0 24 24">
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 24 24">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </symbol>
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6" /></symbol>
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+        <symbol id="i-external-link" viewBox="0 0 24 24">
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </symbol>
+        <symbol id="i-building-2" viewBox="0 0 24 24">
+          <path d="M10 12h4" />
+          <path d="M10 8h4" />
+          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+          <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+          <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 24 24">
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24">
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <symbol id="i-ellipsis" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24">
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24">
+          <rect x="14" y="3" width="5" height="18" rx="1" />
+          <rect x="5" y="3" width="5" height="18" rx="1" />
+        </symbol>
+        <symbol id="i-coins" viewBox="0 0 24 24">
+          <path d="M13.744 17.736a6 6 0 1 1-7.48-7.48" />
+          <path d="M15 6h1v4" />
+          <path d="m6.134 14.768.866-.5 2 3.464" />
+          <circle cx="16" cy="8" r="6" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </symbol>
+        <symbol id="i-shield-check" viewBox="0 0 24 24">
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol id="i-circle-alert" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </symbol>
+        <symbol id="i-skip-forward" viewBox="0 0 24 24">
+          <path d="M21 4v16" />
+          <path
+            d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"
+          />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 24 24">
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </symbol>
+        <symbol id="i-workflow" viewBox="0 0 24 24">
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </symbol>
+        <symbol id="i-columns-3" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </symbol>
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <symbol id="i-hand-coins" viewBox="0 0 24 24">
+          <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17" />
+          <path
+            d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"
+          />
+          <path d="m2 16 6 6" />
+          <circle cx="16" cy="9" r="2.9" />
+          <circle cx="6" cy="5" r="3" />
+        </symbol>
+        <symbol id="i-key-round" viewBox="0 0 24 24">
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <!-- The GitHub mark, verbatim from components/icons/GithubMark.tsx -->
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.3-.54-1.53.11-3.19 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.89.12 3.19.77.84 1.23 1.92 1.23 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header>
+        <h1>Take it over — move your repositories to your own GitHub</h1>
+        <p>
+          <b>The room behind two shipped doors.</b> The repo-set step promises
+          <i>"It's yours — move it to your own GitHub whenever you want"</i> and the billing panel's
+          exhausted state offers <b>Move repositories</b>. Neither leads anywhere yet: the shipped
+          <code class="k">OwnershipPromise</code> deliberately renders its door <b>unlinked</b> —
+          <i
+            >"a link to a 404 is a worse broken promise than no link, and a surface that draws a
+            door owes a real entrance"</i
+          >
+          (<code class="k">RepositorySetStep.tsx</code>). This asset draws the entrance those doors
+          earn.
+        </p>
+        <p>
+          <b>The flow is GROUNDED, not invented.</b> Every state below is
+          <a class="link" href="#">MOTIR-711</a>'s saga (<code class="k"
+            >requested → transfer_pending → awaiting_reinstall → done</code
+          >, plus <code class="k">failed</code>, <b>per ROW</b>); every cost line is
+          <code class="k">ci-minutes-allowance.md</code> §D's binding copy rule; the
+          re-enable-then-transfer ordering is §G; the no-op for a row the user already owns is ADR
+          <code class="k">project-repository-set.md</code> §3. Nothing here decides anything those
+          did not.
+        </p>
+        <p>
+          <b>Drawn against SHIPPED reality.</b> <code class="k">RepositoryRow</code>,
+          <code class="k">IdentityHeader</code> and <code class="k">GrantRow</code> all ship as code
+          and were <b>RENDERED</b> from their own source + the real compiled
+          <code class="k">globals.css</code> before anything was drawn; the two host mocks were
+          rendered with Playwright. Every row, identity block and grant row below mirrors those
+          renders element for element (notes.html #73). <b>Nothing shipped is redrawn.</b>
+        </p>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 0 — THE DOORS
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 0 · <b>The doors</b> — three entrances, one room, drawn IN their host surfaces
+      </div>
+      <p class="panel-note">
+        A design that names a route in prose has not drawn an access path, so each door is rendered
+        as the real affordance inside a repro of the surface that owns it, haloed.
+        <b>Two of the three already ship as design assets</b> and are composed here, not redrawn.
+        The third is the room's own permanent door: the project-settings rail.
+      </p>
+      <p class="panel-note">
+        <b>Why the settings rail is not an invention.</b> The room mounts at
+        <code class="k">/settings/project/repositories</code>, and
+        <code class="k">lib/settings/projectSettingsNav.ts</code> is a REGISTRY whose own comment
+        says
+        <i>"a later admin story mounts its page by ADDING an entry here — no layout change"</i> —
+        and whose totality test pairs every <code class="k">settings/project/**/page.tsx</code>
+        1:1 with a registry entry. A page on disk with no entry FAILS that test, so the nav row is a
+        consequence of the mount, not an extra surface. It is also what makes the flow re-enterable:
+        a transfer left half-finished is picked up from a door that is always there, never only from
+        a step the user has already left.
+      </p>
+      <div class="panel flow">
+        <div class="frame">
+          <div class="fcap">door 1 · the approval step — shipped asset, composed</div>
+          <div class="shell">
+            <div class="step-pane">
+              <div class="step">
+                <div>
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 style="font-size: 18px; margin-top: 6px">Motir will host your code</h3>
+                </div>
+                <div class="note">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                    whenever you want.
+                    <a class="link door halo" href="#">How moving it works</a>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p>
+            <code class="k">repositorySet.promise</code> +
+            <code class="k">repositorySet.promiseDoor</code>. The promise is shipped; the link is
+            the ONE string this flow adds to it.
+          </p>
+        </div>
+        <div class="arrow">
+          <svg class="i lg"><use href="#i-arrow-right" /></svg>
+        </div>
+        <div class="frame">
+          <div class="fcap">door 2 · the exhausted billing panel — shipped asset, composed</div>
+          <div class="bill">
+            <div class="head">
+              <strong>Motir CI</strong>
+              <span class="pill pill-warning">
+                <svg class="i sm"><use href="#i-pause" /></svg>
+                CI paused
+              </span>
+            </div>
+            <div class="body">
+              <div class="opt-card">
+                <h5>
+                  <svg class="i sm"><use href="#i-arrow-up" /></svg>
+                  Move the repositories to your own GitHub
+                </h5>
+                <div class="cons">
+                  GitHub bills you for Actions directly from then on, and Motir stops charging CI
+                  credits. The code is yours either way — this changes who pays for the compute.
+                </div>
+                <div class="cost">
+                  Needs a GitHub account you own, a transfer you accept on GitHub (it isn't
+                  instant), and re-installing the Motir app so dispatch keeps working.
+                </div>
+                <button
+                  class="btn btn-secondary btn-sm halo"
+                  type="button"
+                  style="align-self: flex-start"
+                >
+                  Move repositories
+                  <svg class="i sm"><use href="#i-chevron-right" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p>
+            ORG-scoped, so it names no project. Panel 1's header carries the org's paused state back
+            — one decision surface, N pointers (§D).
+          </p>
+        </div>
+        <div class="arrow">
+          <svg class="i lg"><use href="#i-arrow-right" /></svg>
+        </div>
+        <div class="frame">
+          <div class="fcap">door 3 · the project-settings rail — the permanent way back</div>
+          <div class="set-rail" style="border-right: 0; border-radius: var(--radius-card)">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row active halo">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+            </div>
+          </div>
+          <p>
+            A new <code class="k">PROJECT_SETTINGS_NAV</code> entry —
+            <code class="k">id: 'repositories'</code>, group <code class="k">general</code>, icon
+            <code class="k">FolderGit2</code>. It lights the rail row AND the ⌘K deep link at once.
+          </p>
+        </div>
+      </div>
+      <div class="lands">
+        <b
+          >All three land on the same surface —
+          <code class="k">/settings/project/repositories</code>, panel 1.</b
+        >
+        It is project-scoped because a takeover is <b>per ROW</b> (MOTIR-711), and rows belong to a
+        project's set. Door 2 is org-scoped, so it lands on the room for the project the user is in
+        and the room states the org-wide truth in its header — the other projects Motir still hosts
+        are named there, each a link, so an org-level decision never silently moves one project and
+        abandons the rest.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 1 — THE ROOM
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 1 · <b>The room</b> — the project's repository set, with the takeover on each
+        Motir-owned row
+      </div>
+      <p class="panel-note">
+        The rows are the <b>shipped <code class="k">RepositoryRow</code></b
+        >, mirrored from a real render — the flex pair, the 24px card padding, the mint
+        <code class="k">created</code> tint, the sky <code class="k">connected</code> tint, the
+        icon-plus-word state, the mono <code class="k">--el-link</code> repo reference.
+        <b>The takeover is not a new control</b>: it is one more button in the row's existing
+        <code class="k">RowActions</code> strip, the same slot
+        <code class="k">Let Motir host it</code> already occupies. Reusing the real component is
+        what keeps this asset from drifting from the app (notes.html #73).
+      </p>
+      <p class="panel-note">
+        <b>The already-yours row is the clean no-op, and it is drawn as an ABSENCE.</b> The
+        <code class="k">shared</code> row was connect-existing — the user already owns it, GitHub
+        already bills them, and §5.4 already excludes it from metering. So it carries
+        <b>no action</b>, not a disabled one: a control a user cannot use is worse than a sentence
+        saying why (§D's own rule, applied one surface over). Its state word changes from
+        <b>Connected</b> to <b>Yours</b> in this room, because here the question is not "did Motir
+        adopt it" but "whose is it".
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Repositories</h3>
+              <p>
+                Where Acme booking's code lives. Motir hosts the repositories it created for you —
+                move any of them to your own GitHub whenever you want.
+              </p>
+            </div>
+
+            <div class="banner warn" role="status">
+              <svg class="i lg"><use href="#i-pause" /></svg>
+              <div>
+                <b>CI is paused — this organization is out of credits.</b> Moving a repository to
+                your own GitHub turns its Actions back on and GitHub bills you for them from then
+                on. Motir also hosts repositories for
+                <a class="link" href="#">Acme internal tools</a> and
+                <a class="link" href="#">Acme marketing site</a> — moving this project's does not
+                move theirs.
+                <a class="link" href="#">Add credits instead</a>
+              </div>
+            </div>
+
+            <div class="rows">
+              <div class="row created">
+                <div class="row-main">
+                  <div class="row-head">
+                    <span class="pill pill-neutral mono">web</span>
+                    <span class="row-state ok">
+                      <svg class="i"><use href="#i-circle-check-big" /></svg>
+                      Created
+                    </span>
+                  </div>
+                  <div class="repo-link">
+                    <svg class="gh ghm"><use href="#i-github" /></svg>
+                    <a class="name" href="#">motir-projects/acme-booking-web</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <p class="helper">Hosted by Motir · seeded from the Motir Next.js starter.</p>
+                  <div class="actions">
+                    <button class="btn btn-secondary btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-arrow-up-right" /></svg>
+                      Move to my GitHub
+                    </button>
+                  </div>
+                </div>
+                <div class="row-aside">
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="row created">
+                <div class="row-main">
+                  <div class="row-head">
+                    <span class="pill pill-neutral mono">api</span>
+                    <span class="row-state ok">
+                      <svg class="i"><use href="#i-circle-check-big" /></svg>
+                      Created
+                    </span>
+                  </div>
+                  <div class="repo-link">
+                    <svg class="gh ghm"><use href="#i-github" /></svg>
+                    <a class="name" href="#">motir-projects/acme-booking-api</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <p class="helper">Hosted by Motir · seeded from the Motir Next.js starter.</p>
+                  <div class="actions">
+                    <button class="btn btn-secondary btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-arrow-up-right" /></svg>
+                      Move to my GitHub
+                    </button>
+                  </div>
+                </div>
+                <div class="row-aside">
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="row yours">
+                <div class="row-main">
+                  <div class="row-head">
+                    <span class="pill pill-neutral mono">shared</span>
+                    <span class="row-state info">
+                      <svg class="i"><use href="#i-badge-check" /></svg>
+                      Yours
+                    </span>
+                  </div>
+                  <div class="repo-link">
+                    <svg class="gh ghm"><use href="#i-github" /></svg>
+                    <a class="name" href="#">acme-inc/design-tokens</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <p class="helper">
+                    You already own this one — nothing to move, and Motir never bills its CI.
+                  </p>
+                </div>
+                <div class="row-aside">
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 2 — PICK THE TARGET
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 2 · <b>Pick the target</b> — and the three states the picker really has
+      </div>
+      <p class="panel-note">
+        <b>⚠️ The org list is a live call, so it has states — drawn, not assumed.</b>
+        <code class="k">GithubIdentity</code> stores exactly one login, the user's PERSONAL
+        <code class="k">githubLogin</code> (<code class="k">prisma/schema.prisma</code>, read at
+        rung 2). There is no stored org list anywhere, so the organizations are a
+        <code class="k">GET /user/orgs</code> with the user's token — which can be slow and can
+        fail. An instantly-populated list would be a drawing of a system that does not exist.
+        <b>The personal account is always available</b> and is never behind that call, so a failed
+        org lookup degrades to a working picker rather than a blocked flow.
+      </p>
+      <p class="panel-note">
+        <b>The decision is a modal; the STATE is not.</b> Everything in panels 2–3 is transient —
+        pick, read the costs, confirm — so it lives in a <code class="k">Modal</code>. Everything in
+        panels 4–7 outlives it, survives a reload and must be re-promptable, so it lives on the ROW.
+        That split is what keeps <code class="k">transfer_pending</code> from being drawn as a
+        spinner in a dialog nobody left open.
+      </p>
+      <div class="panel gallery">
+        <div class="state">
+          <div class="cap">
+            <code class="k">orgs loaded</code>
+            <span
+              >Personal first — it is the one target that always exists and never needs a network
+              call. Orgs follow, grouped.</span
+            >
+          </div>
+          <div class="scrim">
+            <div class="modal">
+              <div class="modal-head">
+                <div class="eyebrow">Move a repository</div>
+                <h4>Move <span class="mono">acme-booking-web</span> to your GitHub</h4>
+                <p class="helper">
+                  Motir transfers this repository out of its organization and into yours. Your work
+                  items, history and dispatch stay exactly where they are.
+                </p>
+              </div>
+              <div class="field">
+                <label for="t1">Where should it go?</label>
+                <div class="listbox">
+                  <div class="grp">Your account</div>
+                  <div class="opt active">
+                    <span class="identity" style="gap: 10px">
+                      <span class="av" style="height: 28px; width: 28px; font-size: 12px">Y</span>
+                    </span>
+                    <span style="flex: 1; min-width: 0">
+                      <b class="mono">yuezhu</b>
+                      <span class="sub" style="display: block">Your personal GitHub account</span>
+                    </span>
+                    <svg class="i sm" style="color: var(--el-accent-on-surface)">
+                      <use href="#i-check" />
+                    </svg>
+                  </div>
+                  <div class="grp">Your organizations</div>
+                  <div class="opt">
+                    <svg class="i" style="color: var(--el-icon-muted)">
+                      <use href="#i-building-2" />
+                    </svg>
+                    <span style="flex: 1; min-width: 0">
+                      <b class="mono">acme-inc</b>
+                    </span>
+                  </div>
+                  <div class="opt">
+                    <svg class="i" style="color: var(--el-icon-muted)">
+                      <use href="#i-building-2" />
+                    </svg>
+                    <span style="flex: 1; min-width: 0">
+                      <b class="mono">acme-labs</b>
+                    </span>
+                  </div>
+                </div>
+                <span class="helper xs">
+                  Moving into an organization needs permission to create repositories there — GitHub
+                  refuses the transfer otherwise, and Motir says so rather than silently hiding the
+                  option.
+                </span>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-primary" type="button">Continue</button>
+                <button class="btn btn-ghost" type="button">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="twoup">
+          <figure>
+            <figcaption>2b · looking up the organizations</figcaption>
+            <div class="scrim" style="padding: 18px">
+              <div class="modal" style="gap: 14px">
+                <div class="modal-head">
+                  <h4 style="font-size: 18px">Move <span class="mono">acme-booking-web</span></h4>
+                </div>
+                <div class="field">
+                  <label for="t2">Where should it go?</label>
+                  <div class="listbox">
+                    <div class="grp">Your account</div>
+                    <div class="opt active">
+                      <svg class="i" style="color: var(--el-icon-muted)">
+                        <use href="#i-user" />
+                      </svg>
+                      <span style="flex: 1; min-width: 0"><b class="mono">yuezhu</b></span>
+                    </div>
+                    <div class="opt" role="status">
+                      <span class="spin" aria-hidden="true"></span>
+                      <span class="sub">Looking up your organizations…</span>
+                    </div>
+                  </div>
+                  <span class="helper xs">
+                    You can go ahead with your personal account — the lookup only adds
+                    organizations.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </figure>
+          <figure>
+            <figcaption>2c · the lookup failed — degraded, not blocked</figcaption>
+            <div class="scrim" style="padding: 18px">
+              <div class="modal" style="gap: 14px">
+                <div class="modal-head">
+                  <h4 style="font-size: 18px">Move <span class="mono">acme-booking-web</span></h4>
+                </div>
+                <div class="field">
+                  <label for="t3">Where should it go?</label>
+                  <div class="listbox">
+                    <div class="grp">Your account</div>
+                    <div class="opt active">
+                      <svg class="i" style="color: var(--el-icon-muted)">
+                        <use href="#i-user" />
+                      </svg>
+                      <span style="flex: 1; min-width: 0"><b class="mono">yuezhu</b></span>
+                    </div>
+                  </div>
+                  <div class="banner info" role="status" style="margin-top: 4px">
+                    <svg class="i lg"><use href="#i-info" /></svg>
+                    <div>
+                      Motir couldn't reach your GitHub organizations just now, so only your personal
+                      account is listed. <a class="link" href="#">Try again</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </figure>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <code class="k">no GitHub identity</code>
+            <span
+              >Motir does not know a GitHub account to transfer to. It REUSES MOTIR-1900's connect
+              prompt — this flow does not draw a second one.</span
+            >
+          </div>
+          <div class="scrim">
+            <div class="modal">
+              <div class="modal-head">
+                <div class="eyebrow">Move a repository</div>
+                <h4>Connect GitHub first</h4>
+                <p class="helper">
+                  Your code is private — only you and Motir can see it. Connect GitHub and Motir
+                  will invite you to it, so you can open it, clone it, and point your own agent at
+                  it.
+                </p>
+              </div>
+              <div class="note">
+                <svg class="i lg"><use href="#i-lock" /></svg>
+                <span>
+                  Motir needs one thing to move a repository to you: the GitHub account it belongs
+                  to. It is the same account it invites you to your code with — you'll see which
+                  one.
+                </span>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-primary" type="button">
+                  <svg class="gh"><use href="#i-github" /></svg>
+                  Connect GitHub
+                </button>
+                <button class="btn btn-ghost" type="button">Later</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 3 — THE COSTS, BEFORE THE COMMIT
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 3 · <b>The costs, stated before the user commits</b> — never "one click"
+      </div>
+      <p class="panel-note">
+        <code class="k">ci-minutes-allowance.md</code> §D is binding and its wording is quoted, not
+        paraphrased: the option is framed as
+        <i
+          >"GitHub bills you for Actions directly from then on, and Motir stops charging CI
+          credits"</i
+        >, and it states its
+        <b
+          >real costs — a GitHub account you own, an asynchronous transfer you must accept on
+          GitHub, and a re-install of the Motir App on the new owner so dispatch keeps working.
+          Never "one click."</b
+        >
+        The three costs are therefore the confirm step's SUBSTANCE, not fine print under it: each is
+        a line with its own glyph, and the second and third are named as things the user will have
+        to go and DO.
+      </p>
+      <p class="panel-note">
+        <b>What it does NOT cost is stated too.</b> §G decides that the transfer re-enables Actions
+        unconditionally, so a user moving a repository <i>because</i> CI is paused is told the CI
+        comes back — otherwise the honest cost list reads as pure loss and the option the ADR
+        designed as a real second answer looks like a punishment.
+      </p>
+      <div class="panel scrim">
+        <div class="modal">
+          <div class="modal-head">
+            <div class="eyebrow">Move a repository · step 2 of 2</div>
+            <h4>Move <span class="mono">acme-booking-web</span> to <b class="mono">yuezhu</b></h4>
+          </div>
+          <div class="costs">
+            <div class="h">What this takes</div>
+            <ul>
+              <li>
+                <svg class="i lg"><use href="#i-user" /></svg>
+                <span>
+                  <b>A GitHub account you own.</b>
+                  <span class="sub"
+                    >It goes to <b class="mono">yuezhu</b>, the account you connected.</span
+                  >
+                </span>
+              </li>
+              <li>
+                <svg class="i lg"><use href="#i-clock" /></svg>
+                <span>
+                  <b>A transfer you accept on GitHub. It isn't instant.</b>
+                  <span class="sub"
+                    >GitHub asks <b class="mono">yuezhu</b> to accept it. Nothing moves until you
+                    do, and nothing expires on Motir's side while you take your time.</span
+                  >
+                </span>
+              </li>
+              <li>
+                <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                <span>
+                  <b>Re-installing the Motir app on the new owner.</b>
+                  <span class="sub"
+                    >An app installation belongs to an account, so it does not travel with the
+                    repository. Until you re-install, Motir can't dispatch work to it.</span
+                  >
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div class="banner info">
+            <svg class="i lg"><use href="#i-zap" /></svg>
+            <div>
+              <b
+                >GitHub bills you for Actions directly from then on, and Motir stops charging CI
+                credits.</b
+              >
+              The code is yours either way — this changes who pays for the compute. Actions come
+              back on for this repository as part of the move, even while your organization is out
+              of credits.
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-primary" type="button">
+              <svg class="i sm"><use href="#i-arrow-up-right" /></svg>
+              Move this repository
+            </button>
+            <button class="btn btn-ghost" type="button">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 4 — transfer_pending
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 · <code class="k">transfer_pending</code> — <b>a place, not a spinner</b>
+      </div>
+      <p class="panel-note">
+        MOTIR-711:
+        <i
+          >"the call is asynchronous, and for a personal-account target the new owner must accept on
+          GitHub, so <code class="k">transfer_pending</code> is a real state resolved by a webhook
+          or a poll, not a spinner."</i
+        >
+        Drawn accordingly: the row keeps this state across reloads, sessions and days; it says
+        <b>what the user must go and do, and where</b>; and it offers the way back to GitHub every
+        time it is seen. A spinner would promise that waiting in front of it accomplishes something
+        — it does not, because the next move is the user's, on GitHub.
+      </p>
+      <p class="panel-note">
+        <b
+          >The tint is <code class="k">--el-warning-surface</code>, and that is a deliberate third
+          register.</b
+        >
+        Mint means settled and Motir's; sky means yours; peach means <i>waiting on you</i>. No state
+        is carried by colour alone — every one below pairs an icon with a word (finding #35).
+      </p>
+      <div class="panel" style="max-width: 42rem">
+        <div class="rows">
+          <div class="row needsyou">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait">
+                  <svg class="i"><use href="#i-clock" /></svg>
+                  Waiting for you to accept on GitHub
+                </span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name plain">motir-projects/acme-booking-web</span>
+              </div>
+              <p class="helper">
+                GitHub sent the transfer to <b class="mono">yuezhu</b>. It stays here until you
+                accept it there — nothing expires on Motir's side, and the repository keeps working
+                in the meantime.
+              </p>
+              <div class="actions">
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-external-link" /></svg>
+                  Accept it on GitHub
+                </button>
+                <button class="btn btn-ghost btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                  Check again
+                </button>
+              </div>
+            </div>
+            <div class="row-aside">
+              <button class="icon-btn" type="button" aria-label="Repository actions">
+                <svg class="i"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 5 — awaiting_reinstall
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 5 · <code class="k">awaiting_reinstall</code> —
+        <b>the hand-off that keeps the loop alive</b>
+      </div>
+      <p class="panel-note">
+        The repository is the user's now, and this is the state where Motir is
+        <b>honest about what it costs them</b>: a GitHub App installation is account-scoped, so the
+        grant did not travel with the repository, and until it is re-established
+        <b>dispatch and the code-graph index stop working</b>. The row says exactly that — the
+        consequence, not just the chore.
+      </p>
+      <p class="panel-note">
+        <b>Repository selection happens on GitHub's screen and is never faked in-app.</b> The
+        hand-off composes the SHIPPED install path — <code class="k">githubAppInstallUrl()</code> /
+        <code class="k">githubInstallationManageUrl()</code>, whose own source comment says the
+        install grant <i>"happens ENTIRELY on GitHub; Motir only links OUT to it"</i> — and the
+        panel beside it REUSES the shipped <code class="k">GrantRow</code> and
+        <code class="k">IdentityHeader</code> from
+        <code class="k">gitSettingsPrimitives.tsx</code> rather than redrawing them. The user is
+        told the one thing GitHub's screen will not tell them: which repository to tick.
+      </p>
+      <div class="panel twoup">
+        <figure>
+          <figcaption>5a · the row — durable, and re-promptable</figcaption>
+          <div class="rows">
+            <div class="row needsyou">
+              <div class="row-main">
+                <div class="row-head">
+                  <span class="pill pill-neutral mono">web</span>
+                  <span class="row-state wait">
+                    <svg class="i"><use href="#i-folder-git-2" /></svg>
+                    Install Motir on <span class="mono">yuezhu</span>
+                  </span>
+                </div>
+                <div class="repo-link">
+                  <svg class="gh ghm"><use href="#i-github" /></svg>
+                  <a class="name" href="#">yuezhu/acme-booking-web</a>
+                  <svg class="i sm" style="color: var(--el-icon-muted)">
+                    <use href="#i-external-link" />
+                  </svg>
+                </div>
+                <p class="helper">
+                  The repository is yours — the transfer went through. Install the Motir app on
+                  <b class="mono">yuezhu</b> and tick <b class="mono">acme-booking-web</b> when
+                  GitHub asks which repositories it may see.
+                </p>
+                <p class="helper" role="alert">
+                  <b style="color: var(--el-text)"
+                    >Until you do, Motir can't dispatch work to this repository</b
+                  >
+                  — your plan and your history are untouched.
+                </p>
+                <div class="actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-external-link" /></svg>
+                    Install on GitHub
+                  </button>
+                  <button class="btn btn-ghost btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                    Check again
+                  </button>
+                </div>
+              </div>
+              <div class="row-aside">
+                <button class="icon-btn" type="button" aria-label="Repository actions">
+                  <svg class="i"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>5b · the shipped install hand-off it points at — NOT redrawn</figcaption>
+          <div class="card" style="display: flex; flex-direction: column; gap: 18px">
+            <div class="identity">
+              <span class="av" aria-hidden="true">Y</span>
+              <span class="who">
+                <span class="top">
+                  <span class="login">@yuezhu</span>
+                  <span class="pill pill-done">
+                    <svg class="i sm"><use href="#i-badge-check" /></svg>
+                    Verified
+                  </span>
+                </span>
+                <span class="cap">Connected as yuezhu</span>
+              </span>
+            </div>
+            <div role="separator" style="border-top: 1px solid var(--el-border-soft)"></div>
+            <div class="grant">
+              <span class="tile"
+                ><svg class="i lg"><use href="#i-folder-git-2" /></svg
+              ></span>
+              <span class="body">
+                <strong>Install the Motir GitHub App</strong>
+                <p>You choose which repositories Motir may see, on GitHub.</p>
+              </span>
+            </div>
+            <p class="helper xs">
+              <code class="k">app/(authed)/settings/workspace/github/page.tsx</code> —
+              <code class="k">IdentityHeader</code> + <code class="k">GrantRow</code>, rendered from
+              the real components. 7.10 owns this pane; this flow links into it and adds nothing to
+              it.
+            </p>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 6 — done
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 6 · <code class="k">done</code> —
+        <b>transferred, its new owner shown, the loop alive</b>
+      </div>
+      <p class="panel-note">
+        The row lands in the SAME shape a connect-existing row has always had — sky,
+        <b>Yours</b> — because that is now what it is. Nothing on this surface distinguishes "yours
+        because you brought it" from "yours because you took it over", and that is the point of the
+        promise the flow exists to keep. The only extra line is the billing consequence, which is
+        the one thing that genuinely changed for the user.
+      </p>
+      <p class="panel-note">
+        <b>MOTIR-711 does not mark it done on the transfer alone</b> — reaching
+        <code class="k">done</code> requires a new <code class="k">GithubInstallation</code> under
+        the new owner. So this row is proof the loop survived the hand-off, not just proof the
+        repository moved.
+      </p>
+      <div class="panel" style="max-width: 42rem">
+        <div class="rows">
+          <div class="row yours">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state info">
+                  <svg class="i"><use href="#i-badge-check" /></svg>
+                  Yours
+                </span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <a class="name" href="#">yuezhu/acme-booking-web</a>
+                <svg class="i sm" style="color: var(--el-icon-muted)">
+                  <use href="#i-external-link" />
+                </svg>
+              </div>
+              <p class="helper">
+                Moved to <b class="mono">yuezhu</b> on 31 Jul. GitHub bills you for Actions on it
+                from now on, and Motir no longer charges CI credits for it. Dispatch is working.
+              </p>
+            </div>
+            <div class="row-aside">
+              <button class="icon-btn" type="button" aria-label="Repository actions">
+                <svg class="i"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 7 — failed / recovery
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 7 · <code class="k">failed</code> and recovery —
+        <b>three ways to be stuck, none of them wedged</b>
+      </div>
+      <p class="panel-note">
+        MOTIR-711 requires that
+        <i
+          >"an unaccepted transfer or an unfinished re-install is re-promptable, and re-running any
+          step is a no-op."</i
+        >
+        The three are drawn separately because they are genuinely different: only ONE of them is a
+        failure. An unaccepted transfer and an unfinished re-install are the flow working correctly
+        and waiting on a human — they keep their own <b>peach</b> waiting register and their resume
+        affordance, and they are <b>never</b> tinted as errors. Only a request GitHub refused is
+        red.
+      </p>
+      <div class="panel gallery">
+        <div class="state">
+          <div class="cap">
+            <code class="k">failed</code>
+            <span
+              >The real reason, the real recovery, and the reassurance that nothing was
+              half-done.</span
+            >
+          </div>
+          <div class="row failed" style="max-width: 42rem">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">api</span>
+                <span class="row-state bad">
+                  <svg class="i"><use href="#i-triangle-alert" /></svg>
+                  Couldn't move it
+                </span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name plain">motir-projects/acme-booking-api</span>
+              </div>
+              <p class="alert" role="alert">
+                <svg class="i sm"><use href="#i-triangle-alert" /></svg>
+                <span>
+                  GitHub declined the transfer to <b class="mono">acme-inc</b> — you need permission
+                  to create repositories in that organization. The repository is still here and
+                  still works; nothing was changed.
+                </span>
+              </p>
+              <div class="actions">
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                  Try again
+                </button>
+                <button class="btn btn-ghost btn-sm" type="button">Pick a different account</button>
+              </div>
+            </div>
+            <div class="row-aside">
+              <button class="icon-btn" type="button" aria-label="Repository actions">
+                <svg class="i"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <span><code class="k">transfer_pending</code>, days later</span>
+            <span
+              >Not a failure and not drawn as one — it says so, and re-prompts. Re-running the step
+              is a no-op (MOTIR-711), so the button is always safe to press.</span
+            >
+          </div>
+          <div class="row needsyou" style="max-width: 42rem">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait">
+                  <svg class="i"><use href="#i-clock" /></svg>
+                  Still waiting for you to accept on GitHub
+                </span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <span class="name plain">motir-projects/acme-booking-web</span>
+              </div>
+              <p class="helper">
+                Sent to <b class="mono">yuezhu</b> on 28 Jul and not accepted yet. Nothing is wrong
+                and nothing was lost — the repository is still here and still working. Accept it on
+                GitHub to finish, or just leave it.
+              </p>
+              <div class="actions">
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-external-link" /></svg>
+                  Accept it on GitHub
+                </button>
+                <button class="btn btn-ghost btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                  Check again
+                </button>
+              </div>
+            </div>
+            <div class="row-aside">
+              <button class="icon-btn" type="button" aria-label="Repository actions">
+                <svg class="i"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="state">
+          <div class="cap">
+            <span><code class="k">awaiting_reinstall</code>, unfinished</span>
+            <span
+              >The repository is already theirs, so the copy never implies it might be taken back —
+              only that dispatch is off until the app is installed.</span
+            >
+          </div>
+          <div class="row needsyou" style="max-width: 42rem">
+            <div class="row-main">
+              <div class="row-head">
+                <span class="pill pill-neutral mono">web</span>
+                <span class="row-state wait">
+                  <svg class="i"><use href="#i-folder-git-2" /></svg>
+                  Install Motir on <span class="mono">yuezhu</span> to finish
+                </span>
+              </div>
+              <div class="repo-link">
+                <svg class="gh ghm"><use href="#i-github" /></svg>
+                <a class="name" href="#">yuezhu/acme-booking-web</a>
+                <svg class="i sm" style="color: var(--el-icon-muted)">
+                  <use href="#i-external-link" />
+                </svg>
+              </div>
+              <p class="helper">
+                It's yours and it stays yours. Motir just can't reach it to dispatch work until the
+                app is installed on <b class="mono">yuezhu</b> with this repository selected.
+              </p>
+              <div class="actions">
+                <button class="btn btn-secondary btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-external-link" /></svg>
+                  Install on GitHub
+                </button>
+                <button class="btn btn-ghost btn-sm" type="button">
+                  <svg class="i sm"><use href="#i-refresh-cw" /></svg>
+                  Check again
+                </button>
+              </div>
+            </div>
+            <div class="row-aside">
+              <button class="icon-btn" type="button" aria-label="Repository actions">
+                <svg class="i"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 8 — ONE ROW OF THREE
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 8 · <b>One row of three</b> — the set mid-move, with the others untouched and working
+      </div>
+      <p class="panel-note">
+        MOTIR-711's <b>per-ROW</b> rule, drawn at set scale, because it is the property most easily
+        lost in implementation:
+        <i>"taking over one row of three is legitimate and must not wedge the others."</i> The
+        <code class="k">web</code> row is mid-hand-off; the <code class="k">api</code> row is still
+        Motir-hosted, still running, and still offers its own move; the
+        <code class="k">shared</code> row was never Motir's.
+        <b>Three ownerships and three states, in one set, all legal at once</b> — and the header's
+        summary counts the truth instead of implying the project is "moving".
+      </p>
+      <div class="panel" style="max-width: 46rem">
+        <div class="card" style="display: flex; flex-direction: column; gap: 16px">
+          <div class="pane-head">
+            <h3 style="font-size: 20px">Repositories</h3>
+            <p class="helper">
+              <b style="color: var(--el-text)">1 moving</b> · 1 hosted by Motir · 1 yours
+            </p>
+          </div>
+          <div class="rows">
+            <div class="row needsyou">
+              <div class="row-main">
+                <div class="row-head">
+                  <span class="pill pill-neutral mono">web</span>
+                  <span class="row-state wait">
+                    <svg class="i"><use href="#i-folder-git-2" /></svg>
+                    Install Motir on <span class="mono">yuezhu</span>
+                  </span>
+                </div>
+                <div class="repo-link">
+                  <svg class="gh ghm"><use href="#i-github" /></svg>
+                  <a class="name" href="#">yuezhu/acme-booking-web</a>
+                </div>
+                <div class="actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-external-link" /></svg>
+                    Install on GitHub
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="row created">
+              <div class="row-main">
+                <div class="row-head">
+                  <span class="pill pill-neutral mono">api</span>
+                  <span class="row-state ok">
+                    <svg class="i"><use href="#i-circle-check-big" /></svg>
+                    Created
+                  </span>
+                </div>
+                <div class="repo-link">
+                  <svg class="gh ghm"><use href="#i-github" /></svg>
+                  <a class="name" href="#">motir-projects/acme-booking-api</a>
+                </div>
+                <p class="helper">
+                  Still hosted by Motir, still dispatching — moving the web repository changed
+                  nothing here.
+                </p>
+                <div class="actions">
+                  <button class="btn btn-secondary btn-sm" type="button">
+                    <svg class="i sm"><use href="#i-arrow-up-right" /></svg>
+                    Move to my GitHub
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="row yours">
+              <div class="row-main">
+                <div class="row-head">
+                  <span class="pill pill-neutral mono">shared</span>
+                  <span class="row-state info">
+                    <svg class="i"><use href="#i-badge-check" /></svg>
+                    Yours
+                  </span>
+                </div>
+                <div class="repo-link">
+                  <svg class="gh ghm"><use href="#i-github" /></svg>
+                  <a class="name" href="#">acme-inc/design-tokens</a>
+                </div>
+                <p class="helper">
+                  You already own this one — nothing to move, and Motir never bills its CI.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
