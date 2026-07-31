@@ -33,6 +33,9 @@ const ROW_DEFAULTS = {
   proposalSignal: null,
   realizedRepo: null,
   established: false,
+  // The TAKE-IT-OVER saga (MOTIR-711) — null is the common case: no handoff has
+  // ever been requested for this row.
+  takeover: null,
   // The collaborator invitation (MOTIR-1900) — a sub-state OF a created row, so
   // the default is the honest "nobody has been invited to this yet".
   access: { state: 'not_invited', login: null, invitationUrl: null },

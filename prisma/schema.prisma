@@ -4284,6 +4284,38 @@ model ProjectRepo {
   /// When the intent was last SUCCESSFULLY asserted on the host. NULL means it
   /// never has been (a fresh row, or every attempt so far failed).
   ciActionsAppliedAt DateTime? @map("ci_actions_applied_at")
+  /// ── The TAKE-IT-OVER saga (MOTIR-711) ───────────────────────────────────
+  ///
+  /// Where this row sits in the handoff that moves a Motir-owned repository to
+  /// the user's own GitHub. NULL is the overwhelmingly common state and means
+  /// "no takeover has ever been requested" — it is NOT a state of the machine,
+  /// which is why the column is nullable rather than defaulted: a default would
+  /// claim every repository is mid-handoff.
+  ///
+  /// Modelled as durable STATES rather than inferred from the mirror, because
+  /// two of them are waits on a HUMAN doing something on GitHub — accepting a
+  /// transfer, installing the App — and a wait nobody recorded is a wedged repo
+  /// (ADR `ci-minutes-allowance.md` §5.4/§G). Every state is re-promptable.
+  takeoverState         ProjectRepoTakeoverState? @map("takeover_state")
+  /// The GitHub login the repository is being handed to — a personal account or
+  /// one of the user's orgs. Recorded at REQUEST time so the saga can be resumed
+  /// (and the transfer re-issued) without asking again, and so the webhook can
+  /// verify the transfer that landed is the one Motir asked for.
+  takeoverTargetOwner   String?                   @map("takeover_target_owner")
+  /// When the takeover was requested. The saga's start, and what an operator
+  /// reads to spot a transfer nobody has accepted for a fortnight.
+  takeoverRequestedAt   DateTime?                 @map("takeover_requested_at")
+  /// When the `repository` `transferred` webhook confirmed the repo actually
+  /// moved. NULL while the transfer is still pending the new owner's accept.
+  takeoverTransferredAt DateTime?                 @map("takeover_transferred_at")
+  /// When the handoff COMPLETED — i.e. a `GithubInstallation` under the new
+  /// owner was observed, so dispatch and the code-graph feed still work. The
+  /// transfer alone never sets this: a repo the App can no longer reach is a
+  /// broken loop, not a finished handoff.
+  takeoverCompletedAt   DateTime?                 @map("takeover_completed_at")
+  /// Why a `failed` takeover failed, so a stalled handoff is RECORDED rather
+  /// than inferred. Cleared on every retry, exactly like `failureReason`.
+  takeoverFailureReason String?                   @map("takeover_failure_reason")
   /// ── COLLABORATOR ACCESS — the user's way IN to their own code (MOTIR-1900) ─
   ///
   /// Every repository Motir creates lives in Motir's own org and is PRIVATE (ADR
@@ -4624,6 +4656,31 @@ enum ProjectRepoState {
   failed
 
   @@map("project_repo_state")
+}
+
+/// The TAKE-IT-OVER saga's per-row lifecycle (MOTIR-711):
+///
+///   requested ──transfer accepted──▶ transfer_pending ──▶ awaiting_reinstall ──▶ done
+///       │                                   │                      │
+///       └───────────────── failed ◀─────────┴──────────────────────┘
+///
+/// `failed` is RESUMABLE, never terminal — every state is re-promptable, because
+/// the two middle states are waits on a human acting on GitHub.
+enum ProjectRepoTakeoverState {
+  /// Requested and claimed. Actions are being re-enabled and the transfer issued.
+  requested
+  /// The transfer was accepted by GitHub and is awaiting the new owner's ACCEPT
+  /// (a personal-account target must accept; an org target usually lands at once).
+  transfer_pending
+  /// The repository has moved. Motir's provisioning App no longer reaches it, so
+  /// the user must install the App on the new owner and select it.
+  awaiting_reinstall
+  /// A `GithubInstallation` exists under the new owner — the loop survived.
+  done
+  /// A step failed; `takeoverFailureReason` says why. Retryable.
+  failed
+
+  @@map("project_repo_takeover_state")
 }
 
 /// WHO owns a project's repository set (ADR §3) — read on `Project`, not on a set

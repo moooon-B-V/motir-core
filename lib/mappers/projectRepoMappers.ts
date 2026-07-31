@@ -6,6 +6,7 @@ import type {
   ProjectRepoRoleDto,
   ProjectRepoSetDto,
   ProjectRepoStateDto,
+  ProjectRepoTakeoverStateDto,
   RealizedProjectRepoDto,
 } from '@/lib/dto/projectRepos';
 import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
@@ -52,6 +53,19 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     // deleted is NOT established (the repository no longer exists), even though
     // the plan it records survives.
     established: isEstablishedState(row.state) && row.githubRepo !== null,
+    // The TAKE-IT-OVER saga (MOTIR-711). `null` is the common case and means no
+    // handoff has ever been requested — NOT a state of the machine, which is why
+    // the surface renders nothing for it rather than an "idle" chip.
+    takeover: row.takeoverState
+      ? {
+          state: row.takeoverState as ProjectRepoTakeoverStateDto,
+          targetOwner: row.takeoverTargetOwner,
+          requestedAt: row.takeoverRequestedAt?.toISOString() ?? null,
+          transferredAt: row.takeoverTransferredAt?.toISOString() ?? null,
+          completedAt: row.takeoverCompletedAt?.toISOString() ?? null,
+          failureReason: row.takeoverFailureReason,
+        }
+      : null,
     // Derived from the row's two `collaborator_*` stamps, never a stored state
     // (MOTIR-1900) — see `lib/projectRepos/access.ts` for why.
     access: toAccessDto(row),

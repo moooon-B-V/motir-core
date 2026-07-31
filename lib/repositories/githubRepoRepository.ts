@@ -87,6 +87,35 @@ export const githubRepoRepository = {
     });
   },
 
+  /**
+   * Re-stamp a mirror row's COORDINATES after the repository moved on the host —
+   * the takeover's mirror update (MOTIR-711), driven by the `repository`
+   * `transferred` delivery.
+   *
+   * ⚠️ THIS WRITE IS WHAT MAKES TWO OTHER GUARANTEES FALL OUT FOR FREE, and
+   * neither has any code of its own:
+   *
+   *   * the CI-Actions pause fan-out re-checks `githubRepo.owner` against the
+   *     provisioning org at call time (`ciActionsGateService`'s `assertPending`),
+   *     so a transferred row silently leaves the sweep — nobody has to remember to
+   *     exclude it;
+   *   * the CI meter gates on the RUN's own repository owner rather than on this
+   *     mirror (`ci-minutes-allowance.md` §5.5), so metering already stops at the
+   *     transfer whether or not this row has caught up yet. Updating it keeps the
+   *     mirror honest; it is not what stops the billing.
+   *
+   * `updateMany` (not `update`) so a webhook REDELIVERY after the row is gone is
+   * an idempotent no-op (count 0) rather than a `P2025` throw. Returns the count.
+   */
+  async updateOwnerByRepoId(
+    repoId: string,
+    data: { owner: string; name: string; defaultBranch?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.updateMany({ where: { repoId }, data });
+    return result.count;
+  },
+
   /** Remove ONE selected repo by its `(installation_id, repo_id)` pair — the
    *  in-app "disconnect this project" write (MOTIR-1478, the GitLab settings
    *  surface). `deleteMany` (not `delete`) so a double-submit / redelivery after

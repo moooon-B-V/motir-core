@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import {
+  GithubIdentityRequiredError,
   ProjectRepoInvalidFieldError,
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
+  ProjectRepoNotTransferableError,
   ProjectRepoStateTransitionError,
+  ProjectRepoTakeoverStateError,
   RealizedRepoAlreadyClaimedError,
+  RepoTransferRefusedError,
 } from '@/lib/projectRepos/errors';
 
 /**
@@ -41,12 +45,21 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
   if (
     err instanceof ProjectRepoNameTakenError ||
     err instanceof RealizedRepoAlreadyClaimedError ||
-    err instanceof ProjectRepoStateTransitionError
+    err instanceof ProjectRepoStateTransitionError ||
+    err instanceof ProjectRepoNotTransferableError ||
+    err instanceof ProjectRepoTakeoverStateError ||
+    err instanceof GithubIdentityRequiredError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof ProjectRepoInvalidFieldError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  // The takeover's upstream failure (MOTIR-711): GitHub refused, and no change to
+  // the request would fix it — so it is a 502, not a 4xx blaming the caller. The
+  // row is already `failed` with the reason recorded and is re-promptable.
+  if (err instanceof RepoTransferRefusedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
   }
   return null;
 }
