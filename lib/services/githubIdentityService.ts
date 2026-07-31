@@ -1,7 +1,8 @@
 import { withUserContext } from '@/lib/workspaces/context';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { toGithubIdentityDTO } from '@/lib/mappers/githubMappers';
-import { encryptToken } from '@/lib/github/tokenCrypto';
+import { encryptToken, decryptToken } from '@/lib/github/tokenCrypto';
+import { userOrgsClient, type GithubUserOrg } from '@/lib/github/userOrgs';
 import { GithubOAuthExchangeError, GithubOAuthNotConfiguredError } from '@/lib/github/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { GithubIdentityDTO } from '@/lib/dto/github';
@@ -112,6 +113,26 @@ export const githubIdentityService = {
       githubIdentityRepository.findByUserId(userId, tx),
     );
     return row ? toGithubIdentityDTO(row) : null;
+  },
+
+  /**
+   * The organizations the acting member's connected account belongs to (Story
+   * MOTIR-1775 · MOTIR-1939) — the takeover picker's "Your organizations" group.
+   *
+   * ⚠️ A LIVE CALL, because nothing stores them: the identity row holds one
+   * login, the PERSONAL one. So this is the only read in the flow that can be
+   * slow or fail, and the surface renders both of those as real states.
+   *
+   * `null` identity → an EMPTY list, never a throw: "no account connected" is
+   * answered by the connect prompt the surface already renders for it, not by an
+   * error from the organization lookup.
+   */
+  async listOrganizations(userId: string): Promise<GithubUserOrg[]> {
+    const row = await withUserContext(userId, (tx) =>
+      githubIdentityRepository.findByUserId(userId, tx),
+    );
+    if (!row) return [];
+    return userOrgsClient.listForToken(decryptToken(row.accessTokenEncrypted));
   },
 
   /**

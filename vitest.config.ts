@@ -427,6 +427,20 @@ export default defineConfig({
         // claims are made of.
         'lib/projectRepos/teamAccessView.ts',
         'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx',
+        // Story MOTIR-1775 · MOTIR-1939 — the TAKE-IT-OVER surface. Gated because
+        // the card is a set of claims about STATE that only hold while the
+        // branches expressing them are exercised: that a waiting state is a
+        // durable place and never a spinner, that the already-yours row offers
+        // nothing, that one row moving leaves its siblings working, and that the
+        // picker still works when the org lookup fails. Every one of those is a
+        // branch, and an untested branch here silently wedges a repository the
+        // user was promised was theirs.
+        'lib/github/userOrgs.ts',
+        'lib/services/projectRepoRoomService.ts',
+        'app/api/github/organizations/route.ts',
+        'app/(authed)/settings/project/repositories/_components/TakeoverRow.tsx',
+        'app/(authed)/settings/project/repositories/_components/TakeoverModal.tsx',
+        'app/(authed)/settings/project/repositories/_components/RepositoriesRoom.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -671,6 +685,26 @@ export default defineConfig({
         // Story MOTIR-1775 · MOTIR-1945 — the team code-access surface.
         'lib/projectRepos/teamAccessView.ts': { branches: 90, functions: 90, lines: 90 },
         'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-1775 · MOTIR-1939 — the take-it-over room (see the
+        // `include` note).
+        'lib/github/userOrgs.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/projectRepoRoomService.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/github/organizations/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/(authed)/settings/project/repositories/_components/TakeoverRow.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(authed)/settings/project/repositories/_components/TakeoverModal.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(authed)/settings/project/repositories/_components/RepositoriesRoom.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

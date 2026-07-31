@@ -2,6 +2,7 @@ import {
   Bot,
   Box,
   Columns3,
+  FolderGit2,
   Gauge,
   KeyRound,
   SlidersHorizontal,
@@ -103,6 +104,22 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     labelKey: 'nav.details',
     access: browse,
     exact: true,
+  },
+  {
+    id: 'repositories',
+    group: 'general',
+    href: '/settings/project/repositories',
+    icon: FolderGit2,
+    labelKey: 'nav.repositories',
+    // Story MOTIR-1775 · MOTIR-1939 — the TAKE-IT-OVER room, and the PERMANENT
+    // way back to it. The other two doors (the ownership promise's `How moving
+    // it works` link, the billing panel's `Move repositories` button) are both
+    // moments the user passes through; a `transfer_pending` that sits for days
+    // has to be reachable from somewhere that is always there, which is what
+    // this row is (design/repository-set §14.4, door 3). Browse-gated like every
+    // General entry — a member SEES where the code lives; `projectAccessService`
+    // re-gates the takeover write itself.
+    access: browse,
   },
   {
     id: 'members',
