@@ -1350,3 +1350,184 @@ describe('a created row’s INVITATION line', () => {
     }
   });
 });
+
+describe('the access step SENDS the invitations', () => {
+  /** A `created` row nobody has been invited to, for a CONNECTED user — the one
+   *  shape whose access-step primary is the grant button rather than a link out. */
+  const connectedNotInvited = () =>
+    view([createdRow(ACCESS.notInvited)], { githubLogin: 'yuezhu', githubAvatarUrl: null });
+
+  /** Serve the three reads the step makes, so only the POST changes anything:
+   *  the set (`GET ../repositories`), the acceptance refresh (`GET ../access`,
+   *  a bare array) and the grant (`POST ../access`). */
+  function stubAccess(opts: {
+    rows: ProjectRepoDto[];
+    refreshed?: ProjectRepoDto[];
+    grant?: unknown;
+    view: ProjectRepoEstablishViewDto;
+  }) {
+    return stubFetch((url, init) => {
+      const u = String(url);
+      if (u.endsWith('/access')) {
+        if (init?.method === 'POST') {
+          return opts.grant ?? { rows: opts.rows, login: 'yuezhu', invited: 1, failed: 0 };
+        }
+        return opts.refreshed ?? opts.rows;
+      }
+      return opts.view;
+    });
+  }
+
+  function posts(spy: ReturnType<typeof stubFetch>) {
+    return spy.mock.calls.filter(
+      ([u, init]) => String(u).endsWith('/access') && (init as RequestInit)?.method === 'POST',
+    );
+  }
+
+  it('POSTs the grant and keeps the RESPONSE as the confirmation', async () => {
+    const v = connectedNotInvited();
+    const spy = stubAccess({
+      rows: [createdRow(ACCESS.notInvited)],
+      grant: { rows: [createdRow(ACCESS.invited)], login: 'yuezhu', invited: 1, failed: 0 },
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    // The access step for a connected-but-uninvited user: the primary IS the grant.
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    // The rows the grant RETURNED are kept — the step does not re-read the set to
+    // learn what it was just told (design §12: the response IS the confirmation,
+    // and a refresh here would only risk a visible revert).
+    expect(await screen.findByRole('link', { name: /Open the invitation/ })).toBeTruthy();
+    expect(posts(spy)).toHaveLength(1);
+    expect(JSON.parse(String((posts(spy)[0]![1] as RequestInit).body))).toEqual({});
+  });
+
+  it('reports a GitHub refusal — a `failed` count is an error the user must see', async () => {
+    const v = connectedNotInvited();
+    stubAccess({
+      rows: [createdRow(ACCESS.notInvited)],
+      grant: { rows: [createdRow(ACCESS.notInvited)], login: 'yuezhu', invited: 0, failed: 1 },
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      "Motir couldn't send the invitation",
+    );
+  });
+
+  it('reports a failed REQUEST the same way — a throw is not silence', async () => {
+    const v = connectedNotInvited();
+    stubFetch((url, init) => {
+      if (String(url).endsWith('/access') && init?.method === 'POST') throw new Error('network');
+      return String(url).endsWith('/access') ? [createdRow(ACCESS.notInvited)] : v;
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      "Motir couldn't send the invitation",
+    );
+  });
+
+  it('a `login: null` response is the CONNECT PROMPT, never an error', async () => {
+    const v = connectedNotInvited();
+    const spy = stubAccess({
+      rows: [createdRow(ACCESS.notInvited)],
+      grant: { rows: [createdRow(ACCESS.notInvited)], login: null, invited: 0, failed: 0 },
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }));
+
+    // Not having connected is a state the panel already renders as a prompt (off
+    // `githubLogin`, not off this response). Showing it as a failure would blame
+    // the user for a step they never took — so `failed: 0` raises nothing, even
+    // though nothing was invited.
+    await waitFor(() => expect(posts(spy)).toHaveLength(1));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('REFRESHES the pending invitations on entering the step, and folds them in', async () => {
+    const v = view([createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    const spy = stubAccess({
+      rows: [createdRow(ACCESS.invited)],
+      // The user accepted on GitHub while Motir was not looking.
+      refreshed: [createdRow(ACCESS.accepted)],
+      view: v,
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+
+    // GitHub tells Motir nothing when an invitation is accepted, so entering the
+    // step is when it asks — and the answer replaces the rows on screen. The
+    // pending invitation's door goes with it rather than pointing at a 404.
+    await waitFor(() =>
+      expect(
+        spy.mock.calls.some(
+          ([u, init]) =>
+            String(u).endsWith('/access') && ((init as RequestInit)?.method ?? 'GET') === 'GET',
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: /Open the invitation/ })).toBeNull(),
+    );
+  });
+
+  it('survives a refresh that fails — the row keeps saying what it last knew', async () => {
+    const v = view([createdRow(ACCESS.invited)], {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+    });
+    stubFetch((url, init) => {
+      if (String(url).endsWith('/access') && (init?.method ?? 'GET') === 'GET') {
+        throw new Error('refresh unreachable');
+      }
+      return v;
+    });
+    renderStep(v);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
+
+    // Best-effort: an unreachable refresh must not blank the invitation the user
+    // can see, and must not surface as a failure they cannot act on.
+    expect(await screen.findByText('@yuezhu')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open the invitation/ })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a row’s Resend reaches the client with that row’s id', async () => {
+    // A created row PLUS an unresolved one, so the default path reads `failed`
+    // and still offers the door into the technical path — which is the only
+    // surface that renders a per-row Resend.
+    const rows = [
+      createdRow(ACCESS.invited),
+      row({ id: 'r2', role: 'api', name: 'acme-api', state: 'failed', failureReason: 'nope' }),
+    ];
+    const v = view(rows, {
+      githubLogin: 'yuezhu',
+      githubAvatarUrl: null,
+      hasInstallation: true,
+    });
+    const spy = stubAccess({ rows, view: v });
+    renderStep(v);
+
+    fireEvent.click(screen.getByRole('button', { name: 'I already have code' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Resend invitation' }));
+
+    await waitFor(() => {
+      expect(posts(spy)).toHaveLength(1);
+      // Row-scoped, so a resend never touches a sibling's invitation.
+      expect(JSON.parse(String((posts(spy)[0]![1] as RequestInit).body))).toEqual({ rowId: 'r1' });
+    });
+  });
+});
