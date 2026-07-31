@@ -20,6 +20,17 @@ through the REPO row, and the shared installation never reconciles. Recorded in
 It **overturns nothing** — §3 and its 2026-07-30 amendment stand unchanged; this closes what
 they cost. Nothing in §0–§2 or §4–§6 changes.
 
+**Amended:** 2026-07-31 (Yue · MOTIR-1943) — **§3 gains TEAM ACCESS**: the ownership
+amendment left every member except the approving user locked out of a private, Motir-owned
+repository. This decides WHO is invited (the members the shipped `canEdit` policy already
+lets edit the project), at WHAT permission (`push` per invitee; `admin` stays the owner's),
+WHO sees the connect prompt (each member, for their own identity only), WHERE the surface
+lives (project settings, at _Access & members_), and whether the CI-spend exposure needs a
+new guard (it does not — recorded so that none is built). Recorded in
+[the team-access amendment](#amendment-2026-07-31-yue--motir-1943--team-access-who-else-gets-into-the-code-at-what-permission-and-where-the-door-is).
+It **supersedes nothing** — it answers a question §3 left open. Nothing in §0–§2 or §4–§6
+changes.
+
 The recorded architecture every other card in MOTIR-1775 builds to. It decides six
 things: what fixes the **number** of repositories a project has (§0), the **role**
 vocabulary and naming (§1), what **seeds** a repo the default starter does not fit (§2),
@@ -626,6 +637,174 @@ ENTITY/KEY it hangs on, not only the data-source mechanism it reads_ (`notes.htm
 motir-ai org-identity finding). There the key was absent across a service boundary; here it
 was present but no longer identifying. Both are the same check, missed the same way.
 
+#### Amendment 2026-07-31 (Yue · MOTIR-1943) — TEAM access: who else gets into the code, at what permission, and where the door is
+
+**The gap this closes.**
+[§3's ownership amendment](#amendment-2026-07-30-yue--motir-1893--a-new-projects-repos-are-always-motir-owned)
+made every created repository Motir-owned and **private** — and closed the hole it opened
+for exactly one person, in its own words: _"the user gets access to their own code on the
+repository itself (MOTIR-1900 invites them as a collaborator on every repo Motir
+creates)"_. **The user. Everyone else on the team was left out.** On the six-person
+workspace Motir dogfoods, five members cannot clone their own project's code by any path. `design/repository-set/design-notes.md` §5 records the gap and
+defers it deliberately; MOTIR-1910 carries the mechanism. This amendment decides the five
+questions that mechanism cannot decide for itself, because each is an access-control or
+spend question rather than an implementation one.
+
+**Evidence pinned at:** `motir-core` `origin/main` @ `ed929fe6` (includes MOTIR-1900).
+Every answer below names the decision-authority rung it came from and where its evidence
+lives — verified against that tree, not carried over from the card that asked the question.
+
+##### Q1 · WHICH members are invited — the ones the product already lets EDIT the project
+
+**The invitable set is exactly the members for whom the shipped project-access policy
+`canEdit` returns true**, enumerated with the same access-level scoping
+`assignableMembersService.list` already applies. Motir does not invent a second membership
+rule for code; it reuses the one the product enforces everywhere else.
+
+Concretely: enumerate candidates the way the assignable-members chokepoint does — a
+`private` project scopes to its `ProjectMembership` rows, every other level to the
+workspace's members — then keep each candidate for whom
+`canEdit({ accessLevel, workspaceRole, projectRole })` is true.
+
+**Rung 2** — `lib/projects/access.ts` (the pure policy: `canEdit`, its two rails and the
+per-level table), `lib/services/assignableMembersService.ts` (the shipped,
+access-level-scoped enumeration chokepoint), `prisma/schema.prisma` (`MemberRole`,
+`ProjectAccessLevel`, `ProjectMembership`, `WorkspaceMembership`).
+
+**Why NOT "every `ProjectMembership` whose role is not `viewer`"** — the option MOTIR-1943
+was authored recommending, and the reason the answer moved: it is **under-inclusive**. Two
+shipped facts break it. On an `open` (or `public`) project **any workspace member edits
+with no `ProjectMembership` row at all**, and a workspace **owner/admin passes both rails
+regardless of project membership** (`isWorkspaceManager`). A membership-row query would
+therefore lock out precisely the people who can already change everything in the project —
+its owner included. `canEdit` is the product's own answer to "who changes this project's
+things", so it is the answer here.
+
+**What reusing the policy excludes for free** — which is the argument for reusing it rather
+than restating it: a project `viewer` is read-only everywhere and is never invited; a
+non-workspace-member never passes the null-deny rail; and the **`public` access level does
+not widen the grant** — an external or signed-out viewer of a public project is denied
+`canEdit` by that same rail, so making a project public exposes its issues for reading and
+never its code. (`public` is a fourth `ProjectAccessLevel` value that postdates the
+question as it was framed; it is recorded here so no implementer has to re-derive it.)
+
+##### Q2 · WHAT permission — `push` per invitee, with `admin` reserved to the owner
+
+**A teammate is invited at `push`; the approving user keeps `admin`.** The permission is
+therefore **per-invitee data**, not one value for the whole product.
+
+**Rung 2** — `lib/github/repoCollaborators.ts` pins `COLLABORATOR_PERMISSION = 'admin'` as
+a module constant and justifies it in-comment by the takeover path: the repository is the
+user's _"in every sense but the account it sits under… including the settings needed to
+take it over later (MOTIR-711)"_. That reasoning is **owner-shaped**. MOTIR-711 transfers
+the whole set out of Motir's org and only the owner walks it; a teammate needs to clone,
+branch and push — not to transfer, rename or delete the project's repositories. **Rung 1** —
+GitHub's own repository roles separate `write` from `admin` for exactly this split.
+
+**⚠️ The retrofit this obliges, called out for the implementer.** `COLLABORATOR_PERMISSION`
+is a module constant and `repoCollaboratorClient.invite()` sends it unconditionally, so the
+permission must become a **column on the new per-`(repository × user)` record** and a
+parameter of the invite call. MOTIR-1910 owns that change — it rides the same cardinality
+retrofit that turns `project_repository`'s four singular `collaborator_*` columns into a
+per-member table — and its **backfill must stamp the owner's existing row `admin`**, so no
+access already granted is silently downgraded by the migration that generalises it.
+
+##### Q3 · WHO sees the connect prompt — each member, only for their OWN identity
+
+**A member is offered _Connect GitHub_ only for themselves.** Someone looking at a teammate
+who has no connected identity sees a **reason**, never an action they cannot take — and **a
+GitHub handle is never typed in**.
+
+**Rung 2** — `GithubIdentity` is `@unique` on `userId` and holds that user's own OAuth token
+(`prisma/schema.prisma`); `projectRepoAccessService.grantAccess` resolves the identity of
+the **acting** user and returns `login: null` as the connect-prompt signal. Motir cannot
+OAuth on a teammate's behalf, so an uninvitable member is a state to explain, not a form to
+fill. A typed handle is refused for the reason MOTIR-1900's own comment gives: it proves
+nothing, and a typo invites a **stranger** to a private repository.
+
+##### Q4 · WHERE the surface lives — project settings, at _Access & members_
+
+**Team code access is rendered in PROJECT SETTINGS, on or beside the _Access & members_
+pane** — where a person already goes to ask who on this project can do what. Whether it is a
+section within that pane or a sibling pane is MOTIR-1944's to draw; what is decided here is
+the surface itself, against the two candidates below.
+
+**Rung 2** — the peer surface is SHIPPED, not hypothetical:
+`app/(authed)/settings/project/members/page.tsx` (+ its `ProjectMembersSettings`), with the
+design assets `design/projects/access-members.mock.html` and
+`design/projects/settings-area.mock.html`. `ProjectRepo` is project-scoped, so a
+project-settings home matches the data's own scope.
+
+**The two rejected placements.** The **code-context surface** (MOTIR-1764) is about index
+freshness and the code-blind planning state — repositories as an input to planning, not
+people. The **plan-approval repo-set step** is ruled out by its own design:
+`design/repository-set/design-notes.md` §5, _"a teammate is not standing at plan approval,
+so their door belongs on a surface they actually reach."_
+
+This question was escalated to a decision rather than left to the designer on purpose — an
+undecided placement is an architecture choice, and the design-against-shipped-reality rule
+routes exactly that case here. MOTIR-1944 draws the surface **and its access path** against
+this answer.
+
+##### Q5 · The CI-spend blast radius — NO new guard, recorded so that none is built
+
+**Widening push access adds no new enforcement surface. The two shipped guards already
+cover it, for two different reasons — an implementer should build neither a per-member CI
+cap nor a second refusal path.** This was checked against both services rather than assumed
+— MOTIR-1943 flagged it as the answer most worth falsifying, on the grounds that if it did
+not hold, the guard it discovered would be this decision's most valuable output.
+
+**Rung 2:**
+
+- **The pool GROWS with the people added to it.** `lib/ciMetering/allowance.ts` sets
+  `INCLUDED_MINUTES_PER_SEAT = 300` under an `ORG_POOL_FLOOR_MINUTES = 1000` floor, and
+  `ciAllowanceService` recomputes `pool = max(members × 300, 1000)` **from org membership at
+  read time** — never accrued, never from Stripe's lagging seat quantity. A teammate who can
+  push is a seat that already enlarged the allowance.
+- **The two membership sets cannot diverge in the direction that would matter.** Org
+  membership **gates** workspace access (`OrganizationMembership`, in-schema: _"a workspace
+  is reachable only by a member of its org"_), so every member Q1 makes invitable is
+  necessarily counted in the pool that funds them.
+- **The guard that actually covers a teammate's push is MOTIR-1907's, and it is
+  count-independent.** `ciAllowanceService` states its own limit in-code: it owns _"the
+  DISPATCH-side refusal ONLY"_ and cannot by itself stop GitHub billing Motir, because _"a
+  push, a fix-up commit, the admin-collaborator grant (MOTIR-1900) and repo-resident
+  triggers all reach Actions with no claim."_ The enforcement that does reach them
+  **disables Actions on the repository** at `ci_credits_exhausted`, derived per ORG and
+  fanned out per repo (`ciActionsGateSweep`) — so it holds identically for one pusher or
+  twenty.
+
+**The honest residual, named rather than guarded.** N pushers drain a shared pool faster, so
+an org reaches `ci_credits_exhausted` sooner. That is a **metering** outcome, not an
+access-control one, and the existing two-threshold model (draw credits, then refuse) is what
+answers it. **The revisit trigger, so this stays falsifiable:** measured consumption showing
+teams routinely exhausted by teammate pushes rather than by dispatches — the same kind of
+datum `docs/decisions/ci-minutes-allowance.md` §1.4 already names for re-pricing the pool.
+
+##### What this asks of the not-yet-built cards
+
+Recorded so the sweep is visible. **The sweep was run and no card below needed re-wording:**
+each already defers its answer to this decision instead of restating one, which is exactly
+what kept a stale answer from being baked in while the question was open.
+
+- **MOTIR-1910** (the mechanism) — eligibility resolves through `canEdit` + the
+  assignable-members scoping (Q1), never a raw membership query; the permission becomes a
+  per-invitee column defaulting to `push`, with the owner's backfilled row at `admin` (Q2);
+  a member with no `GithubIdentity` is recorded as not-invited-with-a-reason (Q3). It adds
+  **no** CI guard (Q5).
+- **MOTIR-1944** (the design) draws the surface in project settings at _Access & members_,
+  with its access path (Q4). Its **not eligible** state has two distinct reasons to draw —
+  _the role does not grant edit_ (Q1) and _no connected GitHub account_ (Q3) — and they are
+  different rows with different forward paths: the first is settled, the second is
+  actionable by that member and by nobody else.
+- **MOTIR-1945** (the surface) renders against MOTIR-1944 and consumes MOTIR-1910's DTO.
+
+**Nothing in §0–§2 or §4–§6 changes, and no earlier §3 text is superseded** — this
+amendment answers a question §3 left open rather than reversing anything it decided.
+
+The planning defect that made this decision necessary — MOTIR-1910 named its own missing
+decision in its body and was authored `ready` regardless — is logged as **MOTIR-1946**.
+
 ### §4 — Rows are INDEPENDENT, failure is honest, and the step is resumable
 
 **4.1 · The per-row lifecycle:**
@@ -788,6 +967,16 @@ MOTIR-1782), never of a second branch in the model.
   GitHub row's tenant is not derivable from its installation, and it is a property of §3's
   one-org decision rather than of the repo set itself. MOTIR-1931 lands it; MOTIR-1932 logs
   the planning defect.
+- **Collaborator access becomes a per-`(repository × user)` RECORD, and the permission a
+  column on it** _(2026-07-31 team-access amendment)_. MOTIR-1900 modelled access as four
+  singular `project_repository.collaborator_*` columns — one collaborator per repository —
+  so inviting the team is a cardinality retrofit, not a loop over the shipped shape. The
+  permission moves off the `COLLABORATOR_PERMISSION` module constant onto that record
+  (`push` for members, `admin` backfilled for the owner). MOTIR-1910 lands it, MOTIR-1944
+  designs the surface, MOTIR-1945 renders it; MOTIR-1946 logs the planning defect. **Repo
+  access now MIRRORS the product's own `canEdit` policy** rather than defining a second
+  membership rule — so any future change to project access levels or roles reaches the code
+  grant automatically, and is a place to re-check this amendment.
 
 ## Deferred to the spike — asserted nowhere in this document
 
@@ -852,3 +1041,18 @@ deliberately stops short and points at (d).
 - `docs/decisions/ci-minutes-allowance.md` §5.1–§5.2 — the owner-login gate the tenancy
   amendment narrows to a QUALIFIER, and the attribution chain it re-enters through the repo
   row.
+- Read by the 2026-07-31 TEAM-ACCESS amendment (its Q1–Q5):
+  `lib/projects/access.ts` — `canEdit` and its two rails, the policy Q1's member set is
+  defined by; `lib/projects/roles.ts` — `isWorkspaceManager`;
+  `lib/services/assignableMembersService.ts` — the shipped access-level-scoped enumeration
+  Q1 reuses; `lib/github/repoCollaborators.ts` — `COLLABORATOR_PERMISSION = 'admin'` and the
+  takeover reasoning Q2 narrows to the owner; `lib/services/projectRepoAccessService.ts` —
+  the per-ACTOR grant and its `login: null` connect-prompt signal (Q3);
+  `lib/projectRepos/access.ts` — `PROJECT_REPO_ACCESS_STATES` and the derived-state
+  discipline the per-member record keeps; `app/(authed)/settings/project/members/page.tsx`
+  with `design/projects/access-members.mock.html` and
+  `design/projects/settings-area.mock.html` — Q4's shipped host surface;
+  `lib/ciMetering/allowance.ts` with `lib/services/ciAllowanceService.ts` — the seat-derived
+  pool, and the in-code note that the dispatch-side refusal does NOT cover a push;
+  `lib/jobs/definitions/ciActionsGateSweep.ts` — the per-repo Actions gate that does (Q5);
+  `design/repository-set/design-notes.md` §5 — where the gap was written down.
