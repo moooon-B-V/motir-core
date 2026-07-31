@@ -4,6 +4,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { getGitProvider } from '@/lib/git';
 import { enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
+import type { GithubRepo } from '@prisma/client';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git/types';
 
@@ -76,6 +77,64 @@ export const githubInstallationService = {
 
       const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
       return toGithubInstallationDTO(installation, repos);
+    });
+  },
+
+  /**
+   * Mirror ONE repository Motir just CREATED in its provisioning org (Story
+   * MOTIR-1775 · MOTIR-1781) — the whole write, and deliberately not a reconcile.
+   *
+   * Two facts make this a separate method rather than a `persistInstallation`
+   * call with one repo:
+   *
+   *   1. **The installation is SHARED and belongs to no tenant** (MOTIR-1931 /
+   *      the ADR's 2026-07-31 amendment §3). It is upserted with
+   *      `workspaceId: null`; the REPO row carries the creating project's
+   *      workspace, which is what every tenancy read now resolves through.
+   *   2. **Nothing may prune.** `persistInstallation` reconciles the whole
+   *      selection and would call `deleteExcept` — on a shared installation that
+   *      deletes every OTHER tenant's created repos. This writes exactly the one
+   *      row and touches nothing else, so `deleteExcept` stays unreachable on
+   *      this path as a property of the code, not as a caution.
+   *
+   * There is also NO webhook to wait for: GitHub fires no
+   * `installation_repositories` delivery for a repo the App itself creates on an
+   * all-repositories install (spike Mechanic 2), which is exactly why the
+   * creation flow drives this in-flow. Returns the mirrored row.
+   *
+   * System context — like every other installation write, this runs with no
+   * active workspace (the acting caller's own workspace gates the row it is
+   * about, one layer up, in `projectRepoProvisioningService`).
+   */
+  async persistProvisionedRepo(input: {
+    /** The tenant the REPOSITORY belongs to — stamped on the repo row. */
+    workspaceId: string;
+    installation: { installationId: string; accountLogin: string; accountType: string };
+    repo: NormalizedRepo;
+  }): Promise<GithubRepo> {
+    return withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.upsert(
+        {
+          installationId: input.installation.installationId,
+          // NULL, always: Motir's provisioning installation serves N workspaces
+          // and is owned by none of them.
+          workspaceId: null,
+          accountLogin: input.installation.accountLogin,
+          accountType: input.installation.accountType,
+        },
+        tx,
+      );
+      return githubRepoRepository.upsert(
+        {
+          installationId: installation.id,
+          workspaceId: input.workspaceId,
+          repoId: input.repo.providerRepoId,
+          owner: input.repo.owner,
+          name: input.repo.name,
+          defaultBranch: input.repo.defaultBranch,
+        },
+        tx,
+      );
     });
   },
 

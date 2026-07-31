@@ -1,0 +1,343 @@
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
+import {
+  RepoNameTakenOnHostError,
+  RepoProvisioningError,
+  repoProvisioningClient,
+  type ProvisionedRepo,
+} from '@/lib/github/repoProvisioning';
+import {
+  ProjectRepoNotFoundError,
+  ProjectRepoStateTransitionError,
+  RealizedRepoAlreadyClaimedError,
+} from '@/lib/projectRepos/errors';
+import type { ProjectRepoDto, ProjectRepoStateDto } from '@/lib/dto/projectRepos';
+
+// The repo-CREATION primitive (Story MOTIR-1775 · MOTIR-1781) — the service that
+// makes a project's planned repositories actually exist.
+//
+// It is orchestration and nothing else. The three things it composes are all
+// shipped, and it adds code to none of them:
+//
+//   * `projectRepoSetService` owns the rows and the ADR §4.1 state machine
+//     (`markCreating` → `attachRealizedRepo` / `markFailed`), each its own short,
+//     row-locked transaction.
+//   * `repoProvisioningClient` owns every GitHub mechanic (which endpoint, which
+//     credential, the 422 collision signal, readiness). It is the boundary the
+//     tests fake.
+//   * `githubInstallationService.persistProvisionedRepo` + `enqueueCodeGraphIndex`
+//     are the shipped mirror-and-index chain. Nothing here re-implements them,
+//     and nothing subscribes to a new webhook.
+//
+// ⚠️ NO TRANSACTION SPANS THE HOST CALLS (ADR §4.2 + the side-effects-outside-tx
+// rule). Creating a repository is a network side effect that cannot be rolled
+// back — you cannot un-create a repository, and a compensating delete would mean
+// destroying something the user can already see to make a report look tidy. So
+// each row's outcome is PERSISTED AS IT RESOLVES, and a crash mid-set leaves a
+// readable partial state that the next run resumes from.
+//
+// ⚠️ ROWS ARE INDEPENDENT AND CREATION IS SEQUENTIAL. A failed row lands in
+// `failed` WITH ITS REASON and its siblings keep their own outcomes — row 2 of 3
+// failing neither rolls back row 1 nor stops row 3. Sequential rather than
+// parallel because the governing limit is GitHub's 80 content-generating requests
+// per minute plus an undisclosed abuse limit on repository creation specifically
+// (spike §4.1): a set is 2–5 rows, so serialising costs seconds and removes the
+// only way this path could ever trip a secondary limit.
+//
+// SCOPE. This is the primitive as a SERVICE, callable from the approval flow.
+// No UI (MOTIR-1782), no schema (MOTIR-1780), no proposal (MOTIR-1881), no
+// starter registry (MOTIR-709), no transfer flow (MOTIR-711).
+//
+// CONNECT-EXISTING is deliberately absent: it creates nothing, so it is a row
+// state change plus an association — `projectRepoSetService.attachRealizedRepo`
+// on an already-connected `GithubRepo`, which is shipped and which MOTIR-1782
+// calls directly. Wrapping it here would add a layer that does nothing.
+
+/** What happened to ONE row in an establish run. */
+export type EstablishRowOutcome =
+  /** A repository was created for this row and the row is now `created`. */
+  | 'created'
+  /** The repository already existed in Motir's org under this row's name and was
+   *  ADOPTED — the resume path after a crash between create and attach. The row
+   *  is `created`; no second repository was made. */
+  | 'adopted'
+  /** The attempt failed; the row is `failed` and carries its reason. */
+  | 'failed'
+  /** The row was already settled (`created` / `connected` / `skipped`) — a re-run
+   *  never touches it. */
+  | 'already_settled'
+  /** The row was not attempted: another run holds it `creating`, or it lost the
+   *  claim race between this run's read and its `markCreating`. */
+  | 'not_attempted';
+
+export interface EstablishRowResult {
+  rowId: string;
+  /** The row's authored name — the one the attempt targeted. */
+  name: string;
+  outcome: EstablishRowOutcome;
+  /** The row as it stands AFTER the attempt. Null only when the row could not be
+   *  re-read (it was removed mid-run). */
+  row: ProjectRepoDto | null;
+  /** The renderable failure sentence, for `outcome: 'failed'` only. */
+  failureReason?: string;
+  /** The typed failure code, for `outcome: 'failed'` only — stable for a UI that
+   *  wants to branch (e.g. offer "connect it instead" on a name collision). */
+  failureCode?: string;
+}
+
+export interface EstablishSetResult {
+  projectId: string;
+  /** One entry per row of the set, in set order — including the ones this run
+   *  deliberately did not touch, so a caller can render the whole set from one
+   *  result rather than re-reading to find out what was skipped. */
+  rows: EstablishRowResult[];
+}
+
+/** The states an establish run may act on. `proposed` is the first attempt;
+ *  `failed` is the retry, which ADR §4.1 makes explicitly resumable. Everything
+ *  else is either settled or claimed by a concurrent run. */
+const UNRESOLVED_STATES: readonly ProjectRepoStateDto[] = ['proposed', 'failed'];
+
+export const projectRepoProvisioningService = {
+  /**
+   * Establish every unresolved row of a project's repository set: create the
+   * repository, seed it per its role, mirror it, and settle the row.
+   *
+   * RESUMABLE AND IDEMPOTENT PER ROW. Only `proposed` and `failed` rows are
+   * attempted, so a re-run completes exactly what is left and never re-creates a
+   * repository that already exists — the `422 already exists` path adopts, it
+   * does not rename and it does not create a second one.
+   *
+   * NEVER THROWS FOR A ROW-LEVEL FAILURE. A row that cannot be created is
+   * recorded as `failed` with its reason and the run continues; the caller reads
+   * the per-row outcomes. It DOES throw for a caller-level failure — the project
+   * not existing, or the actor not being allowed to edit it — which is the access
+   * gate `projectRepoSetService` already owns.
+   */
+  async establishSet(projectId: string, ctx: ServiceContext): Promise<EstablishSetResult> {
+    // Browse-gated read of the whole set (a missing / other-tenant project 404s
+    // here, before anything touches GitHub); every write below is edit-gated by
+    // the set service itself.
+    const rows = await projectRepoSetService.listByProject(projectId, ctx);
+    const projectName = await readProjectName(projectId, ctx);
+
+    const results: EstablishRowResult[] = [];
+    // SEQUENTIAL on purpose — see the module header.
+    for (const row of rows) {
+      if (!UNRESOLVED_STATES.includes(row.state)) {
+        results.push({
+          rowId: row.id,
+          name: row.name,
+          // `creating` is not settled: it is another run's live claim, and the
+          // honest report is "not attempted", not "already done".
+          outcome: row.state === 'creating' ? 'not_attempted' : 'already_settled',
+          row,
+        });
+        continue;
+      }
+      results.push(await establishRow(row, projectName, ctx));
+    }
+
+    return { projectId, rows: results };
+  },
+};
+
+/** The project's display name — it goes into the repository description, which
+ *  GitHub also renders into an initialised repo's README (ADR §2's "a README
+ *  naming the project and the row's role"). */
+async function readProjectName(projectId: string, ctx: ServiceContext): Promise<string> {
+  const project = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+    (tx) => projectRepository.findById(projectId, tx),
+  );
+  return project?.name ?? 'this project';
+}
+
+/**
+ * Establish ONE row. The whole per-row contract lives here: claim, create,
+ * mirror, attach, index — and on any failure, record the reason on the row and
+ * return rather than throw, so the caller's loop reaches the siblings.
+ */
+async function establishRow(
+  row: ProjectRepoDto,
+  projectName: string,
+  ctx: ServiceContext,
+): Promise<EstablishRowResult> {
+  // CLAIM the row first (`proposed | failed → creating`). This is the concurrency
+  // guard, not bookkeeping: the hop is legality-checked under the row's lock, so
+  // a second run racing this one loses the transition and backs off here — before
+  // it has asked GitHub for a repository.
+  //
+  // A claim that fails for ANY reason yields `not_attempted` and the loop moves
+  // on to the siblings. That is not leniency, it is the only correct answer: an
+  // unclaimed row is still `proposed`, and ADR §4.1 gives `proposed` no edge to
+  // `failed` — so there is literally nowhere to record a failure, and throwing
+  // would abandon the rows after it, which is the one thing per-row independence
+  // forbids. A cause other than the transition race is logged, since that would
+  // be a real defect rather than an expected loss.
+  try {
+    await projectRepoSetService.markCreating(row.id, ctx);
+  } catch (err) {
+    if (!(err instanceof ProjectRepoStateTransitionError)) {
+      console.error(
+        `[projectRepoProvisioningService] could not claim row ${row.id}; skipping it:`,
+        err,
+      );
+    }
+    return { rowId: row.id, name: row.name, outcome: 'not_attempted', row };
+  }
+
+  let provisioned: ProvisionedRepo;
+  try {
+    provisioned = await repoProvisioningClient.provisionRepository({
+      name: row.name,
+      role: row.role,
+      seedSource: row.seedSource,
+      projectName,
+    });
+  } catch (err) {
+    return failRow(row, err, ctx);
+  }
+
+  try {
+    // An ADOPTED repository is one this call did not create, so it is the only
+    // case where the coordinate might already be mirrored — possibly for ANOTHER
+    // tenant. Check BEFORE the upsert: `githubRepoRepository.upsert` re-stamps
+    // `workspace_id`, so mirroring another workspace's repo would not merely
+    // mis-record it, it would MOVE it. This read is global and context-free on
+    // purpose (the shipped `findConnectedByName` semantics): the question "who
+    // already holds this coordinate?" cannot be asked from inside one tenant.
+    if (provisioned.adopted) {
+      const existing = await githubRepoRepository.findConnectedByName(
+        provisioned.owner,
+        provisioned.name,
+      );
+      const foreign = existing.find((repo) => repo.workspaceId !== ctx.workspaceId);
+      if (foreign) return failRow(row, new RepoNameTakenOnHostError(row.name), ctx);
+    }
+
+    // MIRROR the one repository (never a reconcile — the shared provisioning
+    // installation holds every tenant's repos, so pruning is unreachable by
+    // construction; see `persistProvisionedRepo`). This is what replaces the
+    // `installation_repositories` delivery GitHub does NOT send for a repo the
+    // App itself created (spike Mechanic 2).
+    const mirrored = await githubInstallationService.persistProvisionedRepo({
+      workspaceId: ctx.workspaceId,
+      installation: {
+        installationId: provisioned.installationId,
+        accountLogin: provisioned.owner,
+        accountType: 'Organization',
+      },
+      repo: {
+        providerRepoId: provisioned.providerRepoId,
+        owner: provisioned.owner,
+        name: provisioned.name,
+        defaultBranch: provisioned.defaultBranch,
+      },
+    });
+
+    // SETTLE the row: `creating → created`, with the mirror row attached. The
+    // unique index on `github_repo_id` is the tenant-blind backstop for the
+    // adoption check above — a repo already claimed by another project's row
+    // fails here as a typed error, which `failRow` turns into a `failed` row.
+    const settled = await projectRepoSetService.attachRealizedRepo(row.id, mirrored.id, ctx);
+
+    // POST-COMMIT, BEST-EFFORT — the existing chokepoint, per repo (MOTIR-1500).
+    // Nothing is added to the webhook → reconcile → index chain; this is the same
+    // function `enqueueNewlyAddedRepos` calls for a newly-selected repo. A dropped
+    // enqueue self-heals: the job is idempotent and a later push re-triggers it.
+    await enqueueCodeGraphIndex({
+      installationId: provisioned.installationId,
+      workspaceId: ctx.workspaceId,
+      repoOwner: mirrored.owner,
+      repoName: mirrored.name,
+      defaultBranch: mirrored.defaultBranch,
+    });
+
+    return {
+      rowId: row.id,
+      name: row.name,
+      outcome: provisioned.adopted ? 'adopted' : 'created',
+      row: settled,
+    };
+  } catch (err) {
+    // The repository EXISTS at this point — it is not deleted to tidy the record
+    // (ADR §4.2). The row records why it could not be settled and stays
+    // resumable; the retry then takes the adopt path rather than creating a
+    // second repository.
+    return failRow(row, err, ctx);
+  }
+}
+
+/**
+ * Record a row's failure and return its result. `markFailed` is itself a write
+ * that can lose a race (a concurrent run may have moved the row), so its own
+ * failure is logged and swallowed — losing the reason is bad, losing the rest of
+ * the set because we could not write the reason is worse.
+ */
+async function failRow(
+  row: ProjectRepoDto,
+  err: unknown,
+  ctx: ServiceContext,
+): Promise<EstablishRowResult> {
+  const { reason, code } = describeFailure(err, row.name);
+  let settled: ProjectRepoDto | null = null;
+  try {
+    settled = await projectRepoSetService.markFailed(row.id, reason, ctx);
+  } catch (markErr) {
+    console.error(
+      `[projectRepoProvisioningService] could not record the failure of row ${row.id}:`,
+      markErr,
+    );
+  }
+  return {
+    rowId: row.id,
+    name: row.name,
+    outcome: 'failed',
+    row: settled,
+    failureReason: reason,
+    failureCode: code,
+  };
+}
+
+/**
+ * Turn a thrown error into the RENDERABLE reason persisted on the row.
+ *
+ * Three tiers, and the middle one earns its place: a repository DOES exist by the
+ * time these fire, so "the row was removed / already claims another repo / moved
+ * underneath us" is a real, explainable concurrent-edit outcome that deserves its
+ * own sentence rather than a shrug. Only a genuinely unknown failure gets the
+ * generic sentence, and its detail goes to the LOG — never to the row, because a
+ * raw GitHub or database payload must not reach a rendered surface.
+ */
+function describeFailure(err: unknown, repoName: string): { reason: string; code: string } {
+  if (err instanceof RepoProvisioningError) {
+    return { reason: err.reason, code: err.code };
+  }
+  if (err instanceof RealizedRepoAlreadyClaimedError) {
+    return {
+      reason:
+        `The repository for "${repoName}" already belongs to another project in this workspace, ` +
+        'so it was not claimed for this one. Choose a different name, or remove the other claim.',
+      code: err.code,
+    };
+  }
+  if (err instanceof ProjectRepoNotFoundError) {
+    return {
+      reason:
+        `The repository for "${repoName}" was created, but the row could not be updated because ` +
+        'it was removed while the repository was being created. Re-run the step to reconcile it.',
+      code: err.code,
+    };
+  }
+  console.error(`[projectRepoProvisioningService] unexpected failure for "${repoName}":`, err);
+  return {
+    reason: `Something went wrong while creating the repository "${repoName}". Retry this row.`,
+    code: 'UNEXPECTED',
+  };
+}
