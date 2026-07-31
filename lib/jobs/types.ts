@@ -284,6 +284,7 @@ export interface JobEventDataMap {
   /** Monthly CI-minutes reconciliation (Story MOTIR-1775 · MOTIR-1896) — cron
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;
+  'system.ci-actions-gate-sweep': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;

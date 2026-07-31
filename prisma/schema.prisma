@@ -4263,6 +4263,27 @@ model ProjectRepo {
   /// `reason`: that gloss is a log/PR fallback and is not a localized string, so
   /// persisting it would put untranslated prose on a rendered surface.
   proposalSignal String?          @map("proposal_signal")
+  /// ── The CI-Actions INTENT (MOTIR-1907) ──────────────────────────────────
+  ///
+  /// The DESIRED Actions state for this row: `true` means "Motir wants GitHub
+  /// Actions DISABLED on this repository", because its org is
+  /// `ci_credits_exhausted`. Stored as INTENT rather than applied-state because
+  /// the fan-out is N GitHub calls with NO transaction over them: half can fail,
+  /// and a durable intent is what lets the next sweep finish the job instead of
+  /// losing it (§6.5).
+  ciActionsDisabled Boolean @default(false) @map("ci_actions_disabled")
+  /// When the intent above last CHANGED. Paired with `ciActionsAppliedAt` this
+  /// is the whole convergence predicate — a row needs (re-)asserting exactly
+  /// when `ciActionsAppliedAt IS NULL OR ciActionsAppliedAt < ciActionsIntentAt`.
+  ///
+  /// Two timestamps rather than a `pending` boolean on purpose: a boolean has to
+  /// be cleared by the same code that sets it, so a crash between the GitHub call
+  /// and the clear leaves it lying. Comparing two stamps is derivable state — it
+  /// cannot desynchronise, and a re-run recomputes the same answer.
+  ciActionsIntentAt DateTime? @map("ci_actions_intent_at")
+  /// When the intent was last SUCCESSFULLY asserted on the host. NULL means it
+  /// never has been (a fresh row, or every attempt so far failed).
+  ciActionsAppliedAt DateTime? @map("ci_actions_applied_at")
   /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.

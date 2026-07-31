@@ -200,4 +200,40 @@ export const githubRepoRepository = {
     });
     return result.count;
   },
+
+  /**
+   * The DISTINCT workspaces holding at least one repository owned by `owner` —
+   * the entry point for any org-wide fan-out over Motir-hosted repos
+   * (MOTIR-1907).
+   *
+   * ⚠️ THIS EXISTS BECAUSE "the org's workspaces" IS NOT READABLE FROM A
+   * BACKGROUND PATH. `workspaceRepository.listByOrganization` looks like the
+   * natural read and is NOT reachable here: `workspace`'s RLS admits a row only
+   * via `id = app.workspace_id` or the caller's OWN memberships, with **no
+   * `app.system_admin` escape** — so both of its shipped callers run under
+   * `withOrgContext({ userId, … })`, a cookie-session surface. The CI-Actions gate
+   * fires from metering and from a sweep, where there is no user at all.
+   *
+   * `github_repo` is the way in: it carries `workspace_id` directly (MOTIR-1931)
+   * and its policy DOES have the system escape the webhook path already relies
+   * on. So the traversal runs mirror → workspace → org, one workspace at a time,
+   * binding each workspace's own GUC — the same direction `ciMinutesMeterService`
+   * §5.2 takes, and entirely within shipped policy. Widening `workspace`'s RLS
+   * instead would be a cross-tenant access change, which is not this card's to
+   * make.
+   *
+   * Compared case-INSENSITIVELY: GitHub logins are case-insensitive and the
+   * mirror echoes the payload's casing, which an operator's `GITHUB_FALLBACK_ORG`
+   * need not match — the same comparison `isMotirOwnedRepo` makes.
+   */
+  async listWorkspaceIdsByOwner(
+    owner: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ workspaceId: string }>> {
+    return tx.$queryRaw<Array<{ workspaceId: string }>>`
+      SELECT DISTINCT "workspace_id" AS "workspaceId"
+      FROM "github_repo"
+      WHERE lower("owner") = lower(${owner})
+    `;
+  },
 };
