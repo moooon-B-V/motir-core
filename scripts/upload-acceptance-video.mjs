@@ -47,6 +47,46 @@ const DEFAULT_OUTPUT_DIR = 'out/playwright-output-acceptance';
 const DEFAULT_OIDC_AUDIENCE = 'motir-acceptance-video';
 
 /**
+ * Whether this run may actually POST evidence, or only REHEARSE the publish
+ * (MOTIR-1937).
+ *
+ * WHY THIS EXISTS. Publishing is `supersede`-on-create: a new row for a story
+ * marks the prior current one superseded and unlinks its video so the orphan-GC
+ * reclaims it (`acceptanceEvidenceService`). And the target story comes from the
+ * RECORDING's own `acceptance-story.json` sidecar, which outranks the PR ref
+ * ({@link resolveStoryKey}) — so every recording publishes to ITS OWN story no
+ * matter which branch ran the lane. Combine those two with a CI lane whose only
+ * gate is a branch-name prefix, and any ordinary code PR replaced the acceptance
+ * receipts of every story with a chaptered spec: measured on the MOTIR-1781 PR
+ * (run 30651989797), which republished seven already-accepted stories. Those
+ * clips were recorded off an unrelated branch and nobody watched them, which is
+ * the opposite of what an acceptance receipt is for.
+ *
+ * `plan-rules.md` (the MOTIR-1644 rule) already scopes acceptance video to
+ * USER-FACING stories — "a NON-UI Story … is EXEMPT: it accepts on its tests
+ * alone". This is CI catching up with that rule.
+ *
+ * WHY A DRY RUN RATHER THAN SKIPPING THE STEP. Everything before the POST is a
+ * real check that a PR SHOULD pay for: the recordings exist, each declares a
+ * resolvable story, and each clip is watchable (the MOTIR-1772 floor). Gating
+ * the whole step on `main` would move all of that post-merge — exactly the
+ * blind spot MOTIR-1905 was filed for, where a broken acceptance gate looked
+ * green for days. So a PR still discovers, resolves, assesses, annotates and
+ * summarises; it just never writes.
+ *
+ * FAIL-CLOSED. Anything other than an explicit `publish` is a dry run —
+ * including an unset variable. A workflow that forgets to pass the mode
+ * therefore rehearses rather than silently superseding production evidence, and
+ * a local run of this script can never touch a real story by accident.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {'publish' | 'dry-run'}
+ */
+export function resolvePublishMode(env = process.env) {
+  return env['ACCEPTANCE_PUBLISH_MODE'] === 'publish' ? 'publish' : 'dry-run';
+}
+
+/**
  * Walk a Playwright output dir and locate EVERY recording it produced.
  *
  * One RECORDING is one test's output directory: its `video.webm` plus whatever
@@ -519,6 +559,37 @@ export async function main() {
   for (const { storyKey } of publishable) perStory.set(storyKey, (perStory.get(storyKey) ?? 0) + 1);
   for (const [storyKey, count] of perStory) {
     if (count > 1) console.log(`Note: ${count} recordings target ${storyKey} — publishing all.`);
+  }
+
+  // DRY RUN — everything above ran for real; nothing below writes (MOTIR-1937).
+  //
+  // This is the branch a pull request takes. The recordings were discovered,
+  // every story resolved, and every clip assessed against the watchability floor
+  // — all of which stay reported and annotated — but no evidence is POSTed, so a
+  // PR can never supersede a story's receipt with a clip recorded off its branch.
+  //
+  // It still exits NON-ZERO for an unwatchable clip. That is the point of running
+  // the gate on PRs at all: pacing is a defect the PR author can fix, and
+  // `continue-on-error` keeps it from blocking the merge while the annotation
+  // makes it visible. A publish FAILURE cannot occur here — nothing is published.
+  const mode = resolvePublishMode();
+  if (mode !== 'publish') {
+    console.log(
+      `Dry run (ACCEPTANCE_PUBLISH_MODE=${process.env['ACCEPTANCE_PUBLISH_MODE'] ?? 'unset'}) — ` +
+        `${publishable.length} recording(s) resolved and assessed, none published. ` +
+        'Acceptance evidence is written only by the push-to-main run, so a PR never supersedes ' +
+        "a story's receipt with a clip recorded off its branch.",
+    );
+    ciSummary(
+      `- ℹ️ Dry run — ${publishable.length} recording(s) checked, none published (evidence is written on \`main\` only).`,
+    );
+    if (unwatchable.length > 0) {
+      console.error(
+        `${unwatchable.length} unwatchable recording(s) out of ${targets.length} — reported above.`,
+      );
+      process.exit(1);
+    }
+    return;
   }
 
   // Keyless GitHub OIDC first (MOTIR-1650); fall back to the MOTIR_UPLOAD_TOKEN

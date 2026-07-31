@@ -54,6 +54,25 @@ inputs:
     description: The Playwright acceptance lane's output dir.
     required: false
     default: out/playwright-output-acceptance
+  publish-mode:
+    description: >
+      `publish` to write evidence, or `dry-run` to rehearse — discover the
+      recordings, resolve each one's story and apply the watchability floor, but
+      POST nothing (MOTIR-1937).
+
+      Defaults to `publish`, because invoking this Action is itself the explicit
+      act of wiring up a publish; the underlying script fails CLOSED (an unset
+      mode is a dry run) so a direct `node scripts/…` call can never write by
+      accident.
+
+      ⚠️ If your workflow runs the acceptance lane on PULL REQUESTS, pass a
+      computed value — publishing SUPERSEDES a story's current evidence, and each
+      recording targets its OWN declared story, so a PR that merely runs the lane
+      would replace receipts it has nothing to do with. That is the bug MOTIR-1937
+      fixed in Motir's own CI:
+      `${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'publish' || 'dry-run' }}`
+    required: false
+    default: publish
   produced-by:
     description: The E2E subtask key that produced the video (e.g. MOTIR-1638).
     required: false
@@ -76,4 +95,5 @@ runs:
         ACCEPTANCE_FALLBACK_STORY_KEY: ${{ inputs.fallback-story-key }}
         ACCEPTANCE_OUTPUT_DIR: ${{ inputs.output-dir }}
         ACCEPTANCE_PRODUCED_BY: ${{ inputs.produced-by }}
+        ACCEPTANCE_PUBLISH_MODE: ${{ inputs.publish-mode }}
       run: node scripts/upload-acceptance-video.mjs

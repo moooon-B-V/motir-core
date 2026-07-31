@@ -16,6 +16,7 @@ import {
   findRecordings,
   main,
   parseWorkItemKey,
+  resolvePublishMode,
   resolveStoryKey,
   uploadAcceptanceVideo,
 } from '../scripts/upload-acceptance-video.mjs';
@@ -484,6 +485,9 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // appended to by the tests.
     'GITHUB_ACTIONS',
     'GITHUB_STEP_SUMMARY',
+    // MOTIR-1937 — the publish/dry-run gate. In ENV_KEYS so each test starts
+    // from a known mode rather than inheriting the ambient one.
+    'ACCEPTANCE_PUBLISH_MODE',
   ] as const;
   const saved: Record<string, string | undefined> = {};
 
@@ -495,6 +499,11 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // PAT auth (no OIDC vars → keyless path is skipped).
     process.env['MOTIR_UPLOAD_TOKEN'] = 'motir_pat_test';
     process.env['MOTIR_BASE_URL'] = 'https://app.motir.co';
+    // These cases assert PUBLISH behaviour, so they run as the push-to-main lane
+    // does (MOTIR-1937). The uploader fails closed, so without this every test
+    // here would silently become a dry run and assert nothing about publishing —
+    // the dry-run cases below opt back out explicitly.
+    process.env['ACCEPTANCE_PUBLISH_MODE'] = 'publish';
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -696,6 +705,129 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     await main();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // ── Only `main` publishes; a PR rehearses (MOTIR-1937) ────────────────────
+  //
+  // The bug: publishing supersedes, and each recording targets its OWN declared
+  // story, so any code PR replaced the receipts of every story with a chaptered
+  // spec. What is pinned here is that a dry run keeps every CHECK and drops only
+  // the WRITE — the reason it is a dry run rather than a skipped step.
+
+  describe('dry run', () => {
+    it('publishes NOTHING — the case that cost seven stories their receipts', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-augment-replan-chromium', { storyKey: 'MOTIR-811' });
+      writeRecording(dir, 'acceptance-plan-change-chromium', { storyKey: 'MOTIR-1726' });
+      writeRecording(dir, 'acceptance-video-dogfood-chromium', { storyKey: 'MOTIR-1627' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      // A backend PR, exactly like MOTIR-1781's: no acceptance spec of its own,
+      // and the three recordings each declare a story it has nothing to do with.
+      process.env['ACCEPTANCE_PR_REF'] = 'subtask/MOTIR-1781-repo-creation-primitive';
+      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
+      const fetchMock = stubFetch();
+
+      await main();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(putBlobMock).not.toHaveBeenCalled();
+    });
+
+    it('FAILS CLOSED — an unset mode is a dry run, so a forgetful workflow cannot publish', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-chromium', { storyKey: 'MOTIR-1627' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      delete process.env['ACCEPTANCE_PUBLISH_MODE'];
+      const fetchMock = stubFetch();
+
+      await main();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('still RESOLVES every story and reports them — the checks a PR should pay for', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-a-chromium', { storyKey: 'MOTIR-811' });
+      writeRecording(dir, 'acceptance-b-chromium', { storyKey: 'MOTIR-1726' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
+      // Re-spy and hold the reference rather than naming `console.log` in the
+      // assertion — the file's convention for the no-console lint rule.
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch();
+
+      await main();
+
+      const logged = logSpy.mock.calls.flat().join('\n');
+      expect(logged).toContain('MOTIR-811');
+      expect(logged).toContain('MOTIR-1726');
+      expect(logged).toContain('Dry run');
+    });
+
+    it('still FAILS on an unwatchable clip — the MOTIR-1772 floor is a PR-time check', async () => {
+      // The whole reason this is a dry run and not a skipped step: pacing is a
+      // defect the PR author can fix, and moving the gate to `main` would put it
+      // back post-merge — the MOTIR-1905 blind spot.
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-raced-chromium', {
+        storyKey: 'MOTIR-811',
+        chapters: JSON.stringify([
+          { label: 'one', tSeconds: 0.5 },
+          { label: 'two', tSeconds: 3.0 },
+        ]),
+        totalSeconds: 9.5,
+      });
+      writeRecording(dir, 'acceptance-good-chromium', { storyKey: 'MOTIR-1627' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
+      process.env['GITHUB_ACTIONS'] = 'true';
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const fetchMock = stubFetch();
+
+      await main();
+
+      expect(exit).toHaveBeenCalledWith(1);
+      // Annotated, so `continue-on-error` cannot hide it (MOTIR-1905's contract).
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('::error::Unwatchable acceptance video for MOTIR-811'),
+      );
+      // …and still nothing was written.
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('needs no credential — a dry run never authenticates', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-chromium', { storyKey: 'MOTIR-1627' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      process.env['ACCEPTANCE_PUBLISH_MODE'] = 'dry-run';
+      delete process.env['MOTIR_UPLOAD_TOKEN'];
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await main();
+
+      expect(exit).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Dry run'));
+    });
+  });
+});
+
+// ── The publish/dry-run gate (MOTIR-1937) ────────────────────────────────────
+
+describe('resolvePublishMode', () => {
+  it('publishes ONLY on an explicit publish', () => {
+    expect(resolvePublishMode({ ACCEPTANCE_PUBLISH_MODE: 'publish' })).toBe('publish');
+  });
+
+  it.each([
+    ['dry-run', { ACCEPTANCE_PUBLISH_MODE: 'dry-run' }],
+    ['unset', {}],
+    ['empty', { ACCEPTANCE_PUBLISH_MODE: '' }],
+    ['a typo', { ACCEPTANCE_PUBLISH_MODE: 'Publish' }],
+    ['a truthy-looking value', { ACCEPTANCE_PUBLISH_MODE: 'true' }],
+  ])('is a dry run for %s — the gate fails closed', (_label, env) => {
+    expect(resolvePublishMode(env)).toBe('dry-run');
   });
 });
 

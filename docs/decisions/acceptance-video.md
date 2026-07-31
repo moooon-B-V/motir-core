@@ -227,6 +227,55 @@ fall back to an `integration`-scoped API token otherwise.**
   rotation, and scoping for one endpoint. (Epic 9's _hosted_ runner uses its own
   service principal inside its sandbox — explicitly out of scope here.)
 
+#### Amendment 2026-07-31 (Yue · MOTIR-1937) — WHEN the lane runs vs. when it PUBLISHES
+
+The original decision settled **how** CI authenticates and never said **which runs**
+may publish. That gap had a live cost, so the answer is recorded here rather than
+left to be re-derived from `ci.yml`.
+
+**What went wrong.** The `acceptance-video` leg is a member of the `e2e` matrix, and
+that job's only gate is a branch-prefix skip (`seed/` / `design/` / `docs/`). So every
+ordinary `subtask/*` PR ran the whole lane. Combined with two properties decided
+elsewhere — publishing **supersedes** (§2's retention rule: a new green run retires the
+prior current row and unlinks its video for the orphan-GC) and the target story comes
+from the **recording's own sidecar**, which outranks the PR ref (MOTIR-1684) — this
+meant any code PR republished the receipts of every story that has a chaptered spec.
+Measured on the MOTIR-1781 PR (Actions run `30651989797`): a pure repo-provisioning
+card with no user-observable surface republished **seven** already-accepted stories,
+each with a clip recorded off its branch that nobody watched.
+
+That also contradicted a rule already written down: `plan-rules.md` (MOTIR-1644) scopes
+the acceptance video to **user-facing stories**, and says a non-UI story "is EXEMPT: it
+accepts on its tests alone".
+
+**The decision.** Split the lane's two jobs, because they have different audiences:
+
+| Run            | Specs + recording + watchability gate | Publishes evidence |
+| -------------- | ------------------------------------- | ------------------ |
+| Pull request   | **yes**                               | **no** (dry run)   |
+| Push to `main` | yes                                   | **yes**            |
+
+- **Only a push to `main` publishes.** `ACCEPTANCE_PUBLISH_MODE` is `publish` for
+  exactly that run and `dry-run` everywhere else. A story's receipt can therefore only
+  ever be written by the run that merged it, never by an unrelated branch.
+- **A PR still runs everything up to the write.** It discovers the recordings, resolves
+  each one's story, and applies the watchability floor (§2's amendment / MOTIR-1772),
+  reporting through the annotation + job-summary channels `continue-on-error` cannot
+  swallow. Gating the whole STEP on `main` was rejected: it would move those checks
+  post-merge and recreate the MOTIR-1905 blind spot, where a broken acceptance gate
+  looked green for days.
+- **The gate fails closed.** Anything other than an explicit `publish` — including an
+  unset variable — is a dry run, so a workflow edit that forgets it cannot silently
+  resurrect the bug, and a local run of the uploader can never touch a real story.
+- **A dry run still exits non-zero for an unwatchable clip.** Pacing is a defect the PR
+  author can fix, so the signal belongs on the PR; `continue-on-error` keeps it from
+  blocking the merge.
+
+**Deliberately unchanged:** eligibility (decision 1), retention/supersede semantics
+(§2), the org toggle (§3), and the auth mechanism above. This amendment decides only
+WHICH RUNS write. It is also distinct from MOTIR-1911 — one clip exceeding the per-file
+cap is a size problem, not a question of which runs publish.
+
 ---
 
 ## Consequences

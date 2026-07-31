@@ -66,6 +66,8 @@ jobs:
           pr-title: ${{ github.event.pull_request.title }}
           fallback-story-key: MOTIR-1627 # used on push-to-main / no PR id
           produced-by: MOTIR-1638
+          # Publish only from `main`; a PR rehearses (MOTIR-1937 — see below).
+          publish-mode: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'publish' || 'dry-run' }}
           # no `token:` — keyless OIDC. base-url defaults to https://app.motir.co
 ```
 
@@ -74,6 +76,30 @@ publishes nothing**. The endpoint verifies the run's OIDC token, resolves the
 repo → your Motir workspace (via the GitHub App connection), and attributes the
 evidence to the **workspace owner** — subject to the same eligibility gate as the
 in-app path (an org without the paid AI plan is rejected `402`).
+
+### Which RUNS may publish — `publish-mode` (MOTIR-1937)
+
+**If your acceptance lane runs on pull requests, gate the publish to `main`.**
+Publishing **supersedes**: a new green run retires the story's previous evidence and
+unlinks its video for the orphan-GC. And the target story comes from the
+**recording's own sidecar**, which outranks the PR ref — so each recording publishes
+to _its_ story regardless of which branch ran the lane. Put those together and a lane
+that runs on every PR will replace the receipts of every story that has a chaptered
+spec, with clips recorded off unrelated branches that no reviewer watched. That
+happened in Motir's own CI: one backend PR republished **seven** already-accepted
+stories.
+
+`publish-mode: dry-run` keeps every CHECK and drops only the WRITE — the recordings
+are still discovered, every story still resolved, and the watchability floor still
+applied and annotated. So a PR keeps the full signal (including a non-zero exit for
+an unpaced clip, which the author can fix) and can never touch a real story's
+evidence. Prefer this over skipping the step entirely, which would move those checks
+post-merge.
+
+The input defaults to `publish`, since calling the Action is itself an explicit act of
+wiring up a publish. The underlying script fails **closed** — an unset
+`ACCEPTANCE_PUBLISH_MODE` is a dry run — so running `node scripts/upload-acceptance-video.mjs`
+by hand can never write to a story by accident.
 
 ### How the target story is resolved (MOTIR-1684)
 
