@@ -865,10 +865,11 @@ stale the moment the user edits a row, and meaningless before the row is created
 
 ```
 generate ──▶ each proposal carries a repo ROLE
-   └──▶ the distinct roles ARE the proposed set (§0.1)
-          └──▶ user edits + confirms the set, rows are established (§4)
-                 └──▶ materialize resolves role ──▶ the confirmed row's repo NAME
-                        └──▶ work_item.targetRepo (the shipped bare-name column)
+   └──▶ materialize RECORDS it on the item (work_item.targetRepoRole)
+          └──▶ the distinct roles ARE the proposed set (§0.1)
+                 └──▶ user edits + confirms the set, a row is ESTABLISHED (§4)
+                        └──▶ establishing that row RESOLVES the role ──▶ its repo NAME
+                               └──▶ work_item.targetRepo (the shipped bare-name column)
 ```
 
 This closes the ordering hazard cleanly — the tree can be generated before any repository
@@ -876,32 +877,85 @@ exists, which is the actual sequence — and it leaves the shipped `targetRepo` 
 untouched: the column still holds a bare repo NAME, still validated against the connected
 set by `resolveAuthoredTargetRepo`.
 
-**5.3 · Materialize VALIDATES, and never guesses.** Resolution has exactly three outcomes,
-and only the first writes a pin:
+**5.3 · Resolution VALIDATES, never guesses — and it runs when a ROW BECOMES ESTABLISHED,
+not at materialize.** Resolution has exactly three outcomes, and only the first writes a
+pin:
 
-- the role matches **exactly one** established row → `targetRepo` is that row's repo name;
-- the role matches **no** established row (it was skipped, failed, or removed from the
-  set) → `targetRepo` stays `null`. The item is honestly unrouted, which is the same
-  signal the shipped resolver already emits, and the code-index loop already renders;
-- the role matches **more than one** row (a repeated role, §1.2) → the proposal must name
+- **exactly one** row carries the role AND it is established → `targetRepo` is that row's
+  repo name;
+- **exactly one** row carries the role but it names no repository that exists yet — still
+  `proposed` / `creating`, or `skipped` / `failed`, or its mirror is gone → `targetRepo`
+  stays `null`. The item is honestly unrouted, which is the same signal the shipped
+  resolver already emits, and the code-index loop already renders;
+- **more than one** row carries the role (a repeated role, §1.2) → the proposal must name
   the row, not just the role; an ambiguous pin resolves to `null` rather than to an
   arbitrary row. Guessing here would send an agent into the wrong checkout, which
   `docs/decisions/target-repo-attribution.md` §3 established is strictly worse than no
-  answer.
+  answer. **Ambiguity is counted over ALL rows carrying the role, in ANY state** — not
+  only the established ones. Counting only established rows would both guess (half the
+  items belong in the row that was skipped) and make the answer depend on RUN ORDER, since
+  this pass runs per row as each is established. Counting rows makes the verdict a property
+  of the SET, identical no matter which row establishes first, or how many times the pass
+  runs.
+
+**WHEN this is evaluated — corrected 2026-07-31 (MOTIR-1914) against shipped ordering.**
+This section first placed the resolution "at materialize". Verified on `motir-core`
+`origin/main`, materialize is the one moment it cannot happen:
+
+- `plansService.approvePlan` materializes the tree INSIDE the approve `$transaction`, and
+  fires `projectRepoProposalService.proposeRepositorySet` only **after that transaction
+  commits**, best-effort — the pre-plan read is a `server-only` client call that cannot run
+  inside a tx. So on the onboarding path the project's repo set **does not exist yet** when
+  its items are created.
+- And once it does exist, its rows are `proposed`. `ESTABLISHED_PROJECT_REPO_STATES` is
+  `['created', 'connected']` (`lib/projectRepos/vocabulary.ts`) — states a row reaches only
+  through the creation primitive (MOTIR-1781) or the establish UI (MOTIR-1782), i.e. after
+  the user confirms the set (§0.2, §4).
+
+Resolving at materialize would therefore write `null` for every role, every time — outcome
+two above, on the happy path. So the pin is a TWO-STEP: the ROLE is recorded on the work
+item at materialize (MOTIR-1912), and RESOLVED to a name when a row becomes established
+(MOTIR-1913 — `projectRepoPinService.resolvePins`, invoked from
+`projectRepoSetService.attachRealizedRepo` after that method's own locked transaction
+commits, so every establish path reaches it whether the row was created or connected). The
+three outcomes above are unchanged; only **when** they are evaluated moved, because this
+ADR was written before the approve-time ordering shipped. The shipped code is the arbiter
+and the ADR follows it (rung 2), not the other way round.
+
+Two properties fall out of evaluating later, and are worth stating because §4 depends on
+them: the pass is **idempotent and re-runnable** — a row established later (a retried
+failure, §4.4) resolves the items still carrying its role, and a re-run pins nothing new;
+and a role whose row is never established leaves its items unrouted by **waiting**, rather
+than by writing `null` eagerly at materialize and calling that an answer.
 
 **5.4 · Once a set is established, a proposal MAY carry the resolved repo NAME directly.**
 For a re-plan, an augment, or an `expand_item` on a project whose repos already exist, the
 names are final and there is no ordering problem — so the pin may be the name, validated
 the same way `create_work_item` / `update_work_item` already validate an authored
 `targetRepo`. **Role is the portable pin; name is the settled one.** Materialize accepts
-either.
+either — a NAME is validated and written straight through at approve; a ROLE is recorded
+and resolved later, per §5.3.
 
-**5.5 · What this asks of the two producers**, so no seam is left unowned: motir-ai's
-generator emits the role (MOTIR-1885), `PlanItemProposedFields` carries it through the
-proposal and materialize resolves + validates it (MOTIR-1884). Both cards are `blocked_by`
-this ADR and this section is the specification they build to — including the refinement
-that what a proposal pins is a **role** (or, per §5.4, a settled name), not always a repo
-name.
+**5.5 · What this asks of the cards that build the seam**, so no leg is left unowned. The
+role pin is a THREE-card seam, not two — emit, carry, resolve — because §5.3's correction
+splits recording the role from resolving it:
+
+| Leg         | Repo         | Card       | What it owns                                                                                                                                                                       |
+| ----------- | ------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Emit**    | `motir-ai`   | MOTIR-1885 | The tree generator pins each proposed leaf to a repo **ROLE** (§5.2), from the role enum §1.1 fixes.                                                                               |
+| **Carry**   | `motir-core` | MOTIR-1912 | `targetRepoRole` on `PlanItemProposedFields` / `PlanItemPatch` → `work_item.targetRepoRole` at materialize; the distinct roles FEED the set derivation as §0.1.1's primary signal. |
+| **Resolve** | `motir-core` | MOTIR-1913 | §5.3's three outcomes, evaluated when a row becomes established — role → the row's repo NAME → `work_item.targetRepo`.                                                             |
+
+A fourth card, **MOTIR-1884** (`motir-core`), shipped the §5.4 leg: a proposal carrying an
+already-settled repo **NAME**, validated at approve against the project's set. It is
+correct for the settled-set case and is deliberately left in place — it is not the role
+carrier, and the two pins coexist.
+
+Every card here is `blocked_by` this ADR, and this section is the specification they build
+to — the load-bearing part being §5.2: what a proposal pins on a FRESH project is a
+**role**, never a repo name. (The first pass of this section named only two cards and
+described both as carrying the name; MOTIR-1914 records why that was wrong and corrects
+it. A card citing this ADR must read §5.2 to the clause, not to the section.)
 
 ### §6 — The single-repo project is the degenerate case, not a second code path
 
@@ -939,6 +993,11 @@ MOTIR-1782), never of a second branch in the model.
 - **motir-ai's proposal schema grows a role field** (MOTIR-1885). Its enum must stay in
   lockstep with §1.1 — the same cross-repo constant discipline `AI_DRAFT_EXPLANATION_SOURCE`
   already follows.
+- **The ROLE pin is carried and resolved in two separate steps** (MOTIR-1912 + MOTIR-1913),
+  for the ordering reason §5.3 records: `work_item` grows `targetRepoRole` alongside
+  `targetRepo`, and the role→name write happens on row establishment. So establishing a
+  repository gains a follow-on DB pass, and an item can sit with a role and no name for as
+  long as its row is unestablished — the honest unrouted state, not a missing write.
 - **`resolveDispatchTargetRepo`'s single-connected-repo fallback stays**, as the
   compatibility path for every project that predates the set (including this one). Once a
   project has an established set, MOTIR-1783 resolves against the **project's** set instead
