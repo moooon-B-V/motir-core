@@ -16,6 +16,11 @@
 //     synthetic plan/usage state + hosted session URLs, so the billing journeys
 //     (checkout / paywall / portal) drive the real surfaces with no live Stripe
 //     and no motir-ai instance (Subtask 8.1.10's dedicated cloud-on E2E lane).
+//   - E2E_TEST_GITHUB_REPOS=1 → lib/test-github-repos-mock intercepts the
+//     repo-PROVISIONING and COLLABORATOR calls to api.github.com (create, the
+//     readiness read, the CI stub, the admin invite), so the repository-set
+//     journey (MOTIR-1785) drives the real establish + access paths end to end
+//     and NO REAL REPOSITORY IS EVER CREATED by the suite.
 //
 // All mocks share ONE undici MockAgent (lib/test-mock-agent) installed as
 // the global dispatcher — installing two agents would silently disconnect
@@ -37,7 +42,8 @@ export async function register() {
   const wantOauthMock = process.env['E2E_TEST_OAUTH'] === '1';
   const wantBlobMock = process.env['E2E_TEST_BLOB'] === '1';
   const wantBillingMock = process.env['E2E_TEST_BILLING'] === '1';
-  if (!wantOauthMock && !wantBlobMock && !wantBillingMock) return;
+  const wantGithubReposMock = process.env['E2E_TEST_GITHUB_REPOS'] === '1';
+  if (!wantOauthMock && !wantBlobMock && !wantBillingMock && !wantGithubReposMock) return;
 
   const { installSharedMockAgent } = await import('@/lib/test-mock-agent');
   const agent = installSharedMockAgent();
@@ -69,5 +75,13 @@ export async function register() {
     installBillingBoundaryMock(agent);
     // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
     console.log('[INSTRUMENT] E2E_TEST_BILLING active — motir-ai billing seam mocked.');
+  }
+  if (wantGithubReposMock) {
+    const { installGithubReposMock } = await import('@/lib/test-github-repos-mock');
+    installGithubReposMock(agent);
+    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
+    console.log(
+      '[INSTRUMENT] E2E_TEST_GITHUB_REPOS active — GitHub repo creation + collaborator API mocked.',
+    );
   }
 }

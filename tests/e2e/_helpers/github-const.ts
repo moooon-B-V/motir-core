@@ -40,3 +40,13 @@ export const E2E_REPO = {
   defaultBranch: 'main',
 } as const;
 export const E2E_INSTALLATION_ACCOUNT = { login: 'moooon-e2e', type: 'Organization' } as const;
+
+// MOTIR's own provisioning org (Story MOTIR-1775 · MOTIR-1785) — the owner EVERY
+// repository Motir creates lands under, for both audiences, since the 2026-07-30
+// ownership amendment. Deliberately NOT `E2E_INSTALLATION_ACCOUNT.login`: that is
+// the org the USER's App installation belongs to (the connect-existing side), and
+// a test in which the two coincide could not tell "created in Motir's org" apart
+// from "created in the user's". Lives here for the same reason the rest do —
+// playwright.acceptance.config.ts hands it to the server as GITHUB_FALLBACK_ORG
+// before any app code is loadable.
+export const E2E_PROVISIONING_ORG = 'motir-projects-e2e';
