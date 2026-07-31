@@ -263,6 +263,40 @@ export const projectRepoRepository = {
     return rows[0] ?? null;
   },
 
+  /**
+   * Take a row lock (`SELECT … FOR UPDATE`) on EVERY row of a project's set, in a
+   * deterministic order — the serialization point for a write DERIVED from the
+   * shape of the whole set rather than from one row (MOTIR-1913's role → repo-name
+   * resolution).
+   *
+   * `lockById` is not enough there: the derived answer depends on how many rows
+   * carry a role and which of them are established, so two concurrent establish
+   * calls could each lock only their OWN row, read contradictory snapshots of the
+   * set, and write pins from both. Locking the set makes the second pass wait and
+   * then re-read the truth the first one committed.
+   *
+   * `ORDER BY "id"` is load-bearing, not tidiness: two passes that took the same
+   * rows in different orders would deadlock rather than queue. Every caller
+   * therefore acquires this lock FIRST and any `work_item` lock second, so the two
+   * tables are always taken in one order.
+   *
+   * Returns the locked ids (empty for a project with no set — nothing to lock and
+   * nothing to resolve); the caller re-reads the rows under the lock.
+   */
+  async lockByProject(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "project_repository"
+      WHERE "project_id" = ${projectId} AND "workspace_id" = ${workspaceId}
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+    return rows.map((r) => r.id);
+  },
+
   async create(
     data: Prisma.ProjectRepoUncheckedCreateInput,
     tx: Prisma.TransactionClient,
