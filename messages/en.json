@@ -1183,6 +1183,7 @@
       },
       "details": "Details",
       "members": "Members & access",
+      "codeAccess": "Code access",
       "workflow": "Workflow",
       "board": "Boards",
       "estimation": "Estimation",
@@ -1662,6 +1663,83 @@
       "changeRoleErrorTitle": "Could not change role",
       "errorLastAdmin": "This is the only project admin — assign another admin first.",
       "errorGeneric": "Something went wrong. Please try again."
+    },
+    "codeAccess": {
+      "title": "Code access",
+      "subtitle": "Who on <strong>{projectName}</strong> can clone and push to the repositories Motir made for it.",
+      "peopleHeading": "People",
+      "countPill": "{granted} of {eligible} can clone",
+      "refresh": "Refresh",
+      "refreshLabel": "Refresh access from GitHub",
+      "refreshError": "Motir couldn't reach GitHub just now. Nothing changed — try again in a moment.",
+      "setLabel": "{count, plural, one {# repository} other {# repositories}}:",
+      "setChip": {
+        "notCreated": "not created",
+        "yours": "yours"
+      },
+      "notEligibleHeading": "Not eligible",
+      "notEligibleBody": "Code access follows the project's own edit permission. Someone who can't edit {projectName} is never invited to its code.",
+      "doorCard": {
+        "title": "Code access",
+        "summary": "{granted} of {eligible} people who can edit can clone this project's code",
+        "action": "Open code access",
+        "noCode": "Motir hasn't made any repositories for this project yet"
+      },
+      "state": {
+        "accepted": "Has access",
+        "acceptedReason": "<strong>@{login}</strong> can clone and push to all {count}",
+        "acceptedReasonOne": "<strong>@{login}</strong> can clone and push to <strong>{repo}</strong>",
+        "invited": "Invitation sent",
+        "invitedReason": "to <strong>@{login}</strong>, waiting to be accepted on GitHub",
+        "notInvited": "Not invited yet",
+        "notInvitedReady": "<strong>@{login}</strong> is ready to be invited",
+        "notInvitedOther": "{name} hasn't connected a GitHub account",
+        "notInvitedOtherNote": "Only {name} can connect it — Motir invites the account a person connects, never one typed in for them.",
+        "notInvitedSelf": "Motir doesn't know your GitHub account yet",
+        "failed": "Couldn't invite",
+        "failedReason": "GitHub turned the invitation down on <strong>{repo}</strong>",
+        "ineligible": "No code access",
+        "ineligibleViewer": "Viewers can read {projectName} but not edit it",
+        "nothingToGrant": "Nothing to grant",
+        "nothingToGrantReason": "Motir made no repository for this project"
+      },
+      "permission": {
+        "push": "Push",
+        "admin": "Admin"
+      },
+      "expand": "{count, plural, one {# repository} other {# repositories}}",
+      "expandPartial": "{count, plural, one {# repository} other {# repositories}} · {sent} sent",
+      "expandLabel": "Show per-repository access for {name}",
+      "invite": "Invite",
+      "inviteLabel": "Invite {name}",
+      "resend": "Resend invitation",
+      "resendLabel": "Resend invitation for {name}",
+      "openInvitation": "Open the invitation",
+      "openInvitationLabel": "Open the invitation for {name} to {repo}",
+      "retry": "Try again",
+      "retryLabel": "Retry invitation for {name}",
+      "connect": "Connect GitHub",
+      "changeRole": "Change role",
+      "changeRoleLabel": "Change {name}'s project role",
+      "useDifferent": "Use a different account",
+      "self": {
+        "title": "You aren't connected to GitHub yet",
+        "body": "{projectName}'s code is private. Connect GitHub and Motir invites you to {count, plural, one {the repository} other {all # repositories}}.",
+        "identityCaption": "The GitHub account Motir invites to this project's code",
+        "verified": "Verified"
+      },
+      "readOnlyNote": "You can see where everyone stands. Inviting somebody, and changing who's eligible, is a project admin's to do.",
+      "empty": {
+        "title": "{projectName} has no code yet",
+        "body": "When a plan is approved, Motir creates this project's repositories — and everyone who can edit {projectName} gets invited to them. There is nothing to grant until then.",
+        "action": "Review the plan"
+      },
+      "establishing": {
+        "pill": "Setting up",
+        "banner": "Motir is still creating <strong>{repo}</strong>. Invitations go out as each repository lands — nothing here is lost if you leave."
+      },
+      "partialNote": "Only the repositories Motir made are counted. A repository the team already owns is reached through GitHub, not through Motir.",
+      "failedBanner": "GitHub wouldn't take {failed} of {total} invitations for <strong>{name}</strong>. The repositories are fine — only the invitation failed, and it can be sent again."
     },
     "buildInPublic": {
       "liveBadge": "Live",
