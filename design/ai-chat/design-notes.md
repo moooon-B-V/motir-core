@@ -926,3 +926,199 @@ The three-file set under `design/ai-chat/` for this surface:
 `deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Composes
 `planning-workspace.mock.html` (MOTIR-1193) + `design/roadmap/` (MOTIR-1009);
 grounded in MOTIR-1728 / 1729 / 1730 / 1731; gates those four code subtasks.
+
+---
+
+## ⭐ The "M" universal AI callout — the orb becomes a TRIGGER (MOTIR-1811, 2026-08-01)
+
+**What changes.** The shipped floating **"M"** orb (`PlanWithAIFab`, MOTIR-1299)
+navigates **straight** to the planning workspace today. It becomes the **trigger
+for a small anchored menu** — "the home of all AI" — whose first action is
+_Plan with AI_, with _Ask about this project_ (MOTIR-1343) and _Help with a task_
+(MOTIR-1344) mounting into the same menu as their stories land. **The orb is the
+ONLY entrance this touches** — the TopNav hero pill, ⌘K, the work-item door
+(MOTIR-910) and the roadmap door (MOTIR-1011) are all unchanged.
+
+### ⭐ EVERY ROW OPENS THE SAME SURFACE — the menu only says what the callout CAN DO (Yue, 2026-08-01)
+
+Motir has exactly one AI conversation surface — the `PlanningWorkspace` hosted at
+`/planning` (MOTIR-1729) — and **all three rows navigate to that one surface with
+the same context-derived href**, via the shipped `planningWorkspaceHref()`. The
+callout is **not a mode picker and not a router**: it is a **capability list**, an
+answer to "what can I ask this thing?", and the row the user picks does **not**
+narrow what the conversation can be about.
+
+**Why.** The conversation is free-form and **the user can switch topic
+mid-conversation** — plan the sprint, then ask what blocks a card, then get help
+drafting its description, all in one thread. A mode chosen at the door would be
+wrong within one turn, and enforcing it would fragment the one surface the product
+deliberately has. So the door does not choose; it only **advertises**. The topic is
+chosen — and re-chosen — inside the conversation.
+
+Three consequences the code subtask must honour:
+
+- **One href, shared by every row.** Not three destinations, not three modes, not a
+  thread locked to one kind of question. A row is a **label**, not a route.
+- **A row appears when the CAPABILITY exists behind that one surface** (MOTIR-1343
+  / MOTIR-1344) — what a story adds is what the workspace can do, never where the
+  row points.
+- **A row may seed the composer's starter phrasing**, but it never constrains the
+  thread. The composer slot is the same door with the first turn already typed.
+
+Still forbidden in the other direction: a row that opens a **bespoke per-feature
+chat panel**. Every row is a door to the ONE workspace.
+
+**It DEEPENS the sketch, it does not re-invent it.** `planning-workspace.mock.html`
+sheet 4 ("B — Floating 'M': the universal AI callout") already draws the callout
+at options-comparison depth — the "Motir AI" header, three icon + title +
+description rows, an "Ask Motir anything…" field. That visual language is settled
+and reproduced here; what this asset adds is BUILD depth. The orb's own fill, glow
+and pulse, and the planning workspace itself (7.20.1 / MOTIR-1193), are composed,
+never redrawn.
+
+**Asset:** `ai-callout-menu.mock.html` (source) + `ai-callout-menu.png` (full-page
+export). An eight-panel review board:
+
+| Panel | What it shows                                                                                                                         |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **The access path** — the orb in situ over the shipped authed shell, closed (today: click → `/planning`) then open                    |
+| **2** | **The orb's trigger role** — `<Link>` → `Popover.Trigger` + `<button>`, the accessible-name change, and its four states               |
+| **3** | **Both menu states** — interim (header + the one live row) · target (three rows + composer) · and the FORBIDDEN "coming soon" variant |
+| **4** | **Row anatomy** — icon tile, title, one-line description, and rest / hover / focus-visible / active                                   |
+| **5** | **Open · close · keyboard** — the shipped `UserMenu` popover idiom, plus the anchoring + panel props                                  |
+| **6** | **Narrow / mobile** — 390 px and 320 px drawn TO SCALE, the width clamp, and the never-covers-the-orb rule                            |
+| **7** | **Dark, AA, and surface material** — the real dark token flip, the per-element ink table, `data-surface="popover"`                    |
+| **8** | **What it composes** — every element mapped to its shipped owner — and which entrances stay exactly as they are                       |
+
+### ⭐ Drawn against SHIPPED REALITY — rendered before drawn
+
+Per design-against-shipped-reality (lesson #73), both surfaces this design
+composes were **rendered from the running app first** (production build, signed
+in, an active project, `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` set so the
+launcher mounts) and the mock reuses that markup rather than a stylised
+stand-in. What the render pinned down:
+
+- **The orb** is an `<a href="/planning?mode=project&from=project">` with
+  `aria-label="Plan with AI"` — 56 × 56 (`h-14 w-14`), `fixed right-5 bottom-5
+z-40`, `rounded-full`, the radial accent fill + pink aura + the 3.2 s
+  `.plan-with-ai-fab-pulse` ring. Measured at **x 1364, y 824** on a 1440 × 900
+  viewport and **x 314, y 704** at 390 × 780 — the same 20 px offsets, no
+  breakpoint.
+- **`Popover.Content` renders `role="dialog"`**, not `role="menu"` — with
+  `data-side` / `data-align` / `data-state` on the panel and the shipped
+  `UserMenu` holding plain links inside it. That is the keyboard contract this
+  design mirrors, and it is why a roving `menuitem` model is explicitly ruled out.
+- **The shipped `UserMenu` panel** is 240 px, `--radius-card` (12 px),
+  `--el-page-bg`, a `--el-border` hairline, `--shadow-elevated`, `py-1`, a
+  bordered header block (`px-3 pb-2 pt-2`) and rows with a 16 px muted lucide
+  glyph + a 14 px `--el-text` label.
+- **The `TopNav` right cluster** is `[Plan with AI] [Build in public]
+[+ Create ⌘C] [Search ⌘K] [bug] [screen] [bell] [avatar]` — the hero pill leads
+  it, and it is present on every authed screen, which is why losing the orb's
+  direct navigation costs no access.
+- **A shape drift worth fixing while mirroring:** the shipped `UserMenu` rows
+  render `rounded-(--radius-sm)` with raw `px-2 py-2` — Tier-0 shape a
+  `data-style` swap cannot reshape. The callout's rows take the element-semantic
+  tokens (`--radius-control`, `--spacing-control-x/y`) instead; rendered values
+  are near-identical today, so nothing looks different.
+
+### ⚠️ The interim menu is deliberate — and the fast lane is NOT lost
+
+The menu ships with **one** row, because one capability exists. That is a real cost
+(an extra click on the orb) and it is paid on purpose: the header names the
+surface so the single row reads as "the first of several", and the architecture
+that holds all three actions is built once rather than retrofitted. **The direct
+one-click path survives untouched** — the TopNav hero pill and ⌘K still go
+STRAIGHT to `/planning` on every screen (panel 8). And `⌘`/middle-click is
+preserved one level in, because every row is a real link.
+
+**An action whose story has not landed is ABSENT — never a dimmed, disabled or
+"Coming soon" row** (drawn as the forbidden variant in panel 3). A dead row is a
+promise the product cannot keep, it costs a tab stop and a screen-reader
+announcement, and it makes the interim state feel broken rather than young.
+
+### The panel — anchoring, and the keyboard model it inherits
+
+| Prop               | Value   | Why                                                                |
+| ------------------ | ------- | ------------------------------------------------------------------ |
+| `side`             | `top`   | the orb hugs the bottom edge — there is no room below              |
+| `align`            | `end`   | right edges line up with the orb, away from the viewport edge      |
+| `sideOffset`       | `12`    | clears the orb's outer glow (the primitive's default 8 sits in it) |
+| `collisionPadding` | `16`    | keeps the panel off every viewport edge when it shifts             |
+| `width`            | `288`   | fits the longest description on ONE line; 320 is wider than needed |
+| `overflowVisible`  | `false` | static rows only — the default clip is correct                     |
+| `modal`            | `false` | the page behind stays scrollable + readable, like the user menu    |
+
+**Keyboard = the shipped `UserMenu` idiom, unchanged.** Open with click / `Enter`
+/ `Space`; `Tab` and `Shift+Tab` walk the rows in DOM order (composer last, once
+it exists); `Enter` follows the row's `href`; `Esc` or a click outside dismisses;
+focus returns to the orb on every close path (Radix's `onCloseAutoFocus`).
+**Do NOT invent a roving `role="menu"` pattern** — a second, contradictory model
+would make two shell menus behave differently under the same-looking chrome. If a
+future card genuinely wants arrow-key roving it must say so explicitly and specify
+the FULL `menu` / `menuitem` semantics (`aria-activedescendant` or roving
+`tabindex`, typeahead, Home/End); it is not something to half-build.
+
+**Motion.** While the menu is open the pulse **stops**
+(`[data-state='open'] .plan-with-ai-fab-pulse { animation: none }`, keyed off the
+attribute Radix already sets on the trigger) so the panel never sits inside a
+breathing halo — stopping, not `animation-play-state: paused`, which would freeze
+the ring at an arbitrary radius. The pulse is already gated behind
+`@media (prefers-reduced-motion: no-preference)`, so a motion-sensitive user never
+sees it in any state and the open-state rule is a no-op for them.
+
+**Responsive.** `width: min(288px, calc(100vw - 2rem))`; the rows reflow (the
+description wraps) rather than truncating. `side="top"` + `sideOffset: 12` put the
+panel's bottom edge 12 px above the orb's top, so it can never cover the trigger —
+there is never room below for Radix to flip into. At 320 px the collision padding
+shifts the panel 4 px, leaving 16 px margins. The orb itself gets no new
+responsive rule.
+
+### Primitives composed (no hand-rolling)
+
+| Element             | Built from                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the orb             | the shipped `components/planning/PlanWithAIFab.tsx` — fill, aura, pulse, position, size verbatim; only the ELEMENT changes                                               |
+| the panel           | `Popover` / `Popover.Trigger` / `Popover.Content` from `@motir/design-system` (re-exported at `components/ui/Popover.tsx`)                                               |
+| header block + rows | the shipped `app/(authed)/_components/UserMenu.tsx` idiom — bordered header, `--el-surface` row hover, muted lucide glyph                                                |
+| the destination     | `lib/planning/launcher.ts` — `planningWorkspaceHref()` / `PLANNING_WORKSPACE_PATH`; **ONE href shared by every row** — no new route, no new mode, no per-row destination |
+| the composer slot   | `Input` shape tokens (`--radius-input`, `--height-control`); its behaviour is MOTIR-1343's to specify — this asset reserves the slot                                     |
+| icons               | lucide-react — `Sparkles`, `MessageCircleQuestion`, `Wrench`, `ArrowUp`                                                                                                  |
+| gating              | unchanged — `(authed)/layout.tsx` mounts the orb only under `isMotirAiConfigured() && activeProject`                                                                     |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*`. The mock's token block is **generated
+  verbatim** from `packages/design-system/theme.css` (the Tier-0 `@theme` +
+  `[data-theme='dark']` blocks and the Tier-3 `:root,[data-appearance-scope]`
+  layer), and every icon is a real lucide `__iconNode` path — so the asset cannot
+  drift from the shipped design system and contains **no retyped hex and no
+  invented hue**. The header tint and the icon tiles are `color-mix()` of
+  `--el-accent` → `--el-highlight` over `--el-page-bg` — the same palette-derived
+  recipe the shipped hero pill and orb already use.
+- **Shape** strictly via element-semantic tokens — panel = `--radius-card`, rows +
+  icon tiles = `--radius-control`, composer = `--radius-input`, chips =
+  `--radius-badge`, elevation = `--shadow-elevated`, row padding =
+  `--spacing-control-x/y`. `rounded-full` only on the orb and the avatar.
+- **Dark** is drawn from the real dark token flip (`data-theme="dark"` **plus**
+  `data-appearance-scope`, since the Tier-3 layer is declared on
+  `:root,[data-appearance-scope]` and a nested subtree must re-emit it).
+- **AA** — the row description is `--el-text-secondary`, never `--el-text-muted`,
+  which fails at 11.5 px; tile ink is `--el-accent-text` on the accent-dominant
+  gradient and `--el-accent-on-surface` on the tint.
+- **Not colour alone** — the primary row is marked by its filled tile AND its
+  position; every state pairs a fill with a ring.
+- **A11y** — the trigger's accessible name becomes **"Motir AI"** ("Plan with AI"
+  moves inside, as the row's name) and Radix adds `aria-haspopup="dialog"` /
+  `aria-expanded` / `aria-controls`; rows are real links in the natural tab order;
+  focus-visible draws the 2 px `--focus-ring-color` ring inset so it never clips
+  at the panel edge.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
+(this section) · `ai-callout-menu.mock.html` (source) · `ai-callout-menu.png`
+(full-page export, Playwright chromium — light, `deviceScaleFactor: 2`, 1240 px
+wide). Composes `planning-workspace.mock.html` sheet 4 (MOTIR-1193); gates the
+code subtask **MOTIR-1812** (the callout menu shell), and reserves the rows
+MOTIR-1343 / MOTIR-1344 deliver.
