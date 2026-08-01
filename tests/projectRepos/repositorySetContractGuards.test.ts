@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
-import { enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
+import { enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
@@ -107,7 +107,7 @@ describe('the index chain got no new code', () => {
     // only its own producer.
     const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 
-    await enqueueNewlyAddedRepos({
+    await enqueueReposMissingFirstIndex({
       installationId: '556677',
       workspaceId: 'ws-1',
       repos: [
@@ -118,7 +118,7 @@ describe('the index chain got no new code', () => {
           defaultBranch: 'main',
         } as never,
       ],
-      existingRepoIds: [],
+      indexedRepoRefs: [],
     });
 
     expect(send).toHaveBeenCalledTimes(1);

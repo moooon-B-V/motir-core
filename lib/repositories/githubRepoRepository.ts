@@ -56,6 +56,26 @@ export const githubRepoRepository = {
     });
   },
 
+  /** Every connected repo WITH its parent installation, optionally narrowed to one
+   *  workspace (MOTIR-1961) — the operator first-index sweep's one read. The
+   *  installation is included because the enqueue payload needs the PROVIDER's
+   *  installation id (`GithubInstallation.installationId`, the token-minting key),
+   *  which the repo row holds only as the internal FK. Cross-workspace by design:
+   *  the never-indexed-repo defect is not one tenant's, so the sweep's default
+   *  domain is every affected tenant — the caller narrows with `workspaceId` and
+   *  MUST run under `withSystemContext` when it does not (the `github_repo` RLS
+   *  policy is workspace-keyed). Stable-ordered so the sweep's report is diffable. */
+  async listWithInstallation(
+    tx: Prisma.TransactionClient,
+    opts: { workspaceId?: string } = {},
+  ): Promise<(GithubRepo & { installation: GithubInstallation })[]> {
+    return tx.githubRepo.findMany({
+      where: opts.workspaceId ? { workspaceId: opts.workspaceId } : {},
+      include: { installation: true },
+      orderBy: [{ workspaceId: 'asc' }, { owner: 'asc' }, { name: 'asc' }],
+    });
+  },
+
   /** One selected repo by its `(installation_id, repo_id)` pair — the webhook's
    *  lookup from a normalized change request's `providerRepoId` (GitHub's numeric
    *  repo id) to the internal `GithubRepo.id` the PR row FKs against. Null when

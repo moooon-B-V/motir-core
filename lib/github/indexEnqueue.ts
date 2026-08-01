@@ -11,9 +11,25 @@ import type { NormalizedRepo } from '@/lib/git/types';
 // MUST be called AFTER the installation's repos persist: the grant mirror is the
 // source of truth and the index is a SIDE EFFECT that must never fail or roll
 // back the grant (PROD-443 — coupling a committed mutation to a transport call
-// turns it into a 500 on a blip). So a failed enqueue is swallowed + logged. The
-// job is idempotent, so a dropped enqueue self-heals on the next repo-selection
-// change (or a manual replay).
+// turns it into a 500 on a blip). So a failed enqueue is swallowed + logged.
+//
+// SELF-HEALING — what it does and does not cover (MOTIR-1961). The dispatch gate
+// is "this repo has NO code graph yet", NOT "this repo row is new", so a dropped
+// enqueue really does self-heal on the next repo-selection change or re-bind: the
+// repo still has no succeeded index, so the next reconcile enqueues it again. The
+// gate USED to be row novelty (`existingRepoIds`), and that made the self-heal
+// claim false for the one case that needed it most — a repo persisted BEFORE this
+// feature shipped was never "newly added" at any moment when the code existed, so
+// no bind, no reconcile and no refresh ever gave it a first graph, and the
+// workspace was silently code-blind forever. Novelty and indexedness are different
+// facts; only the second one belongs in this gate.
+
+/** A repo's canonical `owner/name` ref — the key the index ledger records as
+ *  `output.repoRef` and the one the enqueue gate matches against. Kept here, next
+ *  to the gate, so the producer and the consumer of that key cannot drift. */
+export function repoRefOf(repo: { owner: string; name: string }): string {
+  return `${repo.owner}/${repo.name}`;
+}
 
 /** Enqueue ONE repo's index job. Swallows + logs a transport failure. */
 export async function enqueueCodeGraphIndex(data: CodeGraphIndexData): Promise<void> {
@@ -48,20 +64,30 @@ export async function enqueueCodeGraphRefresh(data: CodeGraphRefreshData): Promi
 }
 
 /**
- * Enqueue an index job for each repo in `repos` whose provider repo id is NOT in
- * `existingRepoIds` — i.e. exactly the newly-added repos of a reconcile / bind.
- * A re-selection that adds nothing enqueues nothing. Best-effort per repo (one
- * failure never blocks the others or the caller).
+ * Enqueue an index job for each repo in `repos` that has NO code graph yet —
+ * `indexedRepoRefs` is the workspace's already-indexed set (`owner/name`, from
+ * the succeeded-index ledger). A reconcile whose repos are all indexed enqueues
+ * nothing; a repo that is merely UNCHANGED but has never been indexed DOES
+ * enqueue, which is the whole point (MOTIR-1961).
+ *
+ * A repo whose index is queued or in flight but not yet succeeded re-enqueues.
+ * That is deliberate and cheap to allow: the ledger cannot tie a `running` row to
+ * a repo (it writes `output.repoRef` only on success), the job is idempotent by
+ * construction, and the reconcile that would double-send fires only on a
+ * repo-selection change. Under-enqueueing here costs a permanently code-blind
+ * workspace; over-enqueueing costs one convergent re-index.
+ *
+ * Best-effort per repo (one failure never blocks the others or the caller).
  */
-export async function enqueueNewlyAddedRepos(input: {
+export async function enqueueReposMissingFirstIndex(input: {
   installationId: string;
   workspaceId: string;
   repos: NormalizedRepo[];
-  existingRepoIds: Iterable<string>;
+  indexedRepoRefs: Iterable<string>;
 }): Promise<void> {
-  const existing = new Set(input.existingRepoIds);
+  const indexed = new Set(input.indexedRepoRefs);
   for (const repo of input.repos) {
-    if (existing.has(repo.providerRepoId)) continue;
+    if (indexed.has(repoRefOf(repo))) continue;
     await enqueueCodeGraphIndex({
       installationId: input.installationId,
       workspaceId: input.workspaceId,

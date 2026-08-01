@@ -277,17 +277,38 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
     vi.stubGlobal('fetch', fetchMock);
   }
 
-  it('a RE-bind of an already-persisted installation enqueues only the newly-granted repos (MOTIR-896)', async () => {
+  /** The ledger row that MEANS "this repo has a code graph" — a succeeded
+   *  `system.code-graph-index` run carrying the repo's `output.repoRef`. */
+  async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
+    await db.jobRun.create({
+      data: {
+        workspaceId,
+        functionId: 'system.code-graph-index',
+        eventName: 'system.code-graph-index',
+        eventId: `evt-${repoRef}`,
+        attempt: 0,
+        status: 'succeeded',
+        output: { indexed: true, repoRef, projectsIndexed: 1 },
+      },
+    });
+  }
+
+  it('a RE-bind enqueues only the repos with NO code graph yet (MOTIR-896 · MOTIR-1961)', async () => {
     stubGithubFetch();
     const { inngest } = await import('@/lib/jobs/client');
     const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    // The suite does not restore mocks between tests, so the spy is shared —
+    // clear it or a sibling test's sends leak into this one's assertions.
+    send.mockClear();
     const { workspace } = await makeWorkspace('rebind@example.com');
-    // Repo 111 is already mirrored; the seam returns 111 + 222 — only 222 is new.
+    // Repo 111 is already mirrored AND indexed; the seam returns 111 + 222 —
+    // only 222 lacks a graph.
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: { installationId: 'inst-bind', accountLogin: 'moooon', accountType: 'User' },
       repos: [REPO_A],
     });
+    await seedSucceededIndex(workspace.id, 'moooon/motir-core');
 
     const dto = await githubInstallationService.bindInstallationForWorkspace({
       workspaceId: workspace.id,
@@ -301,6 +322,73 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
     expect(indexSends.map((c) => (c[0] as { data: { repoName: string } }).data.repoName)).toEqual([
       'motir-ai',
     ]);
+  });
+
+  it('a RE-bind RECOVERS an already-mirrored repo that was never indexed (MOTIR-1961)', async () => {
+    // The defect's state at the bind path: repo 111 has been mirrored for months
+    // and has no index run. The old gate skipped it as "not newly added", so
+    // re-binding — the user's most obvious remedy — repaired nothing.
+    stubGithubFetch();
+    const { inngest } = await import('@/lib/jobs/client');
+    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    // The suite does not restore mocks between tests, so the spy is shared —
+    // clear it or a sibling test's sends leak into this one's assertions.
+    send.mockClear();
+    const { workspace } = await makeWorkspace('rebind-recover@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-bind', accountLogin: 'moooon', accountType: 'User' },
+      repos: [REPO_A],
+    });
+
+    await githubInstallationService.bindInstallationForWorkspace({
+      workspaceId: workspace.id,
+      installationId: 'inst-bind',
+    });
+
+    const indexed = send.mock.calls
+      .filter((c) => (c[0] as { name: string }).name === 'system.code-graph-index')
+      .map((c) => (c[0] as { data: { repoName: string } }).data.repoName);
+    expect(indexed.sort()).toEqual(['motir-ai', 'motir-core']);
+  });
+
+  it('a succeeded run that indexed NOTHING does not count as a graph (MOTIR-1961)', async () => {
+    // `indexRepoIntoWorkspaceProjects` returns `{ indexed: false, reason }` — a
+    // SUCCEEDED job_run with no `output.repoRef` — when the workspace had no
+    // projects. Reading that as "indexed" would strand the repo permanently.
+    stubGithubFetch();
+    const { inngest } = await import('@/lib/jobs/client');
+    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    // The suite does not restore mocks between tests, so the spy is shared —
+    // clear it or a sibling test's sends leak into this one's assertions.
+    send.mockClear();
+    const { workspace } = await makeWorkspace('rebind-noprojects@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-bind', accountLogin: 'moooon', accountType: 'User' },
+      repos: [REPO_A],
+    });
+    await db.jobRun.create({
+      data: {
+        workspaceId: workspace.id,
+        functionId: 'system.code-graph-index',
+        eventName: 'system.code-graph-index',
+        eventId: 'evt-no-projects',
+        attempt: 0,
+        status: 'succeeded',
+        output: { indexed: false, reason: 'no_projects' },
+      },
+    });
+
+    await githubInstallationService.bindInstallationForWorkspace({
+      workspaceId: workspace.id,
+      installationId: 'inst-bind',
+    });
+
+    const indexed = send.mock.calls
+      .filter((c) => (c[0] as { name: string }).name === 'system.code-graph-index')
+      .map((c) => (c[0] as { data: { repoName: string } }).data.repoName);
+    expect(indexed.sort()).toEqual(['motir-ai', 'motir-core']);
   });
 
   it('binds a fresh install: fetches account + repos through the seam and persists them', async () => {

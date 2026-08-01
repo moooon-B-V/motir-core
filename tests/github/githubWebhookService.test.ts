@@ -572,18 +572,36 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
     );
   }
 
-  it('enqueues one code-graph-index job per NEWLY-added repo and skips repos already present', async () => {
-    // Authoritative set = the already-present `keep` (id 111) + a freshly-added
-    // `fresh` (id 222). Only `fresh` should enqueue.
+  /** Seed the ledger row that MEANS "this repo has a code graph": a succeeded
+   *  `system.code-graph-index` run carrying the repo's `output.repoRef`. */
+  async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
+    await db.jobRun.create({
+      data: {
+        workspaceId,
+        functionId: 'system.code-graph-index',
+        eventName: 'system.code-graph-index',
+        eventId: `evt-${repoRef}`,
+        attempt: 0,
+        status: 'succeeded',
+        output: { indexed: true, repoRef, projectsIndexed: 1 },
+      },
+    });
+  }
+
+  /** Persist `keep` (id 111), then reconcile against `keep` + `fresh` (id 222)
+   *  and return the index jobs the reconcile enqueued. */
+  async function reconcileAndCollectIndexJobs(
+    workspaceId: string,
+    seedIndexFor: string[],
+  ): Promise<Record<string, unknown>[]> {
     stubGithub([
       { id: 111, name: 'keep' },
       { id: 222, name: 'fresh' },
     ]);
     const sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 
-    const { workspace } = await makeWorkspace('cg-enqueue@example.com');
     await githubInstallationService.persistInstallation({
-      workspaceId: workspace.id,
+      workspaceId,
       installation: {
         installationId: 'inst-cg',
         accountLogin: 'moooon',
@@ -591,6 +609,7 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
       },
       repos: [{ providerRepoId: '111', owner: 'moooon', name: 'keep', defaultBranch: 'main' }],
     });
+    for (const repoRef of seedIndexFor) await seedSucceededIndex(workspaceId, repoRef);
     // The bind above (persistInstallation directly) doesn't enqueue; clear anything.
     sendSpy.mockClear();
 
@@ -600,17 +619,42 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
     });
     expect(res).toMatchObject({ event: 'installation_repositories', outcome: 'synced' });
 
-    const indexCalls = sendSpy.mock.calls.filter(
-      ([e]) => (e as { name?: string }).name === 'system.code-graph-index',
-    );
-    expect(indexCalls).toHaveLength(1);
-    expect((indexCalls[0]![0] as { data: Record<string, unknown> }).data).toMatchObject({
+    return sendSpy.mock.calls
+      .filter(([e]) => (e as { name?: string }).name === 'system.code-graph-index')
+      .map(([e]) => (e as { data: Record<string, unknown> }).data);
+  }
+
+  it('enqueues one code-graph-index job per UN-INDEXED repo and skips the already-indexed', async () => {
+    // Authoritative set = the already-present `keep` (id 111), which HAS a graph,
+    // + a freshly-added `fresh` (id 222), which does not. Only `fresh` enqueues.
+    const { workspace } = await makeWorkspace('cg-enqueue@example.com');
+    const jobs = await reconcileAndCollectIndexJobs(workspace.id, ['moooon/keep']);
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
       installationId: 'inst-cg',
       workspaceId: workspace.id,
       repoOwner: 'moooon',
       repoName: 'fresh',
       defaultBranch: 'main',
     });
+  });
+
+  it('a reconcile RECOVERS a long-present repo that never got a first index (MOTIR-1961)', async () => {
+    // The defect's exact state: `keep` has a github_repo row and NO index run.
+    // Under the old novelty gate it was skipped as "already present" and could
+    // never be indexed by any path; now the same reconcile picks it up.
+    const { workspace } = await makeWorkspace('cg-recover@example.com');
+    const jobs = await reconcileAndCollectIndexJobs(workspace.id, []);
+
+    expect(jobs.map((d) => d['repoName'])).toEqual(['keep', 'fresh']);
+  });
+
+  it('a reconcile that changes nothing and indexes nothing new is a no-op (no re-index storm)', async () => {
+    const { workspace } = await makeWorkspace('cg-quiet@example.com');
+    const jobs = await reconcileAndCollectIndexJobs(workspace.id, ['moooon/keep', 'moooon/fresh']);
+
+    expect(jobs).toEqual([]);
   });
 });
 
