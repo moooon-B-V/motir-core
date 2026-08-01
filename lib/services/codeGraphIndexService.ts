@@ -187,9 +187,13 @@ export const codeGraphIndexService = {
         jobRunRepository.listSucceededCodeGraphIndexRepoRefs(input.workspaceId, tx),
       );
     } catch (err) {
+      // The workspace id is passed as an ARGUMENT, never interpolated into the
+      // first argument: on the webhook path it is request-derived, and building
+      // a format string out of it is `js/tainted-format-string` (CodeQL, high).
       console.error(
-        `enqueueFirstIndexForRepos(${input.workspaceId}) could not read the index ledger; ` +
-          `treating every repo as un-indexed (the job is idempotent):`,
+        'enqueueFirstIndexForRepos could not read the index ledger for workspace; ' +
+          'treating every repo as un-indexed (the job is idempotent):',
+        input.workspaceId,
         err,
       );
     }
