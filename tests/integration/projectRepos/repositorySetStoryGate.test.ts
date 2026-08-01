@@ -25,6 +25,7 @@ import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { createRunnerGroupFake, type RunnerGroupFake } from '../../helpers/runnerGroupFake';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Story-level GATE for "Establish the project's REPOSITORY SET at plan
@@ -88,6 +89,9 @@ let existingRepos: Map<string, number>;
 /** Repo names the fake GitHub refuses to create, and with which status. */
 let refusals: Map<string, number>;
 let nextRepoId: number;
+/** The project's own GitHub runner group (MOTIR-1972) — establishing a
+ *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
+let runnerGroups: RunnerGroupFake;
 
 /**
  * A GitHub good enough to establish against: it resolves the provisioning
@@ -113,6 +117,10 @@ function installGitHub(): void {
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
         });
       }
+      // The project's own RUNNER GROUP (MOTIR-1972) — establishing a repository
+      // now syncs it, so this suite's GitHub has to know about those endpoints.
+      const group = await runnerGroups.handle(u, method, body);
+      if (group) return group;
       if (
         method === 'POST' &&
         (u.includes('/generate') || u.endsWith(`/orgs/${MOTIR_ORG}/repos`))
@@ -187,6 +195,7 @@ beforeEach(async () => {
   existingRepos = new Map();
   refusals = new Map();
   nextRepoId = 700_001;
+  runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },

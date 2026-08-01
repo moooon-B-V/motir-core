@@ -121,15 +121,44 @@ export async function withSystemContext<T>(
  * id resolves to), never from user input — exactly the constraint
  * `withOrgServiceWriteContext` documents. The policy confines the effect to that
  * one workspace, so it grants no broader reach than the id already implies.
+ *
+ * `options` raises Prisma's interactive-transaction budget for the ONE path that
+ * needs it — see {@link TransactionBudget}. Omit it and the default 5s applies,
+ * which is what every shipped caller wants.
  */
 export async function withWorkspaceServiceContext<T>(
   workspaceId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: TransactionBudget,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
-    return fn(tx);
-  });
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+      return fn(tx);
+    },
+    options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  );
+}
+
+/**
+ * An explicit, raised budget for an interactive transaction.
+ *
+ * Prisma's default is `timeout: 5000` / `maxWait: 2000`, and that default is
+ * correct for essentially everything: a transaction is a lock held on live rows,
+ * and a long one is usually a design smell. It is stated as a TYPE rather than
+ * two loose numbers so that raising it is a visible, argued decision at the call
+ * site instead of a magic literal.
+ *
+ * The one shipped caller is the per-project runner-group sync (MOTIR-1972),
+ * which must hold the project's row lock ACROSS its GitHub calls because the
+ * access list it writes is read-derived — see that service's header for why the
+ * lock cannot be released first.
+ */
+export interface TransactionBudget {
+  /** Max wall-clock ms the transaction body may run before Prisma rolls back. */
+  timeoutMs: number;
+  /** Max ms to wait for a free connection before the transaction even starts. */
+  maxWaitMs: number;
 }
 
 /**

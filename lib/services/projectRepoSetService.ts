@@ -13,6 +13,7 @@ import { projectRepoCollaboratorRepository } from '@/lib/repositories/projectRep
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoPinService } from '@/lib/services/projectRepoPinService';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import {
   toProjectRepoDto,
   toProjectRepoSetDto,
@@ -523,6 +524,18 @@ export const projectRepoSetService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
       (tx) => projectRepoRepository.deleteById(rowId, tx),
     );
+
+    // POST-COMMIT, BEST-EFFORT — the removed row's repository must LEAVE the
+    // project's runner group (MOTIR-1972). The access list is the other half of
+    // the establish seam's sync: a grant that outlives the row it came from is a
+    // runner Motir booted for this project still being able to serve a repository
+    // the project no longer claims. Only an ESTABLISHED row had an id in the list
+    // at all, so removing a `proposed` one re-writes the same array — which is
+    // exactly why the sync is a whole-set re-derivation and needs no branch here.
+    await projectRunnerGroupService.syncQuietly({
+      projectId: existing.projectId,
+      workspaceId: ctx.workspaceId,
+    });
   },
 
   /**
@@ -807,6 +820,23 @@ export const projectRepoSetService = {
         err,
       );
     }
+
+    // POST-COMMIT, BEST-EFFORT — add the repository this row just realized to the
+    // project's OWN runner group (MOTIR-1972 · `ci-runner-fleet.md` §7.3). Wired
+    // at this same seam and for the same reason the two passes above are: this is
+    // the ONE method every establish path goes through — the creation primitive's
+    // `created` hop AND the establish UI's connect-existing `connected` hop — so
+    // no caller has to remember it and none can drift.
+    //
+    // A whole-set re-sync rather than an append, because rows establish
+    // INDEPENDENTLY and asynchronously (ADR §4.1): the desired access list is
+    // whatever the set says right now, and the service takes the project's row
+    // lock to make that read-derived write safe against a sibling row settling at
+    // the same moment.
+    await projectRunnerGroupService.syncQuietly({
+      projectId: attached.projectId,
+      workspaceId: ctx.workspaceId,
+    });
     return attached;
   },
 

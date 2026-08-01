@@ -761,6 +761,36 @@ export const projectRepository = {
   },
 
   /**
+   * Record (or clear) the project's own GitHub Actions RUNNER GROUP — Story
+   * MOTIR-1916 · MOTIR-1972, `docs/decisions/ci-runner-fleet.md` §7.3.
+   *
+   * `tx` REQUIRED, and the caller is expected to be holding this row's
+   * {@link lockById} lock: the access list this stamps is READ-DERIVED (the
+   * desired `selected_repository_ids` is computed from the project's current
+   * repository set), so two rows establishing concurrently would otherwise each
+   * read the pre-existing list and the second write would erase the first's
+   * repository. The lock is what serializes them; this method is the plain
+   * id-keyed write at the end of it.
+   *
+   * A single `data` object rather than four setters because the four fields are
+   * ONE fact — "the group, and whether GitHub agrees with us about it" — and
+   * writing them separately is what would let a successful sync leave
+   * `runnerGroupSyncPending` true.
+   */
+  async setRunnerGroup(
+    id: string,
+    data: {
+      runnerGroupId?: number | null;
+      runnerGroupName?: string | null;
+      runnerGroupSyncedAt?: Date | null;
+      runnerGroupSyncPending?: boolean;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data });
+  },
+
+  /**
    * Atomically bump the per-project work-item counter and return the new
    * value. Uses UPDATE … RETURNING (NOT a read-then-write) so allocation is
    * gap-free under concurrency: each concurrent caller's UPDATE serializes

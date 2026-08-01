@@ -11,6 +11,7 @@ import { githubInstallationRepository } from '@/lib/repositories/githubInstallat
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { actionsPermissionsClient } from '@/lib/github/actionsPermissions';
 import { repoTransferClient, RepoTransferError } from '@/lib/github/repoTransfer';
 import { toProjectRepoDto, type ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
@@ -216,7 +217,7 @@ export const projectRepoTakeoverService = {
     // The SERVICE flavour of the workspace context: a webhook has no user, and
     // `project_repository`'s policy predicates purely on `app.workspace_id` — the
     // same context the CI-Actions sweep writes its rows under.
-    return withWorkspaceServiceContext(found.workspaceId, async (tx) => {
+    const outcome = await withWorkspaceServiceContext(found.workspaceId, async (tx) => {
       await githubRepoRepository.updateOwnerByRepoId(
         input.providerRepoId,
         {
@@ -253,6 +254,27 @@ export const projectRepoTakeoverService = {
       );
       return { outcome: 'applied' as const };
     });
+
+    // POST-COMMIT, BEST-EFFORT — the repository has LEFT Motir's org, so it must
+    // leave the project's runner group too (MOTIR-1972 · `ci-runner-fleet.md`
+    // §7.3). It falls out of the desired access list by the owner rule alone —
+    // the mirror's owner was just re-stamped above — so no special case is needed
+    // here beyond re-running the sync.
+    //
+    // `syncAfterHandoff`, not a plain sync: a project hands its repositories over
+    // one row at a time, and the LAST one leaves the group access-listing nothing
+    // in an org whose repositories Motir no longer owns. That group is deleted
+    // rather than abandoned. Runs after the transaction commits (the sync takes
+    // the project's own row lock, and nesting it inside this one would order two
+    // writers differently on different paths) and swallows its own failures: a
+    // handoff that has already moved the repository must never be reported as
+    // failed because a group could not be tidied.
+    await projectRunnerGroupService.syncAfterHandoff({
+      projectId: found.projectId,
+      workspaceId: found.workspaceId,
+    });
+
+    return outcome;
   },
 
   /**

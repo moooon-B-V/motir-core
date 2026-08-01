@@ -34,6 +34,7 @@ import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
@@ -381,6 +382,28 @@ export const projectsService = {
         }
       },
     );
+
+    // POST-COMMIT, BEST-EFFORT — delete the project's own GitHub Actions runner
+    // group (MOTIR-1972 · `docs/decisions/ci-runner-fleet.md` §7.3). Archive is
+    // this product's terminal project lifecycle action (there is no hard delete
+    // and no un-archive path), so it is the project-deletion edge the card names.
+    //
+    // An abandoned group is not billable, but it IS a live access list naming
+    // repositories in Motir's org with nothing pointing at it — the kind of stale
+    // grant that is only ever discovered by an incident. Deleting it also means an
+    // archived project can no longer have a runner provisioned for it, which is
+    // the right answer: MOTIR-1921 refuses when the group id is gone rather than
+    // falling back to the org-wide `Default` group.
+    //
+    // Outside the transaction and quiet by contract: the project IS archived, and
+    // failing that write because GitHub was unreachable would be a worse outcome
+    // than a group that has to be tidied later. (The sync is self-healing, so if
+    // an un-archive path is ever added, the project's next establish re-creates
+    // the group.)
+    await projectRunnerGroupService.deleteQuietly({
+      projectId: input.projectId,
+      workspaceId: input.workspaceId,
+    });
   },
 
   /**

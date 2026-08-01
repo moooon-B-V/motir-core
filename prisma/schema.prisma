@@ -833,6 +833,42 @@ model Project {
   /// lets 9.3.7 find every claimable repo of a project with ONE project-scoped read
   /// instead of a GitHub account scan. NULL until the establish step decides.
   repoSetTargetAccount    String?               @map("repo_set_target_account")
+  /// The project's OWN GitHub Actions runner group (Story MOTIR-1916 ·
+  /// MOTIR-1972) — `docs/decisions/ci-runner-fleet.md` §7.3: one group per Motir
+  /// PROJECT, access-listed to exactly that project's repositories, created
+  /// programmatically at repository establishment.
+  ///
+  /// It is a CORRECTNESS column, not a bookkeeping one. `runs-on` resolves to a
+  /// static label, so every fleet runner visible to a queued fleet job matches
+  /// it: with one org-wide group, a runner booted for project X is picked up by
+  /// project Y's queued job — including one MOTIR-1922's admission gate DECLINED.
+  /// The group's `selected_repository_ids` is what makes the label unambiguous,
+  /// so MOTIR-1921 mints its JIT config against THIS id and REFUSES to provision
+  /// when it is NULL rather than falling back to the `Default` group (id 1,
+  /// `visibility: all`), which would silently restore the org-wide failure.
+  ///
+  /// NULL for every project that predates the fleet and for every self-hosted
+  /// deployment (which never provisions a repository at all) — a first-class
+  /// state, backfilled with no data step.
+  runnerGroupId           Int?                  @map("runner_group_id")
+  /// The group's deterministic name (`motir-project-<projectId>`), stored so an
+  /// ORPHANED group in Motir's org is attributable to the project that made it
+  /// without a reverse lookup, and so a group deleted out of band can be
+  /// re-adopted by name before a second one is created.
+  runnerGroupName         String?               @map("runner_group_name")
+  /// When the group's access list was last written to GitHub SUCCESSFULLY. Read
+  /// together with `runnerGroupSyncPending`: this answers "when was it last
+  /// right?", that one answers "is it right NOW?".
+  runnerGroupSyncedAt     DateTime?             @map("runner_group_synced_at")
+  /// TRUE when a sync is OWED — the GitHub half of the last attempt failed, so
+  /// the access list on GitHub is behind this project's repository set. The
+  /// repository is established regardless (the group call is a side effect that
+  /// runs after the establishment commits; its failure must never roll one back),
+  /// and a later establish / removal pass re-syncs and clears the flag. A stale
+  /// `runnerGroupSyncedAt` cannot express this on its own — after the FIRST
+  /// successful sync the stamp is non-null forever — which is why the flag is its
+  /// own column rather than a derived read.
+  runnerGroupSyncPending  Boolean               @default(false) @map("runner_group_sync_pending")
   /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
   /// validated at the service layer against the avatar registry
   /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
