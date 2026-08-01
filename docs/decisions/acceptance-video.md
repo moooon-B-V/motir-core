@@ -301,12 +301,22 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
 | PR that changes no acceptance spec               | **no lane** | nothing                      |
 | Push to `main`                                   | **no lane** | nothing (the PR already did) |
 
-- **Absent, not skipped.** `.github/workflows/ci.yml` gains a cheap
-  `acceptance-specs` job (checkout + one `git diff`) whose output gates a separate
-  `acceptance` job. A job-level `if:` is the only thing that removes a check from
-  the PR entirely, and it can only read `needs.*` — which is why the detector is a
-  job and not a step, and why the lane is no longer an `e2e` matrix leg (a matrix
-  cannot be pruned by an expression).
+- **Absent, not skipped — and only ONE mechanism achieves that.** The lane moves
+  out of `ci.yml` into its own `.github/workflows/acceptance-video.yml`, triggered
+  by `on: pull_request: paths: ['tests/e2e/acceptance*.spec.ts']`. A workflow whose
+  path filter does not match is never TRIGGERED, so no run exists and no check
+  appears. The two cheaper-looking options were both tried and are both wrong:
+  - a **matrix leg** cannot be dropped by an expression at all;
+  - a **job-level `if:`** does not remove the check — a job whose `if:` is false is
+    still reported as a greyed `Skipped`. Measured, not assumed: the first attempt
+    at this card gated an `acceptance` job on a detector job's output, and PR #1751
+    still listed `Playwright E2E (acceptance-video) · skipping`. Free in minutes,
+    but still "the step is there", which is what was asked to go away.
+- **What the separate workflow costs.** It cannot `needs:` ci.yml's `build` job or
+  read that run's artifacts, so it compiles `.next/` itself (the shared
+  `./.github/actions/e2e-setup` composite takes a `next-build: build` input for
+  exactly this). That is one extra build, paid only on the PRs that own a spec —
+  where the 11-minute lane dwarfs it. There is deliberately no `push:` trigger.
 - **What this costs, said out loud.** The watchability floor and story resolution
   (§2's amendment / MOTIR-1772, MOTIR-1905) now run **only on the owning run** — a
   spec that drifts below the floor is caught when its own PR next touches it, not

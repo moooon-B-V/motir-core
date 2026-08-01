@@ -15,6 +15,18 @@ description: >-
   (kept in the job so the DB container's lifetime is visible where its
   DATABASE_URL is set).
 
+inputs:
+  next-build:
+    description: >-
+      Where `.next/` comes from. `download` (default) takes the artifact the
+      `build` job of the same CI run published — the cheap path, available to
+      any job in that workflow. `build` compiles it here, which the
+      acceptance-video workflow needs: it is a SEPARATE workflow (so its checks
+      can be absent rather than skipped), and a workflow cannot depend on
+      another workflow's job or read its artifacts.
+    required: false
+    default: download
+
 runs:
   using: composite
   steps:
@@ -46,6 +58,7 @@ runs:
     # Download the pre-built .next/ from the build job so the webServer
     # boots via `next start` without building independently (MOTIR-1706).
     - name: Download .next/ build artifact
+      if: inputs.next-build == 'download'
       uses: actions/download-artifact@v7
       with:
         name: next-build
@@ -59,6 +72,13 @@ runs:
     # script; here we run it explicitly because we don't run build.)
     - run: pnpm prisma migrate deploy
       shell: bash
+      if: inputs.next-build == 'download'
+    # The no-artifact path: `pnpm build` is `prisma generate && migrate deploy
+    # && next build`, so it covers the migrate step above as well.
+    - name: Build the app
+      if: inputs.next-build == 'build'
+      shell: bash
+      run: pnpm build
     # Cache the Playwright browser binary across runs (and the matrix legs).
     # Every leg re-pays `playwright install` otherwise — pure fixed overhead
     # that sharding multiplies by the leg count. Keyed on the lockfile so a

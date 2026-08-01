@@ -353,57 +353,6 @@ jobs:
       # CI (vitest exits 1 on a threshold breach).
       - run: pnpm vitest --mergeReports --coverage
 
-  # ── Which acceptance specs does this PR own? (MOTIR-1949) ──
-  # The acceptance lane is OPT-IN BY AUTHORING A SPEC: it runs only when a PR
-  # touches `tests/e2e/acceptance*.spec.ts`. Everything else — an ordinary
-  # `subtask/*` code PR, and every push to `main` — never sees the job.
-  #
-  # WHY A WHOLE JOB FOR ONE `git diff`. A job-level `if:` is the only thing that
-  # makes a check ABSENT rather than present-and-skipped, and a job-level `if:`
-  # can only read `needs.*` outputs — not a step in its own job, and not a
-  # conditionally-dropped matrix leg (a matrix cannot be pruned by an
-  # expression). So this job exists purely to produce that output. It is a
-  # checkout plus a diff: seconds, no services, no install.
-  #
-  # WHAT IT REPLACED (MOTIR-1937 → MOTIR-1949). MOTIR-1937 scoped the PUBLISH to
-  # the specs a run changed and deliberately kept the lane on every run ("the
-  # checks stay on every run"). Measured cost of that on a PR that publishes
-  # nothing: 11 min — the run's long pole — and a 419 MB report artifact, to
-  # record eight clips and then discard them. Yue's call on 2026-07-31: scope the
-  # LANE, not just the publish. See the amendment in
-  # `docs/decisions/acceptance-video.md`.
-  acceptance-specs:
-    name: Changed acceptance specs
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      specs: ${{ steps.detect.outputs.specs }}
-    steps:
-      - uses: actions/checkout@v6
-      - id: detect
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          # A push to `main` owns nothing: the PR that changed the spec already
-          # published the receipt while its story was in review, and re-publishing
-          # post-merge would only supersede it with an identical clip. So a push
-          # build produces an empty list and the acceptance job does not exist.
-          if [ -z "${BASE_SHA}" ]; then
-            echo "push build — no PR diff, so this run owns no acceptance spec."
-            echo "specs=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # A pull_request checkout is the MERGE commit at depth 1, which carries
-          # both parents — so the base is normally already present. Fetch it if it
-          # is not, rather than paying `fetch-depth: 0` on every run.
-          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null ||
-            git fetch --depth=1 origin "${BASE_SHA}"
-          SPECS=$(git diff --name-only "${BASE_SHA}" HEAD -- 'tests/e2e/acceptance*.spec.ts' | tr '\n' ' ')
-          echo "owned acceptance specs: ${SPECS:-<none>}"
-          echo "specs=${SPECS}" >> "$GITHUB_OUTPUT"
-
   e2e:
     # Sharded matrix (Subtask: E2E CI speedup). The suite is `workers: 1` /
     # `fullyParallel: false` ON PURPOSE — every spec shares one Postgres and a
@@ -443,8 +392,9 @@ jobs:
     runs-on: ubuntu-latest
     # Read-only: these legs check out, run specs and upload a report. The
     # `id-token: write` this job used to carry belonged to the acceptance-video
-    # publish, which is now its own `acceptance` job (MOTIR-1949) — a lane that
-    # can mint an OIDC token should be the one lane that actually publishes.
+    # publish, which now lives in its own `acceptance-video.yml` workflow
+    # (MOTIR-1949) — the lane that mints an OIDC token should be the one lane
+    # that actually publishes.
     permissions:
       contents: read
     # Skip E2E on plan-seed, design, and docs PRs. A `seed/*` PR only edits
@@ -523,10 +473,13 @@ jobs:
           # self-host spec (billing-selfhost) rides a normal bulk shard.
           - id: billing-cloud
             args: '--config playwright.billing.config.ts'
-          # NOTE: the acceptance-video lane is NOT a leg here (MOTIR-1949). It is
-          # its own `acceptance` job below, so it can be ABSENT — not present and
-          # skipped — on the PRs that do not own an acceptance spec. A matrix leg
-          # cannot be dropped conditionally; a job can.
+          # NOTE: the acceptance-video lane is NOT a leg here (MOTIR-1949). It
+          # is its own WORKFLOW — `.github/workflows/acceptance-video.yml`, with
+          # a `paths:` filter on `tests/e2e/acceptance*.spec.ts` — so that a PR
+          # which owns no acceptance spec sees no acceptance check AT ALL. A
+          # matrix leg cannot be dropped by an expression, and a job-level `if:`
+          # only downgrades the check to a greyed `Skipped`; an untriggered
+          # workflow is the only thing that leaves nothing behind.
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
     # by a `services:` block — see that action's header for why (MOTIR-1742).
     env:
@@ -555,8 +508,8 @@ jobs:
       - name: Start Postgres
         uses: ./.github/actions/postgres
       # pnpm + Node, the three caches, the pre-built `.next/`, migrate deploy and
-      # the retrying Playwright install — shared verbatim with the `acceptance`
-      # job below (MOTIR-1949).
+      # the retrying Playwright install — shared verbatim with the acceptance
+      # lane in `acceptance-video.yml` (MOTIR-1949).
       - uses: ./.github/actions/e2e-setup
       # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
       # pinned `inngest-cli` devDependency — `pnpm install` above runs its
@@ -593,144 +546,13 @@ jobs:
       # silently uploaded NOTHING ("No files were found with the provided path")
       # — a red billing leg left no trace, screenshot, or report to debug from.
       # (The acceptance lane's own `-acceptance` report is uploaded by the
-      # `acceptance` job below, which owns that lane since MOTIR-1949.)
+      # `acceptance-video.yml` workflow, which owns that lane since MOTIR-1949.)
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.id }}
           path: out/playwright-report*
-          retention-days: 7
-
-  # ── The acceptance-video lane (Story MOTIR-1627) ──
-  # The acceptance E2E + self-test dogfood (MOTIR-1638) and the per-story
-  # acceptance specs (MOTIR-1700), CLOUD-ON + video:'on'. Its OWN lane
-  # (playwright.acceptance.config.ts: MOTIR_CLOUD + the E2E_TEST_BILLING mock,
-  # isolated ports 3200/8488) so the plan/toggle panel states are reachable and
-  # each green run is recorded. testMatch: acceptance*.spec.ts catches the
-  # dogfood AND the story-specific specs (planner rule MOTIR-1644); the main
-  # config testIgnore's the same pattern.
-  #
-  # ITS OWN JOB, NOT AN `e2e` MATRIX LEG (MOTIR-1949) — so that on a PR which
-  # owns no acceptance spec the check is ABSENT, not present-and-skipped, and
-  # nobody pays its 11 minutes or its ~400 MB video/trace report.
-  acceptance:
-    name: Playwright E2E (acceptance-video)
-    runs-on: ubuntu-latest
-    # Keyless acceptance-video publish (MOTIR-1650): the publish step requests a
-    # GitHub OIDC token, which needs `id-token: write`. `contents: read` keeps
-    # checkout working. (OIDC is NOT granted to fork PRs, so a fork falls back to
-    # the PAT / no-ops — see the publish step.)
-    permissions:
-      contents: read
-      id-token: write
-    needs: [build, acceptance-specs]
-    # ABSENT — not skipped — unless THIS PR changed an acceptance spec. That is
-    # the whole point of the `acceptance-specs` job; see its header.
-    if: ${{ needs.acceptance-specs.outputs.specs != '' }}
-    # Postgres is started by ./.github/actions/postgres (first step below), NOT
-    # by a `services:` block — see that action's header for why (MOTIR-1742).
-    #
-    # The env below is deliberately identical to the `e2e` job's — same DB, same
-    # module-load placeholders, same file-email outbox. A job cannot inherit
-    # another job's env, and a composite action cannot set one, so it is repeated
-    # rather than shared. Change both together.
-    env:
-      # In CI Postgres runs on the standard 5432.
-      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
-      # See the build job for the rationale on these throwaway values.
-      # Better-Auth's module-load requiredEnv check needs them present;
-      # the actual OAuth round-trip is intercepted by the undici MockAgent
-      # in instrumentation.ts (E2E_TEST_OAUTH=1 below).
-      BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
-      GOOGLE_CLIENT_ID: ci-e2e-placeholder
-      GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
-      EMAIL_PROVIDER: file
-      EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
-      E2E_TEST_OAUTH: '1'
-      E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
-      # Skip the husky install postinstall — CI has no .git/hooks to wire.
-      HUSKY: '0'
-    steps:
-      - uses: actions/checkout@v6
-      - name: Start Postgres
-        uses: ./.github/actions/postgres
-      # The same setup the `e2e` legs run — one definition, two callers.
-      - uses: ./.github/actions/e2e-setup
-      - name: Run E2E (acceptance-video)
-        run: pnpm test:e2e --config playwright.acceptance.config.ts
-
-      # On a GREEN acceptance run, publish EVERY recorded video to its OWN
-      # STORY's acceptance panel (BYOK). The lane carries one chaptered
-      # acceptance spec per user-facing story (MOTIR-1644 / MOTIR-1700), and
-      # MOTIR-1734 made the uploader publish them ALL — it used to take whichever
-      # recording `readdirSync` yielded first and silently drop the rest, so on a
-      # multi-story run only one story got its receipt (observed: PR #1620
-      # published MOTIR-811 and discarded MOTIR-1726's clip).
-      # MOTIR-1905 removed the SECOND way the lane lost every receipt: the
-      # watchability gate used to abort the whole run on the first sub-floor clip,
-      # so one unpaced spec cost every OTHER story its video too. An unwatchable
-      # clip now costs only its own story, and the step still exits non-zero.
-      # Auth is KEYLESS GitHub OIDC first (MOTIR-1650) —
-      # the moooon repo is App-connected, so no secret is needed;
-      # MOTIR_UPLOAD_TOKEN is the PAT fallback. The uploader no-ops when NEITHER
-      # is available (a fork PR gets no OIDC and no secret), so forks /
-      # unconfigured runs never fail here.
-      #
-      # TARGET STORY (MOTIR-1684): NO longer the hardcoded MOTIR-1627 constant.
-      # `resolveStoryKey` picks the target — the recording's self-declared story
-      # (the acceptance harness sidecar; the MOTIR-1638 dogfood pins itself to
-      # MOTIR-1627, so the self-test still publishes to its own panel and is never
-      # mis-attributed) → the PR's `MOTIR-<id>` (branch/title, the status-sync
-      # convention; the endpoint resolves a subtask key to its parent story) →
-      # the MOTIR-1627 dogfood FALLBACK.
-      #
-      # BEST-EFFORT — `continue-on-error` so this side-effect NEVER gates the
-      # merge.
-      #
-      # ⚠️ `continue-on-error` REWRITES THIS STEP'S CONCLUSION TO `success` — on
-      # the checks UI, in `gh pr checks`, and in the REST API — even when the
-      # script exits 1. That is not a reason to remove it (a fork PR with no OIDC,
-      # or a transient 5xx, must not red-light a merge), but it means the step's
-      # own status can never be the signal. So the uploader reports through the
-      # two channels the rewrite does NOT swallow: a `::error::` ANNOTATION and
-      # the job SUMMARY (MOTIR-1905). Before that, a completely broken acceptance
-      # gate — one unpaced spec suppressing every story's receipt — looked green
-      # for days, and the raw job log was the only place it was visible.
-      #
-      # ⚠️ A RUN PUBLISHES ONLY THE SPECS IT CHANGED (MOTIR-1937). Since
-      # MOTIR-1949 the JOB only exists on such a run at all, but the uploader
-      # still receives the owned set and still filters on it — belt and braces,
-      # because the two gates fail differently: the job gate is one expression in
-      # this file, while the uploader FAILS CLOSED per recording (an empty list,
-      # or a sidecar with no `specFile`, owns nothing). A PR that changes ONE
-      # spec must publish ONE story's receipt, not all eight it recorded —
-      # publishing supersedes (a new row retires the story's prior evidence and
-      # unlinks its video for the orphan-GC) and each recording targets its OWN
-      # declared story rather than the PR's.
-      - name: Publish the acceptance video
-        if: success()
-        continue-on-error: true
-        env:
-          MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
-          MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
-          ACCEPTANCE_PR_REF: ${{ github.head_ref }}
-          ACCEPTANCE_PR_TITLE: ${{ github.event.pull_request.title }}
-          ACCEPTANCE_FALLBACK_STORY_KEY: MOTIR-1627
-          ACCEPTANCE_PRODUCED_BY: MOTIR-1638
-          ACCEPTANCE_CHANGED_SPECS: ${{ needs.acceptance-specs.outputs.specs }}
-        run: node scripts/upload-acceptance-video.mjs
-      # Always upload the report — a green run's is the only place the recorded
-      # video and trace survive for a reviewer to check by hand, and a red one is
-      # how the lane is debugged at all (MOTIR-1706: the old hardcoded
-      # `out/playwright-report` path matched nothing here, so a red acceptance leg
-      # left no trace, screenshot or report behind).
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report-acceptance-video
-          path: out/playwright-report-acceptance
           retention-days: 7
 
   # ── The sandbox image (Story 7.9 · 7.9.7c MOTIR-885 · 7.9.7e MOTIR-1788) ──
