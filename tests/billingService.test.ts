@@ -35,6 +35,9 @@ const { billingService } = await import('@/lib/services/billingService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { organizationsService } = await import('@/lib/services/organizationsService');
 const { billingPropagationService } = await import('@/lib/services/billingPropagationService');
+const { ciPeriodUsageRepository } = await import('@/lib/repositories/ciPeriodUsageRepository');
+const { withSystemContext } = await import('@/lib/workspaces/context');
+const { periodStartFor, periodEndFor } = await import('@/lib/ciMetering/period');
 const { createTestUser } = await import('./fixtures/userFixtures');
 const { truncateAuthTables } = await import('./helpers/db');
 const { BillingNotAvailableError, BillingForbiddenError, UnknownBillingPriceError } =
@@ -110,7 +113,7 @@ async function makeOrgWithRoles() {
     role: 'member',
     actorUserId: owner.id,
   });
-  return { organizationId, owner, admin, member, outsider };
+  return { organizationId, workspaceId: workspace.id, owner, admin, member, outsider };
 }
 
 beforeEach(async () => {
@@ -238,10 +241,126 @@ describe('billingService.getBillingStatus', () => {
 
   it('propagates a motir-ai outage (the route maps it to 502)', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
-    getOrgUsageMock.mockRejectedValueOnce(new MotirAiUnavailableError('down'));
+    // Reject EVERY usage read for this test: the CI entitlement makes its own
+    // (it treats a failure as `balance: null` rather than exhaustion), so a
+    // one-shot rejection could be absorbed there instead of surfacing here.
+    getOrgUsageMock.mockRejectedValue(new MotirAiUnavailableError('down'));
     await expect(
       billingService.getBillingStatus({ organizationId, actorUserId: owner.id }),
     ).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+});
+
+// ③ The Motir CI line's data (MOTIR-1903, ADR §7) — the END-TO-END proof the
+// card asks for: the figures the panel renders come from REAL reads (membership
+// → pool, the meter → consumption, the charge row → credits), never a
+// placeholder and never a hardcoded null. The motir-ai boundary is the suite's
+// existing mock; everything else runs against real Postgres.
+describe('billingService.getBillingStatus — the CI entitlement (③ Motir CI)', () => {
+  beforeEach(() => {
+    process.env['GITHUB_FALLBACK_ORG'] = 'motir-projects';
+  });
+  afterEach(() => {
+    delete process.env['GITHUB_FALLBACK_ORG'];
+  });
+
+  it('carries a REAL, non-null entitlement: the pool derived from live membership and the metered consumption', async () => {
+    const { organizationId, workspaceId, owner } = await makeOrgWithRoles();
+    // 3 members (owner + admin + member) → 3 × 300 = 900, under the 1,000 floor.
+    const periodStart = periodStartFor(new Date());
+    await withSystemContext((tx) =>
+      ciPeriodUsageRepository.incrementForPeriod(
+        {
+          workspaceId,
+          organizationId,
+          periodStart,
+          billableMinutes: 240,
+          rawWallClockSeconds: 240 * 60,
+          linearEquivalentMinutes: 240,
+        },
+        tx,
+      ),
+    );
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(dto.ci.applicable).toBe(true);
+    expect(dto.ci.memberCount).toBe(3);
+    expect(dto.ci.poolMinutes).toBe(1000);
+    expect(dto.ci.floorApplied).toBe(true);
+    // The consumption is the meter's own row, not a zero the panel would render
+    // as "nothing to bill".
+    expect(dto.ci.consumedMinutes).toBe(240);
+    expect(dto.ci.remainingMinutes).toBe(760);
+    expect(dto.ci.overageMinutes).toBe(0);
+    expect(dto.ci.chargedCredits).toBe(0);
+    expect(dto.ci.balance).toBe(1420);
+    expect(dto.ci.state).toBe('within_allowance');
+    expect(dto.ci.periodEnd).toBe(periodEndFor(periodStart).toISOString());
+  });
+
+  it('reports drawing-on-credits once the metered minutes pass the pool', async () => {
+    const { organizationId, workspaceId, owner } = await makeOrgWithRoles();
+    const periodStart = periodStartFor(new Date());
+    await withSystemContext((tx) =>
+      ciPeriodUsageRepository.incrementForPeriod(
+        {
+          workspaceId,
+          organizationId,
+          periodStart,
+          billableMinutes: 1420,
+          rawWallClockSeconds: 1420 * 60,
+          linearEquivalentMinutes: 1420,
+        },
+        tx,
+      ),
+    );
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(dto.ci.state).toBe('drawing_on_credits');
+    expect(dto.ci.overageMinutes).toBe(420);
+    expect(dto.ci.remainingMinutes).toBe(0);
+  });
+
+  it('reports exhaustion when the org is past the pool at a zero balance', async () => {
+    const { organizationId, workspaceId, owner } = await makeOrgWithRoles();
+    getOrgUsageMock.mockResolvedValue(rawUsage({ balance: 0 }));
+    const periodStart = periodStartFor(new Date());
+    await withSystemContext((tx) =>
+      ciPeriodUsageRepository.incrementForPeriod(
+        {
+          workspaceId,
+          organizationId,
+          periodStart,
+          billableMinutes: 1200,
+          rawWallClockSeconds: 1200 * 60,
+          linearEquivalentMinutes: 1200,
+        },
+        tx,
+      ),
+    );
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+    expect(dto.ci.state).toBe('ci_credits_exhausted');
+  });
+
+  it('bypasses the META org — no CI accounting, so the panel shows no CI line', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+    expect(dto.ci.applicable).toBe(false);
+    expect(dto.ci.state).toBe('bypassed');
+  });
+
+  it('bypasses an install with no provisioning org — nothing can be Motir-owned', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    delete process.env['GITHUB_FALLBACK_ORG'];
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+    expect(dto.ci.applicable).toBe(false);
+    expect(dto.ci.state).toBe('bypassed');
   });
 });
 
