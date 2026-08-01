@@ -31,13 +31,47 @@ describe('MOTIR_RUNNER_LABEL — the §M naming constraints', () => {
     expect(MOTIR_RUNNER_LABEL).not.toMatch(/\d+-?core|xlarge|large/i);
   });
 
-  it('classifies as `unknown` today — MOTIR-1923 is what gives it its own family', () => {
-    // The CURRENT, honest state: with no fleet row in the rate table yet, a
-    // fleet job falls to §3.4's ×1.00 fallback. Pinning it proves the label does
-    // not accidentally land in a GitHub family (the failure §M actually fears),
-    // and MOTIR-1923 flips this expectation to `motir_fleet` when it adds the
-    // classification rule and the priced row.
-    expect(classifyRunner([MOTIR_RUNNER_LABEL])).toBe('unknown');
+  it('classifies as its OWN `motir_fleet` family, never a GitHub one (MOTIR-1923)', () => {
+    // This assertion used to pin `unknown` — the honest state while the rate
+    // table had no fleet row — and named MOTIR-1923 as what would flip it. 1923
+    // had in fact merged FIRST (`2d13e066`, before this file landed in
+    // `dcbb7383`), so the pin shipped already-stale and `main` went red on a
+    // collision neither PR could see. Asserting the shipped truth is what a
+    // forward-looking pin should have been in the first place: the guarantee
+    // §M actually wants is that the label lands in the fleet family, not that
+    // it lands in today's fallback.
+    expect(classifyRunner([MOTIR_RUNNER_LABEL])).toBe('motir_fleet');
+  });
+});
+
+describe('the gate and the meter agree on WHICH label is the fleet (MOTIR-1964)', () => {
+  // The invariant that outranks either module's own constant: a job the
+  // provisioner boots a fleet runner for MUST meter as `motir_fleet`. Two
+  // separate `'motir-runner'` literals — one per module, which is what the
+  // MOTIR-1920 / MOTIR-1923 merge produced — satisfy every other test in this
+  // file and in `runnerRates.test.ts` while being one edit away from silently
+  // disagreeing. This asserts the join, so a re-split fails here rather than in
+  // a billing report months later.
+  it('every label the §O gate accepts classifies as `motir_fleet`', () => {
+    for (const labels of [
+      [MOTIR_RUNNER_LABEL],
+      ['self-hosted', MOTIR_RUNNER_LABEL],
+      ['MOTIR-RUNNER'],
+      ['  Motir-Runner  '],
+      // The §M failure this pair exists to prevent: a fleet job whose set also
+      // carries an OS label must still attribute to the fleet, never to Linux.
+      ['ubuntu-latest', MOTIR_RUNNER_LABEL],
+    ]) {
+      expect(isMotirFleetJob(labels)).toBe(true);
+      expect(classifyRunner(labels)).toBe('motir_fleet');
+    }
+  });
+
+  it('a label the gate REJECTS never classifies as `motir_fleet`', () => {
+    for (const labels of [['ubuntu-latest'], ['self-hosted'], ['motir-runner-staging'], []]) {
+      expect(isMotirFleetJob(labels)).toBe(false);
+      expect(classifyRunner(labels)).not.toBe('motir_fleet');
+    }
   });
 });
 
