@@ -441,6 +441,16 @@ export default defineConfig({
         'app/(authed)/settings/project/repositories/_components/TakeoverRow.tsx',
         'app/(authed)/settings/project/repositories/_components/TakeoverModal.tsx',
         'app/(authed)/settings/project/repositories/_components/RepositoriesRoom.tsx',
+        // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
+        // BACKFILL's decision table. It shipped ungated, and it is the one file
+        // in that subtask whose branches ARE the safety argument: each branch is
+        // a claim about what may be stamped truthfully on ~1 700 already-shipped
+        // items, and the two most important ones ABSTAIN (a done coding-agent
+        // card with no PR, a cancelled card). An untested abstention is
+        // indistinguishable from a missing rule, and the damage it does —
+        // inventing attribution on real history — is silent and hard to undo.
+        // The service + repository halves are already gated above.
+        'lib/workItems/provenanceBackfill.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -833,6 +843,12 @@ export default defineConfig({
         'app/api/cli/device/start/route.ts': { functions: 90, lines: 90 },
         'app/api/cli/device/token/route.ts': { functions: 90, lines: 90 },
         'app/(auth)/device/_components/DeviceApproval.tsx': { functions: 90, lines: 90 },
+        // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
+        // backfill's decision table (see the `include` note). It measures at
+        // 100/100/100 today, so this pins what MOTIR-1758 already earned rather
+        // than asking for new tests: the point of the gate is that the next edit
+        // to a rule cannot quietly ship an unexercised branch.
+        'lib/workItems/provenanceBackfill.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
