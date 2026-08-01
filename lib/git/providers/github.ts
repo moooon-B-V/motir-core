@@ -12,6 +12,7 @@ import type {
   NormalizedRepo,
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
+  NormalizedWorkflowJobEvent,
   NormalizedWorkflowRunEvent,
 } from '../types';
 
@@ -325,6 +326,76 @@ export const githubProvider: GitProvider = {
       repoName,
       workflowName: typeof run['name'] === 'string' ? run['name'] : null,
       completedAt,
+    };
+  },
+
+  // --- The runner FLEET (Story MOTIR-1916 · MOTIR-1920) ----------------------
+
+  parseWorkflowJobEvent(rawPayload: unknown): NormalizedWorkflowJobEvent | null {
+    const payload = asRecord(rawPayload);
+    if (!payload) return null;
+    // Only a QUEUED job asks for a machine. `in_progress` means one was already
+    // assigned and `completed` means it is finished — provisioning for either
+    // boots a runner nothing will ever claim, which then idles until its
+    // timeout, costing real money for no work.
+    if (payload['action'] !== 'queued') return null;
+
+    const job = asRecord(payload['workflow_job']);
+    const repo = asRecord(payload['repository']);
+    if (!job || !repo) return null;
+
+    const providerRepoId = idToString(repo['id']);
+    const runId = idToString(job['run_id']);
+    const jobId = idToString(job['id']);
+    // The OWNER comes from the delivery's own `repository.owner.login`, exactly
+    // as the meter reads it (§5.5) — the mirror can hold a pre-transfer owner,
+    // and this is the identity the fleet's org-level runner group belongs to.
+    const repoOwner =
+      typeof asRecord(repo['owner'])?.['login'] === 'string'
+        ? (asRecord(repo['owner'])!['login'] as string)
+        : null;
+    const repoName = typeof repo['name'] === 'string' ? repo['name'] : null;
+    if (!providerRepoId || !runId || !jobId || !repoOwner || !repoName) return null;
+
+    // `run_attempt` completes the idempotency key: a RE-RUN is a new attempt
+    // whose jobs are genuinely new work needing their own ephemeral runners
+    // (§5.8's discipline, one level down). A payload without one is attempt 1.
+    const rawAttempt = job['run_attempt'];
+    const runAttempt =
+      typeof rawAttempt === 'number' && Number.isInteger(rawAttempt) && rawAttempt > 0
+        ? rawAttempt
+        : 1;
+
+    // ⚠️ `labels` on a QUEUED delivery is necessarily the set `runs-on`
+    // REQUESTED, not a runner's own labels — at `queued` GitHub has assigned no
+    // runner, so there is no runner whose labels could be reported. This settles
+    // the "honest unknown" §M names (GitHub's REST reference lists `labels`
+    // without saying which it is) for the provisioning path, and it is the
+    // reading the fleet needs: the decision to boot must be made from what the
+    // workflow ASKED for. §M's rules were written to hold either way, so
+    // MOTIR-1923's classifier is unaffected; live confirmation on a real fleet
+    // job belongs to MOTIR-1928.
+    const requestedLabels = Array.isArray(job['labels'])
+      ? job['labels'].filter((label): label is string => typeof label === 'string')
+      : [];
+
+    // A queued job with no usable instant is refused rather than stamped with
+    // "now": the age of an intent is what a stuck-queue alarm reads, and a
+    // guessed timestamp would make a job that queued an hour ago look fresh.
+    const queuedAt = parseDate(job['started_at']) ?? parseDate(job['created_at']);
+    if (!queuedAt) return null;
+
+    return {
+      providerRepoId,
+      runId,
+      runAttempt,
+      jobId,
+      jobName: typeof job['name'] === 'string' ? job['name'] : null,
+      workflowName: typeof job['workflow_name'] === 'string' ? job['workflow_name'] : null,
+      repoOwner,
+      repoName,
+      requestedLabels,
+      queuedAt,
     };
   },
 

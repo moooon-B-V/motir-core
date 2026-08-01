@@ -114,6 +114,39 @@ export interface NormalizedWorkflowRunEvent {
   completedAt: Date;
 }
 
+/** A QUEUED CI job, normalized across providers — consumed by the runner-fleet
+ *  provisioning path (Story MOTIR-1916 · MOTIR-1920). DISTINCT from
+ *  `NormalizedWorkflowRunEvent`, which is the *billing* signal read at run
+ *  COMPLETION: this one is the *provisioning* signal read at job QUEUE time,
+ *  i.e. the moment a machine is needed and none exists yet.
+ *
+ *  `requestedLabels` is the load-bearing field and the ONLY thing the fleet
+ *  scopes on (`ci-minutes-allowance.md` §O): the `workflow_job` `queued` event
+ *  fires for GitHub-hosted jobs too, so a listener that reacts to event RECEIPT
+ *  would pull Motir's own CI onto the fleet. `jobId` joins `(runId, runAttempt)`
+ *  in the idempotency key because one run attempt queues MANY jobs, each needing
+ *  its own ephemeral runner — the run-level key the meter uses would collapse a
+ *  31-job matrix into a single intent. */
+export interface NormalizedWorkflowJobEvent {
+  providerRepoId: string;
+  /** The host's own workflow-run id (as a string — never do math on it). */
+  runId: string;
+  /** The run attempt; a re-run increments it and legitimately needs new runners. */
+  runAttempt: number;
+  /** The host's own job id — unique within the run attempt. */
+  jobId: string;
+  jobName: string | null;
+  workflowName: string | null;
+  repoOwner: string;
+  repoName: string;
+  /** The labels the job's `runs-on` REQUESTED. At `queued` no runner has been
+   *  assigned yet, so this can only be the requested set — see the note on
+   *  GitHub's `parseWorkflowJobEvent`. */
+  requestedLabels: string[];
+  /** When the job entered the queue — the age a stuck intent is measured from. */
+  queuedAt: Date;
+}
+
 /** One job of a completed workflow run, normalized across providers. The meter
  *  bills PER JOB, rounded up (§5.8), so this is the unit it reads — not the run
  *  as a whole, whose wall clock would undercount parallel jobs. */

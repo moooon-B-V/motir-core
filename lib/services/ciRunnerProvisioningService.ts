@@ -1,0 +1,291 @@
+import { Prisma } from '@prisma/client';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import type { NormalizedWorkflowJobEvent } from '@/lib/git/types';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import {
+  ciRunnerProvisioningIntentRepository,
+  type CiRunnerProvisioningIntentCreateInput,
+} from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { isMotirFleetJob } from '@/lib/ciFleet/config';
+
+// The runner-FLEET ENTRY POINT (Story MOTIR-1916 · MOTIR-1920) — turning a
+// `workflow_job` `queued` delivery into an attributed provisioning intent, or,
+// far more often, into a deliberate no-op.
+//
+// `docs/decisions/ci-minutes-allowance.md`'s 2026-07-31 amendment moves project
+// CI onto Motir-operated ephemeral runners. A job that wants one announces
+// itself by queueing; this service decides whether that job is OURS to serve and
+// records the request durably so MOTIR-1921 can boot a machine for it.
+//
+// ⚠️ IT BOOTS NOTHING AND SPENDS NOTHING. No runner is registered, no token is
+// minted, no cap is consulted, no credit is read — those are MOTIR-1921's and
+// MOTIR-1922's, and the seam between them is exactly ONE read:
+// `ciRunnerProvisioningIntentRepository.listPending`.
+//
+// The pipeline, and where each step is decided:
+//
+//   1. Is it OURS?      §O   — the requested LABELS name the Motir runner. The
+//                              whole point of the card; everything else is
+//                              dropped at debug level, without an error.
+//   2. Whom for?        §5.2 — repo → project-repo row → project → workspace →
+//                              org, the same chain the meter walks.
+//   3. Already seen?    §5.8 — a cheap pre-check; the unique index is the guard.
+//   4. Record it.              One insert. That is the deliverable.
+
+/** Whom a queued fleet job belongs to — the §5.2 chain's output. */
+interface Attribution {
+  workspaceId: string;
+  organizationId: string;
+  projectId: string | null;
+  githubRepoId: string;
+}
+
+export type RecordQueuedJobOutcome =
+  /** The job's requested labels do not name the Motir runner — a GitHub-hosted
+   *  job, which is the overwhelming majority of deliveries. NOT an error, and
+   *  deliberately the first branch: §J's scope boundary lives here. */
+  | { outcome: 'not_fleet_job'; requestedLabels: string[] }
+  /** The delivery names an installation or repo Motir has no mirror row for. */
+  | { outcome: 'unknown_installation' }
+  | { outcome: 'unknown_repo' }
+  /** A fleet-labelled job in a repo that resolves to no tenant — a repo whose
+   *  project was deleted, or one belonging to none. LOGGED, never provisioned
+   *  (§5.4's posture, applied one step earlier: real compute with no owner). */
+  | { outcome: 'unattributed'; repoOwner: string; repoName: string }
+  /** This exact job of this exact run attempt already has an intent (§5.8). */
+  | { outcome: 'duplicate'; runId: string; runAttempt: number; jobId: string }
+  | {
+      outcome: 'recorded';
+      intentId: string;
+      runId: string;
+      runAttempt: number;
+      jobId: string;
+      organizationId: string;
+      workspaceId: string;
+      projectId: string | null;
+    };
+
+export const ciRunnerProvisioningService = {
+  /**
+   * Handle ONE queued job. `installationId` is the App installation the delivery
+   * arrived on — stored on the intent because MOTIR-1921 mints the runner
+   * registration token with it.
+   *
+   * Never throws for a job it simply does not serve: every "no" is a typed
+   * outcome the webhook logs, because a webhook that 500s makes GitHub retry a
+   * delivery there was never anything to do for.
+   */
+  async recordQueuedJob(
+    event: NormalizedWorkflowJobEvent,
+    installationId: string,
+  ): Promise<RecordQueuedJobOutcome> {
+    // 1 · §O — THE GATE. Scope by the job's requested LABELS, not by receipt of
+    // an event, not by repository owner, and not by tenant flag.
+    //
+    // It runs FIRST, before a single DB read, and that ordering is the design:
+    // every `motir-core` job — 31 per run, at ~10 runs a day — delivers a
+    // `queued` event here, and none of them should cost a query, let alone a
+    // runner. Owner alone would not do: `isMotirOwnedRepo` is true for every
+    // repo in the provisioning org, and would stay true for a repo added to it
+    // later that is still meant to run GitHub-hosted. The label is what the
+    // workflow actually ASKED for.
+    //
+    // `isMeta` is deliberately NOT consulted (§O's axis table): the tenant flag
+    // lives behind the repo → project → workspace → org join this branch runs
+    // before, and for a repo with no project row there is no tenant to read at
+    // all. The exclusion has to be answerable from the payload, and the label is.
+    if (!isMotirFleetJob(event.requestedLabels)) {
+      return { outcome: 'not_fleet_job', requestedLabels: event.requestedLabels };
+    }
+
+    // 2 · §5.2 — resolve the tenant. TWO contexts, one per hop, because the
+    // shipped RLS policies gate differently and only the mirror tables carry the
+    // `app.system_admin` escape:
+    //
+    //   * `github_installation` / `github_repo` — policy is
+    //     `system_admin OR workspace_id = …`, so the webhook (no session, no
+    //     active workspace) reads them under `withSystemContext`.
+    //   * `project_repository` / `workspace` — policy gates PURELY on
+    //     `app.workspace_id` with NO system escape, so `withSystemContext` would
+    //     read NOTHING here in production (where the app connects as the
+    //     non-BYPASSRLS `prodect_app` role) and every job would resolve to
+    //     "unattributed". They are read under `withWorkspaceServiceContext`,
+    //     bound to the REPO's workspace.
+    //
+    // ⚠️ The REPO row is the tenant, never the installation (MOTIR-1931,
+    // `notes.html` #186). Under Motir's shared provisioning installation
+    // `GithubInstallation.workspaceId` is NULL and names no workspace at all —
+    // reading it here would attribute every tenant's jobs to nobody.
+    const connection = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return { kind: 'unknown_installation' as const };
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        event.providerRepoId,
+        tx,
+      );
+      if (!repo) return { kind: 'unknown_repo' as const };
+      return {
+        kind: 'connected' as const,
+        workspaceId: repo.workspaceId,
+        githubRepoId: repo.id,
+      };
+    });
+
+    if (connection.kind === 'unknown_installation') {
+      console.warn(
+        '[ciRunnerProvisioningService] fleet-labelled job on an unknown installation — not provisioned',
+        { installationId, repoOwner: event.repoOwner, repoName: event.repoName },
+      );
+      return { outcome: 'unknown_installation' };
+    }
+    if (connection.kind === 'unknown_repo') {
+      console.warn(
+        '[ciRunnerProvisioningService] fleet-labelled job in a repo Motir does not mirror — not provisioned',
+        { installationId, repoOwner: event.repoOwner, repoName: event.repoName },
+      );
+      return { outcome: 'unknown_repo' };
+    }
+
+    const tenant = await withWorkspaceServiceContext(connection.workspaceId, async (tx) => {
+      // `ProjectRepo.githubRepoId` is @unique, so a realized repo belongs to AT
+      // MOST one project row — the join can never be ambiguous. Its absence
+      // covers both the deleted-project and the no-project case (the set row
+      // cascades away with its project).
+      const projectRepo = await projectRepoRepository.findByGithubRepoId(
+        connection.githubRepoId,
+        tx,
+      );
+      if (!projectRepo) return null;
+      const workspace = await workspaceRepository.findByIdInTx(projectRepo.workspaceId, tx);
+      if (!workspace) return null;
+      return {
+        workspaceId: projectRepo.workspaceId,
+        organizationId: workspace.organizationId,
+        projectId: projectRepo.projectId,
+      };
+    });
+
+    if (!tenant) {
+      // A job asking for a Motir runner that belongs to no tenant would be
+      // compute spent on nobody's behalf, uncapped and uncharged — so it is
+      // REFUSED rather than merely logged, which is the one place this path
+      // diverges from the meter's §5.4 posture. The meter records a cost GitHub
+      // has already charged and cannot un-charge; here the money has not been
+      // spent yet, and declining is free. The warning is still mandatory: a
+      // fleet-labelled job with no owner means a repo was created or moved
+      // outside the repo-set path, and silence would hide that.
+      console.warn(
+        '[ciRunnerProvisioningService] fleet-labelled job has no attributable project — not provisioned',
+        {
+          repoOwner: event.repoOwner,
+          repoName: event.repoName,
+          runId: event.runId,
+          runAttempt: event.runAttempt,
+          jobId: event.jobId,
+        },
+      );
+      return { outcome: 'unattributed', repoOwner: event.repoOwner, repoName: event.repoName };
+    }
+
+    const attribution: Attribution = {
+      workspaceId: tenant.workspaceId,
+      organizationId: tenant.organizationId,
+      projectId: tenant.projectId,
+      githubRepoId: connection.githubRepoId,
+    };
+
+    // 3 · A cheap redelivery pre-check. NOT the correctness guard — two
+    // concurrent deliveries would both miss it; the unique index at step 4 is
+    // what guarantees once.
+    const already = await withSystemContext((tx) =>
+      ciRunnerProvisioningIntentRepository.findByJobKey(
+        event.runId,
+        event.runAttempt,
+        event.jobId,
+        tx,
+      ),
+    );
+    if (already) {
+      return {
+        outcome: 'duplicate',
+        runId: event.runId,
+        runAttempt: event.runAttempt,
+        jobId: event.jobId,
+      };
+    }
+
+    const input: CiRunnerProvisioningIntentCreateInput = {
+      workspaceId: attribution.workspaceId,
+      organizationId: attribution.organizationId,
+      projectId: attribution.projectId,
+      githubRepoId: attribution.githubRepoId,
+      installationId,
+      runId: event.runId,
+      runAttempt: event.runAttempt,
+      jobId: event.jobId,
+      jobName: event.jobName,
+      workflowName: event.workflowName,
+      // The repo identity AS THE DELIVERY REPORTED IT (§5.5), never the mirror's.
+      repoOwner: event.repoOwner,
+      repoName: event.repoName,
+      requestedLabels: event.requestedLabels,
+      queuedAt: event.queuedAt,
+    };
+
+    try {
+      const intent = await withSystemContext((tx) =>
+        ciRunnerProvisioningIntentRepository.create(input, tx),
+      );
+      return {
+        outcome: 'recorded',
+        intentId: intent.id,
+        runId: event.runId,
+        runAttempt: event.runAttempt,
+        jobId: event.jobId,
+        organizationId: attribution.organizationId,
+        workspaceId: attribution.workspaceId,
+        projectId: attribution.projectId,
+      };
+    } catch (err) {
+      // The idempotency guarantee. A concurrent or retried delivery loses the
+      // race on `(run_id, run_attempt, job_id)` and reports `duplicate` — which
+      // matters more here than for the meter: a lost race that fell through to a
+      // second intent would boot a SECOND ephemeral runner for one job, and the
+      // second would idle until its timeout with no job to claim. Caught OUTSIDE
+      // the transaction on purpose — a failed statement aborts the Postgres
+      // transaction, so catching it inside and continuing would only produce a
+      // second, more confusing error (25P02).
+      if (isUniqueViolation(err)) {
+        return {
+          outcome: 'duplicate',
+          runId: event.runId,
+          runAttempt: event.runAttempt,
+          jobId: event.jobId,
+        };
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * THE SEAM. The oldest intents still awaiting a runner — what MOTIR-1921's
+   * provisioner consumes. Deliberately returns the rows only: no gate, no cap,
+   * no boot decision. Those are the consumer's, and keeping them out is what
+   * lets this half stay a pure record of what was asked for.
+   */
+  async listPendingIntents(limit = 50) {
+    return withSystemContext((tx) => ciRunnerProvisioningIntentRepository.listPending(limit, tx));
+  },
+};
+
+/** A Postgres unique-constraint violation, surfaced by Prisma as P2002. */
+function isUniqueViolation(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}

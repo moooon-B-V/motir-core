@@ -23,6 +23,10 @@ import {
   type CiFeedbackResult,
 } from './changeRequestCiFeedback';
 import { ciMinutesMeterService, type MeterWorkflowRunOutcome } from './ciMinutesMeterService';
+import {
+  ciRunnerProvisioningService,
+  type RecordQueuedJobOutcome,
+} from './ciRunnerProvisioningService';
 import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
@@ -102,6 +106,22 @@ export type GithubWebhookResult =
         | 'failed';
     }
   | {
+      // The runner FLEET's entry point (Story MOTIR-1916 · MOTIR-1920).
+      // DISTINCT from `workflow_run` above and deliberately a separate event:
+      // that one answers "how much compute did Motir just pay for?" at run
+      // COMPLETION (the billing loop), while this answers "does this job need a
+      // machine, and is it ours to boot one for?" at job QUEUE time (the
+      // provisioning loop). `outcome` is the service's own typed outcome, plus
+      // this handler's edges: a delivery we do not provision for at all, and one
+      // whose recording threw (acked, never 500).
+      event: 'workflow_job';
+      outcome:
+        | RecordQueuedJobOutcome['outcome']
+        | 'ignored_action'
+        | 'unknown_installation'
+        | 'failed';
+    }
+  | {
       // The TAKE-IT-OVER saga's confirmation (MOTIR-711). `already_applied` is the
       // REDELIVERY outcome and is a success, not a warning; `owner_mismatch` is a
       // transfer to somewhere other than what the row recorded — the mirror is
@@ -139,6 +159,8 @@ export const githubWebhookService = {
         return this.handleCiStatus(body);
       case 'workflow_run':
         return this.handleWorkflowRun(body);
+      case 'workflow_job':
+        return this.handleWorkflowJob(body);
       case 'repository':
         return this.handleRepository(body);
       default:
@@ -406,6 +428,52 @@ export const githubWebhookService = {
         error: err instanceof Error ? err.message : 'unknown',
       });
       return { event: 'workflow_run', outcome: 'failed' };
+    }
+  },
+
+  /**
+   * Handle a `workflow_job` delivery — the runner FLEET's entry point (Story
+   * MOTIR-1916 · MOTIR-1920). Only a `queued` job normalizes: `in_progress`
+   * means a runner was already assigned and `completed` means the work is done,
+   * so provisioning for either boots a machine nothing will claim.
+   *
+   * ⚠️ THIS EVENT FIRES FOR GITHUB-HOSTED JOBS TOO — every one of `motir-core`'s
+   * own 31 jobs per run among them (`ci-minutes-allowance.md` §J/§O). The
+   * decision to provision is made ONLY from the job's requested labels, inside
+   * the service, before any DB read; everything else is a deliberate no-op. A
+   * handler that acted on event RECEIPT would silently migrate Motir's own
+   * release path onto the fleet, which is the outcome §J exists to prevent.
+   *
+   * Like the meter above, a failure here does not fail the delivery: an ack that
+   * 500s makes GitHub retry, and a retry cannot fix a bad DB connection. The
+   * `(run_id, run_attempt, job_id)` idempotency key means a later redelivery —
+   * GitHub's own, or a manual replay — records it exactly once, so dropping this
+   * one loses nothing that cannot be recovered.
+   */
+  async handleWorkflowJob(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    if (!provider.parseWorkflowJobEvent) {
+      return { event: 'workflow_job', outcome: 'ignored_action' };
+    }
+    const job = provider.parseWorkflowJobEvent(body);
+    if (!job) return { event: 'workflow_job', outcome: 'ignored_action' };
+
+    const installationId = readInstallationId(body);
+    if (!installationId) return { event: 'workflow_job', outcome: 'unknown_installation' };
+
+    try {
+      const result = await ciRunnerProvisioningService.recordQueuedJob(job, installationId);
+      return { event: 'workflow_job', outcome: result.outcome };
+    } catch (err) {
+      console.error('[githubWebhookService] runner-provisioning intent failed; delivery acked', {
+        runId: job.runId,
+        runAttempt: job.runAttempt,
+        jobId: job.jobId,
+        repoOwner: job.repoOwner,
+        repoName: job.repoName,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+      return { event: 'workflow_job', outcome: 'failed' };
     }
   },
 };
