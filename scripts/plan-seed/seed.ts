@@ -84,6 +84,7 @@ import { composeDescription, mapTypeAndExecutor } from './mapItem';
 import { MOTIR_PUBLIC_OVERVIEW_MD, MOTIR_PUBLIC_TAGLINE, MOTIR_PUBLIC_TAGS } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import { SEED_TEST_PROJECT_NAME, seedGenerationTestProject } from './testProject';
+import { markDogfoodProjectEstablished } from './dogfoodProject';
 import { seedSystemPrincipal } from './systemPrincipal';
 import {
   SEED_STATUS_MAP,
@@ -348,19 +349,29 @@ async function main() {
       },
       tx,
     );
+    // MOTIR-1799: `motir` is an ESTABLISHED project, so the seed stamps its
+    // onboarding-ran marker instead of leaving it null. The meta project never
+    // walks the onboarding journey — its plan is authored directly — so the
+    // marker `approvePlan` would normally write is stamped here. The full
+    // rationale, and what the marker unlocks, is in `./dogfoodProject.ts`.
+    // Set-once by construction, so reseeds stay idempotent.
+    await markDogfoodProjectEstablished(project.id, new Date(), tx);
   });
 
   // ── A SECOND, onboarding-ready project: the AI-generation TEST BED (MOTIR-1426) ──
   // A fresh project under the SAME `moooon` workspace, with NO seeded tree and no
-  // approved plan, so `onboardingRanAt` stays null and `/onboarding` LOADS for it
-  // (the gate redirects to /roadmap only AFTER a plan is approved). AI access is
-  // inherited from the org's `isMeta` flag. It is the test bed for the generation
-  // ENTRY (MOTIR-1396) — distinct from the real `motir` plan project; reaching the
-  // "Generate plan" entry then needs a `tiers_complete` pre-plan baseline seeded
-  // in motir-ai (MOTIR-1430). The active-project pin above is deliberately NOT
-  // touched — `motir` stays the default landing project; testers switch to this
-  // one via the project switcher. Idempotent across reseeds (the clear pass
-  // deletes the workspace, cascading its projects).
+  // approved plan. ⚠️ UNLIKE the `motir` project stamped just above (MOTIR-1799),
+  // this one's `onboardingRanAt` deliberately stays NULL so `/onboarding` LOADS
+  // for it — that CONTRAST is the point: the meta project is established, and this
+  // is the project still available to exercise the onboarding flow. Do not
+  // "consistency-fix" it to match `motir`. AI access is inherited from the org's
+  // `isMeta` flag. It is the test bed for the generation ENTRY (MOTIR-1396) —
+  // distinct from the real `motir` plan project; reaching the "Generate plan"
+  // entry then needs a `tiers_complete` pre-plan baseline seeded in motir-ai
+  // (MOTIR-1430). The active-project pin above is deliberately NOT touched —
+  // `motir` stays the default landing project; testers switch to this one via the
+  // project switcher. Idempotent across reseeds (the clear pass deletes the
+  // workspace, cascading its projects).
   const testProject = await seedGenerationTestProject({
     workspaceId: workspace.id,
     ownerUserId: ownerId,
