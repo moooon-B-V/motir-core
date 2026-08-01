@@ -22,6 +22,7 @@
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",
     "db:seed:reporting": "tsx --tsconfig tsconfig.node.json scripts/seed-reporting.ts",
     "db:backfill:boards": "tsx --tsconfig tsconfig.node.json scripts/backfill-default-boards.ts",
+    "db:backfill:provenance": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-provenance.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",

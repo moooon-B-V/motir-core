@@ -4,7 +4,9 @@ import {
   type Executor,
   type ProjectRepoRole,
   type WorkItem,
+  type WorkItemImplementationSource,
   type WorkItemKind,
+  type WorkItemPlanningSource,
   type WorkItemPriority,
   type WorkItemType,
 } from '@prisma/client';
@@ -471,6 +473,111 @@ export const workItemRepository = {
     const result = await tx.workItem.updateMany({
       where: { id: { in: ids }, targetRepo: null },
       data: { targetRepo },
+    });
+    return result.count;
+  },
+
+  /**
+   * Every row in a project that still MISSES at least one provenance source —
+   * the read half of the MOTIR-1758 backfill, projected to exactly the evidence
+   * `lib/workItems/provenanceBackfill.ts` classifies on.
+   *
+   * `hasLinkedPr` is derived from the 7.10.3 `GithubPullRequest` mirror by
+   * taking at most ONE linked row per item (`take: 1`) rather than counting
+   * them: the classifier only asks whether any PR exists, and a bounded take
+   * keeps the projection flat regardless of how many PRs an item accumulated.
+   *
+   * ARCHIVED rows are deliberately INCLUDED. Archive is a reversible
+   * soft-remove — the item still exists, is still readable on the archived
+   * surface, and still renders a Provenance section — so excluding it would
+   * leave a hole the backfill can never fill again once it is unarchived. The
+   * service reports the archived split so the operator sees what is being
+   * touched. `workspaceId`-gated (finding #26) and read-only → `db` singleton,
+   * with an optional `tx` for the dry-run/real run sharing one context.
+   */
+  async findProvenanceBackfillCandidates(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      createdAt: Date;
+      status: string;
+      type: WorkItemType | null;
+      executor: Executor | null;
+      planningSource: WorkItemPlanningSource | null;
+      implementationSource: WorkItemImplementationSource | null;
+      sessionBranch: string | null;
+      archivedAt: Date | null;
+      githubPullRequests: Array<{ id: string }>;
+    }>
+  > {
+    return (tx ?? db).workItem.findMany({
+      where: {
+        projectId,
+        workspaceId,
+        OR: [{ planningSource: null }, { implementationSource: null }],
+      },
+      select: {
+        id: true,
+        identifier: true,
+        createdAt: true,
+        status: true,
+        type: true,
+        executor: true,
+        planningSource: true,
+        implementationSource: true,
+        sessionBranch: true,
+        archivedAt: true,
+        githubPullRequests: { select: { id: true }, take: 1 },
+      },
+      orderBy: { key: 'asc' },
+    });
+  },
+
+  /**
+   * Stamp ONE planning source onto many items — the write half of the
+   * MOTIR-1758 backfill, mirroring `pinTargetRepoByIds`' shape exactly.
+   *
+   * `planningSource: null` stays in the WHERE as the idempotence guard, and it
+   * is doing real work here rather than belt-and-braces: it is what makes the
+   * whole backfill safe to re-run and race-safe WITHOUT a row lock. A row that
+   * gained provenance between the sweep read and this write simply falls out of
+   * the update, so a concurrent MCP create can never be overwritten and a second
+   * consecutive run writes zero rows. Returning the affected count is what makes
+   * that no-op OBSERVABLE rather than merely assumed.
+   */
+  async backfillPlanningSourceByIds(
+    ids: string[],
+    source: WorkItemPlanningSource,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.workItem.updateMany({
+      where: { id: { in: ids }, planningSource: null },
+      data: { planningSource: source },
+    });
+    return result.count;
+  },
+
+  /**
+   * Stamp ONE implementation source onto many items — the implementation twin
+   * of {@link backfillPlanningSourceByIds}, with the same null-guarded
+   * idempotence contract. Only ever called with `byok` / `manual`: `hosted` is
+   * unreachable from self-reported evidence by design (the ADR), so the
+   * backfill has no path that produces it.
+   */
+  async backfillImplementationSourceByIds(
+    ids: string[],
+    source: WorkItemImplementationSource,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.workItem.updateMany({
+      where: { id: { in: ids }, implementationSource: null },
+      data: { implementationSource: source },
     });
     return result.count;
   },

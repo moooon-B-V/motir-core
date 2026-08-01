@@ -42,6 +42,15 @@ import {
   QUICK_SEARCH_MIN_QUERY_LENGTH,
 } from '@/lib/workItems/quickSearch';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  CANCELLED_STATUS_KEY,
+  MOTIR_SEED_BURST_END,
+  addToProvenanceBucket,
+  classifyProvenance,
+  emptyProvenanceBucket,
+  type ProvenanceBackfillReport,
+} from '@/lib/workItems/provenanceBackfill';
 import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
@@ -1754,6 +1763,142 @@ export const workItemsService = {
       },
       tx,
     );
+  },
+
+  /**
+   * BACKFILL provenance across one project's pre-provenance rows (MOTIR-1758) —
+   * the orchestration behind `pnpm db:backfill:provenance`.
+   *
+   * Story MOTIR-1685 stamps provenance at every write seam, but only for rows
+   * written after it landed; this repairs the history that predates it, from
+   * evidence already in the database. The rules live in
+   * `lib/workItems/provenanceBackfill.ts` (a pure decision table); this method
+   * owns the reads, the grouping and the transaction, and NEVER invents a value
+   * — `planningHarness` / `planningModel` / `implementationHarness` /
+   * `implementationModel` are never written, and `hosted` is unreachable.
+   *
+   * IDEMPOTENT BY CONSTRUCTION, no row lock needed: every write is a
+   * null-guarded `updateMany`, so a row that gained provenance between the
+   * sweep read and the write falls out of the update. A second consecutive run
+   * reports zero writes, and a concurrent MCP create is never clobbered.
+   *
+   * `dryRun` runs the entire decision pass and returns the same report with
+   * every `written` at 0 and no transaction opened — the rehearsal this needs
+   * because its target is the live tenant.
+   *
+   * Operator-shaped, so it takes an `actorUserId` rather than a `ServiceContext`
+   * (there is no session) and binds the workspace GUC via `withWorkspaceContext`
+   * exactly as `boardsService.backfillDefaultBoard` does — the RLS-correct path
+   * for a script's writes under the non-bypass `prodect_app` role.
+   */
+  async backfillProvenanceForProject(
+    projectId: string,
+    actorUserId: string,
+    opts: { dryRun?: boolean; seedBurstEnd?: Date } = {},
+  ): Promise<ProvenanceBackfillReport> {
+    const project = await projectRepository.findById(projectId);
+    if (!project) throw new ProjectNotFoundError(projectId);
+
+    const dryRun = opts.dryRun ?? false;
+    const seedBurstEnd = opts.seedBurstEnd ?? MOTIR_SEED_BURST_END;
+
+    // "Implemented" = the project's own done-category set MINUS `cancelled`
+    // (which the default workflow files under `done` too, but which means
+    // abandoned, not shipped). Per-project rather than a `'done'` literal, so a
+    // custom workflow's terminal states are honoured.
+    const terminalKeys = await workflowsService.getTerminalStatusKeys(
+      projectId,
+      project.workspaceId,
+    );
+    const implementedStatusKeys = new Set(
+      [...terminalKeys].filter((key) => key !== CANCELLED_STATUS_KEY),
+    );
+
+    const rows = await workItemRepository.findProvenanceBackfillCandidates(
+      projectId,
+      project.workspaceId,
+    );
+
+    const report: ProvenanceBackfillReport = {
+      projectIdentifier: project.identifier,
+      dryRun,
+      seedBurstEnd,
+      implementedStatusKeys: [...implementedStatusKeys].sort(),
+      candidates: rows.length,
+      archivedCandidates: rows.filter((r) => r.archivedAt !== null).length,
+      createdAtOrBeforeBoundary: 0,
+      createdAfterBoundary: 0,
+      planning: { manual: emptyProvenanceBucket(), mcp: emptyProvenanceBucket() },
+      implementation: { byok: emptyProvenanceBucket(), manual: emptyProvenanceBucket() },
+      implementationLeftNull: { alreadyStamped: 0, notImplementedYet: 0, doneWithoutEvidence: 0 },
+    };
+
+    const planningIds: Record<'manual' | 'mcp', string[]> = { manual: [], mcp: [] };
+    const implementationIds: Record<'byok' | 'manual', string[]> = { byok: [], manual: [] };
+
+    for (const row of rows) {
+      const candidate = {
+        id: row.id,
+        identifier: row.identifier,
+        createdAt: row.createdAt,
+        status: row.status,
+        type: row.type,
+        executor: row.executor,
+        planningSource: row.planningSource,
+        implementationSource: row.implementationSource,
+        hasLinkedPr: row.githubPullRequests.length > 0,
+        sessionBranch: row.sessionBranch,
+      };
+      if (candidate.createdAt.getTime() <= seedBurstEnd.getTime())
+        report.createdAtOrBeforeBoundary += 1;
+      else report.createdAfterBoundary += 1;
+
+      const verdict = classifyProvenance(candidate, { seedBurstEnd, implementedStatusKeys });
+
+      if (verdict.planningSource !== null) {
+        addToProvenanceBucket(report.planning[verdict.planningSource], candidate.identifier);
+        planningIds[verdict.planningSource].push(candidate.id);
+      }
+
+      if (verdict.implementationSource !== null) {
+        addToProvenanceBucket(
+          report.implementation[verdict.implementationSource],
+          candidate.identifier,
+        );
+        implementationIds[verdict.implementationSource].push(candidate.id);
+      } else if (candidate.implementationSource !== null) {
+        report.implementationLeftNull.alreadyStamped += 1;
+      } else if (!implementedStatusKeys.has(candidate.status)) {
+        report.implementationLeftNull.notImplementedYet += 1;
+      } else {
+        report.implementationLeftNull.doneWithoutEvidence += 1;
+      }
+    }
+
+    if (dryRun) return report;
+
+    await withWorkspaceContext(
+      { userId: actorUserId, workspaceId: project.workspaceId },
+      async (tx) => {
+        for (const source of ['manual', 'mcp'] as const) {
+          report.planning[source].written = await workItemRepository.backfillPlanningSourceByIds(
+            planningIds[source],
+            source,
+            tx,
+          );
+        }
+        for (const source of ['byok', 'manual'] as const) {
+          report.implementation[source].written =
+            await workItemRepository.backfillImplementationSourceByIds(
+              implementationIds[source],
+              source,
+              tx,
+            );
+        }
+      },
+    );
+
+    return report;
   },
 
   async markIntegrated(
