@@ -147,6 +147,21 @@ export const projectRepository = {
   },
 
   /**
+   * Every project carrying `identifier`, ACROSS workspaces (MOTIR-1799).
+   * `identifier` is unique only per workspace, so this can legitimately return
+   * more than one row — the caller decides what to do with an ambiguous key.
+   *
+   * This exists for OPERATOR TOOLING (`scripts/stamp-onboarding-ran.ts`), which
+   * is handed a project key with no workspace: it refuses to act on an ambiguous
+   * match rather than guessing. It is deliberately NOT reachable from a request
+   * path — a user-facing read must stay workspace-scoped via `findByIdentifier`
+   * above, or it leaks the existence of other tenants' projects.
+   */
+  async findAllByIdentifier(identifier: string): Promise<Project[]> {
+    return db.project.findMany({ where: { identifier }, orderBy: { createdAt: 'asc' } });
+  },
+
+  /**
    * Non-archived projects in a workspace, ordered by createdAt asc so the
    * first-created project lands first in any list surface. Optionally takes
    * `tx` so the read happens inside withWorkspaceContext when the caller

@@ -11,6 +11,15 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 // from the `moooon` org's `isMeta` flag (the credit gate is waived), so nothing
 // here touches billing.
 //
+// ⚠️ THE NULL MARKER HERE IS DELIBERATE, AND IS NOT AN INCONSISTENCY WITH THE
+// SIBLING PROJECT (MOTIR-1799). As of MOTIR-1799 the seed STAMPS
+// `onboardingRanAt` on the `motir` dogfood project (see `./dogfoodProject.ts`):
+// the meta project is ESTABLISHED and reaches that state by stamping the marker,
+// not by walking a wizard. This test bed is the deliberate counterpart — the one
+// project that still lands in `/onboarding`, so the flow remains exercisable. The
+// difference between the two is load-bearing: do NOT "fix" this project to match
+// `motir`, and do not revert `motir`'s stamp to match this one.
+//
 // It is the test bed for the generation ENTRY (MOTIR-1396) — kept DISTINCT from
 // the real `motir` plan project. Reaching the "Generate plan" entry then needs a
 // `tiers_complete` pre-plan baseline, seeded separately in `motir-ai` (MOTIR-1430)
@@ -33,9 +42,12 @@ export interface SeedGenerationTestProjectInput {
 
 /**
  * Create the onboarding-ready generation test-bed project under the `moooon`
- * workspace and enrol the team. Leaves `onboardingRanAt` NULL (no plan is
- * approved) and does NOT change any active-project pin — `motir` stays the
- * default landing project; testers switch to this one via the project switcher.
+ * workspace and enrol the team. Leaves `onboardingRanAt` NULL **on purpose** (no
+ * plan is approved) so this stays the project that lands in `/onboarding` — the
+ * deliberate counterpart to the `motir` dogfood project, which the seed stamps as
+ * established (MOTIR-1799, `./dogfoodProject.ts`). Does NOT change any
+ * active-project pin — `motir` stays the default landing project; testers switch
+ * to this one via the project switcher.
  * Returns the created project DTO (carries `id`, `identifier`, `onboardingRanAt`).
  */
 export async function seedGenerationTestProject(
