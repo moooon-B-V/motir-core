@@ -2,16 +2,27 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyRunner,
   LINUX_EQUIVALENT_MULTIPLIER,
+  MOTIR_FLEET_RUNNER_LABEL,
   multiplierForLabels,
   resolveRunnerRate,
   RUNNER_RATES,
 } from '@/lib/ciMetering/runnerRates';
 
-// Runner normalization (Story MOTIR-1775 · MOTIR-1896) —
-// `docs/decisions/ci-minutes-allowance.md` §3. Pure unit tests: no DB, no clock.
+// Runner normalization (Story MOTIR-1775 · MOTIR-1896; the Motir fleet family is
+// MOTIR-1923) — `docs/decisions/ci-minutes-allowance.md` §3 + amendment §M. Pure
+// unit tests: no DB, no clock.
+//
+// Every instant below is PINNED, never derived from `new Date()`: these assert
+// against the table's own `effectiveFrom` values, so a test that read the wall
+// clock would be green until the day it silently wasn't (MOTIR-1950/1951/1954).
 
 const AFTER_REPRICING = new Date('2026-07-30T12:00:00.000Z');
 const BEFORE_REPRICING = new Date('2025-06-01T00:00:00.000Z');
+/** After the fleet's rate takes effect (2026-08-01) — and note it is AFTER
+ *  `AFTER_REPRICING`, which predates the fleet row entirely. */
+const AFTER_FLEET_PRICED = new Date('2026-08-15T00:00:00.000Z');
+/** Before it — the window where a fleet job still takes the §3.4 fallback. */
+const BEFORE_FLEET_PRICED = new Date('2026-07-15T00:00:00.000Z');
 
 describe('classifyRunner', () => {
   it.each([
@@ -53,6 +64,51 @@ describe('classifyRunner', () => {
   });
 });
 
+describe('classifyRunner — the MOTIR FLEET family (MOTIR-1923 · ADR §M)', () => {
+  it('classifies the fleet label as its OWN family, not as GitHub-hosted Linux', () => {
+    // Attribution is the point: metering a fleet run as `linux_x64` would give
+    // the right number under the wrong family, which §M calls the worst kind of
+    // correct — the breakdown would claim GitHub-hosted minutes Motir never paid.
+    expect(classifyRunner([MOTIR_FLEET_RUNNER_LABEL])).toBe('motir_fleet');
+  });
+
+  it('is case-insensitive and whitespace-tolerant, like every other family', () => {
+    expect(classifyRunner([`  ${MOTIR_FLEET_RUNNER_LABEL.toUpperCase()} `])).toBe('motir_fleet');
+  });
+
+  it('wins over an OS label anywhere in the set, whatever the order', () => {
+    // The ADR records an honest unknown: GitHub's REST reference does not say
+    // whether `labels` reports what `runs-on` REQUESTED or what the runner
+    // CARRIES. The fleet registers with `--no-default-labels` so both readings
+    // give one element — but the pre-pass makes a mixed set attribute correctly
+    // either way, rather than depending on which reading turns out to be true.
+    expect(classifyRunner(['ubuntu-latest', MOTIR_FLEET_RUNNER_LABEL])).toBe('motir_fleet');
+    expect(classifyRunner(['self-hosted', MOTIR_FLEET_RUNNER_LABEL])).toBe('motir_fleet');
+  });
+
+  it('matches EXACTLY — a near-miss variant stays unknown rather than borrowing the rate', () => {
+    // `motir-runner-large` is not the 2-core-equivalent spec the ×1.00 parity
+    // rate was decided for, so it must NOT silently take it. Falling to unknown
+    // meters at the same ×1.00 but WARNS — the signal to price it deliberately.
+    expect(classifyRunner(['motir-runner-large'])).toBe('unknown');
+    expect(classifyRunner(['motir-runner-4-core'])).toBe('unknown');
+    expect(classifyRunner(['motir'])).toBe('unknown');
+  });
+
+  it('the label itself satisfies §M.2 — no OS substring, no larger-runner match', () => {
+    // §M.2 constrains the string because the classifier matches on substrings:
+    // a label containing `linux` would classify as GitHub-hosted Linux, and one
+    // containing `2-core` would warn on every fleet run forever. Asserted here
+    // against the real classifier so renaming the constant cannot break it by eye.
+    for (const forbidden of ['ubuntu', 'linux', 'arm', 'windows', 'macos', 'osx']) {
+      expect(MOTIR_FLEET_RUNNER_LABEL).not.toContain(forbidden);
+    }
+    // If the label ever matched the larger-runner pattern, THIS would classify
+    // as `unknown` instead of the fleet — the same guard, machine-checked.
+    expect(classifyRunner([MOTIR_FLEET_RUNNER_LABEL])).toBe('motir_fleet');
+  });
+});
+
 describe('resolveRunnerRate — effective dating (§3.3)', () => {
   it('resolves each priced family to its cost-proportional multiplier', () => {
     // The ratios are the runner's own GitHub price over the Linux 2-core x64
@@ -71,13 +127,34 @@ describe('resolveRunnerRate — effective dating (§3.3)', () => {
     expect(resolveRunnerRate('macos', AFTER_REPRICING)?.multiplier).not.toBe(10);
   });
 
-  it('each multiplier equals the rate’s own price divided by the Linux x64 price', () => {
+  it('every COST_RATIO multiplier equals its own price divided by the Linux x64 price', () => {
     const linux = RUNNER_RATES.find((r) => r.family === 'linux_x64');
     expect(linux).toBeDefined();
-    for (const rate of RUNNER_RATES) {
+    const costRatioRates = RUNNER_RATES.filter((r) => r.basis === 'cost_ratio');
+    // Guard the guard: if a future edit flipped every row to `product_parity`
+    // this loop would pass vacuously while asserting nothing.
+    expect(costRatioRates.length).toBeGreaterThanOrEqual(4);
+    for (const rate of costRatioRates) {
       // The ratio is what makes a single blended overage rate honest (§2.3).
       expect(rate.multiplier).toBeCloseTo(rate.usdPerMinute / linux!.usdPerMinute, 2);
     }
+  });
+
+  it('the FLEET row is the only product-parity row, and is NOT a cost ratio (§M.4)', () => {
+    // The fleet's ×1.00 is a decided customer-facing rate, not a ratio of its own
+    // cost — pricing it at the true ~×0.1 ratio would hand every org ~10× more
+    // effective CI, which is an allowance change made in a rate table. This test
+    // is the guard against a future reader "fixing" the row into a ratio.
+    const parity = RUNNER_RATES.filter((r) => r.basis === 'product_parity');
+    expect(parity.map((r) => r.family)).toEqual(['motir_fleet']);
+
+    const linux = RUNNER_RATES.find((r) => r.family === 'linux_x64');
+    const fleet = parity[0]!;
+    expect(fleet.multiplier).toBe(1.0);
+    // Its usdPerMinute records MOTIR's own cost, so the ratio deliberately does
+    // NOT hold — the fleet is far cheaper than the numéraire it meters at.
+    expect(fleet.usdPerMinute).toBeLessThan(linux!.usdPerMinute);
+    expect(fleet.multiplier).not.toBeCloseTo(fleet.usdPerMinute / linux!.usdPerMinute, 2);
   });
 
   it('returns null for a run that PREDATES every entry — history never re-prices', () => {
@@ -117,5 +194,42 @@ describe('multiplierForLabels', () => {
       multiplier: LINUX_EQUIVALENT_MULTIPLIER,
       priced: false,
     });
+  });
+});
+
+describe('multiplierForLabels — the fleet is PRICED at ×1.00, not fallen back to it', () => {
+  it('prices a fleet job at ×1.00 and reports priced: true — so it never warns', () => {
+    // Both paths produce ×1.00, and that is exactly why this assertion matters:
+    // `priced` is the ONLY thing separating "a decided product rate" from "no row
+    // exists yet". The meter logs on `priced: false`, so without this row every
+    // fleet run would warn forever and bury the genuinely-unpriced signal.
+    expect(multiplierForLabels([MOTIR_FLEET_RUNNER_LABEL], AFTER_FLEET_PRICED)).toEqual({
+      family: 'motir_fleet',
+      multiplier: 1.0,
+      priced: true,
+    });
+  });
+
+  it('an unknown runner STILL falls back and STILL warns — §3.4 is intact', () => {
+    // The fleet row must not paper over the safety path it sits next to.
+    expect(multiplierForLabels(['some-vendor-gpu'], AFTER_FLEET_PRICED)).toEqual({
+      family: 'unknown',
+      multiplier: LINUX_EQUIVALENT_MULTIPLIER,
+      priced: false,
+    });
+  });
+
+  it('does NOT re-price a run that predates the row — a new row, never a backfill (§3.3)', () => {
+    // The whole point of effective dating: adding this row today leaves every
+    // already-metered period exactly as it was charged. A fleet-labelled job
+    // completing before the row takes the §3.4 fallback (same ×1.00, but it
+    // warns), so history cannot silently change price under an audit.
+    expect(multiplierForLabels([MOTIR_FLEET_RUNNER_LABEL], BEFORE_FLEET_PRICED)).toEqual({
+      family: 'motir_fleet',
+      multiplier: LINUX_EQUIVALENT_MULTIPLIER,
+      priced: false,
+    });
+    expect(resolveRunnerRate('motir_fleet', BEFORE_FLEET_PRICED)).toBeNull();
+    expect(resolveRunnerRate('motir_fleet', AFTER_FLEET_PRICED)?.multiplier).toBe(1.0);
   });
 });

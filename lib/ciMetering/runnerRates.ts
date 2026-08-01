@@ -5,7 +5,8 @@
 //
 //     linear_equivalent = raw_billable_minutes × multiplier(runner)
 //
-// and the multiplier is a PRICE RATIO — the runner's own per-minute price
+// and the multiplier is — for every GitHub-hosted row — a PRICE RATIO: the
+// runner's own per-minute price
 // divided by the Linux 2-core x64 price (the numéraire) — NOT GitHub's
 // `Linux ×1 / Windows ×2 / macOS ×10` included-minutes drain multipliers. ADR
 // §3.2 is explicit that those are a marketing allotment device rather than a
@@ -15,6 +16,11 @@
 // domain over — Motir already prices AI cost-plus from each provider's own
 // price, and `notes.html` #88 is the recorded lesson from taking a rate off a
 // secondary catalog instead of the vendor's own page.
+//
+// ⚠️ ONE row is deliberately NOT a price ratio: Motir's own runner fleet, which
+// meters at ×1.00 as a PRODUCT decision (the ADR's 2026-07-31 amendment §M;
+// MOTIR-1915 / MOTIR-1923). Its rationale lives on `MOTIR_FLEET_RATE` below, and
+// `RateBasis` marks it in the type so the distinction survives the next edit.
 //
 // ⚠️ EFFECTIVE-DATED, not a bare constant (ADR §3.3). Each entry carries an
 // `effectiveFrom`, and resolution takes the run's own completion timestamp — so
@@ -34,20 +40,49 @@
 // resolver's signature is the table's read signature, so promoting this to rows
 // later is mechanical and needs no call-site change.
 
-/** The runner families the ADR prices. `unknown` is the safe catch-all (§3.4). */
-export type RunnerFamily = 'linux_x64' | 'linux_arm64' | 'windows_x64' | 'macos' | 'unknown';
+/**
+ * The runner families the ADR prices. `unknown` is the safe catch-all (§3.4).
+ *
+ * `motir_fleet` is Motir's OWN ephemeral self-hosted fleet (Story MOTIR-1916).
+ * It is a PRICED family, not the §3.4 fallback — see `MOTIR_FLEET_RATE` below.
+ */
+export type RunnerFamily =
+  | 'linux_x64'
+  | 'linux_arm64'
+  | 'windows_x64'
+  | 'macos'
+  | 'motir_fleet'
+  | 'unknown';
 
-/** One effective-dated price ratio for a runner family. */
+/**
+ * What a row's `multiplier` IS — the invariant that holds for it.
+ *
+ * - `cost_ratio` — the runner's own vendor price ÷ the Linux 2-core x64 price.
+ *   `multiplier === usdPerMinute / <linux_x64 usdPerMinute>` holds, and
+ *   `runnerRates.test.ts` asserts it for every row carrying this basis.
+ * - `product_parity` — a DECIDED customer-facing rate that is deliberately NOT a
+ *   ratio of its own `usdPerMinute` (ADR amendment §M.4). Only the Motir fleet
+ *   carries it. Marking it in the type is what stops a future reader "fixing"
+ *   the row back into a ratio and re-pricing the product by accident.
+ */
+export type RateBasis = 'cost_ratio' | 'product_parity';
+
+/** One effective-dated rate for a runner family. */
 export interface RunnerRate {
   family: RunnerFamily;
-  /** The runner's price ÷ the Linux 2-core x64 price, at `effectiveFrom`. */
+  /** The rate applied to this family's billable minutes at `effectiveFrom`. For
+   *  a `cost_ratio` row: the runner's price ÷ the Linux 2-core x64 price. */
   multiplier: number;
   /** UTC instant this rate takes effect. A run completing before it uses the
    *  previous entry for the same family (none today — these are the first). */
   effectiveFrom: Date;
-  /** The vendor price the ratio was computed from, in USD per minute — recorded
-   *  so the arithmetic is auditable without re-reading the ADR. */
+  /** The per-minute price in USD this row records. For a `cost_ratio` row it is
+   *  the VENDOR price the ratio was computed from, so the arithmetic is
+   *  auditable without re-reading the ADR. For the `product_parity` row it is
+   *  MOTIR'S OWN cost, which the multiplier is deliberately not a ratio of. */
   usdPerMinute: number;
+  /** Which of the two invariants above the row's `multiplier` satisfies. */
+  basis: RateBasis;
 }
 
 /** GitHub's 2026-01-01 Actions repricing — the cut that took Linux 2-core from
@@ -55,6 +90,78 @@ export interface RunnerRate {
  *  rates (ADR §9). Every rate below is dated to it because that is when the
  *  prices they are ratios of took effect. */
 const GITHUB_2026_REPRICING = new Date('2026-01-01T00:00:00.000Z');
+
+/**
+ * The single distinctive `runs-on` label Motir's fleet runners register with
+ * (MOTIR-1916 · ADR amendment §M.2). The fleet registers with
+ * `--no-default-labels` and exactly this one label, so the classification below
+ * is unambiguous under EITHER reading of GitHub's `labels` field — the ADR
+ * records as an honest unknown that the REST reference does not say whether it
+ * reports the labels `runs-on` REQUESTED or the labels the runner CARRIES, and a
+ * single-custom-label runner produces the same one-element set either way.
+ * (MOTIR-1920 records which it is from the first real fleet run.)
+ *
+ * ⚠️ The exact string is load-bearing, and §M.2 constrains it: it must contain
+ * none of `ubuntu` / `linux` / `arm` / `windows` / `macos` / `osx`, and must not
+ * match the larger-runner pattern. A label containing `linux` would classify as
+ * the GitHub `linux_x64` family — the numbers would come out right while the
+ * attribution was silently wrong — and one containing `2-core` would take the
+ * §3.4 fallback and warn on every fleet run forever. `runnerRates.test.ts`
+ * asserts both constraints against the real patterns rather than by eye.
+ *
+ * It is exported because the provisioning path (MOTIR-1920/1921) selects on the
+ * SAME label: one constant, so the meter and the provisioner cannot drift.
+ */
+export const MOTIR_FLEET_RUNNER_LABEL = 'motir-runner';
+
+/** When the fleet's rate takes effect — the day the row landed (MOTIR-1923).
+ *  Per §3.3 this is a NEW ROW, never a backfill: a run that completed before it
+ *  keeps whatever it was already metered at, and history never re-prices. The
+ *  fleet does not exist before this instant, so nothing real predates it; a job
+ *  that somehow did takes the §3.4 fallback (×1.00 + a warning), which is the
+ *  safe direction. */
+const MOTIR_FLEET_PRICED_FROM = new Date('2026-08-01T00:00:00.000Z');
+
+/**
+ * The Motir fleet's rate (MOTIR-1923, implementing the ADR's 2026-07-31
+ * amendment §M) — effective-dated like every other row, and ×1.00.
+ *
+ * ⚠️ **THE ×1.00 IS A PRODUCT DECISION, NOT A COST RATIO — do not "fix" it into
+ * one.** Every other row in this table is a price ratio against the Linux 2-core
+ * numéraire (§3.1). This one is not, and that is deliberate:
+ *
+ * - The fleet's real cost to Motir is roughly **$0.0005–0.001/min** on spot
+ *   compute (§L) — a ~6–12× lower basis for the identical workload. Pricing the
+ *   family at that true cost ratio (~×0.1) would silently hand every org ~10×
+ *   more effective CI, which is a **customer-facing allowance change made in a
+ *   rate table instead of in the open** (§M).
+ * - The fleet's runner spec is fixed to be **Linux-2-core-EQUIVALENT**, so
+ *   metering it at parity with the numéraire charges the user exactly what they
+ *   were already promised. §L keeps the shipped allowance and rate untouched;
+ *   the improved margin funds the fleet's own operating cost. Passing the saving
+ *   on would re-open §1 with its own card — not silently, and not here.
+ * - `usdPerMinute` below therefore records **MOTIR'S OWN cost, not GitHub's**,
+ *   and is the one row where the price and the multiplier are deliberately not a
+ *   ratio of each other (§M.4). `basis: 'product_parity'` is what says so to the
+ *   type system, and it is why the ratio invariant in `runnerRates.test.ts`
+ *   skips this row instead of failing on it.
+ *
+ * The figure is the conservative (high) end of §L's estimate — it understates
+ * margin rather than overstating it — and it is an ESTIMATE until MOTIR-1924
+ * meters the fleet's real container-seconds. Nothing the customer is charged
+ * depends on it: it feeds margin reporting only, because `multiplier` is what
+ * meters the run.
+ *
+ * See also: MOTIR-1915 (the decision), `docs/decisions/ci-minutes-allowance.md`
+ * §L (the price is not re-opened) and §M (this family, its label, this rate).
+ */
+const MOTIR_FLEET_RATE: RunnerRate = {
+  family: 'motir_fleet',
+  multiplier: 1.0, // parity with the Linux 2-core numéraire — a PRODUCT decision (§M)
+  effectiveFrom: MOTIR_FLEET_PRICED_FROM,
+  usdPerMinute: 0.001, // Motir's own spot cost, NOT a ratio basis (§M.4)
+  basis: 'product_parity',
+};
 
 /**
  * The effective-dated rate table (ADR §3.1). Ordered newest-last per family;
@@ -68,25 +175,30 @@ export const RUNNER_RATES: readonly RunnerRate[] = [
     multiplier: 1.0,
     effectiveFrom: GITHUB_2026_REPRICING,
     usdPerMinute: 0.006,
+    basis: 'cost_ratio',
   },
   {
     family: 'linux_arm64',
     multiplier: 0.83, // $0.005 / $0.006
     effectiveFrom: GITHUB_2026_REPRICING,
     usdPerMinute: 0.005,
+    basis: 'cost_ratio',
   },
   {
     family: 'windows_x64',
     multiplier: 1.67, // $0.010 / $0.006
     effectiveFrom: GITHUB_2026_REPRICING,
     usdPerMinute: 0.01,
+    basis: 'cost_ratio',
   },
   {
     family: 'macos',
     multiplier: 10.33, // $0.062 / $0.006
     effectiveFrom: GITHUB_2026_REPRICING,
     usdPerMinute: 0.062,
+    basis: 'cost_ratio',
   },
+  MOTIR_FLEET_RATE,
 ];
 
 /** The numéraire's multiplier — also the fallback for an unpriced runner (§3.4). */
@@ -103,8 +215,9 @@ const LARGER_RUNNER = /(^|-)(\d+-?core|xlarge|large)(-|$)/i;
  * Classify a job's runner from its GitHub `labels` (and, as a weaker hint, its
  * `runner_name`). PURE.
  *
- * The ADR prices the FOUR standard 2-core hosted runners. Anything else — a
- * larger hosted runner, a self-hosted label, a future OS — is `unknown`, which
+ * The ADR prices the four standard 2-core hosted runners, plus Motir's own fleet
+ * (§M). Anything else — a larger hosted runner, someone else's self-hosted
+ * label, a future OS — is `unknown`, which
  * §3.4 meters at ×1.00 and LOGS: under-counting a runner Motir has not priced is
  * the safe direction (it never over-bills a user for a rate nobody decided), and
  * the log entry is the signal to add a rate.
@@ -112,8 +225,21 @@ const LARGER_RUNNER = /(^|-)(\d+-?core|xlarge|large)(-|$)/i;
  * Note the larger-runner check runs BEFORE the OS match on purpose: an
  * `ubuntu-latest-4-core` job is Linux, but it is NOT the Linux the ×1.00 rate
  * prices, and silently charging it as one would be a priced guess.
+ *
+ * The MOTIR FLEET is matched first of all, and by EXACT label rather than by
+ * substring (§M.3). Exact is the safe direction twice over: a near-miss variant
+ * like `motir-runner-large` is NOT the 2-core-equivalent spec the ×1.00 parity
+ * rate was decided for, so it correctly falls through to `unknown` and warns
+ * instead of silently borrowing the fleet's rate. The scan is a PRE-PASS over
+ * the whole label set rather than a branch inside the loop, so a job whose set
+ * also carries an OS label still attributes to the fleet — the family is what
+ * §3.3's stored breakdown reports, and a fleet run must never be recorded as
+ * GitHub-hosted Linux (the "numbers right, attribution wrong" failure §M names).
  */
 export function classifyRunner(labels: readonly string[]): RunnerFamily {
+  for (const raw of labels) {
+    if (raw.trim().toLowerCase() === MOTIR_FLEET_RUNNER_LABEL) return 'motir_fleet';
+  }
   for (const raw of labels) {
     const label = raw.trim().toLowerCase();
     if (label.length === 0) continue;
