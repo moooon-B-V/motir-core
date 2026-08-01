@@ -59,6 +59,9 @@ describe('CI Postgres container (MOTIR-1742)', () => {
     // make every assertion below pass vacuously.
     expect(allJobs.length).toBeGreaterThan(5);
     expect(dbJobs.map((j) => `${j.file}:${j.id}`).sort()).toEqual([
+      // The acceptance-video lane, lifted out of the `e2e` matrix into its own
+      // `paths:`-filtered workflow by MOTIR-1949.
+      'acceptance-video.yml:acceptance',
       'ci.yml:build',
       'ci.yml:e2e',
       'ci.yml:test',

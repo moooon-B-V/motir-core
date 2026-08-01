@@ -1,0 +1,171 @@
+name: Acceptance video
+
+# ── The acceptance-video lane, story-scoped (Story MOTIR-1627 · MOTIR-1949) ──
+#
+# The acceptance E2E + self-test dogfood (MOTIR-1638) and the per-story
+# acceptance specs (MOTIR-1700), CLOUD-ON + video:'on'. Its OWN Playwright lane
+# (playwright.acceptance.config.ts: MOTIR_CLOUD + the E2E_TEST_BILLING mock,
+# isolated ports 3200/8488) so the plan/toggle panel states are reachable and
+# each green run is recorded. testMatch: acceptance*.spec.ts catches the dogfood
+# AND the story-specific specs (planner rule MOTIR-1644); the main Playwright
+# config testIgnore's the same pattern.
+#
+# ⚠️ WHY ITS OWN WORKFLOW, AND NOT A JOB IN ci.yml.
+# The requirement is that a PR which does not own an acceptance spec shows NO
+# acceptance check at all. A job-level `if:` does NOT achieve that: a job whose
+# `if:` is false is still REPORTED, as a greyed `Skipped` check (measured on
+# PR #1751 — `Playwright E2E (acceptance-video)  skipping`). A matrix leg cannot
+# be dropped by an expression either. The only mechanism that leaves no check
+# behind is a workflow that is never TRIGGERED — hence a separate file with a
+# `paths:` filter. No matching file → no run → nothing on the PR.
+#
+# Consequences of being a separate workflow, accepted deliberately:
+#   • It cannot `needs:` ci.yml's `build` job or read that run's artifacts, so it
+#     compiles `.next/` itself (`next-build: build`). That costs a build, but
+#     only on the PRs that own a spec — where the 11-minute lane dwarfs it.
+#   • There is no `push:` trigger. `main` never runs the lane, which is already
+#     the decision: the PR published the receipt while its story was in review,
+#     and re-publishing post-merge would only supersede it with an identical clip
+#     (`docs/decisions/acceptance-video.md`, amendments MOTIR-1937 / MOTIR-1949).
+on:
+  pull_request:
+    paths:
+      - 'tests/e2e/acceptance*.spec.ts'
+
+# Cancel older runs on the same ref when a new commit lands (saves CI minutes).
+# Safe interpolation: github.workflow is a fixed workflow name; github.ref is a
+# validated git ref identifier (not user-controlled free-form input).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: Playwright E2E (acceptance-video)
+    runs-on: ubuntu-latest
+    # Keyless acceptance-video publish (MOTIR-1650): the publish step requests a
+    # GitHub OIDC token, which needs `id-token: write`. `contents: read` keeps
+    # checkout working. (OIDC is NOT granted to fork PRs, so a fork falls back to
+    # the PAT / no-ops — see the publish step.)
+    permissions:
+      contents: read
+      id-token: write
+    # Postgres is started by ./.github/actions/postgres (first step below), NOT
+    # by a `services:` block — see that action's header for why (MOTIR-1742).
+    #
+    # The env below is deliberately identical to ci.yml's `e2e` job — same DB,
+    # same module-load placeholders, same file-email outbox. Workflows cannot
+    # share an env block, so it is repeated rather than shared. Change both
+    # together.
+    env:
+      # In CI Postgres runs on the standard 5432.
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      # See ci.yml's build job for the rationale on these throwaway values.
+      # Better-Auth's module-load requiredEnv check needs them present;
+      # the actual OAuth round-trip is intercepted by the undici MockAgent
+      # in instrumentation.ts (E2E_TEST_OAUTH=1 below).
+      BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-e2e-placeholder
+      GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
+      EMAIL_PROVIDER: file
+      EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
+      E2E_TEST_OAUTH: '1'
+      E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
+      # Skip the husky install postinstall — CI has no .git/hooks to wire.
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      # The same setup ci.yml's E2E legs run — one definition, two callers — but
+      # building `.next/` here, since another workflow's artifact is out of reach.
+      - uses: ./.github/actions/e2e-setup
+        with:
+          next-build: build
+
+      # WHICH specs this PR owns. The `paths:` filter already guarantees at least
+      # one, but the uploader needs the LIST: publishing SUPERSEDES a story's
+      # current evidence and each recording targets its OWN declared story, so a
+      # run that published everything it recorded would replace the receipts of
+      # every other story with a chaptered spec (MOTIR-1937 — measured: the
+      # MOTIR-1781 PR republished seven). The uploader FAILS CLOSED, so if this
+      # step ever stops producing a list, the run rehearses instead of
+      # resurrecting that bug.
+      - name: Which acceptance specs does this run own?
+        id: owned-specs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # A pull_request checkout is the MERGE commit at depth 1, which carries
+          # both parents — so the base is normally already present. Fetch it if it
+          # is not, rather than paying `fetch-depth: 0` on every run.
+          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null ||
+            git fetch --depth=1 origin "${BASE_SHA}"
+          SPECS=$(git diff --name-only "${BASE_SHA}" HEAD -- 'tests/e2e/acceptance*.spec.ts' | tr '\n' ' ')
+          echo "owned acceptance specs: ${SPECS:-<none>}"
+          echo "specs=${SPECS}" >> "$GITHUB_OUTPUT"
+
+      - name: Run E2E (acceptance-video)
+        run: pnpm test:e2e --config playwright.acceptance.config.ts
+
+      # On a GREEN acceptance run, publish the recordings this PR owns to their
+      # OWN STORY's acceptance panel (BYOK). The lane carries one chaptered
+      # acceptance spec per user-facing story (MOTIR-1644 / MOTIR-1700), and
+      # MOTIR-1734 made the uploader publish them ALL — it used to take whichever
+      # recording `readdirSync` yielded first and silently drop the rest, so on a
+      # multi-story run only one story got its receipt (observed: PR #1620
+      # published MOTIR-811 and discarded MOTIR-1726's clip).
+      # MOTIR-1905 removed the SECOND way the lane lost every receipt: the
+      # watchability gate used to abort the whole run on the first sub-floor clip,
+      # so one unpaced spec cost every OTHER story its video too. An unwatchable
+      # clip now costs only its own story, and the step still exits non-zero.
+      # Auth is KEYLESS GitHub OIDC first (MOTIR-1650) — the moooon repo is
+      # App-connected, so no secret is needed; MOTIR_UPLOAD_TOKEN is the PAT
+      # fallback. The uploader no-ops when NEITHER is available (a fork PR gets no
+      # OIDC and no secret), so forks / unconfigured runs never fail here.
+      #
+      # TARGET STORY (MOTIR-1684): NO longer the hardcoded MOTIR-1627 constant.
+      # `resolveStoryKey` picks the target — the recording's self-declared story
+      # (the acceptance harness sidecar; the MOTIR-1638 dogfood pins itself to
+      # MOTIR-1627, so the self-test still publishes to its own panel and is never
+      # mis-attributed) → the PR's `MOTIR-<id>` (branch/title, the status-sync
+      # convention; the endpoint resolves a subtask key to its parent story) →
+      # the MOTIR-1627 dogfood FALLBACK.
+      #
+      # BEST-EFFORT — `continue-on-error` so this side-effect NEVER gates the
+      # merge.
+      #
+      # ⚠️ `continue-on-error` REWRITES THIS STEP'S CONCLUSION TO `success` — on
+      # the checks UI, in `gh pr checks`, and in the REST API — even when the
+      # script exits 1. That is not a reason to remove it (a fork PR with no OIDC,
+      # or a transient 5xx, must not red-light a merge), but it means the step's
+      # own status can never be the signal. So the uploader reports through the
+      # two channels the rewrite does NOT swallow: a `::error::` ANNOTATION and
+      # the job SUMMARY (MOTIR-1905). Before that, a completely broken acceptance
+      # gate — one unpaced spec suppressing every story's receipt — looked green
+      # for days, and the raw job log was the only place it was visible.
+      - name: Publish the acceptance video
+        if: success()
+        continue-on-error: true
+        env:
+          MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
+          MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
+          ACCEPTANCE_PR_REF: ${{ github.head_ref }}
+          ACCEPTANCE_PR_TITLE: ${{ github.event.pull_request.title }}
+          ACCEPTANCE_FALLBACK_STORY_KEY: MOTIR-1627
+          ACCEPTANCE_PRODUCED_BY: MOTIR-1638
+          ACCEPTANCE_CHANGED_SPECS: ${{ steps.owned-specs.outputs.specs }}
+        run: node scripts/upload-acceptance-video.mjs
+      # Always upload the report — a green run's is the only place the recorded
+      # video and trace survive for a reviewer to check by hand, and a red one is
+      # how the lane is debugged at all (MOTIR-1706: the old hardcoded
+      # `out/playwright-report` path matched nothing here, so a red acceptance leg
+      # left no trace, screenshot or report behind).
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-acceptance-video
+          path: out/playwright-report-acceptance
+          retention-days: 7

@@ -279,6 +279,56 @@ acceptance specs **it changed**, and nothing else.
 one clip exceeding the per-file cap is a size problem, not a question of which run
 publishes. The starter's own acceptance lane is MOTIR-1941.
 
+#### Amendment 2026-07-31 (Yue · MOTIR-1949) — the LANE is story-scoped too
+
+The amendment above scoped the **publish** and kept the lane: "the checks stay on
+every run". That half held for one day. It fixed the correctness bug (verified:
+run `30673082674`, eight recordings, `rehearsed: … → MOTIR-811 … 0 published`) but
+left the cost that started the whole thread — _why does every PR carry this check?_
+
+**Measured, on a PR that publishes nothing** (same run): the `acceptance-video` leg
+took **11 min**, the run's long pole (next longest 8 min), and uploaded a **419 MB**
+report (every other leg ≤ 3 MB, retained 7 days) — to record eight clips and then
+correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
+
+**The decision (Yue): the lane runs only for the PR that owns an acceptance spec** —
+"no acceptance video step unless the PR is for story E2E test". This **supersedes**
+"the checks stay on every run". The table above becomes:
+
+| Run                                              | Lane runs   | Publishes                    |
+| ------------------------------------------------ | ----------- | ---------------------------- |
+| PR that changes `tests/e2e/acceptance-X.spec.ts` | yes         | **only X's story**           |
+| PR that changes no acceptance spec               | **no lane** | nothing                      |
+| Push to `main`                                   | **no lane** | nothing (the PR already did) |
+
+- **Absent, not skipped — and only ONE mechanism achieves that.** The lane moves
+  out of `ci.yml` into its own `.github/workflows/acceptance-video.yml`, triggered
+  by `on: pull_request: paths: ['tests/e2e/acceptance*.spec.ts']`. A workflow whose
+  path filter does not match is never TRIGGERED, so no run exists and no check
+  appears. The two cheaper-looking options were both tried and are both wrong:
+  - a **matrix leg** cannot be dropped by an expression at all;
+  - a **job-level `if:`** does not remove the check — a job whose `if:` is false is
+    still reported as a greyed `Skipped`. Measured, not assumed: the first attempt
+    at this card gated an `acceptance` job on a detector job's output, and PR #1751
+    still listed `Playwright E2E (acceptance-video) · skipping`. Free in minutes,
+    but still "the step is there", which is what was asked to go away.
+- **What the separate workflow costs.** It cannot `needs:` ci.yml's `build` job or
+  read that run's artifacts, so it compiles `.next/` itself (the shared
+  `./.github/actions/e2e-setup` composite takes a `next-build: build` input for
+  exactly this). That is one extra build, paid only on the PRs that own a spec —
+  where the 11-minute lane dwarfs it. There is deliberately no `push:` trigger.
+- **What this costs, said out loud.** The watchability floor and story resolution
+  (§2's amendment / MOTIR-1772, MOTIR-1905) now run **only on the owning run** — a
+  spec that drifts below the floor is caught when its own PR next touches it, not
+  on the next unrelated PR. That is the MOTIR-1905 blind spot re-accepted, at a
+  much smaller radius: the gate reports on the run that can actually act on it.
+  The acceptance specs also stop acting as incidental regression coverage on other
+  PRs; the bulk / a11y / at-scale legs are the regression net.
+- **Belt and braces.** The uploader still receives and filters on the owned set, so
+  the correctness fix does not depend on the workflow gate being right.
+
+The starter (MOTIR-1941) shipped this shape from day one; motir-core now matches it.
+
 ---
 
 ## Consequences
