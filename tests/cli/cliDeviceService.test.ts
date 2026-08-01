@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@prisma/client';
 
 // Better-Auth's rate limiter buckets /sign-in|/sign-up per IP (window 10s, max 3),
@@ -14,6 +14,7 @@ vi.hoisted(() => {
 
 const { db } = await import('@/lib/db');
 const { auth } = await import('@/lib/auth');
+const { APIError } = await import('better-auth/api');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { CLI_TOKEN_SCOPES } = await import('@/lib/mcp/scopes');
@@ -42,6 +43,13 @@ const { truncateAuthTables } = await import('../helpers/db');
 // session: each test signs in for real and forwards the resulting cookie, because
 // the plugin's claim/approve/deny endpoints read the session from the request
 // themselves and a stubbed `getSession()` would not reach them.
+//
+// ONE declared exception (Bug MOTIR-1955): three tests in "approve — the flip refuses
+// after the pre-checks passed" reject `auth.api.deviceApprove` at the boundary. What
+// they assert is Motir's own translation of the plugin's documented RFC 8628 codes,
+// and the states those codes describe are reachable only through a race — so leaving
+// them to the race meant the coverage gate flipped by luck. Everything else, that
+// block's first two tests included, still drives the real plugin.
 //
 // The three acts under test: `start` (the terminal opens a grant), the plugin's
 // claim + approve/deny (the browser), and `poll` (the terminal exchanges the grant
@@ -456,6 +464,130 @@ describe('approve — the gates', () => {
         headers,
       }),
     ).rejects.toBeInstanceOf(DeviceGrantExpiredError);
+  });
+});
+
+// ── the pre-check ↔ flip window (Bug MOTIR-1955) ─────────────────────────────
+// `approve` validates the row inside a transaction and the plugin re-validates it at
+// the flip, so `translateApproveError` is reached only when the two disagree: the row
+// changed in that window, or the forwarded SESSION is not the one the pre-checks
+// approved for. Every refusal the pre-checks CAN see (expired, not pending, unclaimed,
+// wrong approver) is thrown before the plugin is ever called, which is why nothing
+// above this block reaches the translator.
+//
+// Until MOTIR-1955 the only test that reached it was the two-simultaneous-approvals
+// race at the bottom of this file, whose assertions hold whichever side the loser
+// lands on — including the side where both flips slip through and the translator is
+// never entered. On 2026-08-01 a CI run landed there: all 35 tests passed, the file's
+// line coverage fell 96.34% → 87.8%, and the per-file gate failed a PR whose diff was
+// one unrelated test file. Coverage supplied by a race is coverage that is not there,
+// so each branch is pinned deterministically here instead.
+describe('approve — the flip refuses after the pre-checks passed', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A pending, claimed grant — the state every test below starts the flip from. */
+  async function claimedGrant() {
+    const { owner, workspace } = await createTestWorkspace();
+    const headers = await signIn(owner);
+    const grant = await cliDeviceService.start({ hostname: 'workbox' });
+    await claim(grant.user_code, headers);
+    return { owner, workspace, headers, grant };
+  }
+
+  // The two REAL refusals: no stub, the plugin's own session read does the rejecting.
+  it('refuses a flip carrying no session, and leaves the row pending for a retry', async () => {
+    const { owner, workspace, grant } = await claimedGrant();
+
+    await expect(
+      cliDeviceService.approve({
+        userCode: grant.user_code,
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+        headers: new Headers({ origin: BASE_URL }),
+      }),
+    ).rejects.toBeInstanceOf(DeviceGrantForbiddenError);
+
+    // The binding is written BEFORE the flip, so a refused flip leaves it on a row
+    // that is still `pending` — which is the documented recovery: press Approve again.
+    const row = await db.deviceCode.findUniqueOrThrow({
+      where: { deviceCode: grant.device_code },
+    });
+    expect(row.status).toBe('pending');
+    expect(row.workspaceId).toBe(workspace.id);
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('refuses a flip carrying a DIFFERENT signed-in session than the one that claimed', async () => {
+    const { owner, workspace, grant } = await claimedGrant();
+    const stranger = await createTestWorkspace();
+    const strangerHeaders = await signIn(stranger.owner);
+
+    // `actorUserId` matches the row's claim, so every pre-check passes; only the
+    // plugin sees that the session behind the flip belongs to somebody else.
+    await expect(
+      cliDeviceService.approve({
+        userCode: grant.user_code,
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+        headers: strangerHeaders,
+      }),
+    ).rejects.toBeInstanceOf(DeviceGrantForbiddenError);
+  });
+
+  // The remaining codes describe a row that changed BETWEEN the pre-checks and the
+  // flip. That window is a genuine race — the concurrency test below hits it only
+  // sometimes — so it is driven at the plugin boundary here. What is asserted is
+  // Motir's own translation table, not Better-Auth's behaviour: the CLI must receive
+  // the typed domain error for each documented RFC 8628 code, never a raw 500.
+  it('translates a row that stopped being pending in the window into not-pending', async () => {
+    const { owner, workspace, headers, grant } = await claimedGrant();
+    vi.spyOn(auth.api, 'deviceApprove').mockRejectedValue(
+      new APIError('BAD_REQUEST', { error: 'invalid_request' }),
+    );
+
+    await expect(
+      cliDeviceService.approve({
+        userCode: grant.user_code,
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+        headers,
+      }),
+    ).rejects.toBeInstanceOf(DeviceGrantNotPendingError);
+  });
+
+  it('translates a code that expired in the window into expired', async () => {
+    const { owner, workspace, headers, grant } = await claimedGrant();
+    vi.spyOn(auth.api, 'deviceApprove').mockRejectedValue(
+      new APIError('BAD_REQUEST', { error: 'expired_token' }),
+    );
+
+    await expect(
+      cliDeviceService.approve({
+        userCode: grant.user_code,
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+        headers,
+      }),
+    ).rejects.toBeInstanceOf(DeviceGrantExpiredError);
+  });
+
+  it('rethrows an APIError whose code it does not recognise rather than mistranslating it', async () => {
+    const { owner, workspace, headers, grant } = await claimedGrant();
+    const unrecognised = new APIError('BAD_REQUEST', { error: 'something_new' });
+    vi.spyOn(auth.api, 'deviceApprove').mockRejectedValue(unrecognised);
+
+    // A code this table has never seen must surface AS ITSELF. Folding it into one of
+    // the four would tell the CLI a specific, wrong story about a grant.
+    await expect(
+      cliDeviceService.approve({
+        userCode: grant.user_code,
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+        headers,
+      }),
+    ).rejects.toBe(unrecognised);
   });
 });
 
