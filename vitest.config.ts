@@ -451,6 +451,16 @@ export default defineConfig({
         // inventing attribution on real history — is silent and hard to undo.
         // The service + repository halves are already gated above.
         'lib/workItems/provenanceBackfill.ts',
+        // Story 7.24 · MOTIR-1812 → gated by MOTIR-1813. The "M" universal AI
+        // callout: its action REGISTRY plus the two components that consume it.
+        // The registry is the extension point MOTIR-1343 / MOTIR-1344 each land a
+        // single entry in, so what the gate protects is not today's one row — it
+        // is that the next row arrives with its branches exercised, in a surface
+        // that is the front door to every AI capability Motir offers. The
+        // launcher it derives its href from is already gated above.
+        'lib/planning/aiCallout.ts',
+        'components/planning/AiCalloutMenu.tsx',
+        'components/planning/PlanWithAIFab.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -849,6 +859,14 @@ export default defineConfig({
         // than asking for new tests: the point of the gate is that the next edit
         // to a rule cannot quietly ship an unexercised branch.
         'lib/workItems/provenanceBackfill.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 7.24 · MOTIR-1812 → gated by MOTIR-1813 (see the `include` note).
+        // Measured over the merged surface, all three files sit at 100/100/100
+        // from the shell's own units, so this pins what MOTIR-1812 already earned
+        // rather than asking for catch-up tests — the point of the gate is that
+        // the NEXT action entry cannot quietly ship an unexercised row.
+        'lib/planning/aiCallout.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/AiCalloutMenu.tsx': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/PlanWithAIFab.tsx': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
