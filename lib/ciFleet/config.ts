@@ -1,3 +1,5 @@
+import { MOTIR_FLEET_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
+
 // The runner FLEET's scoping seam (Story MOTIR-1916 · MOTIR-1920) — WHICH
 // queued CI jobs Motir boots an ephemeral runner for.
 //
@@ -44,6 +46,18 @@
  *
  * `motir-runner` satisfies both constraints. §M names it explicitly.
  *
+ * ⚠️ ONE SOURCE, ALIASED HERE (MOTIR-1964). The value is the meter's
+ * `MOTIR_FLEET_RUNNER_LABEL`, whose own doc says it is exported precisely so
+ * "the meter and the provisioner cannot drift". This module originally declared
+ * a SECOND `'motir-runner'` literal — MOTIR-1920 and MOTIR-1923 were in flight
+ * together and each defined the label, so the merge produced exactly the drift
+ * the export exists to prevent. Two literals that agree today are not one
+ * constant: if this one were edited alone, `isMotirFleetJob` would provision for
+ * a label `classifyRunner` no longer recognises, and every fleet job would be
+ * metered as `unknown` — the §M "numbers right, attribution wrong" failure, now
+ * reachable by a single-line edit. The alias keeps this module's name (the
+ * provisioning path reads better for it) while making the value un-drifting.
+ *
  * A CONSTANT, not configuration: the fleet's label has to agree in three places
  * that cannot negotiate at runtime — the runner's own `--no-default-labels`
  * registration (MOTIR-1921), the org variable the workflows read (MOTIR-1925 /
@@ -51,7 +65,7 @@
  * failure mode of drift is "no runner is ever provisioned and every job queues
  * for 24 hours", which looks like an outage rather than a misconfiguration.
  */
-export const MOTIR_RUNNER_LABEL = 'motir-runner';
+export const MOTIR_RUNNER_LABEL = MOTIR_FLEET_RUNNER_LABEL;
 
 /**
  * Does this job's REQUESTED runner labels name the Motir fleet? The §O gate,
