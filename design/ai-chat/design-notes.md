@@ -939,12 +939,34 @@ _Plan with AI_, with _Ask about this project_ (MOTIR-1343) and _Help with a task
 ONLY entrance this touches** — the TopNav hero pill, ⌘K, the work-item door
 (MOTIR-910) and the roadmap door (MOTIR-1011) are all unchanged.
 
-**Every row is an INTENT into the ONE universal surface.** Motir has exactly one
-AI conversation surface — the `PlanningWorkspace` hosted at `/planning`
-(MOTIR-1729) — and the callout is a **mode picker in front of it**, never a
-launcher for bespoke per-feature chat panels. Each row is a real `<a href>` into
-that workspace carrying an intent, exactly as _Plan with AI_ does today through
-`planningWorkspaceHref()`.
+### ⭐ EVERY ROW OPENS THE SAME SURFACE — the menu only says what the callout CAN DO (Yue, 2026-08-01)
+
+Motir has exactly one AI conversation surface — the `PlanningWorkspace` hosted at
+`/planning` (MOTIR-1729) — and **all three rows navigate to that one surface with
+the same context-derived href**, via the shipped `planningWorkspaceHref()`. The
+callout is **not a mode picker and not a router**: it is a **capability list**, an
+answer to "what can I ask this thing?", and the row the user picks does **not**
+narrow what the conversation can be about.
+
+**Why.** The conversation is free-form and **the user can switch topic
+mid-conversation** — plan the sprint, then ask what blocks a card, then get help
+drafting its description, all in one thread. A mode chosen at the door would be
+wrong within one turn, and enforcing it would fragment the one surface the product
+deliberately has. So the door does not choose; it only **advertises**. The topic is
+chosen — and re-chosen — inside the conversation.
+
+Three consequences the code subtask must honour:
+
+- **One href, shared by every row.** Not three destinations, not three modes, not a
+  thread locked to one kind of question. A row is a **label**, not a route.
+- **A row appears when the CAPABILITY exists behind that one surface** (MOTIR-1343
+  / MOTIR-1344) — what a story adds is what the workspace can do, never where the
+  row points.
+- **A row may seed the composer's starter phrasing**, but it never constrains the
+  thread. The composer slot is the same door with the first turn already typed.
+
+Still forbidden in the other direction: a row that opens a **bespoke per-feature
+chat panel**. Every row is a door to the ONE workspace.
 
 **It DEEPENS the sketch, it does not re-invent it.** `planning-workspace.mock.html`
 sheet 4 ("B — Floating 'M': the universal AI callout") already draws the callout
@@ -1002,7 +1024,7 @@ z-40`, `rounded-full`, the radial accent fill + pink aura + the 3.2 s
 
 ### ⚠️ The interim menu is deliberate — and the fast lane is NOT lost
 
-The menu ships with **one** row, because one action exists. That is a real cost
+The menu ships with **one** row, because one capability exists. That is a real cost
 (an extra click on the orb) and it is paid on purpose: the header names the
 surface so the single row reads as "the first of several", and the architecture
 that holds all three actions is built once rather than retrofitted. **The direct
@@ -1054,15 +1076,15 @@ responsive rule.
 
 ### Primitives composed (no hand-rolling)
 
-| Element             | Built from                                                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| the orb             | the shipped `components/planning/PlanWithAIFab.tsx` — fill, aura, pulse, position, size verbatim; only the ELEMENT changes           |
-| the panel           | `Popover` / `Popover.Trigger` / `Popover.Content` from `@motir/design-system` (re-exported at `components/ui/Popover.tsx`)           |
-| header block + rows | the shipped `app/(authed)/_components/UserMenu.tsx` idiom — bordered header, `--el-surface` row hover, muted lucide glyph            |
-| the destination     | `lib/planning/launcher.ts` — `planningWorkspaceHref()` / `PLANNING_WORKSPACE_PATH`; no new route, no new mode                        |
-| the composer slot   | `Input` shape tokens (`--radius-input`, `--height-control`); its behaviour is MOTIR-1343's to specify — this asset reserves the slot |
-| icons               | lucide-react — `Sparkles`, `MessageCircleQuestion`, `Wrench`, `ArrowUp`                                                              |
-| gating              | unchanged — `(authed)/layout.tsx` mounts the orb only under `isMotirAiConfigured() && activeProject`                                 |
+| Element             | Built from                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the orb             | the shipped `components/planning/PlanWithAIFab.tsx` — fill, aura, pulse, position, size verbatim; only the ELEMENT changes                                               |
+| the panel           | `Popover` / `Popover.Trigger` / `Popover.Content` from `@motir/design-system` (re-exported at `components/ui/Popover.tsx`)                                               |
+| header block + rows | the shipped `app/(authed)/_components/UserMenu.tsx` idiom — bordered header, `--el-surface` row hover, muted lucide glyph                                                |
+| the destination     | `lib/planning/launcher.ts` — `planningWorkspaceHref()` / `PLANNING_WORKSPACE_PATH`; **ONE href shared by every row** — no new route, no new mode, no per-row destination |
+| the composer slot   | `Input` shape tokens (`--radius-input`, `--height-control`); its behaviour is MOTIR-1343's to specify — this asset reserves the slot                                     |
+| icons               | lucide-react — `Sparkles`, `MessageCircleQuestion`, `Wrench`, `ArrowUp`                                                                                                  |
+| gating              | unchanged — `(authed)/layout.tsx` mounts the orb only under `isMotirAiConfigured() && activeProject`                                                                     |
 
 ### Token / a11y discipline
 

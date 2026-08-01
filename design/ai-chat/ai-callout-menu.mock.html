@@ -3,11 +3,18 @@
   THE "M" UNIVERSAL AI CALLOUT MENU — the orb becomes a TRIGGER (MOTIR-1811,
   Story MOTIR-1342).
 
-  This is NOT a new AI surface. Motir has exactly ONE AI conversation surface —
-  the `PlanningWorkspace` hosted at `/planning` (MOTIR-1729, shipped). The
-  callout is a MODE PICKER in front of it: every row navigates into that one
-  workspace carrying an intent, exactly as the shipped orb does today through
-  `planningWorkspaceHref()`.
+  This is NOT a new AI surface, and NOT a mode picker. Motir has exactly ONE AI
+  conversation surface — the `PlanningWorkspace` hosted at `/planning`
+  (MOTIR-1729, shipped) — and EVERY row opens THAT one surface, with the same
+  context-derived href from the shipped `planningWorkspaceHref()`. The menu's
+  only job is to say WHAT THE CALLOUT CAN DO; it does not narrow what the
+  conversation is about.
+
+  Why (Yue, 2026-08-01): the conversation is free-form and the user can switch
+  topic mid-conversation — plan the sprint, then ask what blocks a card, then
+  get help drafting it, all in one thread. A mode chosen at the door would be
+  wrong within one turn, so the door only advertises; the topic is chosen (and
+  re-chosen) in the conversation itself.
 
   It DEEPENS the sketch already in `design/ai-chat/planning-workspace.mock.html`
   sheet 4 ("B — Floating 'M': the universal AI callout") — that sheet's `.ai-menu`
@@ -1084,12 +1091,20 @@
           <i>Help with a task</i> (MOTIR-1344) mounting into the same menu as their stories land.
         </p>
         <p>
-          <b>Every row is an intent into the ONE universal surface.</b> Motir has exactly one AI
-          conversation surface — the <code>PlanningWorkspace</code> at
-          <code>/planning</code> (MOTIR-1729). The callout is a <b>mode picker in front of it</b>,
-          never a launcher for bespoke per-feature chat panels: each row is a real link into that
-          workspace carrying an intent, exactly as the <i>Plan with AI</i> row does through
-          <code>planningWorkspaceHref()</code>.
+          <b>⭐ EVERY ROW OPENS THE SAME SURFACE. The menu only says what the callout can DO.</b>
+          Motir has exactly one AI conversation surface — the <code>PlanningWorkspace</code> at
+          <code>/planning</code> (MOTIR-1729) — and all three rows navigate to
+          <b>that one surface, with the same context-derived href</b>, via the shipped
+          <code>planningWorkspaceHref()</code>. The callout is <b>not</b> a mode picker and
+          <b>not</b> a router: it is a <b>capability list</b> — an answer to “what can I ask this
+          thing?” — and the row you pick does not narrow what the conversation can be about.
+        </p>
+        <p>
+          <b>Why (Yue, 2026-08-01):</b> the conversation is free-form, and
+          <b>the user can switch topic mid-conversation</b> — plan the sprint, then ask what blocks
+          a card, then get help drafting its description, all in one thread. A mode chosen at the
+          door would be wrong within one turn, and enforcing it would fragment the one surface the
+          product deliberately has. So the door does not choose; it only <b>advertises</b>.
         </p>
         <p>
           It <b>deepens</b> <code>planning-workspace.mock.html</code> sheet 4 (“B — Floating ‘M’:
@@ -1434,8 +1449,10 @@
               </div>
               <ul class="spec">
                 <li>
-                  One row, because one action exists. The header names the surface so the single row
-                  reads as “the first of several”, not “a menu of one”.
+                  One row, because one CAPABILITY exists. The header names the surface so the single
+                  row reads as “the first of several”, not “a menu of one”. The destination is
+                  already the same one every later row will use — nothing about the wiring changes
+                  when a row is added.
                 </li>
                 <li>
                   <b>No composer yet</b> — the “Ask Motir anything…” field belongs to the first row
@@ -1495,19 +1512,26 @@
               </div>
               <ul class="spec">
                 <li>
-                  <b>Plan with AI</b> → <code>/planning?mode=…&amp;from=project</code> — the shipped
-                  <code>planningWorkspaceHref()</code>, unchanged.
+                  <b>All three rows resolve to the SAME href</b> —
+                  <code>planningWorkspaceHref(context)</code> for the surface the user is on. Not
+                  three destinations, not three modes: one surface, three ways of saying what it is
+                  for.
                 </li>
                 <li>
-                  <b>Ask about this project</b> → the same workspace in its ASK mode (MOTIR-1343 /
-                  MOTIR-1815 own what that mode renders).
+                  <b>A row is a LABEL, not a route.</b> <i>Ask about this project</i> and
+                  <i>Help with a task</i> appear when the workspace can actually do those things
+                  (MOTIR-1343 / MOTIR-1344) — what changes is the CAPABILITY behind the one surface,
+                  never where the row points.
                 </li>
                 <li>
-                  <b>Help with a task</b> → the same workspace in its item-scoped mode (MOTIR-1344).
+                  <b>The topic is chosen in the conversation, not at the door</b> — the user opens
+                  the workspace and says what they want, and can change it at any turn. A row may
+                  seed the composer’s starter phrasing, but it never locks the thread to one kind of
+                  question.
                 </li>
                 <li>
-                  <b>The composer</b> is a shortcut past the rows: typing and submitting opens the
-                  workspace with that text as the first turn. Its mode resolution is 1343’s to
+                  <b>The composer</b> is the same door with the first turn already typed: submitting
+                  opens the same workspace carrying that text. Its wiring is MOTIR-1343’s to
                   specify; this asset only reserves the slot.
                 </li>
               </ul>
@@ -1559,7 +1583,16 @@
                 </li>
                 <li>
                   Equally forbidden: a row that opens a <b>bespoke per-feature chat panel</b>. Every
-                  row is an intent into the ONE workspace.
+                  row is a door to the ONE workspace.
+                </li>
+                <li>
+                  <b
+                    >And forbidden in the other direction: three rows that open three DIFFERENT
+                    things</b
+                  >
+                  — separate routes, separate modes, or a thread locked to one kind of question. The
+                  user switches topic mid-conversation, so a choice made at the door would be stale
+                  a turn later. The rows differ in what they SAY, never in where they GO.
                 </li>
               </ul>
             </div>
@@ -1744,8 +1777,9 @@
                 <li>
                   <b>Activate</b> — <span class="kbd">Enter</span> follows the row’s
                   <code>href</code> into <code>/planning</code>; the panel closes on navigation.
-                  <span class="kbd">⌘</span>/middle-click opens it in a new tab, because the row is
-                  a real link.
+                  Every row carries the SAME href, so which one is activated changes nothing about
+                  where the user lands. <span class="kbd">⌘</span>/middle-click opens it in a new
+                  tab, because the row is a real link.
                 </li>
                 <li><b>Dismiss</b> — <span class="kbd">Esc</span>, or a click anywhere outside.</li>
                 <li>
@@ -2125,7 +2159,8 @@
                   <td>the destination</td>
                   <td>
                     <code>lib/planning/launcher.ts</code> — <code>planningWorkspaceHref()</code> /
-                    <code>PLANNING_WORKSPACE_PATH</code>; no new route, no new mode
+                    <code>PLANNING_WORKSPACE_PATH</code>; <b>ONE href, shared by every row</b>. No
+                    new route, no new mode, no per-row destination
                   </td>
                 </tr>
                 <tr>
