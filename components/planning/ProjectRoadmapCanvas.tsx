@@ -98,6 +98,10 @@ export interface ProjectRoadmapCanvasProps {
    * The sprint-scoped read (MOTIR-1381) re-roots at the topmost in-sprint members, so
    * a sprint committed to one story's subtree hides the whole sprint behind one drill.
    *
+   * "Exactly one node" counts the level's WORK — a node flagged `decorative` (the
+   * pinned planning-origin cluster) is not a choice and does not hold the descent
+   * back (MOTIR-1824).
+   *
    * **Defaults to `false`, and that default is load-bearing.** This canvas is the
    * reusable FOUNDATION (MOTIR-1194) behind five consumers; an onboarding canvas that
    * silently walked past its single station would be a regression. Only the work-item
@@ -297,7 +301,16 @@ export function ProjectRoadmapCanvas({
         // on resolves — which is what makes a chained epic → story → subtasks descent
         // read as ONE arrival. The state change happens in this async CONTINUATION,
         // never as a synchronous setState in the effect body (the CI lint rule).
-        const only = lvl.nodes.length === 1 ? lvl.nodes[0] : undefined;
+        //
+        // The count is over the level's WORK, not its node array (MOTIR-1824): a
+        // `decorative` node — the planning-origin cluster an ONBOARDED project pins
+        // at its root level — is provenance drawn beside the road, not a branch in
+        // it. Counting it made every onboarded project's root level two nodes, so
+        // this feature silently never fired for them; the design's own rule for the
+        // negative case is "there is a real branch; the choice is the user's"
+        // (`auto-drill.mock.html` panel E), and a pinned annotation is neither.
+        const choices = lvl.nodes.filter((n) => n.decorative !== true);
+        const only = choices.length === 1 ? choices[0] : undefined;
         if (
           autoDescendRef.current &&
           only?.drillable === true &&

@@ -332,6 +332,9 @@ export interface SingleStorySprintRoadmapSeed {
  * Project scope is deliberately MULTI-root (two epics), so the same fixture also
  * proves the negative half of step 4: switching back to Whole project renders the
  * multi-root level with no descend.
+ *
+ * The project is ONBOARDED (MOTIR-1824), so its root levels also carry the pinned
+ * planning-origin cluster — the shape the descent originally never fired on.
  */
 export async function seedSingleStorySprintRoadmap(
   email: string,
@@ -398,13 +401,17 @@ export async function seedSingleStorySprintRoadmap(
     ctx,
   );
 
-  // Deliberately NOT onboarded (no `onboardingRanAt`) — the same choice
-  // `seedSprintRoadmap` makes. The planning-origin cluster is pinned at the ROOT
-  // level of an onboarded project (`includeOrigin: parentId === null &&
-  // showPlanningOrigin` in `WorkItemRoadmap`), and it is a NODE: it would make
-  // this sprint's root two nodes, so the level would no longer be the
-  // single-drillable-parent shape under test. The motivating real case — this
-  // project's own manually-built tree — is likewise not onboarded.
+  // ONBOARDED (MOTIR-1824) — and that is now the POINT, not a caveat. The
+  // planning-origin cluster is pinned at the root level of a project that
+  // onboarded (`includeOrigin: parentId === null && showPlanningOrigin` in
+  // `WorkItemRoadmap`), and it is a NODE. While the auto-descend counted the
+  // level's whole node array, that extra node made this sprint's root two nodes
+  // and the descent never fired here — so this fixture had to seed a
+  // never-onboarded project to exercise the feature at all, which meant the
+  // browser proof covered only the projects the bug did not affect. The descent
+  // now counts the level's WORK (the cluster is `decorative`), so the harder,
+  // more common shape is what the acceptance run drives.
+  await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: new Date() } });
 
   return {
     email,

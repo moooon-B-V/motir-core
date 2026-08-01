@@ -46,6 +46,14 @@ export interface ProjectCanvasNode {
   /** This node is READY to start (MOTIR-1417) — the LOCATE control's fallback target
    *  when there is no frontier; multiple ready nodes are cycled. */
   ready?: boolean;
+  /** This node is DECORATION, not a member of the level's work (MOTIR-1824) — a
+   *  pinned annotation the consumer draws ALONGSIDE the level (today: the
+   *  planning-origin cluster, which says where the tree came from). It renders,
+   *  selects, drags and searches like any other node; the ONE thing it is excluded
+   *  from is the question "does this level offer the user a CHOICE?", which
+   *  `autoDescendSingleParent` asks. A ghost anchor for an off-level blocker is NOT
+   *  decorative — it names a real, peekable work item and is a reason to stop. */
+  decorative?: boolean;
   /** Explicit world position (fixed stations own theirs); else the deterministic
    *  auto-layout places the node. */
   x?: number;

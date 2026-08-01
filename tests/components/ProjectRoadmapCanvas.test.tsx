@@ -552,6 +552,76 @@ describe('ProjectRoadmapCanvas', () => {
       expect(noCrumbNav()).toBeNull();
     });
 
+    // MOTIR-1824 — the ONBOARDED-project shape. `buildWorkItemLevel` pins the
+    // planning-origin cluster onto the ROOT level of a project that onboarded, as a
+    // `decorative` node. It is provenance drawn beside the road, never a branch in
+    // it, so it must not answer the "does this level offer a choice?" question. It
+    // did, and the whole feature silently never fired for an onboarded project.
+    const origin = (): ProjectCanvasNode => ({
+      ...node('ORIGIN', 'Planning origin'),
+      decorative: true,
+    });
+
+    it('DESCENDS past a decorative node — [origin + one drillable story] is still one choice', async () => {
+      const onboarded: Record<string, RoadmapLevel> = {
+        __root__: { nodes: [origin(), node('P', 'Parent story', true)], deps: [] },
+        P: { nodes: [node('S1', 'Story one'), node('S2', 'Story two')], deps: [] },
+      };
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serve(onboarded)}
+          autoDescendSingleParent
+          rootLabel="Roadmap"
+        />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(el('S2')).toBeTruthy();
+      // Neither the skipped story NOR the cluster pinned beside it was painted —
+      // the arrival is the same one a never-onboarded project gets.
+      expect(el('P')).toBeNull();
+      expect(el('ORIGIN')).toBeNull();
+      expect(crumbLabels()).toEqual(['Roadmap', 'P']);
+    });
+
+    it('does NOT descend when a decorative node sits beside TWO stories (a real branch)', async () => {
+      const twoStories: RoadmapLevel = {
+        nodes: [origin(), node('P', 'Parent story', true), node('Q', 'Other story', true)],
+        deps: [],
+      };
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={() => Promise.resolve(twoStories)}
+          autoDescendSingleParent
+        />,
+      );
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      await act(async () => {});
+      expect(el('Q')).toBeTruthy();
+      expect(el('ORIGIN')).toBeTruthy(); // decoration still RENDERS; it is only uncounted
+      expect(noCrumbNav()).toBeNull();
+    });
+
+    // The counting rule is "not decorative", NOT "drillable" — a level holding one
+    // drillable story AND a childless bug offers a real choice (open the story, or
+    // read the bug), and skipping it would hide the bug behind a card the user never
+    // saw. This is the shape the narrower "count only drillable nodes" fix breaks.
+    it('does NOT descend when the only drillable node shares the level with a LEAF', async () => {
+      const storyAndLoose: RoadmapLevel = {
+        nodes: [origin(), node('P', 'Parent story', true), node('B', 'Loose bug')],
+        deps: [],
+      };
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={() => Promise.resolve(storyAndLoose)}
+          autoDescendSingleParent
+        />,
+      );
+      expect(await screen.findByText('Loose bug')).toBeTruthy();
+      await act(async () => {});
+      expect(el('P')).toBeTruthy();
+      expect(noCrumbNav()).toBeNull();
+    });
+
     it('does NOT descend when the single node is NOT drillable (a childless leaf)', async () => {
       const lone: RoadmapLevel = { nodes: [node('A', 'Lonely leaf')], deps: [] };
       render(
