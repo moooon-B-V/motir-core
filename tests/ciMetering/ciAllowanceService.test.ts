@@ -63,8 +63,19 @@ const NOW_WITHIN_JULY_2026 = new Date('2026-07-15T12:00:00.000Z');
  * `AUGUST_2026` literals stay where a test is deliberately ABOUT a specific
  * period (the boundary reset, the charge/state assertions) — those pass their
  * period in explicitly, so they never depend on the wall clock.
+ *
+ * ⚠️ IT IS A FUNCTION, NOT A CONST, AND THAT IS LOAD-BEARING. A module-level
+ * `const … = periodStartFor(new Date())` is evaluated at IMPORT time — before
+ * `beforeEach` pins the clock (MOTIR-1950) — so it would capture the REAL month
+ * while the gate, running under the pinned clock, reads the pinned one. The two
+ * halves would disagree and re-create the very bug both of them fixed: that
+ * combination landed on `main` on 2026-08-01 and turned it red again within the
+ * hour. Resolving it per-call keeps it consistent with whatever clock is in
+ * force at the moment the gate is exercised — pinned or real.
  */
-const CURRENT_PERIOD = periodStartFor(new Date());
+function currentGatePeriod(): Date {
+  return periodStartFor(new Date());
+}
 
 interface Fixture {
   organizationId: string;
@@ -267,7 +278,7 @@ describe('the pool is derived from MEMBERSHIP (§1, §4.2, §4.3)', () => {
     // And it is never refused, even at a negative balance. Meter into the
     // period the GATE reads too, so this asserts the meta bypass rather than an
     // empty period (MOTIR-1951).
-    await meter(fx, 5000, CURRENT_PERIOD);
+    await meter(fx, 5000, currentGatePeriod());
     await expect(
       ciAllowanceService.assertDispatchAllowed({
         userId: fx.ownerUserId,
@@ -673,7 +684,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
   it('refuses dispatch with a typed error carrying WHY', async () => {
     const fx = await seedOrg({ members: 1 });
     stubMotirAi({ balance: 0 });
-    await meter(fx, 1200, CURRENT_PERIOD);
+    await meter(fx, 1200, currentGatePeriod());
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
@@ -735,7 +746,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
   it('does NOT refuse while merely drawing on credits — the two thresholds are distinct (§6.1)', async () => {
     const fx = await seedOrg({ members: 1 });
     stubMotirAi({ balance: 500 });
-    await meter(fx, 1200, CURRENT_PERIOD);
+    await meter(fx, 1200, currentGatePeriod());
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
@@ -748,7 +759,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
   it('does NOT refuse inside the allowance even at a zero balance', async () => {
     const fx = await seedOrg({ members: 1 });
     stubMotirAi({ balance: 0 });
-    await meter(fx, 500, CURRENT_PERIOD);
+    await meter(fx, 500, currentGatePeriod());
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
@@ -766,7 +777,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
         throw new Error('ECONNRESET');
       }),
     );
-    await meter(fx, 1200, CURRENT_PERIOD);
+    await meter(fx, 1200, currentGatePeriod());
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
