@@ -244,6 +244,14 @@ divided by the Linux 2-core x64 price:
 | Linux 2-core arm64 | $0.005             | **×0.83**  | $0.005 / $0.006 |
 | Windows 2-core x64 | $0.010             | **×1.67**  | $0.010 / $0.006 |
 | macOS 3/4-core     | $0.062             | **×10.33** | $0.062 / $0.006 |
+| **Motir fleet**    | ~$0.001 (Motir's)  | **×1.00**  | **not a ratio** |
+
+> ⚠️ The **Motir fleet** row is the one entry whose multiplier is a **product
+> decision, not a cost ratio** — parity with the numéraire, because the fleet's spec is
+> Linux-2-core-equivalent. Its price column records **Motir's own cost**, which the
+> multiplier is deliberately not a ratio of. Full rationale in the amendment's **§M**; the
+> row ships in `lib/ciMetering/runnerRates.ts` (MOTIR-1923) carrying `basis: 'product_parity'`
+> so the distinction is machine-checked rather than remembered.
 
 **3.2 · GitHub's own `Linux ×1 / Windows ×2 / macOS ×10` multipliers are the WRONG basis,
 and MOTIR-1898's recommendation to adopt them was mistaken.** Those are the rates at which

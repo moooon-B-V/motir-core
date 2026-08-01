@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeRunUsage, type MeteredJob } from '@/lib/ciMetering/normalize';
+import { MOTIR_FLEET_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
 
 // The metering arithmetic (Story MOTIR-1775 · MOTIR-1896) —
 // `docs/decisions/ci-minutes-allowance.md` §3 + §5.8. Pure: no DB, no clock.
@@ -187,6 +188,89 @@ describe('normalizeRunUsage — the audit trail (§3.3)', () => {
     );
     expect(usage.linearEquivalentMinutes).toBe(10);
     expect(usage.unpricedFamilies).toEqual(['macos']);
+  });
+});
+
+describe('normalizeRunUsage — a MOTIR FLEET run (MOTIR-1923 · ADR §M)', () => {
+  // The fleet's rate takes effect 2026-08-01, so a fleet run is metered at an
+  // instant after it. Pinned, never `new Date()` — see runnerRates.test.ts.
+  const FLEET_COMPLETED_AT = new Date('2026-08-15T12:00:00.000Z');
+
+  /** A job of `minutes` wall clock on the fleet, completing in the fleet window. */
+  function fleetJob(id: string, minutes: number): MeteredJob {
+    const startedAt = new Date('2026-08-15T11:00:00.000Z');
+    return {
+      id,
+      name: id,
+      startedAt,
+      completedAt: new Date(startedAt.getTime() + minutes * 60_000),
+      labels: [MOTIR_FLEET_RUNNER_LABEL],
+    };
+  }
+
+  it('meters the fleet at ×1.00 as a PRICED family — nothing to warn about', () => {
+    // The acceptance criterion this file owns: a fixture job carrying the fleet
+    // label produces an EMPTY `unpricedFamilies`, which is what the meter service
+    // logs its "unpriced runner family" warning on. Before this row it was
+    // `['unknown']` on every single fleet run.
+    const usage = normalizeRunUsage(
+      [fleetJob('build', 4), fleetJob('test', 6)],
+      FLEET_COMPLETED_AT,
+    );
+
+    expect(usage.unpricedFamilies).toEqual([]);
+    expect(usage.billableMinutes).toBe(10);
+    expect(usage.linearEquivalentMinutes).toBe(10);
+  });
+
+  it('retains raw wall clock, the fleet family and the multiplier applied (§3.3)', () => {
+    const usage = normalizeRunUsage([fleetJob('build', 4)], FLEET_COMPLETED_AT);
+
+    expect(usage.breakdown).toEqual([
+      {
+        family: 'motir_fleet',
+        multiplier: 1,
+        billableMinutes: 4,
+        rawWallClockSeconds: 240,
+        linearEquivalentMinutes: 4,
+        jobCount: 1,
+        unpriced: false,
+      },
+    ]);
+  });
+
+  it('attributes fleet minutes to their OWN family, never to GitHub-hosted Linux', () => {
+    // A mixed run is the case that would hide the bug: if the fleet classified as
+    // `linux_x64` the totals would still be right while the breakdown claimed
+    // GitHub-hosted minutes Motir never paid for (§M's "worst kind of correct").
+    const usage = normalizeRunUsage(
+      [fleetJob('fleet', 5), jobOfMinutes('hosted', 5, ['ubuntu-latest'])],
+      FLEET_COMPLETED_AT,
+    );
+
+    expect(usage.breakdown.map((e) => [e.family, e.billableMinutes])).toEqual([
+      ['linux_x64', 5],
+      ['motir_fleet', 5],
+    ]);
+    expect(usage.unpricedFamilies).toEqual([]);
+  });
+
+  it('a fleet run predating the row still warns — the row is not a backfill (§3.3)', () => {
+    // Adding the row today leaves already-charged history exactly as charged.
+    const usage = normalizeRunUsage([fleetJob('build', 4)], new Date('2026-07-15T00:00:00.000Z'));
+
+    expect(usage.linearEquivalentMinutes).toBe(4); // same ×1.00 …
+    expect(usage.unpricedFamilies).toEqual(['motir_fleet']); // … but it warns
+  });
+
+  it('an unknown runner alongside the fleet STILL warns — §3.4 is intact', () => {
+    // The fleet row must not suppress the safety path it sits next to.
+    const usage = normalizeRunUsage(
+      [fleetJob('fleet', 3), jobOfMinutes('gpu', 3, ['some-vendor-gpu'])],
+      FLEET_COMPLETED_AT,
+    );
+
+    expect(usage.unpricedFamilies).toEqual(['unknown']);
   });
 });
 
