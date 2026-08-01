@@ -1,0 +1,2208 @@
+<!doctype html>
+<!--
+  THE "M" UNIVERSAL AI CALLOUT MENU — the orb becomes a TRIGGER (MOTIR-1811,
+  Story MOTIR-1342).
+
+  This is NOT a new AI surface. Motir has exactly ONE AI conversation surface —
+  the `PlanningWorkspace` hosted at `/planning` (MOTIR-1729, shipped). The
+  callout is a MODE PICKER in front of it: every row navigates into that one
+  workspace carrying an intent, exactly as the shipped orb does today through
+  `planningWorkspaceHref()`.
+
+  It DEEPENS the sketch already in `design/ai-chat/planning-workspace.mock.html`
+  sheet 4 ("B — Floating 'M': the universal AI callout") — that sheet's `.ai-menu`
+  (Motir AI header · three icon+title+description rows · an "Ask Motir anything…"
+  field) is the settled visual language and is reproduced here 1:1 in intent.
+  What this asset adds is BUILD depth: anchoring, the orb's trigger-role change,
+  open/close + keyboard, the interim vs target states, responsive placement,
+  gating, motion, dark, and the surface-material behaviour.
+
+  Drawn against SHIPPED REALITY (design-against-shipped-reality / notes #73).
+  Before anything was drawn, the running app was rendered — production build,
+  signed in, an active project, MOTIR_AI_URL + MOTIR_AI_SERVICE_TOKEN set so the
+  launcher mounts — and both surfaces this design composes were screenshotted:
+    · `PlanWithAIFab`  — the orb: 56×56 (`h-14 w-14`), `fixed right-5 bottom-5
+      z-40`, `rounded-full`, the radial accent fill + pink aura + 3.2s pulse
+    · `UserMenu`       — the shipped `Popover` shell menu whose ROW IDIOM and
+      KEYBOARD MODEL this menu mirrors (240px panel, `--radius-card`,
+      `--shadow-elevated`, bordered header block, `--radius-control` rows with
+      `--el-surface` hover, 16px muted lucide icon, 14px `--el-text` label)
+  Every strip below reuses that exact shipped markup — never a stylised redraw.
+
+  TOKENS ARE GENERATED, NOT TYPED. The `:root` / `[data-theme='dark']` /
+  `:root,[data-appearance-scope]` blocks below are extracted verbatim from
+  `packages/design-system/theme.css` (Tier-0 `--color-*`, the shape/type scale,
+  and the Tier-3 `--el-*` layer), and every icon is a real `lucide-react`
+  `__iconNode` path. So this mock cannot drift from the shipped design system:
+  no invented hue, no retyped hex, no hand-drawn glyph. Colour flows through
+  `--el-*` only; shape through the element-semantic tokens
+  (`--radius-card|control|input|badge`, `--spacing-control-x/y`, `--shadow-*`).
+  The dark panels carry `data-theme="dark" data-appearance-scope` together — the
+  Tier-3 layer is declared on `:root,[data-appearance-scope]`, so a nested
+  subtree must re-emit it to pick the Tier-0 dark flip up.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The "M" universal AI callout menu — orb → Plan · Ask · Help</title>
+    <style>
+      /* ── Tier 0 (light) — generated verbatim from packages/design-system/theme.css @theme ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Tier 0 (dark) — theme.css [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* ── Tier 3 (--el-*) — theme.css :root,[data-appearance-scope] ── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 28px 24px 56px;
+        background: var(--el-canvas);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+        align-self: center;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .panel-body {
+        padding: 20px 18px 22px;
+      }
+      .note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note + .note {
+        margin-top: 8px;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      .cols {
+        display: grid;
+        gap: 18px;
+      }
+      .cols > * {
+        min-width: 0; /* the min-w-0 rule — a grid child must be allowed to shrink */
+      }
+      .c2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .c3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .sub {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+        color: var(--el-text-muted);
+        margin: 0 0 9px;
+      }
+      .stage {
+        background: var(--el-canvas);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 16px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 10.5px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+      }
+      .tag.now {
+        background: var(--el-tint-mint);
+      }
+      .tag.next {
+        background: var(--el-tint-lavender);
+      }
+      .tag.keep {
+        background: var(--el-tint-sky);
+      }
+      .tag.gone {
+        background: var(--el-tint-rose);
+      }
+      .tag.warn {
+        background: var(--el-tint-peach);
+      }
+
+      /* ── the faux app screen (mirrors the shipped authed shell) ────── */
+      .app {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+        height: 306px;
+      }
+      .app .topnav > * {
+        white-space: nowrap;
+        flex: none;
+      }
+      .app .topnav {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        height: 42px;
+        padding: 0 11px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .app .brand {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .spacer {
+        flex: 1;
+      }
+      .heropill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 26px;
+        padding: 0 10px;
+        border-radius: var(--radius-btn);
+        font-size: 10.5px;
+        font-weight: 650;
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+          0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+      }
+      .app .icbtn {
+        display: inline-grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        font-size: 10.5px;
+      }
+      .app .chip {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 7px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        font-size: 10px;
+        color: var(--el-text-secondary);
+      }
+      .avatar {
+        display: inline-grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10.5px;
+        font-weight: 650;
+      }
+      .app .cols2 {
+        display: flex;
+        height: calc(100% - 42px);
+      }
+      .app .side {
+        width: 148px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .app .side .row {
+        height: 24px;
+        border-radius: var(--radius-control);
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-control-x);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .app .side .row.on {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .app .main {
+        flex: 1;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        min-width: 0;
+      }
+      .app .h {
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+      }
+      .app .line {
+        height: 30px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+      }
+
+      /* ── the shipped orb, reproduced with its own recipe ──────────── */
+      .orb {
+        position: relative;
+        width: 56px;
+        height: 56px;
+        border-radius: 9999px;
+        display: grid;
+        place-items: center;
+        color: var(--el-accent-text);
+        font-weight: 700;
+        font-size: 20px;
+        line-height: 1;
+        background-image: radial-gradient(
+          circle at 33% 27%,
+          color-mix(in srgb, var(--el-accent-text) 32%, var(--el-accent)),
+          var(--el-accent) 56%,
+          color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+        );
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+          0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+          0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+      }
+      .orb.floating {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+      }
+      .orb .pulse {
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        box-shadow: 0 0 0 9px color-mix(in srgb, var(--el-highlight) 22%, transparent);
+      }
+      .orb.hover {
+        transform: scale(1.05);
+      }
+      .orb.pressed {
+        transform: scale(0.95);
+      }
+      .orb.focus {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .orb.open .pulse {
+        box-shadow: none;
+      }
+      .orb.open::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--el-accent-text) 55%, transparent);
+      }
+
+      /* ── the callout menu = the shipped Popover.Content ────────────── */
+      .menu {
+        width: 288px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+        padding-bottom: 4px;
+      }
+      .menu .m-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--el-border);
+        background-image: linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--el-accent) 10%, var(--el-page-bg)),
+          color-mix(in srgb, var(--el-highlight) 10%, var(--el-page-bg))
+        );
+      }
+      .menu .m-head .miniorb {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .menu .m-head b {
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+      }
+      .menu .m-rows {
+        padding: 4px;
+      }
+      .m-row {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        text-decoration: none;
+      }
+      .m-row .ic {
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
+        color: var(--el-accent-on-surface);
+      }
+      .m-row .ic svg {
+        width: 15px;
+        height: 15px;
+      }
+      .m-row.primary .ic {
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+        background-color: var(--el-accent);
+      }
+      .m-row .tt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.35;
+      }
+      .m-row .ds {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.4;
+        margin-top: 1px;
+      }
+      .m-row.hover {
+        background: var(--el-surface);
+      }
+      .m-row.focus {
+        background: var(--el-surface);
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: -2px;
+      }
+      .m-row.active {
+        background: var(--el-muted);
+      }
+      .m-ask {
+        margin: 4px 8px 6px;
+        height: var(--height-control);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .m-ask .send {
+        margin-left: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .m-ask .send svg {
+        width: 12px;
+        height: 12px;
+      }
+      .icon {
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ── annotation ────────────────────────────────────────────────── */
+      .anno {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        white-space: nowrap;
+      }
+      ul.spec {
+        margin: 10px 0 0;
+        padding-left: 17px;
+        font-size: 12px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      ul.spec li + li {
+        margin-top: 4px;
+      }
+      ul.spec b {
+        color: var(--el-text-strong);
+      }
+      table.t {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11.5px;
+        margin-top: 10px;
+      }
+      table.t th {
+        text-align: left;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-muted);
+        padding: 0 10px 6px 0;
+        border-bottom: 1px solid var(--el-border);
+        font-weight: 700;
+      }
+      table.t td {
+        padding: 7px 10px 7px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+        line-height: 1.5;
+      }
+      table.t td:first-child {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .swatchrow {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .swatch {
+        width: 236px;
+      }
+      .swatch .cap {
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+        margin-bottom: 5px;
+        font-weight: 650;
+      }
+      .darkwrap {
+        background: var(--el-canvas);
+        border-radius: var(--radius-card);
+        padding: 16px;
+        border: 1px solid var(--el-border);
+      }
+      .phone {
+        width: 390px;
+        height: 620px;
+        transform-origin: top left;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        position: relative;
+        overflow: hidden;
+      }
+      .phone .bar {
+        height: 44px;
+        border-bottom: 1px solid var(--el-border);
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        gap: 6px;
+        font-size: 10.5px;
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .phone .body {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .phone .line {
+        height: 38px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+      }
+      .strike {
+        position: relative;
+        opacity: 0.6;
+      }
+      .strike::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(
+          to bottom right,
+          transparent calc(50% - 1px),
+          var(--el-danger) calc(50% - 1px),
+          var(--el-danger) calc(50% + 1px),
+          transparent calc(50% + 1px)
+        );
+      }
+      .kbd {
+        display: inline-block;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border-radius: var(--radius-kbd);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-strong);
+      }
+      .flow {
+        counter-reset: s;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .flow li {
+        counter-increment: s;
+        position: relative;
+        padding-left: 27px;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .flow li + li {
+        margin-top: 8px;
+      }
+      .flow li::before {
+        content: counter(s);
+        position: absolute;
+        left: 0;
+        top: 1px;
+        width: 19px;
+        height: 19px;
+        border-radius: 9999px;
+        display: grid;
+        place-items: center;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .flow li b {
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <symbol id="i-message-circle-question" viewBox="0 0 24 24">
+          <path
+            d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"
+          />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-wrench" viewBox="0 0 24 24">
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"
+          />
+        </symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24">
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 24 24">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <div class="boardhead">
+        <h1>The “M” universal AI callout — the orb becomes a trigger</h1>
+        <p>
+          The shipped floating <b>“M”</b> orb (<code>PlanWithAIFab</code>, MOTIR-1299) navigates
+          <b>straight</b> to the planning workspace today. This design turns it into the
+          <b>trigger for a small anchored menu</b> — “the home of all AI” — whose first action is
+          <i>Plan with AI</i>, with <i>Ask about this project</i> (MOTIR-1343) and
+          <i>Help with a task</i> (MOTIR-1344) mounting into the same menu as their stories land.
+        </p>
+        <p>
+          <b>Every row is an intent into the ONE universal surface.</b> Motir has exactly one AI
+          conversation surface — the <code>PlanningWorkspace</code> at
+          <code>/planning</code> (MOTIR-1729). The callout is a <b>mode picker in front of it</b>,
+          never a launcher for bespoke per-feature chat panels: each row is a real link into that
+          workspace carrying an intent, exactly as the <i>Plan with AI</i> row does through
+          <code>planningWorkspaceHref()</code>.
+        </p>
+        <p>
+          It <b>deepens</b> <code>planning-workspace.mock.html</code> sheet 4 (“B — Floating ‘M’:
+          the universal AI callout”); that sketch’s visual language is settled and reproduced here.
+          The orb’s own fill, glow and pulse are <b>reused exactly as shipped</b> — this asset never
+          re-specifies them — and the planning workspace itself belongs to
+          <a href="#">7.20.1 / MOTIR-1193</a>.
+        </p>
+      </div>
+      <!-- ══════════════ 1 — THE ACCESS PATH ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>The access path — the orb in situ, closed then open</h2>
+          <span class="cap"
+            >rendered from the running app · <code>fixed right-5 bottom-5 z-40</code></span
+          >
+        </div>
+        <div class="panel-body">
+          <p class="note">
+            The door is the SHIPPED orb, already afloat bottom-right on every authed screen (<code
+              >(authed)/layout.tsx</code
+            >
+            mounts it under <code>isMotirAiConfigured() &amp;&amp; activeProject</code>). Nothing
+            new is added to the shell — the same 56×56 orb, the same position, the same
+            fill/glow/pulse. What changes is what the click DOES: it opens the callout instead of
+            navigating away.
+          </p>
+          <div class="cols" style="margin-top: 14px; grid-template-columns: 1fr">
+            <div>
+              <p class="sub">Today — one click leaves the page</p>
+              <div class="app">
+                <div class="topnav">
+                  <span class="chip">B&nbsp; Backlog E2E — groo… ▾</span>
+                  <span class="spacer"></span>
+                  <span class="heropill"
+                    ><svg class="icon" style="width: 12px; height: 12px">
+                      <use href="#i-sparkles" />
+                    </svg>
+                    Plan with AI</span
+                  >
+                  <span class="chip">Build in public</span>
+                  <span class="chip">＋ Create</span>
+                  <span class="chip"
+                    ><svg class="icon" style="width: 11px; height: 11px">
+                      <use href="#i-search" />
+                    </svg>
+                    Search ⌘K</span
+                  >
+                  <span class="icbtn">🐞</span>
+                  <span class="icbtn">▭</span>
+                  <span class="icbtn">🔔</span>
+                  <span class="avatar">B</span>
+                </div>
+                <div class="cols2">
+                  <div class="side">
+                    <div class="row">Dashboard</div>
+                    <div class="row">Work Items</div>
+                    <div class="row">Ready</div>
+                    <div class="row">Boards</div>
+                    <div class="row">Roadmap</div>
+                    <div class="row">Plans</div>
+                    <div class="row on">Backlog</div>
+                    <div class="row">Triage</div>
+                    <div class="row">Reports</div>
+                  </div>
+                  <div class="main">
+                    <span class="h">Backlog</span>
+                    <div class="line"></div>
+                    <div class="line"></div>
+                    <div class="line"></div>
+                    <div class="line"></div>
+                  </div>
+                </div>
+                <span class="orb floating"><span class="pulse"></span>M</span>
+                <span class="anno" style="right: 92px; bottom: 26px"
+                  >click →
+                  <code style="background: none; color: inherit; padding: 0"
+                    >/planning?mode=project</code
+                  ></span
+                >
+              </div>
+              <ul class="spec">
+                <li>
+                  The orb is an <code>&lt;a href&gt;</code> whose accessible name is
+                  <b>“Plan with AI”</b> — so the ONE global AI door can only ever mean “plan”.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="sub">
+                After — the orb opens the callout, anchored to itself
+                <span class="tag now">MOTIR-1812 ships this</span>
+              </p>
+              <div class="app">
+                <div class="topnav">
+                  <span class="chip">B&nbsp; Backlog E2E — groo… ▾</span>
+                  <span class="spacer"></span>
+                  <span class="heropill"
+                    ><svg class="icon" style="width: 12px; height: 12px">
+                      <use href="#i-sparkles" />
+                    </svg>
+                    Plan with AI</span
+                  >
+                  <span class="chip">Build in public</span>
+                  <span class="chip">＋ Create</span>
+                  <span class="chip"
+                    ><svg class="icon" style="width: 11px; height: 11px">
+                      <use href="#i-search" />
+                    </svg>
+                    Search ⌘K</span
+                  >
+                  <span class="icbtn">🐞</span>
+                  <span class="icbtn">▭</span>
+                  <span class="icbtn">🔔</span>
+                  <span class="avatar">B</span>
+                </div>
+                <div class="cols2">
+                  <div class="side">
+                    <div class="row">Dashboard</div>
+                    <div class="row">Work Items</div>
+                    <div class="row">Ready</div>
+                    <div class="row">Boards</div>
+                    <div class="row">Roadmap</div>
+                    <div class="row">Plans</div>
+                    <div class="row on">Backlog</div>
+                    <div class="row">Triage</div>
+                    <div class="row">Reports</div>
+                  </div>
+                  <div class="main">
+                    <span class="h">Backlog</span>
+                    <div class="line"></div>
+                    <div class="line"></div>
+                    <div class="line"></div>
+                    <div class="line"></div>
+                  </div>
+                </div>
+                <div style="position: absolute; right: 20px; bottom: 88px">
+                  <div class="menu" style="transform: scale(0.9); transform-origin: bottom right">
+                    <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                    <div class="m-rows">
+                      <span class="m-row primary hover">
+                        <span class="ic"
+                          ><svg class="icon"><use href="#i-sparkles" /></svg
+                        ></span>
+                        <span>
+                          <span class="tt" style="display: block">Plan with AI</span>
+                          <span class="ds" style="display: block"
+                            >Generate, expand or re-plan the project</span
+                          >
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span class="orb floating open"><span class="pulse"></span>M</span>
+                <span class="anno" style="right: 92px; bottom: 26px">trigger stays put</span>
+                <span class="anno" style="right: 296px; bottom: 108px"
+                  >side <b>top</b> · align <b>end</b> · offset 12 ⟶</span
+                >
+              </div>
+              <ul class="spec">
+                <li>
+                  The panel opens <b>upward and right-aligned</b> to the orb — so it never covers
+                  the trigger and never crosses the viewport edge it is already hugging.
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p class="note" style="margin-top: 14px">
+            <b>The direct one-click path is NOT lost.</b> The TopNav hero pill
+            (<code>PlanWithAILauncher</code>) and <span class="kbd">⌘K</span> → “Plan with AI” still
+            go STRAIGHT to the workspace on every screen — see panel&nbsp;8. The orb is the surface
+            that becomes plural; the fast lane stays a single click.
+          </p>
+        </div>
+      </section>
+
+      <!-- ══════════════ 2 — THE ORB'S NEW TRIGGER ROLE ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>The orb’s trigger role — from link to <code>Popover.Trigger</code></h2>
+          <span class="cap">the orb’s own fill · glow · pulse are REUSED, never re-specified</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">What the orb IS, before and after</p>
+              <table class="t">
+                <tr>
+                  <th></th>
+                  <th>Shipped today</th>
+                  <th>After this design</th>
+                </tr>
+                <tr>
+                  <td>element</td>
+                  <td><code>&lt;Link href&gt;</code> (next/link)</td>
+                  <td>
+                    <code>&lt;button type="button"&gt;</code> inside
+                    <code>&lt;Popover.Trigger asChild&gt;</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>accessible name</td>
+                  <td><code>aria-label="Plan with AI"</code></td>
+                  <td>
+                    <code>aria-label="Motir AI"</code> — “Plan with AI” moves INSIDE, as the row’s
+                    name
+                  </td>
+                </tr>
+                <tr>
+                  <td>announced state</td>
+                  <td>— (a link)</td>
+                  <td>
+                    Radix sets <code>aria-haspopup="dialog"</code> + <code>aria-expanded</code> +
+                    <code>aria-controls</code> on the trigger
+                  </td>
+                </tr>
+                <tr>
+                  <td>activate</td>
+                  <td>navigates to <code>/planning?mode=…</code></td>
+                  <td>opens the callout; the ROW then navigates there</td>
+                </tr>
+                <tr>
+                  <td>⌘/middle-click</td>
+                  <td>opens planning in a new tab</td>
+                  <td>
+                    lost on the orb, <b>preserved one level in</b> — every row is a real
+                    <code>&lt;a href&gt;</code>, so ⌘-click still opens planning in a new tab
+                  </td>
+                </tr>
+                <tr>
+                  <td>fill · glow · pulse</td>
+                  <td colspan="2">
+                    <b>UNCHANGED</b> — the shipped <code>ORB_STYLE</code> radial + aura and the
+                    <code>.plan-with-ai-fab-pulse</code> keyframes are reused verbatim; this design
+                    adds no colour of its own to the orb
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <div>
+              <p class="sub">States — the four the trigger must carry</p>
+              <div class="stage">
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 12px;
+                    justify-items: center;
+                    text-align: center;
+                  "
+                >
+                  <div>
+                    <span class="orb"><span class="pulse"></span>M</span>
+                    <div class="sub" style="margin: 9px 0 0">rest</div>
+                  </div>
+                  <div>
+                    <span class="orb hover"><span class="pulse"></span>M</span>
+                    <div class="sub" style="margin: 9px 0 0">hover<br />scale 1.05</div>
+                  </div>
+                  <div>
+                    <span class="orb focus"><span class="pulse"></span>M</span>
+                    <div class="sub" style="margin: 9px 0 0">focus-visible<br />ring + offset</div>
+                  </div>
+                  <div>
+                    <span class="orb open"><span class="pulse"></span>M</span>
+                    <div class="sub" style="margin: 9px 0 0">open<br />pulse stopped</div>
+                  </div>
+                </div>
+              </div>
+              <ul class="spec">
+                <li>
+                  <b>rest</b> — the shipped radial fill, the pink aura, and the 3.2 s
+                  <code>plan-with-ai-fab-pulse</code> ring.
+                </li>
+                <li>
+                  <b>hover</b> / <b>active</b> — <code>scale(1.05)</code> /
+                  <code>scale(0.95)</code>, the shipped <code>transition-transform</code>.
+                  Unchanged.
+                </li>
+                <li>
+                  <b>focus-visible</b> — the shipped 2 px <code>--focus-ring-color</code> ring with
+                  a 2 px offset. Unchanged, and now REQUIRED: a button is the only way in by
+                  keyboard.
+                </li>
+                <li>
+                  <b>open</b> — the pulse <b>stops</b> (<code
+                    >[data-state='open'] .plan-with-ai-fab-pulse { animation: none }</code
+                  >, keyed off the attribute Radix already puts on the trigger) so the panel never
+                  sits inside a breathing halo, and an inset hairline reads as “pressed”. Closing
+                  restores it. Stopping is specified rather than
+                  <code>animation-play-state: paused</code>, which would freeze the ring at an
+                  arbitrary radius.
+                </li>
+                <li>
+                  <b><code>prefers-reduced-motion</code></b> — the pulse is already gated behind
+                  <code>@media (prefers-reduced-motion: no-preference)</code>, so a motion-sensitive
+                  user never sees it in ANY state; the open-state pause is a no-op for them. The
+                  panel’s own <code>fade-in-0</code> is the primitive’s and stays as-is.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 3 — THE MENU, BOTH STATES ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>The menu — interim (what ships) and target (what it grows into)</h2>
+          <span class="cap">one architecture · rows mount as their stories land</span>
+        </div>
+        <div class="panel-body">
+          <p class="note">
+            The callout is a surface that <b>GROWS</b>. Both states below are first-class: the same
+            panel, the same header, the same row idiom — the target simply has more rows plus the
+            composer. Nothing is restructured when a row arrives; a row is <b>added</b>.
+          </p>
+          <div class="cols c3" style="margin-top: 14px; align-items: start">
+            <div>
+              <p class="sub">Interim — ships now <span class="tag now">MOTIR-1812</span></p>
+              <div class="stage" style="display: grid; place-items: center">
+                <div class="menu">
+                  <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                  <div class="m-rows">
+                    <span class="m-row primary">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Plan with AI</span>
+                        <span class="ds" style="display: block"
+                          >Generate, expand or re-plan the project</span
+                        >
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <ul class="spec">
+                <li>
+                  One row, because one action exists. The header names the surface so the single row
+                  reads as “the first of several”, not “a menu of one”.
+                </li>
+                <li>
+                  <b>No composer yet</b> — the “Ask Motir anything…” field belongs to the first row
+                  that consumes free text (MOTIR-1343).
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="sub">
+                Target — the whole surface <span class="tag next">1343 · 1344</span>
+              </p>
+              <div class="stage" style="display: grid; place-items: center">
+                <div class="menu">
+                  <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                  <div class="m-rows">
+                    <span class="m-row primary">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Plan with AI</span>
+                        <span class="ds" style="display: block"
+                          >Generate, expand or re-plan the project</span
+                        >
+                      </span>
+                    </span>
+                    <span class="m-row">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-message-circle-question" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Ask about this project</span>
+                        <span class="ds" style="display: block"
+                          >Answers from your plan, docs &amp; work items</span
+                        >
+                      </span>
+                    </span>
+                    <span class="m-row">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-wrench" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Help with a task</span>
+                        <span class="ds" style="display: block"
+                          >Draft, summarise, or assist on a work item</span
+                        >
+                      </span>
+                    </span>
+                  </div>
+                  <div class="m-ask">
+                    Ask Motir anything…
+                    <span class="send"
+                      ><svg class="icon"><use href="#i-arrow-up" /></svg
+                    ></span>
+                  </div>
+                </div>
+              </div>
+              <ul class="spec">
+                <li>
+                  <b>Plan with AI</b> → <code>/planning?mode=…&amp;from=project</code> — the shipped
+                  <code>planningWorkspaceHref()</code>, unchanged.
+                </li>
+                <li>
+                  <b>Ask about this project</b> → the same workspace in its ASK mode (MOTIR-1343 /
+                  MOTIR-1815 own what that mode renders).
+                </li>
+                <li>
+                  <b>Help with a task</b> → the same workspace in its item-scoped mode (MOTIR-1344).
+                </li>
+                <li>
+                  <b>The composer</b> is a shortcut past the rows: typing and submitting opens the
+                  workspace with that text as the first turn. Its mode resolution is 1343’s to
+                  specify; this asset only reserves the slot.
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p class="sub">Not this <span class="tag gone">forbidden</span></p>
+              <div class="stage" style="display: grid; place-items: center">
+                <div class="menu strike">
+                  <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                  <div class="m-rows">
+                    <span class="m-row primary">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Plan with AI</span>
+                        <span class="ds" style="display: block"
+                          >Generate, expand or re-plan the project</span
+                        >
+                      </span>
+                    </span>
+                    <span class="m-row" style="opacity: 0.55">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-message-circle-question" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Ask about this project</span>
+                        <span class="ds" style="display: block">Coming soon</span>
+                      </span>
+                    </span>
+                    <span class="m-row" style="opacity: 0.55">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-wrench" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Help with a task</span>
+                        <span class="ds" style="display: block">Coming soon</span>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <ul class="spec">
+                <li>
+                  <b>An action whose story has not landed is ABSENT</b> — never a dimmed, disabled,
+                  or “Coming soon” row. A dead row is a promise the product cannot keep, it costs a
+                  tab stop and a screen-reader announcement, and it makes the interim state feel
+                  broken rather than young.
+                </li>
+                <li>
+                  Equally forbidden: a row that opens a <b>bespoke per-feature chat panel</b>. Every
+                  row is an intent into the ONE workspace.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 4 — ROW ANATOMY ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>Row anatomy — icon · title · one-line description, and its four states</h2>
+          <span class="cap">mirrors the shipped <code>UserMenu</code> row, one line taller</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">The parts</p>
+              <div class="stage">
+                <div class="menu" style="width: 320px; margin: 0 auto">
+                  <div class="m-rows">
+                    <span class="m-row primary hover">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span>
+                        <span class="tt" style="display: block">Plan with AI</span>
+                        <span class="ds" style="display: block"
+                          >Generate, expand or re-plan the project</span
+                        >
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <table class="t">
+                <tr>
+                  <th>Part</th>
+                  <th>Spec</th>
+                </tr>
+                <tr>
+                  <td>the row</td>
+                  <td>
+                    a real <code>&lt;a href&gt;</code> · <code>--radius-control</code> ·
+                    <code>--spacing-control-y</code> / <code>--spacing-control-x</code> padding ·
+                    9&nbsp;px gap
+                  </td>
+                </tr>
+                <tr>
+                  <td>icon tile</td>
+                  <td>
+                    26&nbsp;px square, <code>--radius-control</code>; lucide glyph at 15&nbsp;px.
+                    The <b>primary</b> row’s tile carries the hero gradient (<code
+                      >--el-accent</code
+                    >
+                    → <code>color-mix</code> toward <code>--el-highlight</code>) with
+                    <code>--el-accent-text</code> ink; every other row’s tile is an accent tint with
+                    <code>--el-accent-on-surface</code> ink
+                  </td>
+                </tr>
+                <tr>
+                  <td>title</td>
+                  <td>13&nbsp;px / 600 · <code>--el-text</code></td>
+                </tr>
+                <tr>
+                  <td>description</td>
+                  <td>
+                    11.5&nbsp;px · <code>--el-text-secondary</code> · <b>one line</b>, sentence
+                    case, no terminal period — it says what the mode DOES, never “click here”
+                  </td>
+                </tr>
+                <tr>
+                  <td>icons</td>
+                  <td>
+                    lucide <code>Sparkles</code> · <code>MessageCircleQuestion</code> ·
+                    <code>Wrench</code> — the same family the shell already uses
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <div>
+              <p class="sub">The four states</p>
+              <div class="stage">
+                <div class="menu" style="width: 320px; margin: 0 auto">
+                  <div class="m-rows" style="display: flex; flex-direction: column; gap: 2px">
+                    <span class="m-row">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span
+                        ><span class="tt" style="display: block">rest</span>
+                        <span class="ds" style="display: block">no fill</span></span
+                      >
+                    </span>
+                    <span class="m-row hover">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span
+                        ><span class="tt" style="display: block">hover</span>
+                        <span class="ds" style="display: block"
+                          ><code>--el-surface</code></span
+                        ></span
+                      >
+                    </span>
+                    <span class="m-row focus">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span
+                        ><span class="tt" style="display: block">focus-visible</span>
+                        <span class="ds" style="display: block"
+                          ><code>--el-surface</code> + inset ring</span
+                        ></span
+                      >
+                    </span>
+                    <span class="m-row active">
+                      <span class="ic"
+                        ><svg class="icon"><use href="#i-sparkles" /></svg
+                      ></span>
+                      <span
+                        ><span class="tt" style="display: block">active / pressed</span>
+                        <span class="ds" style="display: block"><code>--el-muted</code></span></span
+                      >
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <ul class="spec">
+                <li>
+                  <b>hover === focus-visible fill</b>, exactly as the shipped
+                  <code>UserMenu</code> row does (<code
+                    >hover:bg-(--el-surface) focus-visible:bg-(--el-surface)</code
+                  >) — the keyboard user and the mouse user see the same highlight.
+                </li>
+                <li>
+                  <b>focus-visible adds a ring the shipped row lacks.</b> On a 240&nbsp;px menu of
+                  one-line rows a fill alone is readable; on a three-row callout with descriptions
+                  it is not distinct enough, so the row also draws the 2&nbsp;px
+                  <code>--focus-ring-color</code> ring, inset so it never clips at the panel edge.
+                </li>
+                <li>
+                  <b>Use <code>--radius-control</code>, not <code>--radius-sm</code>.</b> The
+                  shipped <code>UserMenu</code> rows render <code>rounded-(--radius-sm)</code> with
+                  raw <code>px-2 py-2</code> — Tier-0 shape that a <code>data-style</code> swap
+                  cannot reshape. The new rows take the element-semantic tokens; the rendered values
+                  are near-identical today, so nothing looks different and the style axis is
+                  honoured.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 5 — INTERACTION + KEYBOARD ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>
+            Open · close · keyboard — the shipped <code>UserMenu</code> popover idiom, unchanged
+          </h2>
+          <span class="cap">no <code>role="menu"</code> · no roving arrow keys</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">The flow</p>
+              <ol class="flow">
+                <li>
+                  <b>Open</b> — click, <span class="kbd">Enter</span> or
+                  <span class="kbd">Space</span> on the orb. Radix opens
+                  <code>Popover.Content</code> in a portal, moves focus into the panel, and flips
+                  the trigger’s <code>aria-expanded</code>.
+                </li>
+                <li>
+                  <b>Move</b> — <span class="kbd">Tab</span> /
+                  <span class="kbd">Shift+Tab</span> walk the rows in DOM order (and the composer
+                  last, once it exists). Natural tab order, Radix-managed containment — <b>not</b> a
+                  roving <code>menuitem</code> model.
+                </li>
+                <li>
+                  <b>Activate</b> — <span class="kbd">Enter</span> follows the row’s
+                  <code>href</code> into <code>/planning</code>; the panel closes on navigation.
+                  <span class="kbd">⌘</span>/middle-click opens it in a new tab, because the row is
+                  a real link.
+                </li>
+                <li><b>Dismiss</b> — <span class="kbd">Esc</span>, or a click anywhere outside.</li>
+                <li>
+                  <b>Focus returns to the orb</b> on every close path (Radix’s
+                  <code>onCloseAutoFocus</code> default) — the keyboard user is put back where they
+                  started, never at the top of the document.
+                </li>
+              </ol>
+              <p class="note" style="margin-top: 12px">
+                <b>Why no <code>role="menu"</code>.</b> The shipped shell menu
+                (<code>UserMenu</code>) is a <code>Popover</code> whose content renders as
+                <code>role="dialog"</code> holding plain links — verified in the running app. A
+                second, contradictory interaction model for the callout would make two shell menus
+                behave differently under the same-looking chrome. If a future card genuinely wants
+                arrow-key roving it must say so explicitly and specify the FULL
+                <code>menu</code>&nbsp;/&nbsp;<code>menuitem</code> semantics (<code
+                  >aria-activedescendant</code
+                >
+                or roving <code>tabindex</code>, typeahead, Home/End) — it is not something to
+                half-build.
+              </p>
+            </div>
+            <div>
+              <p class="sub">Anchoring + panel spec</p>
+              <table class="t">
+                <tr>
+                  <th>Prop</th>
+                  <th>Value</th>
+                  <th>Why</th>
+                </tr>
+                <tr>
+                  <td><code>side</code></td>
+                  <td><code>"top"</code></td>
+                  <td>the orb hugs the bottom edge — there is no room below</td>
+                </tr>
+                <tr>
+                  <td><code>align</code></td>
+                  <td><code>"end"</code></td>
+                  <td>right edges line up with the orb, away from the viewport edge</td>
+                </tr>
+                <tr>
+                  <td><code>sideOffset</code></td>
+                  <td><code>12</code></td>
+                  <td>clears the orb’s outer glow (the primitive’s default 8 sits inside it)</td>
+                </tr>
+                <tr>
+                  <td><code>collisionPadding</code></td>
+                  <td><code>16</code></td>
+                  <td>keeps the panel off every viewport edge when it shifts</td>
+                </tr>
+                <tr>
+                  <td><code>width</code></td>
+                  <td><code>288</code></td>
+                  <td>
+                    fits “Answers from your plan, docs &amp; work items” on ONE line; the
+                    primitive’s 320 default is wider than the content needs
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>overflowVisible</code></td>
+                  <td><code>false</code></td>
+                  <td>static rows only — the default clip is correct (as for the user menu)</td>
+                </tr>
+                <tr>
+                  <td><code>modal</code></td>
+                  <td><code>false</code></td>
+                  <td>
+                    the default: the page behind stays scrollable + readable, like the user menu
+                  </td>
+                </tr>
+              </table>
+              <ul class="spec">
+                <li>
+                  The panel is <code>z-50</code> (the primitive’s), above the orb’s
+                  <code>z-40</code> — so a shifted panel is never painted under it.
+                </li>
+                <li>
+                  <b>Open state is local.</b> <code>useState</code> in the FAB, exactly as
+                  <code>UserMenu</code> holds its own — no provider, no global store.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 6 — RESPONSIVE ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">6</span>
+          <h2>Narrow / mobile — the panel must never overflow, and never cover the orb</h2>
+          <span class="cap">rendered at 390 × 780 · orb measured at x&nbsp;314, y&nbsp;704</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols" style="grid-template-columns: 560px 1fr; gap: 22px; align-items: start">
+            <div style="display: flex; gap: 18px">
+              <div>
+                <p class="sub">390 px — open, to scale</p>
+                <div style="width: 253px; height: 403px; overflow: hidden">
+                  <div class="phone" style="transform: scale(0.65)">
+                    <div class="bar">
+                      <span class="heropill" style="font-size: 11px">Plan with AI</span>
+                      <span class="spacer" style="flex: 1"></span>
+                      <span class="avatar">B</span>
+                    </div>
+                    <div class="body">
+                      <div class="line"></div>
+                      <div class="line"></div>
+                      <div class="line"></div>
+                      <div class="line"></div>
+                    </div>
+                    <div style="position: absolute; right: 20px; bottom: 88px">
+                      <div class="menu">
+                        <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                        <div class="m-rows">
+                          <span class="m-row primary">
+                            <span class="ic"
+                              ><svg class="icon"><use href="#i-sparkles" /></svg
+                            ></span>
+                            <span
+                              ><span class="tt" style="display: block">Plan with AI</span>
+                              <span class="ds" style="display: block"
+                                >Generate, expand or re-plan the project</span
+                              ></span
+                            >
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="orb floating open"><span class="pulse"></span>M</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p class="sub">320 px — the clamp</p>
+                <div style="width: 208px; height: 403px; overflow: hidden">
+                  <div class="phone" style="width: 320px; transform: scale(0.65)">
+                    <div class="bar">
+                      <span class="heropill" style="font-size: 11px">Plan with AI</span>
+                      <span class="spacer" style="flex: 1"></span>
+                      <span class="avatar">B</span>
+                    </div>
+                    <div class="body">
+                      <div class="line"></div>
+                      <div class="line"></div>
+                      <div class="line"></div>
+                      <div class="line"></div>
+                    </div>
+                    <div style="position: absolute; right: 16px; bottom: 88px">
+                      <div class="menu" style="width: 288px">
+                        <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                        <div class="m-rows">
+                          <span class="m-row primary">
+                            <span class="ic"
+                              ><svg class="icon"><use href="#i-sparkles" /></svg
+                            ></span>
+                            <span
+                              ><span class="tt" style="display: block">Plan with AI</span>
+                              <span class="ds" style="display: block"
+                                >Generate, expand or re-plan the project</span
+                              ></span
+                            >
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="orb floating open"><span class="pulse"></span>M</span>
+                    <span class="anno" style="left: 8px; bottom: 214px"
+                      >shifted 4 px → 16 px margins</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <ul class="spec" style="margin-top: 0">
+                <li>
+                  <b>Width clamps, it does not scroll:</b>
+                  <code>width: min(288px, calc(100vw - 2rem))</code>. At 390 px the panel is a full
+                  288 px with ~82 px to spare; at 320 px it shrinks to 288 px and
+                  <code>collisionPadding: 16</code> nudges it clear of the left edge. The rows
+                  reflow — the description wraps to a second line rather than truncating.
+                </li>
+                <li>
+                  <b>It never covers the orb.</b> <code>side="top"</code> +
+                  <code>sideOffset: 12</code> put the panel’s bottom edge 12 px ABOVE the orb’s top.
+                  Radix would only flip to <code>bottom</code> if there were room below — there
+                  never is, since the orb is 20 px off the bottom edge.
+                </li>
+                <li>
+                  <b>Height:</b> the target menu is ~250 px tall — well inside
+                  <code>--radix-popover-content-available-height</code> even on a short landscape
+                  phone. If a future row set outgrows that, the primitive’s available-height
+                  variable is the hook to scroll the ROW LIST, never the panel chrome.
+                </li>
+                <li>
+                  <b>The orb itself is untouched at every width</b> — it is already
+                  <code>fixed right-5 bottom-5</code> with no breakpoint, verified at 390 px and
+                  1440 px. This design adds no responsive rule to the orb.
+                </li>
+                <li>
+                  <b>Touch:</b> the 56 px orb and the ~44 px rows both clear the 44 px touch target
+                  minimum; the row’s hit area is the whole row, not the title text.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 7 — DARK + MATERIAL + AA ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">7</span>
+          <h2>Dark, AA, and the surface-material styles</h2>
+          <span class="cap">real dark tokens · <code>data-surface="popover"</code></span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">Dark — the same tokens, flipped</p>
+              <div class="darkwrap" data-theme="dark" data-appearance-scope>
+                <div style="display: grid; place-items: center; gap: 16px">
+                  <div class="menu">
+                    <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                    <div class="m-rows">
+                      <span class="m-row primary">
+                        <span class="ic"
+                          ><svg class="icon"><use href="#i-sparkles" /></svg
+                        ></span>
+                        <span>
+                          <span class="tt" style="display: block">Plan with AI</span>
+                          <span class="ds" style="display: block"
+                            >Generate, expand or re-plan the project</span
+                          >
+                        </span>
+                      </span>
+                      <span class="m-row hover">
+                        <span class="ic"
+                          ><svg class="icon"><use href="#i-message-circle-question" /></svg
+                        ></span>
+                        <span>
+                          <span class="tt" style="display: block">Ask about this project</span>
+                          <span class="ds" style="display: block"
+                            >Answers from your plan, docs &amp; work items</span
+                          >
+                        </span>
+                      </span>
+                      <span class="m-row">
+                        <span class="ic"
+                          ><svg class="icon"><use href="#i-wrench" /></svg
+                        ></span>
+                        <span>
+                          <span class="tt" style="display: block">Help with a task</span>
+                          <span class="ds" style="display: block"
+                            >Draft, summarise, or assist on a work item</span
+                          >
+                        </span>
+                      </span>
+                    </div>
+                    <div class="m-ask">
+                      Ask Motir anything…
+                      <span class="send"
+                        ><svg class="icon"><use href="#i-arrow-up" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <span class="orb"><span class="pulse"></span>M</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="sub">Contrast + material</p>
+              <table class="t">
+                <tr>
+                  <th>Element</th>
+                  <th>Ink</th>
+                  <th>On</th>
+                </tr>
+                <tr>
+                  <td>row title</td>
+                  <td><code>--el-text</code></td>
+                  <td><code>--el-page-bg</code> · hover <code>--el-surface</code></td>
+                </tr>
+                <tr>
+                  <td>row description</td>
+                  <td><code>--el-text-secondary</code></td>
+                  <td>same — <b>not</b> <code>--el-text-muted</code>, which fails AA at 11.5 px</td>
+                </tr>
+                <tr>
+                  <td>“Motir AI” header</td>
+                  <td><code>--el-text-strong</code></td>
+                  <td>a 10 % accent→highlight tint over <code>--el-page-bg</code></td>
+                </tr>
+                <tr>
+                  <td>primary tile glyph</td>
+                  <td><code>--el-accent-text</code></td>
+                  <td>the accent-dominant gradient (white ink stays AA)</td>
+                </tr>
+                <tr>
+                  <td>other tile glyphs</td>
+                  <td><code>--el-accent-on-surface</code></td>
+                  <td>an 11 % accent tint — the token that stays bright in dark</td>
+                </tr>
+                <tr>
+                  <td>composer placeholder</td>
+                  <td><code>--el-text-faint</code></td>
+                  <td>placeholder only; the typed value is <code>--el-text</code></td>
+                </tr>
+              </table>
+              <ul class="spec">
+                <li>
+                  <b>Every colour is a token or a <code>color-mix</code> of two tokens</b> — no
+                  invented hue anywhere, including the header tint and the tile gradients, which are
+                  the same palette-derived recipe the shipped hero pill and orb use.
+                </li>
+                <li>
+                  <b>Not colour alone:</b> the primary row is marked by its filled tile AND its
+                  position, never by hue alone; states pair a fill with a ring.
+                </li>
+                <li>
+                  <b>Surface material.</b> <code>Popover.Content</code> already emits
+                  <code>data-surface="popover"</code>, so a material style (glassmorphism, aurora)
+                  frosts the PANEL for free. The header tint therefore lives on its own child
+                  element, and the row hover fill is <code>--el-surface</code> — both compose over a
+                  frosted panel without a second opaque layer fighting the material. Nothing here
+                  needs a per-style rule.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 8 — COMPOSED FROM / UNCHANGED ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">8</span>
+          <h2>What it composes — and which entrances this design does NOT touch</h2>
+          <span class="cap">nothing here is hand-rolled</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2">
+            <div>
+              <p class="sub">Composed from</p>
+              <table class="t">
+                <tr>
+                  <th>Element</th>
+                  <th>Built from</th>
+                </tr>
+                <tr>
+                  <td>the orb</td>
+                  <td>
+                    the shipped <code>components/planning/PlanWithAIFab.tsx</code> — fill, aura,
+                    pulse, position and size reused verbatim; only the ELEMENT changes (link →
+                    trigger button)
+                  </td>
+                </tr>
+                <tr>
+                  <td>the panel</td>
+                  <td>
+                    <code>Popover</code> / <code>Popover.Trigger</code> /
+                    <code>Popover.Content</code> from <code>@motir/design-system</code> (re-exported
+                    at <code>components/ui/Popover.tsx</code>) — portal, click-outside, Esc, focus
+                    return and <code>data-surface</code> all come free
+                  </td>
+                </tr>
+                <tr>
+                  <td>header block + rows</td>
+                  <td>
+                    the shipped <code>app/(authed)/_components/UserMenu.tsx</code> idiom — bordered
+                    header, <code>--el-surface</code> row hover, muted lucide glyph, 14&nbsp;px
+                    label
+                  </td>
+                </tr>
+                <tr>
+                  <td>the destination</td>
+                  <td>
+                    <code>lib/planning/launcher.ts</code> — <code>planningWorkspaceHref()</code> /
+                    <code>PLANNING_WORKSPACE_PATH</code>; no new route, no new mode
+                  </td>
+                </tr>
+                <tr>
+                  <td>the composer slot</td>
+                  <td>
+                    <code>Input</code> shape tokens (<code>--radius-input</code>,
+                    <code>--height-control</code>); its behaviour is MOTIR-1343’s to specify
+                  </td>
+                </tr>
+                <tr>
+                  <td>icons</td>
+                  <td>
+                    lucide-react — <code>Sparkles</code>, <code>MessageCircleQuestion</code>,
+                    <code>Wrench</code>, <code>ArrowUp</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>gating</td>
+                  <td>
+                    unchanged — <code>(authed)/layout.tsx</code> mounts the orb only under
+                    <code>isMotirAiConfigured() &amp;&amp; activeProject</code>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            <div>
+              <p class="sub">Entrances that stay EXACTLY as they are</p>
+              <table class="t">
+                <tr>
+                  <th>Entrance</th>
+                  <th>Status</th>
+                </tr>
+                <tr>
+                  <td>TopNav hero pill</td>
+                  <td>
+                    <span class="tag keep">unchanged</span>
+                    <code>PlanWithAILauncher</code> still goes STRAIGHT to <code>/planning</code> in
+                    the current context’s mode — the one-click fast lane on every screen
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="kbd">⌘K</span> command</td>
+                  <td>
+                    <span class="tag keep">unchanged</span> the “Plan with AI” command in
+                    <code>AppCommandPalette</code> still navigates directly
+                  </td>
+                </tr>
+                <tr>
+                  <td>work-item detail door</td>
+                  <td>
+                    <span class="tag keep">unchanged</span> MOTIR-910’s per-item entrance keeps its
+                    own contextual launch
+                  </td>
+                </tr>
+                <tr>
+                  <td>roadmap door</td>
+                  <td>
+                    <span class="tag keep">unchanged</span> MOTIR-1011’s roadmap entrance keeps its
+                    own launch
+                  </td>
+                </tr>
+                <tr>
+                  <td>the floating “M” orb</td>
+                  <td><span class="tag now">the ONLY change</span> link → menu trigger</td>
+                </tr>
+              </table>
+              <p class="note" style="margin-top: 14px">
+                <b>Why the orb and not the pill.</b> The pill is the <i>planning</i> entrance and
+                its label says so; the orb is the <i>brand mark</i> — “the home of all AI”. Giving
+                the menu to the orb keeps a one-click planning path on every screen while the orb
+                grows into the plural surface, which is exactly what <code>PlanWithAIFab</code>’s
+                own shipped note anticipated: “when that lands, this orb grows a menu in place”.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
