@@ -9,6 +9,7 @@ import { ciPeriodChargeRepository } from '@/lib/repositories/ciPeriodChargeRepos
 import { withSystemContext } from '@/lib/workspaces/context';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
+import { periodStartFor } from '@/lib/ciMetering/period';
 import { truncateAuthTables } from '../helpers/db';
 
 // The CI-minutes ENTITLEMENT against real Postgres (Story MOTIR-1775 ·
@@ -655,6 +656,33 @@ describe('the DEBIT is a post-commit side effect (§8.6)', () => {
 
     expect(result.outcome).toBe('debit_pending');
     expect((await chargeRow(fx))?.debitedCredits).toBe(0);
+  });
+});
+
+describe('the gate reads the period the fixtures write (the anti-vacuity guard)', () => {
+  // The one assertion that protects every `.resolves.toBeUndefined()` below.
+  //
+  // Those six negatives cannot tell "the gate correctly declined to refuse"
+  // apart from "the gate looked in an empty period and had nothing to refuse
+  // over" — they pass either way. So the thing they silently depend on is
+  // asserted ONCE, here, directly: the period `assertDispatchAllowed` resolves
+  // from its own `new Date()` is the period `meter()` writes into.
+  //
+  // This runs INSIDE a test, so the `beforeEach` pin is in effect — which is
+  // precisely what a module-scope `periodStartFor(new Date())` misses. Both
+  // MOTIR-1950's pin and MOTIR-1951's module-scope constant were individually
+  // reasonable and together left `main` red for hours (MOTIR-1952); MOTIR-1953
+  // then removed the second mechanism. This guard is what makes a THIRD attempt
+  // fail immediately and self-describe, instead of six tests quietly asserting
+  // nothing.
+  it('the pinned clock and the fixture default are one period', () => {
+    // Resolved the way the gate resolves it: from `new Date()`, under the pin.
+    const gateReads = periodStartFor(new Date());
+
+    // `meter()`'s default — the period every test that omits an explicit one
+    // writes into. MOTIR-1953 collapsed the file onto this single mechanism, so
+    // there is exactly one thing for the gate to agree with.
+    expect(gateReads).toEqual(JULY_2026);
   });
 });
 

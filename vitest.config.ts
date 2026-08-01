@@ -813,6 +813,15 @@ export default defineConfig({
         //     failure out of the mint, and the two `translate*Error` fall-throughs
         //     for a plugin error that is not an `APIError`. Reaching them means
         //     stubbing Better-Auth, which would test the stub.
+        //     ⚠️ The LINE figure here is deliberately pinned by deterministic tests
+        //     (Bug MOTIR-1955). Until then `translateApproveError` was executed only
+        //     when the two-simultaneous-approvals race happened to make the loser
+        //     fail at the plugin instead of at the pre-checks — an outcome the test
+        //     asserts either way. When a CI run landed on the other side the file
+        //     read 87.8% instead of 96.34% and this threshold failed a PR whose diff
+        //     was one unrelated test file. The fix was to cover those branches
+        //     deterministically, NOT to lower the number: a threshold that a race
+        //     can cross is the defect, and lowering it would only widen the window.
         //   • start/route + token/route — a `body ?? {}` arm that cannot be null
         //     (the parse always assigns) and the poll's final rethrow for an error
         //     that is not a `DeviceGrantError`.

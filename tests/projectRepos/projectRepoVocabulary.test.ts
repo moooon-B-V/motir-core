@@ -18,7 +18,7 @@ import {
   canTransition,
   isSettledState,
 } from '@/lib/projectRepos/transitions';
-import { toProjectRepoNames } from '@/lib/projectRepos/names';
+import { toProjectRepoNames, toProjectRepoPinNames } from '@/lib/projectRepos/names';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 
 // The PURE half of the project repository SET (Story MOTIR-1775 · MOTIR-1780) —
@@ -370,5 +370,88 @@ describe('toProjectRepoNames — which rows a dispatch may be pinned to', () => 
 
   it('is empty for an empty set', () => {
     expect(toProjectRepoNames([])).toEqual([]);
+  });
+});
+
+describe('toProjectRepoPinNames — which rows an AUTHORED pin may name', () => {
+  // The sibling domain, and the asymmetry between the two is the whole point:
+  // authoring records a decision about work that has not run (the plan names
+  // repositories before they exist), while dispatch names a checkout that has to
+  // exist right now. Reached only through the DB-backed suites until now, which
+  // left its own branches — the unrealized ref, the null coordinates, the
+  // case-insensitive dedup, the unnameable row — untested directly.
+
+  it('INCLUDES an unrealized row — the plan pins before the repository exists', () => {
+    // The ordinary onboarding case: "this subtask ships in the api repo we are
+    // about to create." Rejecting it would make the pin unusable exactly when the
+    // planner emits it.
+    const names = toProjectRepoPinNames([
+      row({ state: 'proposed', name: 'acme-api', githubRepoId: null, githubRepo: null }),
+    ]);
+    expect(names.map((n) => n.name)).toEqual(['acme-api']);
+  });
+
+  it('carries NO coordinates for an unrealized row, and the ref IS the name', () => {
+    // There is no host casing to prefer and no clone URL to know, so the domain
+    // says so rather than inventing either — a pin resolved through it can never
+    // claim to know where something lives that does not.
+    const [name] = toProjectRepoPinNames([
+      row({ state: 'proposed', name: 'acme-api', githubRepoId: null, githubRepo: null }),
+    ]);
+    expect(name).toMatchObject({
+      repoRef: 'acme-api',
+      cloneUrl: null,
+      defaultBranch: null,
+      role: 'web',
+    });
+  });
+
+  it("prefers the REALIZED repo's name and coordinates once the row is real", () => {
+    const [name] = toProjectRepoPinNames([
+      row({
+        name: 'acme-web',
+        githubRepo: { ...row().githubRepo!, name: 'acme-frontend', owner: 'acme' },
+      }),
+    ]);
+    expect(name).toMatchObject({ name: 'acme-frontend', repoRef: 'acme/acme-frontend' });
+    expect(name!.cloneUrl).toContain('acme/acme-frontend');
+  });
+
+  it('admits EVERY state — a skipped or failed row is still a name a plan may have pinned', () => {
+    for (const state of [
+      'proposed',
+      'creating',
+      'created',
+      'connected',
+      'skipped',
+      'failed',
+    ] as const) {
+      expect(
+        toProjectRepoPinNames([
+          row({ state, name: 'acme-api', githubRepoId: null, githubRepo: null }),
+        ]).map((n) => n.name),
+      ).toEqual(['acme-api']);
+    }
+  });
+
+  it('de-duplicates by name case-insensitively, first in set order winning', () => {
+    const names = toProjectRepoPinNames([
+      row({ id: 'r1', position: 'a0', name: 'acme-web', githubRepoId: null, githubRepo: null }),
+      row({ id: 'r2', position: 'a1', name: 'ACME-Web', githubRepoId: null, githubRepo: null }),
+    ]);
+    expect(names).toHaveLength(1);
+    expect(names[0]!.rowId).toBe('r1');
+  });
+
+  it('DROPS a row whose name normalizes to nothing rather than emitting a blank pin', () => {
+    // A blank name is "unpinned" everywhere else in the system; emitting it here
+    // would put an empty string in the domain a pin is validated against.
+    expect(
+      toProjectRepoPinNames([row({ name: '  ', githubRepoId: null, githubRepo: null })]),
+    ).toEqual([]);
+  });
+
+  it('is empty for an empty set', () => {
+    expect(toProjectRepoPinNames([])).toEqual([]);
   });
 });
