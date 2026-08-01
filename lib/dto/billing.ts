@@ -1,5 +1,6 @@
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import type { BillingCatalog } from '@/lib/billing/catalog';
+import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 
 // DTOs for the billing surfaces (Story 8.1). Defines EXACTLY what crosses the
 // HTTP boundary — no Prisma model leaks. The inbound propagation route returns
@@ -91,6 +92,19 @@ export interface BillingStatusDTO {
   };
   /** ② Motir AI: the credit plan tier + balance. */
   motirAi: MotirAiBillingDTO;
+  /**
+   * ③ Motir CI (MOTIR-1903, ADR `ci-minutes-allowance.md` §7.1): the CI-minutes
+   * entitlement — used vs included this period, how the pool was derived, the
+   * reset date, and the credits the overage drew, DISTINCT from AI's spend.
+   *
+   * NOT nullable, and deliberately so. `ciAllowanceService.getEntitlementState`
+   * already models "no CI here" as a real value (`applicable: false`,
+   * `state: 'bypassed'` — off-cloud, no provisioning org, or the META org), so
+   * the panel switches on a field that is always present. An optional field
+   * would invite the always-null wiring that renders nothing while every test
+   * stays green.
+   */
+  ci: CiEntitlementStateDTO;
   /** The purchasable prices the storefront renders + checkout routes through. */
   catalog: BillingCatalog;
 }

@@ -6,7 +6,9 @@ import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUpRight,
   Check,
+  ChevronRight,
   Coins,
   CreditCard,
   Crown,
@@ -14,6 +16,7 @@ import {
   Eye,
   Layers,
   Lock,
+  Pause,
   Sparkles,
   Users,
   X,
@@ -28,6 +31,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { useToast } from '@/components/ui/Toast';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
+import { ciLineFigures, type CiLineVariant } from './ciFigures';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -317,10 +321,15 @@ function TierPill({ name }: { name: string }) {
 }
 
 // A token-only allotment meter (the `.meter` pattern shared with ai-usage).
-function Meter({ pct, low }: { pct: number; low?: boolean }) {
+// `tickPct` is the CI line's pool-boundary notch (design-notes amendment,
+// `.meter.over .tick`): inside a SATURATED bar it marks where the included pool
+// ended, so "2,220 of 1,800" reads as a bar that is full plus an overshoot
+// rather than an unexplained 100%. It is a notch cut in `--el-page-bg`, not a
+// colour, so it stays legible under every palette.
+function Meter({ pct, low, tickPct }: { pct: number; low?: boolean; tickPct?: number | null }) {
   return (
     <div
-      className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-(--el-muted)"
+      className="relative mt-2 h-1.5 w-full overflow-hidden rounded-full bg-(--el-muted)"
       role="presentation"
     >
       <span
@@ -330,6 +339,16 @@ function Meter({ pct, low }: { pct: number; low?: boolean }) {
           backgroundColor: low ? 'var(--el-warning)' : 'var(--el-accent)',
         }}
       />
+      {tickPct == null ? null : (
+        <i
+          className="absolute inset-y-0 w-0.5"
+          style={{
+            left: `${Math.max(0, Math.min(100, tickPct))}%`,
+            backgroundColor: 'var(--el-page-bg)',
+          }}
+          aria-hidden
+        />
+      )}
     </div>
   );
 }
@@ -405,6 +424,17 @@ function HomeView({
   goPlans,
   goSeats,
 }: SharedViewProps & { goPlans: () => void; goSeats: () => void }) {
+  // ⚠️ THE ORDERING RULE (design-notes amendment, panel 8) — measured, not a
+  // preference. In its normal third position the Motir CI card starts 756 px
+  // down the page, below the ~700 px fold of a 1280×800 laptop, so a PAUSED
+  // admin would land above the decision and have to scroll to find it. When CI
+  // is paused the card is hoisted FIRST; otherwise it keeps third position. This
+  // orders by urgency without a second decision surface, without a page-level
+  // banner to keep in sync, and without changing ① or ② at all — they are
+  // identical, just below.
+  const ciPaused = data.ci.state === 'ci_credits_exhausted';
+  const ciLine = <MotirCiLine data={data} t={t} canManage={canManage} goPlans={goPlans} />;
+
   return (
     <>
       <header className="flex flex-col gap-1">
@@ -417,6 +447,7 @@ function HomeView({
 
       {!canManage ? <AdminViewOnlyNote t={t} /> : null}
 
+      {ciPaused ? ciLine : null}
       <MotirLine
         data={data}
         t={t}
@@ -432,6 +463,7 @@ function HomeView({
         portal={portal}
         redirecting={redirecting}
       />
+      {ciPaused ? null : ciLine}
       <PaymentCard t={t} canManage={canManage} portal={portal} redirecting={redirecting} />
     </>
   );
@@ -733,6 +765,266 @@ function CanceledBanner({ t }: { t: T }) {
         aria-hidden
       />
       <p className="font-sans text-xs text-(--el-text-strong)">{t('canceled.banner')}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ③ Motir CI line (MOTIR-1903 · design/billing "Amendment 2026-07-30" ·
+// ADR ci-minutes-allowance.md §7). A THIRD billed line, not a second usage kind
+// on the AI line: its own unit (minutes), its own period (the calendar month —
+// deliberately NOT the seat/AI renewal date, which the copy says out loud) and
+// its own exhaustion state.
+//
+// It reports MINUTES and the credits its own overage drew, and LINKS to the AI
+// line for the balance rather than restating it (§7.2's non-duplication rule) —
+// so a reader can tell CI's spend from AI's. Every figure comes from
+// `ciLineFigures(data.ci)`, i.e. from `getEntitlementState`'s real reads; the
+// card renders nothing it cannot trace to one.
+function MotirCiLine({
+  data,
+  t,
+  canManage,
+  goPlans,
+}: {
+  data: BillingStatusDTO;
+  t: T;
+  canManage: boolean;
+  goPlans: () => void;
+}) {
+  const ci = ciLineFigures(data.ci);
+  // `null` is the ADR's not-applicable set (self-host, no provisioning org, the
+  // META org) — no line at all, which is what §7.3.7 asks for.
+  if (!ci) return null;
+
+  const paused = ci.variant === 'paused';
+  const resets = fmtDate(ci.resetsAt);
+  const derivation = ci.floorApplied
+    ? t('ci.deriveFloor', { pool: fmt(ci.poolMinutes) })
+    : t('ci.deriveSeats', { perSeat: ci.perSeatMinutes, n: ci.memberCount });
+
+  return (
+    <Card
+      header={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-peach) text-(--el-text-strong)">
+              <Zap className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="font-sans text-base font-semibold text-(--el-text)">{t('ci.name')}</h2>
+              <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.tagline')}</p>
+            </div>
+          </div>
+          <CiStatePill variant={ci.variant} t={t} />
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* The paused banner leads: it is the reason the card was hoisted to the
+            top of the stack, so the state comes before the numbers. */}
+        {paused ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-yellow) p-(--spacing-card-padding)">
+            <Pause
+              className="mt-0.5 h-4 w-4 shrink-0"
+              style={{ color: 'var(--el-warning)' }}
+              aria-hidden
+            />
+            <p className="font-sans text-xs text-(--el-text-strong)">
+              <strong>{canManage ? t('ci.pausedTitle') : t('ci.pausedTitleMember')}</strong>{' '}
+              {canManage
+                ? t('ci.pausedBody', {
+                    pool: fmt(ci.poolMinutes),
+                    over: fmt(ci.overageMinutes),
+                    credits: fmt(ci.chargedCredits),
+                  })
+                : t('ci.pausedBodyMember')}
+            </p>
+          </div>
+        ) : null}
+
+        {ci.variant === 'nothing_to_bill' ? (
+          // §7.3.6 — deliberately NOT an empty state and NOT a "0 of 1,800"
+          // meter: an org whose repositories are all its own has a pool it will
+          // never draw on, and saying so beats drawing a zero as if something
+          // were wrong.
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              <strong className="text-(--el-text-strong)">{t('ci.zeroTitle')}</strong>{' '}
+              {t('ci.zeroBody', { pool: fmt(ci.poolMinutes) })}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-sans text-xs text-(--el-text-muted)">{t('ci.usedLabel')}</span>
+              <span className="font-sans text-sm font-medium text-(--el-text-strong)">
+                {t('ci.usedOfPool', { used: fmt(ci.usedMinutes), pool: fmt(ci.poolMinutes) })}
+              </span>
+            </div>
+            <Meter pct={ci.meterPct} low={ci.over} tickPct={ci.tickPct} />
+            <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-sans text-xs text-(--el-text-muted)">{derivation}</span>
+              <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
+                {paused
+                  ? t('ci.creditsDrawn', { credits: fmt(ci.chargedCredits) })
+                  : ci.over
+                    ? t('ci.minutesOver', { over: fmt(ci.overageMinutes) })
+                    : t('ci.minutesLeft', { left: fmt(ci.remainingMinutes) })}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* §6.1 — crossing the pool is a NORMAL, VISIBLE event that blocks
+            nothing. Stated as its own banner so it can't read as a failure. */}
+        {ci.variant === 'drawing_on_credits' ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-yellow) p-(--spacing-card-padding)">
+            <Coins
+              className="mt-0.5 h-4 w-4 shrink-0"
+              style={{ color: 'var(--el-warning)' }}
+              aria-hidden
+            />
+            <p className="font-sans text-xs text-(--el-text-strong)">
+              <strong>{t('ci.drawingTitle')}</strong>{' '}
+              {t('ci.drawingBody', {
+                over: fmt(ci.overageMinutes),
+                credits: fmt(ci.chargedCredits),
+              })}
+            </p>
+          </div>
+        ) : null}
+
+        {ci.variant === 'within_allowance' ? (
+          <p className="font-sans text-xs text-(--el-text-muted)">
+            {resets ? `${t('ci.resets', { date: resets })} ` : ''}
+            {t('ci.overageRate')}
+          </p>
+        ) : null}
+        {ci.variant === 'drawing_on_credits' && resets ? (
+          <p className="font-sans text-xs text-(--el-text-muted)">
+            {t('ci.resetsRefill', { date: resets })}
+          </p>
+        ) : null}
+        {paused && resets ? (
+          <p className="font-sans text-xs text-(--el-text-muted)">
+            {t('ci.resets', { date: resets })}
+          </p>
+        ) : null}
+
+        {/* A transport blip on the balance read is a REAL value (`balance:
+            null`), never exhaustion and never a misleading zero: the minutes
+            half above is local data and stays accurate; only the credit half is
+            missing. Suppressed when paused, where the balance is known to be 0. */}
+        {ci.balanceUnavailable && !paused ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.balanceUnavailable')}</p>
+          </div>
+        ) : null}
+
+        {paused ? (
+          canManage ? (
+            <CiPausedDecision t={t} goPlans={goPlans} />
+          ) : (
+            // Never a disabled control: a sentence explaining who can act beats
+            // a button this user cannot press. It routes WITHOUT naming owners —
+            // naming them would leak org membership (the shipped `askOwner`
+            // paywall variant routes the same way).
+            <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+              <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.memberLockNote')}</p>
+            </div>
+          )
+        ) : null}
+
+        {/* §7.2 — CI links to the AI line for the balance instead of restating
+            it, so there is one place a balance is authored. */}
+        {ci.variant !== 'nothing_to_bill' ? (
+          <div>
+            <Link
+              href="/settings/organization/usage"
+              className="inline-flex items-center gap-1.5 font-sans text-sm text-(--el-link) hover:underline"
+            >
+              <Coins className="h-4 w-4" aria-hidden />
+              {t('ci.viewUsage')}
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+function CiStatePill({ variant, t }: { variant: CiLineVariant; t: T }) {
+  if (variant === 'nothing_to_bill') return <Pill tone="neutral">{t('ci.stateNothing')}</Pill>;
+  if (variant === 'within_allowance') {
+    return (
+      <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
+        <Check className="h-3 w-3" aria-hidden />
+        {t('ci.stateIncluded')}
+      </Pill>
+    );
+  }
+  // Both over-pool states are WARNING, never danger — the panel's own rule for
+  // "you are paying more" and "this is stopped": nothing is broken and nothing
+  // has been deleted.
+  const paused = variant === 'paused';
+  return (
+    <Pill className="bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent">
+      {paused ? (
+        <Pause className="h-3 w-3" aria-hidden />
+      ) : (
+        <Coins className="h-3 w-3" aria-hidden />
+      )}
+      {paused ? t('ci.statePaused') : t('ci.stateDrawing')}
+    </Pill>
+  );
+}
+
+// The two-option DECISION (amendment §D). TWO PEERS, NO DEFAULT — neither is the
+// `primary` variant, because one keeps the hosted arrangement and one ends it,
+// and dressing either as *the* answer is Motir's thumb on the scale. Each states
+// its real cost under it: the top-up states the §B resume latency instead of
+// implying "instant"; the takeover states the GitHub account, the asynchronous
+// transfer and the App re-install, never "one click". The takeover is never
+// hidden and never gated on a stored GitHub identity — motir-core's only social
+// provider is Google, so NO admin has one and gating would hide it from everyone
+// (MOTIR-711/MOTIR-1939's room collects the destination inside its own flow).
+function CiPausedDecision({ t, goPlans }: { t: T; goPlans: () => void }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)">
+        <h3 className="flex items-center gap-1.5 font-sans text-sm font-semibold text-(--el-text)">
+          <Coins className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
+          {t('ci.optionCreditsTitle')}
+        </h3>
+        <p className="font-sans text-xs text-(--el-text-secondary)">{t('ci.optionCreditsBody')}</p>
+        <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.optionCreditsCost')}</p>
+        <div className="mt-auto pt-1">
+          <Button variant="secondary" size="sm" onClick={goPlans}>
+            {t('ci.optionCreditsCta')}
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding)">
+        <h3 className="flex items-center gap-1.5 font-sans text-sm font-semibold text-(--el-text)">
+          <ArrowUpRight className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
+          {t('ci.optionMoveTitle')}
+        </h3>
+        <p className="font-sans text-xs text-(--el-text-secondary)">{t('ci.optionMoveBody')}</p>
+        <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.optionMoveCost')}</p>
+        <div className="mt-auto pt-1">
+          <Link
+            href="/settings/project/repositories"
+            className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+          >
+            {t('ci.optionMoveCta')}
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

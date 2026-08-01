@@ -18,11 +18,43 @@ import { truncateAuthTables } from '../helpers/db';
 // meter's suite established); the row lock, the RLS contexts, the watermark and
 // the membership count all run for real, because every acceptance criterion here
 // is about what the DATABASE does under contention.
+//
+// ⚠️ THE CLOCK IS PINNED (MOTIR-1950). Every fixture here meters into a FIXED
+// period (`JULY_2026`), and `getEntitlementState` / `chargeForMeteredRun` are
+// handed that period explicitly — but `assertDispatchAllowed` takes no period:
+// it resolves its own from `new Date()` (`ciAllowanceService.ts` —
+// `getEntitlementState(organizationId, new Date())`). So without a pinned clock
+// the fixtures' rows and the gate's period agree ONLY while the real calendar
+// happens to sit inside July 2026. It did until 2026-08-01T00:00 UTC, at which
+// point the current period held zero consumption, the gate stopped refusing, and
+// the whole suite's dispatch coverage silently changed meaning: the one test
+// asserting a REFUSAL went red, and the six asserting "does NOT refuse" started
+// passing VACUOUSLY. Pinning `now` inside the metered period is what makes every
+// one of them exercise the real branch again, on any date the suite is run.
+//
+// This is the convention the sibling gate suite (`ciDispatchGate.test.ts`)
+// already follows — *"the period the fixture's consumption lands in must be the
+// one the gate reads"* — pinning the very same instant. This file was the only
+// one in the CI-metering set that omitted it. A test that needs to cross the
+// boundary moves the clock itself with `vi.setSystemTime` (see the §4.5 guard).
+//
+// ⚠️ ONE mechanism only — do NOT also make a fixture follow the wall clock
+// (MOTIR-1953). The pin above and a period derived from the real calendar are
+// mutually exclusive: a module-level `periodStartFor(new Date())` is evaluated
+// at import, BEFORE the fake timer exists, so it captures the real month while
+// the gate reads the pinned one — the two disagree and the suite breaks exactly
+// as it did before either fix. That combination reached `main` on 2026-08-01,
+// when two parallel sessions fixed the same time bomb the two different ways and
+// both merged: each PR was green against a base without the other, git found no
+// textual conflict, and the merged result was red. If a period must vary, move
+// the PINNED instant — never introduce a second source of "now".
 
 const PASSWORD = 'hunter2hunter2';
 const MOTIR_ORG = 'motir-projects';
 const JULY_2026 = new Date('2026-07-01T00:00:00.000Z');
 const AUGUST_2026 = new Date('2026-08-01T00:00:00.000Z');
+/** A fixed instant INSIDE `JULY_2026` — the period every fixture meters into. */
+const NOW_WITHIN_JULY_2026 = new Date('2026-07-15T12:00:00.000Z');
 
 interface Fixture {
   organizationId: string;
@@ -150,6 +182,9 @@ function stubMotirAi(options?: { balance?: number; debitStatus?: number; debitTh
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // Pin `now` inside the metered period — see the header. Same convention as the
+  // sibling gate suite (`ciDispatchGate.test.ts`), which pins the same instant.
+  vi.setSystemTime(NOW_WITHIN_JULY_2026);
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
@@ -157,6 +192,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
@@ -218,7 +254,9 @@ describe('the pool is derived from MEMBERSHIP (§1, §4.2, §4.3)', () => {
     expect(charged).toEqual({ outcome: 'bypassed', reason: 'meta' });
     expect(await chargeRow(fx)).toBeNull();
 
-    // And it is never refused, even at a negative balance.
+    // And it is never refused, even at a negative balance. The 5,000 minutes
+    // metered above land in the period the pinned clock makes the gate read, so
+    // this asserts the meta BYPASS rather than an empty period (MOTIR-1953).
     await expect(
       ciAllowanceService.assertDispatchAllowed({
         userId: fx.ownerUserId,
@@ -651,6 +689,36 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
         balance: 0,
       });
     }
+  });
+
+  // MOTIR-1950 — the guard for the whole class. The gate resolves its period from
+  // the wall clock, so this pins BOTH sides of that boundary in one test: exhausted
+  // inside the metered period, allowed again the instant the calendar rolls over
+  // and §4.5 resets the pool. It fails if the clock pin is ever removed (the
+  // refusal half stops holding off-July), and it fails if the gate stops reading
+  // the CURRENT period (the reset half stops holding) — which is exactly the pair
+  // of regressions that let this suite go quietly vacuous for a month.
+  it('resolves the refusal against the CURRENT period — and the period reset lifts it (§4.5)', async () => {
+    const fx = await seedOrg({ members: 1 });
+    stubMotirAi({ balance: 0 });
+    await meter(fx, 1200); // consumption lands in JULY_2026, the pinned period
+
+    await expect(
+      ciAllowanceService.assertDispatchAllowed({
+        userId: fx.ownerUserId,
+        workspaceId: fx.workspaceId,
+      }),
+    ).rejects.toThrow(CiCreditsExhaustedError);
+
+    // Roll the calendar into the next month: the pool resets, July's consumption
+    // no longer counts against it, and the same org is dispatchable again.
+    vi.setSystemTime(new Date('2026-08-15T12:00:00.000Z'));
+    await expect(
+      ciAllowanceService.assertDispatchAllowed({
+        userId: fx.ownerUserId,
+        workspaceId: fx.workspaceId,
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('does NOT refuse while merely drawing on credits — the two thresholds are distinct (§6.1)', async () => {
