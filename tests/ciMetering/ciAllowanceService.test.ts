@@ -9,7 +9,6 @@ import { ciPeriodChargeRepository } from '@/lib/repositories/ciPeriodChargeRepos
 import { withSystemContext } from '@/lib/workspaces/context';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
-import { periodStartFor } from '@/lib/ciMetering/period';
 import { truncateAuthTables } from '../helpers/db';
 
 // The CI-minutes ENTITLEMENT against real Postgres (Story MOTIR-1775 ·
@@ -38,6 +37,17 @@ import { truncateAuthTables } from '../helpers/db';
 // one the gate reads"* — pinning the very same instant. This file was the only
 // one in the CI-metering set that omitted it. A test that needs to cross the
 // boundary moves the clock itself with `vi.setSystemTime` (see the §4.5 guard).
+//
+// ⚠️ ONE mechanism only — do NOT also make a fixture follow the wall clock
+// (MOTIR-1953). The pin above and a period derived from the real calendar are
+// mutually exclusive: a module-level `periodStartFor(new Date())` is evaluated
+// at import, BEFORE the fake timer exists, so it captures the real month while
+// the gate reads the pinned one — the two disagree and the suite breaks exactly
+// as it did before either fix. That combination reached `main` on 2026-08-01,
+// when two parallel sessions fixed the same time bomb the two different ways and
+// both merged: each PR was green against a base without the other, git found no
+// textual conflict, and the merged result was red. If a period must vary, move
+// the PINNED instant — never introduce a second source of "now".
 
 const PASSWORD = 'hunter2hunter2';
 const MOTIR_ORG = 'motir-projects';
@@ -45,26 +55,6 @@ const JULY_2026 = new Date('2026-07-01T00:00:00.000Z');
 const AUGUST_2026 = new Date('2026-08-01T00:00:00.000Z');
 /** A fixed instant INSIDE `JULY_2026` — the period every fixture meters into. */
 const NOW_WITHIN_JULY_2026 = new Date('2026-07-15T12:00:00.000Z');
-
-/**
- * The period the GATE will actually read (MOTIR-1951).
- *
- * `assertDispatchAllowed` is the one entry point that takes no date: it asks for
- * `getEntitlementState(orgId, new Date())`, which `periodStartFor` truncates to
- * the CURRENT UTC month. So a test that seeds usage into a hardcoded month only
- * exercises the gate during that month — and from the 1st of the next one it
- * silently stops: the gate reads an empty period, never refuses, and every
- * `.resolves.toBeUndefined()` assertion below passes vacuously while the one
- * `.rejects` assertion turns red. That is exactly what happened on 2026-08-01,
- * when this file had pinned every gate test to `JULY_2026`.
- *
- * So gate-path tests meter HERE, derived from the same function the code uses,
- * which makes them correct in any month. The explicit `JULY_2026` /
- * `AUGUST_2026` literals stay where a test is deliberately ABOUT a specific
- * period (the boundary reset, the charge/state assertions) — those pass their
- * period in explicitly, so they never depend on the wall clock.
- */
-const CURRENT_PERIOD = periodStartFor(new Date());
 
 interface Fixture {
   organizationId: string;
@@ -264,10 +254,9 @@ describe('the pool is derived from MEMBERSHIP (§1, §4.2, §4.3)', () => {
     expect(charged).toEqual({ outcome: 'bypassed', reason: 'meta' });
     expect(await chargeRow(fx)).toBeNull();
 
-    // And it is never refused, even at a negative balance. Meter into the
-    // period the GATE reads too, so this asserts the meta bypass rather than an
-    // empty period (MOTIR-1951).
-    await meter(fx, 5000, CURRENT_PERIOD);
+    // And it is never refused, even at a negative balance. The 5,000 minutes
+    // metered above land in the period the pinned clock makes the gate read, so
+    // this asserts the meta BYPASS rather than an empty period (MOTIR-1953).
     await expect(
       ciAllowanceService.assertDispatchAllowed({
         userId: fx.ownerUserId,
@@ -673,7 +662,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
   it('refuses dispatch with a typed error carrying WHY', async () => {
     const fx = await seedOrg({ members: 1 });
     stubMotirAi({ balance: 0 });
-    await meter(fx, 1200, CURRENT_PERIOD);
+    await meter(fx, 1200);
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
@@ -735,7 +724,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
   it('does NOT refuse while merely drawing on credits — the two thresholds are distinct (§6.1)', async () => {
     const fx = await seedOrg({ members: 1 });
     stubMotirAi({ balance: 500 });
-    await meter(fx, 1200, CURRENT_PERIOD);
+    await meter(fx, 1200);
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
@@ -748,7 +737,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
   it('does NOT refuse inside the allowance even at a zero balance', async () => {
     const fx = await seedOrg({ members: 1 });
     stubMotirAi({ balance: 0 });
-    await meter(fx, 500, CURRENT_PERIOD);
+    await meter(fx, 500);
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
@@ -766,7 +755,7 @@ describe('the REFUSAL at zero balance (§6.2, §6.3)', () => {
         throw new Error('ECONNRESET');
       }),
     );
-    await meter(fx, 1200, CURRENT_PERIOD);
+    await meter(fx, 1200);
 
     await expect(
       ciAllowanceService.assertDispatchAllowed({
