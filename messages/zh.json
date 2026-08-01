@@ -720,6 +720,15 @@
     },
     "planWithAI": {
       "label": "用 AI 规划"
+    },
+    "aiCallout": {
+      "name": "Motir AI",
+      "actions": {
+        "plan": {
+          "title": "用 AI 规划",
+          "description": "生成、扩展或重新规划项目"
+        }
+      }
     }
   },
   "issueViews": {

@@ -720,6 +720,15 @@
     },
     "planWithAI": {
       "label": "Plan with AI"
+    },
+    "aiCallout": {
+      "name": "Motir AI",
+      "actions": {
+        "plan": {
+          "title": "Plan with AI",
+          "description": "Generate, expand or re-plan the project"
+        }
+      }
     }
   },
   "issueViews": {
