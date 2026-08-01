@@ -1035,6 +1035,17 @@ the saving on, it re-opens §1 with its OWN card** — not this one, and not sil
 precondition: MOTIR-1924 is what makes the real margin _measurable_, so any such re-opening
 should wait on it rather than on the estimate above.
 
+> **⛔ CORRECTED 2026-08-01 (MOTIR-1918) — the `~$0.0005–0.001/min` figure above is wrong for
+> the provider actually chosen.** It was a category estimate ("spot compute is cheap"), and
+> the fleet does not run on spot compute: it runs on **Fly Machines**. The real basis for a
+> Linux-2-core-equivalent runner is **~$0.00195/min** (`performance-2x` + 4 GB extra RAM,
+> computed from Fly's published table) — **2–4× this estimate**, so the improvement over
+> GitHub-hosted is **~3.1×, not 6–12×**, and the fleet's gross margin is **~80.5%**, not
+> ~90–95%. **The DECISION above is unchanged**: the customer-facing numbers still do not
+> re-open, re-opening §1 still needs its own card, and it should still wait on MOTIR-1924
+> making the margin a measurement. Only the figure moves. Derivation and sources:
+> `docs/decisions/ci-runner-fleet.md` §8.
+
 #### §M — Question 2: the Motir fleet family meters at **×1.00 — a PRODUCT decision, deliberately NOT a cost ratio**
 
 §3.1 defines the multiplier as a **price ratio against the Linux 2-core numéraire**, and its
@@ -1394,7 +1405,12 @@ landed between the initial read and the write. Re-fetch before trusting a §-ref
   a re-opening of §1 with its own card, and it should wait on MOTIR-1924 making the margin a
   measurement rather than an estimate.
 - **Which orchestrator runs the fleet.** §M fixes what the runner must be _equivalent to_;
-  MOTIR-1918 decides what actually runs it.
+  MOTIR-1918 decides what actually runs it. **DECIDED 2026-08-01 —
+  `docs/decisions/ci-runner-fleet.md`:** Motir-operated **Fly Machines**, in a **separate Fly
+  organization**, behind a `ContainerOrchestrator` port. That record also **corrects §L's
+  margin note** (see the ⛔ block there), supplies MOTIR-1923's `usdPerMinute`, and answers
+  the fleet's spend-ceiling question — **Fly offers neither a cap nor an alert**, so the
+  binding ceiling is product-side, in MOTIR-1922's gate.
 
 **Related planning bugs.** MOTIR-1904 records that this card's earlier revision promised its
 implementers "no further questions" while its "what the user sees" answer had no owning
