@@ -344,8 +344,9 @@ records the `job_run` row's `event_name` as the synthetic `scheduled.{job_id}`
 (a cron run carries no real triggering-event name), so the dashboard treats both
 kinds the same, and a scheduled run that fails surfaces in the DLQ exactly like
 any other job. `system.daily-health-check`
-(`lib/jobs/definitions/dailyHealthCheck.ts`) is the reference example — a no-op
-that proves the scheduled path end-to-end. `system.attachment-gc`
+(`lib/jobs/definitions/dailyHealthCheck.ts`) is the reference example — it proves
+the scheduled path end-to-end, and as of MOTIR-1970 it also carries the
+**schedule-health probe** (see "Registration" below). `system.attachment-gc`
 (`lib/jobs/definitions/attachmentGc.ts`, Subtask 5.2.7) is the first real
 scheduled job: the daily orphan-attachment sweep (unlinked rows past the 7-day
 safety window → blob, then row), cursor-bounded per run and idempotent, with
@@ -369,3 +370,50 @@ dedicated manual Subtask:
 2. Confirm `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` in both Vercel scopes.
 3. Sync the preview `/api/inngest` URL and trigger a run from the Inngest
    dashboard to confirm end-to-end.
+
+## Registration — the failure mode to know about (MOTIR-1970)
+
+**Inngest only invokes functions it has been TOLD about.** The registration is a
+`PUT` to `/api/inngest`; adding a job to `lib/jobs/registry.ts` and deploying is
+not enough on its own. When the cloud's registered function list falls behind the
+deployed build, every function added since is **dead, silently**: the event is
+accepted, `inngest.send()` succeeds, **no run is created**, no `job_run` row is
+written, and nothing errors anywhere. A dead job is indistinguishable from a job
+nobody triggered.
+
+That happened. Production ran from 2026-07-02 to 2026-08-01 with five jobs
+consuming nothing — `system.code-graph-index`, `system.code-graph-refresh`,
+`system.auto-plan-cadence-tick`, `system.ci-minutes-reconcile`,
+`system.ci-actions-gate-sweep`. **Root cause:** the Inngest↔Vercel integration
+probes the per-deployment `motir-core-<hash>.vercel.app` URL, and the Vercel
+project runs Deployment Protection at `all_except_custom_domains`, so that URL
+answers with a 302 into Vercel's SSO login. The probe never reached the app. Only
+the custom domain `app.motir.co` is exempt. (This is MOTIR-66 recurring — that
+card fixed the PREVIEW probe with a protection-bypass secret; production
+deployment URLs were never covered.)
+
+Two mechanisms now close it, and they are deliberately independent:
+
+1. **Deploy-time sync** — `.github/workflows/inngest-sync.yml` PUTs
+   `https://app.motir.co/api/inngest` on every successful production deploy and
+   **fails the job** if the PUT does not return 200. Motir issues its own sync,
+   against the domain protection does not cover, and a failure is a red check
+   rather than silence.
+2. **Runtime detection** — `system.daily-health-check` now runs the
+   **schedule-health probe** (`lib/services/jobScheduleHealthService.ts`). It
+   walks every registered cron job and fails the run when one has missed more
+   than one consecutive tick, dead-lettering with the offenders named in the
+   message. Cron jobs are the tripwire because they are the only ones whose
+   silence is unambiguous — an event-triggered job that never ran may simply
+   never have been triggered.
+
+The probe lives in `system.daily-health-check` **specifically because that job is
+old** (2026-06-01) and is therefore registered in any stale sync the cloud could
+still be holding: an OLD job checking on NEW ones. A checker defined alongside
+the jobs it watches would be stranded by the very fault it exists to report — so
+do not move it to a newer job, and do not re-declare that job under a new id.
+
+**To re-sync by hand:** `curl -X PUT https://app.motir.co/api/inngest`. A 200 with
+`{"modified": true}` means the registry actually changed. Re-syncing after a long
+gap activates every dormant job at once, including crons with real side effects —
+check what has been dormant before firing it.
