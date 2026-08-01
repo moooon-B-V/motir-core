@@ -47,6 +47,14 @@ import { runnerGroupClient, runnerGroupNameFor } from '@/lib/github/runnerGroups
 // pass re-syncs. `syncQuietly` is that contract made un-forgettable at the call
 // sites.
 //
+// ⚠️ EVERY LOG LINE IS A CONSTANT MESSAGE + A STRUCTURED CONTEXT OBJECT, never a
+// template literal carrying an id. `console.*`'s first argument is a FORMAT
+// string (Node honours `%s` / `%d` / `%o`), so interpolating a request-derived
+// value into it and then passing a second argument is CodeQL's
+// `js/tainted-format-string`: an id containing `%s` would swallow the argument
+// after it and silently corrupt the log. The structured form is also what the
+// sibling fleet service (`ciRunnerProvisioningService`) already uses.
+//
 // ⚠️ NO ACCESS GATE OF ITS OWN, BY DESIGN. Every caller is either already
 // edit-gated (the establish flow, `removeRow`) or is a webhook saga with no
 // acting user at all (the transfer). So this service binds the workspace context
@@ -225,9 +233,9 @@ export const projectRunnerGroupService = {
             tx,
           );
           console.error(
-            `[projectRunnerGroupService] runner-group sync failed for project ${target.projectId}; ` +
-              'the repositories are established and the group is marked unsynced:',
-            detail,
+            '[projectRunnerGroupService] runner-group sync failed — the repositories are ' +
+              'established and the group is marked unsynced',
+            { projectId: target.projectId, detail },
           );
           return { outcome: 'sync_pending' as const, detail };
         }
@@ -250,10 +258,10 @@ export const projectRunnerGroupService = {
     try {
       await this.syncForProject(target);
     } catch (err) {
-      console.error(
-        `[projectRunnerGroupService] could not sync the runner group for project ${target.projectId}:`,
+      console.error('[projectRunnerGroupService] could not sync the runner group', {
+        projectId: target.projectId,
         err,
-      );
+      });
     }
   },
 
@@ -307,9 +315,9 @@ export const projectRunnerGroupService = {
         } catch (err) {
           const detail = err instanceof Error ? err.message : 'unknown';
           console.error(
-            `[projectRunnerGroupService] could not delete runner group ${groupId} for project ` +
-              `${target.projectId}; the columns are left in place so a retry can find it:`,
-            detail,
+            '[projectRunnerGroupService] could not delete the runner group — the columns are ' +
+              'left in place so a retry can find it',
+            { projectId: target.projectId, runnerGroupId: groupId, detail },
           );
           return { outcome: 'delete_failed' as const, runnerGroupId: groupId, detail };
         }
@@ -350,9 +358,11 @@ export const projectRunnerGroupService = {
       }
     } catch (err) {
       console.error(
-        `[projectRunnerGroupService] could not settle the runner group after a handoff for project ` +
-          `${target.projectId}:`,
-        err,
+        '[projectRunnerGroupService] could not settle the runner group after a handoff',
+        {
+          projectId: target.projectId,
+          err,
+        },
       );
     }
   },
@@ -367,10 +377,10 @@ export const projectRunnerGroupService = {
     try {
       await this.deleteForProject(target);
     } catch (err) {
-      console.error(
-        `[projectRunnerGroupService] could not delete the runner group for project ${target.projectId}:`,
+      console.error('[projectRunnerGroupService] could not delete the runner group', {
+        projectId: target.projectId,
         err,
-      );
+      });
     }
   },
 };
