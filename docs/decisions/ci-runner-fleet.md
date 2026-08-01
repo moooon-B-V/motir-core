@@ -486,11 +486,16 @@ is:**
    already carry `costUsd` per runner; a rolling month-to-date sum over the fleet org is a
    read Motir owns, on a physical quantity, that survives a provider change. It **alerts** —
    §1's ceiling is what **stops**.
-3. **MOTIR-1935 is re-scoped, not deleted.** What remains for a human is real and short:
-   create the separate Fly organization, put it on its own payment method, record the
-   month-to-date figure to watch and its named owner, and record — as MOTIR-1908 did for the
-   $0 GitHub budget — **what Fly actually does when spend runs away, from observation rather
-   than from the docs' silence.**
+3. **MOTIR-1935 needs no re-scope — it already anticipated this branch**, and it deserves the
+   credit: its last acceptance criterion reads _"If the chosen provider offers **no**
+   enforceable spend ceiling, that is recorded plainly along with the compensating control
+   actually put in place … never left as 'we'll watch the dashboard'."_ What this decision
+   supplies is its step 1 — the answer. **Fly is the account; there is no cap and no alert;
+   the compensating control is §9.1's fleet-wide ceiling.** What remains for a human is real
+   and short: create the separate Fly organization (§7.5), put it on its own payment method,
+   record the month-to-date figure to watch and its named owner, and record — as MOTIR-1908
+   did for the $0 GitHub budget — **what Fly actually does when spend runs away, from
+   observation rather than from the docs' silence.**
 
 ## §10 — Binding on MOTIR-1916's cards
 
@@ -547,8 +552,11 @@ stated scope is changed rather than merely detailed, it says **AMENDED**.
   the cold-spare pool is ever built), and **which labels the jobs API reports**. It should
   also confirm a job for project X is **not** picked up by a runner booted for project Y —
   §7.3's failure mode, which is silent when it happens.
-- **MOTIR-1935 (manual — the spend bound). RE-SCOPED, see §9.3.** There is no provider cap and
-  no provider alert to set. What remains: create the separate Fly organization (§7.5), its own
+- **MOTIR-1935 (manual — the spend bound). ANSWERED, not re-scoped — see §9.3.** Its step 1 is
+  _"read MOTIR-1918's outcome and enumerate every account the fleet actually bills to"_, and
+  its last criterion already covers a provider with no enforceable ceiling. The answer:
+  **one account (the fleet's own Fly organization), no cap, no alert**; the compensating
+  control is §9.1's fleet-wide ceiling. What remains: create that organization (§7.5), its own
   payment method, the named owner, the figure to watch, and an **observation** of Fly's
   behaviour under runaway spend.
 - **MOTIR-685 (Epic 9's hosted-execution decision). CONSTRAINED, not re-scoped.** It adopts
