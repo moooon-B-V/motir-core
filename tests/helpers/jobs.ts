@@ -92,3 +92,47 @@ export function captureJobEvents(): { events: CapturedJobEvent[]; restore: () =>
   }) as typeof inngest.send);
   return { events, restore: () => spy.mockRestore() };
 }
+
+/**
+ * Give every registered cron job a fresh `scheduled.*` ledger row, so
+ * `system.daily-health-check`'s schedule-health probe (MOTIR-1970) passes.
+ *
+ * The probe FAILS the health-check run when a cron job has stopped firing, which
+ * is the whole point of it — but it also means any test that drives
+ * `dailyHealthCheck` for some OTHER reason (the scheduled-path primitive, the
+ * cross-cutting ledger invariants) needs the schedules to look healthy first.
+ * Without this the run throws, and the test fails for a reason that has nothing
+ * to do with what it is asserting.
+ *
+ * `system.daily-health-check` is deliberately SKIPPED: `defineJob` writes its
+ * `running` row before the handler body runs, so it always clears its own check
+ * — and skipping it keeps it the only row of its own functionId, so callers can
+ * still assert an exact run count for the job under test.
+ *
+ * Importing `@/lib/jobs/registry` here is load-bearing: it evaluates every
+ * definition module, which is what populates the schedule table. Callers get
+ * that for free rather than depending on which modules their own imports
+ * happen to pull in.
+ */
+export async function seedHealthyJobSchedules(): Promise<void> {
+  const { jobSchedules } = await import('@/lib/jobs/schedules');
+  await import('@/lib/jobs/registry');
+  const { db } = await import('@/lib/db');
+  const startedAt = new Date(Date.now() - 60_000);
+  for (const { functionId } of jobSchedules()) {
+    if (functionId === 'system.daily-health-check') continue;
+    await db.jobRun.create({
+      data: {
+        workspaceId: null,
+        functionId,
+        eventName: `scheduled.${functionId}`,
+        eventId: `seed-${functionId}`,
+        attempt: 0,
+        status: 'succeeded',
+        startedAt,
+        finishedAt: startedAt,
+        durationMs: 0,
+      },
+    });
+  }
+}

@@ -1,6 +1,7 @@
 import { inngest } from './client';
 import { jobServices, type JobServices } from './services';
 import { resolveRetries, type RetryPolicyName } from './retries';
+import { registerSchedule } from './schedules';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
 import type { JobRunFailure } from '@/lib/dto/jobs';
@@ -147,6 +148,12 @@ export function defineJob<N extends JobEventName>(
   handler: JobHandler,
 ) {
   const { id, concurrency, idempotency, debounce, cron } = options;
+  // Publish the schedule so `jobScheduleHealthService` can check that this cron
+  // is still actually firing in production (MOTIR-1970). Registering HERE, at
+  // the single choke point every job passes through, is what keeps the schedule
+  // table complete by construction — a cron job cannot exist without appearing
+  // in it.
+  if (cron !== undefined) registerSchedule(id, cron);
   // The event this function subscribes to: the id itself (1:1 convention) or
   // the explicit `trigger` of an additional consumer.
   const triggerEvent = options.trigger ?? id;

@@ -187,4 +187,34 @@ export const jobRunRepository = {
       skip: opts.offset,
     });
   },
+
+  /**
+   * Newest `started_at` per event name, across ALL workspaces (MOTIR-1970).
+   *
+   * The schedule-health check asks "when did each cron job last actually run?",
+   * which is one aggregate over the whole ledger rather than N per-job reads —
+   * hence a single `groupBy`. Like `listAll` it has no workspace filter, so the
+   * caller MUST supply a `withSystemContext` tx (the only RLS branch that admits
+   * the untenanted `workspace_id IS NULL` rows every `system.*` job writes).
+   *
+   * Keyed on `eventName`, not `functionId`, because that is what identifies a
+   * SCHEDULED run: `defineJob` records a cron run's event name as the synthetic
+   * `scheduled.{id}`, so keying on it counts only genuine cron ticks and never a
+   * manual replay of the same function from the DLQ.
+   */
+  async findLatestStartedAtByEventNames(
+    eventNames: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ eventName: string; latestStartedAt: Date }>> {
+    const rows = await tx.jobRun.groupBy({
+      by: ['eventName'],
+      where: { eventName: { in: eventNames } },
+      _max: { startedAt: true },
+    });
+    // `_max.startedAt` types as nullable because Prisma cannot know the column
+    // is not — but `started_at` is NOT NULL and `groupBy` never returns an empty
+    // group, so a returned row always has a max. Asserting it here keeps the
+    // impossible case out of the caller as a branch it could never exercise.
+    return rows.map((row) => ({ eventName: row.eventName, latestStartedAt: row._max.startedAt! }));
+  },
 };

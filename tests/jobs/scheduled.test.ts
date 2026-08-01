@@ -9,6 +9,7 @@ import {
   DAILY_HEALTH_CHECK_CRON,
 } from '@/lib/jobs/definitions/dailyHealthCheck';
 import { truncateJobRuns } from '../helpers/db';
+import { seedHealthyJobSchedules } from '../helpers/jobs';
 
 // Scheduled-job primitive (Story 1.6 · Subtask 1.6.4) — the replacement for the
 // 1.6.2 system.ping smoke test. Drives the `system.daily-health-check` cron job
@@ -35,19 +36,29 @@ afterAll(async () => {
 // wrapper records the ledger event_name as the synthetic `scheduled.{id}`
 // regardless, so the assertions below prove the override.
 
+// As of MOTIR-1970 the health check carries a real probe (the schedule-health
+// check), so it only SUCCEEDS when every registered cron job is firing. These
+// tests are about the scheduled-path primitive, not the probe, so they make the
+// schedules healthy first — the probe's own behaviour is covered in
+// `schedule-health.test.ts`.
+
 describe('system.daily-health-check scheduled job', () => {
   it('runs to completion and returns the static payload', async () => {
+    await seedHealthyJobSchedules();
     const engine = new InngestTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
 
-    expect(result).toEqual(DAILY_HEALTH_CHECK_PAYLOAD);
+    expect(result).toMatchObject(DAILY_HEALTH_CHECK_PAYLOAD);
   });
 
   it('writes a succeeded job_run row with the synthetic scheduled event name', async () => {
+    await seedHealthyJobSchedules();
     const engine = new InngestTestEngine({ function: dailyHealthCheck });
     await engine.execute();
 
-    const runs = await db.jobRun.findMany();
+    // Only the wrapper writes a row for THIS function (the seed skips it), so
+    // there is exactly one and it is the one under test.
+    const runs = await db.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
     expect(runs).toHaveLength(1);
 
     const run = runs[0]!;

@@ -13,7 +13,7 @@ import { jobRunsService } from '@/lib/services/jobRunsService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { EmailSendData } from '@/lib/jobs/types';
 import type { Prisma } from '@prisma/client';
-import { captureConsoleEmails, runEmailSendJob } from '../helpers/jobs';
+import { captureConsoleEmails, runEmailSendJob, seedHealthyJobSchedules } from '../helpers/jobs';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Cross-cutting jobs invariants that close Story 1.6 (Subtask 1.6.6) — the ones
@@ -62,11 +62,20 @@ afterAll(async () => {
 
 describe('scheduled job', () => {
   it('the daily-health-check cron job writes a ledger row under the synthetic scheduled event name', async () => {
+    // The health check now carries the MOTIR-1970 schedule-health probe, which
+    // fails the run when a cron job has stopped firing. This test is about the
+    // scheduled-path LEDGER, so make the schedules healthy first; the probe's own
+    // behaviour is covered in `schedule-health.test.ts`.
+    await seedHealthyJobSchedules();
+
     const engine = new InngestTestEngine({ function: dailyHealthCheck });
     const { result } = await engine.execute();
-    expect(result).toEqual(DAILY_HEALTH_CHECK_PAYLOAD);
+    // `toMatchObject`, not `toEqual`: the payload also carries the schedule
+    // report, which is not what this test is pinning.
+    expect(result).toMatchObject(DAILY_HEALTH_CHECK_PAYLOAD);
 
-    const runs = await db.jobRun.findMany();
+    // The seed skips this function, so its own row is the only one.
+    const runs = await db.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.functionId).toBe('system.daily-health-check');

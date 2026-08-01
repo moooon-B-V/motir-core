@@ -461,6 +461,19 @@ export default defineConfig({
         'lib/planning/aiCallout.ts',
         'components/planning/AiCalloutMenu.tsx',
         'components/planning/PlanWithAIFab.tsx',
+        // MOTIR-1970 — the schedule-health detection seam. Gated because this is
+        // the code that has to work on the day everything else has already
+        // failed: production ran for a month with five jobs silently consuming
+        // nothing, and no signal existed anywhere. Each branch here IS a way the
+        // alarm can fail to sound — a cron term the evaluator does not
+        // understand, a "never ran" that reads as healthy, a job judged against
+        // the wrong tick. An untested branch in a detector is indistinguishable
+        // from no detector, and its failure mode is the same silence it was
+        // built to break.
+        'lib/jobs/cron.ts',
+        'lib/jobs/schedules.ts',
+        'lib/services/jobScheduleHealthService.ts',
+        'lib/jobs/definitions/dailyHealthCheck.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -867,6 +880,11 @@ export default defineConfig({
         'lib/planning/aiCallout.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/AiCalloutMenu.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanWithAIFab.tsx': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-1970 — the schedule-health detection seam (see the `include` note).
+        'lib/jobs/cron.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/schedules.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/jobScheduleHealthService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/dailyHealthCheck.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
