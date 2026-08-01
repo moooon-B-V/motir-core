@@ -188,6 +188,13 @@ export function buildWorkItemLevel(
             id: ORIGIN_ID,
             parentId: null,
             drillable: false,
+            // DECORATION, not a member of the level's work (MOTIR-1824). No real
+            // work item backs it, and it is the level's provenance rather than
+            // one of its branches — so the canvas's "does this level offer a
+            // choice?" test (`autoDescendSingleParent`) must not count it. Left
+            // uncounted, an ONBOARDED project's root level was never the
+            // single-drillable-node shape and the auto-descend never fired for it.
+            decorative: true,
             searchText: 'Planning origin idea discover shape validate plan',
             content: <PlanningOriginCluster />,
             // Left of the auto-layout origin (x=40, y=40 in `deterministicLayout`),

@@ -1020,6 +1020,22 @@ Nothing else about the breadcrumb changes: Back control, separators, `aria-curre
 | **E** | The NEGATIVE cases             | E1 a multi-root level (≥2 nodes → the choice is the user's) and E2 a single **non-drillable** leaf (nothing beneath it → the lone card is _correct_) — both with **no breadcrumb at all** — plus the full descend table |
 | **F** | Post-navigate-up resting state | after the user clicks the breadcrumb root (or Back), the single-parent level **sits still**; the re-descend table (refresh: no · explicit drill: yes · scope switch: yes)                                               |
 
+### What "one node" counts — the level's WORK (MOTIR-1824, recorded after the build)
+
+Panel E's descend table reads "2 or more nodes → NO", with the reason that decides it: _there is a
+real branch; the choice is the user's._ The pinned **planning-origin cluster** (MOTIR-1013) is a node
+on the root level of every project that ONBOARDED, and it is neither — it is provenance drawn beside
+the road, not a branch in it. Counting it made an onboarded project's root level permanently
+two-node, so the descent never fired there at all: exactly the projects the feature was for got the
+lone card it exists to skip.
+
+So the count the table describes is over the level's **work**, not its node array. A node the
+consumer flags `decorative` (today only the origin cluster) still renders, selects, drags and
+searches like any other — it is excluded from this ONE question. An off-level **ghost anchor** is
+NOT decorative: it names a real, peekable work item, so it remains a reason to stop. Every other row
+of the table is unchanged, and the treatment has no pixels of its own — an onboarded project simply
+gets the arrival panel A already draws.
+
 ### Suppression is BEHAVIOUR, not chrome (panel F)
 
 After an explicit navigation up, the resting level is an ordinary root level — the same one card,

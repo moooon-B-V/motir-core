@@ -138,6 +138,62 @@ describe('the adapter → canvas seam: hasChildren (DTO) reaches drillable (node
     expect(noCrumbNav()).toBeNull();
   });
 
+  // MOTIR-1824 — THE ONBOARDED PROJECT, end to end. The two tests above serve a
+  // root level whose only node is the work item, which is only true of a project
+  // that never onboarded. An ONBOARDED one gets the planning-origin cluster pinned
+  // beside its roots by the SAME adapter call (`includeOrigin: parentId === null &&
+  // showPlanningOrigin`), so its root level is never one node — and the feature
+  // silently did nothing for it. The regression is only visible from here: both
+  // canvas-level fixtures and a wire payload alone miss it, because the extra node
+  // is injected BETWEEN them, by the adapter.
+  it('descends on an ONBOARDED project, whose root level also carries the planning-origin cluster', async () => {
+    const fetchSpy = serveWire({
+      __root__: { nodes: [wireNode('E1', 'MOTIR-1', 'Lone epic', true)], edges: [] },
+      E1: {
+        nodes: [
+          wireNode('S1', 'MOTIR-2', 'Story one', false, 'E1'),
+          wireNode('S2', 'MOTIR-3', 'Story two', false, 'E1'),
+        ],
+        edges: [],
+      },
+    });
+
+    render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+
+    // Same arrival as the never-onboarded project: the work, not the lone card.
+    expect(await screen.findByText('Story one')).toBeTruthy();
+    expect(el('S2')).toBeTruthy();
+    expect(el('E1')).toBeNull();
+    expect(crumbLabels()).toEqual(['Roadmap', 'MOTIR-1 · Lone epic']);
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    const urls = fetchSpy.mock.calls.map(([u]) => String(u));
+    expect(urls[1]).toBe('/api/projects/MOTIR/roadmap?parentId=E1');
+  });
+
+  it('an onboarded project with TWO root epics still renders its level — cluster and all', async () => {
+    // The control for the test above, and the proof the fix did not degrade into
+    // "descend whenever there is one drillable node": the same `showPlanningOrigin`
+    // level with a real branch in it stays put, and the cluster is on screen (it
+    // is excluded from the COUNT, not from the render).
+    serveWire({
+      __root__: {
+        nodes: [
+          wireNode('E1', 'MOTIR-1', 'Lone epic', true),
+          wireNode('E2', 'MOTIR-9', 'Other epic', true),
+        ],
+        edges: [],
+      },
+    });
+
+    render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+    expect(await screen.findByText('Lone epic')).toBeTruthy();
+    await act(async () => {}); // flush the effect pass before the negatives
+    expect(el('E2')).toBeTruthy();
+    expect(el('__planning_origin__')).toBeTruthy();
+    expect(noCrumbNav()).toBeNull();
+  });
+
   it('carries the adapter’s `identifier · title` crumb onto the auto-descended arrival', async () => {
     // The breadcrumb is the ONLY thing naming a level nobody clicked
     // (MOTIR-1805 DECISION 2), and its label is built by the ADAPTER from the

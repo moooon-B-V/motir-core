@@ -21,6 +21,12 @@
 // Plus a MULTI-ROOT negative control, so the feature can never become "always
 // drill into the first thing".
 //
+// The fixture's project is ONBOARDED (MOTIR-1824), so every root level it renders
+// also carries the pinned planning-origin cluster. That is deliberate: while the
+// descent counted a level's whole node array, the cluster made the sprint root two
+// nodes and this feature did nothing at all for an onboarded project — the shape
+// this spec could not cover until the count became "the level's WORK".
+//
 // AUTHORITATIVE SIGNALS ONLY — no fixed-duration sleep anywhere in this file.
 // Each level is a roadmap GET, and the auto-descend adds a SECOND fetch (the
 // `parentId` drill) before the final paint, so waiting on the scope switch's ROOT
@@ -147,6 +153,12 @@ test('roadmap auto-drill — a single-story sprint opens on its subtasks, and th
     for (const title of seed.subtaskTitles) {
       await expect(page.getByText(title, { exact: true })).toBeVisible();
     }
+    // The seeded project is ONBOARDED (MOTIR-1824), so the level we descended
+    // FROM held the pinned planning-origin cluster beside the lone story. That
+    // second node is what used to make this level "not single" and stop the
+    // descent dead; landing here at all is the browser-level proof it no longer
+    // counts. (It belongs to the root level only, so it is gone from this one.)
+    await expect(page.getByTestId('planning-origin')).toHaveCount(0);
     // …and the skipped story is NOT rendered as a card; it is in the breadcrumb.
     // Asserting node count alone would pass on any unrelated level, so this
     // pins the ancestor by name too (`Roadmap › <identifier · title>`).
@@ -194,8 +206,12 @@ test('roadmap auto-drill — a single-story sprint opens on its subtasks, and th
   await chapter('Climb to the skipped level — and it sits still', async () => {
     await breadcrumb(page).getByRole('button', { name: 'Roadmap', exact: true }).click();
 
-    // (a) The single-parent level: the lone story card, no subtasks, no breadcrumb.
+    // (a) The single-parent level: the lone story card, no subtasks, no breadcrumb
+    // — and, pinned beside it, the planning-origin cluster this onboarded project
+    // draws (MOTIR-1824). Seeing BOTH here is the level whose two nodes used to
+    // suppress the descent, now rendered only because the user asked for it.
     await expect(page.getByText(seed.storyTitle, { exact: true })).toBeVisible();
+    await expect(page.getByTestId('planning-origin')).toBeVisible();
     await expect(page.getByText(seed.subtaskTitles[0], { exact: true })).toHaveCount(0);
     await expect(breadcrumb(page)).toHaveCount(0);
     await beat();
