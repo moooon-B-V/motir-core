@@ -306,6 +306,17 @@ describe('the metering capability is GitHub-only, by design (§5.6)', () => {
     expect(getGitProvider('gitlab').parseWorkflowRunEvent).toBeUndefined();
     expect(getGitProvider('gitlab').fetchWorkflowRunJobs).toBeUndefined();
   });
+
+  it('the runner-FLEET capability is scoped the same way (MOTIR-1920)', () => {
+    // Same structural reason, one card later: the fleet boots runners only for
+    // repositories Motir hosts, and Motir hosts none on GitLab — so there is no
+    // GitLab job it would ever provision for. `parseWorkflowJobEvent`'s own
+    // behaviour is pinned in `tests/ciFleet/workflowJobEvent.test.ts`; what is
+    // asserted here is that it stayed a CAPABILITY rather than becoming a
+    // contract every provider must stub.
+    expect(typeof github.parseWorkflowJobEvent).toBe('function');
+    expect(getGitProvider('gitlab').parseWorkflowJobEvent).toBeUndefined();
+  });
 });
 
 describe('github.parseWorkflowRunEvent (MOTIR-1896)', () => {

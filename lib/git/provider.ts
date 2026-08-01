@@ -9,6 +9,7 @@ import type {
   NormalizedRepo,
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
+  NormalizedWorkflowJobEvent,
   NormalizedWorkflowRunEvent,
 } from './types';
 
@@ -119,6 +120,18 @@ export interface GitProvider {
    * has not completed, a different event, or a malformed body). PURE.
    */
   parseWorkflowRunEvent?(rawPayload: unknown): NormalizedWorkflowRunEvent | null;
+
+  /**
+   * Normalize a raw QUEUED-workflow-job webhook payload into the
+   * provider-agnostic shape, or `null` when it is not one the fleet provisions
+   * for (a non-`queued` action — `in_progress` / `completed` — a different
+   * event, or a malformed body). PURE.
+   *
+   * OPTIONAL for the same structural reason the metering reads above are
+   * (§5.6): Motir creates repositories only in its own GitHub org, so there is
+   * no GitLab job the fleet would ever boot a runner for.
+   */
+  parseWorkflowJobEvent?(rawPayload: unknown): NormalizedWorkflowJobEvent | null;
 
   /**
    * Fetch the JOBS of one completed workflow run, normalized. The meter bills

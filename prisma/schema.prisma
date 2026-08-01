@@ -503,8 +503,8 @@ model Organization {
   /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
   acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
 
-  memberships         OrganizationMembership[]
-  workspaces          Workspace[]
+  memberships                 OrganizationMembership[]
+  workspaces                  Workspace[]
   // CI-minutes consumption attributed to this org (Story MOTIR-1775 ·
   // MOTIR-1896). The org is the tier the POOL and the credit ledger are held at
   // (`ci-minutes-allowance.md` §4.1), so both metering tables carry it
@@ -512,14 +512,18 @@ model Organization {
   // period?" one indexed read for the allowance sibling (MOTIR-1901) instead of
   // a join through every workspace. Cascade: an org's consumption history is
   // meaningless without the org.
-  ciWorkflowRunUsages CiWorkflowRunUsage[]
-  ciPeriodUsages      CiPeriodUsage[]
+  ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  ciPeriodUsages              CiPeriodUsage[]
+  // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the
+  // queued fleet jobs attributed to this org. Cascade for the same reason: an
+  // intent is a request to spend on the org's behalf, meaningless without it.
+  ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
   // What that consumption has been CHARGED (Story MOTIR-1775 · MOTIR-1901) — one
   // row per org per period. Org-scoped rather than workspace-scoped, unlike the
   // two metering tables above, because the POOL and the credit ledger are both
   // org-level (§4.1) and a charge spanning an org's workspaces has no single
   // workspace to belong to.
-  ciPeriodCharges     CiPeriodCharge[]
+  ciPeriodCharges             CiPeriodCharge[]
 
   @@map("organization")
 }
@@ -566,89 +570,92 @@ model Workspace {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberships              WorkspaceMembership[]
-  projects                 Project[]
-  workItems                WorkItem[]
-  workItemLinks            WorkItemLink[]
-  jobRuns                  JobRun[]
-  jobRunDlqs               JobRunDlq[]
-  workflowStatuses         WorkflowStatus[]
-  workflowTransitions      WorkflowTransition[]
-  attachments              Attachment[]
-  acceptanceEvidences      AcceptanceEvidence[]
-  boards                   Board[]
-  boardColumns             BoardColumn[]
-  boardColumnStatuses      BoardColumnStatus[]
-  sprints                  Sprint[]
-  projectMemberships       ProjectMembership[]
+  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships                 WorkspaceMembership[]
+  projects                    Project[]
+  workItems                   WorkItem[]
+  workItemLinks               WorkItemLink[]
+  jobRuns                     JobRun[]
+  jobRunDlqs                  JobRunDlq[]
+  workflowStatuses            WorkflowStatus[]
+  workflowTransitions         WorkflowTransition[]
+  attachments                 Attachment[]
+  acceptanceEvidences         AcceptanceEvidence[]
+  boards                      Board[]
+  boardColumns                BoardColumn[]
+  boardColumnStatuses         BoardColumnStatus[]
+  sprints                     Sprint[]
+  projectMemberships          ProjectMembership[]
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
   // Cascade with the workspace (a deleted workspace frees its keys).
-  projectKeyAliases        ProjectKeyAlias[]
-  comments                 Comment[]
-  labels                   Label[]
-  components               Component[]
-  customFieldDefinitions   CustomFieldDefinition[]
-  customFieldValues        CustomFieldValue[]
-  savedFilters             SavedFilter[]
-  savedFilterSubscriptions SavedFilterSubscription[]
-  automationRules          AutomationRule[]
+  projectKeyAliases           ProjectKeyAlias[]
+  comments                    Comment[]
+  labels                      Label[]
+  components                  Component[]
+  customFieldDefinitions      CustomFieldDefinition[]
+  customFieldValues           CustomFieldValue[]
+  savedFilters                SavedFilter[]
+  savedFilterSubscriptions    SavedFilterSubscription[]
+  automationRules             AutomationRule[]
   // Dashboards (Story 6.3) — workspace-scoped widget grids. Cascade.
-  dashboards               Dashboard[]
+  dashboards                  Dashboard[]
   // In-app notifications (Story 5.7 · Subtask 5.7.2) — workspace-scoped per
   // the finding-#26 tenancy gate (every notification read filters on it).
   // Cascade with the workspace, the comments pattern.
-  notifications            Notification[]
-  sprintReportEntries      SprintReportEntry[]
+  notifications               Notification[]
+  sprintReportEntries         SprintReportEntry[]
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
-  apiTokens                ApiToken[]
+  apiTokens                   ApiToken[]
   // In-flight `motir login` grants BOUND to this workspace (Subtask MOTIR-1865).
   // The row is not tenant data (it is identity-scoped, no RLS — see DeviceCode);
   // the edge exists because the pending grant names the workspace its PAT would be
   // minted into, so it must go with the workspace. Cascade.
-  deviceCodes              DeviceCode[]
+  deviceCodes                 DeviceCode[]
   // AI-planning proposal bundles + their proposed-operation items (Story 7.21).
   // Workspace-scoped tenant data — cascade with the workspace.
-  plans                    Plan[]
-  planItems                PlanItem[]
+  plans                       Plan[]
+  planItems                   PlanItem[]
   // GitHub App installations on this workspace (Story 7.10 · MOTIR-891) — "Grant
   // 2" of the GitHub integration (repo access). Cascade with the workspace.
   // A workspace's OWN installation only — Motir's shared provisioning
   // installation is bound to NO workspace (MOTIR-1931); its repos are tenanted
   // through `githubRepos` below, not through here.
-  githubInstallations      GithubInstallation[]
+  githubInstallations         GithubInstallation[]
   // Connected/created repositories owned by this workspace (MOTIR-1931). Tenancy
   // is a property of the REPO, not of the installation: one shared provisioning
   // installation holds every tenant's created repos, so the repo row is what says
   // whose they are. Cascade with the workspace.
-  githubRepos              GithubRepo[]
+  githubRepos                 GithubRepo[]
   // Issue-import runs + their external-id → work-item map (Story 7.16 · MOTIR-939).
   // Workspace-scoped tenant data — cascade with the workspace.
-  imports                  Import[]
-  importedIssues           ImportedIssue[]
+  imports                     Import[]
+  importedIssues              ImportedIssue[]
   // Per-user import OAuth identities scoped to this workspace (Story 7.16 ·
   // MOTIR-1653) — the encrypted vendor-token store. Cascade with the workspace.
-  importSourceIdentities   ImportSourceIdentity[]
+  importSourceIdentities      ImportSourceIdentity[]
   // Migrate-existing-codebase onboarding runs (Workflow B, Story 7.15 ·
   // MOTIR-1499). Cascade with the workspace.
-  migrateOnboardings       MigrateOnboarding[]
+  migrateOnboardings          MigrateOnboarding[]
   // Plan-change conversations + their turns (Story 7.30 · MOTIR-1728).
   // Workspace-scoped tenant data — cascade with the workspace.
-  planChangeSessions       PlanChangeSession[]
-  planChangeTurns          PlanChangeTurn[]
+  planChangeSessions          PlanChangeSession[]
+  planChangeTurns             PlanChangeTurn[]
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
-  projectRepos             ProjectRepo[]
+  projectRepos                ProjectRepo[]
   /// The per-member collaborator records on this workspace's repositories
   /// (MOTIR-1910). Cascade: they are tenant-scoped rows with no life of their own.
-  projectRepoCollaborators ProjectRepoCollaborator[]
+  projectRepoCollaborators    ProjectRepoCollaborator[]
   // Metered CI consumption — the per-run audit rows and the per-period rollup
   // (Story MOTIR-1775 · MOTIR-1896). Workspace-scoped tenant data (the
   // workspace_id + RLS contract) even though the POOL is resolved per org, so a
   // tenant can never read another's consumption. Cascade with the workspace.
-  ciWorkflowRunUsages      CiWorkflowRunUsage[]
-  ciPeriodUsages           CiPeriodUsage[]
+  ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  ciPeriodUsages              CiPeriodUsage[]
+  // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
+  // workspace_id + RLS contract as the two metering tables above.
+  ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -839,84 +846,88 @@ model Project {
   updatedAt               DateTime              @updatedAt
   archivedAt              DateTime?
 
-  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
   // so Prisma's relation inference doesn't have to guess; there is exactly
   // ONE relation between Project and WorkspaceMembership (the active-project
   // pointer), and both sides carry the same @relation("ActiveProject") name.
-  members                WorkspaceMembership[]   @relation("ActiveProject")
+  members                     WorkspaceMembership[]        @relation("ActiveProject")
   // Back-relation for `User.lastActiveProject` (Subtask 8.8.27) — the users
   // whose GLOBAL last-active landing pointer names this project. SetNull on the
   // FK: archiving/deleting the project clears each user's pointer (never
   // blocks), mirroring the `WorkspaceMembership.activeProject` pointer above.
   // Modelled on both sides per the FK-`@relation` rule so `migrate dev` reports
   // no drift.
-  lastActiveForUsers     User[]                  @relation("LastActiveProject")
-  workItems              WorkItem[]
-  workflowStatuses       WorkflowStatus[]
-  workflowTransitions    WorkflowTransition[]
-  boards                 Board[]
-  boardColumns           BoardColumn[]
-  boardColumnStatuses    BoardColumnStatus[]
-  sprints                Sprint[]
+  lastActiveForUsers          User[]                       @relation("LastActiveProject")
+  workItems                   WorkItem[]
+  workflowStatuses            WorkflowStatus[]
+  workflowTransitions         WorkflowTransition[]
+  boards                      Board[]
+  boardColumns                BoardColumn[]
+  boardColumnStatuses         BoardColumnStatus[]
+  sprints                     Sprint[]
   // Per-user canvas node arrangements for this project (Subtask 7.3.77).
-  canvasNodePositions    CanvasNodePosition[]
+  canvasNodePositions         CanvasNodePosition[]
   // Explicit project membership (Story 6.4). Cascades: deleting a project
   // removes its membership rows.
-  memberships            ProjectMembership[]
+  memberships                 ProjectMembership[]
   // Label folksonomy + component taxonomy (Subtask 5.4.1). Both cascade with
   // the project (project-scoped rows; projects are soft-archived in practice,
   // so this is the rare hard-delete path).
-  labels                 Label[]
-  components             Component[]
+  labels                      Label[]
+  components                  Component[]
   // Per-project custom-field definitions (Story 5.3). Cascades: deleting a
   // project removes its field definitions (and, through them, options/values).
-  customFieldDefinitions CustomFieldDefinition[]
+  customFieldDefinitions      CustomFieldDefinition[]
   // Saved filters (Story 6.2) — project-contained (the recorded deviation
   // from Jira's site-global filters). Cascades with the project.
-  savedFilters           SavedFilter[]
+  savedFilters                SavedFilter[]
   // Automation rules (Story 6.6) — project-scoped (the stub's scope; the
   // global/multi-project tier is the documented extension). Cascades with the
   // project (deleting a project removes its rules + their execution logs).
-  automationRules        AutomationRule[]
+  automationRules             AutomationRule[]
   // Project-sourced dashboard widgets (Story 6.3). Cascade: a deleted
   // project takes its widgets (no meaningful stale state).
-  dashboardWidgets       DashboardWidget[]
+  dashboardWidgets            DashboardWidget[]
   // Retired project keys (Story 6.8). Cascade: deleting a project FREES its
   // reserved keys (the verified Jira rule — only deletion un-reserves a key).
-  keyAliases             ProjectKeyAlias[]
+  keyAliases                  ProjectKeyAlias[]
   // Public-project topic tags (Story 6.13 · Subtask 6.13.5) — the assignments
   // linking this project to the shared topic vocabulary (`ProjectTag`). Cascade:
   // deleting a project sheds its tag assignments; the tag rows are a shared
   // vocabulary and survive.
-  tagAssignments         ProjectTagAssignment[]
+  tagAssignments              ProjectTagAssignment[]
   // AI-planning proposal bundles for this project (Story 7.21). Cascade.
-  plans                  Plan[]
+  plans                       Plan[]
   // Issue-import runs into this project + their idempotency map (Story 7.16 ·
   // MOTIR-939). Cascade: a deleted project takes its import history + map rows.
-  imports                Import[]
-  importedIssues         ImportedIssue[]
+  imports                     Import[]
+  importedIssues              ImportedIssue[]
   // The migrate-existing-codebase onboarding run for this project (Workflow B,
   // Story 7.15 · MOTIR-1499). One per project (the state machine is resumable
   // by re-reading the saved step), so a `?` one-to-one. Cascade.
-  migrateOnboarding      MigrateOnboarding?
+  migrateOnboarding           MigrateOnboarding?
   // The project's plan-change CONVERSATIONS (Story 7.30 · MOTIR-1728; widened by
   // 7.12.3 · MOTIR-909). Still ONE project-wide thread (`scope_key = ''`), plus
   // one CONTEXTUAL thread per distinct work-item anchor set — enforced by
   // `PlanChangeSession.@@unique([projectId, scopeKey])`, which is why this is a
   // list rather than the former `?` one-to-one. Cascade.
-  planChangeSessions     PlanChangeSession[]
+  planChangeSessions          PlanChangeSession[]
   // The project's REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780) — one row per
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
-  repos                  ProjectRepo[]
+  repos                       ProjectRepo[]
   // Metered CI runs attributed to this project (Story MOTIR-1775 · MOTIR-1896).
   // SetNull, NOT Cascade: the run rows are a spend AUDIT, and Motir was really
   // billed for those minutes whether or not the project still exists — deleting
   // them with the project would erase real cost. `ci-minutes-allowance.md` §5.4
   // makes the same call for the live case (a Motir-org repo whose project was
   // deleted is "metered as a cost, charged to nobody, and LOGGED").
-  ciWorkflowRunUsages    CiWorkflowRunUsage[]
+  ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  /// Runner-fleet provisioning intents for this project's repos (MOTIR-1920).
+  /// SetNull like the metered rows: a deleted project must not erase the record
+  /// that a runner was asked for on its behalf.
+  ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3712,25 +3723,29 @@ model GithubRepo {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  installation        GithubInstallation   @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  installation                GithubInstallation           @relation(fields: [installationId], references: [id], onDelete: Cascade)
   /// The owning tenant (MOTIR-1931) — modelled on BOTH sides, like every other FK
   /// in this schema (the CLAUDE.md migration rule). Cascade: a deleted workspace
   /// takes its mirrored repos with it, exactly as it did when they hung off the
   /// installation.
-  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  pullRequests        GithubPullRequest[]
+  workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pullRequests                GithubPullRequest[]
   /// Metered CI runs on this repo (Story MOTIR-1775 · MOTIR-1896). SetNull, like
   /// `ProjectRepo.githubRepoId`: disconnecting the repo must not delete the
   /// record that Motir paid for its compute. The row keeps `repoOwner`/`repoName`
   /// — the identity GitHub actually bills against — so the audit survives the
   /// mirror row entirely.
-  ciWorkflowRunUsages CiWorkflowRunUsage[]
+  ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  /// Runner-fleet provisioning intents for this repo (MOTIR-1920). SetNull for
+  /// the same reason the metered rows are: the intent keeps `repoOwner`/`repoName`
+  /// so it survives the mirror row entirely.
+  ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
   /// The project-repo-set row this connected repo REALIZES, if any (MOTIR-1780).
   /// At most one — a repo created for project A can never be recorded as project
   /// B's (`ProjectRepo.githubRepoId` is `@unique`). Back-relation of a SetNull FK:
   /// disconnecting this repo leaves the set row with a null realized repo, not a
   /// deleted plan.
-  projectRepo         ProjectRepo?
+  projectRepo                 ProjectRepo?
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -4711,6 +4726,112 @@ model CiPeriodCharge {
   /// One charge row per org per period — the lock target and the upsert key.
   @@unique([organizationId, periodStart])
   @@map("ci_period_charge")
+}
+
+/// A QUEUED CI job that needs a Motir-fleet runner (Story MOTIR-1916 ·
+/// MOTIR-1920) — the fleet's ENTRY POINT, and the durable record that a machine
+/// was asked for.
+///
+/// WHY A ROW AND NOT A DIRECT CALL. The `workflow_job` `queued` webhook must be
+/// acked fast (a slow handler makes GitHub retry) while booting a runner is a
+/// slow, failure-prone side effect against a cloud provider. Persisting the
+/// INTENT first splits the two: the delivery is durable the moment this row
+/// commits, and MOTIR-1921's provisioner can crash, retry or be redeployed
+/// between receipt and boot without losing the job. A fire-and-forget call would
+/// lose exactly the jobs that arrive during a deploy.
+///
+/// ⚠️ EVERY ROW HERE IS A LABEL-SCOPED JOB. `ci-minutes-allowance.md` §O: the
+/// handler emits an intent ONLY for a job whose requested labels name the Motir
+/// runner. GitHub-hosted jobs — including all 31 of `motir-core`'s own — reach
+/// the same webhook and are dropped before this table is touched, which is what
+/// keeps Motir's own release path off infrastructure Motir is still building
+/// (§J). `requestedLabels` is stored so that decision is auditable after the
+/// fact rather than inferred.
+///
+/// The attribution columns mirror `CiWorkflowRunUsage` deliberately: the same
+/// repo → project → workspace → org chain resolves both, so the compute Motir
+/// provisions and the minutes it later charges for can be joined on the same
+/// keys. `projectId` / `githubRepoId` are nullable + SetNull for the same reason
+/// the metered rows are — a deleted project or a disconnected repo must not
+/// erase the record that a runner was booted and paid for.
+model CiRunnerProvisioningIntent {
+  id       String @id @default(cuid())
+  /// Provider discriminator — always "github" today (§5.6: Motir creates no
+  /// GitLab repositories, so there is no GitLab job the fleet would serve).
+  provider String @default("github")
+
+  workspaceId    String  @map("workspace_id")
+  /// The org whose pool and cap this job's runner counts against, DENORMALIZED
+  /// exactly as the metering tables denormalize it — MOTIR-1922's in-flight cap
+  /// and credit-exhaustion refusal both key on the org, and neither should have
+  /// to join through the workspace to ask.
+  organizationId String  @map("organization_id")
+  projectId      String? @map("project_id")
+  githubRepoId   String? @map("github_repo_id")
+
+  /// The App installation the delivery arrived on — carried because MOTIR-1921
+  /// mints the runner-registration token with it, and re-deriving it at boot
+  /// time from the repo would read a mirror that may since have changed.
+  installationId String @map("installation_id")
+
+  /// GitHub's own ids (strings — never do math on them). The three together are
+  /// the idempotency key: GitHub redelivers webhooks, a re-run is a new
+  /// `runAttempt` that legitimately needs fresh runners, and ONE run attempt
+  /// queues MANY jobs, each needing its own ephemeral runner. Keying on
+  /// `(runId, runAttempt)` alone — the meter's key, which is right for a
+  /// per-RUN measurement — would collapse a 31-job matrix into one intent and
+  /// starve 30 jobs.
+  runId        String  @map("run_id")
+  runAttempt   Int     @map("run_attempt")
+  jobId        String  @map("job_id")
+  jobName      String? @map("job_name")
+  workflowName String? @map("workflow_name")
+
+  /// The repository AS THE DELIVERY REPORTED IT (§5.5) — never copied from the
+  /// mirror, which can hold a pre-transfer owner.
+  repoOwner String @map("repo_owner")
+  repoName  String @map("repo_name")
+
+  /// The labels the job's `runs-on` REQUESTED — the evidence for why this row
+  /// exists at all. Stored rather than recomputed because the §O gate is the
+  /// one decision on this path whose failure is silent and expensive in both
+  /// directions (provisioning for a job that is not ours; not provisioning for
+  /// one that is).
+  requestedLabels String[] @map("requested_labels")
+
+  /// When GitHub queued the job — NOT when Motir received the delivery. The age
+  /// of an unclaimed intent is the stuck-queue signal, and a redelivery hours
+  /// later must not make an old job look fresh.
+  queuedAt DateTime @map("queued_at")
+
+  /// The provisioning lifecycle. MOTIR-1920 only ever writes `pending`; the
+  /// transitions out of it are MOTIR-1921's (boot / teardown) and MOTIR-1922's
+  /// (the in-flight cap and the `ci_credits_exhausted` refusal). Kept a String
+  /// rather than an enum so that card can extend the vocabulary without a
+  /// migration on a table it does not own — the values live in
+  /// `lib/ciFleet/config.ts`'s consumer, and this column has exactly one writer
+  /// today.
+  status String @default("pending")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  githubRepo   GithubRepo?  @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+
+  /// The idempotency guarantee: a redelivered webhook produces no second intent,
+  /// while a RE-RUN (a new attempt) and every sibling JOB of the same run each
+  /// get their own.
+  @@unique([runId, runAttempt, jobId])
+  @@index([workspaceId])
+  /// MOTIR-1921's work queue: the oldest unclaimed intents, and MOTIR-1922's
+  /// per-org in-flight count, are both served by this.
+  @@index([status, queuedAt])
+  @@index([organizationId, status])
+  @@index([projectId, status])
+  @@map("ci_runner_provisioning_intent")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
