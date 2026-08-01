@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { inngest } from '@/lib/jobs/client';
-import { enqueueCodeGraphIndex, enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
+import { enqueueCodeGraphIndex, enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import type { NormalizedRepo } from '@/lib/git/types';
 
 // Story 7.10 · MOTIR-896 — the FEED-DISPATCH branches of the code-graph index
@@ -65,34 +65,68 @@ describe('enqueueCodeGraphIndex — best-effort (MOTIR-896)', () => {
   });
 });
 
-describe('enqueueNewlyAddedRepos — the reconcile filter (MOTIR-896)', () => {
-  it('a re-selection that adds nothing enqueues NOTHING', async () => {
+describe('enqueueReposMissingFirstIndex — the reconcile filter (MOTIR-896 · MOTIR-1961)', () => {
+  it('a reconcile whose repos are ALL indexed enqueues NOTHING', async () => {
     const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 
-    await enqueueNewlyAddedRepos({
+    await enqueueReposMissingFirstIndex({
       installationId: 'inst-1',
       workspaceId: 'ws-1',
       repos: [repo('1', 'core'), repo('2', 'ai')],
-      existingRepoIds: ['1', '2'],
+      indexedRepoRefs: ['moooon/core', 'moooon/ai'],
     });
 
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('enqueues exactly the newly-added repos, skipping the already-present', async () => {
+  it('enqueues exactly the repos with NO code graph, skipping the already-indexed', async () => {
     const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
 
-    await enqueueNewlyAddedRepos({
+    await enqueueReposMissingFirstIndex({
       installationId: 'inst-1',
       workspaceId: 'ws-1',
       repos: [repo('1', 'core'), repo('2', 'ai'), repo('3', 'meta')],
-      existingRepoIds: ['2'],
+      indexedRepoRefs: ['moooon/ai'],
     });
 
     const names = send.mock.calls.map(
       (c) => (c[0] as { data: { repoName: string } }).data.repoName,
     );
     expect(names).toEqual(['core', 'meta']);
+  });
+
+  it('the REGRESSION: a long-present repo that was never indexed still enqueues (MOTIR-1961)', async () => {
+    // The state the old novelty gate could not escape — every repo row already
+    // exists (nothing is "newly added"), and not one has a graph. Under the old
+    // `existingRepoIds` gate this enqueued zero jobs, forever.
+    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+
+    await enqueueReposMissingFirstIndex({
+      installationId: 'inst-1',
+      workspaceId: 'ws-1',
+      repos: [repo('1', 'core'), repo('2', 'ai'), repo('3', 'meta')],
+      indexedRepoRefs: [],
+    });
+
+    const names = send.mock.calls.map(
+      (c) => (c[0] as { data: { repoName: string } }).data.repoName,
+    );
+    expect(names).toEqual(['core', 'ai', 'meta']);
+  });
+
+  it('matches the indexed set on owner/name, not on name alone', async () => {
+    // Two owners can select repos of the same name; only the exact ref counts.
+    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+
+    await enqueueReposMissingFirstIndex({
+      installationId: 'inst-1',
+      workspaceId: 'ws-1',
+      repos: [repo('1', 'core')],
+      indexedRepoRefs: ['someone-else/core'],
+    });
+
+    expect(send).toHaveBeenCalledOnce();
+    expect((send.mock.calls[0]![0] as { data: { repoName: string } }).data.repoName).toBe('core');
   });
 
   it('one repo’s enqueue failure never blocks the others (best-effort PER repo)', async () => {
@@ -103,11 +137,11 @@ describe('enqueueNewlyAddedRepos — the reconcile filter (MOTIR-896)', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      enqueueNewlyAddedRepos({
+      enqueueReposMissingFirstIndex({
         installationId: 'inst-1',
         workspaceId: 'ws-1',
         repos: [repo('1', 'core'), repo('2', 'ai')],
-        existingRepoIds: [],
+        indexedRepoRefs: [],
       }),
     ).resolves.toBeUndefined();
 

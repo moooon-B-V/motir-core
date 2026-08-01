@@ -82,6 +82,46 @@ export const jobRunRepository = {
   },
 
   /**
+   * The FIRST-INDEX recovery read (MOTIR-1961): every repo of this workspace
+   * that ALREADY has a code graph — the `output.repoRef` of each SUCCEEDED
+   * `system.code-graph-index` run. The set form of
+   * {@link findSucceededCodeGraphIndex}, for the enqueue gate that must decide
+   * "has this repo ever been indexed?" for a WHOLE repo set in one round-trip
+   * instead of N per-repo reads.
+   *
+   * Scope note: this answers "a first graph EXISTS", not "the graph is FRESH".
+   * Staleness (graph commit vs the default-branch head) is MOTIR-1754/1766's
+   * axis and deliberately not read here — a repo that never got a first graph
+   * cannot be stale, so the two questions never overlap.
+   *
+   * Takes `tx`: run it under `withWorkspaceContext` (the RLS policy scopes it)
+   * or `withSystemContext` (the grant/webhook paths, which have no active
+   * workspace — the policy's system-admin branch admits them).
+   */
+  async listSucceededCodeGraphIndexRepoRefs(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.jobRun.findMany({
+      where: {
+        workspaceId,
+        functionId: 'system.code-graph-index',
+        status: 'succeeded',
+      },
+      select: { output: true },
+    });
+    const refs = new Set<string>();
+    for (const row of rows) {
+      const output = row.output as { repoRef?: unknown } | null;
+      // A succeeded run that indexed NOTHING (`{ indexed: false, reason }` —
+      // the installation/workspace vanished, or the workspace had no projects)
+      // carries no `repoRef` and must NOT count as an index.
+      if (output && typeof output.repoRef === 'string') refs.add(output.repoRef);
+    }
+    return [...refs];
+  },
+
+  /**
    * The migrate-onboarding INDEX-progress read (Story 7.15 · MOTIR-934): is a
    * `system.code-graph-index` run CURRENTLY indexing ANY repo for this workspace?
    * The wizard's Index step shows an aggregate "indexing in progress" spinner when

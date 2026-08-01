@@ -11,7 +11,8 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
-import { enqueueCodeGraphRefresh, enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
+import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
   syncChangeRequestStatus,
   type ChangeRequestContextResolution,
@@ -532,14 +533,6 @@ async function reconcileInstallation(
   const workspaceId = existing.workspaceId;
   if (workspaceId === null) return 'skipped_shared_installation';
 
-  // The repos already persisted BEFORE this reconcile — the baseline we diff the
-  // authoritative set against, so we index only NEWLY-added repos (a re-selection
-  // that drops/keeps repos never re-indexes an unchanged one).
-  const existingRepoIds = await withSystemContext(async (tx) => {
-    const rows = await githubRepoRepository.listByInstallation(existing.id, tx);
-    return rows.map((r) => r.repoId);
-  });
-
   const account = asRecord(asRecord(body['installation'])?.['account']);
   const repos = await getGitProvider(existing.provider as GitProviderId).fetchInstallationRepos(
     installationId,
@@ -555,13 +548,15 @@ async function reconcileInstallation(
     repos,
   });
 
-  // POST-COMMIT, best-effort: kick off a code-graph index for each newly-added
-  // repo (MOTIR-1500). Never blocks or fails the grant mirror.
-  await enqueueNewlyAddedRepos({
+  // POST-COMMIT, best-effort: kick off a code-graph index for each repo that has
+  // no graph yet (MOTIR-1500; re-gated on indexedness by MOTIR-1961 — an
+  // UNCHANGED repo that was never indexed now recovers here, which is what makes
+  // "a dropped enqueue self-heals on the next repo-selection change" true).
+  // Never blocks or fails the grant mirror.
+  await codeGraphIndexService.enqueueFirstIndexForRepos({
     installationId,
     workspaceId,
     repos,
-    existingRepoIds,
   });
   return 'synced';
 }
