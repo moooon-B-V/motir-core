@@ -47,24 +47,33 @@ const AUGUST_2026 = new Date('2026-08-01T00:00:00.000Z');
 const NOW_WITHIN_JULY_2026 = new Date('2026-07-15T12:00:00.000Z');
 
 /**
- * The period the GATE will actually read (MOTIR-1951).
+ * The period the GATE will actually read (MOTIR-1951, corrected by MOTIR-1952).
  *
  * `assertDispatchAllowed` is the one entry point that takes no date: it asks for
  * `getEntitlementState(orgId, new Date())`, which `periodStartFor` truncates to
- * the CURRENT UTC month. So a test that seeds usage into a hardcoded month only
- * exercises the gate during that month — and from the 1st of the next one it
- * silently stops: the gate reads an empty period, never refuses, and every
+ * the CURRENT UTC month. So the period the fixtures meter into MUST be the one
+ * the gate resolves, or the gate reads an empty period, never refuses, and every
  * `.resolves.toBeUndefined()` assertion below passes vacuously while the one
- * `.rejects` assertion turns red. That is exactly what happened on 2026-08-01,
- * when this file had pinned every gate test to `JULY_2026`.
+ * `.rejects` assertion turns red.
  *
- * So gate-path tests meter HERE, derived from the same function the code uses,
- * which makes them correct in any month. The explicit `JULY_2026` /
- * `AUGUST_2026` literals stay where a test is deliberately ABOUT a specific
- * period (the boundary reset, the charge/state assertions) — those pass their
- * period in explicitly, so they never depend on the wall clock.
+ * ⚠️ DERIVE IT FROM THE PINNED INSTANT, NEVER FROM `new Date()` AT MODULE SCOPE.
+ * This constant is evaluated at IMPORT time — before any `beforeEach` runs, so
+ * before the `vi.setSystemTime(NOW_WITHIN_JULY_2026)` pin above is in effect. A
+ * `new Date()` here therefore reads the REAL wall clock while the gate under
+ * test reads the PINNED one, and the two agree only during a real-world July
+ * 2026. That is exactly how MOTIR-1950 (which added the pin) and MOTIR-1951
+ * (which added this constant, reading the wall clock) cancelled each other out
+ * and left `main` red after both had merged: fixtures metered into August, the
+ * gate looked in July.
+ *
+ * ONE time mechanism per file. This suite's is the `beforeEach` pin; every
+ * period here is derived from it. The explicit `JULY_2026` / `AUGUST_2026`
+ * literals stay where a test is deliberately ABOUT a specific period (the
+ * boundary reset, the charge/state assertions) — those pass their period in
+ * explicitly, so they never consult the clock at all. `periodsAgree` below is
+ * the guard that fails loudly if this ever drifts again.
  */
-const CURRENT_PERIOD = periodStartFor(new Date());
+const CURRENT_PERIOD = periodStartFor(NOW_WITHIN_JULY_2026);
 
 interface Fixture {
   organizationId: string;
@@ -666,6 +675,29 @@ describe('the DEBIT is a post-commit side effect (§8.6)', () => {
 
     expect(result.outcome).toBe('debit_pending');
     expect((await chargeRow(fx))?.debitedCredits).toBe(0);
+  });
+});
+
+describe('the gate reads the period the fixtures write (the anti-vacuity guard)', () => {
+  // The one assertion that protects every `.resolves.toBeUndefined()` below.
+  //
+  // Those six negatives cannot tell "the gate correctly declined to refuse"
+  // apart from "the gate looked in an empty period and had nothing to refuse
+  // over" — they pass either way. So the thing they silently depend on is
+  // asserted ONCE, here, directly: the period `assertDispatchAllowed` resolves
+  // from its own `new Date()` is the period `meter()` writes into.
+  //
+  // This runs INSIDE a test, so the `beforeEach` pin is in effect — which is
+  // precisely what a module-scope `new Date()` misses. Both MOTIR-1950's pin and
+  // MOTIR-1951's derived constant were individually reasonable and together left
+  // `main` red for hours; this guard turns that class of drift into an immediate,
+  // self-explaining failure instead of five tests quietly asserting nothing.
+  it('the pinned clock, the fixture default and CURRENT_PERIOD are one period', () => {
+    const gateReads = periodStartFor(new Date());
+
+    expect(gateReads).toEqual(CURRENT_PERIOD);
+    // `meter()`'s default — the period the tests that omit an explicit one use.
+    expect(gateReads).toEqual(JULY_2026);
   });
 });
 
