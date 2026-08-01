@@ -69,7 +69,7 @@ jobs:
       GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
       EMAIL_PROVIDER: file
       EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
-      # REQUIRED HERE, unlike ci.yml (MOTIR-1965). This lane BUILDS `.next` inside
+      # REQUIRED HERE, unlike ci.yml (MOTIR-1967). This lane BUILDS `.next` inside
       # this job (`e2e-setup` with `next-build: build`), and `next build` forces
       # NODE_ENV=production — under which `lib/email.ts`'s file provider refuses to
       # load (it is a test-only sink) and page-data collection for /api/inngest
