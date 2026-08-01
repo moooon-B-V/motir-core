@@ -71,4 +71,13 @@ body {
   .plan-with-ai-fab-pulse {
     animation: plan-with-ai-fab-pulse 3.2s ease-out infinite;
   }
+  /* While the AI callout is OPEN (MOTIR-1812), the pulse stops, so the panel
+     never sits inside a breathing halo. Keyed off the `data-state` Radix sets
+     on the trigger the aura lives in. Stopping, not `animation-play-state:
+     paused`, which would freeze the ring at an arbitrary radius. The whole
+     block is already behind prefers-reduced-motion, so this is a no-op for a
+     motion-sensitive user — who never sees the pulse in any state. */
+  [data-state='open'] .plan-with-ai-fab-pulse {
+    animation: none;
+  }
 }
