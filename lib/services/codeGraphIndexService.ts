@@ -22,10 +22,15 @@ import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 // invariant, docs/ai-boundary.md).
 //
 // 4-layer (CLAUDE.md): the job handler is the "service caller" for a background
-// trigger, so ALL the orchestration lives here, not in the definition file — the
-// handler just wraps this in a memoized `step.run`, exactly as `billingSeatSync`
-// delegates to `billingService`. This service owns the repository reads (through
-// the leaves), the RLS context, and the boundary calls.
+// trigger, so ALL the work lives here, not in the definition file, exactly as
+// `billingSeatSync` delegates to `billingService`. This service owns the
+// repository reads (through the leaves), the RLS context, and the boundary
+// calls. Since MOTIR-1974 it exposes the work as TWO methods rather than one —
+// `resolveIndexTarget` (reads) and `indexRepoIntoProject` (one project's network
+// side effects) — because each must be its own durable checkpoint. What the
+// definition file adds is only the step SHAPE (which call is a `step.run`, and
+// that phase 2 runs once per resolved project); that is Inngest's concern and
+// belongs with the job, not in here.
 //
 // TENANCY (the RESOLVED current-stage fan-out): a repo belongs to a WORKSPACE
 // (`GithubRepo.workspaceId` since MOTIR-1931 — NOT the installation's, which is
@@ -48,9 +53,9 @@ import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
 // transaction (RLS-safe under the trusted-writer escape, like the webhook); the
-// tarball fetch and the per-project motir-ai calls are network side effects done
-// AFTER that transaction closes — a transaction is never held open across a
-// GitHub / motir-ai round-trip.
+// tarball fetch and the motir-ai upload are network side effects done AFTER that
+// transaction closes — in a different method entirely since MOTIR-1974 — so a
+// transaction is never held open across a GitHub / motir-ai round-trip.
 
 export interface IndexRepoInput {
   /** GitHub's numeric installation id (as a string) — the token-minting key. */
@@ -73,6 +78,39 @@ export interface IndexRepoInput {
 export type IndexRepoResult =
   | { indexed: false; reason: 'installation_missing' | 'workspace_missing' | 'no_projects' }
   | { indexed: true; repoRef: string; projectsIndexed: number };
+
+/**
+ * What the job needs to know before it can index anything: the skip reason, or
+ * the resolved tenant tuple + the full project fan-out. JSON-SERIALIZABLE by
+ * construction — it is a `step.run` result, so it crosses a checkpoint boundary
+ * and is replayed from Inngest's memo on every later invocation (MOTIR-1974).
+ */
+export type IndexTarget =
+  | { indexed: false; reason: 'installation_missing' | 'workspace_missing' | 'no_projects' }
+  | {
+      indexed: true;
+      repoRef: string;
+      providerId: GitProviderId;
+      organizationId: string;
+      /** EVERY project of the repo's workspace — the fan-out is workspace-scoped
+       *  (see the TENANCY note above); one index step lands per entry. */
+      projectIds: string[];
+    };
+
+/** Everything one project's index step needs — the resolved tuple, flattened. */
+export interface IndexProjectInput extends IndexRepoInput {
+  providerId: GitProviderId;
+  organizationId: string;
+  repoRef: string;
+  projectId: string;
+}
+
+/** A small JSON-serializable summary of ONE project's index step. */
+export interface IndexProjectResult {
+  projectId: string;
+  repoRef: string;
+  filesIndexed: number;
+}
 
 /** One repo the first-index sweep found without a code graph. */
 export interface MissingFirstIndexRepo {
@@ -98,14 +136,18 @@ export interface FirstIndexSweepReport {
 
 export const codeGraphIndexService = {
   /**
-   * Fetch one repo's tarball once and index it into every project of the
-   * installation's workspace. No-ops cleanly (never throws) when the
+   * PHASE 1 (one checkpointed step) — resolve the tenant tuple and the project
+   * fan-out for a repo. DB reads only: no network, so it is cheap to replay and
+   * cheap to retry. No-ops cleanly (never throws) when the
    * installation/workspace vanished before the job ran or the workspace has no
-   * projects. Any GitHub / motir-ai failure propagates so the job's idempotent
-   * retry budget can absorb a transient blip.
+   * projects — the no-op verdicts ARE the contract (the job never throws on a
+   * vanished tenant), and they are returned rather than thrown so the ledger
+   * records WHY nothing was indexed.
+   *
+   * Keyed by WORKSPACE: the input carries no project, and the fan-out this
+   * returns is every project of the workspace (see the TENANCY note above).
    */
-  async indexRepoIntoWorkspaceProjects(input: IndexRepoInput): Promise<IndexRepoResult> {
-    // Phase 1 — resolve the tenant tuple under system context (DB reads only).
+  async resolveIndexTarget(input: IndexRepoInput): Promise<IndexTarget> {
     const resolved = await withSystemContext(async (tx) => {
       const installation = await githubInstallationRepository.findByInstallationId(
         input.installationId,
@@ -134,13 +176,51 @@ export const codeGraphIndexService = {
       return { indexed: false, reason: 'workspace_missing' };
     if (resolved.projectIds.length === 0) return { indexed: false, reason: 'no_projects' };
 
-    // Phase 2 — network side effects OUTSIDE the transaction. Fetch the tarball
-    // ONCE (via the provider seam, dispatched by the stored discriminator), then
-    // hand the same bytes to motir-ai per project.
-    const provider = getGitProvider(resolved.providerId);
-    // The SAME key the enqueue gate matches on (`repoRefOf`) — this is what lands
-    // in the ledger as `output.repoRef`, so producer and gate share one formatter.
-    const repoRef = repoRefOf({ owner: input.repoOwner, name: input.repoName });
+    return {
+      indexed: true,
+      // The SAME key the enqueue gate matches on (`repoRefOf`) — this is what
+      // lands in the ledger as `output.repoRef`, so producer and gate share one
+      // formatter.
+      repoRef: repoRefOf({ owner: input.repoOwner, name: input.repoName }),
+      providerId: resolved.providerId,
+      organizationId: resolved.organizationId,
+      projectIds: resolved.projectIds,
+    };
+  },
+
+  /**
+   * PHASE 2 (one checkpointed step PER PROJECT) — fetch the repo's tarball and
+   * hand those bytes to motir-ai for ONE project. Network side effects only, and
+   * no transaction is open across them.
+   *
+   * ⚠️ WHY ONE PROJECT PER CALL (MOTIR-1974). This used to be a single call that
+   * fetched once and then uploaded N times in a loop — and because Inngest can
+   * only checkpoint BETWEEN steps, the whole fetch + N uploads had to fit in ONE
+   * platform invocation. It never did: all five production repos 504'd on
+   * `FUNCTION_INVOCATION_TIMEOUT` and dead-lettered, the tiny starter repo
+   * exactly like `motir-core`. Splitting the fan-out into a step per project
+   * gives each upload its OWN invocation budget, and a failure resumes from the
+   * project it died on instead of restarting the repo.
+   *
+   * ⚠️ WHY THE TARBALL IS RE-FETCHED PER PROJECT. A `step.run` result must be
+   * JSON-serializable, so the bytes cannot cross a checkpoint — the fetch has to
+   * live INSIDE whichever step uses them. Re-fetching is the price of the
+   * checkpoint, and it is the cheap half: GitHub serves a pre-signed codeload
+   * URL in seconds, while the upload waits on motir-ai building the graph. Note
+   * that it costs nothing per invocation — replayed steps return from Inngest's
+   * memo without executing, so each invocation still performs exactly ONE fetch
+   * and ONE upload.
+   *
+   * ⚠️ WHY THE SAME BYTES ARE UPLOADED PER PROJECT AT ALL. motir-ai's code-graph
+   * store is PROJECT-scoped (`aiProjectId`), so a workspace's N projects need N
+   * stores; one upload cannot serve the workspace. Narrowing the fan-out to the
+   * repo's actual projects via `project_repository` (MOTIR-1780) is real, is
+   * unadopted here on purpose, and belongs to MOTIR-1754 — see the TENANCY note
+   * above. Do not read this as an invitation to change it in passing.
+   */
+  async indexRepoIntoProject(input: IndexProjectInput): Promise<IndexProjectResult> {
+    // The provider seam, dispatched by the discriminator phase 1 resolved.
+    const provider = getGitProvider(input.providerId);
     const bytes = await provider.fetchRepoTarball(
       input.installationId,
       input.repoOwner,
@@ -148,17 +228,19 @@ export const codeGraphIndexService = {
       input.defaultBranch,
     );
 
-    for (const projectId of resolved.projectIds) {
-      await indexCodeGraph({
-        coreOrganizationId: resolved.organizationId,
-        coreWorkspaceId: resolved.workspaceId,
-        coreProjectId: projectId,
-        repoRef,
-        bytes,
-      });
-    }
+    const result = await indexCodeGraph({
+      coreOrganizationId: input.organizationId,
+      coreWorkspaceId: input.workspaceId,
+      coreProjectId: input.projectId,
+      repoRef: input.repoRef,
+      bytes,
+    });
 
-    return { indexed: true, repoRef, projectsIndexed: resolved.projectIds.length };
+    return {
+      projectId: input.projectId,
+      repoRef: input.repoRef,
+      filesIndexed: result.filesIndexed,
+    };
   },
 
   /**

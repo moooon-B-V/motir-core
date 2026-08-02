@@ -1,6 +1,6 @@
 import { registerGitProvider } from '../registry';
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
-import type { GitProvider } from '../provider';
+import { REPO_TARBALL_TIMEOUT_MS, type GitProvider } from '../provider';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -110,6 +110,12 @@ export const githubProvider: GitProvider = {
   ): Promise<ArrayBuffer> {
     const { token } = await mintInstallationToken(installationId);
     let res: Response;
+    // The fetch runs inside a background-job invocation with a finite platform
+    // budget, so it carries a deadline (MOTIR-1974) — an unanswered request must
+    // fail as an Error the job's retry budget can absorb, not by outliving the
+    // invocation.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
     try {
       // GitHub 302-redirects `/tarball` to a PRE-SIGNED codeload.github.com URL.
       // `fetch` follows the redirect and (per the fetch spec) STRIPS the
@@ -122,11 +128,16 @@ export const githubProvider: GitProvider = {
           accept: 'application/vnd.github+json',
           'user-agent': 'motir',
         },
+        signal: controller.signal,
       });
     } catch (err) {
       throw new Error(
-        `GitHub tarball endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
+        controller.signal.aborted
+          ? `GitHub tarball endpoint timed out after ${REPO_TARBALL_TIMEOUT_MS}ms`
+          : `GitHub tarball endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
       );
+    } finally {
+      clearTimeout(timer);
     }
     if (!res.ok) throw new Error(`GitHub tarball endpoint returned ${res.status}`);
     return res.arrayBuffer();

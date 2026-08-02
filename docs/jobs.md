@@ -257,6 +257,57 @@ job specifies neither, it gets `transient`. On the **final** failed attempt the
 run dead-letters (below); `none` therefore dead-letters on the very first
 failure.
 
+## Wall clock — the step is the unit, and every I/O call needs a deadline
+
+**A retry budget does not help a job that runs out of TIME**, and this is the
+failure mode that has actually cost us production runs (MOTIR-1974). Three rules
+follow, and they are coupled — changing one means checking the others.
+
+**1 · The platform timeout applies to an INVOCATION, i.e. to a step.** Inngest
+checkpoints between steps and re-invokes the handler at each boundary, replaying
+completed steps from its memo without executing them. So a step is the unit of
+work that must fit inside the function timeout — never the whole run. A handler
+that does everything in one `step.run` has opted out of checkpointing entirely:
+it must fit end-to-end in a single invocation, and if it doesn't, it is killed
+mid-flight on **every** attempt and burns its whole budget getting nowhere.
+Split a long body into steps at the natural resume points (per item of a
+fan-out, per phase), and remember a step's result must be JSON-serializable —
+if a value can't cross the boundary (raw bytes, a stream), the work that
+produces it belongs INSIDE the step that consumes it.
+
+**2 · `/api/inngest` declares an explicit `maxDuration`.** Every job is invoked
+through that one route, so its `maxDuration` is the ceiling on every step in the
+app. It is declared (currently `300`, the Pro serverless maximum) rather than
+inherited, because a silent platform default is a number nobody reviews against
+the work the jobs actually do.
+
+**3 · Every network call a job makes carries a deadline.** `fetch` has none of
+its own: an unresponsive dependency is waited on until the platform kills the
+invocation, and that arrives as a bare `FUNCTION_INVOCATION_TIMEOUT` 504 with no
+step output — indistinguishable from a crashed app, and nothing a retry budget
+can reason about. A bounded call fails as a typed error instead, INSIDE the
+budget, and retries meaningfully. The deadlines in play:
+`MOTIR_AI_REQUEST_TIMEOUT_MS` (30s) and `MOTIR_AI_INDEX_TIMEOUT_MS` (180s) in
+`lib/ai/motirAiClient.ts`, `REPO_TARBALL_TIMEOUT_MS` (60s) in
+`lib/git/provider.ts`. **Their sum along the slowest step must stay under
+`maxDuration`** — that inequality is what guarantees a hung dependency surfaces
+as a typed failure rather than as an invocation kill.
+
+**What this looked like when it was wrong.** `system.code-graph-index` ran a
+tarball fetch plus one motir-ai upload per project inside a single `step.run`,
+against an undeclared `maxDuration`, with no deadline on either call. All five
+production repos exhausted all five attempts on `FUNCTION_INVOCATION_TIMEOUT`
+and dead-lettered — including a repo small enough that size cannot explain it.
+It now runs one `resolve-target` step plus one `index-project:<id>` step per
+project (`lib/jobs/codeGraphSteps.ts`).
+
+**A retrying job looks identical to a healthy one.** `defineJob` writes its
+`running` ledger row in a memoized step, so a retry replays it: the row stays
+`running` with `attempt` frozen at 0 until the budget is spent. Until the DLQ
+row lands, a dying job and an in-flight one are indistinguishable on the
+dashboard — so when you are watching a long job, watch `job_run_dlq`, not
+`job_run.status`.
+
 ## Dead-letter queue
 
 When a job exhausts its retry budget, the wrapper writes a row to `job_run_dlq`

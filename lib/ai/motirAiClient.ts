@@ -69,6 +69,56 @@ function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// ── Request deadlines (MOTIR-1974) ──────────────────────────────────────────
+//
+// Every call across this boundary rides a DEADLINE. `fetch` has none of its
+// own, so an unresponsive motir-ai is waited on until something ELSE kills the
+// caller — and on Vercel that something is the platform, which returns a bare
+// `FUNCTION_INVOCATION_TIMEOUT` 504 with no step output. That is how the whole
+// `system.code-graph-index` fleet dead-lettered: Inngest never saw a
+// `MotirAiUnavailableError` its retry budget could absorb, only an untyped
+// invocation kill it could not distinguish from a crashed app.
+//
+// The deadline bounds TIME-TO-RESPONSE-HEADERS, not body consumption: the timer
+// is cleared the moment `fetch` resolves. So it covers connect + request-send
+// (including a multi-megabyte tarball upload) + the server's think time, while
+// leaving a long-lived response body — `streamJob`'s SSE stream — free to run
+// as long as it needs. A stream that never connects still fails fast.
+export const MOTIR_AI_REQUEST_TIMEOUT_MS = 30_000;
+
+// The code-graph upload is the one call that is legitimately slow: it ships a
+// whole repo tarball and motir-ai answers only once the graph is built, on a
+// scale-to-zero machine whose cold start measured ~23s (2026-08-02). It gets a
+// much larger deadline — still well inside `/api/inngest`'s `maxDuration`, so a
+// hang surfaces as a typed error rather than as an invocation kill.
+export const MOTIR_AI_INDEX_TIMEOUT_MS = 180_000;
+
+/**
+ * `fetch` with a deadline, mapping BOTH a transport failure and a timeout to
+ * `MotirAiUnavailableError` — the single typed error every caller (and every
+ * job retry budget) already understands.
+ */
+async function aiFetch(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number = MOTIR_AI_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (err) {
+    // The abort is OURS, so report the deadline rather than the opaque
+    // "This operation was aborted" the runtime throws.
+    if (controller.signal.aborted) {
+      throw new MotirAiUnavailableError(`motir-ai did not respond within ${timeoutMs}ms`);
+    }
+    throw new MotirAiUnavailableError(describe(err));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Best-effort parse of a non-2xx body into a Problem (contract §5); falls back
 // to a synthetic problem when the body isn't problem+json.
 async function readProblem(res: Response): Promise<Problem> {
@@ -110,16 +160,11 @@ export async function submitJob(
     readBackToken,
   };
 
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/jobs`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(envelope),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/jobs`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(envelope),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
 
   const body: unknown = await res.json();
@@ -134,14 +179,9 @@ export async function submitJob(
 // typed error. A 404 / transport failure throws a typed error.
 export async function getJob(jobId: string): Promise<JobView> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}`, {
-      headers: authHeaders(serviceToken),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}`, {
+    headers: authHeaders(serviceToken),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
 
   const body = (await res.json()) as RawJobResponse;
@@ -169,14 +209,9 @@ export async function getOrgUsage(query: UsageQuery): Promise<RawUsageResponse> 
   if (query.page) params.set('page', String(query.page));
   if (query.pageSize) params.set('pageSize', String(query.pageSize));
 
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/usage?${params.toString()}`, {
-      headers: authHeaders(serviceToken),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/usage?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawUsageResponse;
 }
@@ -199,16 +234,11 @@ export async function debitCiOverage(
   input: CiOverageDebitInput,
 ): Promise<RawCiOverageDebitResponse> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/credits/ci-overage`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(input),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/credits/ci-overage`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawCiOverageDebitResponse;
 }
@@ -224,14 +254,9 @@ export async function getOrgSubscription(
 ): Promise<RawSubscriptionResponse> {
   const { url, serviceToken } = config();
   const params = new URLSearchParams({ coreOrganizationId: query.coreOrganizationId });
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/stripe/subscription?${params.toString()}`, {
-      headers: authHeaders(serviceToken),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/stripe/subscription?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawSubscriptionResponse;
 }
@@ -251,16 +276,11 @@ export async function createCheckoutSession(input: {
   idempotencyKey?: string;
 }): Promise<{ url: string }> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/stripe/checkout-session`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(input),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/stripe/checkout-session`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return readSessionUrl(res);
 }
@@ -275,16 +295,11 @@ export async function createPortalSession(input: {
   returnUrl: string;
 }): Promise<{ url: string }> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/stripe/portal-session`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(input),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/stripe/portal-session`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return readSessionUrl(res);
 }
@@ -325,16 +340,11 @@ export async function setSeatQuantity(input: {
   quantity: number;
 }): Promise<SeatQuantityResult> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/stripe/seat-quantity`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(input),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/stripe/seat-quantity`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as SeatQuantityResult;
 }
@@ -352,14 +362,9 @@ export async function getPreplanState(query: PreplanStateQuery): Promise<RawPrep
     coreWorkspaceId: query.coreWorkspaceId,
     coreProjectId: query.coreProjectId,
   });
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/preplan?${params.toString()}`, {
-      headers: authHeaders(serviceToken),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/preplan?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPreplanStateResponse;
 }
@@ -384,16 +389,11 @@ export interface SaveDesignChoiceInput {
 
 export async function saveDesignChoice(input: SaveDesignChoiceInput): Promise<RawPreplanSession> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/preplan`, {
-      method: 'PATCH',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify(input),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/preplan`, {
+    method: 'PATCH',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPreplanSession;
 }
@@ -491,14 +491,9 @@ export async function getCodeAudit(query: CodeAuditQuery): Promise<RawCodeAuditS
   if (query.findingsOffset !== undefined)
     params.set('findingsOffset', String(query.findingsOffset));
   if (query.findingsLimit !== undefined) params.set('findingsLimit', String(query.findingsLimit));
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/code-audit?${params.toString()}`, {
-      headers: authHeaders(serviceToken),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/code-audit?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawCodeAuditSurface;
 }
@@ -527,16 +522,11 @@ export async function refreshCodeAudit(
     workspaceId: tenant.workspaceId,
     projectId: tenant.projectId,
   });
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/code-context/refresh`, {
-      method: 'POST',
-      headers: authHeaders(serviceToken),
-      body: JSON.stringify({ envelopeVersion: 'v1', tenant, context, readBackToken }),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/code-context/refresh`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({ envelopeVersion: 'v1', tenant, context, readBackToken }),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
 
   const body = (await res.json()) as Partial<RefreshCodeAuditResult>;
@@ -565,14 +555,9 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   if (query.repoKey) params.set('repoKey', query.repoKey);
   if (query.versionsCursor) params.set('versionsCursor', query.versionsCursor);
   if (query.versionsLimit !== undefined) params.set('versionsLimit', String(query.versionsLimit));
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/convention?${params.toString()}`, {
-      headers: authHeaders(serviceToken),
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/convention?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawConventionSurface;
 }
@@ -598,7 +583,8 @@ export interface CodeGraphIndexResult {
 // motir-ai receives BYTES, never a host credential (the open-core invariant). The
 // caller (the `system.code-graph-index` job) has already resolved the tenant and
 // minted the token. A transport failure / non-2xx (problem+json) maps to a typed
-// error the job's retry budget absorbs.
+// error the job's retry budget absorbs — as does a motir-ai that never answers,
+// under this call's own longer `MOTIR_AI_INDEX_TIMEOUT_MS` deadline (MOTIR-1974).
 export async function indexCodeGraph(input: {
   coreOrganizationId: string;
   coreWorkspaceId: string;
@@ -613,9 +599,9 @@ export async function indexCodeGraph(input: {
   const body = Buffer.from(
     input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes),
   );
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/code-graph/index`, {
+  const res = await aiFetch(
+    `${url}/v1/code-graph/index`,
+    {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${serviceToken}`,
@@ -626,10 +612,9 @@ export async function indexCodeGraph(input: {
         'x-repo-ref': input.repoRef,
       },
       body,
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+    },
+    MOTIR_AI_INDEX_TIMEOUT_MS,
+  );
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as CodeGraphIndexResult;
 }
@@ -640,14 +625,9 @@ export async function indexCodeGraph(input: {
 // yield.
 export async function* streamJob(jobId: string): AsyncGenerator<JobStreamEvent> {
   const { url, serviceToken } = config();
-  let res: Response;
-  try {
-    res = await fetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}/stream`, {
-      headers: { Authorization: `Bearer ${serviceToken}`, Accept: 'text/event-stream' },
-    });
-  } catch (err) {
-    throw new MotirAiUnavailableError(describe(err));
-  }
+  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}/stream`, {
+    headers: { Authorization: `Bearer ${serviceToken}`, Accept: 'text/event-stream' },
+  });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   if (!res.body) throw new MotirAiUnavailableError('stream response had no body');
 

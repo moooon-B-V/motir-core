@@ -24,6 +24,18 @@ import type {
 // the MOTIR-1566 planning lesson), so every method here is one GitHub actually
 // backs.
 
+/**
+ * Deadline for a repo-tarball fetch, in ms (MOTIR-1974). The fetch is the first
+ * half of one `system.code-graph-index` step; the motir-ai upload is the second
+ * (`MOTIR_AI_INDEX_TIMEOUT_MS`). Their SUM must stay under the serve route's
+ * `maxDuration`, so a stalled host surfaces as a typed error inside the
+ * invocation budget instead of as a `FUNCTION_INVOCATION_TIMEOUT` with no step
+ * output. Bounds time-to-response-headers (which is where a dead host hangs);
+ * the body download that follows is the host streaming bytes it already
+ * committed to.
+ */
+export const REPO_TARBALL_TIMEOUT_MS = 60_000;
+
 export interface GitProvider {
   /** The provider discriminator — matches the stored rows' `provider` column. */
   readonly id: GitProviderId;
@@ -49,6 +61,11 @@ export interface GitProvider {
    * token; the credential + fetch stay in motir-core (the open-core invariant —
    * the raw BYTES cross the motir-ai boundary, never a host token). GitHub returns
    * exactly what its `/tarball` endpoint yields.
+   *
+   * Implementations MUST bound the request with {@link REPO_TARBALL_TIMEOUT_MS}:
+   * this call runs inside a background-job invocation whose platform budget is
+   * finite, and a host that never answers must fail as a typed, retryable error
+   * rather than by having the invocation killed (MOTIR-1974).
    */
   fetchRepoTarball(
     installationId: string,

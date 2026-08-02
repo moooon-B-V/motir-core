@@ -13,8 +13,14 @@ import { truncateAuthTables } from '../helpers/db';
 // Story 7.5 · MOTIR-1500 — the code-graph index service, the producer half. Real
 // Postgres (the motir-core convention): seed an installation + workspace + N
 // projects, stub the GitHub tarball fetch (global `fetch`), and spy the motir-ai
-// boundary. Asserts the tarball is fetched ONCE and handed to motir-ai once per
-// project with the right tenant tuple (the workspace→projects fan-out).
+// boundary. Asserts the tarball reaches motir-ai once per project with the right
+// tenant tuple (the workspace→projects fan-out).
+//
+// Since MOTIR-1974 the service exposes that work as TWO methods, because each
+// must be its own durable checkpoint: `resolveIndexTarget` (reads only) and
+// `indexRepoIntoProject` (ONE project's fetch + upload). The job wires them into
+// a step per project — `tests/jobs/code-graph-index.test.ts` covers that shape;
+// here we cover what each half does.
 
 const PASSWORD = 'hunter2hunter2';
 const TARBALL = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0xaa, 0xbb]);
@@ -60,8 +66,8 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
-  it('fetches the tarball once and indexes it into every project of the workspace', async () => {
+describe('codeGraphIndexService — resolve, then index one project per step', () => {
+  it('resolves every project of the workspace, and indexes the tarball into each', async () => {
     const user = await usersService.createUser({
       email: 'cg-svc@example.com',
       password: PASSWORD,
@@ -103,21 +109,43 @@ describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
       commitSha: 'abc',
     });
 
-    const res = await codeGraphIndexService.indexRepoIntoWorkspaceProjects({
+    const input = {
       installationId: 'inst-cg',
       workspaceId: workspace.id,
       repoOwner: 'moooon',
       repoName: 'acme',
       defaultBranch: 'main',
+    };
+
+    // Phase 1 — reads only. It touches NO network (this is what makes it cheap
+    // to replay at every later step boundary).
+    const target = await codeGraphIndexService.resolveIndexTarget(input);
+    expect(target).toEqual({
+      indexed: true,
+      repoRef: 'moooon/acme',
+      providerId: 'github',
+      organizationId: workspace.organizationId,
+      projectIds: expect.arrayContaining([projectA.id, projectB.id]),
     });
+    expect(target.indexed && target.projectIds).toHaveLength(2);
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
+    expect(indexSpy).not.toHaveBeenCalled();
 
-    expect(res).toEqual({ indexed: true, repoRef: 'moooon/acme', projectsIndexed: 2 });
+    // Phase 2 — one call per project, each self-contained: its own tarball fetch
+    // plus its own upload, so the caller can put each in its own `step.run`.
+    if (!target.indexed) throw new Error('unreachable');
+    for (const projectId of target.projectIds) {
+      const res = await codeGraphIndexService.indexRepoIntoProject({
+        ...input,
+        providerId: target.providerId,
+        organizationId: target.organizationId,
+        repoRef: target.repoRef,
+        projectId,
+      });
+      expect(res).toEqual({ projectId, repoRef: 'moooon/acme', filesIndexed: 3 });
+    }
 
-    // The tarball was fetched exactly once (reused across projects).
-    const tarballFetches = fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'));
-    expect(tarballFetches).toHaveLength(1);
-
-    // One motir-ai call per project, each with the workspace's org + the SAME bytes.
+    // One motir-ai call per project, each with the workspace's org + the bytes.
     expect(indexSpy).toHaveBeenCalledTimes(2);
     const projectIds = indexSpy.mock.calls.map(([arg]) => arg.coreProjectId).sort();
     expect(projectIds).toEqual([projectA.id, projectB.id].sort());
@@ -152,7 +180,7 @@ describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
     const fetchMock = stubGithubTarball();
     const indexSpy = vi.spyOn(motirAiClient, 'indexCodeGraph');
 
-    const res = await codeGraphIndexService.indexRepoIntoWorkspaceProjects({
+    const res = await codeGraphIndexService.resolveIndexTarget({
       installationId: 'inst-empty',
       workspaceId: workspace.id,
       repoOwner: 'moooon',
@@ -167,7 +195,7 @@ describe('codeGraphIndexService.indexRepoIntoWorkspaceProjects', () => {
   });
 
   it('no-ops when the installation is gone', async () => {
-    const res = await codeGraphIndexService.indexRepoIntoWorkspaceProjects({
+    const res = await codeGraphIndexService.resolveIndexTarget({
       installationId: 'inst-nope',
       workspaceId: 'ws-gone',
       repoOwner: 'moooon',
