@@ -264,6 +264,34 @@ export interface CodeGraphIndexData {
 export type CodeGraphRefreshData = CodeGraphIndexData;
 
 /**
+ * The `system.ci-runner-boot` event payload (Story MOTIR-1916 · MOTIR-1921) —
+ * one per provisioning INTENT to serve with an ephemeral runner.
+ *
+ * ⚠️ IT CARRIES THE INTENT ID AND NOTHING ELSE, deliberately. Everything the
+ * boot needs — the org, the workspace, the project, the repo, the job — is
+ * already on the intent row that MOTIR-1920 wrote, and the row is the source of
+ * truth for it. Copying that attribution into the event would create a second
+ * copy that can disagree with the first, and the moment it did, a container's
+ * cost would be attributed by whichever copy the code happened to read.
+ *
+ * It is a `system.*` event because the fleet spans tenants exactly as Motir's
+ * infrastructure bill does — the same reason `system.ci-minutes-reconcile` is.
+ * `workspaceId` rides along ONLY so the run is scoped on the `job_run` ledger
+ * (a real, valid FK); the handler re-reads the intent for everything else, and
+ * the event is enqueued via `inngest.send`, never `sendEvent`, like every system
+ * job.
+ *
+ * ONE EVENT PER INTENT, not one per batch: a batch handler that died halfway
+ * would leave the containers it had already booted with no supervisor, which is
+ * precisely the orphan the reaper exists to catch and the shape not to
+ * manufacture on purpose.
+ */
+export interface CiRunnerBootData {
+  intentId: string;
+  workspaceId: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -285,6 +313,11 @@ export interface JobEventDataMap {
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;
   'system.ci-actions-gate-sweep': SystemScheduledData;
+  /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
+   *  trigger, the per-intent boot, and the crash-backstop reaper. */
+  'system.ci-runner-provision-sweep': SystemScheduledData;
+  'system.ci-runner-boot': CiRunnerBootData;
+  'system.ci-runner-reap': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
   'system.code-graph-refresh': CodeGraphRefreshData;

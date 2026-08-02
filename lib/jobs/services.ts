@@ -16,6 +16,7 @@ import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconciliationService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
+import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
@@ -48,6 +49,7 @@ export const jobServices = {
   autoPlanCadence: autoPlanCadenceService,
   ciMinutesReconciliation: ciMinutesReconciliationService,
   ciActionsGate: ciActionsGateService,
+  ciRunnerBoot: ciRunnerBootService,
   jobScheduleHealth: jobScheduleHealthService,
 };
 
