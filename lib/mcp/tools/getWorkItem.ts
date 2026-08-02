@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -8,6 +9,12 @@ import type { IssueDetailDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { attachEdges, CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import {
+  attachCommentCounts,
+  commentCountMarker,
+  COMMENT_COUNT_DESCRIPTION,
+  ITEM_ONLY_COMMENT_COUNT_NOTE,
+} from '../commentCounts';
 
 // `get_work_item` (Story 7.8 · Subtask 7.8.4) — read ONE work item by its
 // `PROD-<n>` identifier, returned as the issue-detail aggregate (the same
@@ -36,11 +43,12 @@ function projectKeyOf(identifier: string): string {
 }
 
 /** Compact human-readable summary of an issue-detail aggregate. */
-function summarize(detail: IssueDetailDto): string {
+function summarize(detail: IssueDetailDto, commentCount: number): string {
   const it = detail.item;
   const lines = [
     `${it.identifier} [${it.kind}${it.type ? `/${it.type}` : ''}] ${it.title}`,
-    `Status: ${it.status} · Priority: ${it.priority} · Assignee: ${it.assigneeId ?? 'unassigned'}`,
+    `Status: ${it.status} · Priority: ${it.priority} · Assignee: ${it.assigneeId ?? 'unassigned'}` +
+      commentCountMarker(commentCount),
   ];
   if (detail.parent) lines.push(`Parent: ${detail.parent.identifier} ${detail.parent.title}`);
   lines.push(
@@ -72,8 +80,18 @@ export async function runGetWorkItem(
     detail.children.map((c) => c.id),
     ctx,
   );
-  const structured = { ...detail, children: attachEdges(detail.children, edges) };
-  return toolOk(summarize(detail), structured as unknown as Record<string, unknown>);
+  // The DISCUSSION signal (MOTIR-2001), on the ITEM only — one extra query,
+  // whatever the aggregate holds. The children deliberately do NOT carry it: a
+  // child badge would tempt a client to render the whole subtree's discussion
+  // state from a read whose job is this ONE card, and the list reads already
+  // answer that question per row.
+  const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx);
+  const item = attachCommentCounts([detail.item], counts)[0]!;
+  const structured = { ...detail, item, children: attachEdges(detail.children, edges) };
+  return toolOk(
+    summarize(detail, item.commentCount),
+    structured as unknown as Record<string, unknown>,
+  );
 }
 
 export function registerGetWorkItem(server: McpServer, resolveContext: McpContextResolver): void {
@@ -85,7 +103,11 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'Read a single work item by its identifier (e.g. "PROD-7"): full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
         'readiness verdict. Honors the same access checks as the UI. ' +
-        CHILD_EDGE_BLOCK_DESCRIPTION,
+        CHILD_EDGE_BLOCK_DESCRIPTION +
+        ' ' +
+        COMMENT_COUNT_DESCRIPTION +
+        ' ' +
+        ITEM_ONLY_COMMENT_COUNT_NOTE,
       inputSchema,
     },
     async (args, extra) => {

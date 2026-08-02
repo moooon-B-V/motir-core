@@ -536,11 +536,19 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
     const res = await runGetWorkItem({ key: story.identifier }, fx.ctx);
     const structured = res.structuredContent as Record<string, unknown>;
     const detail = await workItemsService.getIssueDetail(fx.projectId, story.identifier, fx.ctx);
-    // Only `children` differs: the web-facing `IssueDetailDto` is untouched, so
-    // no route-shape test that reads this aggregate back can drift (the reason
-    // 7.9.0f attaches at the transport rather than widening the DTO).
-    const { children: _ignored, ...restOfTool } = structured;
-    const { children: _alsoIgnored, ...restOfDto } = detail as unknown as Record<string, unknown>;
+    // Only the two TRANSPORT attachments differ — `children`'s edge block
+    // (7.9.0f) and the item's `commentCount` (MOTIR-2001). The web-facing
+    // `IssueDetailDto` is untouched by both, so no route-shape test that reads
+    // this aggregate back can drift (the reason each attaches at the transport
+    // rather than widening the DTO).
+    const { children: _ignored, item: toolItem, ...restOfTool } = structured;
+    const {
+      children: _alsoIgnored,
+      item: dtoItem,
+      ...restOfDto
+    } = detail as unknown as Record<string, unknown>;
+    const { commentCount: _count, ...toolItemRest } = toolItem as Record<string, unknown>;
+    expect(JSON.parse(JSON.stringify(toolItemRest))).toEqual(JSON.parse(JSON.stringify(dtoItem)));
     expect(JSON.parse(JSON.stringify(restOfTool))).toEqual(JSON.parse(JSON.stringify(restOfDto)));
   });
 });

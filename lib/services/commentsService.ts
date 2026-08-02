@@ -521,4 +521,44 @@ export const commentsService = {
       workItemRefs,
     };
   },
+
+  /**
+   * The per-row COMMENT-COUNT projection for a PAGE of work items (MOTIR-2001) —
+   * for each requested id, how many comments it holds, replies INCLUDED. The
+   * same number {@link listComments} reports as `totalCount` and the Activity
+   * header renders, so the badge on a list row and the thread behind it can
+   * never disagree.
+   *
+   * Shaped exactly like `workItemsService.getDependencyEdgesForItems`, its
+   * sibling projection:
+   *
+   * - ONE query for the whole page, never one read per row — the batched
+   *   `countByWorkItemIds` leaf. Empty input short-circuits to `{}` without
+   *   touching the DB.
+   * - TOTAL: the result carries an entry for EVERY requested id, pre-seeded to
+   *   `0`, so a row the `GROUP BY` returned no bucket for still gets a number
+   *   and a renderer never branches on presence.
+   * - TENANCY: scoped to `ctx.workspaceId`, so a comment in another tenant can
+   *   never be counted — even if a caller handed over a foreign id.
+   *
+   * NOT view-gated per id, for the same reason its sibling is not: the caller
+   * supplies ids from a page it has ALREADY gated (`getIssueDetail` /
+   * `listReady` / `getProjectIssuesList` each run the workspace check +
+   * `assertCanBrowse` first). An item the caller cannot see is never a row here,
+   * so it never gets a count.
+   */
+  async getCommentCountsForItems(
+    workItemIds: string[],
+    ctx: ServiceContext,
+  ): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {};
+    for (const id of workItemIds) counts[id] = 0;
+    if (workItemIds.length === 0) return counts;
+
+    // Every returned bucket is one of `workItemIds` — that is the `where` — so
+    // the assignment overwrites a seeded zero and never invents a key.
+    const rows = await commentRepository.countByWorkItemIds(workItemIds, ctx.workspaceId);
+    for (const row of rows) counts[row.workItemId] = row.count;
+    return counts;
+  },
 };

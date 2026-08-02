@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -11,6 +12,11 @@ import type { WorkItemDependencyEdgesDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { edgeMarker, EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import {
+  attachCommentCounts,
+  commentCountMarker,
+  COMMENT_COUNT_DESCRIPTION,
+} from '../commentCounts';
 import {
   assigneeIdField,
   kindsField,
@@ -45,10 +51,14 @@ interface ListReadyArgs {
   limit?: number;
 }
 
-/** One ready row as a compact line, with its dependency edges appended. */
-function line(item: ReadyItemDto, edges: WorkItemDependencyEdgesDto | undefined): string {
+/** One ready row as a compact line, with its dependency edges and comment count appended. */
+function line(
+  item: ReadyItemDto,
+  edges: WorkItemDependencyEdgesDto | undefined,
+  commentCount: number | undefined,
+): string {
   const who = item.assignee ? item.assignee.name : 'unassigned';
-  return `${item.key} [${item.kind}/${item.priority}] ${item.title} — ${who}${edgeMarker(edges)}`;
+  return `${item.key} [${item.kind}/${item.priority}] ${item.title} — ${who}${edgeMarker(edges)}${commentCountMarker(commentCount)}`;
 }
 
 export async function runListReady(
@@ -68,19 +78,33 @@ export async function runListReady(
   // read per row. A ready item's `blockedBy` is terminal by definition (that is
   // what makes it ready); its `blocks` is the list's real payload — what this
   // item unblocks, i.e. why it is worth doing first.
-  const edges = await workItemsService.getDependencyEdgesForItems(
-    page.items.map((i) => i.id),
-    ctx,
-  );
+  // The page's DISCUSSION signal (MOTIR-2001) in ONE more query, whatever the
+  // page size — the same batched-projection bar the edge block clears. A ready
+  // row with a live argument on it is a row an agent should read before starting.
+  const [edges, commentCounts] = await Promise.all([
+    workItemsService.getDependencyEdgesForItems(
+      page.items.map((i) => i.id),
+      ctx,
+    ),
+    commentsService.getCommentCountsForItems(
+      page.items.map((i) => i.id),
+      ctx,
+    ),
+  ]);
 
   const header =
     page.items.length === 0
       ? 'No ready work items match.'
       : `${page.items.length} ready item${page.items.length === 1 ? '' : 's'}:`;
-  const body = page.items.map((item) => line(item, edges[item.id])).join('\n');
+  const body = page.items
+    .map((item) => line(item, edges[item.id], commentCounts[item.id]))
+    .join('\n');
   const footer = page.nextCursor ? `\n\nMore available — pass cursor: ${page.nextCursor}` : '';
   return toolOk(`${header}${body ? '\n' + body : ''}${footer}`, {
-    items: page.items.map((item) => ({ ...item, dependencies: edges[item.id] })),
+    items: attachCommentCounts(
+      page.items.map((item) => ({ ...item, dependencies: edges[item.id] })),
+      commentCounts,
+    ),
     nextCursor: page.nextCursor,
   });
 }
@@ -94,7 +118,9 @@ export function registerListReady(server: McpServer, resolveContext: McpContextR
         'List ready-to-start work items in a project (every dependency satisfied), as a ' +
         'cursor-paginated page. Optional filters: kinds, priority, assigneeId. Returns the same ' +
         'set the project’s Ready view shows. ' +
-        EDGE_BLOCK_DESCRIPTION,
+        EDGE_BLOCK_DESCRIPTION +
+        ' ' +
+        COMMENT_COUNT_DESCRIPTION,
       inputSchema,
     },
     async (args, extra) => {

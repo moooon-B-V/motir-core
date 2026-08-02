@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -18,6 +19,11 @@ import type { McpContextResolver } from '../context';
 import { toFilterDecodeToolError, toToolError, toolOk } from '../toolResult';
 import { decodeSearchCursor, encodeSearchCursor } from '../searchCursor';
 import { edgeMarker, EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import {
+  attachCommentCounts,
+  commentCountMarker,
+  COMMENT_COUNT_DESCRIPTION,
+} from '../commentCounts';
 
 // `search_work_items` (Story 7.8 · Subtask 7.8.6) — the agent's arbitrary
 // query tool, deliberately SECOND to the dispatch tools (7.8.4): the planner
@@ -144,9 +150,14 @@ interface SearchArgs {
 }
 
 /** One result row as a compact line for the human-readable text block, with its
- *  dependency edges appended (the SAME marker `list_ready` renders). */
-function line(item: WorkItemListItemDto, edges: WorkItemDependencyEdgesDto | undefined): string {
-  return `${item.identifier} [${item.kind}/${item.priority}] ${item.title} — ${item.status}${edgeMarker(edges)}`;
+ *  dependency edges and comment count appended (the SAME markers `list_ready`
+ *  renders, in the same order). */
+function line(
+  item: WorkItemListItemDto,
+  edges: WorkItemDependencyEdgesDto | undefined,
+  commentCount: number | undefined,
+): string {
+  return `${item.identifier} [${item.kind}/${item.priority}] ${item.title} — ${item.status}${edgeMarker(edges)}${commentCountMarker(commentCount)}`;
 }
 
 /** Map the agent-facing expanded filter to the 6.1.1 stored envelope `{ v, c, f }`. */
@@ -202,19 +213,31 @@ export async function runSearchWorkItems(
   // The page's dependency edges in TWO batched queries (MOTIR-1842) — the SAME
   // service seam `list_ready` uses, so the two lists carry an identical
   // `dependencies` block and a client renders both with one renderer.
-  const edges = await workItemsService.getDependencyEdgesForItems(
-    items.map((i) => i.id),
-    ctx,
-  );
+  const [edges, commentCounts] = await Promise.all([
+    workItemsService.getDependencyEdgesForItems(
+      items.map((i) => i.id),
+      ctx,
+    ),
+    // The same DISCUSSION signal `list_ready` attaches (MOTIR-2001), from the
+    // same batched service seam — one query for the page, so the two lists carry
+    // an identical `commentCount` and a client renders both with one renderer.
+    commentsService.getCommentCountsForItems(
+      items.map((i) => i.id),
+      ctx,
+    ),
+  ]);
 
   const header =
     items.length === 0
       ? 'No work items match.'
       : `${items.length} of ${result.total} matching work item${result.total === 1 ? '' : 's'}:`;
-  const body = items.map((item) => line(item, edges[item.id])).join('\n');
+  const body = items.map((item) => line(item, edges[item.id], commentCounts[item.id])).join('\n');
   const footer = nextCursor ? `\n\nMore available — pass cursor: ${nextCursor}` : '';
   return toolOk(`${header}${body ? '\n' + body : ''}${footer}`, {
-    items: items.map((item) => ({ ...item, dependencies: edges[item.id] })),
+    items: attachCommentCounts(
+      items.map((item) => ({ ...item, dependencies: edges[item.id] })),
+      commentCounts,
+    ),
     total: result.total,
     nextCursor,
   });
@@ -233,7 +256,9 @@ export function registerSearchWorkItems(
         'grammar the /items advanced filter and saved filters use), as a cursor-paginated page. ' +
         'Omit `filter` to page the whole project. Returns the matching items, the total count, ' +
         'and a nextCursor. Honors the same access checks as the UI. ' +
-        EDGE_BLOCK_DESCRIPTION,
+        EDGE_BLOCK_DESCRIPTION +
+        ' ' +
+        COMMENT_COUNT_DESCRIPTION,
       inputSchema,
     },
     async (args, extra) => {

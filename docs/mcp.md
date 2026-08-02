@@ -199,7 +199,8 @@ view shows.
 **Output** — `structuredContent`: `{ items: ReadyItemDto[], nextCursor: string | null }`.
 Each `ReadyItemDto` has `id`, `key` (the `PROD-<n>` identifier), `kind`, `title`,
 `priority`, `status: { key, category }`, `assignee` (or null), and
-`descriptionExcerpt` — **plus the `dependencies` block** below.
+`descriptionExcerpt` — **plus the `dependencies` block** and the
+**[`commentCount`](#the-commentcount-field)** below.
 
 ##### The `dependencies` block (list reads)
 
@@ -231,6 +232,39 @@ The human-readable text block carries the same graph in compact form, appended
 to each row's line: `PROD-7 [task/high] Wire the dispatch — unassigned · blocked
 by PROD-3 · blocks PROD-9`.
 
+##### The `commentCount` field
+
+**All five work-item reads** — `list_ready`, `search_work_items`, `next_ready`,
+`claim_next_ready`, and `get_work_item` — attach the same number to every work
+item they return:
+
+```jsonc
+"commentCount": 3
+```
+
+- **What it counts** — every comment on the item, **replies included**. It is the
+  same total [`get_work_item_activity`](#get_work_item_activity) reports as
+  `totalCount` / `totalComments` and the web Activity header renders, so the
+  badge and the thread behind it can never disagree.
+- **Always present as a number**, `0` when there is no discussion — never
+  `undefined`, never omitted at zero, so a renderer never branches on presence.
+- **Why it is here** — the activity read has to be CALLED to discover a card has
+  nothing to say. This is the signal that makes the call worth making: fetch the
+  thread for the cards that have one, skip the round-trip for the rest. On a
+  dispatch read (`next_ready` / `claim_next_ready`) a non-zero count means the
+  card's prose is not the whole brief — read the discussion before starting.
+- **One query per page**, whatever the page size — never one read per row.
+- Scoped to the caller's workspace, over ids the read has already view-gated: a
+  row you cannot see never appears, so it never carries a count.
+- On **`get_work_item`** it rides the **item itself**, not the child rows —
+  that aggregate answers for one card; the list reads answer per row.
+- It is an MCP projection, not a web DTO field: `ReadyItemDto`,
+  `WorkItemListItemDto` and `IssueDetailDto` are unchanged.
+
+The human-readable text block carries it in the same compact form the
+`dependencies` marker uses, and renders **nothing at zero**: `PROD-7
+[task/high] Wire the dispatch — unassigned · blocks PROD-9 · 3 comments`.
+
 #### `next_ready`
 
 Dispatch ONE item: the highest-ranked ready item not in `excludeIds`, as the
@@ -249,7 +283,10 @@ to `excludeIds`.
 (`null` when nothing is ready). `ReadyItemDispatchDto` extends `ReadyItemDto`
 with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, `runCommand`
 (`motir run <key>`), `sessionBranch`, `targetRepo`, `targetRepoCloneUrl`, and
-`targetRepoDefaultBranch`.
+`targetRepoDefaultBranch` — plus the
+[`commentCount`](#the-commentcount-field) the list reads carry. A non-zero
+count on a dispatch payload is the cue to read
+[`get_work_item_activity`](#get_work_item_activity) before starting.
 
 **`targetRepo` — WHICH repo to run this in** (MOTIR-1804): the bare repo name
 (`"motir-core"`) the CLI maps to a checkout via `.motir.json` (`motir link add
@@ -308,7 +345,8 @@ id is passed.
 **Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null, reason? }`.
 On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
 `status` now in the `in_progress` category) — including `targetRepo` and its
-`targetRepoCloneUrl` / `targetRepoDefaultBranch` coordinates, resolved
+`targetRepoCloneUrl` / `targetRepoDefaultBranch` coordinates and its
+[`commentCount`](#the-commentcount-field), resolved
 identically (see `next_ready` above for the project-scoped rule and the null
 semantics). When nothing could be claimed,
 `item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
@@ -384,7 +422,11 @@ shape the detail page reads.
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency
-links, and a readiness verdict.
+links, and a readiness verdict. The **item** additionally carries
+[`commentCount`](#the-commentcount-field) — how much discussion this card has,
+so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
+paid when there is something to read. The child rows do **not** carry it: this
+aggregate answers for one card, and the list reads answer per row.
 
 Each **CHILD** row additionally carries the same
 [`dependencies` block](#the-dependencies-block-list-reads) the list reads attach
@@ -769,7 +811,8 @@ validation error.
 **Output** — `structuredContent`:
 `{ items: WorkItemListItemDto[], total: number, nextCursor: string | null }`.
 Each row also carries the same [`dependencies` block](#the-dependencies-block-list-reads)
-`list_ready` returns — identical shape, so one renderer covers both lists.
+and [`commentCount`](#the-commentcount-field) `list_ready` returns — identical
+shapes, so one renderer covers both lists.
 
 ### Sprints
 
