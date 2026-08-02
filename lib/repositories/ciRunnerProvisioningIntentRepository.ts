@@ -8,6 +8,44 @@ import { type CiRunnerProvisioningIntent, type Prisma } from '@prisma/client';
  *  out of it belong to the provisioner (MOTIR-1921) and the gate (MOTIR-1922),
  *  which extend this vocabulary rather than migrate an enum. */
 export const CI_RUNNER_INTENT_PENDING = 'pending';
+/** CLAIMED by a provisioner: the JIT config is being minted and a container
+ *  booted. The claim itself is what this status IS — see {@link claimPending}. */
+export const CI_RUNNER_INTENT_PROVISIONING = 'provisioning';
+/** The container is up and holding a registered runner. The state the reaper
+ *  ages containers out of. */
+export const CI_RUNNER_INTENT_RUNNING = 'running';
+/** Terminal: the container ran and was torn down. */
+export const CI_RUNNER_INTENT_COMPLETED = 'completed';
+/** Terminal: no runner ever served this job, and nothing is still running for
+ *  it. `teardownReason` says which path got here. */
+export const CI_RUNNER_INTENT_FAILED = 'failed';
+
+/** The statuses that mean "a container may still exist for this intent" — the
+ *  reaper's and the in-flight count's window. */
+export const CI_RUNNER_INTENT_IN_FLIGHT: readonly string[] = [
+  CI_RUNNER_INTENT_PROVISIONING,
+  CI_RUNNER_INTENT_RUNNING,
+];
+
+/** What a provisioner records once the container is up. */
+export interface CiRunnerBootRecord {
+  containerProvider: string;
+  containerId: string;
+  containerRegion: string;
+  githubRunnerId: number | null;
+  runnerName: string | null;
+  bootedAt: Date;
+}
+
+/** What a provisioner records once the container is gone. */
+export interface CiRunnerSettleRecord {
+  status: string;
+  teardownReason: string | null;
+  settledAt: Date;
+  failureDetail: string | null;
+  startedAt?: Date | null;
+  bootLatencyMs?: number | null;
+}
 
 export interface CiRunnerProvisioningIntentCreateInput {
   workspaceId: string;
@@ -90,6 +128,176 @@ export const ciRunnerProvisioningIntentRepository = {
     return tx.ciRunnerProvisioningIntent.findMany({
       where: { status: CI_RUNNER_INTENT_PENDING },
       orderBy: { queuedAt: 'asc' },
+      take: limit,
+    });
+  },
+
+  /** One intent by id, whatever its status. */
+  async findById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent | null> {
+    return tx.ciRunnerProvisioningIntent.findUnique({ where: { id } });
+  },
+
+  /**
+   * CLAIM a pending intent — an atomic compare-and-set from `pending` to
+   * `provisioning`, returning whether THIS caller won.
+   *
+   * ⚠️ THE `status: PENDING` PREDICATE IS THE CONCURRENCY GUARD, not decoration.
+   * Two sweeps overlapping — a slow one still running when the next fires, or two
+   * instances behind a load balancer — would otherwise both read the same pending
+   * intent and both boot a runner for it. The second runner has no job to claim
+   * (GitHub hands the job to whichever registers first) and would idle until its
+   * timeout, billing the tenant's org for a container that did nothing. Postgres
+   * evaluates the predicate under the row lock `UPDATE` takes, so exactly one
+   * caller sees `count === 1`.
+   *
+   * A conditional UPDATE rather than `SELECT … FOR UPDATE` + write: there is
+   * nothing to read between the two, so the compare-and-set is both shorter and
+   * strictly harder to get wrong — no transaction has to be held open across the
+   * GitHub and provider calls that follow.
+   */
+  async claimPending(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, status: CI_RUNNER_INTENT_PENDING },
+      data: { status: CI_RUNNER_INTENT_PROVISIONING },
+    });
+    return result.count === 1;
+  },
+
+  /**
+   * Record the GitHub runner a JIT mint just registered — BEFORE the container
+   * exists.
+   *
+   * ⚠️ THE ORDERING IS THE POINT, not an implementation detail. §7.4's verified
+   * finding is that `generate-jitconfig` registers the runner at MINT time: the
+   * `201` returns a runner row before any container is created. So between the
+   * mint and the boot there is a window in which GitHub holds a registered runner
+   * and Motir holds nothing — and a crash in that window leaves a dangling
+   * registered runner NOBODY CAN NAME, because the only id was in the dead
+   * process's memory. Writing the id first closes it: the stale-claim sweep reads
+   * this column and de-registers.
+   */
+  async recordMintedRunner(
+    id: string,
+    data: { githubRunnerId: number; runnerName: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.ciRunnerProvisioningIntent.update({
+      where: { id },
+      data: { githubRunnerId: data.githubRunnerId, runnerName: data.runnerName },
+    });
+  },
+
+  /**
+   * Intents CLAIMED but never booted, older than `claimedBefore` — the
+   * stale-claim sweep's read.
+   *
+   * These are the crash-in-the-window rows above: status `provisioning`, no
+   * container. They are found by `updatedAt` because the claim is the last thing
+   * that touched them, and they carry the `githubRunnerId` that has to be
+   * de-registered.
+   */
+  async listStaleClaims(
+    claimedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: {
+        status: CI_RUNNER_INTENT_PROVISIONING,
+        containerId: null,
+        updatedAt: { lt: claimedBefore },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+    });
+  },
+
+  /** Record the container this intent booted, and flip it to `running`. Written
+   *  as ONE statement so a handle never exists without the status that tells the
+   *  reaper to watch it. */
+  async recordBoot(
+    id: string,
+    data: CiRunnerBootRecord,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.ciRunnerProvisioningIntent.update({
+      where: { id },
+      data: {
+        status: CI_RUNNER_INTENT_RUNNING,
+        containerProvider: data.containerProvider,
+        containerId: data.containerId,
+        containerRegion: data.containerRegion,
+        githubRunnerId: data.githubRunnerId,
+        runnerName: data.runnerName,
+        bootedAt: data.bootedAt,
+      },
+    });
+  },
+
+  /** Record when the container was observed running, and the boot latency that
+   *  implies — ADR §6's budget made measurable. */
+  async recordStarted(
+    id: string,
+    startedAt: Date,
+    bootLatencyMs: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.ciRunnerProvisioningIntent.update({
+      where: { id },
+      data: { startedAt, bootLatencyMs },
+    });
+  },
+
+  /** Move an intent to a terminal status with the reason it got there. */
+  async settle(
+    id: string,
+    data: CiRunnerSettleRecord,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.ciRunnerProvisioningIntent.update({
+      where: { id },
+      data: {
+        status: data.status,
+        teardownReason: data.teardownReason,
+        settledAt: data.settledAt,
+        failureDetail: data.failureDetail,
+        ...(data.startedAt === undefined ? {} : { startedAt: data.startedAt }),
+        ...(data.bootLatencyMs === undefined ? {} : { bootLatencyMs: data.bootLatencyMs }),
+      },
+    });
+  },
+
+  /**
+   * Intents still holding a container — the REAPER's read, and the read that
+   * recovers attribution for a container the provider reports.
+   *
+   * Keyed on `containerId` rather than on the intent id because the reaper starts
+   * from what the PROVIDER says exists, which is the only source that is still
+   * right after the orchestrator has crashed.
+   */
+  async findByContainerId(
+    provider: string,
+    containerId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent | null> {
+    return tx.ciRunnerProvisioningIntent.findFirst({
+      where: { containerProvider: provider, containerId },
+    });
+  },
+
+  /** Every intent whose container is still supposed to be alive. Used to settle
+   *  the rows a reap destroyed, so the table cannot keep claiming a container
+   *  exists after the sweeper has removed it. */
+  async listInFlight(
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: { status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+      orderBy: { bootedAt: 'asc' },
       take: limit,
     });
   },

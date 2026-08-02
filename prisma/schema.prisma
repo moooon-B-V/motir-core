@@ -4847,7 +4847,57 @@ model CiRunnerProvisioningIntent {
   /// migration on a table it does not own — the values live in
   /// `lib/ciFleet/config.ts`'s consumer, and this column has exactly one writer
   /// today.
+  ///
+  /// MOTIR-1921 extends the vocabulary exactly as that comment anticipated:
+  /// `provisioning` (claimed, JIT minted, machine booting), `running` (the
+  /// container is up), `completed` and `failed` (terminal, with
+  /// `teardownReason` saying which path got there). The set lives in
+  /// `lib/repositories/ciRunnerProvisioningIntentRepository.ts`.
   status String @default("pending")
+
+  /// ── The PROVISIONED CONTAINER (MOTIR-1921) ────────────────────────────────
+  /// The port's `ContainerHandle`, flattened. PERSISTED, and that is the whole
+  /// reason the reaper can work: the case it exists for is this process dying
+  /// between provision and teardown, so the handle has to survive somewhere that
+  /// is not this process. Provider-agnostic by construction — a Fly Machine id
+  /// and an EC2 instance id are both just `container_id` (ADR §4's rule 1).
+  containerProvider String? @map("container_provider")
+  containerId       String? @map("container_id")
+  containerRegion   String? @map("container_region")
+
+  /// GitHub's numeric runner id, from the JIT-config mint. Stored because
+  /// `generate-jitconfig` REGISTERS the runner before any container exists
+  /// (§7.4, verified 2026-08-01), so every failure path between mint and job
+  /// must be able to de-register it — and after a crash, this column is the only
+  /// thing that knows its name. The encoded JIT config itself is a CREDENTIAL and
+  /// is never persisted.
+  githubRunnerId Int?    @map("github_runner_id")
+  runnerName     String? @map("runner_name")
+
+  /// When the container was created, and when it was observed running. The
+  /// second is what carries the usage row's `startedAt` on the happy path: with
+  /// `auto_destroy: true` the machine deletes itself, taking its event log with
+  /// it, so an observation Motir made while it was alive is the only surviving
+  /// record of when it started.
+  bootedAt  DateTime? @map("booted_at")
+  startedAt DateTime? @map("started_at")
+
+  /// Boot latency in milliseconds — the ADR §6 budget made MEASURABLE rather
+  /// than aspirational. Measured from the job's own `queued_at` (GitHub's
+  /// instant, not our receipt) to the container being observed running, which is
+  /// the orchestrator-observable proxy for §6's webhook→`started_at` span.
+  /// MOTIR-1928 measures the real p50/p95 against the budget on live
+  /// infrastructure; this is what makes that a query rather than a stopwatch.
+  bootLatencyMs Int? @map("boot_latency_ms")
+
+  /// How the container ended — the port's `TeardownReason`. Kept next to the
+  /// status because "failed" alone cannot distinguish a provider refusal from a
+  /// runner that never registered from a job that ran over its timeout, and
+  /// those are three different operational stories.
+  teardownReason String?   @map("teardown_reason")
+  settledAt      DateTime? @map("settled_at")
+  /// A short, non-secret failure detail. Never a provider body.
+  failureDetail String? @map("failure_detail")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -4867,6 +4917,12 @@ model CiRunnerProvisioningIntent {
   @@index([status, queuedAt])
   @@index([organizationId, status])
   @@index([projectId, status])
+  /// The REAPER's read (MOTIR-1921): intents still holding a container, oldest
+  /// boot first. Distinct from `[status, queuedAt]` because the reaper ages a
+  /// container from when it BOOTED, not from when GitHub queued the job — an
+  /// intent that waited an hour at the admission gate and then booted a second
+  /// ago must not be swept as an hour-old orphan.
+  @@index([status, bootedAt])
   @@map("ci_runner_provisioning_intent")
 }
 
