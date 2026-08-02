@@ -90,17 +90,22 @@ describe('system.ci-minutes-reconcile', () => {
     expect(CI_MINUTES_RECONCILE_CRON).toBe('0 4 3 * *');
   });
 
-  it('skips cleanly when there is no billing credential, and still records a run', async () => {
+  it('skips the GitHub half with no billing credential — but STILL audits the fleet', async () => {
     // The normal state until MOTIR-1779 provisions the org + credential. The
     // operational meter does not depend on it, so this must not look like a
-    // failure.
+    // failure — and since MOTIR-1924 the FLEET half does not depend on it at
+    // all, so it reconciles anyway. That asymmetry is the point of running the
+    // two comparisons as separate steps (§Q.2).
     vi.stubEnv('MOTIR_CLOUD', 'true');
     vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
     vi.stubEnv('GITHUB_BILLING_TOKEN', undefined);
 
     const { result } = await new InngestTestEngine({ function: ciMinutesReconcile }).execute();
 
-    expect(result).toEqual({ outcome: 'skipped', reason: 'no_billing_credential' });
+    expect(result).toMatchObject({
+      github: { outcome: 'skipped', reason: 'no_billing_credential' },
+      fleet: { outcome: 'reconciled', org: MOTIR_ORG, repos: [], discrepancies: [] },
+    });
     const runs = await db.jobRun.findMany();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
@@ -137,11 +142,17 @@ describe('system.ci-minutes-reconcile', () => {
 
     const { result } = await new InngestTestEngine({ function: ciMinutesReconcile }).execute();
 
-    expect(result).toMatchObject({ outcome: 'reconciled', org: MOTIR_ORG, year: 2026, month: 7 });
-    const reconciled = result as {
-      repos: Array<{ repoName: string; meteredMinutes: number }>;
-      discrepancies: unknown[];
-    };
+    expect(result).toMatchObject({
+      github: { outcome: 'reconciled', org: MOTIR_ORG, year: 2026, month: 7 },
+    });
+    const reconciled = (
+      result as {
+        github: {
+          repos: Array<{ repoName: string; meteredMinutes: number }>;
+          discrepancies: unknown[];
+        };
+      }
+    ).github;
     expect(reconciled.repos.map((r) => r.repoName)).toEqual(['acme-web', 'quiet-repo']);
     expect(reconciled.repos.find((r) => r.repoName === 'acme-web')?.meteredMinutes).toBe(190);
     // 5 minutes off 195 is inside the 5% tolerance — reporting granularity, not a bug.
@@ -167,9 +178,11 @@ describe('system.ci-minutes-reconcile', () => {
 
     const { result } = await new InngestTestEngine({ function: ciMinutesReconcile }).execute();
 
-    const reconciled = result as {
-      discrepancies: Array<{ repoName: string; driftMinutes: number }>;
-    };
+    const reconciled = (
+      result as {
+        github: { discrepancies: Array<{ repoName: string; driftMinutes: number }> };
+      }
+    ).github;
     expect(reconciled.discrepancies).toEqual([
       expect.objectContaining({ repoName: 'ghost-repo', driftMinutes: -900 }),
     ]);
@@ -181,7 +194,7 @@ describe('system.ci-minutes-reconcile', () => {
   });
 });
 
-describe('ciMinutesReconciliationService.meteredTotalsForMonth', () => {
+describe('ciMinutesReconciliationService.githubHostedTotalsForMonth', () => {
   it('sums the month per repository, across every tenant', async () => {
     // Cross-tenant on purpose: Motir's GitHub bill is org-wide, so no single
     // tenant sees the whole of it.
@@ -189,7 +202,7 @@ describe('ciMinutesReconciliationService.meteredTotalsForMonth', () => {
     await seedMeteredRun('acme-web', 190);
     await seedMeteredRun('second-web', 40);
 
-    expect(await ciMinutesReconciliationService.meteredTotalsForMonth(JULY_2026)).toEqual([
+    expect(await ciMinutesReconciliationService.githubHostedTotalsForMonth(JULY_2026)).toEqual([
       { repoName: 'acme-web', billableMinutes: 190 },
       { repoName: 'second-web', billableMinutes: 40 },
     ]);
@@ -200,19 +213,19 @@ describe('ciMinutesReconciliationService.meteredTotalsForMonth', () => {
     await seedMeteredRun('acme-web', 190);
 
     expect(
-      await ciMinutesReconciliationService.meteredTotalsForMonth(
+      await ciMinutesReconciliationService.githubHostedTotalsForMonth(
         new Date('2026-08-01T00:00:00.000Z'),
       ),
     ).toEqual([]);
 
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'someone-else');
-    expect(await ciMinutesReconciliationService.meteredTotalsForMonth(JULY_2026)).toEqual([]);
+    expect(await ciMinutesReconciliationService.githubHostedTotalsForMonth(JULY_2026)).toEqual([]);
   });
 
   it('matches the owner case-insensitively, as GitHub logins are', async () => {
     await seedMeteredRun('acme-web', 190);
     vi.stubEnv('GITHUB_FALLBACK_ORG', 'MOTIR-PROJECTS');
-    expect(await ciMinutesReconciliationService.meteredTotalsForMonth(JULY_2026)).toEqual([
+    expect(await ciMinutesReconciliationService.githubHostedTotalsForMonth(JULY_2026)).toEqual([
       { repoName: 'acme-web', billableMinutes: 190 },
     ]);
   });

@@ -108,11 +108,12 @@ export interface ContainerStatus {
  * The CONTAINER-SECONDS RECORD (§5) — what the cost meter consumes and what the
  * fleet's own reconciliation audits. PER RUNNER, never aggregated at write time.
  *
- * ⚠️ THE FIELDS ARE FIXED BY THE ADR, THE SCHEMA IS MOTIR-1924'S. This card
- * EMITS the record from `teardown` / `reap`; MOTIR-1924 persists it into a
- * workspace-scoped table with RLS. Keeping the fields here and the table there is
- * what stops the meter, the reconciliation and the margin readout each inventing
- * their own shape.
+ * ⚠️ THE FIELDS ARE FIXED BY THE ADR, THE SCHEMA IS MOTIR-1924'S. MOTIR-1921
+ * EMITS the record from `teardown` / `reap`; MOTIR-1924 persists it into
+ * `ci_container_usage` — workspace-scoped, with RLS — via the sink. Keeping the
+ * fields here and the table there is what stops the meter, the reconciliation
+ * and the margin readout each inventing their own shape; the model's columns
+ * mirror this interface one-for-one, and they have to stay that way.
  */
 export interface ContainerUsage {
   readonly handleId: string;

@@ -238,7 +238,7 @@ describe('ciMinutesReconciliationService.reconcileMonth', () => {
   it('returns no metered totals when no provisioning org is configured', async () => {
     vi.stubEnv('GITHUB_FALLBACK_ORG', undefined);
     expect(
-      await ciMinutesReconciliationService.meteredTotalsForMonth(
+      await ciMinutesReconciliationService.githubHostedTotalsForMonth(
         new Date('2026-07-01T00:00:00.000Z'),
       ),
     ).toEqual([]);

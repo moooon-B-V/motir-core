@@ -20,7 +20,14 @@ import type { ContainerSize, OrchestratorProvider } from './types';
 // database read on that path is one more thing that can fail between "the
 // container is gone" and "we know what it cost". The resolver's signature IS the
 // table's read signature, so promoting these rows to a table later is mechanical
-// and changes no call site. MOTIR-1924 owns that promotion.
+// and changes no call site.
+//
+// ⚠️ THAT PROMOTION IS STILL OPEN, and MOTIR-1924 is not it. That card persists
+// the RESULT — the resolved `usdPerSecond` and `rateEffectiveFrom` are stored on
+// every `ci_container_usage` row, so which rate was applied is a queryable fact
+// and history can never be re-priced by editing this file. What it deliberately
+// did NOT do is move the rates themselves into the database: the teardown-path
+// argument above is unchanged by having a table to write to.
 //
 // ⚠️ EFFECTIVE-DATED, NEVER EDITED IN PLACE. A Fly repricing appends a row with
 // a later `effectiveFrom`; a container that ran before it keeps the rate it was

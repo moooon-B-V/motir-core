@@ -33,6 +33,18 @@ export interface RepoPeriodTotal {
   runCount: number;
 }
 
+/** One repo's metered minutes for a period, split by WHO RAN THE COMPUTE — the
+ *  two populations the corrected reconciliation audits against two different
+ *  sources (`ci-minutes-allowance.md` §Q). `fleetJobCount` is carried because
+ *  the fleet audit's tolerance scales with the number of containers a repo's
+ *  jobs implied, one container per job. */
+export interface RepoHostingSplit {
+  repoName: string;
+  githubHostedMinutes: number;
+  fleetMinutes: number;
+  fleetJobCount: number;
+}
+
 export const ciWorkflowRunUsageRepository = {
   /**
    * Insert one metered run. The `(run_id, run_attempt)` unique index is the real
@@ -128,37 +140,95 @@ export const ciWorkflowRunUsageRepository = {
   },
 
   /**
-   * Per-repository metered totals for one period across EVERY tenant, for one
-   * repo owner — the monthly reconciliation's own read (§5.8).
+   * Per-repository metered totals for one period across EVERY tenant, SPLIT BY
+   * WHO RAN THE COMPUTE — the read the corrected reconciliation is built on
+   * (`ci-minutes-allowance.md` §Q).
    *
-   * Cross-tenant on purpose, and safe: the reconciliation compares Motir's meter
-   * against MOTIR'S OWN GitHub bill, which is org-wide by construction (GitHub
-   * bills the repository owner, and that owner is Motir). Scoping it per tenant
-   * would make the comparison impossible — no single tenant sees the whole bill.
-   * The owner filter keeps it to Motir's own provisioning org, and the caller
-   * runs it under `withSystemContext`, the shipped context for exactly this kind
-   * of operator-tier, cross-workspace read.
+   * ⚠️ THE SPLIT IS PER BREAKDOWN ENTRY, NOT PER ROW, and that is the whole
+   * reason it needs no schema change or backfill. §Q.3: "a repo that MIGRATES
+   * mid-month is reconciled per source, not per repo-month" — and a single
+   * `workflow_run` can itself mix runners (a matrix with one fleet job and three
+   * GitHub-hosted ones), which a row-level predicate would have to round one way
+   * or the other. `runner_breakdown` already stores Σ billable minutes per
+   * runner FAMILY (§3.3, kept so a repricing needs no backfill), so unnesting it
+   * splits the month exactly, with every minute landing on the side that
+   * actually billed for it.
+   *
+   * The `jsonb_typeof` guard is not decoration: `jsonb_array_elements` ERRORS on
+   * a non-array, and it is evaluated per row by the lateral join before any
+   * WHERE clause could exclude one. Every row the meter writes carries an array,
+   * so this only ever costs a type check — but a single malformed row would
+   * otherwise take down the whole monthly audit, which is precisely the signal
+   * that must not go dark.
+   *
+   * ⚠️ `LEFT JOIN LATERAL … ON TRUE`, NOT `CROSS JOIN` — a row with an EMPTY or
+   * unreadable breakdown must not VANISH from the audit. A cross join drops it
+   * silently, which is the same "the signal went dark" failure the guard above
+   * prevents, arriving through the join instead of an error. Such a row falls to
+   * its own `billable_minutes` on the GITHUB-hosted side: that is what every row
+   * metered before the fleet existed is, so the fallback preserves the
+   * pre-amendment behaviour exactly for the population it can apply to.
+   *
+   * Cross-tenant, `withSystemContext`, owner-filtered: the same posture (and the
+   * same reasoning) as `sumByRepoForOwnerPeriod` below.
    */
-  async sumByRepoForOwnerPeriod(
+  async sumByRunnerHostingForOwnerPeriod(
     repoOwner: string,
     periodStart: Date,
     periodEnd: Date,
+    fleetFamily: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ repoName: string; billableMinutes: number }>> {
-    const rows = await tx.$queryRaw<Array<{ repoName: string; billableMinutes: bigint | number }>>`
+  ): Promise<RepoHostingSplit[]> {
+    const rows = await tx.$queryRaw<
+      Array<{
+        repoName: string;
+        githubHostedMinutes: Prisma.Decimal | number;
+        fleetMinutes: Prisma.Decimal | number;
+        fleetJobCount: Prisma.Decimal | number;
+      }>
+    >`
       SELECT
-        "repo_name"                          AS "repoName",
-        COALESCE(SUM("billable_minutes"), 0) AS "billableMinutes"
-      FROM "ci_workflow_run_usage"
-      WHERE LOWER("repo_owner") = LOWER(${repoOwner})
-        AND "period_start" >= ${periodStart}
-        AND "period_start" < ${periodEnd}
-      GROUP BY "repo_name"
-      ORDER BY "repo_name" ASC
+        u."repo_name" AS "repoName",
+        COALESCE(SUM(
+          CASE
+            WHEN entry IS NULL THEN u."billable_minutes"
+            WHEN entry->>'family' <> ${fleetFamily}
+              THEN (entry->>'billableMinutes')::numeric
+            ELSE 0
+          END
+        ), 0) AS "githubHostedMinutes",
+        COALESCE(SUM(
+          CASE WHEN entry->>'family' = ${fleetFamily}
+               THEN (entry->>'billableMinutes')::numeric ELSE 0 END
+        ), 0) AS "fleetMinutes",
+        COALESCE(SUM(
+          CASE WHEN entry->>'family' = ${fleetFamily}
+               THEN (entry->>'jobCount')::numeric ELSE 0 END
+        ), 0) AS "fleetJobCount"
+      FROM "ci_workflow_run_usage" u
+      LEFT JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(u."runner_breakdown") = 'array'
+             THEN u."runner_breakdown" ELSE '[]'::jsonb END
+      ) AS entry ON TRUE
+      WHERE LOWER(u."repo_owner") = LOWER(${repoOwner})
+        AND u."period_start" >= ${periodStart}
+        AND u."period_start" < ${periodEnd}
+      GROUP BY u."repo_name"
+      ORDER BY u."repo_name" ASC
     `;
     return rows.map((row) => ({
       repoName: row.repoName,
-      billableMinutes: Number(row.billableMinutes),
+      githubHostedMinutes: Number(row.githubHostedMinutes),
+      fleetMinutes: Number(row.fleetMinutes),
+      fleetJobCount: Number(row.fleetJobCount),
     }));
   },
+
+  // ⚠️ `sumByRepoForOwnerPeriod` — the un-split owner read this file used to
+  // carry — was REMOVED by MOTIR-1924, not left beside its replacement. It
+  // summed EVERY metered minute for an owner, which is the population §Q now
+  // forbids comparing against GitHub's billing report; leaving it here would
+  // leave a correct-looking read whose only remaining use would be the bug the
+  // amendment exists to fix. `sumByRunnerHostingForOwnerPeriod` above answers
+  // the same question with the split the audit requires.
 };
