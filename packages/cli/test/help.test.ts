@@ -164,6 +164,8 @@ describe('the curated overview', () => {
         $ motir status --json                              # the project pulse
         $ motir sprint                                     # what’s in the active sprint
         $ motir show MOTIR-7                               # the item, its edges, its body
+        $ motir show MOTIR-7 --activity                    # …plus comments + history
+        $ motir show MOTIR-7 --comments                    # …just what people said
         $ motir open MOTIR-7 --print                       # the item’s URL
         $ motir auto --agent claude --max 5                # drain 5 items unattended
         $ motir batch --agent claude                       # snapshot now, one PR each

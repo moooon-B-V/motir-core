@@ -4,12 +4,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { commentsService } from '@/lib/services/commentsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { runListReady } from '@/lib/mcp/tools/listReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
 import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
+import { runGetWorkItemActivity } from '@/lib/mcp/tools/getWorkItemActivity';
 import { runListSprints } from '@/lib/mcp/tools/listSprints';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkItemDto } from '@/lib/dto/workItems';
@@ -562,6 +564,152 @@ describe('motir show — the detail read against a real tree', () => {
     const malformed = await ws.run(['show', 'not-a-key']);
     expect(malformed.exitCode).toBe(1);
     expect(malformed.stderr).toContain('is not a work item key');
+  });
+});
+
+// ── motir show --activity / --comments — the DISCUSSION (MOTIR-2000) ────────
+//
+// The consumer half of `get_work_item_activity` (MOTIR-1999), driven the way the
+// rest of this suite drives things: real comments and real revisions in real
+// Postgres, read back through the real tool by the BUILT binary. What is
+// asserted against is the tool's own page, never a hardcoded string — so a key
+// renamed on either side of the seam fails here rather than rendering blank.
+
+describe('motir show --activity / --comments — the discussion, from a real tenant', () => {
+  /** A card with a threaded conversation AND a real change trail on it. */
+  async function argumentativeItem(fx: WorkItemFixture): Promise<WorkItemDto> {
+    const item = await leaf(fx, 'A card people argued about');
+    const root = await commentsService.addComment(
+      item.id,
+      { bodyMd: '## Rationale\n\nArchived because the surface moved.\n\nA second paragraph.' },
+      fx.ctx,
+    );
+    await commentsService.addComment(
+      item.id,
+      { bodyMd: 'Agreed — the mirror product does the same.', parentCommentId: root.id },
+      fx.ctx,
+    );
+    // A real revision, so the merged view has both row kinds to interleave.
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    return item;
+  }
+
+  it('appends the stream ONLY when asked, and prints what the tool returned', async () => {
+    const { fx } = await linkedProject();
+    const item = await argumentativeItem(fx);
+
+    // NEITHER flag: the read is exactly what it was before this card existed.
+    const plain = await ws.run(['show', item.identifier]);
+    expect(plain.exitCode).toBe(0);
+    expect(plain.stdout).not.toContain('ACTIVITY');
+    expect(plain.stdout).not.toContain('COMMENTS');
+
+    const shown = await ws.run(['show', item.identifier, '--activity']);
+    expect(shown.exitCode, shown.stderr).toBe(0);
+    // The flag only ADDS: the detail block is byte-identical to the flagless read.
+    expect(shown.stdout.startsWith(plain.stdout)).toBe(true);
+
+    const page = structured<{
+      entries: (
+        | { type: 'comment'; thread: { bodyMd: string; replies: { bodyMd: string }[] } }
+        | { type: 'history'; entry: { parts: { kind: string }[] } }
+      )[];
+      totalComments: number;
+      totalChanges: number;
+      nextCursor: string | null;
+    }>(await runGetWorkItemActivity({ key: item.identifier }, fx.ctx));
+
+    // Both counts come from the tool's own totals — the root AND its reply.
+    expect(page.totalComments).toBe(2);
+    expect(shown.stdout).toContain(`ACTIVITY\n${page.totalComments} comments`);
+    expect(shown.stdout).toContain(`${page.totalChanges} changes`);
+
+    // Every comment body, IN FULL — the no-truncation rule this whole read
+    // exists to honour (a cut-off rationale is worse than one you know to page).
+    for (const entry of page.entries) {
+      if (entry.type !== 'comment') continue;
+      for (const line of entry.thread.bodyMd.split('\n')) {
+        if (line.trim() !== '') expect(shown.stdout).toContain(line);
+      }
+      for (const reply of entry.thread.replies) expect(shown.stdout).toContain(reply.bodyMd);
+    }
+    // …with the reply nested one level under its root.
+    expect(shown.stdout).toContain('↳ reply ');
+    // …and the history entry rendered from its typed parts, not from prose.
+    expect(shown.stdout).toContain('changed status');
+    // The whole stream fits, so the page is the whole story and says nothing else.
+    expect(page.nextCursor).toBeNull();
+    expect(shown.stdout).not.toContain('MORE —');
+  });
+
+  it('`--comments` prints the threads only, and an empty card says so explicitly', async () => {
+    const { fx } = await linkedProject();
+    const item = await argumentativeItem(fx);
+
+    const comments = await ws.run(['show', item.identifier, '--comments']);
+    expect(comments.exitCode, comments.stderr).toBe(0);
+    expect(comments.stdout).toContain('COMMENTS\n2 comments');
+    expect(comments.stdout).toContain('Agreed — the mirror product does the same.');
+    // The history is a DIFFERENT view — this one carries none of it.
+    expect(comments.stdout).not.toContain('changed status');
+
+    // A card nobody has said anything about: an explicit line, never a bare
+    // blank and never an error.
+    const quiet = await leaf(fx, 'Nobody has commented on this');
+    const empty = await ws.run(['show', quiet.identifier, '--comments']);
+    expect(empty.exitCode, empty.stderr).toBe(0);
+    expect(empty.stdout).toContain('No comments yet.');
+  });
+
+  it('refuses BOTH flags at once rather than silently picking a stream', async () => {
+    const { fx } = await linkedProject();
+    const item = await leaf(fx, 'One stream or the other');
+
+    const both = await ws.run(['show', item.identifier, '--activity', '--comments']);
+    expect(both.exitCode).toBe(1);
+    expect(both.stderr).toContain('cannot be combined');
+  });
+
+  it('`--json` emits the activity page UNALTERED beside the aggregate', async () => {
+    const { fx } = await linkedProject();
+    const item = await argumentativeItem(fx);
+
+    const asJson = await ws.run(['show', item.identifier, '--comments', '--json']);
+    expect(asJson.exitCode, asJson.stderr).toBe(0);
+    const payload = JSON.parse(asJson.stdout) as {
+      item: { identifier: string };
+      activity: unknown;
+    };
+
+    expect(payload.item.identifier).toBe(item.identifier);
+    // Byte for byte the tool's own `structuredContent` — cursor and totals
+    // included, so a script can tell there is more to read.
+    expect(payload.activity).toEqual(
+      structured(await runGetWorkItemActivity({ key: item.identifier, view: 'comments' }, fx.ctx)),
+    );
+  });
+
+  it('needs NOTHING beyond the `read` scope `motir login` mints', async () => {
+    // The device-authorization grant is fixed at CLI_TOKEN_SCOPES; a flag that
+    // needed a wider one would be unreachable for every terminal connected the
+    // normal way. Driven on a token carrying `read` ALONE — narrower even than
+    // that grant — so the claim is proven, not assumed.
+    const fx = await makeWorkItemFixture();
+    const item = await argumentativeItem(fx);
+    const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+      label: 'read-only',
+      scopes: ['read'],
+    });
+    const env = { MOTIR_TOKEN: token, MOTIR_SERVER: server.url };
+
+    const link = await ws.run(['link', '--project', fx.projectIdentifier], { env });
+    expect(link.exitCode, link.stderr).toBe(0);
+
+    for (const flag of ['--activity', '--comments']) {
+      const result = await ws.run(['show', item.identifier, flag], { env });
+      expect(result.exitCode, `${flag}: ${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain('Archived because the surface moved.');
+    }
   });
 });
 

@@ -327,6 +327,140 @@ describe('motir show', () => {
     await expect(showCommand('not-a-key!', {})).rejects.toThrow(CliError);
     expect(server.calls).toHaveLength(0);
   });
+
+  // ── the discussion: --activity / --comments (MOTIR-2000) ──────────────────
+  //
+  // The stream is a SECOND tool call, made only when asked. These pin both
+  // halves of that contract: the default read is untouched (one call, and not a
+  // byte of new output), and each flag costs exactly one extra call naming the
+  // view it stands for.
+
+  /** One comment thread, exactly as `CommentThreadDTO` crosses the wire. */
+  const thread = {
+    id: 'c1',
+    workItemId: 'row-7',
+    parentCommentId: null,
+    author: { id: 'u1', name: 'Zhu Yue', image: null },
+    bodyMd: 'The rationale, in full.\n\nSecond paragraph.',
+    editedAt: null,
+    createdAt: '2026-07-30T12:00:00.000Z',
+    mentionedUserIds: [],
+    replies: [],
+  };
+
+  /** One page of the merged stream, as `get_work_item_activity` returns it. */
+  const activityPage = {
+    entries: [
+      { type: 'comment', thread },
+      {
+        type: 'history',
+        entry: {
+          id: 'r1',
+          workItemId: 'row-7',
+          changeKind: 'updated',
+          changedAt: '2026-08-01T12:00:00.000Z',
+          actor: { userId: 'u2', name: 'Mo', image: null },
+          parts: [
+            {
+              kind: 'field',
+              field: 'status',
+              from: { type: 'status', key: 'todo', label: 'To Do' },
+              to: { type: 'status', key: 'in_progress', label: 'In Progress' },
+            },
+          ],
+        },
+      },
+    ],
+    nextCursor: null,
+    totalComments: 1,
+    totalChanges: 1,
+    workItemRefs: {},
+  };
+
+  /** One page of the comments-only view. */
+  const commentsPage = { threads: [thread], totalCount: 1, nextCursor: null, order: 'asc' };
+
+  it('makes ONE tool call and prints no stream at all without a flag', async () => {
+    const stdout = capture();
+    server.script({ get_work_item_activity: { structured: activityPage } });
+
+    await showCommand('PROD-7', {});
+    const printed = stdout();
+
+    expect(server.calls.map((c) => c.name)).toEqual(['get_work_item']);
+    expect(printed).not.toContain('ACTIVITY');
+    expect(printed).not.toContain('COMMENTS');
+  });
+
+  it('--activity adds exactly ONE call for view "all", and only APPENDS to the read', async () => {
+    const plain = capture();
+    await showCommand('PROD-7', {});
+    const before = plain();
+    vi.restoreAllMocks();
+
+    const stdout = capture();
+    server.calls.length = 0;
+    server.script({ get_work_item_activity: { structured: activityPage } });
+
+    await showCommand('PROD-7', { activity: true });
+    const printed = stdout();
+
+    expect(server.calls).toEqual([
+      { name: 'get_work_item', args: { key: 'PROD-7' } },
+      { name: 'get_work_item_activity', args: { key: 'PROD-7', view: 'all' } },
+    ]);
+    // Byte-identical to the flagless read, then the stream — the default output
+    // cannot regress behind a flag that only ever adds.
+    expect(printed.startsWith(before)).toBe(true);
+    expect(printed).toContain('ACTIVITY\n1 comment · 1 change');
+    expect(printed).toContain('[comment] Zhu Yue · ');
+    expect(printed).toContain('The rationale, in full.');
+    expect(printed).toContain('Second paragraph.');
+    expect(printed).toContain('changed status: To Do → In Progress');
+  });
+
+  it('--comments adds ONE call for view "comments" and prints only the threads', async () => {
+    const stdout = capture();
+    server.script({ get_work_item_activity: { structured: commentsPage } });
+
+    await showCommand('PROD-7', { comments: true });
+    const printed = stdout();
+
+    expect(server.calls).toEqual([
+      { name: 'get_work_item', args: { key: 'PROD-7' } },
+      { name: 'get_work_item_activity', args: { key: 'PROD-7', view: 'comments' } },
+    ]);
+    expect(printed).toContain('COMMENTS\n1 comment, oldest first');
+    expect(printed).not.toContain('changed status');
+  });
+
+  it('refuses BOTH flags by name, before it opens a session', async () => {
+    capture();
+
+    await expect(showCommand('PROD-7', { activity: true, comments: true })).rejects.toMatchObject({
+      message: expect.stringContaining('cannot be combined'),
+    });
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it('--json carries the activity page UNALTERED, and omits the key without a flag', async () => {
+    const stdout = capture();
+    server.script({ get_work_item_activity: { structured: activityPage } });
+
+    await showCommand('PROD-7', { activity: true, json: true });
+    const payload = JSON.parse(stdout()) as Record<string, unknown>;
+
+    // The tool's own page, byte for byte — including the cursor and the totals a
+    // script needs in order to know there is more.
+    expect(payload['activity']).toEqual(activityPage);
+    // …riding ALONGSIDE the aggregate, which is unchanged.
+    expect({ ...payload, activity: undefined }).toEqual({ ...detail, activity: undefined });
+
+    vi.restoreAllMocks();
+    const plain = capture();
+    await showCommand('PROD-7', { json: true });
+    expect(JSON.parse(plain())).not.toHaveProperty('activity');
+  });
 });
 
 // ── the edge columns' machine view (7.9.16 · MOTIR-1845) ────────────────────

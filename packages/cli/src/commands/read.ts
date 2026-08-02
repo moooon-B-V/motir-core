@@ -7,6 +7,7 @@ import {
   detailWithWaves,
   inFlightFilter,
   issueUrl,
+  renderActivityStream,
   renderReadyTable,
   renderSprintHeader,
   renderSprintItems,
@@ -209,6 +210,29 @@ export function parseItemKey(raw: string, command: string): string {
 
 export interface ShowOptions {
   json?: boolean;
+  /** Also read the merged stream: comments and history interleaved. */
+  activity?: boolean;
+  /** Also read the comment threads only. */
+  comments?: boolean;
+}
+
+/**
+ * Which activity view the flags select, or `null` for neither.
+ *
+ * The two flags are alternatives, not a set — asking for both is a contradiction
+ * about which stream to print, so it fails with the choice named rather than
+ * silently taking one (the same "never silently picks" rule `resolveSprintRef`
+ * holds to).
+ */
+export function activityView(opts: ShowOptions): 'all' | 'comments' | null {
+  if (opts.activity && opts.comments) {
+    throw new CliError('`--activity` and `--comments` cannot be combined.', {
+      hint: '`--activity` prints comments AND history; `--comments` prints just the comments. Pick one.',
+    });
+  }
+  if (opts.activity) return 'all';
+  if (opts.comments) return 'comments';
+  return null;
 }
 
 /**
@@ -221,20 +245,44 @@ export interface ShowOptions {
  * edges, which is what makes the children's build ORDER derivable without a
  * per-child read), so the CLI renders the server's verdict and never re-derives
  * it. A pure read: `show` never claims, transitions or edits.
+ *
+ * `--activity` / `--comments` (MOTIR-2000) add the DISCUSSION, which the
+ * aggregate does not carry: one page of `get_work_item_activity`, appended below
+ * the body. It is a SECOND call made only when asked — the default read stays
+ * one round-trip, so a card with two hundred comments never slows down `show`
+ * or the dispatch path that leans on it — and the output with neither flag is
+ * byte-identical to what it was before they existed.
  */
 export async function showCommand(key: string, opts: ShowOptions): Promise<void> {
   const identifier = parseItemKey(key, 'show');
-  const detail = await withProjectSession(({ client }) => client.getWorkItem(identifier));
+  const view = activityView(opts);
+  const { detail, activity } = await withProjectSession(async ({ client }) => {
+    const detail = await client.getWorkItem(identifier);
+    // No `cursor`, no `order`: this is a look at the newest page, not a walk.
+    const activity =
+      view === null ? null : await client.getWorkItemActivity({ key: identifier, view });
+    return { detail, activity };
+  });
+
   if (opts.json) {
     // The tool's own `structuredContent` — same contract as `ready --json` /
     // `status --json` — with the children in build order and each carrying the
     // `wave` the table computed, so a script never re-derives the graph. The
     // `dependencies` block rides through in FULL: the `+n` budget is a
     // terminal-width concern, not a payload one.
-    json(detailWithWaves(detail));
+    //
+    // A requested stream rides along under `activity`, the activity tool's page
+    // UNALTERED (its `nextCursor` and totals included, so a script can see there
+    // is more). Without a flag the payload is exactly what it always was — the
+    // key does not appear at all rather than appearing as null.
+    json(view === null ? detailWithWaves(detail) : { ...detailWithWaves(detail), activity });
     return;
   }
   out(renderWorkItemDetail(detail));
+  if (view !== null && activity !== null) {
+    out();
+    out(renderActivityStream(view, activity, identifier, new Date()));
+  }
 }
 
 export interface OpenOptions {

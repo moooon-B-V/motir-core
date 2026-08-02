@@ -1,6 +1,14 @@
 import { CliError } from './errors.js';
 import { normalizeServerUrl } from './config/userConfig.js';
 import type {
+  ActivityAllPage,
+  ActivityComment,
+  ActivityCommentThread,
+  ActivityEntry,
+  ActivityPage,
+  ActivityPart,
+  ActivityValue,
+  CommentsPage,
   ReadyItemSummary,
   SearchFilterEnvelope,
   SearchItemSummary,
@@ -745,6 +753,296 @@ export function renderLineage(detail: WorkItemDetail): string {
  * RAW Markdown, printed verbatim — the terminal is not a Markdown viewer, and
  * the body is what a human pastes into an agent.
  */
+// ── the ACTIVITY stream (`show --activity` / `--comments` · MOTIR-2000) ──────
+//
+// The consumer half of `get_work_item_activity` (MOTIR-1999). The DTO ships
+// DATA — typed parts, resolved values — and the wording is the CLIENT's, exactly
+// as the web Activity section owns its own sentence grammar through next-intl.
+// This is that grammar for a terminal: one block per entry, the author and a
+// relative time on the header line (with the absolute stamp beside it, since a
+// terminal has no hover to reveal it), the body indented underneath.
+//
+// TWO invariants the renderer must not break:
+//   1. NO TRUNCATION of a comment body (the MOTIR-1709 rule the tool inherits) —
+//      an agent reading a cut-off rationale is worse off than one that knows it
+//      must page. The `truncate` helper above is for TABLE CELLS; nothing here
+//      uses it.
+//   2. NO DRAIN LOOP. One page is printed and what remains is STATED (the CLI's
+//      own at-scale rule, finding #57). A short page with a non-null cursor is
+//      documented normal for the merged stream, so silence would read as "that
+//      is all" — which is exactly the lie the footer exists to prevent.
+
+/** The em-dash an absent value renders as — the same one the sprint table uses
+ *  for an unset number, and what `ActivityValueDto`'s `none` form means. */
+const NO_VALUE = '—';
+
+/** What the two views print when the item has nothing recorded. Explicit lines,
+ *  never a bare blank: "nothing here" and "the read failed" must not look alike. */
+export const NO_COMMENTS_LINE = 'No comments yet.';
+export const NO_ACTIVITY_LINE = 'No activity yet.';
+
+/** Header prefixes. All three are the SAME WIDTH so every body indents to one
+ *  column, and a reply stays visually attached to the comment it answers. */
+const COMMENT_PREFIX = '[comment] ';
+const REPLY_PREFIX = '  ↳ reply ';
+const CHANGE_PREFIX = '[change]  ';
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const MONTH = 30 * DAY;
+const YEAR = 365 * DAY;
+
+/** `n` with its noun, pluralized. */
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * How long ago, in the coarse unit a reader actually wants ("3 days ago").
+ *
+ * `now` is a PARAMETER, not a `new Date()` inside: a renderer that reads the
+ * clock cannot be asserted against a fixed expectation, and a test that pins one
+ * would rot the moment the fixture aged (the hardcoded-period-vs-wall-clock
+ * trap). A stamp in the FUTURE — clock skew between the server and this box —
+ * reads as "just now" rather than as a negative age, and an unparseable stamp
+ * degrades to itself rather than to `NaN`.
+ */
+export function relativeTime(iso: string, now: Date): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return iso;
+  const delta = now.getTime() - then;
+  if (delta < MINUTE) return 'just now';
+  if (delta < HOUR) return `${plural(Math.floor(delta / MINUTE), 'minute')} ago`;
+  if (delta < DAY) return `${plural(Math.floor(delta / HOUR), 'hour')} ago`;
+  if (delta < MONTH) return `${plural(Math.floor(delta / DAY), 'day')} ago`;
+  if (delta < YEAR) return `${plural(Math.floor(delta / MONTH), 'month')} ago`;
+  return `${plural(Math.floor(delta / YEAR), 'year')} ago`;
+}
+
+/**
+ * One side of a change, in its display form — the resolved label, falling back
+ * to the stored id when the referent is gone (a deleted user, an archived
+ * sprint), never dropping both.
+ *
+ * The `default` branch is NOT dead code: `ActivityValue` mirrors an open union
+ * on purpose (mcpClient.ts), because a newer server can send a value type this
+ * published CLI has never seen. It prints whatever resolved label the value
+ * carries instead of failing on a shape it cannot name.
+ */
+export function activityValueText(value: ActivityValue | string | null | undefined): string {
+  if (value === null || value === undefined) return NO_VALUE;
+  if (typeof value === 'string') return value;
+  switch (value.type) {
+    case 'none':
+      return NO_VALUE;
+    case 'text':
+      return value.text ?? NO_VALUE;
+    case 'status':
+      return value.label ?? value.key ?? NO_VALUE;
+    case 'user':
+      return value.name ?? value.userId ?? NO_VALUE;
+    case 'date':
+      return value.date ?? NO_VALUE;
+    case 'sprint':
+      return value.name ?? value.sprintId ?? NO_VALUE;
+    case 'issue':
+      return value.identifier ?? value.workItemId ?? NO_VALUE;
+    default:
+      return value.label ?? value.name ?? value.identifier ?? value.text ?? value.key ?? NO_VALUE;
+  }
+}
+
+/**
+ * ONE part of a history entry as a sentence fragment — a revision may carry
+ * several (one save touching many fields), which is why the entry joins them
+ * rather than assuming one.
+ *
+ * Total by construction, including over kinds that do not exist yet: an
+ * unrecognized part degrades to the GENERIC form (name the change, show what
+ * sides it carries) instead of throwing. A published CLI meeting a newer Motir
+ * is the ordinary case, not the exceptional one.
+ */
+export function activityPartText(part: ActivityPart): string {
+  switch (part.kind) {
+    case 'created':
+      return 'created the item';
+    case 'archived':
+      return 'archived the item';
+    case 'unarchived':
+      return 'restored the item';
+    case 'field':
+      return `changed ${part.field}: ${activityValueText(part.from)} → ${activityValueText(part.to)}`;
+    // The trail records THAT a body field changed, never its text (the DTO
+    // carries none) — said plainly, so it never reads as a truncation.
+    case 'fieldEdited':
+      return `edited ${part.field} (body not shown — the history trail records no text)`;
+    case 'link':
+      return `${part.op} ${part.linkKind} link → ${activityValueText(part.target)}`;
+    case 'collection':
+      return `${part.op} ${part.field}: ${(part.items ?? []).join(', ')}`;
+    case 'commentDeleted': {
+      const replies = part.replyCount ?? 0;
+      return `deleted a comment by ${activityValueText(part.author)} (${replies} ${replies === 1 ? 'reply' : 'replies'})`;
+    }
+    case 'generic':
+      return `${part.key}: ${activityValueText(part.from)} → ${activityValueText(part.to)}`;
+    default:
+      if (part.from === undefined && part.to === undefined) {
+        return `${part.kind} (unknown change kind — update the CLI to read it in full)`;
+      }
+      return `${part.kind}: ${activityValueText(part.from)} → ${activityValueText(part.to)}`;
+  }
+}
+
+/** `<author> · <relative> (<absolute>)` — the header line every block shares. */
+function attribution(who: string | null, iso: string, now: Date): string {
+  return `${who ?? 'former member'} · ${relativeTime(iso, now)} (${iso})`;
+}
+
+/** ONE history entry: who, when, and every part it carries. */
+export function renderHistoryEntry(entry: ActivityEntry, now: Date): string {
+  const parts = entry.parts.map(activityPartText).join('; ');
+  return `${CHANGE_PREFIX}${attribution(entry.actor.name, entry.changedAt, now)} — ${parts}`;
+}
+
+/** ONE comment: the header, then the body VERBATIM and in FULL, indented to the
+ *  prefix so a multi-line Markdown comment stays attached to its author. Not one
+ *  character is dropped — the no-truncation invariant above. */
+export function renderComment(comment: ActivityComment, prefix: string, now: Date): string {
+  const edited = comment.editedAt === null ? '' : ' (edited)';
+  const indent = ' '.repeat(prefix.length);
+  const header = `${prefix}${attribution(comment.author.name, comment.createdAt, now)}${edited}`;
+  const body = comment.bodyMd
+    .split('\n')
+    // A blank line stays blank — indenting it would append trailing whitespace
+    // to output people pipe and diff. The body's own characters are untouched.
+    .map((line) => (line === '' ? '' : `${indent}${line}`))
+    .join('\n');
+  return `${header}\n${body}`;
+}
+
+/** A root comment plus its single-level replies, nested one level. */
+export function renderCommentThread(thread: ActivityCommentThread, now: Date): string {
+  return [
+    renderComment(thread, COMMENT_PREFIX, now),
+    ...thread.replies.map((reply) => renderComment(reply, REPLY_PREFIX, now)),
+  ].join('\n');
+}
+
+/** Every comment a thread holds — the root plus its replies — because the
+ *  server's totals count replies too, and "5 of 12" has to compare like to like. */
+function commentsIn(threads: ActivityCommentThread[]): number {
+  return threads.reduce((sum, thread) => sum + 1 + thread.replies.length, 0);
+}
+
+/** `12 comments` when the page holds them all, `5 of 12 comments` when it does
+ *  not — the page never claims to be the whole stream. */
+function shownOfTotal(shown: number, total: number, noun: string): string {
+  return shown === total ? plural(total, noun) : `${shown} of ${plural(total, noun)}`;
+}
+
+/**
+ * The footer, printed only when the server handed back a cursor.
+ *
+ * `motir show` deliberately has NO `--cursor` flag: this is a look, not a walk,
+ * and a CLI that pages a discussion is a different command than this card ships.
+ * So "how to continue" is the honest one — the web Activity section, reachable
+ * from here in one command — and the remainder is stated so the page cannot read
+ * as complete. A non-null cursor with nothing left to count is the documented
+ * short-page case, and says so rather than claiming a number it does not have.
+ */
+function moreLine(remaining: [number, string][], identifier: string): string {
+  const left = remaining.filter(([count]) => count > 0).map(([count, noun]) => plural(count, noun));
+  const what =
+    left.length > 0
+      ? `${left.join(' and ')} not on this page`
+      : 'this page may be short — the stream is not exhausted';
+  return `MORE — ${what}. \`motir show\` prints ONE page and never drains the stream; read the rest in Motir: \`motir open ${identifier}\`.`;
+}
+
+/**
+ * Assemble a stream section: heading, count line, the blocks, the footer.
+ *
+ * Entries are separated by a BLANK LINE (a thread's replies are not — they stay
+ * attached to the comment they answer). A comment body is multi-line Markdown,
+ * so run together the blocks read as one wall of text and the boundary between
+ * two people's words disappears.
+ */
+function activitySection(
+  heading: string,
+  counts: string,
+  blocks: string[],
+  emptyLine: string,
+  more: string | null,
+): string {
+  const body = blocks.length === 0 ? [emptyLine] : blocks;
+  return [`${heading}\n${counts}`, body.join('\n\n'), ...(more === null ? [] : [more])].join(
+    '\n\n',
+  );
+}
+
+/**
+ * The whole ACTIVITY / COMMENTS block appended to `motir show`.
+ *
+ * `view` selects the section, and it comes from the FLAG rather than from
+ * sniffing the payload: the two page shapes are the server's own, and a renderer
+ * that guessed which one it held would disagree with the tool the first time a
+ * page came back empty.
+ *
+ * The merged view makes no claim about ordering — every block carries its own
+ * timestamp, and the CLI never sends `order`, so asserting a direction here
+ * would be asserting a server default this build cannot see. The comments view
+ * DOES state one, because its page carries `order`.
+ */
+export function renderActivityStream(
+  view: 'all' | 'comments',
+  page: ActivityPage,
+  identifier: string,
+  now: Date,
+): string {
+  if (view === 'comments') {
+    const p = page as CommentsPage;
+    const shown = commentsIn(p.threads);
+    const direction = p.order === 'asc' ? 'oldest first' : 'newest first';
+    return activitySection(
+      'COMMENTS',
+      `${shownOfTotal(shown, p.totalCount, 'comment')}, ${direction}`,
+      p.threads.map((thread) => renderCommentThread(thread, now)),
+      NO_COMMENTS_LINE,
+      p.nextCursor === null ? null : moreLine([[p.totalCount - shown, 'comment']], identifier),
+    );
+  }
+
+  const p = page as ActivityAllPage;
+  const shownComments = commentsIn(
+    p.entries.flatMap((entry) => (entry.type === 'comment' ? [entry.thread] : [])),
+  );
+  const shownChanges = p.entries.filter((entry) => entry.type === 'history').length;
+  return activitySection(
+    'ACTIVITY',
+    [
+      shownOfTotal(shownComments, p.totalComments, 'comment'),
+      shownOfTotal(shownChanges, p.totalChanges, 'change'),
+    ].join(' · '),
+    p.entries.map((entry) =>
+      entry.type === 'comment'
+        ? renderCommentThread(entry.thread, now)
+        : renderHistoryEntry(entry.entry, now),
+    ),
+    NO_ACTIVITY_LINE,
+    p.nextCursor === null
+      ? null
+      : moreLine(
+          [
+            [p.totalComments - shownComments, 'comment'],
+            [p.totalChanges - shownChanges, 'change'],
+          ],
+          identifier,
+        ),
+  );
+}
+
 export function renderWorkItemDetail(detail: WorkItemDetail, titleWidth = 60): string {
   const sections = [
     renderItemHeader(detail.item),

@@ -104,9 +104,18 @@ motir ready   [--kinds <list>] [--assignee <id|me|unassigned>] [--json]
 motir status  [--json]                                # ready / in-flight + active sprint
 motir sprints [--state <planned|active|complete>] [--json]
 motir sprint  [ref] [--kinds <list>] [--json]         # defaults to the ACTIVE sprint
-motir show    <key> [--json]                          # one item, in full
+motir show    <key> [--activity|--comments] [--json]  # one item, in full
 motir open    <key> [--print]                         # …in the browser
 ```
+
+**`motir show --activity` / `--comments`** add the DISCUSSION the aggregate does
+not carry: `--activity` interleaves comment threads with the change trail,
+`--comments` prints the threads alone. Both are opt-in — the stream is a second
+tool call, so a plain `show` stays one round-trip no matter how loud a card got —
+and comment bodies print **in full**, never excerpted. ONE page is printed and
+never drained: when more remains the footer says how much and points at `motir
+open <key>`; with `--json` the activity page rides along **unaltered** under an
+`activity` key. Passing both flags is refused rather than silently resolved.
 
 `motir sprint`'s **`ref` resolves in order**: omitted → the active sprint; then a
 sprint **id**; then an **exact name**; then a **name prefix** — each
