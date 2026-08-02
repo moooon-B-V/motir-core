@@ -301,6 +301,27 @@ and dead-lettered — including a repo small enough that size cannot explain it.
 It now runs one `resolve-target` step plus one `index-project:<id>` step per
 project (`lib/jobs/codeGraphSteps.ts`).
 
+**4 · Code OUTSIDE a step runs once per PASS, not once per run.** The same
+re-invocation that makes rule 1 true also re-executes everything in the handler
+body that is not inside a `step.run` — once for every step boundary the run
+crosses. The count is therefore a property of the run's step TOPOLOGY, not of
+the handler: adding one bookkeeping step adds one execution of every un-stepped
+line, silently, in an unrelated card's diff. And the value the FUNCTION returns
+is the last pass's, so an un-stepped body that is not idempotent also makes
+Inngest's reported run output disagree with the `job_run` row (which memoized
+the first pass's).
+
+Almost always the fix is to wrap the work in a step. When you cannot — the work
+outlives `maxDuration`, which is rule 2's ceiling on one step — the handler must
+be made explicitly **replay-aware**: record the first pass's outcome in durable
+state keyed by the DISPATCH (`ctx.event.id ?? ctx.runId`, the same identity the
+ledger row correlates by), and have later passes read it back instead of
+re-deriving it. `system.ci-runner-boot` is the worked example (MOTIR-2002): its
+supervision watches a container for up to an hour, twelve times the step
+ceiling, so it stays un-stepped and memoizes its outcome onto the provisioning
+intent. Keying by dispatch rather than a bare flag is what keeps a SECOND
+dispatch from inheriting the first one's answer.
+
 **A retrying job looks identical to a healthy one.** `defineJob` writes its
 `running` ledger row in a memoized step, so a retry replays it: the row stays
 `running` with `attempt` frozen at 0 until the budget is spent. Until the DLQ

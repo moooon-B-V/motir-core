@@ -111,17 +111,34 @@ export const ciRunnerBoot = defineJob(
   },
   async (ctx, services) => {
     const { intentId } = ctx.event.data as { intentId: string };
-    // NOT wrapped in `ctx.step.run`. A step memoizes its result and is replayed
-    // across step boundaries, and this call SUPERVISES a live container for as
-    // long as the job runs — memoizing it would mean a replay returning the old
-    // outcome while the container it describes is still up. The whole operation
-    // is one indivisible unit of work with its own internal guarantees.
+    // ⚠️ UN-STEPPED, AND REPLAY-AWARE BECAUSE OF IT (MOTIR-2002). Supervision
+    // cannot be wrapped in a `ctx.step.run`: one step cannot outlive ONE
+    // invocation of `app/api/inngest/route.ts`, whose declared budget is
+    // `maxDuration = 300` (MOTIR-1974), while a supervised CI job is allowed
+    // 3,600s — twelve times that ceiling. So it stays outside a step, where
+    // Inngest's durable replay re-executes it on EVERY pass, and `superviseOnce`
+    // is what makes that once per DISPATCH instead: the pass that supervises
+    // records its outcome on the intent, and later passes read it back.
+    //
+    // The earlier rationale here — that memoizing would return a stale outcome
+    // for a container still up — did not hold as written (a step does not
+    // return until its callback resolves), and it described a handler that ran
+    // once when the runtime ran it twice. The step CEILING is the real reason.
+    //
+    // ⚠️ THE KEY IS THE EVENT'S ID, not the run id: it is fixed for a run, and
+    // it is the same identity `defineJob` correlates the `job_run` row by, so
+    // the memo and the ledger agree on what "this run" means. The `ctx.runId`
+    // fallback covers an event that carries no id (cron / harness events); the
+    // boot is only ever event-triggered.
+    //
     // The outcome — INCLUDING the container-seconds record on a settled run —
     // is the job's return value, which `defineJob` writes to the `job_run`
-    // ledger: the per-run audit trail. Since MOTIR-1924 the record is ALSO
-    // persisted to `ci_container_usage` inside `runIntent`'s teardown path, so
-    // the ledger is no longer the only place a fleet run's cost is readable.
-    return services.ciRunnerBoot.runIntent(intentId);
+    // ledger: the per-run audit trail. It is now the SAME value on every pass,
+    // so Inngest's reported run output and that row can no longer disagree.
+    // Since MOTIR-1924 the record is ALSO persisted to `ci_container_usage`
+    // inside `runIntent`'s teardown path, so the ledger is no longer the only
+    // place a fleet run's cost is readable.
+    return services.ciRunnerBoot.superviseOnce(intentId, ctx.event.id ?? ctx.runId);
   },
 );
 

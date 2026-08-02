@@ -290,6 +290,52 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
+   * THE SUPERVISION MEMO — read (MOTIR-2002).
+   *
+   * What THIS dispatch already recorded for this intent, or null if it has not
+   * supervised it yet. `supervisionKey` is matched, never ignored: a second,
+   * racing dispatch for the same intent must not read the first one's outcome
+   * and report a container it never booted.
+   *
+   * Returns `Prisma.JsonValue`, because that is honestly what came back out of
+   * the column — the service names it.
+   */
+  async findSupervisionOutcome(
+    id: string,
+    supervisionKey: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Prisma.JsonValue | null> {
+    const row = await tx.ciRunnerProvisioningIntent.findFirst({
+      where: { id, supervisionKey },
+      select: { supervisionOutcome: true },
+    });
+    return row?.supervisionOutcome ?? null;
+  },
+
+  /**
+   * THE SUPERVISION MEMO — write (MOTIR-2002).
+   *
+   * `updateMany` rather than `update` so an intent that no longer exists is a
+   * no-op instead of a `P2025`: `runIntent` answers `unknown_intent` for exactly
+   * that row, and there is nothing to memoize when the answer is "there was
+   * nothing to supervise" — the replay re-derives the same answer for free.
+   * Returns whether a row was actually written, so the caller can log the miss
+   * rather than assume the memo is in place.
+   */
+  async recordSupervisionOutcome(
+    id: string,
+    supervisionKey: string,
+    outcome: Prisma.InputJsonValue,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id },
+      data: { supervisionKey, supervisionOutcome: outcome },
+    });
+    return result.count === 1;
+  },
+
+  /**
    * Intents still holding a container — the REAPER's read, and the read that
    * recovers attribution for a container the provider reports.
    *
