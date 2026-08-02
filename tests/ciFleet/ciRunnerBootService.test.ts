@@ -4,7 +4,12 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
+import {
+  ciRunnerBootService,
+  FLEET_TIME_BUDGETS,
+  pollWaitMs,
+  type PollResult,
+} from '@/lib/services/ciRunnerBootService';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import * as orchestrator from '@/lib/orchestrator';
 import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
@@ -1037,110 +1042,128 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE SUPERVISION MEMO (MOTIR-2002) — `superviseOnce`, against real Postgres.
+// THE THREE BOUNDED PHASES (MOTIR-2007) — against real Postgres.
 //
-// `tests/jobs/ci-runner-fleet.test.ts` drives the Inngest side: how many replay
-// passes there are and that the supervision no longer runs on all of them. This
-// is the other half — what the memo actually WRITES and READS, on the real
-// table, including the scoping that keeps one dispatch's settled container out
-// of another dispatch's answer.
+// `tests/jobs/ci-runner-fleet.test.ts` drives the Inngest side: that the job
+// splits supervision across steps and reaches teardown after a container has
+// outlived the invocation ceiling. This is the other half — what each phase
+// does on the real table, and the property the whole card rests on: that
+// `pollOnce` does ONE provider read and NEVER throws, because a throw would end
+// the run without teardown.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('the supervision memo — once per dispatch, not once per replay pass', () => {
-  /** The provisioner, driven to a settled container at test speed. */
-  const settleFast = {
-    ...FAST,
-    sleep: async () => {
-      const live = fakeOrchestrator.liveContainerIds();
-      if (live[0]) fakeOrchestrator.completeJob(live[0]);
-    },
-  } as const;
-
-  it('records the outcome, and a replay of the SAME dispatch reads it back without supervising again', async () => {
+describe('the boot path is three bounded phases, not one long one', () => {
+  it('bootIntent provisions and hands back a JSON-serializable session', async () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
 
-    const first = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
-    expect(first).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
 
-    const mintsAfterFirst = mintCalls().length;
-    const replay = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+    expect(booted.phase).toBe('supervising');
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    const { session } = booted;
+    expect(session.intentId).toBe(intent.id);
+    expect(session.handle.id).toBe(fakeOrchestrator.liveContainerIds()[0]);
+    expect(session.attribution.workspaceId).toBe(fx.workspaceId);
 
-    // The SAME outcome, and nothing spent to produce it: no second JIT config,
-    // no second container, and no second trip through the admission gate.
-    expect(replay).toEqual(JSON.parse(JSON.stringify(first)));
-    expect(mintCalls()).toHaveLength(mintsAfterFirst);
-    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    // ⚠️ IT CROSSES A STEP BOUNDARY, so it must survive a JSON round-trip
+    // unchanged. A `Date` here would survive the first pass and arrive as a
+    // string on every replayed one — a break that only ever shows up in
+    // production, only on long jobs.
+    expect(JSON.parse(JSON.stringify(session))).toEqual(session);
+    expect(typeof session.bootedAt).toBe('string');
+    expect(typeof session.handle.createdAt).toBe('string');
   });
 
-  it('persists the memo on the intent, keyed by the dispatch that wrote it', async () => {
+  it('bootIntent reports a terminal outcome and provisions NOTHING when the gate refuses', async () => {
+    const booted = await ciRunnerBootService.bootIntent('no-such-intent', FAST);
+
+    expect(booted).toEqual({ phase: 'terminal', outcome: { outcome: 'unknown_intent' } });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
+  it('pollOnce makes EXACTLY ONE provider read and returns — the step cannot become long', async () => {
+    // ⚠️ THE CARD'S STRUCTURAL ASSERTION. The defect was a poll LOOP inside one
+    // invocation; the fix is that one poll is one read. Asserted by counting the
+    // provider calls one `pollOnce` makes, so a loop reintroduced here fails.
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
 
-    const outcome = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+    const describeSpy = vi.spyOn(fakeOrchestrator, 'describe');
+    const polled = await ciRunnerBootService.pollOnce(booted.session, undefined, FAST);
 
-    const row = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
-      where: { id: intent.id },
-    });
-    expect(row.supervisionKey).toBe('evt-1');
-    // Stored as the JSON projection — the same round-trip `defineJob` applies
-    // before writing `job_run.output`, which is what makes the two agree.
-    expect(row.supervisionOutcome).toEqual(JSON.parse(JSON.stringify(outcome)));
+    expect(describeSpy).toHaveBeenCalledTimes(1);
+    expect(polled.done).toBe(false);
   });
 
-  it('a DIFFERENT dispatch does not inherit the memo — it gets its own answer', async () => {
+  it('pollOnce NEVER throws when the provider does — it returns a typed result instead', async () => {
+    // ⚠️ THE LOAD-BEARING PROPERTY. In a stepped world teardown cannot be
+    // reached from a catch (the executor finalizes a failed run first —
+    // PRODECT_FINDINGS #39), so the only way out of the loop must be a value.
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(fakeOrchestrator, 'describe').mockRejectedValue(new Error('provider 500'));
 
-    const first = await ciRunnerBootService.superviseOnce(intent.id, 'evt-sweep', settleFast);
-    expect(first.outcome).toBe('settled');
+    let state: Extract<PollResult, { done: false }> = {
+      done: false,
+      startedAt: null,
+      bootLatencyMs: null,
+      consecutiveReadFailures: 0,
+    };
+    // Tolerated blips first — a single 500 must not end a healthy CI run.
+    for (let i = 0; i < 3; i += 1) {
+      const polled = await ciRunnerBootService.pollOnce(booted.session, state, FAST);
+      expect(polled.done).toBe(false);
+      if (polled.done) throw new Error('unreachable');
+      state = polled;
+    }
+    expect(warn).toHaveBeenCalled();
 
-    // The webhook's dispatch, arriving after the sweep's already settled the
-    // intent. The claim is long gone, so the honest answer is `already_claimed`
-    // — never the sweep's container reported as this run's.
-    const second = await ciRunnerBootService.superviseOnce(intent.id, 'evt-webhook', settleFast);
-    expect(second).toEqual({ outcome: 'already_claimed' });
+    // ...then it gives up on READING, and routes to teardown rather than throwing.
+    const final = await ciRunnerBootService.pollOnce(booted.session, state, FAST);
+    expect(final.done).toBe(true);
+    if (!final.done) throw new Error('unreachable');
+    expect(final.reason).toBe('job_timed_out');
+    expect(final.failureDetail).toContain('could not be read');
   });
 
-  it('an intent that does not exist is answered without a memo — nothing to write it to', async () => {
-    expect(await ciRunnerBootService.superviseOnce('no-such-intent', 'evt-1', FAST)).toEqual({
-      outcome: 'unknown_intent',
-    });
-  });
-
-  it('a memo that cannot be READ falls through to supervising — it never blocks a boot', async () => {
-    // Fail OPEN, deliberately: the memo is an optimisation over a claim that is
-    // still the real guarantee, so a read failure must cost a duplicated gate
-    // check, never a CI job that gets no runner.
+  it('settleSupervision tears down, meters and settles — the stepped form of the finally', async () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(ciRunnerProvisioningIntentRepository, 'findSupervisionOutcome').mockRejectedValue(
-      new Error('pg down'),
-    );
+    const booted = await ciRunnerBootService.bootIntent(intent.id, FAST);
+    if (booted.phase !== 'supervising') throw new Error('unreachable');
+    fakeOrchestrator.completeJob(booted.session.handle.id);
 
-    const outcome = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+    const verdict = await ciRunnerBootService.pollOnce(booted.session, undefined, FAST);
+    expect(verdict.done).toBe(true);
+    if (!verdict.done) throw new Error('unreachable');
 
-    expect(outcome.outcome).toBe('settled');
-    expect(error).toHaveBeenCalledWith(
-      '[ciRunnerBootService] could not read the supervision memo — supervising',
-      expect.objectContaining({ intentId: intent.id }),
-    );
-  });
-
-  it('a memo that cannot be WRITTEN does not fail a run that already booted and tore down', async () => {
-    const fx = await seedTenant();
-    const intent = await seedIntent(fx);
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(ciRunnerProvisioningIntentRepository, 'recordSupervisionOutcome').mockRejectedValue(
-      new Error('pg down'),
-    );
-
-    const outcome = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+    const outcome = await ciRunnerBootService.settleSupervision(booted.session, verdict, FAST);
 
     expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
-    expect(error).toHaveBeenCalledWith(
-      '[ciRunnerBootService] could not record the supervision memo',
-      expect.objectContaining({ intentId: intent.id }),
-    );
+    // The container is gone, the runner de-registered, and the intent settled —
+    // the same three guarantees the `finally` used to hold.
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    expect(deleteRunnerCalls()).toHaveLength(1);
+    const row = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intent.id } });
+    expect(row.status).toBe('completed');
+    expect(row.settledAt).not.toBeNull();
+  });
+
+  it('the poll interval BACKS OFF, and is a pure function of the iteration', async () => {
+    // Purity is what makes the durable loop replay-safe: a wall-clock input
+    // would make two passes of the same run schedule different sleeps.
+    expect(pollWaitMs(1)).toBe(FLEET_TIME_BUDGETS.pollIntervalMs);
+    expect(pollWaitMs(2)).toBeGreaterThan(pollWaitMs(1));
+    expect(pollWaitMs(1)).toBe(pollWaitMs(1));
+    // ...and it is CAPPED, so a long job is ~125 polls rather than 1,200.
+    expect(pollWaitMs(999)).toBe(FLEET_TIME_BUDGETS.maxPollIntervalMs);
+    for (let i = 1; i < 50; i += 1) {
+      expect(pollWaitMs(i)).toBeLessThanOrEqual(FLEET_TIME_BUDGETS.maxPollIntervalMs);
+    }
   });
 });
