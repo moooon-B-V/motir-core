@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -7,6 +8,11 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ReadyItemDispatchDto } from '@/lib/dto/ready';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import {
+  attachCommentCounts,
+  commentCountMarker,
+  COMMENT_COUNT_DESCRIPTION,
+} from '../commentCounts';
 import { projectKeyField } from './readyFilters';
 
 // `claim_next_ready` (MOTIR-1330) — ATOMIC, race-safe dispatch claim. Unlike
@@ -32,9 +38,9 @@ interface ClaimNextReadyArgs {
 }
 
 /** Compact summary of the claimed item. */
-function summarize(item: ReadyItemDispatchDto): string {
+function summarize(item: ReadyItemDispatchDto, commentCount: number): string {
   const lines = [
-    `Claimed (now In Progress): ${item.key} [${item.kind}/${item.priority}] ${item.title}`,
+    `Claimed (now In Progress): ${item.key} [${item.kind}/${item.priority}] ${item.title}${commentCountMarker(commentCount)}`,
     `Run: ${item.runCommand}`,
   ];
   if (item.parentKey) lines.push(`Parent: ${item.parentKey}`);
@@ -65,7 +71,14 @@ export async function runClaimNextReady(
       { item: null, reason: 'none_ready' },
     );
   }
-  return toolOk(summarize(item), { item: item as unknown as Record<string, unknown> });
+  // The DISCUSSION signal on the claimed payload (MOTIR-2001) — the same field
+  // `next_ready` attaches, from the same seam, so a CLAIM and a peek never
+  // disagree about whether the card has a thread worth reading first.
+  const counts = await commentsService.getCommentCountsForItems([item.id], ctx);
+  const claimed = attachCommentCounts([item], counts)[0]!;
+  return toolOk(summarize(item, claimed.commentCount), {
+    item: claimed as unknown as Record<string, unknown>,
+  });
 }
 
 export function registerClaimNextReady(
@@ -82,7 +95,8 @@ export function registerClaimNextReady(
         'dispatch payload (description, context refs, blocker keys, run command). Two concurrent ' +
         'callers never get the same item — the claim IS the status flip, so do NOT call ' +
         'transition_status afterwards. Returns an empty result (retry) when nothing is ready or no ' +
-        'sprint is active.',
+        'sprint is active. ' +
+        COMMENT_COUNT_DESCRIPTION,
       inputSchema,
     },
     async (args, extra) => {

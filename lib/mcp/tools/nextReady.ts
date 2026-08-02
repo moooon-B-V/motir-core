@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -9,6 +10,11 @@ import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 import type { ReadyItemDispatchDto } from '@/lib/dto/ready';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import {
+  attachCommentCounts,
+  commentCountMarker,
+  COMMENT_COUNT_DESCRIPTION,
+} from '../commentCounts';
 import {
   assigneeIdField,
   kindsField,
@@ -46,9 +52,9 @@ interface NextReadyArgs {
 }
 
 /** Compact summary of the dispatched item. */
-function summarize(item: ReadyItemDispatchDto): string {
+function summarize(item: ReadyItemDispatchDto, commentCount: number): string {
   const lines = [
-    `Next: ${item.key} [${item.kind}/${item.priority}] ${item.title}`,
+    `Next: ${item.key} [${item.kind}/${item.priority}] ${item.title}${commentCountMarker(commentCount)}`,
     `Run: ${item.runCommand}`,
   ];
   if (item.parentKey) lines.push(`Parent: ${item.parentKey}`);
@@ -76,7 +82,15 @@ export async function runNextReady(
   if (!dispatch) {
     return toolOk('No ready work items match.', { item: null });
   }
-  return toolOk(summarize(dispatch), { item: dispatch as unknown as Record<string, unknown> });
+  // The DISCUSSION signal on the dispatch payload (MOTIR-2001). This is the read
+  // an agent picks a card UP with, so it is the one place the count changes what
+  // happens next: a non-zero count means read `get_work_item_activity` before
+  // starting, because the card's prose is not the whole brief.
+  const counts = await commentsService.getCommentCountsForItems([dispatch.id], ctx);
+  const item = attachCommentCounts([dispatch], counts)[0]!;
+  return toolOk(summarize(dispatch, item.commentCount), {
+    item: item as unknown as Record<string, unknown>,
+  });
 }
 
 export function registerNextReady(server: McpServer, resolveContext: McpContextResolver): void {
@@ -88,7 +102,8 @@ export function registerNextReady(server: McpServer, resolveContext: McpContextR
         'Return ONE ready work item to start next — the highest-ranked ready item not in ' +
         'excludeIds — as a full dispatch payload (description, context refs, blocker keys, run ' +
         'command), or an empty result when nothing is ready. Pass already-handled ids in ' +
-        'excludeIds to walk the set.',
+        'excludeIds to walk the set. ' +
+        COMMENT_COUNT_DESCRIPTION,
       inputSchema,
     },
     async (args, extra) => {

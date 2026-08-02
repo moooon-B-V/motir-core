@@ -165,6 +165,40 @@ export const commentRepository = {
   },
 
   /**
+   * How many comments each of MANY work items holds (MOTIR-2001) — the BATCHED
+   * sibling of {@link countByWorkItem}, for a whole PAGE of rows. Replies are
+   * included, so a bucket here is the same total that read returns for the same
+   * id (and the same denominator `commentsService.listComments` reports).
+   *
+   * ONE query for any page size — a `groupBy` on `work_item_id`, never a loop
+   * over `countByWorkItem` (the N+1 the MCP list reads must not ship). Empty
+   * input short-circuits WITHOUT touching the DB, matching
+   * `workItemLinkRepository.findBlockedEdgesForItems`.
+   *
+   * SPARSE by construction: an id with no comments produces no row (that is what
+   * `GROUP BY` does). Pre-seeding the zero is the SERVICE's job, exactly as the
+   * edge projection pre-seeds its empty arrays.
+   *
+   * `workspaceId` is a required scope, not an option — a count is read on behalf
+   * of a caller in one tenant, and the ids come from a page that tenant could
+   * already see. Read-only path → `db` singleton.
+   */
+  async countByWorkItemIds(
+    workItemIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ workItemId: string; count: number }[]> {
+    if (workItemIds.length === 0) return [];
+    const client = tx ?? db;
+    const rows = await client.comment.groupBy({
+      by: ['workItemId'],
+      where: { workItemId: { in: workItemIds }, workspaceId },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ workItemId: row.workItemId, count: row._count._all }));
+  },
+
+  /**
    * How many replies a ROOT comment holds (Subtask 5.1.2) — the count the
    * delete path records in the `work_item_revision` deletion trace (and the
    * 5.1.5 confirm copy names) BEFORE the cascade takes the thread. Takes `tx`
