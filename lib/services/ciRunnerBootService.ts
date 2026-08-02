@@ -1,4 +1,4 @@
-import type { CiRunnerProvisioningIntent } from '@prisma/client';
+import type { CiRunnerProvisioningIntent, Prisma } from '@prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   ciRunnerProvisioningIntentRepository as intents,
@@ -164,6 +164,50 @@ function detailOf(err: unknown): string {
 }
 
 export const ciRunnerBootService = {
+  /**
+   * {@link runIntent}, ONCE PER DISPATCH — the entrypoint the boot job calls
+   * (MOTIR-2002).
+   *
+   * ⚠️ WHY A MEMO AND NOT A STEP. Inngest re-invokes a handler from the top at
+   * every step boundary, so anything OUTSIDE a `ctx.step.run` executes once per
+   * durable-replay PASS, and the number of passes is a function of how many
+   * steps the run happens to take — `defineJob`'s two ledger writes make it two.
+   * The obvious fix is to wrap the supervision in a step, whose memoization is
+   * exactly the once-only semantics wanted; it is unavailable, and measurably
+   * so. One step cannot outlive ONE INVOCATION of `app/api/inngest/route.ts`,
+   * whose declared budget is `maxDuration = 300` (Vercel's serverless maximum on
+   * the Pro plan, fixed there by MOTIR-1974), while {@link DEFAULT_JOB_TIMEOUT_MS}
+   * lets a supervised CI job run for 3,600s — twelve times the ceiling.
+   *
+   * So the supervision stays un-stepped and is made explicitly replay-aware
+   * instead: the pass that does the work records its outcome on the intent, and
+   * every later pass of the SAME dispatch reads it back. Later passes cost one
+   * indexed read and neither re-admit (the fleet-wide admission lock is taken
+   * once per boot, not twice) nor re-report (Inngest's run output is the real
+   * outcome, not the loser's `already_claimed`).
+   *
+   * `supervisionKey` identifies the dispatch — the triggering event's id, which
+   * is fixed for a run. It is MATCHED, not merely recorded: a second dispatch for
+   * the same intent gets its own honest `already_claimed` rather than inheriting
+   * a container it never booted.
+   *
+   * Not a substitute for the claim. `admit`'s atomic `pending → provisioning`
+   * remains the guarantee that no second container is ever booted; this is what
+   * stops the fleet's money safety from resting on it ALONE.
+   */
+  async superviseOnce(
+    intentId: string,
+    supervisionKey: string,
+    options: SupervisionOptions = {},
+  ): Promise<RunIntentOutcome> {
+    const replayed = await readSupervisionMemo(intentId, supervisionKey);
+    if (replayed) return replayed;
+
+    const outcome = await this.runIntent(intentId, options);
+    await recordSupervisionMemo(intentId, supervisionKey, outcome);
+    return outcome;
+  },
+
   /**
    * Turn ONE provisioning intent into ONE ephemeral runner, supervise it, and
    * guarantee it is gone.
@@ -635,6 +679,75 @@ async function supervise(input: {
     }
 
     await sleep(input.pollIntervalMs);
+  }
+}
+
+/**
+ * The outcome THIS dispatch already recorded for this intent, if any.
+ *
+ * ⚠️ FAILS OPEN. A memo that cannot be read must never be the reason a queued CI
+ * job gets no runner, so a read failure falls through to supervising — which is
+ * precisely the pre-MOTIR-2002 behaviour, still guarded by the claim. The log is
+ * what distinguishes "no memo" from "could not tell".
+ */
+async function readSupervisionMemo(
+  intentId: string,
+  supervisionKey: string,
+): Promise<RunIntentOutcome | null> {
+  let recorded: Prisma.JsonValue | null;
+  try {
+    recorded = await withSystemContext((tx) =>
+      intents.findSupervisionOutcome(intentId, supervisionKey, tx),
+    );
+  } catch (err) {
+    console.error('[ciRunnerBootService] could not read the supervision memo — supervising', {
+      intentId,
+      detail: detailOf(err),
+    });
+    return null;
+  }
+  if (recorded === null || typeof recorded !== 'object' || Array.isArray(recorded)) return null;
+  // The JSON PROJECTION of the outcome — the same round-trip `defineJob` applies
+  // before writing `job_run.output`, so the replayed value and the ledger row are
+  // the same value by construction (a `usage` Date arrives as an ISO string on
+  // both surfaces, and only on the replayed passes).
+  return recorded as unknown as RunIntentOutcome;
+}
+
+/** Record what this dispatch's supervision returned, so its replay passes read it
+ *  back instead of re-deriving it. Best-effort for the same reason the teardown
+ *  bookkeeping is: this runs AFTER a container has been booted and torn down, and
+ *  throwing here would fail a run that already did its job correctly. */
+async function recordSupervisionMemo(
+  intentId: string,
+  supervisionKey: string,
+  outcome: RunIntentOutcome,
+): Promise<void> {
+  let serialized: Prisma.InputJsonValue;
+  try {
+    serialized = JSON.parse(JSON.stringify(outcome)) as Prisma.InputJsonValue;
+  } catch {
+    console.error('[ciRunnerBootService] a supervision outcome would not serialize', { intentId });
+    return;
+  }
+  try {
+    const written = await withSystemContext((tx) =>
+      intents.recordSupervisionOutcome(intentId, supervisionKey, serialized, tx),
+    );
+    // No row to write to is EXPECTED for `unknown_intent` — there was nothing to
+    // supervise, and a replay re-derives that same answer for free. Any other
+    // outcome losing its memo means the replay will supervise again, so say so.
+    if (!written && outcome.outcome !== 'unknown_intent') {
+      console.warn('[ciRunnerBootService] the supervision memo wrote no row', {
+        intentId,
+        outcome: outcome.outcome,
+      });
+    }
+  } catch (err) {
+    console.error('[ciRunnerBootService] could not record the supervision memo', {
+      intentId,
+      detail: detailOf(err),
+    });
   }
 }
 

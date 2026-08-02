@@ -1035,3 +1035,112 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
     expect(deleteRunnerCalls()).toEqual([]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SUPERVISION MEMO (MOTIR-2002) — `superviseOnce`, against real Postgres.
+//
+// `tests/jobs/ci-runner-fleet.test.ts` drives the Inngest side: how many replay
+// passes there are and that the supervision no longer runs on all of them. This
+// is the other half — what the memo actually WRITES and READS, on the real
+// table, including the scoping that keeps one dispatch's settled container out
+// of another dispatch's answer.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('the supervision memo — once per dispatch, not once per replay pass', () => {
+  /** The provisioner, driven to a settled container at test speed. */
+  const settleFast = {
+    ...FAST,
+    sleep: async () => {
+      const live = fakeOrchestrator.liveContainerIds();
+      if (live[0]) fakeOrchestrator.completeJob(live[0]);
+    },
+  } as const;
+
+  it('records the outcome, and a replay of the SAME dispatch reads it back without supervising again', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    const first = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+    expect(first).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+
+    const mintsAfterFirst = mintCalls().length;
+    const replay = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+
+    // The SAME outcome, and nothing spent to produce it: no second JIT config,
+    // no second container, and no second trip through the admission gate.
+    expect(replay).toEqual(JSON.parse(JSON.stringify(first)));
+    expect(mintCalls()).toHaveLength(mintsAfterFirst);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+
+  it('persists the memo on the intent, keyed by the dispatch that wrote it', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    const outcome = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+
+    const row = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(row.supervisionKey).toBe('evt-1');
+    // Stored as the JSON projection — the same round-trip `defineJob` applies
+    // before writing `job_run.output`, which is what makes the two agree.
+    expect(row.supervisionOutcome).toEqual(JSON.parse(JSON.stringify(outcome)));
+  });
+
+  it('a DIFFERENT dispatch does not inherit the memo — it gets its own answer', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    const first = await ciRunnerBootService.superviseOnce(intent.id, 'evt-sweep', settleFast);
+    expect(first.outcome).toBe('settled');
+
+    // The webhook's dispatch, arriving after the sweep's already settled the
+    // intent. The claim is long gone, so the honest answer is `already_claimed`
+    // — never the sweep's container reported as this run's.
+    const second = await ciRunnerBootService.superviseOnce(intent.id, 'evt-webhook', settleFast);
+    expect(second).toEqual({ outcome: 'already_claimed' });
+  });
+
+  it('an intent that does not exist is answered without a memo — nothing to write it to', async () => {
+    expect(await ciRunnerBootService.superviseOnce('no-such-intent', 'evt-1', FAST)).toEqual({
+      outcome: 'unknown_intent',
+    });
+  });
+
+  it('a memo that cannot be READ falls through to supervising — it never blocks a boot', async () => {
+    // Fail OPEN, deliberately: the memo is an optimisation over a claim that is
+    // still the real guarantee, so a read failure must cost a duplicated gate
+    // check, never a CI job that gets no runner.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(ciRunnerProvisioningIntentRepository, 'findSupervisionOutcome').mockRejectedValue(
+      new Error('pg down'),
+    );
+
+    const outcome = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+
+    expect(outcome.outcome).toBe('settled');
+    expect(error).toHaveBeenCalledWith(
+      '[ciRunnerBootService] could not read the supervision memo — supervising',
+      expect.objectContaining({ intentId: intent.id }),
+    );
+  });
+
+  it('a memo that cannot be WRITTEN does not fail a run that already booted and tore down', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(ciRunnerProvisioningIntentRepository, 'recordSupervisionOutcome').mockRejectedValue(
+      new Error('pg down'),
+    );
+
+    const outcome = await ciRunnerBootService.superviseOnce(intent.id, 'evt-1', settleFast);
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+    expect(error).toHaveBeenCalledWith(
+      '[ciRunnerBootService] could not record the supervision memo',
+      expect.objectContaining({ intentId: intent.id }),
+    );
+  });
+});
