@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Shared work-item-identifier plumbing for the write tools (Subtask 7.8.5).
@@ -135,6 +136,18 @@ export async function resolveWorkItemIdPair(
   return [fromId, toId];
 }
 
+/**
+ * Resolve a SINGLE `PROD-<n>` key to the work item it names — the one-key form
+ * of {@link resolveWorkItemIdsByKeys}, for a tool that addresses exactly one
+ * item and needs more than its id (the canonical `identifier` for its summary
+ * line). Added by MOTIR-1999's `get_work_item_activity` so the key → id
+ * sequence lives HERE rather than being inlined a fourth time; same services,
+ * same 404-not-403 contract as every other resolution in this module.
+ */
+export async function resolveWorkItemByKey(key: string, ctx: ServiceContext): Promise<WorkItemDto> {
+  return resolveOneItem(key, ctx, new Map());
+}
+
 /** Resolve ONE key to its internal id, memoizing the project lookup in
  *  `projectCache`. A bad / cross-tenant key throws the service's typed
  *  not-found error (the 404-not-403 contract), which the caller maps. */
@@ -143,6 +156,16 @@ async function resolveOneKey(
   ctx: ServiceContext,
   projectCache: Map<string, string>,
 ): Promise<string> {
+  return (await resolveOneItem(raw, ctx, projectCache)).id;
+}
+
+/** The shared body of every key resolution above: normalize, resolve the
+ *  project by key prefix (memoized), then the item within it. */
+async function resolveOneItem(
+  raw: string,
+  ctx: ServiceContext,
+  projectCache: Map<string, string>,
+): Promise<WorkItemDto> {
   const identifier = normalizeIdentifier(raw);
   const projectKey = projectKeyOf(identifier);
   let projectId = projectCache.get(projectKey);
@@ -151,6 +174,5 @@ async function resolveOneKey(
     projectId = project.id;
     projectCache.set(projectKey, projectId);
   }
-  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
-  return item.id;
+  return workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 }

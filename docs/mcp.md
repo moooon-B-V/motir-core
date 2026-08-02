@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **37 tools**.
+`initialize` handshake and registers **38 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -405,6 +405,54 @@ it is the sibling sub-graph — the item's OWN edges are the richer top-level
 `blockedBy` / `blocks` / `relatesTo` groups, which also carry link ids. `motir
 show` folds it into the build-order WAVE column; `show --json` adds a computed
 `wave` per child (`null` for a member of a dependency cycle).
+
+#### `get_work_item_activity`
+
+Read one page of a work item's **discussion and change trail** — the comments
+`add_comment` writes, and the history the Activity section shows. Deliberately a
+SEPARATE call from `get_work_item`: that aggregate is a single round-trip and
+stays one, so a card with 200 comments never slows an ordinary read.
+
+| Input    | Type                                   | Required | Notes                                                                                 |
+| -------- | -------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| `key`    | string                                 | yes      | Work item identifier, e.g. `"PROD-7"`.                                                |
+| `view`   | `"all"` \| `"comments"` \| `"history"` | no       | Which stream to read. Default `"all"`.                                                |
+| `cursor` | string                                 | no       | Opaque continuation token from a previous call's `nextCursor`. Echo it back verbatim. |
+| `order`  | `"asc"` \| `"desc"`                    | no       | Page-walk direction. Omit for each view's shipped default (below).                    |
+
+**Output** — `structuredContent` is the page DTO of the selected view, exactly
+as the app's own Activity routes return it (no MCP-specific reshaping):
+
+| `view`     | Default `order` | Payload                  | Shape                                                                                                                         |
+| ---------- | --------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `all`      | `desc`          | `ActivityAllPageDto`     | `{ entries: ({type:'comment', thread} \| {type:'history', entry})[], nextCursor, totalComments, totalChanges, workItemRefs }` |
+| `comments` | `asc`           | `CommentsPageDTO`        | `{ threads: CommentThreadDTO[], totalCount, nextCursor, order, workItemRefs }`                                                |
+| `history`  | `desc`          | `ActivityHistoryPageDto` | `{ entries: ActivityEntryDto[], nextCursor, totalCount }`                                                                     |
+
+A `CommentThreadDTO` is a root comment (`id`, `author`, `bodyMd`, `createdAt`,
+`editedAt`, `mentionedUserIds`) carrying its single-level `replies`. An
+`ActivityEntryDto` is one displayable revision — `changeKind`, `changedAt`,
+`actor`, and typed `parts` (`field` / `fieldEdited` / `link` / `collection` /
+`commentDeleted` / `created` / `generic`); a body-field edit records only THAT
+the field changed, never its text.
+
+Three things to know when paging:
+
+- **A short page with a non-null `nextCursor` is normal**, not an error — both
+  `all` and `history` walk a bounded scan that can stop early inside a stretch
+  of suppressed noise. Keep calling until `nextCursor` is `null`; the text block
+  says `MORE REMAINS` for exactly this reason.
+- **The `all` cursor is an opaque composite** carrying both sources' positions.
+  Echo it back unchanged — never construct, parse or merge one. A malformed one
+  returns `INVALID_ACTIVITY_CURSOR`.
+- **Nothing is truncated.** Comment bodies come back in full in both the
+  structured payload and the text block (the MOTIR-1709 rule). An item with no
+  comments and no displayable revisions returns a well-formed EMPTY page —
+  empty entries, zero totals, `nextCursor: null` — so "nothing was said" is
+  distinguishable from "could not look".
+
+Read-scoped, and access-gated exactly like the UI: an item in another workspace
+(or one the token's role cannot browse) is an indistinguishable not-found.
 
 ### Work-item writes
 

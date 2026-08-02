@@ -28,6 +28,7 @@ import {
   InvalidParentCommentError,
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
+import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
@@ -184,6 +185,13 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof InvalidReadyCursorError || err instanceof InvalidSearchCursorError) {
+    return toolError(err.code, err.message);
+  }
+  // `get_work_item_activity` (MOTIR-1999): a hand-edited / foreign composite
+  // cursor on the All stream. The route maps it to 400; here it reads as a
+  // clean INVALID_ACTIVITY_CURSOR the agent self-corrects from by dropping the
+  // cursor and re-reading from the top, rather than an opaque internal error.
+  if (err instanceof InvalidActivityCursorError) {
     return toolError(err.code, err.message);
   }
   // Link tools (7.8.13): the work-item-link structural guards — a self-link,

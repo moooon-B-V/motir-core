@@ -229,6 +229,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // the token — so it can only ever list the CALLER's own projects.
         list_projects: {},
         get_work_item: { key: item1 },
+        get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },
         claim_next_ready: { projectKey: 'PROD' },
@@ -586,6 +587,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         whoami: {},
         list_projects: {},
         get_work_item: { key: item1 },
+        get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },
         claim_next_ready: { projectKey: 'PROD' },

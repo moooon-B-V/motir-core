@@ -2,6 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpContextResolver, McpScopesResolver } from './context';
 import { scopeGatedServer } from './scopeGate';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
+import {
+  GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
+  registerGetWorkItemActivity,
+} from './tools/getWorkItemActivity';
 import { LIST_READY_TOOL_NAME, registerListReady } from './tools/listReady';
 import { NEXT_READY_TOOL_NAME, registerNextReady } from './tools/nextReady';
 import { CLAIM_NEXT_READY_TOOL_NAME, registerClaimNextReady } from './tools/claimNextReady';
@@ -67,6 +71,7 @@ export const MCP_SERVER_INFO = { name: 'motir', version: '0.1.0' } as const;
 /** Stable tool names — exported so consumers/tests reference them by constant. */
 export const MCP_TOOL_NAMES = [
   GET_WORK_ITEM_TOOL_NAME,
+  GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
   LIST_READY_TOOL_NAME,
   NEXT_READY_TOOL_NAME,
   CLAIM_NEXT_READY_TOOL_NAME,
@@ -129,6 +134,11 @@ export function registerMcpTools(
   const target = resolveScopes ? scopeGatedServer(server, resolveScopes) : server;
   // Read + dispatch tools (7.8.4).
   registerGetWorkItem(target, resolveContext);
+  // The DISCUSSION read (MOTIR-1999) — a card's comments + change trail, the
+  // read half `add_comment` never had. Deliberately NOT folded into
+  // get_work_item: that aggregate is one round-trip and must stay one, so the
+  // paged stream is its own call.
+  registerGetWorkItemActivity(target, resolveContext);
   registerListReady(target, resolveContext);
   registerNextReady(target, resolveContext);
   // Atomic, race-safe dispatch claim (MOTIR-1330) — the write-side counterpart
