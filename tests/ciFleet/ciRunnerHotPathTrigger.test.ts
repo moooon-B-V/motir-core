@@ -142,6 +142,7 @@ async function seedTenant(
         owner: MOTIR_ORG,
         name: 'acme-web',
         defaultBranch: 'main',
+        archived: false,
       },
     ],
   });
