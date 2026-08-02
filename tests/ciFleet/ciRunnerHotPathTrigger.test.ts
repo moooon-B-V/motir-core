@@ -142,10 +142,6 @@ async function seedTenant(
         owner: MOTIR_ORG,
         name: 'acme-web',
         defaultBranch: 'main',
-        // Required on `NormalizedRepo` since MOTIR-1959 (#1780). This fixture
-        // came from MOTIR-1996 (#1778), which merged a minute later off a base
-        // that predated the field — so `main` was left red on typecheck though
-        // both PRs were green. See MOTIR-2003.
         archived: false,
       },
     ],
