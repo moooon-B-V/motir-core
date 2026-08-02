@@ -6,6 +6,12 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import * as orchestrator from '@/lib/orchestrator';
+import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -707,5 +713,325 @@ describe('the pending-intent seam', () => {
     const fx = await seedTenant();
     await seedIntent(fx);
     expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([]);
+  });
+});
+
+// ── The remaining refusals, one test each ───────────────────────────────────
+
+describe('the boot’s defensive paths', () => {
+  it('runs on its REAL default deadlines when the caller passes none', async () => {
+    // Every other test drives supervision with tiny deadlines, so the shipped
+    // constants are never the values in force. Here only `sleep` is supplied —
+    // the job finishes on the first poll, so the real 120s/3600s/3s defaults are
+    // the ones the loop is built with and cannot have rotted into `undefined`.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      sleep: async () => {
+        const live = fakeOrchestrator.liveContainerIds();
+        if (live[0]) fakeOrchestrator.completeJob(live[0]);
+      },
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_completed' });
+    // 3600s is the hard kill §11 fixes, and it reaches the container's spec.
+    expect(fakeOrchestrator.specs[0]?.timeoutSeconds).toBe(3600);
+  });
+
+  it('uses the REAL sleep between polls — a zero interval resolves rather than hanging', async () => {
+    const fx = await seedTenant();
+    fakeOrchestrator.setBootBehaviour('never_start');
+    const intent = await seedIntent(fx);
+
+    // No `sleep` override: the shipped `sleepFor` runs, and its zero-or-less
+    // short-circuit is what keeps a tight poll loop from queueing a timer per
+    // iteration.
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      bootDeadlineMs: 5,
+      jobTimeoutMs: 20,
+      pollIntervalMs: 0,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'provision_failed' });
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+
+  it('a container that goes TERMINAL WITHOUT EVER STARTING is a provisioning failure', async () => {
+    // Distinct from the boot-deadline case above: the provider says the machine
+    // is gone, and it never ran. "Boot succeeded but nothing came up" is a
+    // provisioning failure even though `provision` returned successfully.
+    const fx = await seedTenant();
+    fakeOrchestrator.setBootBehaviour('never_start');
+    const intent = await seedIntent(fx);
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...FAST,
+      sleep: async () => {
+        const live = fakeOrchestrator.liveContainerIds();
+        if (live[0]) fakeOrchestrator.completeJob(live[0]);
+      },
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'provision_failed' });
+    expect(outcome).toMatchObject({ billableSeconds: 0 });
+  });
+
+  it('a provider that keeps failing PAST THE JOB TIMEOUT still ends the container', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    // One good read (so the container is seen RUNNING), then a provider that is
+    // down. The deadlines still bind: a provider outage must not extend a
+    // container past its timeout.
+    let reads = 0;
+    const realDescribe = fakeOrchestrator.describe.bind(fakeOrchestrator);
+    vi.spyOn(fakeOrchestrator, 'describe').mockImplementation(async (handle) => {
+      reads += 1;
+      if (reads === 1) return realDescribe(handle);
+      throw new Error('the provider is down');
+    });
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      bootDeadlineMs: 1_000,
+      jobTimeoutMs: 1,
+      pollIntervalMs: 1,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+
+  it('reports a NON-ERROR provider rejection as `unknown` rather than losing it', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(fakeOrchestrator, 'provision').mockRejectedValue('the provider hung up');
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome).toMatchObject({ outcome: 'provision_failed' });
+    expect(outcome).toMatchObject({ detail: expect.stringContaining('unknown') });
+    // The minted-but-unused runner is still de-registered — a dangling
+    // registered runner is the cost of skipping this.
+    expect(deleteRunnerCalls()).toHaveLength(1);
+  });
+
+  it('a JIT mint refused for a NON-rate-limit reason fails the intent, not the fleet', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    jitHandler = (call) =>
+      call.url.includes('generate-jitconfig')
+        ? json(422, { message: 'runner group not found' })
+        : new Response(null, { status: 204 });
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome).toMatchObject({ outcome: 'provision_failed' });
+    expect(outcome).toMatchObject({
+      detail: expect.stringContaining('could not mint a JIT config'),
+    });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.status).toBe('failed');
+  });
+
+  it('an UNEXPECTED runner-group failure is refused too, with its own detail', async () => {
+    // Not `RunnerGroupNotProvisionedError` — a read that broke. The refusal is
+    // the same (never the `Default` group), but the operator needs to see which
+    // of the two happened.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(projectRunnerGroupService, 'requireRunnerGroupId').mockRejectedValue(
+      new Error('the project read failed'),
+    );
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome).toMatchObject({ outcome: 'no_runner_group' });
+    expect(outcome).toMatchObject({
+      detail: expect.stringContaining("could not read the project's runner group"),
+    });
+    expect(mintCalls()).toEqual([]);
+  });
+
+  it('RELEASES the claim when the orchestrator disappears between the check and the call', async () => {
+    // Both reads are at CALL time (`appAuth`'s contract), so they can disagree
+    // across a redeploy. The claim must go back to the pool rather than pinning
+    // an intent to an instance that cannot serve it.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(orchestrator, 'getOrchestrator').mockImplementation(() => {
+      throw new OrchestratorNotConfiguredError('the fleet credentials went away');
+    });
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome).toEqual({ outcome: 'not_configured' });
+    expect(mintCalls()).toEqual([]);
+    // Released, so a configured instance can take it.
+    expect(
+      (await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intent.id } })).status,
+    ).toBe('pending');
+  });
+
+  it('LOGS and keeps going when the intent cannot be settled', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(ciRunnerProvisioningIntentRepository, 'settle').mockRejectedValue(
+      new Error('the settle write failed'),
+    );
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...FAST,
+      sleep: async () => {
+        const live = fakeOrchestrator.liveContainerIds();
+        if (live[0]) fakeOrchestrator.completeJob(live[0]);
+      },
+    });
+
+    // The CONTAINER is what costs money, and it is gone. A bookkeeping failure
+    // must not propagate out of the path that guarantees that.
+    expect(outcome.outcome).toBe('settled');
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it('LOGS and keeps going when de-registration fails — the runner may dangle, the container does not', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(runnerJitConfigClient, 'deleteRunner').mockRejectedValue(
+      new Error('GitHub refused the delete'),
+    );
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, {
+      ...FAST,
+      sleep: async () => {
+        const live = fakeOrchestrator.liveContainerIds();
+        if (live[0]) fakeOrchestrator.completeJob(live[0]);
+      },
+    });
+
+    expect(outcome.outcome).toBe('settled');
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    expect(error).toHaveBeenCalled();
+  });
+});
+
+describe('the REAPER’s attribution resolver refuses what it cannot attribute', () => {
+  /** Boot a container OUTSIDE the supervised path, so it is left running for the
+   *  reaper to find — the crash-mid-flight shape. */
+  async function orphan(
+    fx: Fixture,
+    overrides: { projectId?: string | null; jobId?: string; githubRunnerId?: number | null } = {},
+  ) {
+    const intent = await db.ciRunnerProvisioningIntent.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        organizationId: fx.organizationId,
+        projectId: overrides.projectId === undefined ? fx.projectId : overrides.projectId,
+        installationId: '556677',
+        runId: `orphan-${Math.random().toString(36).slice(2, 8)}`,
+        runAttempt: 1,
+        jobId: overrides.jobId ?? String(45_000 + Math.floor(Math.random() * 900)),
+        jobName: 'build',
+        workflowName: 'CI',
+        repoOwner: MOTIR_ORG,
+        repoName: 'acme-web',
+        requestedLabels: [MOTIR_RUNNER_LABEL],
+        queuedAt: QUEUED_AT,
+        status: 'running',
+      },
+    });
+    const handle = await fakeOrchestrator.provision(
+      ciRunnerBootService.buildSpec({
+        intent,
+        workflowJobId: 1,
+        projectId: fx.projectId,
+        encodedJitConfig: 'jit',
+        timeoutSeconds: 60,
+        orchestrator: fakeOrchestrator,
+      }),
+    );
+    await withSystemContext((tx) =>
+      ciRunnerProvisioningIntentRepository.recordBoot(
+        intent.id,
+        {
+          containerProvider: handle.provider,
+          containerId: handle.id,
+          containerRegion: handle.region,
+          githubRunnerId: overrides.githubRunnerId === undefined ? 9_777 : overrides.githubRunnerId,
+          runnerName: 'motir-orphan',
+          bootedAt: new Date(),
+        },
+        tx,
+      ),
+    );
+    fakeOrchestrator.backdate(handle.id, new Date(Date.now() - 60 * 60_000));
+    return { intent, handle };
+  }
+
+  it('DESTROYS an orphan whose intent names no project, but emits no cost row for it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fx = await seedTenant();
+    const { handle } = await orphan(fx, { projectId: null });
+
+    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+
+    // An orphan Motir cannot attribute is still an orphan that BILLS, so it is
+    // destroyed anyway; a row attributed to nobody would be worse than none.
+    expect(fakeOrchestrator.liveContainerIds()).not.toContain(handle.id);
+    expect(result.reaped).toBe(0);
+  });
+
+  it('DESTROYS an orphan whose job id is malformed, and emits no cost row', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fx = await seedTenant();
+    const { handle } = await orphan(fx, { jobId: 'not-a-number' });
+
+    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+
+    expect(fakeOrchestrator.liveContainerIds()).not.toContain(handle.id);
+    expect(result.reaped).toBe(0);
+  });
+
+  it('reaps an orphan with NO registered runner without calling GitHub', async () => {
+    const fx = await seedTenant();
+    await orphan(fx, { githubRunnerId: null });
+
+    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+
+    expect(result.reaped).toBe(1);
+    // Nothing to de-register: the crash happened before the mint, so there is no
+    // runner id to name and no call to make.
+    expect(deleteRunnerCalls()).toEqual([]);
+  });
+
+  it('settles nothing when the intent vanishes between the reap and the write-back', async () => {
+    const fx = await seedTenant();
+    await orphan(fx);
+    // The row is deleted (a tenant teardown, a cascade) after the container was
+    // destroyed. The sweep must not throw over a row that is already gone.
+    const findByContainerId = vi.spyOn(ciRunnerProvisioningIntentRepository, 'findByContainerId');
+    let call = 0;
+    const real = findByContainerId.getMockImplementation();
+    findByContainerId.mockImplementation(async (provider, containerId, tx) => {
+      call += 1;
+      if (call > 1) return null;
+      return real
+        ? real(provider, containerId, tx)
+        : tx.ciRunnerProvisioningIntent.findFirst({
+            where: { containerProvider: provider, containerId },
+          });
+    });
+
+    const result = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
+
+    expect(result.reaped).toBe(1);
+    expect(deleteRunnerCalls()).toEqual([]);
   });
 });

@@ -424,6 +424,44 @@ export default defineConfig({
         // silent when it happens.
         'lib/github/runnerGroups.ts',
         'lib/services/projectRunnerGroupService.ts',
+        // Story MOTIR-1916 · MOTIR-1927 — THE REST OF THE FLEET. MOTIR-1924's
+        // entry above gates the cost meter and defers the wider floor here ("the
+        // provisioning path, the port, the adapters — MOTIR-1927's deliverable");
+        // this is that deferral collected.
+        //
+        // Gated as one surface because the fleet's failures are all SILENT and
+        // all expensive: a container nobody tore down bills forever, a runner in
+        // the wrong group serves a job the gate declined, a cap read outside its
+        // lock is not a cap. None of those surfaces as an error — they surface as
+        // an invoice or as another tenant's CI — so the branch that decides each
+        // one is the only place the guarantee is checkable at all.
+        //
+        // The PORT is included alongside the services on purpose: §4 calls the
+        // swappable interface "the single most load-bearing output: it is what
+        // makes this decision reversible", and an adapter half of which is
+        // unexercised is an interface with one caller rather than a port.
+        'lib/orchestrator/types.ts',
+        'lib/orchestrator/index.ts',
+        'lib/orchestrator/errors.ts',
+        'lib/orchestrator/rates.ts',
+        'lib/orchestrator/usage.ts',
+        'lib/orchestrator/usageSink.ts',
+        'lib/orchestrator/adapters/fake/index.ts',
+        'lib/orchestrator/adapters/fly/index.ts',
+        'lib/orchestrator/adapters/fly/flyMachines.ts',
+        'lib/ciFleet/config.ts',
+        'lib/ciFleet/limits.ts',
+        'lib/ciFleet/workloads.ts',
+        'lib/ciFleet/bootDispatch.ts',
+        'lib/github/runnerJitConfig.ts',
+        'lib/services/ciRunnerProvisioningService.ts',
+        'lib/services/ciRunnerBootService.ts',
+        'lib/services/ciRunnerAdmissionService.ts',
+        'lib/services/fleetCeilingService.ts',
+        'lib/repositories/ciRunnerProvisioningIntentRepository.ts',
+        'lib/repositories/ciFleetAdmissionLockRepository.ts',
+        'lib/repositories/fleetInFlightSlotRepository.ts',
+        'lib/jobs/definitions/ciRunnerFleet.ts',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -533,6 +571,46 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story MOTIR-1916 · MOTIR-1927 — the rest of the fleet (see the
+        // include list for why the port ships gated alongside the services).
+        'lib/orchestrator/types.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/index.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/rates.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/usage.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/usageSink.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/adapters/fake/index.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/adapters/fly/index.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/adapters/fly/flyMachines.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/config.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/limits.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/workloads.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/bootDispatch.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/runnerJitConfig.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciRunnerProvisioningService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/ciRunnerBootService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/ciRunnerAdmissionService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetCeilingService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/ciRunnerProvisioningIntentRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/ciFleetAdmissionLockRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/fleetInFlightSlotRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/jobs/definitions/ciRunnerFleet.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes entitlement.
         'lib/ciMetering/allowance.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciAllowanceService.ts': { branches: 90, functions: 90, lines: 90 },
