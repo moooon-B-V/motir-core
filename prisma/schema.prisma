@@ -4924,6 +4924,27 @@ model CiRunnerProvisioningIntent {
   /// infrastructure; this is what makes that a query rather than a stopwatch.
   bootLatencyMs Int? @map("boot_latency_ms")
 
+  /// ── THE SUPERVISION MEMO (MOTIR-2002) ─────────────────────────────────────
+  /// Which dispatch supervised this intent, and what that supervision returned.
+  ///
+  /// The boot's supervision runs OUTSIDE any `ctx.step.run` (it outlives the
+  /// step ceiling — see `lib/jobs/definitions/ciRunnerFleet.ts`), and Inngest
+  /// re-invokes a handler from the top at every step boundary, so un-stepped
+  /// code executes once per durable-replay PASS. These two columns are what
+  /// makes it execute once per RUN instead: the first pass records its outcome
+  /// here, and every later pass of the same dispatch reads it back rather than
+  /// re-admitting, re-counting the fleet census, and re-reporting.
+  ///
+  /// `supervisionKey` is the triggering EVENT's id (falling back to the Inngest
+  /// run id) — the same identity `defineJob` correlates the `job_run` ledger row
+  /// by. Scoped rather than a bare flag on purpose: a SECOND dispatch for the
+  /// same intent must get its own honest answer (`already_claimed`), never the
+  /// first one's settled container reported as its own.
+  supervisionKey     String? @map("supervision_key")
+  /// The `RunIntentOutcome` the run recorded, JSON as the ledger stores it, so
+  /// the replayed value and `job_run.output` cannot come to disagree.
+  supervisionOutcome Json?   @map("supervision_outcome")
+
   /// How the container ended — the port's `TeardownReason`. Kept next to the
   /// status because "failed" alone cannot distinguish a provider refusal from a
   /// runner that never registered from a job that ran over its timeout, and
