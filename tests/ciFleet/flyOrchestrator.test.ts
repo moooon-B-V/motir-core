@@ -4,7 +4,15 @@ import {
   FLEET_METADATA_VALUE,
   flyOrchestrator,
 } from '@/lib/orchestrator/adapters/fly';
-import { flyFleetConfig, isFlyFleetConfigured } from '@/lib/orchestrator/adapters/fly/flyMachines';
+import {
+  flyFleetConfig,
+  isFlyFleetConfigured,
+  isPreStartState,
+  isTerminalState,
+  startedAtOf,
+  stoppedAtOf,
+  toFlyMachine,
+} from '@/lib/orchestrator/adapters/fly/flyMachines';
 import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
 import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
 import type { ContainerHandle, ContainerSpec, UsageAttribution } from '@/lib/orchestrator/types';
@@ -430,5 +438,242 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
     await expect(flyOrchestrator.reap(OLDER_THAN, resolveAll)).rejects.toMatchObject({
       code: 'ORCHESTRATOR_API_FAILED',
     });
+  });
+});
+
+// ── Parsing Fly's JSON, which is not a contract ─────────────────────────────
+
+describe('toFlyMachine tolerates every shape Fly actually sends', () => {
+  /**
+   * Fly's machine JSON is a REST response, not a schema, and the fleet reads it
+   * on the two paths that must not fail: the reaper's list, and the pre-teardown
+   * read that sources the §5 timestamps. A parser that threw — or that silently
+   * produced `undefined` where a Date belongs — would turn a malformed payload
+   * into either a crashed sweep or a cost row nobody can audit.
+   */
+  it('refuses anything without a usable id — that is what "not a machine" means', () => {
+    expect(toFlyMachine(null)).toBeNull();
+    expect(toFlyMachine('a string')).toBeNull();
+    expect(toFlyMachine([])).toBeNull();
+    expect(toFlyMachine({})).toBeNull();
+    expect(toFlyMachine({ id: 42 })).toBeNull();
+    expect(toFlyMachine({ id: '' })).toBeNull();
+  });
+
+  it('defaults every missing string field rather than propagating undefined', () => {
+    const parsed = toFlyMachine({ id: 'm1' });
+
+    expect(parsed).toMatchObject({ id: 'm1', name: '', state: '', region: '' });
+    expect(parsed?.createdAt).toBeNull();
+    expect(parsed?.updatedAt).toBeNull();
+    expect(parsed?.metadata).toEqual({});
+    expect(parsed?.events).toEqual([]);
+  });
+
+  it('reads an events timestamp in EPOCH MILLISECONDS, the shape Fly uses there', () => {
+    // ⚠️ The two timestamp dialects in one payload: the machine's own
+    // `created_at` is RFC 3339, its EVENTS are epoch millis. Both land in the
+    // same parser, and getting the second wrong is what makes a boot-latency
+    // reading silently absurd.
+    const at = Date.parse('2026-08-02T10:00:10.000Z');
+    const parsed = toFlyMachine({ id: 'm1', events: [{ type: 'start', timestamp: at }] });
+    expect(parsed?.events[0]?.timestamp).toEqual(new Date(at));
+  });
+
+  it('drops an UNPARSEABLE timestamp rather than producing an Invalid Date', () => {
+    const parsed = toFlyMachine({
+      id: 'm1',
+      created_at: 'not a date',
+      events: [
+        { type: 'start', timestamp: 'also not a date' },
+        { type: 'exit', timestamp: Number.NaN },
+        { type: 'stop', timestamp: { nested: true } },
+      ],
+    });
+
+    expect(parsed?.createdAt).toBeNull();
+    expect(parsed?.events.map((e) => e.timestamp)).toEqual([null, null, null]);
+    // An Invalid Date compares as NaN everywhere and would make `reap(olderThan)`
+    // quietly skip the machine — a leak with no error.
+    expect(startedAtOf(parsed!)).toBeNull();
+    expect(stoppedAtOf(parsed!)).toBeNull();
+  });
+
+  it('keeps only STRING metadata, so a non-string tag cannot masquerade as one', () => {
+    const parsed = toFlyMachine({
+      id: 'm1',
+      config: { metadata: { [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE, port: 8080, on: true } },
+    });
+    expect(parsed?.metadata).toEqual({ [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE });
+  });
+
+  it('tolerates an events value that is not an array, and entries that are not events', () => {
+    expect(toFlyMachine({ id: 'm1', events: 'nope' })?.events).toEqual([]);
+    expect(toFlyMachine({ id: 'm1', events: [null, 7, 'x'] })?.events).toEqual([]);
+  });
+
+  it('defaults an event’s own type/status to empty strings', () => {
+    const parsed = toFlyMachine({ id: 'm1', events: [{ timestamp: 1 }] });
+    expect(parsed?.events[0]).toMatchObject({ type: '', status: '' });
+  });
+});
+
+describe('the machine-state predicates', () => {
+  it('knows which states are TERMINAL', () => {
+    expect(isTerminalState('destroyed')).toBe(true);
+    expect(isTerminalState('started')).toBe(false);
+  });
+
+  it('knows which states are still ON THE WAY UP', () => {
+    // The distinction a boot deadline needs: `created` is "keep waiting",
+    // `started` is "it is up", and neither is "it failed".
+    expect(isPreStartState('created')).toBe(true);
+    expect(isPreStartState('started')).toBe(false);
+    expect(isPreStartState('destroyed')).toBe(false);
+  });
+});
+
+describe('the §5 instants, read from Fly’s event log', () => {
+  it('takes the FIRST start event, ignoring events of other types', () => {
+    const first = Date.parse('2026-08-02T10:00:10.000Z');
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        { type: 'launch', timestamp: Date.parse('2026-08-02T10:00:00.000Z') },
+        { type: 'start', timestamp: first },
+        { type: 'start', timestamp: Date.parse('2026-08-02T10:05:00.000Z') },
+      ],
+    });
+    expect(startedAtOf(parsed!)).toEqual(new Date(first));
+  });
+
+  it('skips a start event that carries no usable timestamp', () => {
+    const good = Date.parse('2026-08-02T10:00:10.000Z');
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        { type: 'start', timestamp: 'nonsense' },
+        { type: 'start', timestamp: good },
+      ],
+    });
+    expect(startedAtOf(parsed!)).toEqual(new Date(good));
+  });
+
+  it('takes the LATEST stop-ish event, whichever of the three types it is', () => {
+    // `exit`, `stop` and `destroy` all end a machine, and Fly emits them in no
+    // guaranteed order. The LAST one is when it actually stopped costing money.
+    const early = Date.parse('2026-08-02T10:04:00.000Z');
+    const late = Date.parse('2026-08-02T10:09:00.000Z');
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        { type: 'destroy', timestamp: late },
+        { type: 'exit', timestamp: early },
+        { type: 'stop', timestamp: null },
+        { type: 'start', timestamp: Date.parse('2026-08-02T10:00:00.000Z') },
+      ],
+    });
+    expect(stoppedAtOf(parsed!)).toEqual(new Date(late));
+  });
+
+  it('is null when the machine has stopped-ish events but none with an instant', () => {
+    const parsed = toFlyMachine({ id: 'm1', events: [{ type: 'exit', timestamp: 'x' }] });
+    expect(stoppedAtOf(parsed!)).toBeNull();
+  });
+});
+
+describe('the adapter’s fallbacks when Fly answers thinly', () => {
+  it('a machine with NO region or creation instant still yields a usable handle', async () => {
+    // `reap(olderThan)` compares against the handle's `createdAt`, so a null
+    // there would make the container invisible to the one mechanism that exists
+    // to catch it — the fallback is what keeps an un-dated machine reapable.
+    handler = () => json(200, { id: 'thin-1', state: 'created' });
+    const before = Date.now();
+
+    const handle = await flyOrchestrator.provision(SPEC);
+
+    expect(handle).toMatchObject({ provider: 'fly', id: 'thin-1', region: 'iad' });
+    expect(handle.createdAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('a spec with no region of its own falls back to the DEPLOYMENT’s region', async () => {
+    vi.stubEnv('FLY_FLEET_REGION', 'ams');
+    handler = () => json(200, { id: 'thin-2', state: 'created' });
+
+    const handle = await flyOrchestrator.provision({ ...SPEC, region: '' });
+
+    expect(calls[0]?.body?.['region']).toBe('ams');
+    expect(handle.region).toBe('ams');
+  });
+
+  it('describe dates an un-dated machine from the HANDLE rather than reporting none', async () => {
+    handler = () => json(200, machine({ createdAt: null, events: [] }));
+
+    const status = await flyOrchestrator.describe(HANDLE);
+
+    expect(status.createdAt).toEqual(HANDLE.createdAt);
+    expect(status.startedAt).toBeNull();
+    expect(status.stoppedAt).toBeNull();
+  });
+
+  it('reports a refusal whose body is not JSON by STATUS alone', async () => {
+    handler = () => new Response('<html>502</html>', { status: 502 });
+
+    await expect(flyOrchestrator.provision(SPEC)).rejects.toMatchObject({
+      code: 'ORCHESTRATOR_API_FAILED',
+      status: 502,
+    });
+  });
+
+  it('reads Fly’s `error` key as well as `message` — it sends both', async () => {
+    handler = () => json(422, { error: 'no capacity in iad' });
+
+    await expect(flyOrchestrator.provision(SPEC)).rejects.toThrow(/no capacity in iad/);
+  });
+
+  it('normalizes a NON-ERROR transport rejection to the typed error', async () => {
+    // A rejected promise that is not an `Error` (a string thrown by an agent, an
+    // aborted fetch in some runtimes) must not escape as an unnamed value.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw 'socket closed';
+      }),
+    );
+
+    await expect(flyOrchestrator.provision(SPEC)).rejects.toMatchObject({
+      code: 'ORCHESTRATOR_API_FAILED',
+      provider: 'fly',
+      status: null,
+    });
+  });
+});
+
+describe('the reaper keeps sweeping when ONE machine refuses to die', () => {
+  it('logs the refusal, skips that machine, and still destroys the rest', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const old = '2026-08-01T00:00:00.000Z';
+    handler = (call) => {
+      if (call.method === 'GET' && call.url.endsWith('/machines')) {
+        return json(200, [
+          machine({ id: 'stubborn', createdAt: old }),
+          machine({ id: 'compliant', createdAt: old }),
+        ]);
+      }
+      if (call.method === 'DELETE' && call.url.includes('stubborn')) {
+        return json(500, { error: 'machine is wedged' });
+      }
+      return new Response(null, { status: 200 });
+    };
+
+    const usages = await flyOrchestrator.reap(
+      new Date('2026-08-02T00:00:00.000Z'),
+      async () => ATTRIBUTION,
+    );
+
+    // A fleet-wide leak because one destroy 500'd is the failure the sweep
+    // exists to prevent, so one refusal must not abandon the others.
+    expect(usages.map((u) => u.handleId)).toEqual(['compliant']);
+    expect(error).toHaveBeenCalled();
   });
 });

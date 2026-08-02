@@ -6,6 +6,7 @@ import {
   type ContainerRate,
 } from '@/lib/orchestrator/rates';
 import { billableSecondsFor, buildContainerUsage, isUnpriced } from '@/lib/orchestrator/usage';
+import { OrchestratorApiError, OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
 import type { ContainerHandle, UsageAttribution } from '@/lib/orchestrator/types';
 
 // The CONTAINER RATE TABLE and the §5 record's arithmetic (Story MOTIR-1916 ·
@@ -90,6 +91,21 @@ describe('resolution is EFFECTIVE-DATED and exact on every key', () => {
   it('a different machine class resolves to no rate', () => {
     const shared = { cpuKind: 'shared' as const, cpus: 4, memoryMb: 8192 };
     expect(resolveContainerRate('fly', shared, 'iad', AFTER_EFFECTIVE)).toBeNull();
+  });
+
+  // ⚠️ EACH KEY, ON ITS OWN. The `shared` case above differs in three fields at
+  // once, so only the FIRST mismatch is ever exercised and a resolver that
+  // stopped comparing cpus (or memory) would still pass it. A rate is a price
+  // per machine class: matching the wrong one bills Motir's 2-core cost against
+  // an 8-core container, and the error is systematic rather than visible.
+  it('the same class with MORE CPUS resolves to no rate — cpus is compared on its own', () => {
+    const bigger = { ...FLEET_CONTAINER_SIZE, cpus: FLEET_CONTAINER_SIZE.cpus + 2 };
+    expect(resolveContainerRate('fly', bigger, 'iad', AFTER_EFFECTIVE)).toBeNull();
+  });
+
+  it('the same class with MORE MEMORY resolves to no rate — memory is compared on its own', () => {
+    const roomier = { ...FLEET_CONTAINER_SIZE, memoryMb: FLEET_CONTAINER_SIZE.memoryMb * 2 };
+    expect(resolveContainerRate('fly', roomier, 'iad', AFTER_EFFECTIVE)).toBeNull();
   });
 
   it('a different provider resolves to no rate', () => {
@@ -296,5 +312,36 @@ describe('the §5 record', () => {
       },
     });
     expect(usage.rateEffectiveFrom).toBeNull();
+  });
+});
+
+// ── The typed failures ──────────────────────────────────────────────────────
+
+describe('the port’s typed errors name the PROVIDER and never the raw body', () => {
+  it('a refusal reads as a status', () => {
+    const err = new OrchestratorApiError('fly', 429, 'too many machines');
+    expect(err.code).toBe('ORCHESTRATOR_API_FAILED');
+    expect(err.provider).toBe('fly');
+    expect(err.status).toBe(429);
+    expect(err.message).toContain('HTTP 429');
+    expect(err.message).toContain('too many machines');
+  });
+
+  it('a refusal with NO detail still reads cleanly — no dangling punctuation', () => {
+    // A provider that refuses with an unreadable body is common enough that the
+    // message must not degrade into `HTTP 500: undefined`.
+    const err = new OrchestratorApiError('fly', 500, '');
+    expect(err.message).toBe('The fly orchestrator refused a call (HTTP 500).');
+  });
+
+  it('an UNREACHABLE provider is a different sentence, not a status of null', () => {
+    const err = new OrchestratorApiError('fake', null, 'socket hang up');
+    expect(err.message).toBe('The fake orchestrator could not be reached (socket hang up).');
+  });
+
+  it('an unconfigured deployment says WHICH variables are missing', () => {
+    const err = new OrchestratorNotConfiguredError('set FLY_FLEET_API_TOKEN');
+    expect(err.code).toBe('ORCHESTRATOR_NOT_CONFIGURED');
+    expect(err.message).toContain('FLY_FLEET_API_TOKEN');
   });
 });

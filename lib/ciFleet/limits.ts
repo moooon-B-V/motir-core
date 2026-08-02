@@ -132,6 +132,11 @@ function readCeilingEnv(name: string, fallback: number | null): number | null {
  * on an uncapped account should do.
  */
 export function fleetInFlightCeiling(): number {
+  /* istanbul ignore next -- the `?? 0` is UNREACHABLE and kept only to satisfy
+     the shared reader's `number | null` return: this call passes a NON-NULL
+     fallback, so `readCeilingEnv` cannot answer null here. It stays rather than
+     being widened away because narrowing the reader's type would fork it from
+     `projectInFlightCapFor`, whose fallback genuinely is nullable. */
   return readCeilingEnv(FLEET_CEILING_ENV, DEFAULT_FLEET_IN_FLIGHT_CEILING) ?? 0;
 }
 
@@ -148,6 +153,8 @@ export function fleetInFlightCeiling(): number {
  * rather than being read as zero, for the same reason the ceilings do.
  */
 export function fleetSlotTtlSeconds(): number {
+  /* istanbul ignore next -- unreachable for the same reason as the ceiling
+     above: a non-null fallback means the reader never answers null. */
   return readCeilingEnv(FLEET_SLOT_TTL_ENV, DEFAULT_FLEET_SLOT_TTL_SECONDS) ?? 0;
 }
 

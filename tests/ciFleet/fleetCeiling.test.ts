@@ -644,3 +644,60 @@ describe('the per-workload caps still behave exactly as before', () => {
     expect((await ciRunnerAdmissionService.admit(await seedIntent(fx))).outcome).toBe('admitted');
   });
 });
+
+// ── The reserve path's remaining edges ──────────────────────────────────────
+
+describe('the slot reservation’s defaults and its own race', () => {
+  it('falls back to the CONFIGURED TTL when the caller names none', async () => {
+    // A workload that does not know its own hard-kill budget still gets the
+    // fleet-wide safety net rather than an undefined expiry.
+    vi.stubEnv('MOTIR_FLEET_SLOT_TTL_SECONDS', '120');
+    const before = Date.now();
+
+    const verdict = await fleetCeilingService.reserve({
+      workload: 'code_graph_index',
+      ref: 'ttl-default-1',
+    });
+
+    expect(verdict.outcome).toBe('reserved');
+    const slot = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.findByRef('code_graph_index', 'ttl-default-1', tx),
+    );
+    expect(slot?.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 120_000 - 5_000);
+    expect(slot?.expiresAt.getTime()).toBeLessThanOrEqual(before + 120_000 + 5_000);
+  });
+
+  it('a LOST INSERT RACE reports `already_held`, never a second slot', async () => {
+    // The window the `ON CONFLICT DO NOTHING` closes: another transaction
+    // committed the same (workload, ref) between this one's read and its write.
+    // Simulated by blinding the pre-read, which is exactly what that racer's
+    // timing does.
+    await fleetCeilingService.reserve({ workload: 'hosted_agent', ref: 'raced-ref' });
+    vi.spyOn(fleetInFlightSlotRepository, 'findByRef').mockResolvedValue(null);
+
+    const verdict = await fleetCeilingService.reserve({
+      workload: 'hosted_agent',
+      ref: 'raced-ref',
+    });
+
+    expect(verdict).toEqual({ outcome: 'already_held' });
+    const held = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.countLiveForWorkload('hosted_agent', new Date(), tx),
+    );
+    expect(held).toBe(1);
+  });
+
+  it('reports a NON-ERROR rejection as `unknown` rather than losing it', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(ciFleetAdmissionLockRepository, 'ensureScope').mockRejectedValue('a bare string');
+
+    const verdict = await fleetCeilingService.reserve({
+      workload: 'code_graph_index',
+      ref: 'non-error-1',
+    });
+
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
+    expect(verdict).toMatchObject({ detail: expect.stringContaining('unknown') });
+    expect(error).toHaveBeenCalled();
+  });
+});

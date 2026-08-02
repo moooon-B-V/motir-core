@@ -8,6 +8,8 @@ import { ciRunnerAdmissionService } from '@/lib/services/ciRunnerAdmissionServic
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
+import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmissionLockRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { truncateAuthTables } from '../helpers/db';
@@ -518,5 +520,92 @@ describe('bypasses — and what is NEVER bypassed', () => {
     const intent = await seedIntent(fx, { projectId: null });
 
     expect((await ciRunnerAdmissionService.admit(intent)).outcome).toBe('admitted');
+  });
+});
+
+// ── The gate's own failure modes ────────────────────────────────────────────
+
+describe('the gate refuses when its SERIALIZATION cannot be established', () => {
+  /**
+   * `lockScope` answering false means the scope's anchor row was not there to
+   * lock — a programming error rather than a runtime condition, and the ONE
+   * failure the gate must not read as "the fleet is empty". Everything the caps
+   * decide is read-derived, so an unlocked decision is a decision two racers can
+   * both make.
+   */
+  it('DECLINES AND LOGS when the PROJECT scope cannot be locked', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockImplementation(
+      async (scope) => !scope.startsWith('project:'),
+    );
+
+    const verdict = await ciRunnerAdmissionService.admit(intent);
+
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
+    expect(verdict).toMatchObject({ detail: expect.stringContaining('project admission lock') });
+    // FAIL CLOSED: the transaction rolled back, so nothing was claimed.
+    expect(await statusOf(intent.id)).toBe('pending');
+    expect(error).toHaveBeenCalled();
+  });
+
+  it('DECLINES AND LOGS when the FLEET scope cannot be locked', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    vi.spyOn(ciFleetAdmissionLockRepository, 'lockScope').mockImplementation(async (scope) =>
+      scope.startsWith('project:'),
+    );
+
+    const verdict = await ciRunnerAdmissionService.admit(intent);
+
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
+    expect(verdict).toMatchObject({ detail: expect.stringContaining('fleet admission lock') });
+    expect(await statusOf(intent.id)).toBe('pending');
+    expect(error).toHaveBeenCalled();
+  });
+
+  it('reports a NON-ERROR rejection as `unknown` rather than losing it', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    // Not everything thrown is an Error — a driver can reject with a plain
+    // object, and the gate's detail must still be readable.
+    vi.spyOn(ciFleetAdmissionLockRepository, 'ensureScope').mockRejectedValue({ pg: '40P01' });
+
+    const verdict = await ciRunnerAdmissionService.admit(intent);
+
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
+    expect(verdict).toMatchObject({ detail: expect.stringContaining('unknown') });
+    expect(error).toHaveBeenCalled();
+  });
+});
+
+describe('resolveCaps and releaseClaim degrade rather than throwing', () => {
+  it('resolveCaps answers NULL and logs when the org read itself throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await seedTenant();
+    vi.spyOn(organizationRepository, 'findCapContextInTx').mockRejectedValue(
+      new Error('the org read failed'),
+    );
+
+    // The real catch, not a stubbed return: an org whose PLAN cannot be
+    // established must not be handed the largest allowance by default.
+    expect(await ciRunnerAdmissionService.resolveCaps(fx.organizationId)).toBeNull();
+    expect(error).toHaveBeenCalled();
+  });
+
+  it('releaseClaim LOGS and returns rather than throwing at its caller', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(ciRunnerProvisioningIntentRepository, 'releaseClaim').mockRejectedValue(
+      new Error('the release write failed'),
+    );
+
+    // The worst case is an intent that sits in `provisioning` until the
+    // stale-claim sweep writes it off — visible and bounded. A throw here would
+    // be neither, and it would propagate into a teardown path.
+    await expect(ciRunnerAdmissionService.releaseClaim('some-intent')).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalled();
   });
 });

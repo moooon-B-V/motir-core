@@ -188,3 +188,56 @@ describe('the control surface fails loudly on an unknown container', () => {
     expect((await fakeOrchestrator.describe(handle)).state).toBe('started');
   });
 });
+
+// ── A handle the provider has never heard of ────────────────────────────────
+
+describe('a handle from BEFORE a restart — the provider knows nothing about it', () => {
+  /**
+   * The port persists handles precisely so teardown and the reaper survive the
+   * process that booted the container (`ContainerHandle`'s own doc). So both
+   * operations are reachable with a handle the in-memory adapter has no record
+   * of, and neither may throw: the reason the handle was persisted is that the
+   * process holding the state died.
+   */
+  const STRANGER = {
+    provider: 'fake' as const,
+    id: 'machine-from-a-previous-life',
+    region: 'iad',
+    createdAt: new Date('2026-08-01T09:00:00.000Z'),
+  };
+
+  it('describe reports it GONE, dating it from the HANDLE rather than inventing one', async () => {
+    const status = await fakeOrchestrator.describe(STRANGER);
+
+    expect(status).toMatchObject({ exists: false, terminal: true, state: 'destroyed' });
+    // The handle's own instant is the only honest source left.
+    expect(status.createdAt).toEqual(STRANGER.createdAt);
+    expect(status.startedAt).toBeNull();
+    expect(status.stoppedAt).toBeNull();
+  });
+
+  it('teardown still produces its cost row, from the handle and the caller’s observation', async () => {
+    const observedStartedAt = new Date(STRANGER.createdAt.getTime() + 4_000);
+
+    const usage = await fakeOrchestrator.teardown(STRANGER, 'reaped', {
+      ...ATTRIBUTION,
+      observedStartedAt,
+    });
+
+    // The metering guarantee does not weaken just because the adapter lost its
+    // memory — that is the case `observedStartedAt` exists for.
+    expect(usage.handleId).toBe(STRANGER.id);
+    expect(usage.createdAt).toEqual(STRANGER.createdAt);
+    expect(usage.startedAt).toEqual(observedStartedAt);
+    expect(usage.teardownReason).toBe('reaped');
+    expect(usage.billableSeconds).toBeGreaterThan(0);
+  });
+
+  it('teardown of an unknown handle with NO observed start costs nothing, and still writes a row', async () => {
+    const usage = await fakeOrchestrator.teardown(STRANGER, 'provision_failed', ATTRIBUTION);
+
+    expect(usage.startedAt).toBeNull();
+    expect(usage.billableSeconds).toBe(0);
+    expect(Number(usage.costUsd)).toBe(0);
+  });
+});
