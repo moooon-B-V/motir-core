@@ -661,3 +661,202 @@ describe('planValidityService.validateProjectedSprint — the projected sprint r
     ).rejects.toBeInstanceOf(NoActiveSprintError);
   });
 });
+
+// ── The PROSE-vs-GRAPH advisory over the PROJECTED tree (MOTIR-1969) ──────────
+//
+// The projected twin of the live advisory in `validate_work_item`, and the
+// reason it is worth having here: the planner sees the gap BEFORE it
+// materializes, which is the moment the miss is cheapest to fix. The advisory is
+// a SEPARATE channel — it never changes `valid` / `blockers`.
+
+/** A `[label](motir:<id>)` reference token — the shipped chip form. */
+const refToken = (label: string, id: string) => `[${label}](motir:${id})`;
+/** An intra-plan `[label](motir-ref:planItem:<id>)` token — a projected sibling. */
+const planRefToken = (label: string, planItemId: string) =>
+  `[${label}](motir-ref:planItem:${planItemId})`;
+
+describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advisories', () => {
+  it("an `add`'s PROPOSED body naming a live not-done item with no `blockedByRefs` advises", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const substrate = await mk(fx, 'The substrate it consumes', 'task');
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'New child',
+        kind: 'subtask',
+        descriptionMd: `## Acceptance criteria\n- built on ${refToken('SUB', substrate.id)}`,
+      },
+      parentRef: story.id,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    // The verdict itself is untouched — the advisory is never a blocker.
+    expect(res.valid).toBe(true);
+    expect(res.blockers).toEqual([]);
+    expect(res.advisories).toHaveLength(1);
+    expect(res.advisories[0]).toMatchObject({
+      referenced: substrate.identifier,
+      referencedStatus: 'todo',
+      severity: 'likely-missing-edge',
+    });
+    // The scanned card is the not-yet-materialized `add`, named by its temp-ref.
+    expect(res.advisories[0]?.item).toMatch(/^planItem:/);
+  });
+
+  it('an `add` naming a SIBLING `add` by its temp-ref, with no `blockedByRefs`, advises', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const withSibling = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Producer', kind: 'subtask' },
+      parentRef: story.id,
+    });
+    const producerItemId = itemIdByTitle(withSibling, 'Producer');
+    const withConsumer = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Consumer',
+        kind: 'subtask',
+        descriptionMd: `## Acceptance criteria\n- reads what ${planRefToken('Producer', producerItemId)} writes`,
+      },
+      parentRef: story.id,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    expect(res.advisories).toEqual([
+      {
+        item: `planItem:${itemIdByTitle(withConsumer, 'Consumer')}`,
+        referenced: `planItem:${producerItemId}`,
+        referencedStatus: 'todo',
+        severity: 'likely-missing-edge',
+      },
+    ]);
+  });
+
+  it('wiring `blockedByRefs` to the named sibling CLEARS the advisory', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const p = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Producer', kind: 'subtask' },
+      parentRef: story.id,
+    });
+    const producerItemId = itemIdByTitle(p, 'Producer');
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Consumer',
+        kind: 'subtask',
+        descriptionMd: `## Acceptance criteria\n- reads ${planRefToken('Producer', producerItemId)}`,
+      },
+      parentRef: story.id,
+      blockedByRefs: [`planItem:${producerItemId}`],
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.advisories).toEqual([]);
+  });
+
+  it("a `modify`'s PATCHED body is what gets scanned, not the stored one", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const substrate = await mk(fx, 'Substrate', 'task');
+
+    // Stored body names nothing; the plan proposes one that names the substrate.
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { descriptionMd: `Depends on ${refToken('SUB', substrate.id)}.` },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const before = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(before.advisories).toEqual([]); // the STORED body names nothing
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.advisories).toEqual([
+      {
+        item: child.identifier,
+        referenced: substrate.identifier,
+        referencedStatus: 'todo',
+        severity: 'advisory',
+      },
+    ]);
+  });
+
+  it('a `done` referenced item produces no advisory on the projected tree either', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const shipped = await mk(fx, 'Shipped', 'task');
+    await markDone(shipped.id);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'New child',
+        kind: 'subtask',
+        descriptionMd: `Built on ${refToken('SHIPPED', shipped.id)}.`,
+      },
+      parentRef: story.id,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.advisories).toEqual([]);
+  });
+
+  it('the FOREST verdict carries no advisories — an advisory is a per-CARD property', async () => {
+    const fx = await makeWorkItemFixture();
+    const substrate = await mk(fx, 'Substrate', 'task');
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Root add',
+        kind: 'task',
+        descriptionMd: `## Acceptance criteria\n- needs ${refToken('SUB', substrate.id)}`,
+      },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const forest = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    // `PlanValidityDto` is deliberately unchanged: the forest has no single
+    // subject to attribute a body-vs-edges gap to. Per-card coverage is the
+    // `validateProjectedWorkItem` call, asserted above.
+    expect(forest).toEqual({ planId, valid: true, blockers: [] });
+  });
+});

@@ -147,8 +147,10 @@ import type {
   TreeLevelDto,
   ProjectRoadmapDto,
   WorkItemValidityDto,
+  WorkItemProseAdvisoryDto,
   WorkItemImplementationProvenanceInput,
 } from '@/lib/dto/workItems';
+import { buildProseVsGraphAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -4289,6 +4291,11 @@ async function computeOwnBlockerReadiness(
  * not-done members' direct blockers (no ancestor walk — finishing the target's
  * subtree does not depend on work ABOVE it), and report each unsatisfied
  * out-of-subtree blocker at the in-subtree member it gates.
+ *
+ * It ALSO returns the PROSE-vs-GRAPH advisories (MOTIR-1969) for the same
+ * not-done members — a SEPARATE, never-blocking channel, computed by
+ * `buildProseVsGraphAdvisories`. `valid` and `blockers` are byte-identical
+ * whether or not advisories are emitted; nothing below reads `advisories`.
  */
 async function computeWorkItemValidity(
   root: WorkItemDto,
@@ -4308,7 +4315,7 @@ async function computeWorkItemValidity(
   );
   const notDone = members.filter((m) => !terminalForProject.has(m.status));
   if (notDone.length === 0) {
-    return { key: root.identifier, valid: true, blockers: [] };
+    return { key: root.identifier, valid: true, blockers: [], advisories: [] };
   }
 
   const edges = await workItemLinkRepository.findBlockerEdgesForItems(notDone.map((m) => m.id));
@@ -4339,5 +4346,68 @@ async function computeWorkItemValidity(
   }
   // Deterministic order (by gated item, then blocker) for a stable wire shape.
   blockers.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
-  return { key: root.identifier, valid: blockers.length === 0, blockers };
+
+  const advisories = await computeSubtreeProseAdvisories(root, notDone, membersById, edges, ctx);
+  return { key: root.identifier, valid: blockers.length === 0, blockers, advisories };
+}
+
+/**
+ * The PROSE-vs-GRAPH advisories for a validated subtree (MOTIR-1969) — the same
+ * NOT-DONE members the blocker walk probes, each scanned for `motir:` references
+ * its body names but the graph has no `blocked_by` edge to. A `done` member is
+ * skipped for the same reason it is skipped above: its prose is history, not an
+ * unmet dependency.
+ *
+ * Exempt per member: itself, its ANCESTORS (a card naming its own parent Story /
+ * Epic is not a missing dependency — the chain walks up through the subtree and
+ * on through the root's own ancestors), and everything already in its
+ * `blocked_by` set. Bodies come from ONE batched read; the reference resolution
+ * + browse gate + done-ness live in `buildProseVsGraphAdvisories`.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — the caller adds this to a separate field and
+ * the `valid` / `blockers` verdict above is computed without it.
+ */
+async function computeSubtreeProseAdvisories(
+  root: WorkItemDto,
+  notDone: Array<{ id: string; identifier: string; parentId: string | null }>,
+  membersById: Map<string, { id: string; identifier: string; parentId: string | null }>,
+  edges: Array<{ fromId: string; blockerId: string }>,
+  ctx: ServiceContext,
+): Promise<WorkItemProseAdvisoryDto[]> {
+  // The root's OWN ancestors (above the subtree) — a member naming the epic its
+  // story hangs under is naming an ancestor too, and the subtree walk alone
+  // cannot see those.
+  const aboveRoot = await workItemRepository.findAncestors(root.id, ctx.workspaceId);
+  const rootAncestorIds = aboveRoot.map((a) => a.id);
+
+  const blockedByMember = new Map<string, Set<string>>();
+  for (const e of edges) {
+    const set = blockedByMember.get(e.fromId);
+    if (set) set.add(e.blockerId);
+    else blockedByMember.set(e.fromId, new Set([e.blockerId]));
+  }
+
+  const bodies = new Map(
+    (
+      await workItemRepository.findDescriptionsByIds(
+        notDone.map((m) => m.id),
+        ctx.workspaceId,
+      )
+    ).map((r) => [r.id, r.descriptionMd]),
+  );
+
+  const subjects = notDone.map((member) => {
+    const exemptIds = new Set<string>([member.id, ...rootAncestorIds]);
+    // Up the in-subtree chain. `membersById` is finite and acyclic (a tree), and
+    // the loop stops at the root, whose ancestors are already seeded above.
+    let parentId = member.parentId;
+    while (parentId !== null && !exemptIds.has(parentId)) {
+      exemptIds.add(parentId);
+      parentId = membersById.get(parentId)?.parentId ?? null;
+    }
+    for (const blockerId of blockedByMember.get(member.id) ?? []) exemptIds.add(blockerId);
+    return { item: member.identifier, descriptionMd: bodies.get(member.id) ?? null, exemptIds };
+  });
+
+  return buildProseVsGraphAdvisories(subjects, ctx);
 }

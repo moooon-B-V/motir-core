@@ -37,10 +37,34 @@ interface ValidateWorkItemArgs {
   condition?: ValidityCondition;
 }
 
+/**
+ * The prose-vs-graph advisory lines (MOTIR-1969), appended to EITHER verdict.
+ * Deliberately phrased as a prompt to look, never as a failure: advisories do
+ * not change `valid`, so a VALID item with advisories is still VALID.
+ */
+function advisoryLines(result: WorkItemValidityDto): string[] {
+  if (result.advisories.length === 0) return [];
+  return [
+    '',
+    `Advisory (NOT a blocker — ${result.key} is ${result.valid ? 'still VALID' : 'unaffected'} ` +
+      "either way): these items are NAMED in a card's description but have no blocked_by edge " +
+      'from it:',
+    ...result.advisories.map(
+      (a) =>
+        `  ${a.item} names ${a.referenced} (${a.referencedStatus})` +
+        `${a.severity === 'likely-missing-edge' ? ' IN ITS ACCEPTANCE CRITERIA — likely a missing blocked_by' : ''}`,
+    ),
+    'Wire a blocked_by edge if the card consumes it; ignore this if the reference is context only.',
+  ];
+}
+
 /** Human-readable summary for the dual-content text block. */
 function summarize(result: WorkItemValidityDto): string {
   if (result.valid) {
-    return `Work item ${result.key} is VALID — its whole subtree can be finished within itself.`;
+    return [
+      `Work item ${result.key} is VALID — its whole subtree can be finished within itself.`,
+      ...advisoryLines(result),
+    ].join('\n');
   }
   return [
     `Work item ${result.key} is INVALID — ${result.blockers.length} item(s) in its subtree are ` +
@@ -51,6 +75,7 @@ function summarize(result: WorkItemValidityDto): string {
         `${b.blockerSprintId ? `sprint ${b.blockerSprintId}` : 'backlog'})`,
     ),
     'Pull these into the subtree (or finish them), or drop the dependency.',
+    ...advisoryLines(result),
   ].join('\n');
 }
 
@@ -90,8 +115,13 @@ export function registerValidateWorkItem(
         'never gates; only out-of-subtree work can. `condition` defaults to `loose` (a done ' +
         'dependency outside the subtree counts as satisfied); pass `tight` to require every ' +
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
-        'Returns `{ key, valid, blockers: [...] }` naming each in-subtree item and the ' +
-        'out-of-subtree, unsatisfied work gating it. Read-only.',
+        'Returns `{ key, valid, blockers: [...], advisories: [...] }` — `blockers` naming each ' +
+        'in-subtree item and the out-of-subtree, unsatisfied work gating it. `advisories` is a ' +
+        'SEPARATE, NEVER-BLOCKING channel: an in-subtree card whose DESCRIPTION names a not-done ' +
+        'work item it has no blocked_by edge to (severity `likely-missing-edge` when the ' +
+        "reference sits in the card's own acceptance criteria, else `advisory`). Advisories " +
+        'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
+        'Read-only.',
       inputSchema,
     },
     async (args, extra) => runValidateWorkItem(args, resolveContext(extra)),

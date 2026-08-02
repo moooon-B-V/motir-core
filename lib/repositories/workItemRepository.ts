@@ -1757,12 +1757,19 @@ export const workItemRepository = {
    * never gate, mirroring the readiness reads). `workspaceId`-gated throughout
    * (finding #26). Parent↔child is same-project, so the caller judges done-ness
    * against the root's project terminal set. Read-only → `db` singleton.
+   *
+   * `parentId` rides along for the prose-vs-graph advisory (MOTIR-1969), which
+   * walks each member's ANCESTOR chain (a card naming its own parent Story /
+   * Epic is not a missing dependency). It comes free — the CTE already carries
+   * the column to recurse on.
    */
   async findSubtreeMembersForValidity(
     rootId: string,
     workspaceId: string,
-  ): Promise<Array<{ id: string; identifier: string; status: string }>> {
-    return db.$queryRaw<Array<{ id: string; identifier: string; status: string }>>`
+  ): Promise<Array<{ id: string; identifier: string; status: string; parentId: string | null }>> {
+    return db.$queryRaw<
+      Array<{ id: string; identifier: string; status: string; parentId: string | null }>
+    >`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."identifier", w."status"
           FROM "work_item" w
@@ -1778,7 +1785,28 @@ export const workItemRepository = {
             AND w."archivedAt" IS NULL
             AND w."triagedAt" IS NULL
       )
-      SELECT "id", "identifier", "status" FROM subtree`;
+      SELECT "id", "identifier", "status", "parentId" FROM subtree`;
+  },
+
+  /**
+   * The `descriptionMd` of MANY work items in ONE query — the body text the
+   * prose-vs-graph advisory (MOTIR-1969) scans for `motir:` reference tokens.
+   * Deliberately its OWN narrow read rather than a column bolted onto the
+   * validity CTE / project-wide validity load: descriptions are long, and those
+   * two reads are sized by the whole subtree / whole project, so widening them
+   * would balloon a payload most callers never look at. This one is sized by the
+   * NOT-DONE members actually scanned. Workspace-gated (finding #26); read-only
+   * path → `db` singleton; an empty id set short-circuits.
+   */
+  async findDescriptionsByIds(
+    ids: string[],
+    workspaceId: string,
+  ): Promise<Array<{ id: string; descriptionMd: string | null }>> {
+    if (ids.length === 0) return [];
+    return db.workItem.findMany({
+      where: { id: { in: ids }, workspaceId },
+      select: { id: true, descriptionMd: true },
+    });
   },
 
   /**
