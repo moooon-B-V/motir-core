@@ -1,0 +1,198 @@
+# The Motir CI RUNNER image — build, assert, prove, publish (MOTIR-1978)
+#
+# ONE definition, called from two places — the shape `sandbox-images.yml`
+# established, and for the same reason: a publish lane that built the image its
+# own way could ship an artifact no assertion ever touched.
+#
+#   - `ci.yml` on every pull request, with `publish: false` — build, assert,
+#     prove it boots. The merge gate.
+#   - `release-runner-image.yml` on a `runner-v*` tag, with `publish: true` — the
+#     SAME build and the SAME checks, and only then a push to GHCR.
+#
+# The push is a LATER STEP of the job that just proved the image works, so a
+# green build is the release gate rather than a separate trust decision.
+#
+# ── What this workflow EMITS, and why it is the digest and not a tag ─────────
+#
+# `MOTIR_RUNNER_IMAGE` (read by `lib/orchestrator/adapters/fly/flyMachines.ts` →
+# `flyFleetConfig()`) takes a DIGEST reference, never a tag. §7.2 of
+# `docs/decisions/ci-runner-fleet.md` requires it: the fleet's containers execute
+# agent-authored customer code, and a mutable tag under that workload is the
+# supply-chain hole the whole ephemerality posture was bought to close. A tag
+# that moved between the boot decision and the pull would silently change what
+# ran. So the publish job prints `sha256:…` into the job summary, and MOTIR-1979
+# sets that exact string in the deployment.
+#
+# NOT here: signing, SBOM, provenance attestation — the same deliberate omission
+# `sandbox-images.yml` records, and its own decision.
+
+name: Runner image
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: 'Push the asserted + proven image to GHCR (release lane only).'
+        type: boolean
+        default: false
+      version:
+        description: 'Version for the immutable tag (release lane; e.g. 1.0.0).'
+        type: string
+        default: ''
+    outputs:
+      digest:
+        description: 'The sha256 digest that was published (empty on the PR lane).'
+        value: ${{ jobs.runner-image.outputs.digest }}
+
+env:
+  # OCI repository names are lowercase-only, so the `moooon-B-V` org is spelled
+  # lowercase here — `ghcr.io/moooon-B-V/...` is not a pullable reference at all.
+  # Hardcoded rather than derived from `github.repository_owner` for that reason
+  # (the same trap `sandbox-images.yml` documents).
+  IMAGE: ghcr.io/moooon-b-v/motir-ci-runner
+
+jobs:
+  runner-image:
+    name: Build, assert, prove
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # Static assertions run BEFORE the build: a floating tag or a lost §7.4
+      # guarantee is knowable from the source alone, and finding it after a
+      # ten-minute image build is ten minutes wasted on every red run.
+      - name: Assert the sources
+        run: infra/ci-runner/smoke/assert-image.sh --sources
+
+      - uses: docker/setup-buildx-action@v3
+
+      # linux/amd64 only — Fly Machines are x86-64 and the fleet runs in `iad`
+      # (§8, §11). No QEMU leg, unlike the sandbox matrix.
+      #
+      # The context is `infra/ci-runner`, NOT the repo root: the image contains
+      # nothing from motir-core's tree, and a root context would ship the whole
+      # checkout into a container that runs customer code.
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/ci-runner
+          file: infra/ci-runner/Dockerfile
+          platforms: linux/amd64
+          tags: motir-ci-runner:smoke
+          load: true
+          cache-from: type=gha,scope=ci-runner
+          cache-to: type=gha,scope=ci-runner,mode=max
+
+      - name: Assert the built image
+        run: infra/ci-runner/smoke/assert-image.sh --image motir-ci-runner:smoke
+
+      # Quoted: an unquoted scalar containing `: ` is a YAML mapping, and this
+      # step name has one.
+      - name: 'Prove it boots and can run a services: container'
+        run: infra/ci-runner/smoke/prove-boot.sh --image motir-ci-runner:smoke
+
+      # ── Size, because §6 makes it a term in the boot budget ────────────────
+      # Image pull sits inside §6's 10–25 s Machine-create leg, and MOTIR-1928
+      # measures the real p50/p95 against that budget. A number recorded here is
+      # what a later regression can be attributed to — without it, "boot got
+      # slower" has no decomposition.
+      #
+      # The COMPRESSED size is what matters (it is what crosses the network), so
+      # it is summed from the OCI layer blobs rather than read off `docker image
+      # inspect`, which reports the extracted size. The export is a cache hit on
+      # the build above.
+      # Exported through the ACTION, not a raw `docker buildx build`: a bare run
+      # step has no `ACTIONS_RUNTIME_TOKEN`, so `--cache-from type=gha` there
+      # would miss the cache the build above just wrote and rebuild every layer.
+      - name: Export an OCI layout to measure
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/ci-runner
+          file: infra/ci-runner/Dockerfile
+          platforms: linux/amd64
+          outputs: type=oci,dest=/tmp/runner-image.tar
+          cache-from: type=gha,scope=ci-runner
+
+      - name: Measure the compressed size
+        id: size
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oci && tar -xf /tmp/runner-image.tar -C /tmp/oci
+          # Every blob: the compressed layers plus the manifest and config,
+          # which together are a few KB against hundreds of MB. This is what
+          # actually crosses the network on a pull.
+          compressed=$(find /tmp/oci/blobs -type f -printf '%s\n' | awk '{s+=$1} END {print s+0}')
+          extracted=$(docker image inspect motir-ci-runner:smoke --format '{{.Size}}')
+          compressed_mb=$(awk -v b="$compressed" 'BEGIN {printf "%.0f", b/1048576}')
+          extracted_mb=$(awk -v b="$extracted"  'BEGIN {printf "%.0f", b/1048576}')
+          echo "compressed_mb=${compressed_mb}" >> "$GITHUB_OUTPUT"
+          echo "extracted_mb=${extracted_mb}"   >> "$GITHUB_OUTPUT"
+          {
+            echo "### Motir CI runner image"
+            echo
+            echo "| Measure | Value |"
+            echo "| --- | --- |"
+            echo "| Compressed (pulled over the network) | **${compressed_mb} MB** |"
+            echo "| Extracted (on the Machine's rootfs) | ${extracted_mb} MB |"
+            echo
+            echo "Pull time is a term in \`docs/decisions/ci-runner-fleet.md\` §6's 10–25 s"
+            echo "Machine-create leg. MOTIR-1928 measures the real p50/p95 against it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Release lane only, and only now that the image above is proven ──────
+      - name: Log in to GHCR
+        if: ${{ inputs.publish }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Both tags are conveniences for humans reading the registry. NEITHER is
+      # what the fleet consumes — `MOTIR_RUNNER_IMAGE` takes the digest below.
+      - name: Push to GHCR
+        if: ${{ inputs.publish }}
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/ci-runner
+          file: infra/ci-runner/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ inputs.version }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=ci-runner
+          cache-to: type=gha,scope=ci-runner,mode=max
+
+      # "The push step exited 0" is not the same claim as "the fleet can boot
+      # this". This pulls back BY DIGEST — the only reference that names the
+      # exact bytes — and re-runs the image assertions against what was actually
+      # published, which is the same move `sandbox-images.yml`'s verify job makes.
+      - name: Verify the published image BY DIGEST
+        if: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          digest='${{ steps.push.outputs.digest }}'
+          if [ -z "$digest" ]; then
+            echo "::error::the push produced no digest — the release is incomplete."
+            exit 1
+          fi
+          ref="${IMAGE}@${digest}"
+          docker pull "$ref"
+          docker tag "$ref" motir-ci-runner:published
+          infra/ci-runner/smoke/assert-image.sh --image motir-ci-runner:published
+          {
+            echo
+            echo "### Published"
+            echo
+            echo "| Reference | Value |"
+            echo "| --- | --- |"
+            echo "| Digest | \`${digest}\` |"
+            echo "| Pull by digest | \`${ref}\` |"
+            echo
+            echo "**Set \`MOTIR_RUNNER_IMAGE\` to \`${ref}\`** — the digest, never a tag (§7.2)."
+            echo "MOTIR-1979 is the card that sets it in the deployment."
+          } >> "$GITHUB_STEP_SUMMARY"

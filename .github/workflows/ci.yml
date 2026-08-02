@@ -582,3 +582,31 @@ jobs:
     uses: ./.github/workflows/sandbox-images.yml
     with:
       publish: false
+
+  # ── The CI runner image (MOTIR-1916 · MOTIR-1978) ─────────────────────────
+  # `infra/ci-runner/` is what every ephemeral fleet runner boots from — the
+  # value `MOTIR_RUNNER_IMAGE` names and `lib/orchestrator/adapters/fly/
+  # flyMachines.ts` refuses to start without. Its claims are the same shape as
+  # the sandbox's and are checkable the same way: that nothing in it floats
+  # (§7.2), that it holds no registration capability (§7.4), and that a runner
+  # container can actually run a `services:` container the way the starters'
+  # workflows use one. All three need the image BUILT, so they live here rather
+  # than in the unit lane; `test/ciRunnerImage.test.ts` guards the sources
+  # against drift the way `sandboxCi.test.ts` does for the sandbox.
+  #
+  # Same one-definition-two-entry-points shape: `release-runner-image.yml` (on a
+  # `runner-v*` tag) runs this very workflow with `publish: true`. `publish:
+  # false` and the absence of `packages: write` here mean the pull-request lane
+  # cannot push even if it tried.
+  #
+  # Same branch-prefix skip as the lanes above — a design- or docs-only pull
+  # request cannot change what the image does.
+
+  runner-image:
+    name: Runner image
+    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/runner-image.yml
+    with:
+      publish: false
