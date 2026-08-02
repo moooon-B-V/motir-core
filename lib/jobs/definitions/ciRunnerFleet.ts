@@ -1,5 +1,6 @@
 import { defineJob } from '../defineJob';
 import { inngest } from '../client';
+import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
@@ -7,23 +8,28 @@ import { inngest } from '../client';
 // Three functions, and the third is the one that matters most:
 //
 //   * `system.ci-runner-provision-sweep` — finds pending intents and fans out one
-//     boot event each. THE INTERIM TRIGGER (see below).
+//     boot event each. THE RECOVERY TRIGGER (see below).
 //   * `system.ci-runner-boot` — one intent, one runner, supervised to its end.
 //   * `system.ci-runner-reap` — destroys containers nothing is supervising.
 //
-// ⚠️ THE SWEEP IS AN INTERIM TRIGGER AND SAYS SO. `docs/decisions/
-// ci-runner-fleet.md` §6 budgets p50 ≤ 30s from the `workflow_job.queued`
-// webhook to the job starting, and a minute-granularity cron cannot meet that.
-// It is here because MOTIR-1920 declared the seam between the webhook and the
-// boot to be exactly one read — `listPending`.
+// ⚠️ THE SWEEP IS NO LONGER THE PRIMARY TRIGGER, AND NEVER COULD BE.
+// `docs/decisions/ci-runner-fleet.md` §6 budgets p50 ≤ 30s from the
+// `workflow_job.queued` webhook to the job starting, and a minute-granularity
+// cron cannot meet that — it adds up to 60s before the admission gate is even
+// consulted. MOTIR-1996 moved the fast path where it belongs: the webhook
+// dispatches `system.ci-runner-boot` itself, in the same request that records the
+// intent (`lib/ciFleet/bootDispatch.ts`).
 //
-// MOTIR-1922's ADMISSION GATE has since landed, inside `runIntent` — so a sweep
-// that fans out 25 boots no longer fans out 25 containers: each one is decided
-// and capped before it spends anything, and a deferred intent stays pending for
-// the next sweep. What is still missing for §6 is the hot-path call from the
-// webhook, tracked as its own card; the sweep stays regardless as the recovery
-// path for an intent the hot call drops and as the retry loop every deferral
-// depends on.
+// THE SWEEP STAYS, unchanged and load-bearing, as the RECOVERY path — for an
+// intent whose hot dispatch was dropped (a transport blip the webhook swallows
+// rather than 500s on), and as the retry loop every gate DEFERRAL depends on: a
+// project at its in-flight cap leaves its intent pending, and this is what comes
+// back for it. The two triggers race by design; `claimPending`'s compare-and-set
+// means one of them wins and the other gets `already_claimed`.
+//
+// MOTIR-1922's ADMISSION GATE sits inside `runIntent` either way — so a sweep
+// that fans out 25 boots does not fan out 25 containers, and a faster trigger
+// cannot outrun a cap.
 //
 // System-scoped, like every `system.*` job: the fleet spans tenants because
 // Motir's infrastructure bill does.
@@ -73,11 +79,14 @@ export const ciRunnerProvisionSweep = defineJob(
       for (const intentId of intentIds) {
         // `inngest.send` directly, not `sendEvent`: this is a `system.*` event
         // and carries no acting workspace of its own. The handler re-reads the
-        // intent for everything, so the payload is deliberately just the id.
-        await inngest.send({
-          name: 'system.ci-runner-boot',
-          data: { intentId, workspaceId: '' },
-        });
+        // intent for everything, so the payload is deliberately just the id —
+        // built by the SHARED `ciRunnerBootEvent` so the recovery path and the
+        // webhook's hot path cannot emit two different events for one intent.
+        //
+        // Sent BARE, not through `dispatchCiRunnerBoot`: a failure here belongs
+        // to the step, and letting it propagate buys a free Inngest retry. The
+        // webhook has no such retry, which is why only it swallows.
+        await inngest.send(ciRunnerBootEvent(intentId));
       }
       return { dispatched: intentIds.length };
     });

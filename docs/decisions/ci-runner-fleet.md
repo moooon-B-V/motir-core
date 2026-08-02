@@ -275,6 +275,14 @@ Composed from the published numbers rather than asserted:
 | Runner registration + GitHub job assignment            | 5 – 15 s                    | Runner start-up plus GitHub's assignment loop.                                 |
 | **Total**                                              | **≤ 30 s p50 / ≤ 60 s p95** | The bar is **parity with GitHub-hosted**, whose own assignment is not instant. |
 
+**What STARTS the clock, and what keeps it honest (MOTIR-1996).** The boot is dispatched by
+the `workflow_job` webhook itself, in the same request that records the intent — the first
+row of the table is a synchronous hop, not a scheduled one. The minute-granularity
+`system.ci-runner-provision-sweep` is the **recovery** trigger only: it re-drives an intent
+whose hot dispatch was dropped, and it is the retry loop a **deferred** intent waits in. A
+fleet whose primary trigger were the cron would spend up to 60 s of a 30 s budget before the
+gate was consulted, so "the sweep found it" is a fallback path, never the measured one.
+
 **What the SLO does and does not cover — state this or it is unmeasurable.** The budget
 applies to a job the admission gate **ADMITTED**. A job the gate **DEFERRED** (project at
 its in-flight cap, or `ci_credits_exhausted`) is out of scope by construction: deferral is
