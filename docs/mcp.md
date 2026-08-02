@@ -870,10 +870,32 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers }`. When `valid` is `false`, `blockers` lists each gated
-in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId }` (the
-out-of-subtree, unsatisfied work gating it). An unknown / cross-workspace key
+`{ key, valid, blockers, advisories }`. When `valid` is `false`, `blockers` lists
+each gated in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId }`
+(the out-of-subtree, unsatisfied work gating it). An unknown / cross-workspace key
 returns a `WORK_ITEM_NOT_FOUND` tool error.
+
+`advisories` is the **prose-vs-graph** channel (MOTIR-1969) and is **never a
+blocker**: an in-subtree card whose `descriptionMd` NAMES a not-`done` work item
+it carries no `blocked_by` edge to. Each entry is
+`{ item, referenced, referencedStatus, severity }`, where `item` is the card
+whose body names `referenced`, and `severity` is:
+
+| severity              | trigger                                                       |
+| --------------------- | ------------------------------------------------------------- |
+| `advisory`            | the not-`done` item is named anywhere in the body             |
+| `likely-missing-edge` | it is named inside the card's own acceptance-criteria section |
+
+`valid`, `blockers`, and an item's readiness are **identical** whether or not
+advisories are emitted, at BOTH severities — a card legitimately names cards it
+does not depend on (out-of-scope sections, context refs, contrast references, a
+boundary-contract card naming both halves of a two-PR split), so this reports the
+gap without enforcing it. Wire a `blocked_by` edge if the card really consumes
+the reference; ignore the advisory if the reference is context only. A `done`
+reference, a self-reference, an ancestor, and anything already in the
+`blocked_by` set never produce one. **Blind spot:** the check reads
+`descriptionMd` only, so a `type: decision` card's deferrals — which live in the
+document it produces, not in its card body — are outside its reach.
 
 #### `create_sprint`
 

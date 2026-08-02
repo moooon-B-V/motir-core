@@ -243,6 +243,10 @@ export default defineConfig({
         // predicate both validators use (Subtask 7.8.23).
         'lib/mcp/tools/validateWorkItem.ts',
         'lib/workItems/validity.ts',
+        // The PROSE-vs-GRAPH advisory beside those rules (MOTIR-1969) — the pure
+        // reference/severity extractor and the service that resolves + gates it.
+        'lib/workItems/proseVsGraph.ts',
+        'lib/services/proseGraphAdvisoryService.ts',
         'lib/mcp/tools/createSprint.ts',
         'lib/mcp/tools/updateSprint.ts',
         'lib/mcp/tools/deleteSprint.ts',
@@ -644,6 +648,11 @@ export default defineConfig({
         'lib/jobs/definitions/notificationFanIn.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/notifications/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        // The prose-vs-graph advisory (MOTIR-1969) — an ADDITION beside the
+        // finishability rules, gated on its own so a regression in it can't hide
+        // inside workItemsService's blended number.
+        'lib/workItems/proseVsGraph.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/proseGraphAdvisoryService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemLinkRepository.ts': { branches: 90, functions: 90, lines: 90 },

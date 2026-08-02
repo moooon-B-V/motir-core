@@ -158,6 +158,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockerSprintId: null,
         },
       ],
+      advisories: [],
     });
 
     // A no-op plan over the same target is valid.
@@ -171,7 +172,12 @@ describe('POST /api/internal/ai/validate-plan', () => {
       }),
     );
     expect(valid.status).toBe(200);
-    expect(await valid.json()).toEqual({ key: story.identifier, valid: true, blockers: [] });
+    expect(await valid.json()).toEqual({
+      key: story.identifier,
+      valid: true,
+      blockers: [],
+      advisories: [],
+    });
   });
 });
 

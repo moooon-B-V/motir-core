@@ -1069,4 +1069,50 @@ export interface WorkItemValidityDto {
   valid: boolean;
   /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
   blockers: SprintBlockerDto[];
+  /**
+   * PROSE-vs-GRAPH advisories (MOTIR-1969) — a SEPARATE channel from `blockers`,
+   * and **never** a blocker. See {@link WorkItemProseAdvisoryDto}: `valid` and
+   * `blockers` are byte-identical whether or not this array is empty.
+   */
+  advisories: WorkItemProseAdvisoryDto[];
+}
+
+/**
+ * How strongly a body reference suggests a MISSING `blocked_by` edge
+ * (MOTIR-1969) — `advisory` when the not-done item is named anywhere in the
+ * body, `likely-missing-edge` when it is named inside the card's own
+ * acceptance-criteria section. Mirrors `ProseAdvisorySeverity`
+ * (`lib/workItems/proseVsGraph.ts`), which carries the full rationale.
+ */
+export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge';
+
+/**
+ * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
+ * `descriptionMd` NAMES a not-`done` work item it carries no `blocked_by` edge
+ * to. Let **N** = the items a body names via `motir:` link tokens and **E** =
+ * the items it has a `blocked_by` edge to; one advisory is emitted per member of
+ * `N \ E` that is not `done`, not the card itself, and not one of its ancestors.
+ *
+ * ⚠️ **ADVISORY, NEVER A BLOCKER — the load-bearing design decision.** It does
+ * not gate readiness and does not appear as a finishability blocker: a card with
+ * advisories is still `valid` / `ready`. A card legitimately names cards it does
+ * not depend on (out-of-scope sections, "the owner of the other half is X",
+ * context refs, superseded-by notes, sibling record cards), so a hard gate would
+ * make almost every well-written card unready and the fix would be to write
+ * WORSE card bodies — the opposite of what the corpus wants. That asymmetry is
+ * the whole point: it makes the prose-vs-graph gap VISIBLE at authoring time
+ * without making it ENFORCEABLE, which matches what the human check actually is.
+ *
+ * Deliberately shaped like {@link SprintBlockerDto}: `item` is the card whose
+ * body names the reference; `referenced` is the far end.
+ */
+export interface WorkItemProseAdvisoryDto {
+  /** The in-subtree card whose `descriptionMd` names the reference. */
+  item: string;
+  /** The referenced item's identifier (or a `planItem:<id>` temp-ref, projected). */
+  referenced: string;
+  /** The referenced item's raw workflow status key (e.g. `todo`, `in_progress`). */
+  referencedStatus: string;
+  /** How strongly this reference suggests a missing `blocked_by` edge. */
+  severity: WorkItemProseAdvisorySeverityDto;
 }

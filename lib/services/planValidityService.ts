@@ -7,8 +7,12 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import {
+  buildProseVsGraphAdvisories,
+  type ProseAdvisoryLocalRef,
+} from '@/lib/services/proseGraphAdvisoryService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemValidityDto } from '@/lib/dto/workItems';
+import type { WorkItemProseAdvisoryDto, WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { PlanValidityDto } from '@/lib/dto/plans';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
@@ -73,6 +77,15 @@ interface Projection {
   childrenByParent: Map<string, string[]>;
   /** Per-project terminal (`category = 'done'`) status keys, for done-ness. */
   terminalByProject: Map<string, Set<string>>;
+  /**
+   * The PROPOSED body of each `add`, keyed by its temp-ref — the only place a
+   * not-yet-materialized node's `descriptionMd` exists, so the prose-vs-graph
+   * advisory (MOTIR-1969) can scan a projected card the same way it scans a live
+   * one. Real nodes' bodies are read on demand for the members actually scanned;
+   * they are deliberately NOT loaded here, because `buildProjection` reads the
+   * WHOLE project and descriptions are long.
+   */
+  projectedDescription: Map<string, string | null>;
 }
 
 function addEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: string): void {
@@ -147,8 +160,10 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
 
   // Pass 1 — virtual `add` nodes (keyed by their temp-ref, so an intra-plan
   // parent/blocker ref resolves with no topo ordering needed).
+  const projectedDescription = new Map<string, string | null>();
   for (const item of adds) {
     const id = `${TEMP_REF_PREFIX}${item.id}`;
+    projectedDescription.set(id, item.proposedFields?.descriptionMd ?? null);
     nodes.set(id, {
       id,
       identifier: id,
@@ -197,6 +212,13 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
   // Pass 3 — `modify` edge changes (title/priority/type ignored for finishability).
   for (const item of modifies) {
     if (!item.workItemId || !nodes.has(item.workItemId)) continue;
+    // A patched BODY is what the prose-vs-graph advisory must scan — the plan's
+    // proposed text, not the stored one. Sparse-patch semantics: the key being
+    // ABSENT means unchanged (fall through to the live body); present-but-null
+    // means the plan clears it.
+    if (item.patch && 'descriptionMd' in item.patch) {
+      projectedDescription.set(item.workItemId, item.patch.descriptionMd ?? null);
+    }
     for (const ref of item.patch?.blockedByAdd ?? []) {
       const toId = resolveRef(ref);
       if (nodes.has(toId)) addEdge(blockedBy, item.workItemId, toId);
@@ -230,7 +252,14 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
     ctx.workspaceId,
   );
 
-  return { projectId, nodes, blockedBy, childrenByParent, terminalByProject };
+  return {
+    projectId,
+    nodes,
+    blockedBy,
+    childrenByParent,
+    terminalByProject,
+    projectedDescription,
+  };
 }
 
 /** Is a node's raw status terminal (`category = 'done'`) in its OWN project? */
@@ -243,6 +272,86 @@ function sortBlockers(blockers: SprintBlockerDto[]): SprintBlockerDto[] {
   return blockers.sort(
     (a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy),
   );
+}
+
+/**
+ * The PROSE-vs-GRAPH advisories (MOTIR-1969) over the PROJECTED tree — the
+ * projected twin of `computeSubtreeProseAdvisories` in `workItemsService`, and
+ * the reason the check is worth having here at all: the planner can see the gap
+ * BEFORE it materializes, which is the moment the miss is cheapest to fix.
+ *
+ * Same rule, projected inputs. A member's body is the PROJECTED one — an `add`'s
+ * proposed text or a `modify`'s patched text (both in `proj.projectedDescription`),
+ * falling back to the stored body for an untouched real node. Exempt per member:
+ * itself, its projected ANCESTOR chain, and its projected `blocked_by` set. Both
+ * the SCANNED card and the REFERENCE may be a `planItem:<id>` temp-ref — a
+ * projected body names a projected sibling with the intra-plan token form, which
+ * `bodyReferenceSeverities` keys by that same temp-ref, so an `add` that names a
+ * sibling `add` without wiring `blockedByRefs` is caught exactly like a live one.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — the verdict above is computed without it.
+ *
+ * `validateProjectedPlan` (the FOREST verdict) deliberately carries no
+ * advisories: an advisory is a per-CARD property (this body vs this card's
+ * edges) and the forest has no single subject. Per-card coverage is the
+ * `validateProjectedWorkItem` call above.
+ */
+async function projectedProseAdvisories(
+  proj: Projection,
+  memberIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+): Promise<WorkItemProseAdvisoryDto[]> {
+  // Only NOT-done members are scanned — the same filter the blocker walk uses.
+  const scanned = [...memberIds]
+    .map((id) => proj.nodes.get(id))
+    .filter((n): n is ProjectedNode => n !== undefined && !isDone(proj, n));
+  if (scanned.length === 0) return [];
+
+  // Stored bodies for the real members the plan does not re-write.
+  const needsStoredBody = scanned
+    .filter((n) => !n.id.startsWith(TEMP_REF_PREFIX) && !proj.projectedDescription.has(n.id))
+    .map((n) => n.id);
+  const storedBodies = new Map(
+    (await workItemRepository.findDescriptionsByIds(needsStoredBody, ctx.workspaceId)).map((r) => [
+      r.id,
+      r.descriptionMd,
+    ]),
+  );
+
+  const subjects = scanned.map((node) => {
+    const exemptIds = new Set<string>([node.id]);
+    let parentId = node.parentId;
+    while (parentId !== null && !exemptIds.has(parentId)) {
+      exemptIds.add(parentId);
+      parentId = proj.nodes.get(parentId)?.parentId ?? null;
+    }
+    for (const blockerId of proj.blockedBy.get(node.id) ?? []) exemptIds.add(blockerId);
+    return {
+      item: node.identifier,
+      descriptionMd: proj.projectedDescription.has(node.id)
+        ? (proj.projectedDescription.get(node.id) ?? null)
+        : (storedBodies.get(node.id) ?? null),
+      exemptIds,
+    };
+  });
+
+  // Resolve every reference that lives in the PROJECTION against the projection
+  // (that is what makes a temp-ref resolvable, and what makes a `modify`'s
+  // projected status win over the stored one). Carried-in cross-project blocker
+  // nodes are deliberately EXCLUDED: they entered the projection off a live edge
+  // with no browse check, so they go through the advisory service's batched read
+  // and its `filterBrowsable` gate instead — no existence leak.
+  const localRefs = new Map<string, ProseAdvisoryLocalRef>();
+  for (const node of proj.nodes.values()) {
+    if (node.projectId !== proj.projectId) continue;
+    localRefs.set(node.id, {
+      identifier: node.identifier,
+      status: node.status,
+      done: isDone(proj, node),
+    });
+  }
+
+  return buildProseVsGraphAdvisories(subjects, ctx, localRefs);
 }
 
 /**
@@ -335,7 +444,8 @@ export const planValidityService = {
       }
     }
     sortBlockers(blockers);
-    return { key: root.identifier, valid: blockers.length === 0, blockers };
+    const advisories = await projectedProseAdvisories(proj, memberIds, ctx);
+    return { key: root.identifier, valid: blockers.length === 0, blockers, advisories };
   },
 
   /**
