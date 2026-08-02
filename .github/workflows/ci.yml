@@ -610,3 +610,69 @@ jobs:
     uses: ./.github/workflows/runner-image.yml
     with:
       publish: false
+
+  # ── The one required status check on `main` (MOTIR-2008) ──────────────────
+  # `protect-main` (ruleset 17227448) requires exactly ONE context: `CI complete`.
+  # Everything above is gated THROUGH this job rather than by name, because
+  # naming jobs directly could only ever cover the five unconditional,
+  # non-matrix ones (MOTIR-2003). Two measured reasons, both from a real skipped
+  # run (PR #1766, `design/MOTIR-1811-ai-callout-menu`):
+  #
+  #   • A skipped MATRIX job reports ONE check run under the RAW, un-interpolated
+  #     name — literally `Vitest (${{ matrix.shard }}/${{ matrix.total }})`, not
+  #     `Vitest (1/3)`. Requiring the shard names would leave those contexts
+  #     permanently absent on every `seed/` / `design/` / `docs/` PR — the very
+  #     prefixes that exist to skip those jobs — and wedge them unmergeably.
+  #   • A job skipped because its dependency FAILED also reports `skipped`, and a
+  #     skipped required check counts as SATISFIED. `coverage` is `needs: test`,
+  #     so requiring it would have been satisfied by a red test run.
+  #
+  # Aggregating here fixes both: this job's own name never interpolates anything,
+  # so a shard rebalance or a job rename cannot wedge a PR, and the step below
+  # reads each need's `result` rather than trusting the check-run's presence — so
+  # Vitest and E2E are mechanically gated for the first time.
+  #
+  # `needs` MUST list every other job in this file. A job added later and left
+  # out is silently un-gated; `tests/ci-complete-gate.test.ts` asserts the list
+  # against the workflow's actual job keys (a predicate, not a fixed count) so
+  # that omission fails CI instead of shipping.
+
+  ci-complete:
+    name: CI complete
+    # WHY `always()` AND an explicit result assertion — neither alone works:
+    #   • Without `always()` this job would be SKIPPED whenever any need is
+    #     skipped (a skipped `needs` job makes its dependents skip, not fail), so
+    #     every `docs/`/`design/`/`seed/` PR would leave the required context
+    #     absent and unmergeable — and a skipped required check counts as
+    #     satisfied anyway, so the gate would also pass over a red `test` run.
+    #   • `always()` ALONE is worse: it removes the implicit "all needs
+    #     succeeded" condition, so this job would run — and go GREEN — with a
+    #     FAILED or CANCELLED need. Hence the step, which is what actually turns
+    #     `failure` / `cancelled` into a red gate.
+    if: always()
+    needs: [lint, typecheck, design-system, cli, build, test, coverage, e2e, sandbox, runner-image]
+    runs-on: ubuntu-latest
+    # Reads nothing, writes nothing — it only inspects the `needs` context.
+    permissions: {}
+    steps:
+      - name: Assert every needed job succeeded or was skipped
+        # `toJSON(needs)` goes through the environment rather than being spliced
+        # into the script, so no job name or result can be interpreted as shell.
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$NEEDS"
+          # Capture first, THEN test: a `jq | grep`-style pipeline under
+          # `pipefail` reports the wrong command's status when the interesting
+          # command is the one allowed to find nothing.
+          bad=$(jq -r 'to_entries[]
+                       | select(.value.result != "success" and .value.result != "skipped")
+                       | "\(.key)=\(.value.result)"' <<<"$NEEDS")
+          if [ -n "$bad" ]; then
+            while read -r line; do
+              echo "::error::CI incomplete — job ${line%%=*} finished as ${line#*=}"
+            done <<<"$bad"
+            exit 1
+          fi
+          echo "Every job in this workflow succeeded or was skipped."
