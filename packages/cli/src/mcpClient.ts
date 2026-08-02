@@ -395,6 +395,117 @@ export interface WorkItemDetail {
   };
 }
 
+// ── the ACTIVITY stream (MOTIR-1999's tool · MOTIR-2000's consumer) ──────────
+//
+// The mirror of `get_work_item_activity`'s three page shapes (`lib/dto/activity.ts`
+// + `lib/dto/comments.ts`), narrowed to the fields the terminal renders.
+//
+// LOOSER than the server's discriminated unions ON PURPOSE, and for the reason
+// the optional `dependencies` block above exists: the CLI is published to npm on
+// its own release train, so it routinely meets a Motir NEWER than itself. The
+// server's `ActivityEntryPartDto` is a closed union THERE and an open one HERE —
+// a part kind (or a value type) this build has never heard of must render as its
+// generic form, never crash the read. Typing `kind` as `string` with optional
+// members is what makes the renderer's fallback branch reachable instead of
+// unreachable-by-type.
+
+/** One side of a change in its display form (`ActivityValueDto`) — the resolved
+ *  label, with the stored id kept for the deleted-referent case. */
+export interface ActivityValue {
+  type: string;
+  text?: string;
+  key?: string;
+  label?: string | null;
+  userId?: string;
+  name?: string | null;
+  date?: string;
+  sprintId?: string;
+  workItemId?: string;
+  identifier?: string | null;
+}
+
+/** One renderable piece of a history entry (`ActivityEntryPartDto`). `from` /
+ *  `to` are `ActivityValue` on a `field` part and plain strings on a `generic`
+ *  one — the producer's own shape, mirrored rather than harmonized. */
+export interface ActivityPart {
+  kind: string;
+  field?: string;
+  from?: ActivityValue | string | null;
+  to?: ActivityValue | string | null;
+  op?: string;
+  linkKind?: string;
+  target?: ActivityValue;
+  items?: string[];
+  author?: ActivityValue;
+  replyCount?: number;
+  key?: string;
+}
+
+/** One history entry — a displayable revision, its actor resolved. */
+export interface ActivityEntry {
+  id: string;
+  changeKind: string;
+  /** ISO-8601. */
+  changedAt: string;
+  actor: { userId: string; name: string | null };
+  parts: ActivityPart[];
+}
+
+/** One comment (`CommentDTO`). `bodyMd` is the FULL Markdown — the tool never
+ *  truncates it and neither does the renderer. */
+export interface ActivityComment {
+  id: string;
+  author: { id: string; name: string };
+  bodyMd: string;
+  /** Set on a body edit; null when never edited. */
+  editedAt: string | null;
+  createdAt: string;
+}
+
+/** A root comment with its single-level replies riding along. */
+export interface ActivityCommentThread extends ActivityComment {
+  replies: ActivityComment[];
+}
+
+/** One entry of the merged stream: the two sources keep their native shapes
+ *  under a discriminated `type` (`ActivityAllEntryDto`). */
+export type ActivityStreamEntry =
+  | { type: 'comment'; thread: ActivityCommentThread }
+  | { type: 'history'; entry: ActivityEntry };
+
+/** One page of the merged stream (`ActivityAllPageDto`). A page may come back
+ *  SHORT with a non-null `nextCursor` — documented normal for this view. */
+export interface ActivityAllPage {
+  entries: ActivityStreamEntry[];
+  nextCursor: string | null;
+  totalComments: number;
+  totalChanges: number;
+}
+
+/** One page of the comments view (`CommentsPageDTO`). `totalCount` counts every
+ *  comment, replies included; `order` is the direction this window was read in. */
+export interface CommentsPage {
+  threads: ActivityCommentThread[];
+  nextCursor: string | null;
+  totalCount: number;
+  order: 'asc' | 'desc';
+}
+
+/** One page of the history view (`ActivityHistoryPageDto`). No CLI flag selects
+ *  it today (`show` exposes `--activity` / `--comments`), but the client mirrors
+ *  the tool's whole argument surface rather than a subset of it. */
+export interface ActivityHistoryPage {
+  entries: ActivityEntry[];
+  nextCursor: string | null;
+  totalCount: number;
+}
+
+/** The three streams the tool serves, mirroring the Activity section's tabs. */
+export type ActivityView = 'all' | 'comments' | 'history';
+
+/** One page of whichever view was asked for. */
+export type ActivityPage = ActivityAllPage | CommentsPage | ActivityHistoryPage;
+
 /** One FilterAST condition in the tool's self-documenting expanded form. */
 export interface SearchFilterCondition {
   field: string;
@@ -565,6 +676,27 @@ export class MotirClient {
 
   getWorkItem(key: string): Promise<WorkItemDetail> {
     return this.callStructured<WorkItemDetail>('get_work_item', { key });
+  }
+
+  /**
+   * ONE page of a work item's discussion + change trail (MOTIR-1999).
+   *
+   * A SECOND call, made only when `motir show` is asked for it: the default read
+   * stays one round-trip, so a card with two hundred comments never slows down
+   * `show` or the dispatch path that leans on it.
+   *
+   * `cursor` and `order` are pass-through in both directions — the `all` cursor
+   * is an OPAQUE composite carrying both sources' positions, so the CLI must
+   * never construct, parse or merge one. Omitting `order` leaves each view on
+   * its own shipped default rather than the client inventing one.
+   */
+  getWorkItemActivity(args: {
+    key: string;
+    view?: ActivityView;
+    cursor?: string;
+    order?: 'asc' | 'desc';
+  }): Promise<ActivityPage> {
+    return this.callStructured<ActivityPage>('get_work_item_activity', { ...args });
   }
 
   transitionStatus(args: { key: string; status: string }): Promise<unknown> {

@@ -334,7 +334,7 @@ motir doctor --agent "codex exec --sandbox workspace-write" --json
 | `motir status`       | `--json`                                                        |
 | `motir sprints`      | `--state <planned\|active\|complete>` · `--json`                |
 | `motir sprint [ref]` | `--kinds <list>` · `--json`                                     |
-| `motir show <key>`   | `--json`                                                        |
+| `motir show <key>`   | `--activity` · `--comments` · `--json`                          |
 | `motir open <key>`   | `--print`                                                       |
 
 ```sh
@@ -345,6 +345,8 @@ motir sprints --state active       # just the one that's running
 motir sprint                       # the active sprint's work items
 motir sprint "Journey D"           # …a specific one, by name prefix
 motir show MOTIR-1775              # one item: fields, edges, children in build order
+motir show MOTIR-1775 --activity   # …plus the discussion: comments AND history
+motir show MOTIR-1775 --comments   # …just what people said
 motir open MOTIR-42 --print        # print the URL, don't launch a browser
 ```
 
@@ -388,6 +390,55 @@ No match at all fails the same way (one line + hint on **stderr**, exit **1**).
 Note that step 3 precedes step 4 deliberately: a sprint literally named
 `Sprint 1` would resolve to itself even though it is also a prefix of
 `Sprint 10`.
+
+#### `motir show --activity` / `--comments` — the discussion
+
+`show` reads the card; these two flags read what was **said about** it. Same
+command, because the discussion is part of the item, not a separate object —
+the shape `gh issue view <n> --comments` uses.
+
+| Flag         | What it prints                                              |
+| ------------ | ----------------------------------------------------------- |
+| `--activity` | The merged stream: comment threads **and** the change trail |
+| `--comments` | The comment threads only                                    |
+
+```console
+$ motir show MOTIR-1999 --activity
+… the usual show block …
+
+ACTIVITY
+2 of 9 comments · 1 of 4 changes
+
+[comment] Zhu Yue · 3 days ago (2026-07-30T12:00:00.000Z)
+          The rationale for archiving it.
+  ↳ reply Odie · 1 hour ago (2026-08-02T11:00:00.000Z) (edited)
+          Agreed — the mirror does the same.
+[change]  Mo · 1 hour ago (2026-08-02T11:00:00.000Z) — changed status: To Do → In Progress
+
+MORE — 7 comments and 3 changes not on this page. `motir show` prints ONE page
+and never drains the stream; read the rest in Motir: `motir open MOTIR-1999`.
+```
+
+Four things worth knowing:
+
+- **Neither flag = the read you already had.** The stream is a **second** tool
+  call, made only when you ask for it, so a card with two hundred comments never
+  slows down a plain `motir show` (or the dispatch path that leans on it).
+- **Comment bodies are printed IN FULL**, never excerpted. A rationale you can
+  only half-read is worse than one you know you have to page for.
+- **One page, and it says what it left behind.** There is no `--cursor`: this is
+  a look, not a walk. When more remains, the footer names how much and points at
+  `motir open <key>` for the whole stream in Motir. A **short page that still has
+  a cursor is normal** for the merged view (the trail is scanned in bounded
+  windows), and the footer says that too rather than implying the page is
+  everything.
+- **`--json`** emits the activity page **unaltered** under an `activity` key
+  beside the usual aggregate — cursor and totals included. Without a flag the key
+  is absent, so the payload is exactly what it was before.
+
+The two flags are alternatives: passing both is refused by name rather than
+silently resolved to one of them. Both need only the `read` scope, which is what
+`motir login` mints.
 
 ### Dependencies in the terminal — two renderings
 

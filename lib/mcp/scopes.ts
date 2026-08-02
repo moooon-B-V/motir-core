@@ -146,8 +146,8 @@ export const DEFAULT_TOKEN_SCOPES: TokenScope[] = TOKEN_SCOPES.filter(
 /**
  * The FIXED grant a `motir login` device-authorization approval mints (Story
  * MOTIR-1863 · Subtask MOTIR-1865; decided in `docs/decisions/cli-login.md` Q2).
- * Deliberately NARROWER than {@link DEFAULT_TOKEN_SCOPES}: every one of the
- * sixteen tools `packages/cli/src/mcpClient.ts` calls maps through
+ * Deliberately NARROWER than {@link DEFAULT_TOKEN_SCOPES}: EVERY tool
+ * `packages/cli/src/mcpClient.ts` calls maps through
  * {@link TOOL_SCOPES} into exactly these three, and the CLI calls nothing gated by
  * `work_items:archive`, `work_items:delete` or `sprints:write` — so the default
  * set would over-grant three scopes to a credential that lives unattended on a

@@ -326,11 +326,14 @@ owns that, and MOTIR-1870 owns proving it.
 
 `docs/cli.md` § Scopes asserts this is what the CLI needs; the assertion was
 verified rather than copied. Every tool the shipped client calls
-(`packages/cli/src/mcpClient.ts`, sixteen of them: `whoami`, `list_ready`,
-`next_ready`, `get_work_item`, `transition_status`, `dispatch_prompt`,
-`mark_integrated`, `complete_session`, `expand_item`, `open_plan_session`,
-`append_plan_turn`, `submit_plan_session`, `get_plan_status`, `get_plan`,
-`list_sprints`, `search_work_items`) maps through `TOOL_SCOPES`
+(`packages/cli/src/mcpClient.ts`: `whoami`, `list_projects`, `list_ready`,
+`next_ready`, `get_work_item`, `get_work_item_activity`, `transition_status`,
+`dispatch_prompt`, `mark_integrated`, `complete_session`, `expand_item`,
+`open_plan_session`, `append_plan_turn`, `submit_plan_session`,
+`get_plan_status`, `get_plan`, `list_sprints`, `search_work_items` — the list
+has grown since this decision, most recently with `list_projects` (MOTIR-1879)
+and `get_work_item_activity` (MOTIR-2000), and every addition has landed in
+`read`) maps through `TOOL_SCOPES`
 (`lib/mcp/scopes.ts`) into exactly those three. The CLI calls **nothing** gated
 by `work_items:archive`, `work_items:delete`, or `sprints:write` — so
 `DEFAULT_TOKEN_SCOPES` (all-minus-delete) over-grants three scopes to a

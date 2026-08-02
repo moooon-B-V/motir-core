@@ -322,7 +322,7 @@ describe('approve → poll — the mint', () => {
     const granted = await poll(grant.device_code);
 
     const scopes = (await apiTokensService.verify(granted.access_token)).scopes;
-    // The three the CLI's sixteen tools need — and none of the destructive ones the
+    // The three every tool the CLI calls needs — and none of the destructive ones the
     // default set would have handed to a credential living unattended on a box.
     expect(scopes).not.toContain('work_items:delete');
     expect(scopes).not.toContain('work_items:archive');

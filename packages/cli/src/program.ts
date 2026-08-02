@@ -169,6 +169,19 @@ export function buildProgram(): Command {
     .description('Read one work item (e.g. PROD-7): fields, readiness, children, edges, body.')
     .helpGroup(HELP_GROUP.read)
     .option('--json', 'Emit the get_work_item payload as JSON.')
+    // The discussion is OPT-IN, on the detail view rather than in a command of
+    // its own — the mirror product's shape (`gh issue view <n> --comments`), and
+    // it keeps the default read to one tool call.
+    .option('--activity', 'Also print the activity stream: comments and history, one page.')
+    .option('--comments', 'Also print the comment threads only, one page.')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'ONE page of the stream is printed, never a drain loop: when more remains,',
+        'the output says how much and points at `motir open <key>` for the rest.',
+      ].join('\n'),
+    )
     .action(showCommand);
   // ── doctor ────────────────────────────────────────────────────────────────
   program

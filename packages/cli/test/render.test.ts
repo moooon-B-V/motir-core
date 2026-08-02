@@ -22,6 +22,15 @@ import {
   issueUrl,
   markLegend,
   overflowKeys,
+  activityPartText,
+  activityValueText,
+  relativeTime,
+  renderActivityStream,
+  renderComment,
+  renderCommentThread,
+  renderHistoryEntry,
+  NO_ACTIVITY_LINE,
+  NO_COMMENTS_LINE,
   renderChildrenSection,
   renderItemHeader,
   renderLineage,
@@ -41,6 +50,10 @@ import {
 } from '../src/render.js';
 import { CliError } from '../src/errors.js';
 import type {
+  ActivityAllPage,
+  ActivityCommentThread,
+  ActivityEntry,
+  CommentsPage,
   ReadyItemSummary,
   SearchItemSummary,
   SprintSummary,
@@ -1371,5 +1384,342 @@ describe('the output streams', () => {
     expect(written[5]).toBe('{\n  "ok": true\n}\n');
     spy.mockRestore();
     errSpy.mockRestore();
+  });
+});
+
+// ── the ACTIVITY stream (`show --activity` / `--comments` · MOTIR-2000) ───────
+//
+// The renderer is pure and takes `now` as a parameter, so every assertion here
+// is a fixed string rather than a moving target — a suite that pinned relative
+// ages against the wall clock would be green today and red next month.
+
+const NOW = new Date('2026-08-02T12:00:00.000Z');
+
+function comment(over: Partial<ActivityCommentThread> = {}): ActivityCommentThread {
+  return {
+    id: 'c1',
+    author: { id: 'u1', name: 'Zhu Yue' },
+    bodyMd: 'The rationale for archiving it.',
+    editedAt: null,
+    createdAt: '2026-07-30T12:00:00.000Z',
+    replies: [],
+    ...over,
+  };
+}
+
+function historyEntry(over: Partial<ActivityEntry> = {}): ActivityEntry {
+  return {
+    id: 'r1',
+    changeKind: 'updated',
+    changedAt: '2026-08-02T11:00:00.000Z',
+    actor: { userId: 'u2', name: 'Mo' },
+    parts: [
+      {
+        kind: 'field',
+        field: 'status',
+        from: { type: 'status', key: 'todo', label: 'To Do' },
+        to: { type: 'status', key: 'in_progress', label: 'In Progress' },
+      },
+    ],
+    ...over,
+  };
+}
+
+describe('relativeTime', () => {
+  it('reports the coarse unit a reader actually wants, singular and plural', () => {
+    const at = (iso: string): string => relativeTime(iso, NOW);
+    expect(at('2026-08-02T11:59:30.000Z')).toBe('just now');
+    expect(at('2026-08-02T11:59:00.000Z')).toBe('1 minute ago');
+    expect(at('2026-08-02T11:30:00.000Z')).toBe('30 minutes ago');
+    expect(at('2026-08-02T11:00:00.000Z')).toBe('1 hour ago');
+    expect(at('2026-08-01T12:00:00.000Z')).toBe('1 day ago');
+    expect(at('2026-07-03T12:00:00.000Z')).toBe('1 month ago');
+    expect(at('2025-08-02T12:00:00.000Z')).toBe('1 year ago');
+  });
+
+  it('reads a FUTURE stamp as "just now" and an unparseable one as itself', () => {
+    // Clock skew between the server and this box must not print a negative age.
+    expect(relativeTime('2026-08-03T12:00:00.000Z', NOW)).toBe('just now');
+    expect(relativeTime('not-a-timestamp', NOW)).toBe('not-a-timestamp');
+  });
+});
+
+describe('activityValueText', () => {
+  it('renders every shipped value form by its resolved label', () => {
+    expect(activityValueText({ type: 'none' })).toBe('—');
+    expect(activityValueText({ type: 'text', text: 'Ship it' })).toBe('Ship it');
+    expect(activityValueText({ type: 'status', key: 'todo', label: 'To Do' })).toBe('To Do');
+    expect(activityValueText({ type: 'user', userId: 'u1', name: 'Mo' })).toBe('Mo');
+    expect(activityValueText({ type: 'date', date: '2026-08-02' })).toBe('2026-08-02');
+    expect(activityValueText({ type: 'sprint', sprintId: 's1', name: 'Journey D' })).toBe(
+      'Journey D',
+    );
+    expect(activityValueText({ type: 'issue', workItemId: 'w1', identifier: 'PROD-7' })).toBe(
+      'PROD-7',
+    );
+  });
+
+  it('falls back to the stored id when the referent is gone, never dropping both', () => {
+    expect(activityValueText({ type: 'user', userId: 'u9', name: null })).toBe('u9');
+    expect(activityValueText({ type: 'status', key: 'archived_status', label: null })).toBe(
+      'archived_status',
+    );
+    expect(activityValueText({ type: 'sprint', sprintId: 's9', name: null })).toBe('s9');
+    expect(activityValueText({ type: 'issue', workItemId: 'w9', identifier: null })).toBe('w9');
+  });
+
+  it('handles the generic part’s plain strings, and an absent side', () => {
+    expect(activityValueText('a raw string')).toBe('a raw string');
+    expect(activityValueText(null)).toBe('—');
+    expect(activityValueText(undefined)).toBe('—');
+  });
+
+  it('degrades a value type this build has never seen to whatever label it carries', () => {
+    // A NEWER server: the CLI ships to npm on its own train, so this is the
+    // ordinary case, not the exceptional one.
+    expect(activityValueText({ type: 'component', name: 'Billing' })).toBe('Billing');
+    expect(activityValueText({ type: 'something-new' })).toBe('—');
+  });
+});
+
+describe('activityPartText', () => {
+  it('renders each shipped part kind as a sentence fragment', () => {
+    expect(activityPartText({ kind: 'created' })).toBe('created the item');
+    expect(activityPartText({ kind: 'archived' })).toBe('archived the item');
+    expect(activityPartText({ kind: 'unarchived' })).toBe('restored the item');
+    expect(
+      activityPartText({
+        kind: 'field',
+        field: 'priority',
+        from: { type: 'text', text: 'low' },
+        to: { type: 'text', text: 'high' },
+      }),
+    ).toBe('changed priority: low → high');
+    expect(
+      activityPartText({
+        kind: 'link',
+        op: 'added',
+        linkKind: 'is_blocked_by',
+        target: { type: 'issue', workItemId: 'w2', identifier: 'PROD-9' },
+      }),
+    ).toBe('added is_blocked_by link → PROD-9');
+    expect(
+      activityPartText({ kind: 'collection', op: 'added', field: 'labels', items: ['api', 'cli'] }),
+    ).toBe('added labels: api, cli');
+    expect(activityPartText({ kind: 'collection', op: 'removed', field: 'labels' })).toBe(
+      'removed labels: ',
+    );
+    expect(activityPartText({ kind: 'generic', key: 'somethingElse', from: 'a', to: 'b' })).toBe(
+      'somethingElse: a → b',
+    );
+  });
+
+  it('says a body edit carries no text — never as if it had been truncated', () => {
+    expect(activityPartText({ kind: 'fieldEdited', field: 'descriptionMd' })).toContain(
+      'the history trail records no text',
+    );
+  });
+
+  it('counts a deleted comment’s replies with the right plural', () => {
+    const author = { type: 'user', userId: 'u1', name: 'Mo' };
+    expect(activityPartText({ kind: 'commentDeleted', author, replyCount: 1 })).toBe(
+      'deleted a comment by Mo (1 reply)',
+    );
+    expect(activityPartText({ kind: 'commentDeleted', author, replyCount: 0 })).toBe(
+      'deleted a comment by Mo (0 replies)',
+    );
+    expect(activityPartText({ kind: 'commentDeleted', author })).toBe(
+      'deleted a comment by Mo (0 replies)',
+    );
+  });
+
+  it('degrades an UNKNOWN part kind to the generic form instead of throwing', () => {
+    expect(activityPartText({ kind: 'quantumFlux', from: 'off', to: 'on' })).toBe(
+      'quantumFlux: off → on',
+    );
+    const bare = activityPartText({ kind: 'quantumFlux' });
+    expect(bare).toContain('quantumFlux');
+    expect(bare).toContain('unknown change kind');
+  });
+});
+
+describe('renderComment / renderCommentThread', () => {
+  it('prints the body IN FULL, indented under an author + relative time header', () => {
+    const printed = renderComment(
+      comment({
+        bodyMd: '## Why\n\nBecause the terminal cannot see the discussion.\n\n- one\n- two',
+      }),
+      '[comment] ',
+      NOW,
+    );
+
+    expect(printed.split('\n')[0]).toBe(
+      '[comment] Zhu Yue · 3 days ago (2026-07-30T12:00:00.000Z)',
+    );
+    // Every line of the body survives, verbatim, indented to the prefix.
+    expect(printed).toContain('          ## Why');
+    expect(printed).toContain('          Because the terminal cannot see the discussion.');
+    expect(printed).toContain('          - one');
+    expect(printed).toContain('          - two');
+    expect(printed).not.toContain('…');
+  });
+
+  it('marks an edited comment, and names a deleted author rather than printing null', () => {
+    expect(
+      renderComment(comment({ editedAt: '2026-08-01T12:00:00.000Z' }), '[comment] ', NOW),
+    ).toContain('(edited)');
+    const gone = comment({ author: { id: 'u9', name: null as unknown as string } });
+    expect(renderComment(gone, '[comment] ', NOW)).toContain('former member');
+  });
+
+  it('nests replies ONE level under their root, aligned to the same body column', () => {
+    const printed = renderCommentThread(
+      comment({
+        replies: [
+          {
+            id: 'c2',
+            author: { id: 'u2', name: 'Odie' },
+            bodyMd: 'Agreed.',
+            editedAt: null,
+            createdAt: '2026-08-02T11:00:00.000Z',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    const lines = printed.split('\n');
+    expect(lines[0]).toContain('[comment] Zhu Yue');
+    expect(lines[2]).toBe('  ↳ reply Odie · 1 hour ago (2026-08-02T11:00:00.000Z)');
+    expect(lines[3]).toBe('          Agreed.');
+  });
+});
+
+describe('renderHistoryEntry', () => {
+  it('joins every part of one revision onto a single line', () => {
+    expect(renderHistoryEntry(historyEntry(), NOW)).toBe(
+      '[change]  Mo · 1 hour ago (2026-08-02T11:00:00.000Z) — changed status: To Do → In Progress',
+    );
+  });
+
+  it('renders a multi-part revision as several fragments', () => {
+    const printed = renderHistoryEntry(
+      historyEntry({
+        parts: [
+          { kind: 'created' },
+          {
+            kind: 'field',
+            field: 'title',
+            from: { type: 'none' },
+            to: { type: 'text', text: 'A' },
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(printed).toContain('created the item; changed title: — → A');
+  });
+});
+
+describe('renderActivityStream', () => {
+  function allPage(over: Partial<ActivityAllPage> = {}): ActivityAllPage {
+    return {
+      entries: [
+        { type: 'history', entry: historyEntry() },
+        { type: 'comment', thread: comment() },
+      ],
+      nextCursor: null,
+      totalComments: 1,
+      totalChanges: 1,
+      ...over,
+    };
+  }
+
+  function commentsPage(over: Partial<CommentsPage> = {}): CommentsPage {
+    return { threads: [comment()], nextCursor: null, totalCount: 1, order: 'asc', ...over };
+  }
+
+  it('heads the merged view with the per-source counts and prints both row kinds', () => {
+    const printed = renderActivityStream('all', allPage(), 'PROD-7', NOW);
+
+    expect(printed.split('\n').slice(0, 2)).toEqual(['ACTIVITY', '1 comment · 1 change']);
+    expect(printed).toContain('[change]  Mo');
+    expect(printed).toContain('[comment] Zhu Yue');
+    expect(printed).not.toContain('MORE —');
+  });
+
+  it('heads the comments view with the count and the page’s OWN walk direction', () => {
+    expect(renderActivityStream('comments', commentsPage(), 'PROD-7', NOW).split('\n')[1]).toBe(
+      '1 comment, oldest first',
+    );
+    expect(
+      renderActivityStream('comments', commentsPage({ order: 'desc' }), 'PROD-7', NOW).split(
+        '\n',
+      )[1],
+    ).toBe('1 comment, newest first');
+  });
+
+  it('counts REPLIES against the server’s total, so "of" compares like to like', () => {
+    const thread = comment({
+      replies: [
+        {
+          id: 'c2',
+          author: { id: 'u2', name: 'Odie' },
+          bodyMd: 'Agreed.',
+          editedAt: null,
+          createdAt: '2026-08-02T11:00:00.000Z',
+        },
+      ],
+    });
+    // Two comments on the page (root + reply) out of the twelve the item holds.
+    const printed = renderActivityStream(
+      'comments',
+      commentsPage({ threads: [thread], totalCount: 12, nextCursor: 'c-next' }),
+      'PROD-7',
+      NOW,
+    );
+    expect(printed).toContain('2 of 12 comments');
+    expect(printed).toContain('MORE — 10 comments not on this page');
+  });
+
+  it('states what remains and how to reach it — and never loops to drain the stream', () => {
+    const printed = renderActivityStream(
+      'all',
+      allPage({ nextCursor: 'opaque-cursor', totalComments: 9, totalChanges: 4 }),
+      'PROD-7',
+      NOW,
+    );
+    expect(printed).toContain('1 of 9 comments · 1 of 4 changes');
+    expect(printed).toContain('MORE — 8 comments and 3 changes not on this page.');
+    expect(printed).toContain('never drains the stream');
+    expect(printed).toContain('`motir open PROD-7`');
+    // The opaque cursor is the server's business — a reader is never asked to
+    // paste one back, because `show` has no flag that would take it.
+    expect(printed).not.toContain('opaque-cursor');
+  });
+
+  it('reads a SHORT page with a cursor as unfinished, not as a count it cannot make', () => {
+    // Documented normal for the merged stream: the bounded scan stopped early
+    // even though the totals are already all on the page.
+    const printed = renderActivityStream('all', allPage({ nextCursor: 'more' }), 'PROD-7', NOW);
+    expect(printed).toContain('MORE — this page may be short — the stream is not exhausted.');
+  });
+
+  it('prints an explicit empty line for each view — never a bare blank', () => {
+    const empty = renderActivityStream(
+      'all',
+      allPage({ entries: [], totalComments: 0, totalChanges: 0 }),
+      'PROD-7',
+      NOW,
+    );
+    expect(empty).toBe(`ACTIVITY\n0 comments · 0 changes\n\n${NO_ACTIVITY_LINE}`);
+
+    const noComments = renderActivityStream(
+      'comments',
+      commentsPage({ threads: [], totalCount: 0 }),
+      'PROD-7',
+      NOW,
+    );
+    expect(noComments).toBe(`COMMENTS\n0 comments, oldest first\n\n${NO_COMMENTS_LINE}`);
   });
 });
