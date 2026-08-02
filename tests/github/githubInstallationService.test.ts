@@ -23,12 +23,14 @@ const REPO_A: NormalizedRepo = {
   owner: 'moooon',
   name: 'motir-core',
   defaultBranch: 'main',
+  archived: false,
 };
 const REPO_B: NormalizedRepo = {
   providerRepoId: '222',
   owner: 'moooon',
   name: 'motir-ai',
   defaultBranch: 'main',
+  archived: false,
 };
 
 async function makeWorkspace(email: string) {
@@ -452,5 +454,95 @@ describe('github_installation RLS', () => {
       githubInstallationRepository.findByInstallationId('inst-sys', tx),
     );
     expect(row?.workspaceId).toBe(workspace.id);
+  });
+});
+
+// ── The repository's ARCHIVED state (MOTIR-1959) ─────────────────────────────
+//
+// The mirror row is where "is this repository still writable?" is RECORDED, and
+// the whole guard downstream reads it. Two properties are pinned here, because
+// getting either wrong makes the guard look present and be useless:
+//
+//   1. It is STAMPED from the host's own value at every write, and RE-STAMPED on
+//      every reconcile — otherwise it freezes at whatever was true the day the
+//      repo was connected, which is exactly the state MOTIR-1956 recorded.
+//   2. It is FLIPPED by the `repository` delivery, which is the only signal that
+//      arrives when a repo is archived long after it joined the set.
+describe('a mirror row records whether its repository is ARCHIVED', () => {
+  const ARCHIVED_REPO: NormalizedRepo = { ...REPO_A, archived: true };
+
+  async function mirrorOf(repoId: string) {
+    return withSystemContext((tx) => tx.githubRepo.findFirst({ where: { repoId } }));
+  }
+
+  it('stamps the host value on the reconcile write — live and archived alike', async () => {
+    const { workspace } = await makeWorkspace('arch-stamp@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-arch', accountLogin: 'a', accountType: 'Organization' },
+      repos: [ARCHIVED_REPO, REPO_B],
+    });
+
+    expect((await mirrorOf('111'))?.archived).toBe(true);
+    expect((await mirrorOf('222'))?.archived).toBe(false);
+  });
+
+  it('RE-STAMPS it on the next reconcile — the value never freezes at connect time', async () => {
+    // The `installation_repositories` delivery is the cheapest refresh Motir gets,
+    // so it must carry liveness the same way it already carries the coordinates.
+    const { workspace } = await makeWorkspace('arch-restamp@example.com');
+    const install = {
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-re', accountLogin: 'a', accountType: 'Organization' },
+    };
+    await githubInstallationService.persistInstallation({ ...install, repos: [REPO_A] });
+    expect((await mirrorOf('111'))?.archived).toBe(false);
+
+    await githubInstallationService.persistInstallation({ ...install, repos: [ARCHIVED_REPO] });
+    expect((await mirrorOf('111'))?.archived).toBe(true);
+
+    // …and back, so an un-archive on the host needs no repair inside Motir.
+    await githubInstallationService.persistInstallation({ ...install, repos: [REPO_A] });
+    expect((await mirrorOf('111'))?.archived).toBe(false);
+  });
+
+  it('applies an ARCHIVED / UNARCHIVED delivery to the mirror row', async () => {
+    const { workspace } = await makeWorkspace('arch-hook@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-hook', accountLogin: 'a', accountType: 'Organization' },
+      repos: [REPO_A],
+    });
+
+    await expect(
+      githubInstallationService.applyArchivedState({ providerRepoId: '111', archived: true }),
+    ).resolves.toBe(true);
+    expect((await mirrorOf('111'))?.archived).toBe(true);
+
+    await expect(
+      githubInstallationService.applyArchivedState({ providerRepoId: '111', archived: false }),
+    ).resolves.toBe(true);
+    expect((await mirrorOf('111'))?.archived).toBe(false);
+  });
+
+  it('is IDEMPOTENT under redelivery, and silent about a repository it does not mirror', async () => {
+    // GitHub retries; a redelivery must write the same row again rather than
+    // throw, and a delivery for a repo behind the shared provisioning
+    // installation that belongs to no project must not 500 — it would make
+    // GitHub retry a delivery no retry can fix.
+    const { workspace } = await makeWorkspace('arch-redeliver@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-rd', accountLogin: 'a', accountType: 'Organization' },
+      repos: [REPO_A],
+    });
+
+    await githubInstallationService.applyArchivedState({ providerRepoId: '111', archived: true });
+    await githubInstallationService.applyArchivedState({ providerRepoId: '111', archived: true });
+    expect((await mirrorOf('111'))?.archived).toBe(true);
+
+    await expect(
+      githubInstallationService.applyArchivedState({ providerRepoId: 'nobody', archived: true }),
+    ).resolves.toBe(false);
   });
 });

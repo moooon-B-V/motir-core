@@ -382,6 +382,7 @@ async function motirOwnedRow(fx: WorkItemFixture, name: string): Promise<void> {
       owner: MOTIR_ORG,
       name,
       defaultBranch: 'main',
+      archived: false,
     },
   });
   const row = await projectRepoSetService.addRow(fx.projectId, { role: 'web', name }, fx.ctx);
@@ -409,6 +410,7 @@ async function connectedRow(fx: WorkItemFixture, name: string): Promise<void> {
       owner: USER_LOGIN,
       name,
       defaultBranch: 'main',
+      archived: false,
     },
   });
   const row = await projectRepoSetService.addRow(fx.projectId, { role: 'shared', name }, fx.ctx);

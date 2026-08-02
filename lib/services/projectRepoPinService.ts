@@ -160,6 +160,18 @@ async function resolveInTransaction(
             'rather than to an arbitrary one (ADR §5.3).',
         );
       }
+      if (resolution.outcome === 'archived' && unpinnedBefore > 0) {
+        // Same shape as the ambiguity warning, and needed for the same reason: a
+        // pass nobody is watching must leave a reason behind. Named separately
+        // because the ACTION differs — an ambiguous role is fixed in the plan, an
+        // archived one is fixed on the host (MOTIR-1959).
+        console.warn(
+          `[projectRepoPinService] project ${projectId}: role "${role}" resolves to a repository ` +
+            `that is ARCHIVED on the host (row ${resolution.rowIds.join(', ')}), so ` +
+            `${unpinnedBefore} item(s) stay unpinned — an archived repository is read-only and ` +
+            'accepts no branch or pull request.',
+        );
+      }
       continue;
     }
 

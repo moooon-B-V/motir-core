@@ -5511,6 +5511,8 @@
     "createdDetail": "由Motir托管 · 基于Motir的Next.js启动模板初始化。",
     "stateConnected": "已连接",
     "connectedDetail": "这是你已有的仓库——Motir没有创建任何内容，也没有改动其中的任何内容。",
+    "stateArchived": "已在GitHub上归档",
+    "archivedDetail": "该仓库为只读，无法在其中创建分支或提交合并请求。请在GitHub上取消归档，或为这个角色指定另一个仓库。",
     "stateSkipped": "已跳过",
     "skippedTitle": "没有{roleLabel}仓库",
     "skippedDetail": "Motir会据此规划，并在某个任务需要尚不存在的代码时明确说明。",

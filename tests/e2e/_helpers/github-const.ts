@@ -38,6 +38,7 @@ export const E2E_REPO = {
   owner: 'moooon-e2e',
   name: 'motir-demo',
   defaultBranch: 'main',
+  archived: false,
 } as const;
 export const E2E_INSTALLATION_ACCOUNT = { login: 'moooon-e2e', type: 'Organization' } as const;
 

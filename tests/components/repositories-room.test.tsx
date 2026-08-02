@@ -540,6 +540,7 @@ function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
       name,
       repoRef: `motir-projects/${name}`,
       defaultBranch: 'main',
+      archived: false,
     },
     established: true,
     takeover: null,
@@ -563,6 +564,7 @@ function connectedRow(): ProjectRepoDto {
       name: 'design-tokens',
       repoRef: 'acme-inc/design-tokens',
       defaultBranch: 'main',
+      archived: false,
     },
   };
 }

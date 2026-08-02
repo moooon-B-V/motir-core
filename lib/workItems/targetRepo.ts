@@ -1,7 +1,11 @@
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { UnknownTargetRepoError, type UnknownTargetRepoScope } from './errors';
+import {
+  ArchivedTargetRepoError,
+  UnknownTargetRepoError,
+  type UnknownTargetRepoScope,
+} from './errors';
 import type { ServiceContext } from './serviceContext';
 
 // Per-item REPO ATTRIBUTION (Story 7.9 · MOTIR-1804) — the rebuilt producer half
@@ -63,6 +67,22 @@ export interface ConnectedRepoName {
    * about which repo an ambiguous item belongs to.
    */
   defaultBranch: string | null;
+  /**
+   * Whether the repository is ARCHIVED on the host (MOTIR-1959) — read-only, so
+   * it accepts no branch and no pull request from anyone.
+   *
+   * ⚠️ An archived repo stays IN the domain, flagged, rather than being filtered
+   * out of it. Filtering would be the easy change and the wrong one: a pin always
+   * wins over the domain (see {@link resolveDispatchRepo}), so a dropped entry
+   * would resolve to the pinned name with null coordinates — a silent degradation
+   * indistinguishable from "Motir does not know where this lives". Keeping the
+   * entry is what lets the resolution REFUSE and say why.
+   *
+   * `false` for a name Motir knows only as a PLAN: an unrealized row has no
+   * repository to be archived, and its non-dispatchability is already the whole
+   * meaning of it not being in the dispatch domain.
+   */
+  archived: boolean;
 }
 
 /**
@@ -86,6 +106,7 @@ export async function listConnectedRepoNames(ctx: ServiceContext): Promise<Conne
         repoRef: `${repo.owner}/${repo.name}`,
         cloneUrl: repoCloneUrl(repo),
         defaultBranch: repo.defaultBranch,
+        archived: repo.archived,
       });
     }
   }
@@ -175,6 +196,23 @@ export interface ResolvedDispatchRepo {
  * not created yet, a repo disconnected after the pin was authored). Such a pin
  * resolves with NULL coordinates — the name Motir was told, and an honest "I
  * cannot tell you where it lives".
+ *
+ * ⚠️ **THROWS {@link ArchivedTargetRepoError} when the repo it resolved to is
+ * ARCHIVED** (MOTIR-1959) — read-only on the host, so the dispatch it is about to
+ * authorize cannot open a branch or a pull request no matter what the agent does.
+ *
+ * A THROW rather than a `null`, and this is the whole design: `null` is a real
+ * answer here ("Motir cannot say which repo"), and the CLI acts on it by falling
+ * back to its link-root rule — which for an archived target would send an agent
+ * to work in a checkout it can never push. The failure has to arrive as a stated
+ * reason naming the repository, BEFORE any branch or PR attempt, which is the
+ * only form a person can act on (the fix is on the host, and nothing Motir does
+ * next can substitute for it).
+ *
+ * It applies to the single-repo DEFAULT as much as to an explicit pin. The two
+ * differ in how the repo was chosen and not at all in what is wrong with it, and
+ * a project whose only repository is archived is exactly the case where a silent
+ * `null` would read as "no repos configured".
  */
 export function resolveDispatchRepo(
   pinned: string | null,
@@ -182,6 +220,7 @@ export function resolveDispatchRepo(
 ): ResolvedDispatchRepo | null {
   if (pinned !== null) {
     const match = domain.find((r) => r.name.toLowerCase() === pinned.toLowerCase());
+    if (match?.archived) throw new ArchivedTargetRepoError(match.name, match.repoRef);
     return {
       name: pinned,
       cloneUrl: match?.cloneUrl ?? null,
@@ -190,6 +229,7 @@ export function resolveDispatchRepo(
   }
   const only = domain.length === 1 ? domain[0]! : null;
   if (!only) return null;
+  if (only.archived) throw new ArchivedTargetRepoError(only.name, only.repoRef);
   return { name: only.name, cloneUrl: only.cloneUrl, defaultBranch: only.defaultBranch };
 }
 

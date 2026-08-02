@@ -120,6 +120,7 @@ describe('the index chain got no new code', () => {
           owner: 'moooon',
           name: 'motir-core',
           defaultBranch: 'main',
+          archived: false,
         } as never,
       ],
       indexedRepoRefs: [],
@@ -176,6 +177,7 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
         owner: 'moooon',
         name,
         defaultBranch: 'main',
+        archived: false,
         provider: 'github',
       },
     });
@@ -278,6 +280,7 @@ describe('what a delete does to a repository row', () => {
         owner: 'moooon',
         name: 'acme-web',
         defaultBranch: 'main',
+        archived: false,
         provider: 'github',
       },
     });

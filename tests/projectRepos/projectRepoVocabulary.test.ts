@@ -71,6 +71,7 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
       owner: 'acme',
       name: 'acme-web',
       defaultBranch: 'main',
+      archived: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -402,6 +403,7 @@ describe('toProjectRepoPinNames — which rows an AUTHORED pin may name', () => 
       repoRef: 'acme-api',
       cloneUrl: null,
       defaultBranch: null,
+      archived: false,
       role: 'web',
     });
   });

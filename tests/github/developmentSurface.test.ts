@@ -41,7 +41,13 @@ async function makeScenario(email: string) {
       accountType: 'Organization',
     },
     repos: [
-      { providerRepoId: REPO_PROVIDER_ID, owner: 'moooon', name: 'acme', defaultBranch: 'main' },
+      {
+        providerRepoId: REPO_PROVIDER_ID,
+        owner: 'moooon',
+        name: 'acme',
+        defaultBranch: 'main',
+        archived: false,
+      },
     ],
   });
   return { user, workspace, project, ctx };

@@ -65,6 +65,10 @@ export const githubInstallationService = {
             owner: repo.owner,
             name: repo.name,
             defaultBranch: repo.defaultBranch,
+            // The host's own liveness, re-stamped on every reconcile (MOTIR-1959)
+            // — this delivery is the cheapest refresh Motir gets, and a repo the
+            // user archived between two reconciles has to stop reading as live.
+            archived: repo.archived,
           },
           tx,
         );
@@ -132,9 +136,39 @@ export const githubInstallationService = {
           owner: input.repo.owner,
           name: input.repo.name,
           defaultBranch: input.repo.defaultBranch,
+          // A repository Motir just created is never archived, so this is
+          // `false` in practice — recorded from the host's own value anyway
+          // rather than assumed, so there is one rule for how the column is
+          // filled and no path that hardcodes an answer (MOTIR-1959).
+          archived: input.repo.archived,
         },
         tx,
       );
+    });
+  },
+
+  /**
+   * Apply a repository's ARCHIVED / UNARCHIVED state from the host (MOTIR-1959) —
+   * the `repository` delivery's write, and the reason the recorded liveness stays
+   * true instead of freezing at whatever it was when the row was mirrored.
+   *
+   * System context, like every other installation write: the webhook has no active
+   * workspace. Idempotent by construction — the repository's `updateMany` makes a
+   * redelivery a no-op, and re-applying the same value writes the same row.
+   *
+   * Returns whether any mirror row was touched. `false` is the ordinary answer for
+   * a repository Motir does not mirror at all: the shared provisioning
+   * installation sees deliveries for repositories belonging to no project row, and
+   * that is not an error to raise.
+   */
+  async applyArchivedState(input: { providerRepoId: string; archived: boolean }): Promise<boolean> {
+    return withSystemContext(async (tx) => {
+      const count = await githubRepoRepository.setArchivedByRepoId(
+        input.providerRepoId,
+        input.archived,
+        tx,
+      );
+      return count > 0;
     });
   },
 

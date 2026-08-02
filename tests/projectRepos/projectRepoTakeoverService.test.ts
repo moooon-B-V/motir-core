@@ -191,6 +191,7 @@ async function motirOwnedRow(
       owner: MOTIR_ORG,
       name,
       defaultBranch: 'main',
+      archived: false,
     },
   });
   const row = await projectRepoSetService.addRow(fx.projectId, { role: 'web', name }, fx.ctx);
@@ -220,6 +221,7 @@ async function connectedRow(fx: WorkItemFixture, name: string): Promise<string> 
       owner: NEW_OWNER,
       name,
       defaultBranch: 'main',
+      archived: false,
     },
   });
   const row = await projectRepoSetService.addRow(fx.projectId, { role: 'api', name }, fx.ctx);
@@ -524,6 +526,7 @@ describe('the `repository` transferred delivery', () => {
     expect(await db.githubRepo.findFirstOrThrow({ where: { repoId: '900001' } })).toMatchObject({
       owner: NEW_OWNER,
       defaultBranch: 'main',
+      archived: false,
     });
   });
 });
@@ -759,5 +762,89 @@ describe('the CI meter', () => {
     expect(before.outcome).toBe('metered');
     expect(after).toEqual({ outcome: 'not_metered', reason: 'foreign_owner' });
     expect(await db.ciWorkflowRunUsage.count()).toBe(1);
+  });
+});
+
+// ── The `repository` ARCHIVED / UNARCHIVED delivery (MOTIR-1959) ─────────────
+//
+// The same event the takeover saga listens on carries a second, independent
+// fact: whether the repository still accepts writes. It matters here rather than
+// only at establish time because archiving is something the repository's OWNER
+// does, typically long after the row settled — which is precisely the MOTIR-1956
+// incident, and the reason a state recorded once and never refreshed would be a
+// guard in name only.
+describe('the `repository` archived / unarchived delivery', () => {
+  async function deliver(action: 'archived' | 'unarchived', repoId: string) {
+    return githubWebhookService.handleEvent('repository', {
+      action,
+      repository: { id: repoId, name: 'acme-web', owner: { login: MOTIR_ORG } },
+    });
+  }
+
+  const mirror = (repoId: string) => db.githubRepo.findFirst({ where: { repoId } });
+
+  it('flips the mirror row and reports it applied', async () => {
+    const fx = await makeWorkItemFixture();
+    const { repoId } = await motirOwnedRow(fx, 'acme-web');
+    expect((await mirror(repoId))?.archived).toBe(false);
+
+    expect(await deliver('archived', repoId)).toEqual({
+      event: 'repository',
+      outcome: 'archived_applied',
+    });
+    expect((await mirror(repoId))?.archived).toBe(true);
+  });
+
+  it('flips it BACK on `unarchived` — the recorded state follows the host both ways', async () => {
+    const fx = await makeWorkItemFixture();
+    const { repoId } = await motirOwnedRow(fx, 'acme-web');
+    await deliver('archived', repoId);
+
+    expect(await deliver('unarchived', repoId)).toEqual({
+      event: 'repository',
+      outcome: 'archived_applied',
+    });
+    expect((await mirror(repoId))?.archived).toBe(false);
+  });
+
+  it('is idempotent under REDELIVERY', async () => {
+    // GitHub retries. A second delivery writes the same value rather than
+    // throwing, so a retry can never be the thing that breaks the mirror.
+    const fx = await makeWorkItemFixture();
+    const { repoId } = await motirOwnedRow(fx, 'acme-web');
+    await deliver('archived', repoId);
+    expect(await deliver('archived', repoId)).toEqual({
+      event: 'repository',
+      outcome: 'archived_applied',
+    });
+    expect((await mirror(repoId))?.archived).toBe(true);
+  });
+
+  it('NEVER throws for a repository Motir does not mirror', async () => {
+    // The shared provisioning installation sees deliveries for repositories that
+    // belong to no project row; a 500 here would make GitHub retry a delivery no
+    // retry can fix. Same answer the transfer path gives.
+    expect(await deliver('archived', 'host-nobody')).toEqual({
+      event: 'repository',
+      outcome: 'unknown_repo',
+    });
+  });
+
+  it('reports `malformed` for a delivery carrying no repository id', async () => {
+    expect(await githubWebhookService.handleEvent('repository', { action: 'archived' })).toEqual({
+      event: 'repository',
+      outcome: 'malformed',
+    });
+  });
+
+  it('leaves an unrelated `repository` action ignored, exactly as before', async () => {
+    // The two handled actions must not swallow the rest of the event: a
+    // `renamed` / `edited` delivery is still a fast 2xx no-op.
+    expect(
+      await githubWebhookService.handleEvent('repository', {
+        action: 'renamed',
+        repository: { id: 'host-acme-web' },
+      }),
+    ).toEqual({ event: 'ignored', reason: 'unhandled_repository_action:renamed' });
   });
 });

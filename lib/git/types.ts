@@ -16,6 +16,19 @@ export interface NormalizedRepo {
   owner: string;
   name: string;
   defaultBranch: string;
+  /**
+   * Whether the repository is ARCHIVED on the host — read-only, rejecting a push
+   * or a pull request from anyone, admin included (MOTIR-1959).
+   *
+   * A LIVENESS fact, deliberately distinct from every permission the seam already
+   * carries: a collaborator's `push` right says whether a PERSON may write, and
+   * this says whether the REPOSITORY still accepts writes at all. Both providers
+   * report it (GitHub's `archived` boolean, GitLab's `archived` boolean), so it
+   * normalizes with no per-provider special case. Absent from a payload reads as
+   * `false` — "not known to be archived", the state every mirror row was in
+   * before this field existed.
+   */
+  archived: boolean;
 }
 
 /** An App installation's account, normalized across providers — the identity the

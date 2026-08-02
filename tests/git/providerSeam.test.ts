@@ -571,3 +571,82 @@ describe('github.fetchOrgComputeUsage (MOTIR-1896 — the reconciliation read)',
     );
   });
 });
+
+// The LIVENESS field on the normalized repo (MOTIR-1959). Pinned at the seam
+// because this is where the fact ENTERS Motir: every guard downstream reads a
+// mirror column that is only ever as honest as this normalization.
+describe('fetchInstallationRepos carries the repository’s ARCHIVED state', () => {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  beforeEach(() => {
+    _resetInstallationTokenCache();
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function stubRepos(repositories: unknown[]) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string): Promise<Response> => {
+        const u = String(url);
+        if (u.includes('/access_tokens')) {
+          return new Response(
+            JSON.stringify({
+              token: 'ghs_repos',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (u.includes('/installation/repositories')) {
+          return new Response(JSON.stringify({ repositories }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected fetch to ${u}`);
+      }),
+    );
+  }
+
+  it('reads GitHub’s own `archived` boolean, per repository', async () => {
+    stubRepos([
+      { id: 1, name: 'live', full_name: 'moooon/live', default_branch: 'main', archived: false },
+      { id: 2, name: 'dead', full_name: 'moooon/dead', default_branch: 'main', archived: true },
+    ]);
+
+    const repos = await getGitProvider('github').fetchInstallationRepos('inst-1');
+    expect(repos.map((r) => [r.name, r.archived])).toEqual([
+      ['live', false],
+      ['dead', true],
+    ]);
+  });
+
+  it('reads an ABSENT / non-boolean `archived` as live', async () => {
+    // "Not known to be archived" is the state every mirror row was already in
+    // before the column existed, so an omitted field must not archive a repo —
+    // and a truthy non-boolean must not either (only `=== true` archives).
+    stubRepos([
+      { id: 1, name: 'no-field', full_name: 'moooon/no-field', default_branch: 'main' },
+      {
+        id: 2,
+        name: 'stringy',
+        full_name: 'moooon/stringy',
+        default_branch: 'main',
+        archived: 'true',
+      },
+    ]);
+
+    const repos = await getGitProvider('github').fetchInstallationRepos('inst-1');
+    expect(repos.every((r) => r.archived === false)).toBe(true);
+  });
+});

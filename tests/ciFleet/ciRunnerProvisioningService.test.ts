@@ -122,7 +122,9 @@ async function seedTenant(options?: {
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: repoOwner, accountType: 'Organization' },
-    repos: [{ providerRepoId, owner: repoOwner, name: repoName, defaultBranch: 'main' }],
+    repos: [
+      { providerRepoId, owner: repoOwner, name: repoName, defaultBranch: 'main', archived: false },
+    ],
   });
   const githubRepo = await db.githubRepo.findFirstOrThrow({ where: { repoId: providerRepoId } });
 

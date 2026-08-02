@@ -283,6 +283,11 @@ async function establishRow(
         owner: provisioned.owner,
         name: provisioned.name,
         defaultBranch: provisioned.defaultBranch,
+        // A repository Motir created seconds ago is live by construction — the
+        // creation call cannot return an archived repo (MOTIR-1959). Stated
+        // rather than left to a column default so the mirror write has one rule
+        // for where liveness comes from, and this site says WHY it knows.
+        archived: false,
       },
     });
 

@@ -67,6 +67,7 @@ async function makeScenario(email: string) {
         owner: 'octocat',
         name: 'acme',
         defaultBranch: 'main',
+        archived: false,
       },
       tx,
     );

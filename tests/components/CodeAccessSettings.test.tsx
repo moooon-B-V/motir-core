@@ -52,6 +52,7 @@ function repo(over: Partial<ProjectRepoDto> & { id: string; name: string }): Pro
           name: over.name,
           repoRef: `motir-projects/${over.name}`,
           defaultBranch: 'main',
+          archived: false,
         }
       : null,
     ...over,

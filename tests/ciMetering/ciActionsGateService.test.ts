@@ -113,6 +113,7 @@ async function seedRepo(
       owner,
       name,
       defaultBranch: 'main',
+      archived: false,
       provider: 'github',
     },
   });

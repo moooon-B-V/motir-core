@@ -79,6 +79,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
       owner: 'acme',
       name: 'widgets',
       defaultBranch: 'main',
+      archived: false,
     },
   });
 }

@@ -249,6 +249,19 @@ export interface RealizedProjectRepoDto {
   /** `owner/name` — the display form the GitHub surfaces + `resolveCodeContext` use. */
   repoRef: string;
   defaultBranch: string;
+  /**
+   * Whether the repository is ARCHIVED on the host (MOTIR-1959) — read-only, so
+   * no branch or pull request can be opened against it and every item resolving
+   * to it is undispatchable until someone un-archives it.
+   *
+   * It belongs on `realizedRepo` and not beside `state` for the reason this
+   * object exists at all (see {@link ProjectRepoDto}): `state` records what
+   * HAPPENED to the row, `realizedRepo` records what is true of the repository
+   * NOW — and archiving is something the repository's owner does long after the
+   * row settled. A `created` row whose repo is archived is not a failed
+   * establishment; it is a settled row whose repository stopped accepting writes.
+   */
+  archived: boolean;
 }
 
 /**

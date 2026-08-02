@@ -506,6 +506,7 @@ describe('rows and members are independent', () => {
         owner: 'their-org',
         name: 'their-own-repo',
         defaultBranch: 'main',
+        archived: false,
       },
     });
     await projectRepoSetService.attachRealizedRepo(row.id, repo.id, fx.ctx);

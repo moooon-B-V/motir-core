@@ -82,6 +82,7 @@ async function connectRepo(
       owner,
       name,
       defaultBranch: 'main',
+      archived: false,
       provider,
     },
   });
@@ -157,6 +158,7 @@ describe('listConnectedRepoNames', () => {
         repoRef: 'acme/widgets',
         cloneUrl: 'https://github.com/acme/widgets.git',
         defaultBranch: 'main',
+        archived: false,
       },
     ]);
   });

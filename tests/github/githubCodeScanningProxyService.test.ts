@@ -23,6 +23,7 @@ const REPO: NormalizedRepo = {
   owner: 'moooon',
   name: 'motir-core',
   defaultBranch: 'main',
+  archived: false,
 };
 const REPO_REF = 'moooon/motir-core';
 

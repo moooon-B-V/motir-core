@@ -77,6 +77,12 @@ export function toProjectRepoNames(rows: ProjectRepoWithRealized[]): ProjectRepo
       // them, which is exactly what this list is made of.
       cloneUrl: repoCloneUrl(row.githubRepo),
       defaultBranch: row.githubRepo.defaultBranch,
+      // The repository's LIVENESS, carried rather than filtered on (MOTIR-1959).
+      // An archived row stays in the dispatch domain so `resolveDispatchRepo` can
+      // refuse BY NAME; dropping it here would turn a read-only repository into a
+      // silent "Motir does not know where this lives". See the field's own note
+      // on `ConnectedRepoName`.
+      archived: row.githubRepo.archived,
       rowId: row.id,
       role: row.role,
       label: row.label,
@@ -121,6 +127,12 @@ export function toProjectRepoPinNames(rows: ProjectRepoWithRealized[]): ProjectR
       repoRef: realized ? `${realized.owner}/${realized.name}` : name,
       cloneUrl: realized ? repoCloneUrl(realized) : null,
       defaultBranch: realized?.defaultBranch ?? null,
+      // A row that is still a PLAN has no repository to be archived, so `false`.
+      // The PIN domain deliberately does not refuse an archived repo anyway
+      // (MOTIR-1959): authoring records a decision about work that has not run
+      // yet, and a repository can be un-archived before it does. The refusal
+      // belongs at dispatch, where the write is actually about to happen.
+      archived: realized?.archived ?? false,
       rowId: row.id,
       role: row.role,
       label: row.label,

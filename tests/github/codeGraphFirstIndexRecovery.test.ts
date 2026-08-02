@@ -52,6 +52,7 @@ async function connectRepos(
       owner: 'moooon',
       name: r.name,
       defaultBranch: r.defaultBranch ?? 'main',
+      archived: false,
     })),
   });
 }
@@ -295,8 +296,20 @@ describe('codeGraphIndexService.enqueueFirstIndexForRepos (MOTIR-1961)', () => {
       installationId: 'inst-1',
       workspaceId,
       repos: [
-        { providerRepoId: '111', owner: 'moooon', name: 'motir-core', defaultBranch: 'main' },
-        { providerRepoId: '222', owner: 'moooon', name: 'motir-ai', defaultBranch: 'main' },
+        {
+          providerRepoId: '111',
+          owner: 'moooon',
+          name: 'motir-core',
+          defaultBranch: 'main',
+          archived: false,
+        },
+        {
+          providerRepoId: '222',
+          owner: 'moooon',
+          name: 'motir-ai',
+          defaultBranch: 'main',
+          archived: false,
+        },
       ],
     });
 
@@ -318,7 +331,13 @@ describe('codeGraphIndexService.enqueueFirstIndexForRepos (MOTIR-1961)', () => {
         installationId: 'inst-1',
         workspaceId,
         repos: [
-          { providerRepoId: '111', owner: 'moooon', name: 'motir-core', defaultBranch: 'main' },
+          {
+            providerRepoId: '111',
+            owner: 'moooon',
+            name: 'motir-core',
+            defaultBranch: 'main',
+            archived: false,
+          },
         ],
       }),
     ).resolves.toBeUndefined();

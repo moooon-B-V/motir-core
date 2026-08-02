@@ -124,6 +124,7 @@ async function seedTenantWithCreatedRepo(opts: {
       owner: MOTIR_ORG,
       name: opts.repoName,
       defaultBranch: 'main',
+      archived: false,
       provider: 'github',
     },
   });
@@ -310,7 +311,13 @@ describe('the shared provisioning installation holds SEVERAL tenants at once', (
         accountType: 'Organization',
       },
       repos: [
-        { providerRepoId: '800001', owner: 'bravo-inc', name: 'legacy', defaultBranch: 'main' },
+        {
+          providerRepoId: '800001',
+          owner: 'bravo-inc',
+          name: 'legacy',
+          defaultBranch: 'main',
+          archived: false,
+        },
       ],
     });
 
@@ -454,8 +461,20 @@ describe('inbound deliveries route by REPO, not by installation', () => {
         accountType: 'Organization',
       },
       repos: [
-        { providerRepoId: '800001', owner: 'bravo-inc', name: 'legacy', defaultBranch: 'main' },
-        { providerRepoId: '800002', owner: 'bravo-inc', name: 'dropped', defaultBranch: 'main' },
+        {
+          providerRepoId: '800001',
+          owner: 'bravo-inc',
+          name: 'legacy',
+          defaultBranch: 'main',
+          archived: false,
+        },
+        {
+          providerRepoId: '800002',
+          owner: 'bravo-inc',
+          name: 'dropped',
+          defaultBranch: 'main',
+          archived: false,
+        },
       ],
     });
 

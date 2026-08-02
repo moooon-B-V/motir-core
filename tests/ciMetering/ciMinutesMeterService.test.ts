@@ -130,7 +130,9 @@ async function seedTenant(options?: {
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: repoOwner, accountType: 'Organization' },
-    repos: [{ providerRepoId, owner: repoOwner, name: repoName, defaultBranch: 'main' }],
+    repos: [
+      { providerRepoId, owner: repoOwner, name: repoName, defaultBranch: 'main', archived: false },
+    ],
   });
   const githubRepo = await db.githubRepo.findFirstOrThrow({ where: { repoId: providerRepoId } });
 
@@ -612,7 +614,13 @@ describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {
         accountType: 'Organization',
       },
       repos: [
-        { providerRepoId: '99003', owner: MOTIR_ORG, name: 'second-web', defaultBranch: 'main' },
+        {
+          providerRepoId: '99003',
+          owner: MOTIR_ORG,
+          name: 'second-web',
+          defaultBranch: 'main',
+          archived: false,
+        },
       ],
     });
     const repo2 = await db.githubRepo.findFirstOrThrow({ where: { repoId: '99003' } });

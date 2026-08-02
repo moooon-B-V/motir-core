@@ -22,6 +22,7 @@ const REPO: NormalizedRepo = {
   owner: 'moooon',
   name: 'motir-core',
   defaultBranch: 'main',
+  archived: false,
 };
 const ANALYSES_BODY = [{ id: 42, tool: { name: 'CodeQL' }, created_at: '2026-07-01T00:00:00Z' }];
 const SARIF_DOC = { version: '2.1.0', runs: [] };

@@ -128,7 +128,16 @@ export type GithubWebhookResult =
       // transfer to somewhere other than what the row recorded — the mirror is
       // still updated (the coordinates are a fact) but no saga is driven by it.
       event: 'repository';
-      outcome: 'applied' | 'already_applied' | 'unknown_repo' | 'owner_mismatch' | 'malformed';
+      outcome:
+        | 'applied'
+        | 'already_applied'
+        | 'unknown_repo'
+        | 'owner_mismatch'
+        | 'malformed'
+        // MOTIR-1959 — the `archived` / `unarchived` actions. `archived_applied`
+        // means a mirror row's liveness was re-stamped; `unknown_repo` covers the
+        // repository Motir does not mirror, exactly as it does for `transferred`.
+        | 'archived_applied';
     }
   | ChangeRequestSyncResult
   | CiFeedbackResult;
@@ -184,10 +193,20 @@ export const githubWebhookService = {
   },
 
   /**
-   * Handle a `repository` delivery — the TAKE-IT-OVER saga's confirmation
-   * (MOTIR-711). Only the `transferred` action is of interest: it is the moment a
-   * Motir-owned repository has ACTUALLY moved to the user's account, which is the
-   * one thing the saga must never assume from its own `202`.
+   * Handle a `repository` delivery — two independent facts, both about a
+   * repository Motir mirrors.
+   *
+   * **`transferred`** is the TAKE-IT-OVER saga's confirmation (MOTIR-711): the
+   * moment a Motir-owned repository has ACTUALLY moved to the user's account,
+   * which is the one thing the saga must never assume from its own `202`.
+   *
+   * **`archived` / `unarchived`** is the repository's LIVENESS (MOTIR-1959).
+   * Archiving makes a repo read-only, so every card resolving to it becomes
+   * undispatchable — and it happens long after the row was established, which is
+   * exactly the shape MOTIR-1956 recorded. The establish/connect paths stamp the
+   * state when they mirror the repo; this delivery is what keeps it TRUE
+   * afterwards, at no polling cost. It drives no saga and takes no lock — it is
+   * one column on one row.
    *
    * ⚠️ IDEMPOTENT UNDER REDELIVERY, which is not optional — GitHub retries, and a
    * redelivery must not advance a saga twice or re-stamp a mirror that has since
@@ -199,7 +218,20 @@ export const githubWebhookService = {
    * and a 500 here would make GitHub retry a delivery no retry can fix.
    */
   async handleRepository(body: Record<string, unknown>): Promise<GithubWebhookResult> {
-    if (body['action'] !== 'transferred') {
+    const action = body['action'];
+    if (action === 'archived' || action === 'unarchived') {
+      const providerRepoId = readId(asRecord(body['repository'])?.['id']);
+      if (!providerRepoId) return { event: 'repository', outcome: 'malformed' };
+      const applied = await githubInstallationService.applyArchivedState({
+        providerRepoId,
+        archived: action === 'archived',
+      });
+      // `unknown_repo` for a repository no mirror row names — the SAME answer the
+      // transfer path gives, and not an error: the shared provisioning
+      // installation sees deliveries for repositories that belong to no project.
+      return { event: 'repository', outcome: applied ? 'archived_applied' : 'unknown_repo' };
+    }
+    if (action !== 'transferred') {
       return { event: 'ignored', reason: `unhandled_repository_action:${String(body['action'])}` };
     }
     const repo = asRecord(body['repository']);

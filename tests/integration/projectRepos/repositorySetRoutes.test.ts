@@ -342,6 +342,7 @@ describe('POST …/[rowId]/state — the three moves the step offers', () => {
         owner: 'acme-inc',
         name: 'booking-service',
         defaultBranch: 'main',
+        archived: false,
         provider: 'github',
       },
     });
