@@ -7,6 +7,8 @@ import {
   createCheckoutSession,
   createPortalSession,
   indexCodeGraph,
+  MOTIR_AI_INDEX_TIMEOUT_MS,
+  MOTIR_AI_REQUEST_TIMEOUT_MS,
   type RequestActor,
 } from '@/lib/ai/motirAiClient';
 import { verifyJobToken } from '@/lib/ai/jobToken';
@@ -377,6 +379,90 @@ describe('indexCodeGraph (MOTIR-1500)', () => {
   it('maps a transport failure to MotirAiUnavailableError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     await expect(indexCodeGraph(input)).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+});
+
+// ── The deadline (MOTIR-1974) ───────────────────────────────────────────────
+//
+// A motir-ai that ACCEPTS the connection and then never answers is the failure
+// this pins, and it is worse than a refused one: with no deadline, `fetch` waits
+// forever and the caller is killed from outside. In production that caller was a
+// background job on Vercel, so the kill arrived as a bare
+// `FUNCTION_INVOCATION_TIMEOUT` 504 with no step output — Inngest saw an untyped
+// platform error, not a `MotirAiUnavailableError` its retry budget could reason
+// about, and all five `system.code-graph-index` runs dead-lettered.
+//
+// The stub below never resolves; it only settles when the client's OWN abort
+// fires. So if the deadline is ever removed, this test hangs to the vitest
+// timeout instead of quietly passing — the failure mode it guards IS the failure
+// mode of the test.
+describe('request deadlines', () => {
+  /** A fetch that hangs until the caller's own AbortSignal fires. */
+  function hangingFetch(): ReturnType<typeof vi.fn> {
+    return vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(init.signal?.reason ?? new Error('aborted')),
+          );
+        }),
+    );
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('fails a hanging code-graph upload fast and TYPED, at MOTIR_AI_INDEX_TIMEOUT_MS', async () => {
+    vi.stubGlobal('fetch', hangingFetch());
+
+    const pending = indexCodeGraph({
+      coreOrganizationId: 'org_1',
+      coreWorkspaceId: 'ws_1',
+      coreProjectId: 'pj_1',
+      repoRef: 'moooon/acme',
+      bytes: new Uint8Array([0x1f, 0x8b]),
+    });
+    const assertion = expect(pending).rejects.toBeInstanceOf(MotirAiUnavailableError);
+
+    // One tick short of the deadline it is still waiting — the timeout is the
+    // declared constant, not an incidental shorter one.
+    await vi.advanceTimersByTimeAsync(MOTIR_AI_INDEX_TIMEOUT_MS - 1);
+    let settled = false;
+    void pending.catch(() => {
+      settled = true;
+    });
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+  });
+
+  it('reports the deadline rather than the runtime’s opaque abort message', async () => {
+    vi.stubGlobal('fetch', hangingFetch());
+
+    const pending = getJob('job_1');
+    const assertion = expect(pending).rejects.toThrow(
+      `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
+    );
+    await vi.advanceTimersByTimeAsync(MOTIR_AI_REQUEST_TIMEOUT_MS);
+    await assertion;
+  });
+
+  it('gives the ordinary JSON calls the SHORTER deadline, not the upload’s', async () => {
+    // A read surface must not sit for three minutes behind a dead motir-ai just
+    // because the code-graph upload legitimately needs that long.
+    expect(MOTIR_AI_REQUEST_TIMEOUT_MS).toBeLessThan(MOTIR_AI_INDEX_TIMEOUT_MS);
+
+    vi.stubGlobal('fetch', hangingFetch());
+    const pending = getPreplanState({ coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' });
+    const assertion = expect(pending).rejects.toBeInstanceOf(MotirAiUnavailableError);
+    await vi.advanceTimersByTimeAsync(MOTIR_AI_REQUEST_TIMEOUT_MS);
+    await assertion;
   });
 });
 

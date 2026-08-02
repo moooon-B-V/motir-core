@@ -30,7 +30,11 @@ import { truncateAuthTables } from '../helpers/db';
 //      Story deliberately left AI grounding workspace-scoped (MOTIR-1754 owns
 //      that adoption). Pinning their current behaviour is what stops a
 //      well-meant "while I'm here, this should be project-scoped too" edit from
-//      silently moving what a planning job sees.
+//      silently moving what a planning job sees. (MOTIR-1974 re-pointed the
+//      index assertion at `resolveIndexTarget`, the method that now owns the
+//      fan-out after the job was split into per-project steps — the SCOPE it
+//      guards is unchanged, which is the point of re-pointing it rather than
+//      dropping it.)
 //   4. The row's two FKs behave as modelled: a deleted project takes its rows
 //      with it, while a deleted `GithubRepo` leaves a READABLE row with no claim
 //      rather than a dangling reference or a vanished plan.
@@ -229,11 +233,20 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
 
   it('the index job is keyed by WORKSPACE — its input carries no project', async () => {
     const { codeGraphIndexService } = await import('@/lib/services/codeGraphIndexService');
+    // MOTIR-1974 split the job's single method into `resolveIndexTarget` (reads)
+    // + `indexRepoIntoProject` (one project's network work) so each can be its own
+    // durable step. `resolveIndexTarget` is where the guarded property now lives:
+    // it takes the SAME workspace-keyed input (no project) and it is what decides
+    // the fan-out. The split is a checkpointing change, NOT a narrowing one — the
+    // projectIds it returns are still every project of the workspace, and it still
+    // never reads `project_repository`. (`indexRepoIntoProject` does take a
+    // projectId, but only one this resolver handed out.)
+    //
     // Driving it with an installation that does not exist is the cheapest way to
     // prove the shape it accepts without a tarball fetch: the no-op it returns is
     // itself part of the contract (the job never throws on a vanished tenant).
     await expect(
-      codeGraphIndexService.indexRepoIntoWorkspaceProjects({
+      codeGraphIndexService.resolveIndexTarget({
         installationId: 'nope',
         workspaceId: 'nope',
         repoOwner: 'moooon',

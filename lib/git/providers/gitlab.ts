@@ -1,7 +1,7 @@
 import { registerGitProvider } from '../registry';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
-import type { GitProvider } from '../provider';
+import { REPO_TARBALL_TIMEOUT_MS, type GitProvider } from '../provider';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -116,15 +116,26 @@ export const gitlabProvider: GitProvider = {
     // archive endpoint streams a gzipped tarball at `?sha=<ref>`.
     const projectPath = encodeURIComponent(`${owner}/${name}`);
     let res: Response;
+    // Deadline, for the same reason GitHub's carries one (MOTIR-1974): this runs
+    // inside a job invocation with a finite platform budget.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
     try {
       res = await fetch(
         `${gitlabBaseUrl()}/api/v4/projects/${projectPath}/repository/archive?sha=${encodeURIComponent(ref)}`,
-        { headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' } },
+        {
+          headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
+          signal: controller.signal,
+        },
       );
     } catch (err) {
       throw new Error(
-        `GitLab archive endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
+        controller.signal.aborted
+          ? `GitLab archive endpoint timed out after ${REPO_TARBALL_TIMEOUT_MS}ms`
+          : `GitLab archive endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
       );
+    } finally {
+      clearTimeout(timer);
     }
     if (!res.ok) throw new Error(`GitLab archive endpoint returned ${res.status}`);
     return res.arrayBuffer();

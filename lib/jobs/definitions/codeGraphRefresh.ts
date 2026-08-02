@@ -1,4 +1,5 @@
 import { defineJob } from '../defineJob';
+import { runCodeGraphIndexSteps } from '../codeGraphSteps';
 import type { CodeGraphRefreshData } from '../types';
 
 // Code-graph REFRESH job (Story 7.10 · MOTIR-893, the completing feed slice) —
@@ -21,12 +22,19 @@ import type { CodeGraphRefreshData } from '../types';
 //
 // Same shape as the index job otherwise: SYSTEM-scoped (enqueued via
 // `inngest.send`, not `sendEvent`), `retryPolicy: 'idempotent'` (re-indexing
-// converges), one `step.run` (the tarball bytes can't cross a step boundary),
-// all logic delegated to the service (the 4-layer handler-is-a-caller rule).
+// converges), all logic delegated to the service (the 4-layer
+// handler-is-a-caller rule), and the SAME durable step shape —
+// `runCodeGraphIndexSteps`, a step per project (MOTIR-1974; the single-step
+// version could not finish inside one platform invocation, and this job would
+// have died the same way the index job did once pushes started reaching it).
+// `concurrency: 2` for the same reason the index job carries it: motir-ai is
+// scale-to-zero, and parallel runs each pay the cold start instead of sharing
+// one woken machine.
 export const codeGraphRefresh = defineJob(
   {
     id: 'system.code-graph-refresh',
     retryPolicy: 'idempotent',
+    concurrency: 2,
     debounce: {
       key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
       period: '2m',
@@ -35,16 +43,14 @@ export const codeGraphRefresh = defineJob(
   },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphRefreshData;
-    return ctx.step.run('refresh-repo', () =>
-      services.codeGraph.indexRepoIntoWorkspaceProjects({
-        installationId: data.installationId,
-        // The repo's own tenant, stamped at enqueue from `repo.workspaceId`
-        // (MOTIR-1931) — never re-derived from the shared installation.
-        workspaceId: data.workspaceId,
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        defaultBranch: data.defaultBranch,
-      }),
-    );
+    return runCodeGraphIndexSteps(ctx, services, {
+      installationId: data.installationId,
+      // The repo's own tenant, stamped at enqueue from `repo.workspaceId`
+      // (MOTIR-1931) — never re-derived from the shared installation.
+      workspaceId: data.workspaceId,
+      repoOwner: data.repoOwner,
+      repoName: data.repoName,
+      defaultBranch: data.defaultBranch,
+    });
   },
 );
