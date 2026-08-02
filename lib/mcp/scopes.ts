@@ -52,6 +52,10 @@ export function isTokenScope(value: string): value is TokenScope {
 export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // read
   get_work_item: 'read',
+  // get_work_item_activity reads the same comments + history the UI's Activity
+  // section shows (MOTIR-1999) — a pure paged read, and read-scoped even though
+  // its subject is the comment domain: `add_comment` is the write, this is not.
+  get_work_item_activity: 'read',
   list_ready: 'read',
   next_ready: 'read',
   // dispatch_prompt only READS the item and assembles text — it never claims it
