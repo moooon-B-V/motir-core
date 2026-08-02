@@ -1,0 +1,77 @@
+# Publishes the Motir CI runner image to GHCR (MOTIR-1978).
+#
+# Trigger: push the package-scoped tag `runner-v<x.y.z>`. A monorepo must scope
+# its release tags per package (`cli-v*` and `design-system-v*` are the existing
+# precedents); a bare `v*` would fire for the app too.
+#
+# There is deliberately NO push-to-main trigger. The fleet consumes a DIGEST
+# (§7.2), so an image that re-published on every merge would produce a stream of
+# digests nobody pinned and would not change what the deployment boots anyway —
+# `MOTIR_RUNNER_IMAGE` only moves when a human moves it (MOTIR-1979).
+#
+# ⚠️ A tag-triggered lane replays the TAG'S tree, not `main`. A fix pushed to
+# `main` after a red release does nothing until the tag MOVES:
+#   git tag -f runner-v<x.y.z> <fixed-sha> && git push -f origin runner-v<x.y.z>
+#
+# Release procedure:
+#   1. merge the change to the image
+#   2. git tag runner-v<x.y.z> && git push origin runner-v<x.y.z>
+#   3. this workflow builds, asserts, proves, publishes, then pulls the image
+#      back BY DIGEST and re-asserts it
+#   4. copy the digest from the job summary into MOTIR-1979 / the deployment's
+#      `MOTIR_RUNNER_IMAGE`
+#
+# `workflow_dispatch` with `dry_run: true` runs the whole lane WITHOUT pushing —
+# how you validate a change to the release path without minting a version.
+
+name: Release runner image
+
+on:
+  push:
+    tags:
+      - 'runner-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build + assert + prove only; skip the GHCR push'
+        type: boolean
+        default: false
+
+# Never let two releases of the same tag run concurrently, and never cancel one
+# in flight — a half-cancelled push leaves a tag pointing at a manifest whose
+# layers were never all uploaded.
+concurrency:
+  group: release-runner-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Resolve the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # On a tag push the ref is `runner-v1.2.3`; on workflow_dispatch it is
+          # a branch name, which has no version in it — `dispatch` keeps the tag
+          # well-formed for a dry run that never pushes anyway.
+          if [[ "${REF_NAME}" =~ ^runner-v(.+)$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dispatch" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Runner image
+    needs: version
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/runner-image.yml
+    with:
+      publish: ${{ github.event_name == 'push' || !inputs.dry_run }}
+      version: ${{ needs.version.outputs.version }}

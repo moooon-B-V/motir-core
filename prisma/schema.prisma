@@ -5128,6 +5128,40 @@ model CiContainerPeriodCost {
   @@map("ci_container_period_cost")
 }
 
+/// The PROVISIONING GATE's serialization anchor (Story MOTIR-1916 · MOTIR-1922)
+/// — a table whose rows carry no data and exist only to be LOCKED.
+///
+/// ⚠️ WHY A ROW AND NOT JUST A COUNT. Both admission caps are read-derived
+/// writes: *count what is in flight → decide → claim a slot*. `SELECT … FOR
+/// UPDATE` over the counted rows cannot make that safe, because the rows two
+/// racing admissions are about to claim are DIFFERENT rows — locking what you
+/// counted never prevents a concurrent insert or update from changing the count
+/// underneath you (there is no phantom protection at READ COMMITTED). So the
+/// admissions have to contend on ONE shared row, and there is no natural row for
+/// "the fleet" the way `organization` is the natural one for the §4 entitlement
+/// caps (`entitlementsService`, which locks exactly that). This table supplies
+/// it. `notes.html` #35 is the rule; this is the anchor that makes it applicable.
+///
+/// One row per SCOPE, created on demand:
+///   * `fleet`               — the global ceiling. Every admission takes it, so
+///                             it serializes the whole gate.
+///   * `project:<projectId>` — the per-project allowance.
+///
+/// Deliberately NOT workspace-scoped and NOT a tenant table: it holds no tenant
+/// data, and the fleet scope is by definition cross-tenant. Its RLS policy is
+/// `system_admin` only, which is also the context the whole fleet path runs in.
+model CiFleetAdmissionLock {
+  /// `fleet`, or `project:<projectId>`. The primary key IS the scope, so the
+  /// `INSERT … ON CONFLICT DO NOTHING` that materializes a scope on first use is
+  /// naturally idempotent.
+  scope String @id
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ci_fleet_admission_lock")
+}
+
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
 /// Six values, fixed — do NOT add one without amending the ADR, and keep it in
 /// lockstep with motir-ai's proposal-schema role enum (MOTIR-1885).

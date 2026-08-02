@@ -15,11 +15,15 @@ import { inngest } from '../client';
 // ci-runner-fleet.md` §6 budgets p50 ≤ 30s from the `workflow_job.queued`
 // webhook to the job starting, and a minute-granularity cron cannot meet that.
 // It is here because MOTIR-1920 declared the seam between the webhook and the
-// boot to be exactly one read — `listPending` — and MOTIR-1922 owns the
-// admission gate that sits on the hot path between them ("consulted BEFORE this
-// card provisions", §10). Until that gate lands, the sweep is what makes the
-// fleet WORK; once it does, the sweep stays as the recovery path for an intent
-// the hot call dropped, which is worth having regardless.
+// boot to be exactly one read — `listPending`.
+//
+// MOTIR-1922's ADMISSION GATE has since landed, inside `runIntent` — so a sweep
+// that fans out 25 boots no longer fans out 25 containers: each one is decided
+// and capped before it spends anything, and a deferred intent stays pending for
+// the next sweep. What is still missing for §6 is the hot-path call from the
+// webhook, tracked as its own card; the sweep stays regardless as the recovery
+// path for an intent the hot call drops and as the retry loop every deferral
+// depends on.
 //
 // System-scoped, like every `system.*` job: the fleet spans tenants because
 // Motir's infrastructure bill does.

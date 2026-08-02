@@ -167,6 +167,25 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
+   * The inverse of {@link claimPending} — hand a claimed slot back to the pending
+   * pool, for a refusal about the ENVIRONMENT (unconfigured, rate-limited) or one
+   * the admission gate makes AFTER taking the slot (`ci_credits_exhausted`).
+   *
+   * Guarded on `status = provisioning` for the same reason the claim is guarded
+   * on `pending`: this must never resurrect an intent that has since booted or
+   * settled. `settledAt` is cleared because a row going back into the queue has
+   * not settled — leaving a stale instant there would make a re-queued intent
+   * read, in the table and in every report over it, as one that already finished.
+   */
+  async releaseClaim(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: { id, status: CI_RUNNER_INTENT_PROVISIONING },
+      data: { status: CI_RUNNER_INTENT_PENDING, settledAt: null, teardownReason: null },
+    });
+    return result.count === 1;
+  },
+
+  /**
    * Record the GitHub runner a JIT mint just registered — BEFORE the container
    * exists.
    *
@@ -285,6 +304,43 @@ export const ciRunnerProvisioningIntentRepository = {
   ): Promise<CiRunnerProvisioningIntent | null> {
     return tx.ciRunnerProvisioningIntent.findFirst({
       where: { containerProvider: provider, containerId },
+    });
+  },
+
+  /**
+   * How many runners are IN FLIGHT for one project — the per-project cap's
+   * count (MOTIR-1922).
+   *
+   * ⚠️ Read UNDER THE PROJECT'S ADMISSION LOCK and inside the same transaction as
+   * the claim it guards, never on its own: it is the read half of a read-derived
+   * write, and a count taken outside the lock is a snapshot two racers can both
+   * act on. See `ciFleetAdmissionLockRepository.lockScope`.
+   *
+   * "In flight" is `provisioning` + `running` — the same window the reaper uses,
+   * and the reason completion frees a slot with no extra bookkeeping: settling an
+   * intent to `completed`/`failed` drops it out of this set in the same write
+   * that ends the container.
+   */
+  async countInFlightForProject(projectId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: { projectId, status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+    });
+  },
+
+  /**
+   * How many runners are in flight ACROSS THE WHOLE FLEET — the global ceiling's
+   * count (MOTIR-1922 / ADR §9.1), and the only number that bounds Motir's total
+   * CI spend.
+   *
+   * Unscoped ON PURPOSE: no workspace, no org, no project. The invoice this
+   * bounds is Motir's own, and a per-tenant count cannot see the failure mode —
+   * an unbounded number of projects, each individually under its own cap. It is
+   * read under the `fleet` admission lock, which every admission takes, so this
+   * is the most contended read on the path and the one that lock exists for.
+   */
+  async countInFlightFleetWide(tx: Prisma.TransactionClient): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: { status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
     });
   },
 
