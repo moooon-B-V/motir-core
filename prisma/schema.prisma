@@ -518,6 +518,13 @@ model Organization {
   // queued fleet jobs attributed to this org. Cascade for the same reason: an
   // intent is a request to spend on the org's behalf, meaningless without it.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
+  // What the FLEET cost Motir (Story MOTIR-1916 · MOTIR-1924) — the per-runner
+  // container-seconds rows and their per-period rollup. A DIFFERENT QUANTITY
+  // from the two metering tables above (§P): those are what the org is metered,
+  // these are what serving it cost. Both org-denormalized so margin per org is
+  // one read of each.
+  ciContainerUsages           CiContainerUsage[]
+  ciContainerPeriodCosts      CiContainerPeriodCost[]
   // What that consumption has been CHARGED (Story MOTIR-1775 · MOTIR-1901) — one
   // row per org per period. Org-scoped rather than workspace-scoped, unlike the
   // two metering tables above, because the POOL and the credit ledger are both
@@ -656,6 +663,12 @@ model Workspace {
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
   // workspace_id + RLS contract as the two metering tables above.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
+  // The fleet's COST rows (Story MOTIR-1916 · MOTIR-1924) — same workspace_id +
+  // RLS contract again: what a tenant's CI cost Motir is commercially sensitive
+  // in both directions, so it is tenant data with a system-admin escape for the
+  // orchestrator, never an untenanted operator table.
+  ciContainerUsages           CiContainerUsage[]
+  ciContainerPeriodCosts      CiContainerPeriodCost[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -964,6 +977,10 @@ model Project {
   /// SetNull like the metered rows: a deleted project must not erase the record
   /// that a runner was asked for on its behalf.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
+  /// The fleet-cost rows for this project's containers (MOTIR-1924). SetNull for
+  /// the same reason: real money was spent, and deleting the project must not
+  /// erase what it cost.
+  ciContainerUsages           CiContainerUsage[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -4924,6 +4941,191 @@ model CiRunnerProvisioningIntent {
   /// ago must not be swept as an hour-old orphan.
   @@index([status, bootedAt])
   @@map("ci_runner_provisioning_intent")
+}
+
+/// The CONTAINER-SECONDS RECORD (Story MOTIR-1916 · MOTIR-1924) — what ONE fleet
+/// runner cost MOTIR, per runner, never aggregated at write time.
+///
+/// ⚠️ THIS IS THE SECOND METER, AND IT MEASURES A DIFFERENT QUANTITY FROM THE
+/// FIRST. `ci-minutes-allowance.md` §P: before the fleet, "what the customer is
+/// charged" and "what Motir pays" were one number seen from two sides, because
+/// GitHub billed Motir for the minute it charged the user for. On Motir's own
+/// runners they are independent — `CiWorkflowRunUsage` measures Actions job
+/// wall-clock in Linux-equivalent MINUTES (the customer's side); this measures
+/// CONTAINER-SECONDS on the cloud account (Motir's own COGS). Neither can be
+/// derived from the other, which is why both exist.
+///
+/// ⚠️ IT IS NOT BILLING. Nothing here debits a credit ledger, reads a balance or
+/// reaches a user-facing surface — `CiPeriodCharge` is the only table a charge
+/// touches, and this one is deliberately not joined to it. Its consumers are
+/// margin reporting and the fleet's own reconciliation (§Q.2), both internal.
+///
+/// The FIELDS are fixed by `ci-runner-fleet.md` §5 and mirror the port's
+/// `ContainerUsage` one-for-one; the SCHEMA is this card's deliverable. Keeping
+/// them in lockstep is what stops the meter, the reconciliation and the margin
+/// readout each inventing their own shape.
+///
+/// Attribution mirrors `CiWorkflowRunUsage` — repo → project → workspace → org,
+/// denormalized — so the two meters can be compared per tenant without a join
+/// through anything that might have been deleted since.
+model CiContainerUsage {
+  id String @id @default(cuid())
+
+  /// WHICH ORCHESTRATOR ran it (`fly` / `fake` / a future one) — the port's
+  /// `OrchestratorProvider`, NOT a git provider. It is half the idempotency key
+  /// because a handle id is only unique within its own provider's namespace.
+  containerProvider String @map("container_provider")
+  /// The port's opaque `ContainerHandle.id` — a Fly Machine id today. THE
+  /// per-runner identity, and with the provider the row's uniqueness.
+  handleId          String @map("handle_id")
+  containerRegion   String @map("container_region")
+
+  workspaceId    String  @map("workspace_id")
+  /// The org margin is read per (§P: "attributed to the org so the two numbers
+  /// are comparable per tenant"), DENORMALIZED exactly as the minute meter
+  /// denormalizes it.
+  organizationId String  @map("organization_id")
+  /// Nullable + SetNull like every other attribution column here: a deleted
+  /// project must not erase the record that Motir paid for this container.
+  projectId      String? @map("project_id")
+
+  /// WHICH workload this container ran. The fleet org is shared — CI runners,
+  /// code-graph index containers (MOTIR-1981) and, later, Epic 9's hosted agents
+  /// all bill the same uncapped Fly account — so a row that cannot say which
+  /// workload it was makes "what did indexing cost us?" unanswerable and merges
+  /// three margins into one number. Defaulted to `ci` so this migration is a
+  /// no-op for the rows this meter writes today.
+  workload      String @default("ci")
+
+  /// `owner/name` AS THE INTENT RECORDED IT (§5.5's posture) — the port carries
+  /// one string, so the row stores one. The fleet reconciliation splits it.
+  repoFullName  String @map("repo_full_name")
+  /// GitHub's job id (a STRING — never do math on it), matching
+  /// `CiRunnerProvisioningIntent.jobId`. One job, one container.
+  ///
+  /// NULLABLE because only a CI container has one: an index or agent container
+  /// is dispatched directly on the orchestrator port and never touches Actions,
+  /// so there is no job id to record. Required in practice for `workload = 'ci'`.
+  workflowJobId String? @map("workflow_job_id")
+
+  /// The machine class ACTUALLY provisioned — reported by the adapter rather
+  /// than assumed from the spec, because a provider may fall back to a different
+  /// class and the rate that applies is the one that ran.
+  cpuKind  String @map("cpu_kind")
+  cpus     Int
+  memoryMb Int    @map("memory_mb")
+
+  /// The physical quantity, provider-attested where available. `startedAt` is
+  /// NULL iff the container never started (a `provision_failed` row), and that
+  /// is the case `billableSeconds` 0 records.
+  containerCreatedAt DateTime  @map("container_created_at")
+  containerStartedAt DateTime? @map("container_started_at")
+  /// NULLABLE so a row can exist for a container that is still RUNNING. A CI
+  /// runner lives minutes and is costed at teardown, which is why this was NOT
+  /// NULL; an Epic 9 agent container spans a whole `motir run <story>` — HOURS —
+  /// and under teardown-only costing would produce no row for its entire life,
+  /// accruing spend invisibly against an account Fly provides no cap for. The
+  /// column is relaxed now, while the table is empty; implementing incremental
+  /// accrual is MOTIR-1995's, not this card's.
+  containerStoppedAt DateTime? @map("container_stopped_at")
+  /// ceil(stopped − started); 0 when it never started. Fly bills a Machine on
+  /// its RUNNING seconds, so this IS the provider's own basis — which is what
+  /// makes the fleet reconciliation an audit rather than two estimates.
+  billableSeconds    Int       @map("billable_seconds")
+
+  /// The calendar-month bucket, a PURE function of `containerStoppedAt` — the
+  /// same `periodStartFor` the minute meter keys on (§4.5), so the two meters'
+  /// periods always line up.
+  periodStart DateTime @map("period_start")
+
+  /// The commercial mapping, resolved from the DATED rate table AT TEARDOWN.
+  /// DECIMAL, never Float: `usdPerSecond` is ~3×10⁻⁵ and the second counts run
+  /// to five digits, so binary-float error is invisible per row and systematic
+  /// across a month — the shape of error a reconciliation is worst at catching.
+  usdPerSecond      Decimal   @map("usd_per_second") @db.Decimal(20, 12)
+  costUsd           Decimal   @map("cost_usd") @db.Decimal(20, 12)
+  /// WHICH rate row was applied. NULL means no row covered this container: it
+  /// was recorded at a zero rate and LOGGED (the §3.4 posture one domain over),
+  /// and the null is what distinguishes "cost unknown" from a genuine zero.
+  rateEffectiveFrom DateTime? @map("rate_effective_from")
+
+  /// The provider's own terminal state string, and the port's `TeardownReason`.
+  /// "How did this container end" is unanswerable from timestamps alone, and it
+  /// is the question the fleet's operational story is made of.
+  ///
+  /// NULLABLE for the same reason as `containerStoppedAt`: a container that has
+  /// not ended yet has no terminal state, and forbidding that row is what would
+  /// hide a long-running container's spend until it stopped. A settled row still
+  /// carries both — enforced by the writer, not by the column.
+  terminalState  String? @map("terminal_state")
+  teardownReason String? @map("teardown_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  /// THE IDEMPOTENCY GUARANTEE, and it is per RUNNER because a runner is what a
+  /// container is. Both callers of the sink — the `finally` that guarantees
+  /// teardown and the reaper — can reach the SAME handle, and `teardown` is
+  /// required to be idempotent, so the second arrival must cost nothing. §5's
+  /// invariant is exactly this index: "for every provisioned handle, exactly one
+  /// usage row".
+  @@unique([containerProvider, handleId])
+  @@index([workspaceId])
+  /// The org's "what did the fleet cost this period" read.
+  @@index([organizationId, periodStart])
+  /// The fleet reconciliation's read (§Q.2): every container in a period, split
+  /// by repo.
+  @@index([periodStart])
+  @@index([projectId])
+  @@map("ci_container_usage")
+}
+
+/// The PER-PERIOD fleet-COST rollup (Story MOTIR-1916 · MOTIR-1924) — the row
+/// that makes "what did this org's CI cost Motir in July?" one indexed read
+/// rather than a scan-and-sum over every container ever booted.
+///
+/// The exact shape of `CiPeriodUsage` one meter over, and deliberately so:
+/// keyed by workspace (the tenancy contract), summed by org (where the margin
+/// question is asked), incremented in the SAME transaction as the container row
+/// that feeds it — so a duplicate handle fails the unique index and the
+/// increment rolls back with it, and the two can never disagree.
+///
+/// ⚠️ MARGIN IS DERIVED FROM STORED VALUES, NOT FROM LOGS. `CiPeriodUsage` holds
+/// the org's metered Linux-equivalent minutes for the same period and the same
+/// key; this holds what those minutes cost. That pairing is the whole point:
+/// §L's margin claim and §M's ×1.00 estimate become measurements the moment
+/// both rows exist, and re-pricing the allowance (§1) with evidence needs
+/// nothing else.
+model CiContainerPeriodCost {
+  id             String @id @default(cuid())
+  workspaceId    String @map("workspace_id")
+  organizationId String @map("organization_id")
+
+  /// Midnight UTC on the 1st of the calendar month (§4.5).
+  periodStart DateTime @map("period_start")
+
+  /// Σ billable container-seconds — the PHYSICAL total, kept alongside the money
+  /// so a re-pricing can be recomputed from it without a backfill (§3.3's rule,
+  /// applied to Motir's own cost).
+  containerSeconds Int     @default(0) @map("container_seconds")
+  /// Σ cost in USD. Decimal at the row's own precision, never a float.
+  costUsd          Decimal @default(0) @map("cost_usd") @db.Decimal(24, 12)
+  containerCount   Int     @default(0) @map("container_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// One rollup row per workspace per period — the upsert target.
+  @@unique([workspaceId, periodStart])
+  /// The org's cost-for-this-period read, mirroring `CiPeriodUsage`'s.
+  @@index([organizationId, periodStart])
+  @@map("ci_container_period_cost")
 }
 
 /// The PROVISIONING GATE's serialization anchor (Story MOTIR-1916 · MOTIR-1922)

@@ -1,21 +1,25 @@
 import { isUnpriced } from './usage';
+import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import type { ContainerUsage } from './types';
 
-// WHERE THE CONTAINER-SECONDS RECORD GOES (Story MOTIR-1916 · MOTIR-1921) — the
-// single seam MOTIR-1924 replaces with a persist.
+// WHERE THE CONTAINER-SECONDS RECORD GOES (Story MOTIR-1916 · MOTIR-1921 →
+// MOTIR-1924) — the single seam between destroying a container and knowing what
+// it cost.
 //
-// ⚠️ THIS CARD EMITS THE RECORD; MOTIR-1924 PERSISTS IT. `ci-runner-fleet.md` §5
-// splits it exactly there: "the schema is MOTIR-1924's deliverable; the FIELDS
-// are fixed here." So this module is deliberately one function with a structured
-// log in it — not a table this card invents and 1924 has to migrate off, and not
-// a TODO comment either, because a comment is not a call site. When 1924 lands,
-// the body becomes a repository write inside the caller's unit of work and
-// nothing above it changes.
+// MOTIR-1921 emitted the record and stopped at a log; MOTIR-1924 persists it,
+// exactly as this module's own header predicted ("the body becomes a repository
+// write inside the caller's unit of work and nothing above it changes"). It did:
+// the two call sites — the `finally` that guarantees teardown, and the reaper —
+// are untouched, and `ci-runner-fleet.md` §5's split still holds, with the FIELDS
+// fixed by the port and the SCHEMA owned by `ciFleetCostMeterService`.
 //
-// The log is not a placeholder for the persist. It stays afterwards: a usage row
-// that never reached the database still has to be visible, and §5's invariant
-// ("for every provisioned handle, exactly one usage row") is only auditable
-// against a signal that survives the write failing.
+// The module survives the persist rather than dissolving into it, because it
+// owns two things the service must not: the never-throw contract below (the
+// service is free to fail; this is called from a `finally`), and the unpriced
+// WARNING, which is the one condition a human has to act on. A usage row that
+// never reached the database still has to be visible, and §5's invariant ("for
+// every provisioned handle, exactly one usage row") is only auditable against a
+// signal that survives the write failing.
 
 /**
  * Emit one container's cost record.
@@ -47,16 +51,19 @@ export async function recordContainerUsage(usage: ContainerUsage): Promise<void>
       );
     }
 
-    // ⚠️ THE RECORD ITSELF IS NOT LOGGED, AND THAT IS DELIBERATE. It travels in
-    // the CALLER's return value, which for both callers is a job's result — and
-    // `defineJob` writes that to the `job_run` ledger. That is this repo's actual
-    // mechanism for durable operational output (the 1.6.5 dashboard reads it),
-    // and it is strictly better than a log line: queryable, retained, and
-    // attached to the run that produced it. The eslint rule permitting only
-    // `warn`/`error` points at the same thing — an `info` log is a record nobody
-    // can query. So until MOTIR-1924's table lands, the LEDGER is where a
-    // container-seconds record is readable, and the only thing this function
-    // adds is the one condition a human must act on.
+    // THE PERSIST (MOTIR-1924). Idempotent per runner, attributed repo →
+    // project → workspace → org, and bypassed for the meta org and off-cloud —
+    // all inside the service, so this seam stays the one place a container's
+    // cost is handed off and the port keeps knowing nothing about tenancy.
+    //
+    // ⚠️ THE RECORD ITSELF IS STILL NOT LOGGED, AND THAT IS STILL DELIBERATE. It
+    // travels in the CALLER's return value, which for both callers is a job's
+    // result — and `defineJob` writes that to the `job_run` ledger. The ledger
+    // remains the per-run operational trail (the 1.6.5 dashboard reads it); the
+    // table this now writes is the QUERYABLE, aggregated, tenant-attributed
+    // record the margin readout and the fleet reconciliation read. Two records
+    // with two jobs, neither redundant.
+    await ciFleetCostMeterService.recordContainerUsage(usage);
   } catch (err) {
     console.error('[containerUsage] could not record a container-seconds row', {
       handleId: usage.handleId,

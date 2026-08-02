@@ -11,6 +11,15 @@ import { periodStartFor } from '@/lib/ciMetering/period';
 // direction") — a report that quietly corrected the meter would re-price
 // already-charged history, which §3.3 forbids.
 //
+// ⚠️ TWO COMPARISONS, ONE JOB (§Q, MOTIR-1924). Since project CI moved to
+// Motir's own fleet, a metered minute is no longer necessarily a GitHub-BILLED
+// minute, and GitHub's report says nothing about the fleet. So the month is
+// audited against two sources: the GitHub-hosted subset against the billing
+// report, and the fleet subset against the orchestrator's container-seconds
+// record. Both run every month, independently — the fleet half needs no billing
+// credential, so it reports from the first fleet job onward even while the
+// GitHub half is still `skipped` waiting for MOTIR-1779's token.
+//
 // WHY it matters rather than being nice-to-have: the ADR's 40% overage margin
 // rests on the meter matching what GitHub actually bills. Without this the claim
 // is unfalsifiable; with it, a systematic under-count — a run of dropped
@@ -44,11 +53,13 @@ export function previousPeriodStart(now: Date): Date {
 export const ciMinutesReconcile = defineJob(
   { id: 'system.ci-minutes-reconcile', cron: CI_MINUTES_RECONCILE_CRON, retryPolicy: 'idempotent' },
   async (ctx, services) => {
-    return ctx.step.run('reconcile-previous-month', async () => {
-      // The job's clock read is confined to this one line so the pure period
-      // maths above stays testable without faking time.
-      const periodStart = previousPeriodStart(new Date());
-      const metered = await services.ciMinutesReconciliation.meteredTotalsForMonth(periodStart);
+    // The job's clock read is confined to this one line so the pure period maths
+    // above stays testable without faking time.
+    const periodStart = previousPeriodStart(new Date());
+
+    const github = await ctx.step.run('reconcile-github-billed', async () => {
+      const metered =
+        await services.ciMinutesReconciliation.githubHostedTotalsForMonth(periodStart);
       // `getUTCMonth()` is 0-based; GitHub's usage endpoint takes 1-based months.
       return services.ciMinutesReconciliation.reconcileMonth(
         periodStart.getUTCFullYear(),
@@ -56,5 +67,15 @@ export const ciMinutesReconcile = defineJob(
         metered,
       );
     });
+
+    // A SEPARATE step, deliberately: the fleet audit must run even when the
+    // GitHub half skipped for a missing credential, and separate steps are also
+    // what puts both outcomes in the `job_run` ledger as distinct, readable
+    // records rather than one blended result.
+    const fleet = await ctx.step.run('reconcile-fleet', async () =>
+      services.ciMinutesReconciliation.reconcileFleetMonth(periodStart),
+    );
+
+    return { github, fleet };
   },
 );

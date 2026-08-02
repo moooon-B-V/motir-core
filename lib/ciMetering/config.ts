@@ -95,3 +95,30 @@ export function billingUsageToken(): string | null {
  */
 export const RECONCILIATION_TOLERANCE_FRACTION = 0.05;
 export const RECONCILIATION_TOLERANCE_FLOOR_MINUTES = 5;
+
+/**
+ * The EXTRA tolerance the FLEET reconciliation allows PER CONTAINER (§Q.2,
+ * MOTIR-1924) — on top of the fraction + floor above, which it shares.
+ *
+ * The fleet audit compares two of Motir's own records of the same work: the
+ * customer-facing meter's Σ ceil(per-JOB minutes), read from GitHub's jobs API,
+ * against the orchestrator's Σ container-seconds. They measure overlapping but
+ * not identical spans, and BOTH directions of divergence are expected at a
+ * bounded, per-container size:
+ *
+ *   * the METER can read high — it rounds every job UP to the minute (§5.8), so
+ *     a repo's 40 ten-second jobs meter as 40 minutes;
+ *   * the CONTAINER can read high — it is billed from start to teardown, which
+ *     brackets the job with runner registration, job pickup and shutdown.
+ *
+ * Both scale with the number of CONTAINERS, one per job, not with elapsed time —
+ * so the allowance does too. Two minutes each covers the ≤1 minute of ceil
+ * rounding plus §6's ≤60s boot-and-teardown bracket, and nothing else: a leaked
+ * container idling for an hour, or a repo whose fleet minutes have NO container
+ * record at all, still exceeds it immediately.
+ *
+ * ⚠️ IT MUST NOT BE GENEROUS. The whole point of §Q is that a signal which
+ * always fires is not a signal — but a tolerance wide enough to swallow a real
+ * fault is the same failure wearing the opposite sign.
+ */
+export const FLEET_RECONCILIATION_PER_CONTAINER_TOLERANCE_MINUTES = 2;

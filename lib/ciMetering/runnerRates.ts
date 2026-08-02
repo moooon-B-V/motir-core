@@ -114,6 +114,20 @@ const GITHUB_2026_REPRICING = new Date('2026-01-01T00:00:00.000Z');
  */
 export const MOTIR_FLEET_RUNNER_LABEL = 'motir-runner';
 
+/**
+ * The FAMILY name a fleet job's metered minutes are stored under, in the
+ * `runner_breakdown` JSON every metered row carries (§3.3).
+ *
+ * Exported for the same reason the label is: MOTIR-1924's reconciliation splits
+ * a month's metered minutes by this exact string in SQL (`entry->>'family'`),
+ * and a query comparing against its own copy of `'motir_fleet'` would keep
+ * agreeing with `classifyRunner` right up until one of them was edited — after
+ * which fleet minutes would silently rejoin the GitHub-billed population and the
+ * phantom drift §Q exists to remove would come back, unexplained. One constant,
+ * two readers, no drift (the MOTIR-1964 lesson, applied before the fact).
+ */
+export const MOTIR_FLEET_RUNNER_FAMILY: RunnerFamily = 'motir_fleet';
+
 /** When the fleet's rate takes effect — the day the row landed (MOTIR-1923).
  *  Per §3.3 this is a NEW ROW, never a backfill: a run that completed before it
  *  keeps whatever it was already metered at, and history never re-prices. The

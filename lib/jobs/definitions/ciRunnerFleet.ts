@@ -109,8 +109,9 @@ export const ciRunnerBoot = defineJob(
     // is one indivisible unit of work with its own internal guarantees.
     // The outcome — INCLUDING the container-seconds record on a settled run —
     // is the job's return value, which `defineJob` writes to the `job_run`
-    // ledger. That is where a fleet run is readable until MOTIR-1924's table
-    // lands, and it stays useful afterwards as the per-run audit trail.
+    // ledger: the per-run audit trail. Since MOTIR-1924 the record is ALSO
+    // persisted to `ci_container_usage` inside `runIntent`'s teardown path, so
+    // the ledger is no longer the only place a fleet run's cost is readable.
     return services.ciRunnerBoot.runIntent(intentId);
   },
 );

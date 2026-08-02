@@ -384,6 +384,18 @@ export default defineConfig({
         'lib/repositories/ciWorkflowRunUsageRepository.ts',
         'lib/repositories/ciPeriodUsageRepository.ts',
         'lib/jobs/definitions/ciMinutesReconcile.ts',
+        // Story MOTIR-1916 · MOTIR-1924 — the FLEET COST meter, joining the
+        // metering block above for the same reason and one level down: these
+        // figures are what Motir's own margin is read from, and §M's ×1.00
+        // product decision is defended by them. A silent regression in the
+        // attribution, the period key or the per-runner idempotency guard would
+        // not misbill a customer — it would quietly misinform the decision about
+        // whether to re-price the allowance, which is worse for being invisible.
+        // (The wider FLEET floor — the provisioning path, the port, the
+        // adapters — is MOTIR-1927's deliverable, not this card's.)
+        'lib/services/ciFleetCostMeterService.ts',
+        'lib/repositories/ciContainerUsageRepository.ts',
+        'lib/repositories/ciContainerPeriodCostRepository.ts',
         // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes ENTITLEMENT (the
         // charging half of the same decision). Gated for the reason the meter's
         // comment above anticipates: these modules DECIDE what to bill and when
@@ -509,6 +521,18 @@ export default defineConfig({
         },
         'lib/repositories/ciPeriodUsageRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/ciMinutesReconcile.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-1916 · MOTIR-1924 — the fleet COST meter.
+        'lib/services/ciFleetCostMeterService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/ciContainerUsageRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/ciContainerPeriodCostRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story MOTIR-1775 · MOTIR-1901 — the CI-minutes entitlement.
         'lib/ciMetering/allowance.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciAllowanceService.ts': { branches: 90, functions: 90, lines: 90 },

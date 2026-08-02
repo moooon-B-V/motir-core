@@ -149,8 +149,9 @@ export type RunIntentOutcome =
       costUsd: string;
       bootLatencyMs: number | null;
       /** The §5 container-seconds record. Carried on the outcome so it reaches
-       *  the `job_run` ledger — the durable, queryable home for it until
-       *  MOTIR-1924's table lands. */
+       *  the `job_run` ledger, which stays the PER-RUN operational trail; since
+       *  MOTIR-1924 the same record is also persisted to `ci_container_usage`
+       *  by the sink, which is where it is queryable and attributed. */
       usage: ContainerUsage;
     };
 
