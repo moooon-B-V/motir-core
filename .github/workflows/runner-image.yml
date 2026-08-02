@@ -129,6 +129,12 @@ jobs:
           extracted_mb=$(awk -v b="$extracted"  'BEGIN {printf "%.0f", b/1048576}')
           echo "compressed_mb=${compressed_mb}" >> "$GITHUB_OUTPUT"
           echo "extracted_mb=${extracted_mb}"   >> "$GITHUB_OUTPUT"
+          # Also to STDOUT, not only to the step summary. A summary is readable
+          # by a human in the UI and by nothing else — no API returns it — and
+          # the reason this number is recorded at all is so MOTIR-1928 can
+          # attribute a boot-latency regression to it. A figure only a person
+          # can retrieve does not serve that.
+          echo "MOTIR_RUNNER_IMAGE_SIZE compressed=${compressed_mb}MB extracted=${extracted_mb}MB"
           {
             echo "### Motir CI runner image"
             echo
