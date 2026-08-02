@@ -821,6 +821,73 @@ describe('the boot’s defensive paths', () => {
     expect(deleteRunnerCalls()).toHaveLength(1);
   });
 
+  it('AN UNPULLABLE RUNNER IMAGE settles as its own named condition — through the REAL Fly adapter', async () => {
+    // §6.2 of `docs/decisions/fleet-image-pull.md`, and MOTIR-2006's acceptance
+    // criterion in one test: the pull is made to ACTUALLY FAIL rather than the
+    // classification being asserted by inspection.
+    //
+    // ⚠️ THE REAL ADAPTER, NOT THE FAKE ONE. This test selects `fly` exactly as a
+    // deployment does and lets the machine-create go out over the faked `fetch`,
+    // so the path under test is the whole of it: Fly's real body → the adapter's
+    // classifier → the typed error → this service's outcome → the intent row. A
+    // hand-thrown `OrchestratorImageUnpullableError` would have proven only that
+    // an `instanceof` works.
+    //
+    // The 400 body is Fly's own, measured live on 2026-08-02 (ADR §2.2).
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv(
+      'MOTIR_RUNNER_IMAGE',
+      'ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692df68c80367876c65082c60ec3b1c667f32a98811ac53f0dfa8a0e6d1d',
+    );
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    jitHandler = (call) => {
+      if (call.url.includes('api.machines.dev')) {
+        return json(400, {
+          error:
+            'failed to get manifest ghcr.io/moooon-b-v/motir-ci-runner@sha256:446c692d…: unauthorized',
+        });
+      }
+      if (call.url.includes('generate-jitconfig')) {
+        return json(201, {
+          runner: { id: 9001, name: 'motir-runner', status: 'offline' },
+          encoded_jit_config: 'ZW5jb2RlZC1qaXQ=',
+        });
+      }
+      return new Response(null, { status: 204 });
+    };
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    // NOT `provision_failed`. A fleet whose image cannot be pulled produces a
+    // wall of identical failures, and the name is what lets an operator read
+    // that wall as ONE fault with one remedy.
+    expect(outcome).toMatchObject({ outcome: 'image_unpullable' });
+    expect(outcome).toMatchObject({
+      detail: expect.stringContaining('the runner image could not be pulled'),
+    });
+
+    // The intent tells the truth about WHICH image and WHAT the registry said —
+    // this is the row the operator surface renders, so the diagnosis has to
+    // survive into it rather than living only in a log line.
+    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(settled.status).toBe('failed');
+    expect(settled.failureDetail).toContain('motir-ci-runner');
+    expect(settled.failureDetail).toContain('could not PULL');
+    // The teardown reason stays the container vocabulary's `provision_failed`:
+    // no container ever existed, so nothing ended.
+    expect(settled.teardownReason).toBe('provision_failed');
+
+    // And the minted-but-unused JIT runner is still de-registered. This is the
+    // per-job cost §6.1's preflight exists to stop paying, which is exactly why
+    // the preflight is the detection and this is only the backstop.
+    expect(deleteRunnerCalls()).toHaveLength(1);
+  });
+
   it('a JIT mint refused for a NON-rate-limit reason fails the intent, not the fleet', async () => {
     const fx = await seedTenant();
     const intent = await seedIntent(fx);

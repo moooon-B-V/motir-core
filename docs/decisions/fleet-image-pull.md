@@ -363,3 +363,37 @@ mirror.
 - `registry.fly.io` scope + `fly auth docker` — <https://fly.io/docs/blueprints/using-the-fly-docker-registry/>
 - Package visibility is UI-only and irreversible — <https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility>
 - Live probes §2.1–§2.4 — Fly app `motir-2005-pullprobe`, created and destroyed 2026-08-02
+
+## §12 — What MOTIR-2006 measured when it wired this (2026-08-02)
+
+§2 promised that the implementing card would **re-run §2.1 and §2.2**. It did, after
+MOTIR-2009 flipped the package public. Recorded here rather than only in a PR body, because
+this is where the next person reading the decision will look for whether it came true.
+
+**§12.1 — the runner image is now anonymously pullable, and the digest resolves.** The §2.1
+probe, re-run: `GET https://ghcr.io/token?scope=repository:moooon-b-v/motir-ci-runner:pull`
+now returns `{"token":"…"}` (it returned `UNAUTHORIZED` on 2026-08-02 before the flip), and
+the manifest fetch for the pinned digest `sha256:446c692d…` returns **HTTP 200**,
+`application/vnd.oci.image.index.v1+json`. **Control, unchanged:** the same token request for
+`moooon-b-v/motir-sandbox` still returns `UNAUTHORIZED` — so the probe still distinguishes the
+two states rather than having started saying yes to everything (§9's bug, MOTIR-2010, is also
+still open, as that control shows).
+
+**§12.2 — a REAL Fly Machine boots from the digest, and is destroyed.** `POST /v1/apps/{app}/machines`
+with the pinned reference returned **HTTP 201**; the machine reached state `started` (Fly's own
+event log: `launch pending` → `launch created` → `start started`, ~21.7 s later — image pull
+included); `image_ref.registry` resolved to `ghcr.io`. It was then destroyed (`ok: true`), the
+app's machine list read back empty, and the throwaway app was deleted. **Negative control, in
+the same app, minutes apart:** the still-private `motir-sandbox` reference returned **HTTP 400**
+`failed to get manifest …: unauthorized` and created no machine — which is the exact body
+`isImagePullRefusal()` classifies in `flyMachines.ts`.
+
+**§12.3 — what MOTIR-2006 could NOT prove, handed to MOTIR-1928 explicitly.** §12.2 ran in the
+**`personal`** Fly org, not in **`motir-fleet`**, and that substitution is load-bearing enough
+to name: the coding-agent sandbox has no `motir-fleet` credential. Verified rather than
+assumed — the only Fly token reachable from the sandbox enumerates exactly one organization
+(`personal`) and `GET /v1/apps?org_slug=motir-fleet` returns **HTTP 403**. Anonymous pull is a
+Fly-platform behaviour, not an org-scoped one, so §12.2 establishes the MECHANISM; what remains
+unproven is that `motir-fleet`'s **own app, token and region** boot this digest.
+**MOTIR-1928 owns that**, stated here as an obligation rather than left implied — which is the
+failure §0 says this story kept repeating.
