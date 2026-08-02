@@ -170,7 +170,12 @@ else
   ok "no config.sh / config.cmd in the image"
 fi
 
-if inspect 'find / -xdev -name "config.sh" -o -xdev -name "config.cmd" 2>/dev/null | head -1' | grep -q .; then
+# Captured rather than piped, for the same pipefail reason as the boot check
+# below: `find /` exits non-zero on unreadable paths, which under pipefail would
+# make an EMPTY result and a FAILED search indistinguishable.
+stray=$(inspect 'find / -xdev \( -name "config.sh" -o -name "config.cmd" \) 2>/dev/null | head -5' || true)
+if [ -n "${stray}" ]; then
+  printf '%s\n' "${stray}" | sed 's/^/        | /' >&2
   fail "a config.sh / config.cmd exists somewhere in the image (§7.4)"
 else
   ok "no config.sh / config.cmd anywhere on the image filesystem"
@@ -215,10 +220,37 @@ else
 fi
 
 # Fail-fast on a missing credential: the boot contract's one required variable.
-if docker run --rm -e MOTIR_RUNNER_SKIP_DOCKER=1 "${IMAGE}" 2>&1 | grep -q 'ACTIONS_RUNNER_INPUT_JITCONFIG'; then
-  ok "boot without a JIT config fails fast and names the missing variable"
+#
+# ⚠️ The output is CAPTURED, not piped. `set -o pipefail` is on and this
+# `docker run` is SUPPOSED to exit non-zero, so `docker run … | grep -q …`
+# reports the pipeline's status — the container's failure — rather than the
+# grep's match, and the check fails whenever it should pass. That is exactly how
+# this assertion failed on its first CI run while the behaviour it tests was
+# correct all along.
+boot_out=$(docker run --rm "${IMAGE}" 2>&1 || true)
+boot_status=$(docker run --rm "${IMAGE}" >/dev/null 2>&1; echo $?)
+
+if grep -q 'ACTIONS_RUNNER_INPUT_JITCONFIG' <<<"${boot_out}"; then
+  ok "boot without a JIT config names the missing variable"
 else
-  fail "boot without ACTIONS_RUNNER_INPUT_JITCONFIG did not fail with a named error"
+  printf '%s\n' "${boot_out}" | sed 's/^/        | /' >&2
+  fail "boot without ACTIONS_RUNNER_INPUT_JITCONFIG did not name it in the error"
+fi
+
+if [ "${boot_status}" -ne 0 ]; then
+  ok "boot without a JIT config exits non-zero"
+else
+  fail "boot without a JIT config exited 0 — the container would idle to its timeout, billed"
+fi
+
+# Deliberately run WITHOUT `--privileged` and WITHOUT MOTIR_RUNNER_SKIP_DOCKER:
+# the credential check sits BEFORE the dockerd block precisely so a
+# configuration mistake fails in a second instead of after a 30s dockerd
+# timeout. This asserts that ORDER, which is the only reason the check is first.
+if grep -q 'starting dockerd' <<<"${boot_out}"; then
+  fail "dockerd was started before the JIT config was validated — a config mistake now costs a boot timeout"
+else
+  ok "the credential is validated BEFORE dockerd is started"
 fi
 
 echo

@@ -201,9 +201,17 @@ describe('the derived toolchain — every entry traces to a starter workflow', (
 describe('the CI lanes', () => {
   it('the pull-request lane builds the image and cannot publish', () => {
     expect(ciYml).toContain('uses: ./.github/workflows/runner-image.yml');
-    const job = ciYml.slice(ciYml.indexOf('  runner-image:'));
+    // Comments stripped, and the window ends at the job's own `publish: false`.
+    // Both matter: a comment is not a permission grant, and slicing to EOF from
+    // a job that happens to be last is a trap that only springs when someone
+    // appends the NEXT job — which is precisely how this PR broke
+    // `sandboxCi.test.ts`'s equivalent assertion.
+    const job = ciYml
+      .slice(ciYml.indexOf('  runner-image:'))
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
     expect(job).toMatch(/publish: false/);
-    // No `packages: write` on the PR lane — it cannot push even if it tried.
     expect(job.slice(0, job.indexOf('publish: false'))).not.toContain('packages: write');
   });
 

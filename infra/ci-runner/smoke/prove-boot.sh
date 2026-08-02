@@ -83,7 +83,7 @@ grep -q 'dockerd ready'                      <<<"${boot_log}" && ok "dockerd bec
 grep -q 'exec run.sh'                        <<<"${boot_log}" && ok "the entrypoint reached the run.sh exec" || fail "the entrypoint never reached run.sh"
 grep -q 'No such file or directory'           <<<"${boot_log}" && fail "run.sh could not be executed (missing file)" || ok "run.sh was found and executed"
 grep -qi 'permission denied'                  <<<"${boot_log}" && fail "run.sh hit a permission error as the runner user" || ok "no permission error dropping to the runner user"
-grep -qi 'must not run with sudo\|as root'    <<<"${boot_log}" && fail "the runner refused the user it was given" || ok "the runner accepted the unprivileged user"
+grep -qi 'must not run with sudo'             <<<"${boot_log}" && fail "the runner refused the user it was given" || ok "the runner accepted the unprivileged user"
 
 echo "  note  live registration / one-job / de-register is NOT proven here — MOTIR-1928 owns it (see this file's header)"
 

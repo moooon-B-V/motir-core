@@ -34,6 +34,31 @@ const ci = read(join(WORKFLOW_DIR, 'ci.yml'));
 const images = read(join(WORKFLOW_DIR, 'sandbox-images.yml'));
 const release = read(join(WORKFLOW_DIR, 'release-sandbox.yml'));
 const readme = read(join(CLI_DIR, 'sandbox', 'README.md'));
+
+/**
+ * The `sandbox:` job in `ci.yml`, and only it — from its own key to the next
+ * top-level job key, with comments stripped.
+ *
+ * ⚠️ This used to be `ci.slice(ci.indexOf('  sandbox:'))`, i.e. slice-to-EOF,
+ * which was the same thing ONLY while `sandbox:` was the last job in the file.
+ * MOTIR-1978 appended a `runner-image:` job after it, at which point the
+ * "the pull-request lane cannot push" assertion below silently started guarding
+ * a job it knows nothing about — and failed on that job's COMMENT explaining
+ * that it, too, has no `packages: write`. Both halves are fixed here: the window
+ * is the sandbox job, and a comment is not a permission grant.
+ */
+const sandboxJob = (() => {
+  // Comments are dropped BEFORE the window is cut, not after: a job's
+  // documentation sits above its key, so a window that ends at the next key
+  // would otherwise swallow the next job's entire comment block.
+  const lines = ci.split('\n').filter((line) => !line.trim().startsWith('#'));
+  const start = lines.findIndex((line) => line === '  sandbox:');
+  // Loud rather than an empty window silently passing every assertion below.
+  if (start === -1) throw new Error('ci.yml has no `sandbox:` job — this suite guards nothing');
+  const after = lines.slice(start + 1);
+  const end = after.findIndex((line) => /^ {2}[A-Za-z0-9_-]+:$/.test(line));
+  return [lines[start], ...(end === -1 ? after : after.slice(0, end))].join('\n');
+})();
 const runSh = read(join(SMOKE_DIR, 'run.sh'));
 const loopSh = read(join(SMOKE_DIR, 'loop-smoke.sh'));
 const confinementSh = read(join(SMOKE_DIR, 'confinement.sh'));
@@ -368,7 +393,11 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
     const secrets = [...images.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]);
     expect([...new Set(secrets)]).toEqual(['GITHUB_TOKEN']);
     // ...and the pull-request lane must not be able to push at all.
-    expect(ci.slice(ci.indexOf('  sandbox:'))).not.toContain('packages: write');
+    // Scoped to the sandbox job itself (see `sandboxJob` above) — a sibling job
+    // further down the file is not this suite's business, and the sandbox job
+    // being last was never the property under test.
+    expect(sandboxJob).toContain('uses: ./.github/workflows/sandbox-images.yml');
+    expect(sandboxJob).not.toContain('packages: write');
   });
 
   it('tags each profile both movably and immutably, for both architectures', () => {
