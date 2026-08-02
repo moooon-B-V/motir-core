@@ -96,6 +96,7 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
       owner,
       name,
       defaultBranch: 'main',
+      archived: false,
     },
   });
   return `${owner}/${name}`;

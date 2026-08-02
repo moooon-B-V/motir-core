@@ -3,6 +3,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
+  Archive,
   BadgeCheck,
   ChevronDown,
   ChevronUp,
@@ -163,9 +164,13 @@ export function RepositoryRow({
         {row.state === 'created' || row.state === 'connected' ? (
           <>
             <RepoLink row={row} />
-            <p className="text-sm text-(--el-text-helper)">
-              {row.state === 'created' ? t('createdDetail') : t('connectedDetail')}
-            </p>
+            {row.realizedRepo?.archived ? (
+              <RowArchived />
+            ) : (
+              <p className="text-sm text-(--el-text-helper)">
+                {row.state === 'created' ? t('createdDetail') : t('connectedDetail')}
+              </p>
+            )}
           </>
         ) : null}
 
@@ -428,6 +433,36 @@ function RowState({ row }: { row: ProjectRepoDto }) {
     default:
       return null;
   }
+}
+
+/**
+ * The row's ARCHIVED line (MOTIR-1959) — a SUB-STATE of a settled row, built the
+ * same way the invitation line below is, and for the same reason: the repository
+ * existing and the repository still accepting writes are independent axes, so
+ * archiving does not become a seventh row state. The row keeps its `created` /
+ * `connected` tint and word, and this replaces the reassuring detail line under
+ * it, which would otherwise say "your code is ready" about a repository nothing
+ * can be pushed to.
+ *
+ * Obeys the panel-7 rules verbatim: an icon PLUS a word (never colour alone), no
+ * `Pill` on a tinted row, `--el-warning` for the icon and `--el-text-strong` ink.
+ * `role="status"` rather than `alert` — like "not invited", this is a standing
+ * condition the user can resolve, not an error this row raised.
+ */
+function RowArchived() {
+  const t = useTranslations('repositorySet');
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        role="status"
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-(--el-text-strong)"
+      >
+        <Archive className="size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
+        {t('stateArchived')}
+      </span>
+      <p className="min-w-0 text-sm text-(--el-text-helper)">{t('archivedDetail')}</p>
+    </div>
+  );
 }
 
 /**

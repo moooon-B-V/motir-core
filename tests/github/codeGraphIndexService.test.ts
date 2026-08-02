@@ -96,7 +96,15 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
         accountLogin: 'moooon',
         accountType: 'Organization',
       },
-      repos: [{ providerRepoId: '555', owner: 'moooon', name: 'acme', defaultBranch: 'main' }],
+      repos: [
+        {
+          providerRepoId: '555',
+          owner: 'moooon',
+          name: 'acme',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
     });
 
     const fetchMock = stubGithubTarball();
@@ -115,6 +123,7 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
       repoOwner: 'moooon',
       repoName: 'acme',
       defaultBranch: 'main',
+      archived: false,
     };
 
     // Phase 1 — reads only. It touches NO network (this is what makes it cheap
@@ -170,7 +179,9 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: { installationId: 'inst-empty', accountLogin: 'moooon', accountType: 'User' },
-      repos: [{ providerRepoId: '1', owner: 'moooon', name: 'r', defaultBranch: 'main' }],
+      repos: [
+        { providerRepoId: '1', owner: 'moooon', name: 'r', defaultBranch: 'main', archived: false },
+      ],
     });
 
     // Auto-created workspaces may seed a default project; remove any so the

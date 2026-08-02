@@ -4,7 +4,7 @@ import type { GithubRepo } from '@prisma/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
-import { UnknownTargetRepoError } from '@/lib/workItems/errors';
+import { ArchivedTargetRepoError, UnknownTargetRepoError } from '@/lib/workItems/errors';
 import { listDispatchRepoNames } from '@/lib/workItems/dispatchRepo';
 import { runNextReady } from '@/lib/mcp/tools/nextReady';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
@@ -66,7 +66,7 @@ afterAll(async () => {
 async function connectRepo(
   workspaceId: string,
   name: string,
-  opts: { owner?: string; provider?: string; defaultBranch?: string } = {},
+  opts: { owner?: string; provider?: string; defaultBranch?: string; archived?: boolean } = {},
 ): Promise<GithubRepo> {
   const owner = opts.owner ?? 'moooon';
   const provider = opts.provider ?? 'github';
@@ -90,6 +90,7 @@ async function connectRepo(
       owner,
       name,
       defaultBranch: opts.defaultBranch ?? 'main',
+      archived: opts.archived ?? false,
       provider,
     },
   });
@@ -100,7 +101,15 @@ async function connectRepo(
 async function establishRepo(
   fx: WorkItemFixture,
   name: string,
-  opts: { projectId?: string; role?: 'web' | 'api'; owner?: string; defaultBranch?: string } = {},
+  opts: {
+    projectId?: string;
+    role?: 'web' | 'api';
+    owner?: string;
+    defaultBranch?: string;
+    /** Establish the row against a repository that is ARCHIVED on the host
+     *  (MOTIR-1959) — a settled row whose repository accepts no writes. */
+    archived?: boolean;
+  } = {},
 ): Promise<GithubRepo> {
   const projectId = opts.projectId ?? fx.projectId;
   const row = await projectRepoSetService.addRow(
@@ -111,6 +120,7 @@ async function establishRepo(
   const repo = await connectRepo(fx.workspaceId, name, {
     ...(opts.owner !== undefined ? { owner: opts.owner } : {}),
     ...(opts.defaultBranch !== undefined ? { defaultBranch: opts.defaultBranch } : {}),
+    ...(opts.archived !== undefined ? { archived: opts.archived } : {}),
   });
   await projectRepoSetService.attachRealizedRepo(row.id, repo.id, fx.ctx);
   return repo;
@@ -431,6 +441,83 @@ describe('all dispatch surfaces serve the same resolution', () => {
 });
 
 // ── 6 · the published contract stays backward-compatible ───────────────────
+
+// ── 6 · the ARCHIVED repository (MOTIR-1959) ────────────────────────────────
+
+// A repository can be archived at ANY time after it joined the project's set —
+// which is the incident MOTIR-1956 recorded, one layer down. Membership and a
+// collaborator's `push` permission are both silent about it, so before this guard
+// a card resolving to an archived repo stayed `ready`, dispatched, and could not
+// open a PR. What is pinned here is that the refusal happens at RESOLUTION, over
+// real Postgres, on every dispatch surface — not at the point an agent tries to
+// push, which is far too late and far from the reader.
+describe('a dispatch resolving to an ARCHIVED repository', () => {
+  it('REFUSES the project default, naming the repository and the reason', async () => {
+    const fx = await makeWorkItemFixture();
+    await establishRepo(fx, 'acme-web', { archived: true });
+    await makeReady(fx, 'unpinned');
+
+    await expect(dispatchOf(fx)).rejects.toThrow(ArchivedTargetRepoError);
+    await expect(dispatchOf(fx)).rejects.toThrow(/acme-web/);
+    await expect(dispatchOf(fx)).rejects.toThrow(/archived/);
+  });
+
+  it('REFUSES an explicit pin to an archived repo', async () => {
+    const fx = await makeWorkItemFixture();
+    await establishRepo(fx, 'acme-web', { archived: true });
+    await establishRepo(fx, 'acme-api', { role: 'api' });
+    await makeReady(fx, 'pinned at the dead one', 'acme-web');
+
+    await expect(dispatchOf(fx)).rejects.toThrow(ArchivedTargetRepoError);
+  });
+
+  it('still dispatches a SIBLING item pinned to the LIVE repo — rows are independent', async () => {
+    // The guard is about the repository the ITEM resolves to, never about the set
+    // merely containing an archived row: an archived `web` repository cannot
+    // strand the `api` work (ADR §4.2, one layer up).
+    const fx = await makeWorkItemFixture();
+    await establishRepo(fx, 'acme-web', { archived: true });
+    await establishRepo(fx, 'acme-api', { role: 'api' });
+    const live = await makeReady(fx, 'pinned at the live one', 'acme-api');
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      live.identifier,
+      fx.ctx,
+    );
+    expect(dto.targetRepo).toBe('acme-api');
+  });
+
+  it('refuses on EVERY dispatch surface — `next_ready`, `claim_next_ready`, `dispatch_prompt`', async () => {
+    // The surfaces share `resolveItemDispatchRepo` precisely so they can never
+    // route differently; a guard on one of them would be a guard on none.
+    const fx = await makeWorkItemFixture();
+    await establishRepo(fx, 'acme-web', { archived: true });
+    const item = await makeReady(fx, 'dispatch me');
+
+    await expect(runNextReady({ projectKey: fx.projectIdentifier }, fx.ctx)).rejects.toThrow(
+      ArchivedTargetRepoError,
+    );
+    await expect(
+      dispatchPromptService.getDispatchPrompt(fx.projectId, item.identifier, fx.ctx),
+    ).rejects.toThrow(ArchivedTargetRepoError);
+    await expect(runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx)).rejects.toThrow(
+      ArchivedTargetRepoError,
+    );
+  });
+
+  it('un-archiving the repository makes the item dispatchable again — no other repair needed', async () => {
+    // The state is RECORDED, not inferred, so the fix on the host is the whole
+    // fix: nothing in Motir has to be re-established, re-pinned or re-planned.
+    const fx = await makeWorkItemFixture();
+    const repo = await establishRepo(fx, 'acme-web', { archived: true });
+    await makeReady(fx, 'unpinned');
+    await expect(dispatchOf(fx)).rejects.toThrow(ArchivedTargetRepoError);
+
+    await db.githubRepo.update({ where: { id: repo.id }, data: { archived: false } });
+    expect(await dispatchOf(fx)).toMatchObject({ targetRepo: 'acme-web' });
+  });
+});
 
 describe('contract discipline — additive only', () => {
   it("leaves today's fields unchanged in name and type, and adds only the two", async () => {

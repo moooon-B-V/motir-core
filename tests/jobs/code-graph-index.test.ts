@@ -88,7 +88,15 @@ async function seedWorkspace(
   await githubInstallationService.persistInstallation({
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: 'moooon', accountType: 'Organization' },
-    repos: [{ providerRepoId: '77', owner: 'moooon', name: 'motir-core', defaultBranch: 'main' }],
+    repos: [
+      {
+        providerRepoId: '77',
+        owner: 'moooon',
+        name: 'motir-core',
+        defaultBranch: 'main',
+        archived: false,
+      },
+    ],
   });
   return { workspaceId: workspace.id, projectIds, installationId };
 }
@@ -138,6 +146,7 @@ describe('system.code-graph-index — one checkpointed step per project', () => 
             repoOwner: 'moooon',
             repoName: 'motir-core',
             defaultBranch: 'main',
+            archived: false,
           },
         },
       ],
@@ -239,6 +248,7 @@ describe('system.code-graph-refresh — the same shape', () => {
             repoOwner: 'moooon',
             repoName: 'motir-core',
             defaultBranch: 'main',
+            archived: false,
           },
         },
       ],

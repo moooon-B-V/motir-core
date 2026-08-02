@@ -53,7 +53,11 @@ function normalizeProject(value: unknown): NormalizedRepo | null {
       ? project['default_branch']
       : 'main';
   if (!providerRepoId || !name || !owner) return null;
-  return { providerRepoId, owner, name, defaultBranch };
+  // GitLab reports the same liveness fact under the same key (`archived: true` on
+  // `GET /projects`), and an archived GitLab project is read-only exactly as an
+  // archived GitHub repo is — so the normalization is identical, not a per-provider
+  // special case (MOTIR-1959).
+  return { providerRepoId, owner, name, defaultBranch, archived: project['archived'] === true };
 }
 
 /** Map a GitLab pipeline `status` to our normalized CI conclusion. */

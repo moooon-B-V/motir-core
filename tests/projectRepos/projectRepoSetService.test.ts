@@ -81,6 +81,7 @@ async function connectRepo(
       owner,
       name,
       defaultBranch: 'main',
+      archived: false,
       provider,
     },
   });
@@ -531,6 +532,7 @@ describe('the establish machine — the happy paths', () => {
       name: 'acme-web',
       repoRef: 'acme/acme-web',
       defaultBranch: 'main',
+      archived: false,
     });
   });
 

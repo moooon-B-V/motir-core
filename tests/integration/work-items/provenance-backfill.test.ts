@@ -97,6 +97,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
       owner: 'moooon-B-V',
       name: 'motir-core',
       defaultBranch: 'main',
+      archived: false,
       provider: 'github',
     },
     update: {},

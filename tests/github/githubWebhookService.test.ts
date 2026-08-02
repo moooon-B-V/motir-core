@@ -58,7 +58,13 @@ async function makeScenario(email: string) {
       accountType: 'Organization',
     },
     repos: [
-      { providerRepoId: REPO_PROVIDER_ID, owner: 'moooon', name: 'acme', defaultBranch: 'main' },
+      {
+        providerRepoId: REPO_PROVIDER_ID,
+        owner: 'moooon',
+        name: 'acme',
+        defaultBranch: 'main',
+        archived: false,
+      },
     ],
   });
   return { user, workspace, project, item, ctx };
@@ -283,7 +289,15 @@ describe('githubWebhookService — pull_request → status sync', () => {
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: { installationId: 'inst-2', accountLogin: 'moooon', accountType: 'User' },
-      repos: [{ providerRepoId: '888', owner: 'moooon', name: 'beta', defaultBranch: 'main' }],
+      repos: [
+        {
+          providerRepoId: '888',
+          owner: 'moooon',
+          name: 'beta',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
     });
 
     const res = await githubWebhookService.handleEvent(
@@ -348,12 +362,19 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
         accountType: 'Organization',
       },
       repos: [
-        { providerRepoId: REPO_PROVIDER_ID, owner: 'moooon', name: 'acme', defaultBranch: 'main' },
+        {
+          providerRepoId: REPO_PROVIDER_ID,
+          owner: 'moooon',
+          name: 'acme',
+          defaultBranch: 'main',
+          archived: false,
+        },
         {
           providerRepoId: REPO_B_PROVIDER_ID,
           owner: 'moooon',
           name: 'acme-ai',
           defaultBranch: 'main',
+          archived: false,
         },
       ],
     });
@@ -441,7 +462,9 @@ describe('githubWebhookService — installation grant mirror', () => {
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: { installationId: 'inst-del', accountLogin: 'moooon', accountType: 'User' },
-      repos: [{ providerRepoId: '1', owner: 'moooon', name: 'r', defaultBranch: 'main' }],
+      repos: [
+        { providerRepoId: '1', owner: 'moooon', name: 'r', defaultBranch: 'main', archived: false },
+      ],
     });
 
     const first = await githubWebhookService.handleEvent('installation', {
@@ -515,7 +538,15 @@ describe('githubWebhookService — installation grant mirror', () => {
         accountLogin: 'moooon',
         accountType: 'Organization',
       },
-      repos: [{ providerRepoId: '111', owner: 'moooon', name: 'stale', defaultBranch: 'main' }],
+      repos: [
+        {
+          providerRepoId: '111',
+          owner: 'moooon',
+          name: 'stale',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
     });
 
     const res = await githubWebhookService.handleEvent('installation_repositories', {
@@ -607,7 +638,15 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
         accountLogin: 'moooon',
         accountType: 'Organization',
       },
-      repos: [{ providerRepoId: '111', owner: 'moooon', name: 'keep', defaultBranch: 'main' }],
+      repos: [
+        {
+          providerRepoId: '111',
+          owner: 'moooon',
+          name: 'keep',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
     });
     for (const repoRef of seedIndexFor) await seedSucceededIndex(workspaceId, repoRef);
     // The bind above (persistInstallation directly) doesn't enqueue; clear anything.

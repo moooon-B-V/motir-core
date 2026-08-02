@@ -134,6 +134,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
       owner: 'moooon',
       name,
       defaultBranch: 'main',
+      archived: false,
       provider: 'github',
     },
   });

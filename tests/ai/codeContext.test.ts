@@ -53,10 +53,34 @@ async function seedProjectContext(): Promise<ProjectContext> {
 
 /** The Motir-shaped grant: ONE workspace (one product), FOUR connected repos. */
 const FOUR_REPOS = [
-  { providerRepoId: '101', owner: 'moooon', name: 'motir-core', defaultBranch: 'main' },
-  { providerRepoId: '102', owner: 'moooon', name: 'motir-ai', defaultBranch: 'main' },
-  { providerRepoId: '103', owner: 'moooon', name: 'motir-gateway', defaultBranch: 'master' },
-  { providerRepoId: '104', owner: 'moooon', name: 'motir-meta', defaultBranch: 'main' },
+  {
+    providerRepoId: '101',
+    owner: 'moooon',
+    name: 'motir-core',
+    defaultBranch: 'main',
+    archived: false,
+  },
+  {
+    providerRepoId: '102',
+    owner: 'moooon',
+    name: 'motir-ai',
+    defaultBranch: 'main',
+    archived: false,
+  },
+  {
+    providerRepoId: '103',
+    owner: 'moooon',
+    name: 'motir-gateway',
+    defaultBranch: 'master',
+    archived: false,
+  },
+  {
+    providerRepoId: '104',
+    owner: 'moooon',
+    name: 'motir-meta',
+    defaultBranch: 'main',
+    archived: false,
+  },
 ];
 
 beforeEach(async () => {

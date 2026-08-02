@@ -5515,6 +5515,8 @@
     "createdDetail": "Hosted by Motir · seeded from the Motir Next.js starter.",
     "stateConnected": "Connected",
     "connectedDetail": "Your existing repository — nothing was created and nothing was changed in it.",
+    "stateArchived": "Archived on GitHub",
+    "archivedDetail": "This repository is read-only, so no branch or pull request can be opened against it. Un-archive it on GitHub, or point this role at another repository.",
     "stateSkipped": "Skipped",
     "skippedTitle": "No {roleLabel} repository",
     "skippedDetail": "Motir will plan around it, and say so when a task needs code that isn't there.",

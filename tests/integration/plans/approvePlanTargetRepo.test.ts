@@ -69,6 +69,7 @@ async function connectRepo(workspaceId: string, name: string, owner = 'acme'): P
       owner,
       name,
       defaultBranch: 'main',
+      archived: false,
       provider: 'github',
     },
   });

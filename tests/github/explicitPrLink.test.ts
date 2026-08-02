@@ -57,6 +57,7 @@ async function makeScenario(opts: {
           owner: 'moooon',
           name: 'acme',
           defaultBranch: 'main',
+          archived: false,
         },
       ],
     });

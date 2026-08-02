@@ -46,6 +46,7 @@ function toRealizedDto(repo: GithubRepo): RealizedProjectRepoDto {
     name: repo.name,
     repoRef: `${repo.owner}/${repo.name}`,
     defaultBranch: repo.defaultBranch,
+    archived: repo.archived,
   };
 }
 

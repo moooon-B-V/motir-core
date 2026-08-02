@@ -376,6 +376,7 @@ describe('what is NOT invited to', () => {
         owner: LOGIN,
         name: 'their-own-monorepo',
         defaultBranch: 'main',
+        archived: false,
       },
     });
     calls = [];

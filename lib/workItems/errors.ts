@@ -28,7 +28,8 @@ export type WorkItemErrorTag =
   | 'STALE_WORK_ITEM'
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'NOT_EPIC'
-  | 'UNKNOWN_TARGET_REPO';
+  | 'UNKNOWN_TARGET_REPO'
+  | 'ARCHIVED_TARGET_REPO';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -285,6 +286,36 @@ export class UnknownTargetRepoError extends WorkItemError {
         : `Unknown target repo "${repoName}". Connected repositories: ${connectedRefs.join(', ')}.`;
     super(connectedRefs.length === 0 ? empty : known);
     this.name = 'UnknownTargetRepoError';
+  }
+}
+
+/**
+ * The repository an item's dispatch resolved to is ARCHIVED on the host
+ * (MOTIR-1959) — read-only, so no branch and no pull request can be opened
+ * against it, by an admin or by anyone else.
+ *
+ * DISTINCT from {@link UnknownTargetRepoError}, which is a typo or a
+ * wrong-project name at AUTHORING time. This one fires at DISPATCH, about a name
+ * that is entirely correct and a repository that plainly exists — what changed is
+ * the repository, usually long after the item was written. Conflating the two
+ * would tell the user to fix the pin, which is the one thing that will not help.
+ *
+ * The message names the repository AND the reason AND where the fix is, because
+ * the fix is not in Motir: only someone with admin on the host can un-archive it,
+ * so an error that merely says "cannot dispatch" leaves the reader with nothing
+ * to do. A `WorkItemError`, so the route layer maps it to 422 and an MCP caller
+ * sees a self-correctable tool error rather than an opaque 500.
+ */
+export class ArchivedTargetRepoError extends WorkItemError {
+  readonly tag = 'ARCHIVED_TARGET_REPO' as const;
+  readonly code = 'ARCHIVED_TARGET_REPO' as const;
+  constructor(repoName: string, repoRef: string) {
+    super(
+      `Target repo "${repoName}" (${repoRef}) is archived on the host, so it is read-only — ` +
+        'no branch or pull request can be opened against it. Un-archive it, or point this work ' +
+        "at a different repository in the project's set.",
+    );
+    this.name = 'ArchivedTargetRepoError';
   }
 }
 

@@ -71,6 +71,7 @@ async function seedRepo(
       owner,
       name,
       defaultBranch: 'main',
+      archived: false,
     },
   });
   return `${owner}/${name}`;

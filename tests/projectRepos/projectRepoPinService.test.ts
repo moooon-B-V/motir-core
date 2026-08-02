@@ -42,7 +42,11 @@ afterAll(async () => {
 
 /** Connect one repo to the fixture's workspace — the 7.10.3 mirror row a set row
  *  realizes against (same shape as `projectRepoSetService.test.ts`). */
-async function connectRepo(workspaceId: string, name: string): Promise<GithubRepo> {
+async function connectRepo(
+  workspaceId: string,
+  name: string,
+  opts: { archived?: boolean } = {},
+): Promise<GithubRepo> {
   const installationId = `inst-${workspaceId}`;
   const inst = await db.githubInstallation.upsert({
     where: { installationId },
@@ -63,6 +67,7 @@ async function connectRepo(workspaceId: string, name: string): Promise<GithubRep
       owner: 'acme',
       name,
       defaultBranch: 'main',
+      archived: opts.archived ?? false,
       provider: 'github',
     },
   });
@@ -277,6 +282,107 @@ describe('a role that resolves to no repository', () => {
 });
 
 // ── Idempotent, non-clobbering, and resumable ───────────────────────────────
+
+// The LIVENESS axis (MOTIR-1959) — the pin pass is where "this role resolves to
+// an archived repository" turns into a decision NOT to write. Pinned over real
+// Postgres because the pure test proves the verdict and this proves the WRITE
+// that follows from it (or, here, the write that does not).
+describe('a role whose repository is ARCHIVED', () => {
+  it('writes NO pin, and reports the role as `archived` rather than unestablished', async () => {
+    // The nulls are the point: `repoName` is what the pin is written from, so a
+    // role that resolved to a name would pin every item of that role at a
+    // repository no PR can be opened against — and the item would still read
+    // `ready`, which is the MOTIR-1956 shape exactly.
+    const fx = await makeWorkItemFixture();
+    const api = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
+      fx.ctx,
+    );
+    const item = await itemWithRole(fx, 'The sessions endpoint', 'api');
+    await establish(fx, api.id, await connectRepo(fx.workspaceId, 'acme-api', { archived: true }));
+
+    expect(await pinOf(item.id)).toBeNull();
+    const result = await projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
+    expect(result.roles.find((r) => r.role === 'api')).toMatchObject({
+      outcome: 'archived',
+      repoName: null,
+      pinned: 0,
+      leftUnpinned: 1,
+    });
+    expect(result.pinned).toBe(0);
+  });
+
+  it("pins the project's OTHER roles regardless — rows are independent (ADR §4.2)", async () => {
+    const fx = await makeWorkItemFixture();
+    const web = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme-web' },
+      fx.ctx,
+    );
+    const api = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
+      fx.ctx,
+    );
+    const webItem = await itemWithRole(fx, 'The sign-in screen', 'web');
+    const apiItem = await itemWithRole(fx, 'The sessions endpoint', 'api');
+
+    await establish(fx, api.id, await connectRepo(fx.workspaceId, 'acme-api', { archived: true }));
+    await establish(fx, web.id, await connectRepo(fx.workspaceId, 'acme-web'));
+
+    expect(await pinOf(webItem.id)).toBe('acme-web');
+    expect(await pinOf(apiItem.id)).toBeNull();
+  });
+
+  it('pins on the NEXT pass once the repository is un-archived — nothing else to repair', async () => {
+    // The state is RECORDED, so the host-side fix is the whole fix: the role goes
+    // `archived → resolved` and the pass that follows writes the pins it always
+    // would have. Idempotence carries the rest.
+    const fx = await makeWorkItemFixture();
+    const api = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
+      fx.ctx,
+    );
+    const item = await itemWithRole(fx, 'The sessions endpoint', 'api');
+    const repo = await connectRepo(fx.workspaceId, 'acme-api', { archived: true });
+    await establish(fx, api.id, repo);
+    expect(await pinOf(item.id)).toBeNull();
+
+    await db.githubRepo.update({ where: { id: repo.id }, data: { archived: false } });
+    const result = await projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
+
+    expect(await pinOf(item.id)).toBe('acme-api');
+    expect(result.roles.find((r) => r.role === 'api')).toMatchObject({
+      outcome: 'resolved',
+      pinned: 1,
+      leftUnpinned: 0,
+    });
+  });
+
+  it('never UN-pins an item that was pinned while the repository was live', async () => {
+    // The pass only ever fills a null `targetRepo` (the shipped non-clobbering
+    // rule), and archiving must not become the one thing that retracts a name
+    // already dispatched against. The refusal belongs at DISPATCH, where the
+    // reader is told why — not as a silent rewrite of recorded history.
+    const fx = await makeWorkItemFixture();
+    const api = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
+      fx.ctx,
+    );
+    const item = await itemWithRole(fx, 'The sessions endpoint', 'api');
+    const repo = await connectRepo(fx.workspaceId, 'acme-api');
+    await establish(fx, api.id, repo);
+    expect(await pinOf(item.id)).toBe('acme-api');
+
+    await db.githubRepo.update({ where: { id: repo.id }, data: { archived: true } });
+    await projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
+
+    expect(await pinOf(item.id)).toBe('acme-api');
+  });
+});
 
 describe('re-running the resolution', () => {
   it('is a NO-OP — nothing is written twice', async () => {

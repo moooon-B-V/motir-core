@@ -51,7 +51,11 @@ function normalizeRepo(value: unknown): NormalizedRepo | null {
   const defaultBranch =
     typeof repo['default_branch'] === 'string' ? repo['default_branch'] : 'main';
   if (!providerRepoId || !name || !owner) return null;
-  return { providerRepoId, owner, name, defaultBranch };
+  // `archived` is a plain boolean on every repository object GitHub returns (the
+  // installation listing included). Only an explicit `true` archives the mirror —
+  // a payload that omits the field leaves the row live, which is the same reading
+  // every row written before MOTIR-1959 already carries.
+  return { providerRepoId, owner, name, defaultBranch, archived: repo['archived'] === true };
 }
 
 /** Map a GitHub `check_run.conclusion` (or commit-status state) to ours. */

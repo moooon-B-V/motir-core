@@ -6,7 +6,7 @@ import {
   resolveDispatchTargetRepo,
   type ConnectedRepoName,
 } from '@/lib/workItems/targetRepo';
-import { UnknownTargetRepoError } from '@/lib/workItems/errors';
+import { ArchivedTargetRepoError, UnknownTargetRepoError } from '@/lib/workItems/errors';
 import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 
 // The PURE half of per-item repo attribution (Story 7.9 · MOTIR-1804; the repo
@@ -23,6 +23,7 @@ function repo(name: string, owner = 'moooon'): ConnectedRepoName {
     repoRef: `${owner}/${name}`,
     cloneUrl: `https://github.com/${owner}/${name}.git`,
     defaultBranch: 'main',
+    archived: false,
   };
 }
 
@@ -125,6 +126,79 @@ describe('resolveDispatchRepo — the name PLUS how to obtain it (MOTIR-1783)', 
   it('resolves to null — no name, no coordinates — on an ambiguous or empty domain', () => {
     expect(resolveDispatchRepo(null, [repo('a'), repo('b')])).toBeNull();
     expect(resolveDispatchRepo(null, [])).toBeNull();
+  });
+});
+
+// The ARCHIVED guard (MOTIR-1959) — the one place a dispatch resolution REFUSES
+// rather than answering. Pinned here because this is the policy: the DB-backed
+// proof that a real dispatch hits it is `tests/ready/projectScopedDispatchRepo.test.ts`.
+describe('resolveDispatchRepo — an ARCHIVED repository (MOTIR-1959)', () => {
+  const archived = (name: string, owner = 'moooon'): ConnectedRepoName => ({
+    ...repo(name, owner),
+    archived: true,
+  });
+
+  it('THROWS for an explicit pin naming an archived repo — before any branch or PR attempt', () => {
+    // The failure has to arrive as a stated reason, not as a degraded answer: an
+    // archived repository is read-only, so the dispatch this call authorizes could
+    // never open a PR however the agent behaves.
+    expect(() => resolveDispatchRepo('motir-core', [archived('motir-core')])).toThrow(
+      ArchivedTargetRepoError,
+    );
+  });
+
+  it('names the REPOSITORY and states the REASON — the two things the reader acts on', () => {
+    // The fix is on the host and nothing Motir does next substitutes for it, so an
+    // error that only says "cannot dispatch" leaves the reader with nothing to do.
+    try {
+      resolveDispatchRepo('motir-core', [archived('motir-core', 'acme')]);
+      expect.unreachable('an archived target must not resolve');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ArchivedTargetRepoError);
+      expect((err as Error).message).toContain('motir-core');
+      expect((err as Error).message).toContain('acme/motir-core');
+      expect((err as Error).message).toContain('archived');
+    }
+  });
+
+  it('THROWS for the single-repo DEFAULT too — a project whose only repo is archived', () => {
+    // How the repo was chosen differs; what is wrong with it does not. Left as a
+    // silent `null`, this case would read to the CLI as "no repos configured" and
+    // fall back to the link root — an agent working where it cannot push.
+    expect(() => resolveDispatchRepo(null, [archived('motir-core')])).toThrow(
+      ArchivedTargetRepoError,
+    );
+  });
+
+  it('matches the pin CASE-INSENSITIVELY, exactly as the resolving branch does', () => {
+    // A guard that only fired on an exact-case pin would be trivially escapable,
+    // and case is not a distinction anywhere else in this module.
+    expect(() => resolveDispatchRepo('MOTIR-CORE', [archived('motir-core')])).toThrow(
+      ArchivedTargetRepoError,
+    );
+  });
+
+  it('leaves every LIVE resolution untouched — the guard costs the ordinary case nothing', () => {
+    expect(resolveDispatchRepo('motir-core', [repo('motir-core')])).toMatchObject({
+      name: 'motir-core',
+    });
+    expect(resolveDispatchRepo(null, [repo('motir-core')])).toMatchObject({ name: 'motir-core' });
+    // A LIVE sibling is not poisoned by an archived entry in the same domain: with
+    // two entries there is no single-repo default, and the pin picks the live one.
+    expect(resolveDispatchRepo('live', [archived('dead'), repo('live')])).toMatchObject({
+      name: 'live',
+    });
+  });
+
+  it('does NOT throw for a pin the domain does not contain at all', () => {
+    // An unknown pin is the shipped "Motir does not know where this lives" case
+    // (a plan-only row, a repo disconnected after the pin). Nothing says it is
+    // archived, and claiming so would be a guess in the opposite direction.
+    expect(resolveDispatchRepo('api-service', [archived('motir-core')])).toEqual({
+      name: 'api-service',
+      cloneUrl: null,
+      defaultBranch: null,
+    });
   });
 });
 

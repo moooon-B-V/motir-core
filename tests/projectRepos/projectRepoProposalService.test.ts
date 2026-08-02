@@ -73,6 +73,7 @@ async function connectRepo(workspaceId: string, name: string): Promise<GithubRep
       owner: 'acme',
       name,
       defaultBranch: 'main',
+      archived: false,
       provider: 'github',
     },
   });

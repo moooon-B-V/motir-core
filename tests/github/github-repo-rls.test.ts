@@ -101,6 +101,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
       owner: MOTIR_ORG,
       name: 'alpha-web',
       defaultBranch: 'main',
+      archived: false,
     },
   });
   const repoB = await db.githubRepo.create({
@@ -111,6 +112,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
       owner: MOTIR_ORG,
       name: 'bravo-web',
       defaultBranch: 'main',
+      archived: false,
     },
   });
   const prA = await db.githubPullRequest.create({
@@ -212,6 +214,7 @@ describe('github_repo RLS — a shared installation, two tenants', () => {
             owner: MOTIR_ORG,
             name: 'planted',
             defaultBranch: 'main',
+            archived: false,
           },
         }),
       ),

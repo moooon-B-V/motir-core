@@ -16,6 +16,7 @@ const repo = (id: string, name: string): NormalizedRepo => ({
   owner: 'moooon',
   name,
   defaultBranch: 'main',
+  archived: false,
 });
 
 afterEach(() => {

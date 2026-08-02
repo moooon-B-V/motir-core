@@ -3756,6 +3756,23 @@ model GithubRepo {
   owner          String
   name           String
   defaultBranch  String   @map("default_branch")
+  /// Whether the repository is ARCHIVED on the host (MOTIR-1959). An archived
+  /// repo is READ-ONLY: it rejects a push and a pull request from an admin, so a
+  /// card resolving to one dispatches an agent that cannot open a PR at all.
+  /// Membership in the project's set and a collaborator's `push` permission are
+  /// both silent about this — they answer "which row?" and "may this PERSON
+  /// write?", never "does this REPOSITORY still accept writes?".
+  ///
+  /// Recorded, never derived: the value is stamped from the host's own
+  /// `archived` / `archived_at` field at every point the mirror is written
+  /// (installation reconcile, provisioning, GitLab connect) and flipped by the
+  /// `repository` `archived` / `unarchived` delivery, so it stays true for a repo
+  /// archived AFTER it joined the set — which is the failure MOTIR-1956 recorded.
+  ///
+  /// `@default(false)` rather than nullable: every pre-existing row was accepted
+  /// as live, and `false` says exactly that — "not known to be archived" — with no
+  /// backfill pass and no third state for consumers to interpret.
+  archived       Boolean  @default(false)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

@@ -307,8 +307,20 @@ describe('gitlab provider fetch methods (through the seam, real connection)', ()
 
     const repos = await gitlab.fetchInstallationRepos(installationId);
     expect(repos).toEqual([
-      { providerRepoId: '12', owner: 'moooon', name: 'motir-core', defaultBranch: 'main' },
-      { providerRepoId: '34', owner: 'moooon/group', name: 'app', defaultBranch: 'trunk' },
+      {
+        providerRepoId: '12',
+        owner: 'moooon',
+        name: 'motir-core',
+        defaultBranch: 'main',
+        archived: false,
+      },
+      {
+        providerRepoId: '34',
+        owner: 'moooon/group',
+        name: 'app',
+        defaultBranch: 'trunk',
+        archived: false,
+      },
     ]);
   });
 

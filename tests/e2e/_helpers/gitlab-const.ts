@@ -39,4 +39,5 @@ export const E2E_GITLAB_PROJECT = {
   owner: 'moooon-e2e',
   name: 'motir-gitlab-demo',
   defaultBranch: 'main',
+  archived: false,
 } as const;

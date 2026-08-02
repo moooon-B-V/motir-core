@@ -260,6 +260,10 @@ export const gitlabConnectionService = {
             owner: match.owner,
             name: match.name,
             defaultBranch: match.defaultBranch,
+            // The project's own liveness at connect time (MOTIR-1959). An
+            // archived GitLab project is read-only exactly as an archived GitHub
+            // repo is, so the same column answers for both providers.
+            archived: match.archived,
             provider: 'gitlab',
           },
           tx,

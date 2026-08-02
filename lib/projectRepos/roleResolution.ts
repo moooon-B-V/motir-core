@@ -26,7 +26,21 @@ export type RepoRoleOutcome =
   | 'unestablished'
   /** MORE THAN ONE row carries the role (§1.2's repeated role) — §5.3's "never an
    *  arbitrary pick". */
-  | 'ambiguous';
+  | 'ambiguous'
+  /**
+   * Exactly one row carries the role and it names a repository that EXISTS, but
+   * that repository is ARCHIVED on the host (MOTIR-1959) — read-only, so no
+   * branch and no pull request can be opened against it.
+   *
+   * A VALUE OF ITS OWN rather than a second `unestablished`, which is the whole
+   * point: both refuse to resolve, and they refuse for opposite reasons. An
+   * `unestablished` role has nothing yet and the fix is to establish it; an
+   * `archived` role has a real repository whose owner made it read-only, and the
+   * fix is on the host. Collapsing them would report "no repo for this role"
+   * about a repository the user is looking straight at, which is the illegible
+   * refusal `MOTIR-1956` was actually made of.
+   */
+  | 'archived';
 
 export interface ResolvedRepoRole {
   role: ProjectRepoRole;
@@ -40,7 +54,7 @@ export interface ResolvedRepoRole {
 }
 
 /**
- * The repository NAME a single row means, or null when it means none.
+ * What a SINGLE row resolves to — the outcome, and the name when there is one.
  *
  * The two rules `toProjectRepoNames` documents, applied per row:
  *
@@ -53,6 +67,15 @@ export interface ResolvedRepoRole {
  *    `<root>/<name>` on, and the two legitimately differ once a repo is renamed
  *    on the host.
  *
+ * Plus the LIVENESS rule (MOTIR-1959): an established row whose repository is
+ * ARCHIVED resolves to `archived` and to NO name. Establishment is a fact about
+ * the row (a repository was created or connected for it); liveness is a fact
+ * about the repository, and it can flip long afterwards — so the two are read
+ * separately and the name is withheld on either failure. Withholding it is what
+ * makes the guard real: a pin is written from `repoName`, and a role that
+ * resolved to a name would pin every item of that role to a repository no PR can
+ * be opened against.
+ *
  * Deliberately NOT `toProjectRepoNames` itself: that function additionally
  * DE-DUPLICATES the set case-insensitively by name, which is right for the
  * dispatch DOMAIN ("which names may be pinned?") and wrong here. Two rows of
@@ -61,9 +84,20 @@ export interface ResolvedRepoRole {
  * `unestablished` when its repository plainly exists. Resolution asks a per-row
  * question, so it reads the row.
  */
-function establishedRepoName(row: ProjectRepoWithRealized): string | null {
-  if (!isEstablishedState(row.state) || row.githubRepo === null) return null;
-  return normalizeTargetRepo(row.githubRepo.name);
+function resolveSingleRow(row: ProjectRepoWithRealized): {
+  outcome: RepoRoleOutcome;
+  repoName: string | null;
+} {
+  if (!isEstablishedState(row.state) || row.githubRepo === null) {
+    return { outcome: 'unestablished', repoName: null };
+  }
+  const repoName = normalizeTargetRepo(row.githubRepo.name);
+  if (repoName === null) return { outcome: 'unestablished', repoName: null };
+  // Checked AFTER the name, so the archived verdict is only ever reached by a row
+  // that genuinely names a repository — an archived row with an unusable name is
+  // `unestablished`, which is the more basic problem and the one to report.
+  if (row.githubRepo.archived) return { outcome: 'archived', repoName: null };
+  return { outcome: 'resolved', repoName };
 }
 
 /**
@@ -90,8 +124,18 @@ function establishedRepoName(row: ProjectRepoWithRealized): string | null {
  *   establishes first, or whether the pass runs once or ten times.
  *
  * A role with a single row therefore moves `unestablished → resolved` as that row
- * establishes, and never moves again. A role with several rows is `ambiguous`
- * from the moment the set holds them, before anything is created.
+ * establishes, and moves again only if that repository is later ARCHIVED
+ * (MOTIR-1959), which is a fact about the repository rather than about the set.
+ *
+ * ⚠️ **An ARCHIVED row beside a LIVE row of the same role is still `ambiguous`,
+ * not `resolved` to the live one.** The count is over rows, in any state, for the
+ * reason above — and archiving does not remove a row from the set any more than
+ * skipping it does. Resolving to the survivor would be exactly the forbidden
+ * guess: the user planned two repositories for this role, half the items belong
+ * in the one that is now read-only, and nothing records which. `ambiguous` names
+ * both rows and refuses; the user's own fix (remove or re-plan the archived row)
+ * is what makes the role resolvable, and then it resolves to the row they chose
+ * rather than the row Motir picked.
  */
 export function resolveRepoRoles(
   rows: ProjectRepoWithRealized[],
@@ -110,13 +154,8 @@ export function resolveRepoRoles(
       resolved.set(role, { role, outcome: 'ambiguous', repoName: null, rowIds });
       continue;
     }
-    const repoName = establishedRepoName(roleRows[0]!);
-    resolved.set(role, {
-      role,
-      outcome: repoName === null ? 'unestablished' : 'resolved',
-      repoName,
-      rowIds,
-    });
+    const { outcome, repoName } = resolveSingleRow(roleRows[0]!);
+    resolved.set(role, { role, outcome, repoName, rowIds });
   }
   return resolved;
 }

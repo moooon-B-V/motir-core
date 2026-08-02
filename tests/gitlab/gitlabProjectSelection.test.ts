@@ -188,6 +188,7 @@ describe('githubRepoRepository.deleteByInstallationAndRepoId', () => {
           owner: 'o',
           name: 'n',
           defaultBranch: 'main',
+          archived: false,
           provider: 'gitlab',
         },
         tx,

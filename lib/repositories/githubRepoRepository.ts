@@ -16,6 +16,12 @@ export interface UpsertGithubRepoInput {
   owner: string;
   name: string;
   defaultBranch: string;
+  /** Whether the repository is ARCHIVED on the host (MOTIR-1959) — read-only, so
+   *  no branch or PR can be opened against it. Omit to leave the column at its
+   *  `false` default on create; every write path that has the host's own value
+   *  passes it, so a re-selection RE-STAMPS liveness the same way it re-stamps
+   *  the coordinates. */
+  archived?: boolean;
   /** Provider discriminator for the row — omit for GitHub (the column default),
    *  pass `'gitlab'` when persisting a GitLab project selection (MOTIR-1478). */
   provider?: string;
@@ -133,6 +139,31 @@ export const githubRepoRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.githubRepo.updateMany({ where: { repoId }, data });
+    return result.count;
+  },
+
+  /**
+   * Re-stamp a mirror row's ARCHIVED state after the repository was archived (or
+   * un-archived) on the host — the `repository` `archived` / `unarchived`
+   * delivery's write (MOTIR-1959).
+   *
+   * This is what keeps the recorded liveness TRUE rather than merely INITIAL. The
+   * establish/connect paths stamp `archived` at the moment they mirror the repo,
+   * and the incident MOTIR-1956 recorded is precisely a repository archived a
+   * month AFTER that: without this write, a set established while the repo was
+   * live would keep dispatching against it forever.
+   *
+   * `updateMany` (not `update`) for the same reason {@link updateOwnerByRepoId}
+   * uses it: a webhook REDELIVERY after the row is gone must be an idempotent
+   * no-op (count 0), never a `P2025` throw that makes GitHub retry a delivery no
+   * retry can fix. Returns the count.
+   */
+  async setArchivedByRepoId(
+    repoId: string,
+    archived: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.updateMany({ where: { repoId }, data: { archived } });
     return result.count;
   },
 

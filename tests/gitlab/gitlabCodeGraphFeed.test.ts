@@ -94,6 +94,7 @@ async function makeScenario(email: string, opts: { withRepo?: boolean } = {}) {
           owner: 'octocat',
           name: 'acme',
           defaultBranch: 'main',
+          archived: false,
           provider: 'gitlab',
         },
         tx,

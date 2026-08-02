@@ -448,6 +448,7 @@ describe('the technical path', () => {
               name: 'acme-web',
               repoRef: 'motir-projects/acme-web',
               defaultBranch: 'main',
+              archived: false,
             },
           }),
           row({
@@ -555,6 +556,7 @@ describe('the technical path', () => {
           name: long,
           repoRef: `an-organisation-with-a-very-long-login/${long}`,
           defaultBranch: 'main',
+          archived: false,
         },
       }),
     );
@@ -584,6 +586,7 @@ describe('the technical path', () => {
           name: 'c',
           repoRef: 'motir-projects/c',
           defaultBranch: 'main',
+          archived: false,
         },
       }),
       row({ id: 'r4', role: 'infra', name: 'd', state: 'failed', failureReason: 'nope' }),
@@ -819,6 +822,7 @@ describe('a row, in the states the flow cannot be driven into', () => {
           name: 'a',
           repoRef: 'acme/a',
           defaultBranch: 'main',
+          archived: false,
         },
       }),
     );
@@ -934,6 +938,7 @@ describe('a row, in the states the flow cannot be driven into', () => {
             name: 'a',
             repoRef: 'acme/a',
             defaultBranch: 'main',
+            archived: false,
           },
         })}
         index={0}
@@ -1174,6 +1179,7 @@ function createdRow(access: ProjectRepoDto['access']): ProjectRepoDto {
       name: 'acme-web',
       repoRef: 'motir-projects/acme-web',
       defaultBranch: 'main',
+      archived: false,
     },
   });
 }
@@ -1351,6 +1357,78 @@ describe('a created row’s INVITATION line', () => {
       // An icon AND a word, so `invited` and `accepted` are told apart without hue.
       expect(screen.getByText(word).querySelector('svg')).toBeTruthy();
     }
+  });
+});
+
+// The ARCHIVED sub-state (MOTIR-1959) — the row's second liveness axis, built
+// like the invitation line above and for the same reason: the repository
+// EXISTING and the repository still ACCEPTING WRITES are independent, so
+// archiving is not a seventh row state.
+describe('a settled row whose repository is ARCHIVED', () => {
+  function archivedRow(state: 'created' | 'connected' = 'created'): ProjectRepoDto {
+    return row({
+      id: 'r1',
+      role: 'web',
+      name: 'acme-web',
+      state,
+      established: true,
+      realizedRepo: {
+        id: 'gr-1',
+        provider: 'github',
+        owner: 'motir-projects',
+        name: 'acme-web',
+        repoRef: 'motir-projects/acme-web',
+        defaultBranch: 'main',
+        archived: true,
+      },
+    });
+  }
+
+  it('SAYS it is archived, and says what that means for the work', () => {
+    mountRow(archivedRow(), rowHandlers());
+
+    expect(screen.getByText('Archived on GitHub')).toBeTruthy();
+    expect(screen.getByText(/read-only/)).toBeTruthy();
+    // The fix is on the host, so the copy has to point there — an archived-state
+    // line that only reports the state leaves the reader with nothing to do.
+    expect(screen.getByText(/Un-archive it on GitHub/)).toBeTruthy();
+  });
+
+  it('REPLACES the reassuring detail line — never both', () => {
+    // "Hosted by Motir · seeded from the starter" beside "this repository is
+    // read-only" would be the row telling the user two different things.
+    mountRow(archivedRow(), rowHandlers());
+    expect(screen.queryByText(/seeded from the Motir Next.js starter/)).toBeNull();
+  });
+
+  it('keeps the row’s OWN state word — archiving is a sub-state, not a seventh state', () => {
+    // `created` is about the repository existing and stays true; the row also
+    // keeps its link out to the host, because the repository is still there.
+    mountRow(archivedRow(), rowHandlers());
+    expect(screen.getByText('Created')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /motir-projects\/acme-web/ })).toBeTruthy();
+  });
+
+  it('reads the same on a CONNECTED row — the axis is about the repository, not how it got here', () => {
+    mountRow(archivedRow('connected'), rowHandlers());
+    expect(screen.getByText('Connected')).toBeTruthy();
+    expect(screen.getByText('Archived on GitHub')).toBeTruthy();
+  });
+
+  it('is a STATUS with an icon AND a word — never colour alone, never an alert', () => {
+    // Panel 7's rules: state is never colour alone, and this is a standing
+    // condition the user can resolve, not an error the row raised.
+    const { container } = mountRow(archivedRow(), rowHandlers());
+    const status = container.querySelector('[role="status"]');
+    expect(status?.textContent).toContain('Archived on GitHub');
+    expect(screen.getByText('Archived on GitHub').querySelector('svg')).toBeTruthy();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('renders NOTHING extra for a live repository — the ordinary row is unchanged', () => {
+    mountRow(createdRow(ACCESS.notInvited), rowHandlers());
+    expect(screen.queryByText('Archived on GitHub')).toBeNull();
+    expect(screen.getByText(/seeded from the Motir Next.js starter/)).toBeTruthy();
   });
 });
 

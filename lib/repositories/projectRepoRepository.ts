@@ -93,6 +93,11 @@ interface JoinedRow {
   repoOwner: string | null;
   repoName: string | null;
   repoDefaultBranch: string | null;
+  /** The mirror's LIVENESS (MOTIR-1959) — `false` for a live repo, and NULL only
+   *  because every joined column is null on an unrealized row, never because the
+   *  column itself is nullable. Reassembled below with the same `?? false` an
+   *  absent value reads as everywhere else. */
+  repoArchived: boolean | null;
   repoCreatedAt: Date | null;
   repoUpdatedAt: Date | null;
 }
@@ -151,6 +156,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             owner: r.repoOwner!,
             name: r.repoName!,
             defaultBranch: r.repoDefaultBranch!,
+            archived: r.repoArchived ?? false,
             createdAt: r.repoCreatedAt!,
             updatedAt: r.repoUpdatedAt!,
           },
@@ -229,6 +235,7 @@ export const projectRepoRepository = {
         gr."owner"             AS "repoOwner",
         gr."name"              AS "repoName",
         gr."default_branch"    AS "repoDefaultBranch",
+        gr."archived"          AS "repoArchived",
         gr."created_at"        AS "repoCreatedAt",
         gr."updated_at"        AS "repoUpdatedAt"
       FROM "project_repository" pr

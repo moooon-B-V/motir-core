@@ -31,6 +31,7 @@ const REPO: NormalizedRepo = {
   owner: 'moooon',
   name: 'motir-core',
   defaultBranch: 'main',
+  archived: false,
 };
 
 beforeAll(async () => {
@@ -210,6 +211,7 @@ describe('authenticateGithubOidc', () => {
           owner: 'motir-projects',
           name: 'alpha-web',
           defaultBranch: 'main',
+          archived: false,
         },
         {
           installationId: installation.id,
@@ -218,6 +220,7 @@ describe('authenticateGithubOidc', () => {
           owner: 'motir-projects',
           name: 'bravo-web',
           defaultBranch: 'main',
+          archived: false,
         },
       ],
     });

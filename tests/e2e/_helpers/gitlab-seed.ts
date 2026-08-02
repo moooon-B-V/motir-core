@@ -76,6 +76,7 @@ export async function seedGitlabProject(
         owner: project.owner,
         name: project.name,
         defaultBranch: project.defaultBranch,
+        archived: false,
         provider: 'gitlab',
       },
       tx,
