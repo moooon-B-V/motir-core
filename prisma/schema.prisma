@@ -4960,6 +4960,95 @@ model CiFleetAdmissionLock {
   @@map("ci_fleet_admission_lock")
 }
 
+/// ONE ROW PER FLEET CONTAINER, for the workloads that do not own a table of
+/// their own (Story MOTIR-1916 · MOTIR-1997). The registration surface behind
+/// the CROSS-WORKLOAD ceiling.
+///
+/// ⚠️ WHY THIS EXISTS. `ci_fleet_admission_lock`'s `fleet` scope bounds *CI*,
+/// because the number counted under it came from `ci_runner_provisioning_intent`
+/// and nothing else. MOTIR-1981 puts CODE-GRAPH INDEX containers in the same Fly
+/// org and Epic 9 adds HOSTED AGENT containers; neither writes a runner intent,
+/// so neither was visible to the only number bounding Motir's fleet invoice —
+/// and `docs/decisions/ci-runner-fleet.md` §9 records that Fly offers **neither a
+/// spending cap nor a billing alert**, so there is no provider-side backstop
+/// beneath it. Two independent per-workload caps do not compose into a bound:
+/// real peak concurrency is `runners + index + agents`, and no per-workload
+/// number expresses it.
+///
+/// ⚠️ WHY A SECOND TABLE RATHER THAN A COUNTER. A maintained integer is only as
+/// exact as its least reliable decrement — one missed release poisons the
+/// ceiling permanently, and an approximate ceiling on an account with no
+/// provider cap is not a ceiling. Rows are re-derivable, countable under the
+/// existing `fleet` lock in the same transaction as the claim they guard, and
+/// idempotent to take (`(workload, ref)` is unique).
+///
+/// ⚠️ WHY CI DOES **NOT** WRITE HERE. `ci_runner_provisioning_intent.status`
+/// already IS the CI in-flight window (`provisioning` + `running`), maintained by
+/// every claim, release and settle path that exists. Mirroring it into a second
+/// table would add a dual write on the hottest path in the fleet and a leak class
+/// where none exists today. So the ceiling is a UNION over a registry of
+/// per-workload counters (`lib/ciFleet/workloads.ts`) — CI counts its own table;
+/// a workload with no table of its own counts rows here. A workload that later
+/// grows its own table swaps its registry entry and the ceiling stays correct.
+///
+/// Deliberately NOT workspace-scoped and NOT a tenant table (the same argument
+/// `ci_fleet_admission_lock` makes): it bounds Motir's OWN infrastructure spend,
+/// is cross-tenant by definition, and its RLS policy is `system_admin` only —
+/// which is also the only context the fleet path ever runs in. `organization_id`
+/// / `workspace_id` are carried for ATTRIBUTION in an operator's breakdown, never
+/// as a tenancy boundary; both are nullable because a workload may hold a
+/// container before it knows whose it is.
+model FleetInFlightSlot {
+  id String @id @default(cuid())
+
+  /// A `FleetWorkloadKind` (`lib/ciFleet/workloads.ts`). TEXT rather than an
+  /// enum for the reason the intent's `status` is text: a new workload must be a
+  /// one-line registry edit, not a migration, and the exhaustive `Record` in the
+  /// registry is what makes forgetting one a COMPILE error.
+  workload String
+
+  /// The workload's OWN identifier for the thing holding the container — an
+  /// index-run id, an agent-run id. Unique with `workload`, which is what makes
+  /// taking a slot idempotent under a redelivery or a retry: the second `INSERT
+  /// … ON CONFLICT DO NOTHING` occupies no extra capacity.
+  ref String
+
+  /// Attribution for the operator breakdown; never a tenancy boundary (see the
+  /// model comment). Not FKs: a slot must survive the deletion of whatever it
+  /// pointed at, because a leaked slot that outlives its owner is exactly the
+  /// row `expires_at` exists to age out — a cascade would silently free
+  /// capacity a live container is still spending.
+  organizationId String? @map("organization_id")
+  workspaceId    String? @map("workspace_id")
+
+  /// The container this slot stands for, once the workload knows it. Nullable
+  /// because the slot is taken BEFORE the boot — that ordering is the whole
+  /// point, exactly as `claimPending` precedes provisioning on the CI path.
+  containerProvider String? @map("container_provider")
+  containerId       String? @map("container_id")
+
+  claimedAt DateTime @default(now()) @map("claimed_at")
+
+  /// ⚠️ A SAFETY NET, NOT THE RELEASE MECHANISM. Release is an explicit delete
+  /// when the container ends; this bounds the damage of a release that never
+  /// runs (a crashed dispatcher, a workload with a missed teardown path). The
+  /// count ignores rows at or past it, so a leak costs capacity for at most the
+  /// container's own hard-kill budget plus a margin, instead of forever. Set it
+  /// from the workload's `timeoutSeconds`: a value shorter than the container's
+  /// real life would UNDER-count and let the ceiling be exceeded.
+  expiresAt DateTime @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Idempotent take: one slot per (workload, ref), forever.
+  @@unique([workload, ref])
+  /// The ceiling's read — count live rows for one workload. Ordered
+  /// `[workload, expiresAt]` because that is the predicate's shape.
+  @@index([workload, expiresAt])
+  @@map("fleet_in_flight_slot")
+}
+
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
 /// Six values, fixed — do NOT add one without amending the ADR, and keep it in
 /// lockstep with motir-ai's proposal-schema role enum (MOTIR-1885).
