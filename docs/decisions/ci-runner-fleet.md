@@ -490,6 +490,31 @@ is:**
    transaction, the same tests** — so it belongs there, not in a new card. Splitting it out
    would put two cards on one write, which is `notes.html` #187's exact shape. MOTIR-1922 is
    amended in place accordingly (§10).
+
+   > **§9.1a — AMENDED BY MOTIR-1997 (2026-08-02): the ceiling is CROSS-WORKLOAD.** As
+   > written above, §9.1 bounds _runners_, and MOTIR-1922 implemented exactly that: the
+   > counter read `ci_runner_provisioning_intent` and its comment said so. That stopped being
+   > a bound on the invoice the moment **MOTIR-1981 decisions 2–3** put code-graph **index**
+   > containers in the same Fly org, with **Epic 9's agent** containers to follow — neither
+   > writes a runner intent, so neither was visible to the only number standing between this
+   > account and an unbounded bill.
+   >
+   > **Two independent ceilings do not compose into a bound.** With a runner ceiling and
+   > MOTIR-1990's index cap, real peak concurrency is `runners + index (+ agents)` and no
+   > per-workload number expresses it. Measured, not theorised: on 2026-08-02
+   > `system.code-graph-index` and `system.code-graph-refresh` each carried `concurrency: 2`
+   > against one motir-ai, so the effective limit was 4 and neither cap meant what it said.
+   >
+   > So the ceiling now counts **every container the fleet runs, whatever its workload**,
+   > under the same `fleet` admission lock, in the same transaction — a **union over a
+   > workload registry** (`lib/ciFleet/workloads.ts`), summed by `fleetCeilingService.census`.
+   > CI counts its own intent table; a workload with no table of its own registers a row in
+   > `fleet_in_flight_slot` and counts that. The per-workload caps are **unchanged and sit
+   > underneath**: MOTIR-1922's per-project cap is CI fairness, MOTIR-1990's is index
+   > fairness, Epic 9's is seats — and this one is the invoice. `MOTIR_FLEET_MAX_IN_FLIGHT` is
+   > the same env var and the same number; **the set it counts is what changed**, so an
+   > operator who tuned it against CI alone should re-tune it.
+
 2. **A spend TRIPWIRE off the container-seconds meter (§5), not off Fly.** MOTIR-1924's rows
    already carry `costUsd` per runner; a rolling month-to-date sum over the fleet org is a
    read Motir owns, on a physical quantity, that survives a provider change. It **alerts** —

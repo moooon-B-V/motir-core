@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_FLEET_IN_FLIGHT_CEILING,
+  DEFAULT_FLEET_SLOT_TTL_SECONDS,
   PROJECT_IN_FLIGHT_CAPS,
   fleetInFlightCeiling,
+  fleetSlotTtlSeconds,
   projectCapEnvName,
   projectInFlightCapFor,
 } from '@/lib/ciFleet/limits';
@@ -83,5 +85,33 @@ describe('the PER-PROJECT cap is per PLAN TIER', () => {
   it('names the override env var per tier', () => {
     expect(projectCapEnvName('free')).toBe('MOTIR_FLEET_PROJECT_CAP_FREE');
     expect(projectCapEnvName('scaled')).toBe('MOTIR_FLEET_PROJECT_CAP_SCALED');
+  });
+});
+
+// The slot safety net (MOTIR-1997) — the third tunable, and the one whose wrong
+// direction is silent. A ceiling set too low queues work visibly; a TTL set too
+// SHORT stops counting a container that is still running and spending, so the
+// ceiling is exceeded and nothing says so.
+describe('the fleet-slot TTL is per ENVIRONMENT', () => {
+  it('defaults to a value LONGER than any container Motir boots', () => {
+    vi.stubEnv('MOTIR_FLEET_SLOT_TTL_SECONDS', '');
+    expect(fleetSlotTtlSeconds()).toBe(DEFAULT_FLEET_SLOT_TTL_SECONDS);
+    // §6's boot budget and every workload's hard-kill sit far inside an hour;
+    // the default has to clear them with room, or the safety net becomes the
+    // thing that breaks the ceiling.
+    expect(DEFAULT_FLEET_SLOT_TTL_SECONDS).toBeGreaterThan(60 * 60);
+  });
+
+  it('takes the environment value when set', () => {
+    vi.stubEnv('MOTIR_FLEET_SLOT_TTL_SECONDS', '900');
+    expect(fleetSlotTtlSeconds()).toBe(900);
+  });
+
+  it('falls back for a malformed value rather than reading it as zero', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubEnv('MOTIR_FLEET_SLOT_TTL_SECONDS', 'six hours');
+    // A typo must not silently disable the safety net.
+    expect(fleetSlotTtlSeconds()).toBe(DEFAULT_FLEET_SLOT_TTL_SECONDS);
+    expect(warn).toHaveBeenCalled();
   });
 });

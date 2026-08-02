@@ -328,15 +328,22 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
-   * How many runners are in flight ACROSS THE WHOLE FLEET — the global ceiling's
-   * count (MOTIR-1922 / ADR §9.1), and the only number that bounds Motir's total
-   * CI spend.
+   * How many CI RUNNERS are in flight across the whole fleet — the `ci_runner`
+   * term of the cross-workload ceiling (MOTIR-1922 / ADR §9.1, generalized by
+   * MOTIR-1997).
    *
    * Unscoped ON PURPOSE: no workspace, no org, no project. The invoice this
    * bounds is Motir's own, and a per-tenant count cannot see the failure mode —
    * an unbounded number of projects, each individually under its own cap. It is
    * read under the `fleet` admission lock, which every admission takes, so this
    * is the most contended read on the path and the one that lock exists for.
+   *
+   * ⚠️ THIS IS NO LONGER THE WHOLE CEILING, and calling it directly is how the
+   * ceiling stops being a bound. Index containers (MOTIR-1981/1990) and hosted
+   * agents (Epic 9) run on the same fleet and write no intent, so the number
+   * that bounds the invoice is the UNION in `fleetCeilingService.census` — this
+   * is one of its terms, registered as `ci_runner` in `lib/ciFleet/workloads.ts`.
+   * Read the total from there.
    */
   async countInFlightFleetWide(tx: Prisma.TransactionClient): Promise<number> {
     return tx.ciRunnerProvisioningIntent.count({

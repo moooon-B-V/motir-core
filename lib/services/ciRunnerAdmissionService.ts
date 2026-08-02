@@ -12,6 +12,7 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { fleetInFlightCeiling, projectInFlightCapFor } from '@/lib/ciFleet/limits';
+import { fleetCeilingService, describeFleetCensus } from '@/lib/services/fleetCeilingService';
 
 // THE PROVISIONING GATE (Story MOTIR-1916 · MOTIR-1922) — the one place that
 // answers *should this intent get a runner at all?*, decided under a lock before
@@ -24,12 +25,20 @@ import { fleetInFlightCeiling, projectInFlightCapFor } from '@/lib/ciFleet/limit
 //      bought (the Vercel/Netlify shape). Fairness first: without it one project
 //      can occupy the whole fleet and starve every other tenant. A per-tenant
 //      cost bound second.
-//   2. THE FLEET-WIDE CEILING — how much compute Motir is willing to run at
-//      once, whoever asked. ⚠️ THE ONLY THING THAT BOUNDS MOTIR'S TOTAL CI
-//      SPEND: `docs/decisions/ci-runner-fleet.md` §9 records that Fly offers
-//      neither a spending cap nor a billing alert, so there is no provider-side
-//      backstop under this number, and per-project caps do not add up to one —
-//      they multiply by an unbounded project count.
+//   2. THE CROSS-WORKLOAD FLEET CEILING — how much compute Motir is willing to
+//      run at once, whoever asked AND WHATEVER WORKLOAD (MOTIR-1997). ⚠️ THE
+//      ONLY THING THAT BOUNDS MOTIR'S TOTAL FLEET SPEND:
+//      `docs/decisions/ci-runner-fleet.md` §9 records that Fly offers neither a
+//      spending cap nor a billing alert, so there is no provider-side backstop
+//      under this number, and per-project caps do not add up to one — they
+//      multiply by an unbounded project count.
+//      ⚠️ IT IS NO LONGER A RUNNER COUNT. MOTIR-1981 put code-graph INDEX
+//      containers in the same Fly org and Epic 9 adds AGENT containers; neither
+//      writes a runner intent, so a runner-only ceiling stopped being a bound on
+//      the invoice the moment they landed. The number now comes from
+//      `fleetCeilingService.census` — a union over the workload registry — and a
+//      CI job can be refused here because INDEXING filled the fleet. That is the
+//      case per-workload caps structurally cannot catch.
 //   3. THE CREDIT REFUSAL — `ci_credits_exhausted` declines to boot. The state
 //      comes from the SHIPPED `ciAllowanceService.getEntitlementState` and is
 //      never re-derived here, so the billing panel, MOTIR-1907's Actions pause,
@@ -73,7 +82,10 @@ import { fleetInFlightCeiling, projectInFlightCapFor } from '@/lib/ciFleet/limit
 export type AdmissionDeferralReason =
   /** The project is at its plan tier's concurrency allowance. */
   | 'project_cap'
-  /** The whole fleet is at its ceiling — §9.1, the spend bound. */
+  /** The whole fleet is at its ceiling — §9.1, the spend bound. Cross-workload:
+   *  the containers that filled it may belong to indexing or agents, not to CI
+   *  (MOTIR-1997). The verdict's `detail` carries the per-workload breakdown, so
+   *  an operator can see which one to lean on. */
   | 'fleet_ceiling'
   /** The org is past its pool AND out of credits. */
   | 'ci_credits_exhausted'
@@ -83,7 +95,8 @@ export type AdmissionDeferralReason =
 
 export type AdmissionVerdict =
   /** Admitted AND CLAIMED — the intent is now `provisioning` and the caller owns
-   *  it. The counts are carried out for the caller's log. */
+   *  it. The counts are carried out for the caller's log; `fleetInFlight` is the
+   *  CROSS-WORKLOAD total (runners + index + agents), not a runner count. */
   | { outcome: 'admitted'; projectInFlight: number; fleetInFlight: number }
   /** Another provisioner claimed it first. Not an error; the compare-and-set
    *  worked. */
@@ -120,6 +133,11 @@ export const ciRunnerAdmissionService = {
    * full" achieves nothing a queued intent and the next sweep do not.
    */
   async admit(intent: CiRunnerProvisioningIntent): Promise<AdmissionVerdict> {
+    // ONE instant for the whole decision. The cross-workload census compares
+    // slot expiries against it, and a gate that re-read the clock per workload
+    // could count a slot as live for one workload and expired for the next —
+    // the same total, arrived at from two different worlds.
+    const now = new Date();
     const caps = await this.resolveCaps(intent.organizationId);
     if (!caps) {
       // The tier read failed. FAIL CLOSED with the caps, per the asymmetry above:
@@ -172,16 +190,24 @@ export const ciRunnerAdmissionService = {
           }
         }
 
-        // 2 · THE FLEET-WIDE CEILING, immediately after guard 1, under the same
-        // lock, in the same transaction. NOT bypassed by `isMeta` and not by the
-        // tier: it bounds Motir's own invoice, and a meta-org runaway costs
-        // exactly as much as any other.
-        const fleetInFlight = await intents.countInFlightFleetWide(tx);
-        if (fleetInFlight >= caps.fleetCeiling) {
+        // 2 · THE CROSS-WORKLOAD FLEET CEILING, immediately after guard 1, under
+        // the same lock, in the same transaction. NOT bypassed by `isMeta` and
+        // not by the tier: it bounds Motir's own invoice, and a meta-org runaway
+        // costs exactly as much as any other.
+        //
+        // ⚠️ THIS COUNTS EVERY WORKLOAD, NOT JUST RUNNERS (MOTIR-1997). A CI
+        // admission is refused when index or agent containers have filled the
+        // fleet, because they share one Fly org and therefore one invoice. The
+        // census is taken here rather than through `fleetCeilingService.reserve`
+        // precisely because this transaction ALREADY holds
+        // `FLEET_ADMISSION_SCOPE` and is mid-claim — re-entering would deadlock
+        // the gate against itself.
+        const census = await fleetCeilingService.census(now, tx);
+        if (census.total >= caps.fleetCeiling) {
           return {
             outcome: 'deferred' as const,
             reason: 'fleet_ceiling' as const,
-            detail: `the fleet is at its in-flight ceiling (${fleetInFlight}/${caps.fleetCeiling})`,
+            detail: `the fleet is at its in-flight ceiling (${census.total}/${caps.fleetCeiling}: ${describeFleetCensus(census)})`,
           };
         }
 
@@ -190,7 +216,7 @@ export const ciRunnerAdmissionService = {
         const took = await intents.claimPending(intent.id, tx);
         if (!took) return { outcome: 'already_claimed' as const };
 
-        return { outcome: 'admitted' as const, projectInFlight, fleetInFlight };
+        return { outcome: 'admitted' as const, projectInFlight, fleetInFlight: census.total };
       });
     } catch (err) {
       // FAIL CLOSED. The transaction rolled back, so nothing was claimed and the

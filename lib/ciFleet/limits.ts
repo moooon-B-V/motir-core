@@ -12,10 +12,11 @@ import type { PmTier } from '@/lib/billing/entitlements';
 //     CI product uses (Vercel: Hobby 1 concurrent build, Pro 12; Netlify the
 //     same). It is fairness first and a per-tenant cost bound second.
 //   * The FLEET-WIDE ceiling is an INFRASTRUCTURE bound — how much compute Motir
-//     is willing to have running at once, whoever asked for it. It therefore
-//     keys off the ENVIRONMENT, not off any tenant, and no tenant flag lifts it.
+//     is willing to have running at once, whoever asked for it and WHATEVER
+//     WORKLOAD it is (MOTIR-1997). It therefore keys off the ENVIRONMENT, not off
+//     any tenant, and no tenant flag lifts it.
 //
-// ⚠️ THE FLEET CEILING IS THE ONLY THING THAT BOUNDS MOTIR'S TOTAL CI SPEND
+// ⚠️ THE FLEET CEILING IS THE ONLY THING THAT BOUNDS MOTIR'S TOTAL FLEET SPEND
 // (§9). Fly offers neither a spending cap nor a billing alert — *"We don't
 // support billing alerts (yet), so budget accordingly"*, *"there's no soft
 // ceiling. If you go over, we'll bill you"* — so there is no provider-side
@@ -24,9 +25,22 @@ import type { PmTier } from '@/lib/billing/entitlements';
 // that put it here rather than in a vendor console: express enforcement in terms
 // the product controls, so that changing provider changes nothing about what
 // stops the spend.
+//
+// ⚠️ THE CEILING IS CROSS-WORKLOAD AS OF MOTIR-1997, and the env var is
+// unchanged on purpose. `MOTIR_FLEET_MAX_IN_FLIGHT` used to mean "CI runners";
+// it now means "containers, of any workload" — CI runners, MOTIR-1981/1990's
+// code-graph index containers, Epic 9's hosted agents — because those share one
+// Fly org and therefore one invoice. An operator who tuned it against CI alone
+// should re-tune it: the number did not change, the set it counts did. Which
+// workloads exist and where each is counted from is `workloads.ts`; the summing
+// and the lock are `fleetCeilingService`.
 
 /** The env var an operator raises or lowers the fleet ceiling with. */
 const FLEET_CEILING_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
+
+/** The env var that tunes how long an unreleased slot keeps occupying capacity
+ *  before the safety net ages it out. */
+const FLEET_SLOT_TTL_ENV = 'MOTIR_FLEET_SLOT_TTL_SECONDS';
 
 /**
  * The fleet-wide in-flight ceiling when the environment sets none.
@@ -39,6 +53,21 @@ const FLEET_CEILING_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
  * capacity claim.
  */
 export const DEFAULT_FLEET_IN_FLIGHT_CEILING = 24;
+
+/**
+ * How long a slot taken by a slot-backed workload keeps counting if nobody ever
+ * releases it — 6 hours.
+ *
+ * ⚠️ THIS IS A SAFETY NET, NOT A TIMEOUT. Release is an explicit delete when the
+ * container ends; this only bounds the damage of a release that never runs. The
+ * number is therefore deliberately LONGER than any container Motir boots (§6's
+ * budget and every workload's own hard-kill sit far inside it) — a TTL shorter
+ * than a container's real life would stop counting a container that is still
+ * running and spending, which is the one direction this must never err in. It is
+ * long enough to be safe and short enough that a crashed dispatcher's debris
+ * clears within a working day rather than never.
+ */
+export const DEFAULT_FLEET_SLOT_TTL_SECONDS = 6 * 60 * 60;
 
 /**
  * The PER-TIER concurrency allowance — the §4-style "tunable policy" table, the
@@ -94,14 +123,32 @@ function readCeilingEnv(name: string, fallback: number | null): number | null {
 
 /**
  * THE FLEET-WIDE CEILING — the maximum number of containers the whole fleet may
- * have in flight at once, across every tenant.
+ * have in flight at once, across every tenant AND EVERY WORKLOAD (MOTIR-1997).
  *
  * Always a number, never null: an unbounded fleet is the one state §9 exists to
  * make unreachable, so there is deliberately no way to express it. An operator
- * who wants more raises the env var; an operator who wants none sets it to 0.
+ * who wants more raises the env var; an operator who wants none sets it to 0 —
+ * and zero now stops CI, indexing and agents alike, which is what a kill switch
+ * on an uncapped account should do.
  */
 export function fleetInFlightCeiling(): number {
   return readCeilingEnv(FLEET_CEILING_ENV, DEFAULT_FLEET_IN_FLIGHT_CEILING) ?? 0;
+}
+
+/**
+ * How long an unreleased fleet slot keeps occupying capacity, in seconds.
+ *
+ * Reuses the same reader as the ceilings, which means ZERO IS LEGAL here too —
+ * and it is the honest reading: `MOTIR_FLEET_SLOT_TTL_SECONDS=0` turns the
+ * safety net off entirely, so every slot is born already expired and only an
+ * explicit release is doing any work. That is a legitimate (if reckless)
+ * operator choice on a fleet whose releases are trusted, and it errs toward
+ * booting rather than toward refusing — so unlike the ceiling's zero, do not
+ * reach for it as a kill switch. A malformed value falls back with a warning
+ * rather than being read as zero, for the same reason the ceilings do.
+ */
+export function fleetSlotTtlSeconds(): number {
+  return readCeilingEnv(FLEET_SLOT_TTL_ENV, DEFAULT_FLEET_SLOT_TTL_SECONDS) ?? 0;
 }
 
 /** The env var that overrides one tier's per-project allowance, e.g.
