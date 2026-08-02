@@ -1,4 +1,4 @@
-import type { CiRunnerProvisioningIntent, Prisma } from '@prisma/client';
+import type { CiRunnerProvisioningIntent } from '@prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   ciRunnerProvisioningIntentRepository as intents,
@@ -52,14 +52,48 @@ import type {
 //   1. The JIT CONFIG — the runner takes exactly one job, de-registers, exits.
 //   2. `auto_destroy: true` + `restart: { policy: 'no' }` in the Fly adapter — an
 //      exiting process is a destroyed machine, not a restarted one.
-//   3. THE `finally` IN {@link ciRunnerBootService.runIntent} — every path out of
-//      supervision tears the container down, including the ones that threw.
-//   4. {@link ciRunnerBootService.reapOrphans} — the backstop for the ONE case a
-//      `finally` cannot cover: this process dying between provision and teardown.
+//   3. THE POLL LOOP CANNOT EXIT EXCEPT INTO {@link ciRunnerBootService.settleSupervision}
+//      — every path out of supervision tears the container down, including the
+//      ones that failed. See the note below on what changed here (MOTIR-2007).
+//   4. {@link ciRunnerBootService.reapOrphans} — the backstop for the ONE case
+//      guarantee 3 cannot cover: the supervisor dying between provision and
+//      teardown.
 //
 // They are independent on purpose. Any one of them can fail without leaking a
 // container, which is the only useful definition of "guaranteed" for something
 // whose failure is silent.
+//
+// ⚠️ GUARANTEE 3 USED TO BE A `finally`, AND A `finally` COULD NOT HOLD IT
+// (MOTIR-2007). Supervision watches a container for up to {@link
+// DEFAULT_JOB_TIMEOUT_MS} = 3,600s. It used to do that synchronously, inside ONE
+// serverless invocation, whose ceiling is `maxDuration = 300` in
+// `app/api/inngest/route.ts` — twelve times shorter. So every CI job longer than
+// ~5 minutes had its supervisor killed mid-loop with `FUNCTION_INVOCATION_TIMEOUT`:
+// the `finally` never ran, the intent stayed `running` and held a fleet slot
+// against BOTH the per-project cap and the fail-CLOSED cross-workload ceiling
+// until the reaper aged it out 70 minutes later, the run dead-lettered while the
+// job had actually succeeded, and the container's cost was recorded late and
+// coarsely or not at all. A spend guard turning into an outage.
+//
+// The fix is the SHAPE, not another patch: supervision is now a DURABLE POLL
+// LOOP owned by the job (`lib/jobs/definitions/ciRunnerFleet.ts`). This service
+// exposes the three individually-BOUNDED operations it drives —
+// {@link ciRunnerBootService.bootIntent}, {@link ciRunnerBootService.pollOnce},
+// {@link ciRunnerBootService.settleSupervision} — each of which does a fixed,
+// small amount of work and returns. The job wraps each in its own `ctx.step.run`
+// and waits between polls with `ctx.step.sleep`, so no STEP ever approaches
+// `maxDuration` while the RUN spans an hour across many invocations. That is
+// what Inngest's durable execution is for, and `docs/jobs.md` rule 1 is the rule
+// this file used to be the one documented exception to.
+//
+// ⚠️ WHICH IS WHY {@link ciRunnerBootService.pollOnce} MUST NEVER THROW. In a
+// stepped world there is no process holding a `finally`, and a step that fails
+// terminally is NOT followed by a step scheduled from a catch — the executor
+// finalizes the run as failed first (`PRODECT_FINDINGS` #39, the trap that made
+// `defineJob` move its dead-letter write to `onFailure`). So teardown cannot be
+// reached from a catch. Guarantee 3 is instead structural: `pollOnce` converts
+// every failure it can meet into a TYPED result, so the only way out of the loop
+// is a `done` verdict, and a `done` verdict goes to `settleSupervision`.
 //
 // ⚠️ WHO DECIDES WHETHER THIS RUNS AT ALL. §10 puts the ADMISSION GATE — the
 // per-project in-flight cap, the fleet-wide ceiling and the
@@ -88,8 +122,41 @@ const DEFAULT_BOOT_DEADLINE_MS = 120_000;
  *  is fixed here is that the CONTAINER stops. */
 const DEFAULT_JOB_TIMEOUT_MS = 3_600_000;
 
-/** How often supervision asks the provider what the container is doing. */
+/** How soon after boot supervision first asks the provider what the container is
+ *  doing. Short, because a fast job should settle fast: the sooner a terminal
+ *  container is observed, the sooner it is torn down and metered. */
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
+
+/**
+ * The ceiling the poll interval backs off to.
+ *
+ * ⚠️ THIS EXISTS BECAUSE THE WAIT IS NOW A STEP. A fixed 3s interval across a
+ * 3,600s job is 1,200 `step.sleep` + `step.run` pairs — 2,400 steps for ONE CI
+ * job, each a checkpoint Inngest persists and re-invokes through. Backing off to
+ * {@link MAX_POLL_INTERVAL_MS} makes a full-length job ~125 polls instead, and
+ * costs only DETECTION latency: the container is destroyed by `auto_destroy`
+ * when the runner exits either way, so a later observation delays the teardown
+ * call and the usage row, not the machine stopping.
+ *
+ * Kept well under {@link DEFAULT_BOOT_DEADLINE_MS} so the boot deadline is still
+ * observed with granularity rather than overshot by a whole interval.
+ */
+const MAX_POLL_INTERVAL_MS = 30_000;
+
+/** How much the poll interval grows each time it is not yet terminal, until it
+ *  reaches {@link MAX_POLL_INTERVAL_MS}. */
+const POLL_BACKOFF_FACTOR = 2;
+
+/**
+ * A hard ceiling on poll iterations, independent of the clock.
+ *
+ * {@link pollOnce} already terminates on {@link DEFAULT_JOB_TIMEOUT_MS}, so this
+ * is not the bound that matters — it is the bound that still holds if the clock
+ * does something surprising (a frozen `now`, a test seam, a provider that never
+ * reports terminal). A durable loop with no static bound is a runaway that bills
+ * per iteration, so it gets one.
+ */
+const MAX_POLL_ITERATIONS = 2_000;
 
 /**
  * How many CONSECUTIVE provider status reads may fail before supervision gives
@@ -109,9 +176,69 @@ const MAX_CONSECUTIVE_READ_FAILURES = 3;
 const STALE_CLAIM_MS = 15 * 60_000;
 
 /** How old a container must be before the reaper destroys it. Past the job
- *  timeout, so the reaper only ever sees containers the `finally` genuinely
- *  failed to reach — not ones it is about to. */
+ *  timeout, so the reaper only ever sees containers supervision genuinely failed
+ *  to reach — not ones it is about to. */
 const DEFAULT_REAP_AFTER_MS = DEFAULT_JOB_TIMEOUT_MS + 10 * 60_000;
+
+/**
+ * THE FLEET'S TIME BUDGETS, AND HOW THEY RELATE TO THE PLATFORM CEILING — stated
+ * ONCE, here, and asserted in `tests/ciFleet/fleetTimeBudgets.test.ts`
+ * (MOTIR-2007). `docs/jobs.md` rule 2 asks for exactly this inequality; the fleet
+ * was the case it did not hold for.
+ *
+ * Read `maxDuration` (300s, `app/api/inngest/route.ts`) as the ceiling on ONE
+ * INVOCATION — i.e. on one step — never on a run. Then:
+ *
+ *   • `stepWorkBudgetMs` ≤ maxDuration · 1000
+ *        The bound on what any ONE step of the boot path does. `pollOnce` is one
+ *        provider read; `settleSupervision` is a teardown plus its bookkeeping.
+ *        This is the constraint that regressed into an hour-long step before.
+ *
+ *   • `jobTimeoutMs` > maxDuration · 1000        ← DELIBERATE, and only safe now
+ *        A supervised CI job may run 3,600s, twelve times the invocation ceiling.
+ *        That is legal ONLY because the RUN is stepped: no single step spans it.
+ *        Shortening this to fit inside one invocation was the tempting non-fix —
+ *        it caps every tenant's CI job at five minutes, which is the product
+ *        regressing to fit the bug.
+ *
+ *   • `pollIntervalMs` ≤ `maxPollIntervalMs` < `bootDeadlineMs` < `jobTimeoutMs`
+ *        The boot deadline must be observable at poll granularity, and it must be
+ *        able to fire before the job timeout does.
+ *
+ *   • `reapAfterMs` > `jobTimeoutMs`
+ *        The reaper stays the BACKSTOP: it may only ever see containers
+ *        supervision has already given up on, never ones it is about to settle.
+ *
+ * Change one of these and the assertion makes you look at the others.
+ */
+export const FLEET_TIME_BUDGETS = {
+  bootDeadlineMs: DEFAULT_BOOT_DEADLINE_MS,
+  jobTimeoutMs: DEFAULT_JOB_TIMEOUT_MS,
+  pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
+  maxPollIntervalMs: MAX_POLL_INTERVAL_MS,
+  reapAfterMs: DEFAULT_REAP_AFTER_MS,
+  maxPollIterations: MAX_POLL_ITERATIONS,
+  /**
+   * What ONE step of the boot path is allowed to spend. Not a timer this code
+   * enforces — a budget the steps are SHAPED to respect (one provider call each)
+   * and which the test asserts against the route's `maxDuration`.
+   */
+  stepWorkBudgetMs: 120_000,
+} as const;
+
+/**
+ * How long to wait before poll number `iteration` (1-based).
+ *
+ * PURE, and deliberately a function of the iteration rather than of the clock:
+ * the durable loop re-derives it on every replay pass, so a wall-clock input
+ * would make two passes of the same run schedule different sleeps.
+ */
+export function pollWaitMs(iteration: number, options: SupervisionOptions = {}): number {
+  const base = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const cap = options.maxPollIntervalMs ?? MAX_POLL_INTERVAL_MS;
+  const grown = base * POLL_BACKOFF_FACTOR ** Math.max(0, iteration - 1);
+  return Math.min(Math.max(base, grown), Math.max(base, cap));
+}
 
 /** Seams the tests drive. Defaults are the constants above; nothing else may
  *  pass them, which is why they are optional and undocumented in the API. */
@@ -119,9 +246,79 @@ export interface SupervisionOptions {
   bootDeadlineMs?: number;
   jobTimeoutMs?: number;
   pollIntervalMs?: number;
+  maxPollIntervalMs?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 }
+
+/**
+ * The handle on a container currently being supervised — what {@link
+ * ciRunnerBootService.bootIntent} hands to every later step.
+ *
+ * ⚠️ JSON-SERIALIZABLE BY CONTRACT. It crosses a `ctx.step.run` boundary, so
+ * Inngest round-trips it through JSON: every instant is an ISO STRING, not a
+ * `Date`, because a `Date` survives the first pass and arrives as a string on
+ * every replayed one — a difference that would otherwise show up as a
+ * `.getTime is not a function` only in production, only on long jobs.
+ */
+export interface SupervisionSession {
+  readonly intentId: string;
+  readonly handle: {
+    readonly provider: ContainerHandle['provider'];
+    readonly id: string;
+    readonly region: string;
+    /** ISO-8601. */
+    readonly createdAt: string;
+  };
+  readonly githubRunnerId: number | null;
+  /** ISO-8601 — when the container was booted, the origin both deadlines run from. */
+  readonly bootedAt: string;
+  /** ISO-8601 — GitHub's own queue instant, which boot latency is measured from. */
+  readonly queuedAt: string;
+  readonly attribution: {
+    readonly orgId: string;
+    readonly workspaceId: string;
+    readonly projectId: string;
+    readonly repoFullName: string;
+    readonly workflowJobId: number;
+  };
+}
+
+/** What one poll observed. `done` is the ONLY way out of the loop, and it always
+ *  leads to {@link ciRunnerBootService.settleSupervision}. */
+export type PollResult =
+  | {
+      done: false;
+      /** ISO-8601, once the container has been seen running. */
+      startedAt: string | null;
+      bootLatencyMs: number | null;
+      /** Carried forward so the next poll can apply {@link MAX_CONSECUTIVE_READ_FAILURES}. */
+      consecutiveReadFailures: number;
+    }
+  | {
+      done: true;
+      reason: TeardownReason;
+      startedAt: string | null;
+      bootLatencyMs: number | null;
+      /** Set when the loop ended because the provider could not be read, so the
+       *  settled intent can say so rather than reporting a bare timeout. */
+      failureDetail: string | null;
+    };
+
+/** What {@link ciRunnerBootService.bootIntent} returns: either nothing was
+ *  provisioned and the run is over, or a container is up and must be supervised
+ *  to its end. */
+export type BootResult =
+  | { phase: 'terminal'; outcome: RunIntentOutcome }
+  | { phase: 'supervising'; session: SupervisionSession };
+
+/** The starting point of the poll loop — no reads yet, nothing observed. */
+export const INITIAL_POLL_STATE: Extract<PollResult, { done: false }> = {
+  done: false,
+  startedAt: null,
+  bootLatencyMs: null,
+  consecutiveReadFailures: 0,
+};
 
 export type RunIntentOutcome =
   /** No such intent — it was deleted, or the id was stale. */
@@ -184,320 +381,103 @@ function detailOf(err: unknown): string {
 
 export const ciRunnerBootService = {
   /**
-   * {@link runIntent}, ONCE PER DISPATCH — the entrypoint the boot job calls
-   * (MOTIR-2002).
+   * STEP 1 OF THE DURABLE POLL LOOP — admit, mint, boot, and hand back a session
+   * (MOTIR-2007).
    *
-   * ⚠️ WHY A MEMO AND NOT A STEP. Inngest re-invokes a handler from the top at
-   * every step boundary, so anything OUTSIDE a `ctx.step.run` executes once per
-   * durable-replay PASS, and the number of passes is a function of how many
-   * steps the run happens to take — `defineJob`'s two ledger writes make it two.
-   * The obvious fix is to wrap the supervision in a step, whose memoization is
-   * exactly the once-only semantics wanted; it is unavailable, and measurably
-   * so. One step cannot outlive ONE INVOCATION of `app/api/inngest/route.ts`,
-   * whose declared budget is `maxDuration = 300` (Vercel's serverless maximum on
-   * the Pro plan, fixed there by MOTIR-1974), while {@link DEFAULT_JOB_TIMEOUT_MS}
-   * lets a supervised CI job run for 3,600s — twelve times the ceiling.
+   * Everything that has to happen exactly once and costs money: the admission
+   * gate + claim, the runner group, the JIT mint, the container boot. Bounded by
+   * construction — a fixed handful of calls, no loop, no wait — so it fits inside
+   * one invocation with room to spare.
    *
-   * So the supervision stays un-stepped and is made explicitly replay-aware
-   * instead: the pass that does the work records its outcome on the intent, and
-   * every later pass of the SAME dispatch reads it back. Later passes cost one
-   * indexed read and neither re-admit (the fleet-wide admission lock is taken
-   * once per boot, not twice) nor re-report (Inngest's run output is the real
-   * outcome, not the loser's `already_claimed`).
-   *
-   * `supervisionKey` identifies the dispatch — the triggering event's id, which
-   * is fixed for a run. It is MATCHED, not merely recorded: a second dispatch for
-   * the same intent gets its own honest `already_claimed` rather than inheriting
-   * a container it never booted.
-   *
-   * Not a substitute for the claim. `admit`'s atomic `pending → provisioning`
-   * remains the guarantee that no second container is ever booted; this is what
-   * stops the fleet's money safety from resting on it ALONE.
+   * Returns `terminal` when nothing was provisioned (the run is over and the
+   * caller returns the outcome), or `supervising` with the JSON-serializable
+   * {@link SupervisionSession} every later step needs. Never throws for an
+   * outcome it can name, for the reason {@link runIntent} never did: the caller
+   * is a background job, and a throw is a retry that would mint a second runner.
    */
-  async superviseOnce(
-    intentId: string,
-    supervisionKey: string,
-    options: SupervisionOptions = {},
-  ): Promise<RunIntentOutcome> {
-    const replayed = await readSupervisionMemo(intentId, supervisionKey);
-    if (replayed) return replayed;
-
-    const outcome = await this.runIntent(intentId, options);
-    await recordSupervisionMemo(intentId, supervisionKey, outcome);
+  async bootIntent(intentId: string, options: SupervisionOptions = {}): Promise<BootResult> {
+    const outcome = await bootOnce(intentId, options);
     return outcome;
   },
 
   /**
-   * Turn ONE provisioning intent into ONE ephemeral runner, supervise it, and
-   * guarantee it is gone.
+   * STEP 2 (×N) — ONE provider read, and return.
    *
-   * Never throws for an outcome it can name — every refusal is a typed result the
-   * caller logs — because the caller is a background job, and a job that throws
-   * gets retried by Inngest. Retrying "this project has no runner group" would
-   * mint and de-register a runner four more times for nothing.
+   * ⚠️ THIS IS THE WHOLE POINT OF THE CARD. It does exactly one
+   * `orchestrator.describe`, applies the deadlines to what came back, and
+   * returns. No loop, no sleep, no second call — so the step it runs in is
+   * milliseconds, and the constraint cannot silently regress into a long step
+   * again. The WAITING between polls is `ctx.step.sleep`, which costs no
+   * invocation at all.
+   *
+   * ⚠️ AND IT NEVER THROWS. In a stepped world teardown cannot be reached from a
+   * catch (see the module header), so guarantee 3 is structural: every failure
+   * this can meet becomes a typed result, and the only exit is a `done` verdict
+   * that the caller takes to {@link settleSupervision}.
+   */
+  async pollOnce(
+    session: SupervisionSession,
+    previous: Extract<PollResult, { done: false }> = INITIAL_POLL_STATE,
+    options: SupervisionOptions = {},
+  ): Promise<PollResult> {
+    return pollContainerOnce(session, previous, options);
+  },
+
+  /**
+   * STEP 3 — THE TEARDOWN, and the only way the loop ends.
+   *
+   * Destroys the container, de-registers the runner, records the container-seconds
+   * and settles the intent — i.e. everything that used to live in `runIntent`'s
+   * `finally`, now reachable as an ordinary step on the terminal branch rather
+   * than as a language construct in a process that may already be dead.
+   */
+  async settleSupervision(
+    session: SupervisionSession,
+    verdict: Extract<PollResult, { done: true }>,
+    options: SupervisionOptions = {},
+  ): Promise<RunIntentOutcome> {
+    return settleSupervisedContainer(session, verdict, options);
+  },
+
+  /**
+   * Boot ONE intent and supervise it to its end, IN THIS PROCESS.
+   *
+   * ⚠️ NOT THE PRODUCTION PATH, and deliberately not reachable from one. The boot
+   * JOB drives {@link bootIntent} / {@link pollOnce} / {@link settleSupervision}
+   * as separate durable steps, which is the entire fix in MOTIR-2007 — calling
+   * this from a job would rebuild the hour-long invocation the card removed, so
+   * `tests/jobs/ci-runner-fleet.test.ts` asserts the handler does not.
+   *
+   * It survives because it is the honest in-process composition of the same three
+   * operations, which is what lets the service suites drive a whole supervised
+   * boot against real Postgres at millisecond deadlines. Any caller that is NOT a
+   * durable job (a script, a local harness, a test) wants exactly this.
    */
   async runIntent(intentId: string, options: SupervisionOptions = {}): Promise<RunIntentOutcome> {
-    const now = options.now ?? (() => new Date());
     const sleep = options.sleep ?? sleepFor;
-    const bootDeadlineMs = options.bootDeadlineMs ?? DEFAULT_BOOT_DEADLINE_MS;
-    const jobTimeoutMs = options.jobTimeoutMs ?? DEFAULT_JOB_TIMEOUT_MS;
-    const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    const booted = await this.bootIntent(intentId, options);
+    if (booted.phase === 'terminal') return booted.outcome;
 
-    const intent = await withSystemContext((tx) => intents.findById(intentId, tx));
-    if (!intent) return { outcome: 'unknown_intent' };
-
-    if (!isOrchestratorConfigured()) return { outcome: 'not_configured' };
-
-    // THE ADMISSION GATE, which also takes THE CLAIM (atomic `pending →
-    // provisioning`; the loser simply stops — see `claimPending` for why the
-    // predicate is the whole guard). Nothing below this line is reachable for an
-    // intent the caps or the credit state declined, which is the point: every
-    // line after it costs money.
-    const verdict = await ciRunnerAdmissionService.admit(intent);
-    if (verdict.outcome === 'already_claimed') return { outcome: 'already_claimed' };
-    if (verdict.outcome === 'deferred') {
-      console.warn('[ciRunnerBootService] the admission gate deferred an intent', {
-        intentId,
-        reason: verdict.reason,
-        detail: verdict.detail,
-      });
-      return { outcome: 'gate_deferred', reason: verdict.reason, detail: verdict.detail };
+    let state = INITIAL_POLL_STATE;
+    for (let iteration = 1; iteration <= MAX_POLL_ITERATIONS; iteration += 1) {
+      await sleep(pollWaitMs(iteration, options));
+      const polled = await this.pollOnce(booted.session, state, options);
+      if (polled.done) return this.settleSupervision(booted.session, polled, options);
+      state = polled;
     }
-
-    // ── Everything the boot needs, resolved before anything is spent ──────────
-    if (!intent.projectId) {
-      // No project means no runner group (§7.3) and no tenant the container's
-      // cost could be attributed to. Both are disqualifying on their own.
-      await settleFailed(intentId, 'provision_failed', 'the intent names no project');
-      return { outcome: 'no_runner_group', detail: 'the intent names no project' };
-    }
-
-    const workflowJobId = Number(intent.jobId);
-    if (!Number.isInteger(workflowJobId) || workflowJobId <= 0) {
-      await settleFailed(intentId, 'provision_failed', 'the intent has a malformed job id');
-      return { outcome: 'provision_failed', detail: 'the intent has a malformed job id' };
-    }
-
-    let runnerGroupId: number;
-    try {
-      // ⚠️ REFUSES rather than falling back. §7.3: never the `Default` group (id
-      // 1, `visibility: "all"`), which would silently restore the cross-tenant
-      // pickup the per-project group exists to prevent — a runner booted for
-      // project X taking project Y's job, including one the gate DECLINED.
-      runnerGroupId = await projectRunnerGroupService.requireRunnerGroupId({
-        projectId: intent.projectId,
-        workspaceId: intent.workspaceId,
-      });
-    } catch (err) {
-      const detail =
-        err instanceof RunnerGroupNotProvisionedError
-          ? err.message
-          : `could not read the project's runner group: ${detailOf(err)}`;
-      await settleFailed(intentId, 'provision_failed', detail);
-      return { outcome: 'no_runner_group', detail };
-    }
-
-    let orchestrator: ContainerOrchestrator;
-    try {
-      orchestrator = getOrchestrator();
-    } catch (err) {
-      await releaseClaim(intentId);
-      console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
-        intentId,
-        detail: detailOf(err),
-      });
-      return { outcome: 'not_configured' };
-    }
-
-    // ── 1 · Mint the JIT config ───────────────────────────────────────────────
-    // The credential the container receives. ONE runner, ONE config, no
-    // registration capability inside the container (§7.4).
-    let jit;
-    try {
-      jit = await runnerJitConfigClient.mint({
-        name: runnerNameFor(intent),
-        runnerGroupId,
-        // EXACTLY the one §M-compliant label. Not `self-hosted`, not `linux`, not
-        // `x64`: a runner carrying GitHub's defaults would match some unrelated
-        // tenant's `runs-on: self-hosted`, which is §7.3's cross-tenant pickup
-        // arriving through the label axis instead of the group axis.
-        labels: [MOTIR_RUNNER_LABEL],
-      });
-    } catch (err) {
-      if (err instanceof RunnerRegistrationRateLimitedError) {
-        // Early, not broken. Release the claim and let the next sweep try — a
-        // burst against GitHub's 1,500-per-5-minutes ceiling is the gate's
-        // problem to shape (§6), not a reason to fail a job.
-        await releaseClaim(intentId);
-        return { outcome: 'rate_limited', retryAfterSeconds: err.retryAfterSeconds };
-      }
-      const detail = `could not mint a JIT config: ${detailOf(err)}`;
-      await settleFailed(intentId, 'provision_failed', detail);
-      return { outcome: 'provision_failed', detail };
-    }
-
-    // Persist the runner id BEFORE booting. `generate-jitconfig` has already
-    // registered the runner (§7.4), so from here on a crash without this column
-    // would leave a dangling registered runner nobody can name.
-    await withSystemContext((tx) =>
-      intents.recordMintedRunner(
-        intentId,
-        { githubRunnerId: jit.runnerId, runnerName: jit.runnerName },
-        tx,
-      ),
+    // The static ceiling bound. Settle rather than abandon: a container nothing
+    // tears down is the failure this whole file exists to prevent.
+    return this.settleSupervision(
+      booted.session,
+      {
+        done: true,
+        reason: 'job_timed_out',
+        startedAt: state.startedAt,
+        bootLatencyMs: state.bootLatencyMs,
+        failureDetail: `supervision hit the ${MAX_POLL_ITERATIONS}-poll ceiling`,
+      },
+      options,
     );
-
-    // ── 2 · Boot exactly one container ────────────────────────────────────────
-    const spec = this.buildSpec({
-      intent,
-      workflowJobId,
-      projectId: intent.projectId,
-      encodedJitConfig: jit.encodedJitConfig,
-      timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
-      orchestrator,
-    });
-
-    let handle: ContainerHandle;
-    try {
-      handle = await orchestrator.provision(spec);
-    } catch (err) {
-      // A MINTED-BUT-UNUSED JIT CONFIG. The runner is registered at GitHub and no
-      // container will ever claim it, so it is de-registered here rather than
-      // left to GitHub — which does not clean it up (§7.4, verified).
-      await deregisterQuietly(jit.runnerId, intentId);
-
-      // ⚠️ §6.2 of `docs/decisions/fleet-image-pull.md` — AN UNPULLABLE IMAGE IS
-      // ITS OWN NAMED CONDITION, not a generic boot failure. It is the one
-      // provisioning failure that is about the DEPLOYMENT rather than about this
-      // job, so it settles with a detail that says which image and what the
-      // registry said, and returns an outcome an operator can filter on.
-      //
-      // The teardown reason stays `provision_failed`: that column records how a
-      // CONTAINER ended, and here there was never a container to end. Widening
-      // it would put a boot-time diagnosis in a teardown vocabulary — and every
-      // consumer of that enum would have to learn a value it can never observe.
-      if (err instanceof OrchestratorImageUnpullableError) {
-        const detail = `the runner image could not be pulled: ${detailOf(err)}`;
-        console.error('[ciRunnerBootService] the runner image is not pullable', {
-          intentId,
-          image: err.imageReference,
-          detail: detailOf(err),
-        });
-        await settleFailed(intentId, 'provision_failed', detail);
-        return { outcome: 'image_unpullable', detail };
-      }
-
-      const detail = `could not boot a container: ${detailOf(err)}`;
-      await settleFailed(intentId, 'provision_failed', detail);
-      return { outcome: 'provision_failed', detail };
-    }
-
-    const bootedAt = now();
-    await withSystemContext((tx) =>
-      intents.recordBoot(
-        intentId,
-        {
-          containerProvider: handle.provider,
-          containerId: handle.id,
-          containerRegion: handle.region,
-          githubRunnerId: jit.runnerId,
-          runnerName: jit.runnerName,
-          bootedAt,
-        },
-        tx,
-      ),
-    );
-
-    // ── 3 · Supervise, and tear down on EVERY path out ────────────────────────
-    const attribution: UsageAttribution = {
-      orgId: intent.organizationId,
-      workspaceId: intent.workspaceId,
-      projectId: intent.projectId,
-      repoFullName: `${intent.repoOwner}/${intent.repoName}`,
-      workflowJobId,
-      size: FLEET_CONTAINER_SIZE,
-      observedStartedAt: null,
-    };
-
-    let reason: TeardownReason = 'provision_failed';
-    let observedStartedAt: Date | null = null;
-    let bootLatencyMs: number | null = null;
-    let supervisionError: string | null = null;
-
-    try {
-      const supervised = await supervise({
-        orchestrator,
-        handle,
-        bootedAt,
-        queuedAt: intent.queuedAt,
-        bootDeadlineMs,
-        jobTimeoutMs,
-        pollIntervalMs,
-        now,
-        sleep,
-      });
-      reason = supervised.reason;
-      observedStartedAt = supervised.startedAt;
-      bootLatencyMs = supervised.bootLatencyMs;
-      if (supervised.startedAt && supervised.bootLatencyMs !== null) {
-        await withSystemContext((tx) =>
-          intents.recordStarted(
-            intentId,
-            supervised.startedAt as Date,
-            supervised.bootLatencyMs as number,
-            tx,
-          ),
-        );
-      }
-    } catch (err) {
-      // The supervision loop itself broke — a provider read failed repeatedly, or
-      // something unforeseen threw. The container still exists, so the ONLY
-      // acceptable next step is the `finally` below.
-      supervisionError = detailOf(err);
-      reason = 'job_timed_out';
-    } finally {
-      // ⚠️ THE GUARANTEE. Every path out of supervision arrives here — success,
-      // timeout, never-started, and a throw. `teardown` is idempotent, so the
-      // reaper reaching the same container later is harmless.
-      const usage = await teardownQuietly(orchestrator, handle, reason, {
-        ...attribution,
-        observedStartedAt,
-      });
-      await deregisterQuietly(jit.runnerId, intentId);
-
-      if (usage) {
-        await recordContainerUsage(usage);
-        await settleIntent(intentId, {
-          status: reason === 'job_completed' ? CI_RUNNER_INTENT_COMPLETED : CI_RUNNER_INTENT_FAILED,
-          teardownReason: reason,
-          settledAt: now(),
-          failureDetail: supervisionError,
-          startedAt: observedStartedAt,
-          bootLatencyMs,
-        });
-        return {
-          outcome: 'settled',
-          reason,
-          containerId: handle.id,
-          billableSeconds: usage.billableSeconds,
-          costUsd: usage.costUsd,
-          bootLatencyMs,
-          usage,
-        };
-      }
-
-      // Teardown itself failed. The intent stays IN FLIGHT deliberately: marking
-      // it settled would hide a container that may still be running from the one
-      // mechanism that can still catch it. The reaper owns it now.
-      console.error(
-        '[ciRunnerBootService] teardown failed — the intent is left in flight for the reaper',
-        { intentId, containerId: handle.id, provider: handle.provider },
-      );
-      return {
-        outcome: 'provision_failed',
-        detail: `teardown failed for container ${handle.id}; left for the reaper`,
-      };
-    }
   },
 
   /**
@@ -629,168 +609,424 @@ export const ciRunnerBootService = {
   },
 };
 
-// ── internals ─────────────────────────────────────────────────────────────
+// ── the three bounded phases the durable poll loop drives ──────────────────
 
 /**
- * Watch one container until it finishes, never starts, or overruns.
+ * The BOOT phase — admit + claim, resolve, mint, provision, record.
  *
- * Two deadlines, not one, because they are different failures with different
- * remedies: a container that never STARTS is a boot problem (a bad image, an
- * exhausted region), while one that starts and never STOPS is a job problem (a
- * hung test, an infinite loop in customer code). Collapsing them into a single
- * timeout would make the fleet's most common two failures indistinguishable in
- * the record.
+ * This is the old `runIntent` up to and including `recordBoot`, unchanged in
+ * behaviour and in the order it spends things. What changed is where it STOPS:
+ * it hands back a session instead of falling into an hour-long supervision loop,
+ * so it can live in a step.
  */
-async function supervise(input: {
-  orchestrator: ContainerOrchestrator;
-  handle: ContainerHandle;
-  bootedAt: Date;
-  queuedAt: Date;
-  bootDeadlineMs: number;
-  jobTimeoutMs: number;
-  pollIntervalMs: number;
-  now: () => Date;
-  sleep: (ms: number) => Promise<void>;
-}): Promise<{ reason: TeardownReason; startedAt: Date | null; bootLatencyMs: number | null }> {
-  const { orchestrator, handle, bootedAt, queuedAt, now, sleep } = input;
-  let startedAt: Date | null = null;
-  let bootLatencyMs: number | null = null;
-  let consecutiveReadFailures = 0;
+async function bootOnce(intentId: string, options: SupervisionOptions): Promise<BootResult> {
+  const now = options.now ?? (() => new Date());
+  const jobTimeoutMs = options.jobTimeoutMs ?? DEFAULT_JOB_TIMEOUT_MS;
+  const terminal = (outcome: RunIntentOutcome): BootResult => ({ phase: 'terminal', outcome });
 
-  for (;;) {
-    // ⚠️ A SINGLE PROVIDER BLIP MUST NOT KILL A CUSTOMER'S JOB. Without this
-    // tolerance one 500 from the provider propagates out of the loop, the
-    // `finally` tears the container down, and a healthy CI run dies mid-test for
-    // a reason that has nothing to do with the customer's code. The deadlines
-    // above are still the real bound — this only buys the loop the right to
-    // MISS a few reads, never the right to run longer.
-    let status;
-    try {
-      status = await orchestrator.describe(handle);
-      consecutiveReadFailures = 0;
-    } catch (err) {
-      consecutiveReadFailures += 1;
-      if (consecutiveReadFailures > MAX_CONSECUTIVE_READ_FAILURES) throw err;
-      console.warn('[ciRunnerBootService] a container status read failed — retrying', {
-        containerId: handle.id,
-        provider: handle.provider,
-        consecutiveReadFailures,
+  const intent = await withSystemContext((tx) => intents.findById(intentId, tx));
+  if (!intent) return terminal({ outcome: 'unknown_intent' });
+
+  if (!isOrchestratorConfigured()) return terminal({ outcome: 'not_configured' });
+
+  // THE ADMISSION GATE, which also takes THE CLAIM (atomic `pending →
+  // provisioning`; the loser simply stops — see `claimPending` for why the
+  // predicate is the whole guard). Nothing below this line is reachable for an
+  // intent the caps or the credit state declined, which is the point: every
+  // line after it costs money.
+  //
+  // ⚠️ AND IT IS NOW INSIDE A STEP, which is what finally makes the claim
+  // taken ONCE PER RUN rather than once per durable-replay pass (the defect
+  // MOTIR-2002 had to carry a memo column to work around). Step memoization
+  // gives that for free.
+  const verdict = await ciRunnerAdmissionService.admit(intent);
+  if (verdict.outcome === 'already_claimed') return terminal({ outcome: 'already_claimed' });
+  if (verdict.outcome === 'deferred') {
+    console.warn('[ciRunnerBootService] the admission gate deferred an intent', {
+      intentId,
+      reason: verdict.reason,
+      detail: verdict.detail,
+    });
+    return terminal({ outcome: 'gate_deferred', reason: verdict.reason, detail: verdict.detail });
+  }
+
+  // ── Everything the boot needs, resolved before anything is spent ──────────
+  if (!intent.projectId) {
+    // No project means no runner group (§7.3) and no tenant the container's
+    // cost could be attributed to. Both are disqualifying on their own.
+    await settleFailed(intentId, 'provision_failed', 'the intent names no project');
+    return terminal({ outcome: 'no_runner_group', detail: 'the intent names no project' });
+  }
+
+  const workflowJobId = Number(intent.jobId);
+  if (!Number.isInteger(workflowJobId) || workflowJobId <= 0) {
+    await settleFailed(intentId, 'provision_failed', 'the intent has a malformed job id');
+    return terminal({ outcome: 'provision_failed', detail: 'the intent has a malformed job id' });
+  }
+
+  let runnerGroupId: number;
+  try {
+    // ⚠️ REFUSES rather than falling back. §7.3: never the `Default` group (id
+    // 1, `visibility: "all"`), which would silently restore the cross-tenant
+    // pickup the per-project group exists to prevent — a runner booted for
+    // project X taking project Y's job, including one the gate DECLINED.
+    runnerGroupId = await projectRunnerGroupService.requireRunnerGroupId({
+      projectId: intent.projectId,
+      workspaceId: intent.workspaceId,
+    });
+  } catch (err) {
+    const detail =
+      err instanceof RunnerGroupNotProvisionedError
+        ? err.message
+        : `could not read the project's runner group: ${detailOf(err)}`;
+    await settleFailed(intentId, 'provision_failed', detail);
+    return terminal({ outcome: 'no_runner_group', detail });
+  }
+
+  let orchestrator: ContainerOrchestrator;
+  try {
+    orchestrator = getOrchestrator();
+  } catch (err) {
+    await releaseClaim(intentId);
+    console.warn('[ciRunnerBootService] no orchestrator is configured — claim released', {
+      intentId,
+      detail: detailOf(err),
+    });
+    return terminal({ outcome: 'not_configured' });
+  }
+
+  // ── 1 · Mint the JIT config ───────────────────────────────────────────────
+  // The credential the container receives. ONE runner, ONE config, no
+  // registration capability inside the container (§7.4).
+  let jit;
+  try {
+    jit = await runnerJitConfigClient.mint({
+      name: runnerNameFor(intent),
+      runnerGroupId,
+      // EXACTLY the one §M-compliant label. Not `self-hosted`, not `linux`, not
+      // `x64`: a runner carrying GitHub's defaults would match some unrelated
+      // tenant's `runs-on: self-hosted`, which is §7.3's cross-tenant pickup
+      // arriving through the label axis instead of the group axis.
+      labels: [MOTIR_RUNNER_LABEL],
+    });
+  } catch (err) {
+    if (err instanceof RunnerRegistrationRateLimitedError) {
+      // Early, not broken. Release the claim and let the next sweep try — a
+      // burst against GitHub's 1,500-per-5-minutes ceiling is the gate's
+      // problem to shape (§6), not a reason to fail a job.
+      await releaseClaim(intentId);
+      return terminal({ outcome: 'rate_limited', retryAfterSeconds: err.retryAfterSeconds });
+    }
+    const detail = `could not mint a JIT config: ${detailOf(err)}`;
+    await settleFailed(intentId, 'provision_failed', detail);
+    return terminal({ outcome: 'provision_failed', detail });
+  }
+
+  // Persist the runner id BEFORE booting. `generate-jitconfig` has already
+  // registered the runner (§7.4), so from here on a crash without this column
+  // would leave a dangling registered runner nobody can name.
+  await withSystemContext((tx) =>
+    intents.recordMintedRunner(
+      intentId,
+      { githubRunnerId: jit.runnerId, runnerName: jit.runnerName },
+      tx,
+    ),
+  );
+
+  // ── 2 · Boot exactly one container ────────────────────────────────────────
+  const spec = ciRunnerBootService.buildSpec({
+    intent,
+    workflowJobId,
+    projectId: intent.projectId,
+    encodedJitConfig: jit.encodedJitConfig,
+    timeoutSeconds: Math.ceil(jobTimeoutMs / 1000),
+    orchestrator,
+  });
+
+  let handle: ContainerHandle;
+  try {
+    handle = await orchestrator.provision(spec);
+  } catch (err) {
+    // A MINTED-BUT-UNUSED JIT CONFIG. The runner is registered at GitHub and no
+    // container will ever claim it, so it is de-registered here rather than
+    // left to GitHub — which does not clean it up (§7.4, verified).
+    await deregisterQuietly(jit.runnerId, intentId);
+
+    // ⚠️ §6.2 of `docs/decisions/fleet-image-pull.md` — AN UNPULLABLE IMAGE IS
+    // ITS OWN NAMED CONDITION, not a generic boot failure. It is the one
+    // provisioning failure that is about the DEPLOYMENT rather than about this
+    // job, so it settles with a detail that says which image and what the
+    // registry said, and returns an outcome an operator can filter on.
+    //
+    // The teardown reason stays `provision_failed`: that column records how a
+    // CONTAINER ended, and here there was never a container to end. Widening it
+    // would put a boot-time diagnosis in a teardown vocabulary — and every
+    // consumer of that enum would have to learn a value it can never observe.
+    if (err instanceof OrchestratorImageUnpullableError) {
+      const detail = `the runner image could not be pulled: ${detailOf(err)}`;
+      console.error('[ciRunnerBootService] the runner image is not pullable', {
+        intentId,
+        image: err.imageReference,
         detail: detailOf(err),
       });
-      // Fall through to the deadline checks with the reads we have, so a
-      // provider that is down cannot extend a container past its timeout.
-      const elapsedSoFar = now().getTime() - bootedAt.getTime();
-      if (!startedAt && elapsedSoFar >= input.bootDeadlineMs) {
-        return { reason: 'provision_failed', startedAt: null, bootLatencyMs: null };
-      }
-      if (elapsedSoFar >= input.jobTimeoutMs) {
-        return { reason: 'job_timed_out', startedAt, bootLatencyMs };
-      }
-      await sleep(input.pollIntervalMs);
-      continue;
+      await settleFailed(intentId, 'provision_failed', detail);
+      return terminal({ outcome: 'image_unpullable', detail });
     }
 
-    if (status.startedAt && !startedAt) {
-      startedAt = status.startedAt;
-      // ⚠️ MEASURED FROM `queuedAt`, GitHub's own instant — not from our
-      // receipt of the webhook and not from the boot. §6's budget is the span a
-      // USER experiences as "CI is slow to start", and the queue time before
-      // Motir even heard about the job is part of that. MOTIR-1928 measures the
-      // real p50/p95 against the budget; this is what makes it a query.
-      bootLatencyMs = Math.max(0, startedAt.getTime() - queuedAt.getTime());
-    }
-
-    if (status.terminal) {
-      // Gone or stopped. If it never started, the runner never registered — the
-      // "boot succeeded but nothing came up" path, which is a provisioning
-      // failure even though the provider reported success.
-      return {
-        reason: startedAt || status.startedAt ? 'job_completed' : 'provision_failed',
-        startedAt: startedAt ?? status.startedAt,
-        bootLatencyMs,
-      };
-    }
-
-    const elapsed = now().getTime() - bootedAt.getTime();
-    if (!startedAt && elapsed >= input.bootDeadlineMs) {
-      return { reason: 'provision_failed', startedAt: null, bootLatencyMs: null };
-    }
-    if (elapsed >= input.jobTimeoutMs) {
-      return { reason: 'job_timed_out', startedAt, bootLatencyMs };
-    }
-
-    await sleep(input.pollIntervalMs);
+    const detail = `could not boot a container: ${detailOf(err)}`;
+    await settleFailed(intentId, 'provision_failed', detail);
+    return terminal({ outcome: 'provision_failed', detail });
   }
+
+  const bootedAt = now();
+  await withSystemContext((tx) =>
+    intents.recordBoot(
+      intentId,
+      {
+        containerProvider: handle.provider,
+        containerId: handle.id,
+        containerRegion: handle.region,
+        githubRunnerId: jit.runnerId,
+        runnerName: jit.runnerName,
+        bootedAt,
+      },
+      tx,
+    ),
+  );
+
+  // ── 3 · Hand the loop everything it needs, as JSON ────────────────────────
+  return {
+    phase: 'supervising',
+    session: {
+      intentId,
+      handle: {
+        provider: handle.provider,
+        id: handle.id,
+        region: handle.region,
+        createdAt: handle.createdAt.toISOString(),
+      },
+      githubRunnerId: jit.runnerId,
+      bootedAt: bootedAt.toISOString(),
+      queuedAt: intent.queuedAt.toISOString(),
+      attribution: {
+        orgId: intent.organizationId,
+        workspaceId: intent.workspaceId,
+        projectId: intent.projectId,
+        repoFullName: `${intent.repoOwner}/${intent.repoName}`,
+        workflowJobId,
+      },
+    },
+  };
 }
 
 /**
- * The outcome THIS dispatch already recorded for this intent, if any.
+ * ONE provider read, the deadlines applied to it, and a return.
  *
- * ⚠️ FAILS OPEN. A memo that cannot be read must never be the reason a queued CI
- * job gets no runner, so a read failure falls through to supervising — which is
- * precisely the pre-MOTIR-2002 behaviour, still guarded by the claim. The log is
- * what distinguishes "no memo" from "could not tell".
+ * ⚠️ NEVER THROWS — see the module header. Every failure becomes a typed result,
+ * because the only exit from the loop must be one the caller can take to
+ * teardown.
  */
-async function readSupervisionMemo(
-  intentId: string,
-  supervisionKey: string,
-): Promise<RunIntentOutcome | null> {
-  let recorded: Prisma.JsonValue | null;
-  try {
-    recorded = await withSystemContext((tx) =>
-      intents.findSupervisionOutcome(intentId, supervisionKey, tx),
-    );
-  } catch (err) {
-    console.error('[ciRunnerBootService] could not read the supervision memo — supervising', {
-      intentId,
-      detail: detailOf(err),
-    });
+async function pollContainerOnce(
+  session: SupervisionSession,
+  previous: Extract<PollResult, { done: false }>,
+  options: SupervisionOptions,
+): Promise<PollResult> {
+  const now = options.now ?? (() => new Date());
+  const bootDeadlineMs = options.bootDeadlineMs ?? DEFAULT_BOOT_DEADLINE_MS;
+  const jobTimeoutMs = options.jobTimeoutMs ?? DEFAULT_JOB_TIMEOUT_MS;
+  const bootedAt = new Date(session.bootedAt).getTime();
+  const queuedAt = new Date(session.queuedAt).getTime();
+
+  let startedAt = previous.startedAt;
+  let bootLatencyMs = previous.bootLatencyMs;
+
+  /** The deadline check both the happy and the failed-read paths fall through
+   *  to, so a provider that is down can never extend a container past its
+   *  timeout. */
+  const deadlineVerdict = (failureDetail: string | null): PollResult | null => {
+    const elapsed = now().getTime() - bootedAt;
+    if (!startedAt && elapsed >= bootDeadlineMs) {
+      return {
+        done: true,
+        reason: 'provision_failed',
+        startedAt: null,
+        bootLatencyMs: null,
+        failureDetail,
+      };
+    }
+    if (elapsed >= jobTimeoutMs) {
+      return { done: true, reason: 'job_timed_out', startedAt, bootLatencyMs, failureDetail };
+    }
     return null;
+  };
+
+  let status;
+  try {
+    status = await orchestratorFor(session).describe({
+      provider: session.handle.provider,
+      id: session.handle.id,
+      region: session.handle.region,
+      createdAt: new Date(session.handle.createdAt),
+    });
+  } catch (err) {
+    // ⚠️ A SINGLE PROVIDER BLIP MUST NOT KILL A CUSTOMER'S JOB. Without this
+    // tolerance one 500 from the provider ends a healthy CI run for a reason
+    // that has nothing to do with the customer's code. The deadlines are still
+    // the real bound — this only buys the loop the right to MISS a few reads,
+    // never the right to run longer.
+    const consecutiveReadFailures = previous.consecutiveReadFailures + 1;
+    const detail = detailOf(err);
+    if (consecutiveReadFailures > MAX_CONSECUTIVE_READ_FAILURES) {
+      // Give up on reading, but NOT on tearing down: a `done` verdict is what
+      // routes this to teardown, which is why this returns rather than throws.
+      return {
+        done: true,
+        reason: 'job_timed_out',
+        startedAt,
+        bootLatencyMs,
+        failureDetail: `the container status could not be read: ${detail}`,
+      };
+    }
+    console.warn('[ciRunnerBootService] a container status read failed — retrying', {
+      containerId: session.handle.id,
+      provider: session.handle.provider,
+      consecutiveReadFailures,
+      detail,
+    });
+    return (
+      deadlineVerdict(null) ?? { done: false, startedAt, bootLatencyMs, consecutiveReadFailures }
+    );
   }
-  if (recorded === null || typeof recorded !== 'object' || Array.isArray(recorded)) return null;
-  // The JSON PROJECTION of the outcome — the same round-trip `defineJob` applies
-  // before writing `job_run.output`, so the replayed value and the ledger row are
-  // the same value by construction (a `usage` Date arrives as an ISO string on
-  // both surfaces, and only on the replayed passes).
-  return recorded as unknown as RunIntentOutcome;
+
+  if (status.startedAt && !startedAt) {
+    startedAt = status.startedAt.toISOString();
+    // ⚠️ MEASURED FROM `queuedAt`, GitHub's own instant — not from our receipt
+    // of the webhook and not from the boot. §6's budget is the span a USER
+    // experiences as "CI is slow to start", and the queue time before Motir even
+    // heard about the job is part of that.
+    bootLatencyMs = Math.max(0, status.startedAt.getTime() - queuedAt);
+  }
+
+  if (status.terminal) {
+    // Gone or stopped. If it never started, the runner never registered — the
+    // "boot succeeded but nothing came up" path, which is a provisioning
+    // failure even though the provider reported success.
+    const observed = startedAt ?? status.startedAt?.toISOString() ?? null;
+    return {
+      done: true,
+      reason: observed ? 'job_completed' : 'provision_failed',
+      startedAt: observed,
+      bootLatencyMs,
+      failureDetail: null,
+    };
+  }
+
+  return (
+    deadlineVerdict(null) ?? { done: false, startedAt, bootLatencyMs, consecutiveReadFailures: 0 }
+  );
 }
 
-/** Record what this dispatch's supervision returned, so its replay passes read it
- *  back instead of re-deriving it. Best-effort for the same reason the teardown
- *  bookkeeping is: this runs AFTER a container has been booted and torn down, and
- *  throwing here would fail a run that already did its job correctly. */
-async function recordSupervisionMemo(
-  intentId: string,
-  supervisionKey: string,
-  outcome: RunIntentOutcome,
-): Promise<void> {
-  let serialized: Prisma.InputJsonValue;
-  try {
-    serialized = JSON.parse(JSON.stringify(outcome)) as Prisma.InputJsonValue;
-  } catch {
-    console.error('[ciRunnerBootService] a supervision outcome would not serialize', { intentId });
-    return;
-  }
-  try {
-    const written = await withSystemContext((tx) =>
-      intents.recordSupervisionOutcome(intentId, supervisionKey, serialized, tx),
+/**
+ * TEARDOWN — what used to be `runIntent`'s `finally`, as an ordinary step on the
+ * loop's only exit.
+ */
+async function settleSupervisedContainer(
+  session: SupervisionSession,
+  verdict: Extract<PollResult, { done: true }>,
+  options: SupervisionOptions,
+): Promise<RunIntentOutcome> {
+  const now = options.now ?? (() => new Date());
+  const { intentId } = session;
+  const observedStartedAt = verdict.startedAt ? new Date(verdict.startedAt) : null;
+  const handle: ContainerHandle = {
+    provider: session.handle.provider,
+    id: session.handle.id,
+    region: session.handle.region,
+    createdAt: new Date(session.handle.createdAt),
+  };
+
+  // The started instant is recorded here rather than mid-loop: it is known once
+  // and only matters once, and a write per poll would be a write per step.
+  if (observedStartedAt && verdict.bootLatencyMs !== null) {
+    await withSystemContext((tx) =>
+      intents.recordStarted(intentId, observedStartedAt, verdict.bootLatencyMs as number, tx),
     );
-    // No row to write to is EXPECTED for `unknown_intent` — there was nothing to
-    // supervise, and a replay re-derives that same answer for free. Any other
-    // outcome losing its memo means the replay will supervise again, so say so.
-    if (!written && outcome.outcome !== 'unknown_intent') {
-      console.warn('[ciRunnerBootService] the supervision memo wrote no row', {
-        intentId,
-        outcome: outcome.outcome,
-      });
-    }
+  }
+
+  let orchestrator: ContainerOrchestrator;
+  try {
+    orchestrator = orchestratorFor(session);
   } catch (err) {
-    console.error('[ciRunnerBootService] could not record the supervision memo', {
+    // No orchestrator to tear down THROUGH. Leave the intent in flight for the
+    // reaper rather than settling a container that may still be running.
+    console.error('[ciRunnerBootService] no orchestrator at teardown — left for the reaper', {
       intentId,
+      containerId: handle.id,
       detail: detailOf(err),
     });
+    return {
+      outcome: 'provision_failed',
+      detail: `no orchestrator at teardown for container ${handle.id}; left for the reaper`,
+    };
   }
+
+  // ⚠️ THE GUARANTEE. Every path out of supervision arrives here — completed,
+  // timed out, never started, and unreadable. `teardown` is idempotent, so the
+  // reaper reaching the same container later is harmless.
+  const usage = await teardownQuietly(orchestrator, handle, verdict.reason, {
+    orgId: session.attribution.orgId,
+    workspaceId: session.attribution.workspaceId,
+    projectId: session.attribution.projectId,
+    repoFullName: session.attribution.repoFullName,
+    workflowJobId: session.attribution.workflowJobId,
+    size: FLEET_CONTAINER_SIZE,
+    observedStartedAt,
+  });
+  await deregisterQuietly(session.githubRunnerId, intentId);
+
+  if (usage) {
+    await recordContainerUsage(usage);
+    await settleIntent(intentId, {
+      status:
+        verdict.reason === 'job_completed' ? CI_RUNNER_INTENT_COMPLETED : CI_RUNNER_INTENT_FAILED,
+      teardownReason: verdict.reason,
+      settledAt: now(),
+      failureDetail: verdict.failureDetail,
+      startedAt: observedStartedAt,
+      bootLatencyMs: verdict.bootLatencyMs,
+    });
+    return {
+      outcome: 'settled',
+      reason: verdict.reason,
+      containerId: handle.id,
+      billableSeconds: usage.billableSeconds,
+      costUsd: usage.costUsd,
+      bootLatencyMs: verdict.bootLatencyMs,
+      usage,
+    };
+  }
+
+  // Teardown itself failed. The intent stays IN FLIGHT deliberately: marking it
+  // settled would hide a container that may still be running from the one
+  // mechanism that can still catch it. The reaper owns it now.
+  console.error(
+    '[ciRunnerBootService] teardown failed — the intent is left in flight for the reaper',
+    { intentId, containerId: handle.id, provider: handle.provider },
+  );
+  return {
+    outcome: 'provision_failed',
+    detail: `teardown failed for container ${handle.id}; left for the reaper`,
+  };
 }
+
+/** The orchestrator a session's container lives on. Re-read per step rather than
+ *  carried across the boundary, because an adapter is not serializable — the
+ *  handle is, which is exactly why the port made it opaque. */
+function orchestratorFor(_session: SupervisionSession): ContainerOrchestrator {
+  return getOrchestrator();
+}
+
+// ── internals ─────────────────────────────────────────────────────────────
 
 /** Tear down, swallowing a failure into null. The caller decides what a null
  *  means; what it must NOT do is propagate out of a `finally` and mask the

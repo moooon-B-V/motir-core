@@ -1,6 +1,12 @@
 import { defineJob } from '../defineJob';
 import { inngest } from '../client';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
+import {
+  FLEET_TIME_BUDGETS,
+  INITIAL_POLL_STATE,
+  pollWaitMs,
+  type PollResult,
+} from '@/lib/services/ciRunnerBootService';
 
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
@@ -99,46 +105,89 @@ export const ciRunnerBoot = defineJob(
   {
     id: 'system.ci-runner-boot',
     // ⚠️ `none` — ONE ATTEMPT, and this is the one retry policy in the fleet that
-    // is a correctness decision rather than a cost one. A retry would mint a
-    // SECOND JIT config and boot a SECOND container for a job that can only ever
-    // be taken by one runner; the loser would idle to its timeout, billed to the
-    // tenant, having done nothing. `runIntent` is written to return typed
-    // outcomes rather than throw for exactly this reason: the failures worth
-    // retrying (an exhausted registration ceiling, an unconfigured deployment)
-    // release the claim and come back through the next sweep, which is a retry
-    // that costs nothing.
+    // is a correctness decision rather than a cost one. A retry would re-enter
+    // the handler from the top, and the failures worth retrying (an exhausted
+    // registration ceiling, an unconfigured deployment) release the claim and
+    // come back through the next sweep instead — a retry that costs nothing.
+    // `bootIntent` returns typed outcomes rather than throwing for exactly that
+    // reason.
+    //
+    // ⚠️ IT IS NOT WHAT STOPS A SECOND CONTAINER. That is `admit`'s atomic
+    // `pending → provisioning` claim, and — since MOTIR-2007 — the fact that the
+    // boot now sits inside a memoized step, so a replay pass never re-runs it.
     retryPolicy: 'none',
   },
   async (ctx, services) => {
     const { intentId } = ctx.event.data as { intentId: string };
-    // ⚠️ UN-STEPPED, AND REPLAY-AWARE BECAUSE OF IT (MOTIR-2002). Supervision
-    // cannot be wrapped in a `ctx.step.run`: one step cannot outlive ONE
-    // invocation of `app/api/inngest/route.ts`, whose declared budget is
-    // `maxDuration = 300` (MOTIR-1974), while a supervised CI job is allowed
-    // 3,600s — twelve times that ceiling. So it stays outside a step, where
-    // Inngest's durable replay re-executes it on EVERY pass, and `superviseOnce`
-    // is what makes that once per DISPATCH instead: the pass that supervises
-    // records its outcome on the intent, and later passes read it back.
+
+    // ⚠️ THE DURABLE POLL LOOP (MOTIR-2007). Supervising a container takes up to
+    // an hour; ONE INVOCATION of `app/api/inngest/route.ts` gets `maxDuration =
+    // 300` (MOTIR-1974). Doing it synchronously — which is what this handler used
+    // to do — meant every CI job over ~5 minutes had its supervisor killed with
+    // `FUNCTION_INVOCATION_TIMEOUT`: no teardown, no usage row, a dead-lettered
+    // run for a job that had actually passed, and an intent left holding a fleet
+    // slot against the fail-closed ceiling until the reaper aged it out 70
+    // minutes later.
     //
-    // The earlier rationale here — that memoizing would return a stale outcome
-    // for a container still up — did not hold as written (a step does not
-    // return until its callback resolves), and it described a handler that ran
-    // once when the runtime ran it twice. The step CEILING is the real reason.
+    // So the RUN spans the hour and no STEP does. Each step below is a fixed,
+    // small piece of work; the waiting happens in `ctx.step.sleep`, which holds
+    // no invocation at all. This is Inngest's canonical shape for long external
+    // work and `lib/jobs/codeGraphSteps.ts` is the same move (MOTIR-1974).
     //
-    // ⚠️ THE KEY IS THE EVENT'S ID, not the run id: it is fixed for a run, and
-    // it is the same identity `defineJob` correlates the `job_run` row by, so
-    // the memo and the ledger agree on what "this run" means. The `ctx.runId`
-    // fallback covers an event that carries no id (cron / harness events); the
-    // boot is only ever event-triggered.
-    //
-    // The outcome — INCLUDING the container-seconds record on a settled run —
-    // is the job's return value, which `defineJob` writes to the `job_run`
-    // ledger: the per-run audit trail. It is now the SAME value on every pass,
-    // so Inngest's reported run output and that row can no longer disagree.
-    // Since MOTIR-1924 the record is ALSO persisted to `ci_container_usage`
-    // inside `runIntent`'s teardown path, so the ledger is no longer the only
-    // place a fleet run's cost is readable.
-    return services.ciRunnerBoot.superviseOnce(intentId, ctx.event.id ?? ctx.runId);
+    // ⚠️ AND IT RETIRES MOTIR-2002's MEMO. With every phase inside a step,
+    // Inngest's memoization gives once-per-RUN semantics for free: the boot (and
+    // its admission claim) executes on the first pass and replays from the memo
+    // on every later one. The `supervision_key` / `supervision_outcome` columns
+    // that bought that property for the un-stepped body are dropped in this same
+    // change — the shape fix subsumes the patch.
+    const booted = await ctx.step.run('boot-runner', () =>
+      services.ciRunnerBoot.bootIntent(intentId),
+    );
+    // Nothing was provisioned — no container, so nothing to supervise or tear
+    // down. The outcome IS the run's result.
+    if (booted.phase === 'terminal') return booted.outcome;
+
+    const { session } = booted;
+    let state = INITIAL_POLL_STATE;
+    let verdict: Extract<PollResult, { done: true }> | null = null;
+
+    for (let iteration = 1; iteration <= FLEET_TIME_BUDGETS.maxPollIterations; iteration += 1) {
+      // Free waiting: Inngest schedules the resume, so the interval costs a
+      // checkpoint rather than an invocation. `pollWaitMs` is PURE — a function
+      // of the iteration, never of the clock — because a replay pass re-derives
+      // every sleep in the loop and a wall-clock input would make two passes of
+      // the same run disagree about how long to wait.
+      await ctx.step.sleep(`supervise-wait:${iteration}`, pollWaitMs(iteration));
+      // ONE provider read, then return. This is the step the card exists to
+      // bound, and `pollOnce` never throws — a throw here would end the run
+      // WITHOUT teardown, because a step scheduled from a catch is never
+      // executed by the real executor (PRODECT_FINDINGS #39).
+      const polled: PollResult = await ctx.step.run(`supervise-poll:${iteration}`, () =>
+        services.ciRunnerBoot.pollOnce(session, state),
+      );
+      if (polled.done) {
+        verdict = polled;
+        break;
+      }
+      state = polled;
+    }
+
+    // ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP — the stepped form of
+    // the `finally` this handler used to rely on, and the fleet's third teardown
+    // guarantee. The loop can only exit with a `done` verdict or by exhausting
+    // the static iteration ceiling, and both arrive here.
+    return ctx.step.run('settle-runner', () =>
+      services.ciRunnerBoot.settleSupervision(
+        session,
+        verdict ?? {
+          done: true,
+          reason: 'job_timed_out',
+          startedAt: state.startedAt,
+          bootLatencyMs: state.bootLatencyMs,
+          failureDetail: `supervision hit the ${FLEET_TIME_BUDGETS.maxPollIterations}-poll ceiling`,
+        },
+      ),
+    );
   },
 );
 
