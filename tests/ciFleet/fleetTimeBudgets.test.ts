@@ -5,6 +5,8 @@ import {
   pollWaitMs,
   ciRunnerBootService,
 } from '@/lib/services/ciRunnerBootService';
+import { RUNNER_JIT_REQUEST_TIMEOUT_MS } from '@/lib/github/runnerJitConfig';
+import { ORCHESTRATOR_REQUEST_TIMEOUT_MS } from '@/lib/orchestrator/errors';
 
 // THE FLEET'S TIME BUDGETS vs THE PLATFORM CEILING (MOTIR-2007).
 //
@@ -78,6 +80,45 @@ describe('the fleet time budgets are stated once and hold against maxDuration', 
     // ...and the static ceiling is comfortably clear of what a real job needs,
     // so it can only ever bind on a clock that has gone wrong.
     expect(FLEET_TIME_BUDGETS.maxPollIterations).toBeGreaterThan(polls * 2);
+  });
+
+  it("RULE 3's inequality: the boot step's two deadlines SUM to less than one step's budget", () => {
+    // ⚠️ THE ASSERTION MOTIR-2011 EXISTS FOR, and the one rule-2's shape
+    // argument cannot make. `stepWorkBudgetMs` bounds what a step DOES — one
+    // mint, one provision — which is a statement about the code. This bounds how
+    // long those two calls may take, which is a statement about the CLOCK, and
+    // an unbounded `fetch` satisfies the first while violating the second: a step
+    // that makes one call still runs forever if the call does.
+    const b = FLEET_TIME_BUDGETS;
+    expect(b.mintDeadlineMs + b.containerCallDeadlineMs).toBeLessThanOrEqual(b.stepWorkBudgetMs);
+    // ...and therefore, transitively, under the invocation ceiling. Stated
+    // separately because that is the sentence `docs/jobs.md` rule 3 actually
+    // writes down, and the chain is only as good as its weakest link being
+    // asserted.
+    expect(b.mintDeadlineMs + b.containerCallDeadlineMs).toBeLessThan(maxDuration * 1000);
+  });
+
+  it('the deadlines are the CLIENTS OWN numbers, not a copy of them', () => {
+    // The same discipline as importing `maxDuration`: a budget that restates a
+    // client's timeout asserts the constants against themselves and goes stale
+    // the first time a client is tuned.
+    expect(FLEET_TIME_BUDGETS.mintDeadlineMs).toBe(RUNNER_JIT_REQUEST_TIMEOUT_MS);
+    expect(FLEET_TIME_BUDGETS.containerCallDeadlineMs).toBe(ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+    // Both must be real bounds — a zero or a NaN would satisfy every inequality
+    // above while meaning "no deadline at all".
+    expect(FLEET_TIME_BUDGETS.mintDeadlineMs).toBeGreaterThan(0);
+    expect(FLEET_TIME_BUDGETS.containerCallDeadlineMs).toBeGreaterThan(0);
+  });
+
+  it('a POLL and a SETTLE step also fit — the two other steps that touch the provider', () => {
+    // A poll is one provider read; a settle is a read plus a destroy plus a
+    // de-registration. Enumerated per step rather than globally, because rule 3
+    // is about the SLOWEST step, and the slowest one here is not the boot.
+    const b = FLEET_TIME_BUDGETS;
+    expect(b.containerCallDeadlineMs).toBeLessThanOrEqual(b.stepWorkBudgetMs);
+    expect(b.containerCallDeadlineMs * 2 + b.mintDeadlineMs).toBeLessThanOrEqual(
+      b.stepWorkBudgetMs,
+    );
   });
 
   it('the service exposes the three bounded phases the job steps, and no long-running entrypoint of its own', () => {

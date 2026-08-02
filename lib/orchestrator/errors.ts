@@ -63,6 +63,47 @@ export class OrchestratorImageUnpullableError extends OrchestratorApiError {
   }
 }
 
+/**
+ * THE DEADLINE ON EVERY ADAPTER CALL (`docs/jobs.md` rule 3, MOTIR-2011).
+ *
+ * Stated at the PORT rather than inside an adapter, for the same reason the rate
+ * table is: it is a property of where the fleet RUNS — inside a background-job
+ * invocation with a finite platform budget — not of which provider is answering.
+ * A second adapter (§3's migration target) inherits the rule instead of
+ * re-deciding it, and `lib/services/ciRunnerBootService.ts` can fold the number
+ * into `FLEET_TIME_BUDGETS` without importing anything Fly-shaped (the §4 rule 1
+ * boundary `tests/ciFleet/orchestratorPortBoundary.test.ts` asserts).
+ *
+ * 30s, matching `MOTIR_AI_REQUEST_TIMEOUT_MS`: a Machines-API call is one small
+ * JSON round-trip, and the boot's create does NOT wait for the machine to start
+ * (`flyOrchestrator.provision`'s deliberate non-wait), so the deadline covers an
+ * acknowledgement rather than a boot.
+ */
+export const ORCHESTRATOR_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * The provider did not answer inside {@link ORCHESTRATOR_REQUEST_TIMEOUT_MS} —
+ * RETRYABLE, and typed so a hang surfaces as a failure the job can classify
+ * rather than as the platform killing the invocation.
+ *
+ * An {@link OrchestratorApiError} with `status: null` says the provider was
+ * unreachable; this says Motir stopped waiting. On `provision` the difference is
+ * load-bearing: a machine MAY exist that nobody holds a handle to, which is
+ * exactly the case the reaper (§7.1's fourth guarantee) is the backstop for, and
+ * the log line has to say so.
+ */
+export class OrchestratorTimeoutError extends Error {
+  readonly code = 'ORCHESTRATOR_TIMEOUT' as const;
+  readonly retryable = true as const;
+  constructor(
+    readonly provider: OrchestratorProvider,
+    readonly timeoutMs: number,
+  ) {
+    super(`The ${provider} orchestrator did not answer within ${timeoutMs}ms.`);
+    this.name = 'OrchestratorTimeoutError';
+  }
+}
+
 /** The deployment has no orchestrator wired — a self-hosted build, or a cloud
  *  deployment whose fleet credentials are not set. Read at CALL time (never
  *  module load), so an instance that never provisions simply cannot reach the

@@ -289,9 +289,20 @@ can reason about. A bounded call fails as a typed error instead, INSIDE the
 budget, and retries meaningfully. The deadlines in play:
 `MOTIR_AI_REQUEST_TIMEOUT_MS` (30s) and `MOTIR_AI_INDEX_TIMEOUT_MS` (180s) in
 `lib/ai/motirAiClient.ts`, `REPO_TARBALL_TIMEOUT_MS` (60s) in
-`lib/git/provider.ts`. **Their sum along the slowest step must stay under
+`lib/git/provider.ts`, `RUNNER_JIT_REQUEST_TIMEOUT_MS` (15s) in
+`lib/github/runnerJitConfig.ts`, and `ORCHESTRATOR_REQUEST_TIMEOUT_MS` (30s) in
+`lib/orchestrator/errors.ts`. **Their sum along the slowest step must stay under
 `maxDuration`** — that inequality is what guarantees a hung dependency surfaces
 as a typed failure rather than as an invocation kill.
+
+The fleet's boot step is the worked example of the sum, because it is the one
+step that makes TWO external calls: the JIT mint and the container provision.
+Both deadlines are re-exported as `FLEET_TIME_BUDGETS.mintDeadlineMs` /
+`.containerCallDeadlineMs` and `tests/ciFleet/fleetTimeBudgets.test.ts` asserts
+their sum against `stepWorkBudgetMs` and the route's `maxDuration` — so the
+inequality is a failing test rather than a paragraph. It was a paragraph until
+MOTIR-2011: the boot path had the right SHAPE (one small step) with no CLOCK on
+either call, and a step that makes one call still runs forever if the call does.
 
 **What this looked like when it was wrong.** `system.code-graph-index` ran a
 tarball fetch plus one motir-ai upload per project inside a single `step.run`,

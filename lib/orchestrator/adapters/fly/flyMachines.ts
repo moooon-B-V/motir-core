@@ -1,7 +1,9 @@
 import {
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
   OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
 } from '../../errors';
 
 // The FLY MACHINES boundary (Story MOTIR-1916 · MOTIR-1921) — the only module in
@@ -282,10 +284,24 @@ export function stoppedAtOf(machine: FlyMachine): Date | null {
   return latest;
 }
 
+/**
+ * One Machines-API call — the adapter's ONLY `fetch`, so
+ * {@link ORCHESTRATOR_REQUEST_TIMEOUT_MS} is applied once and a new call site
+ * cannot forget it (`docs/jobs.md` rule 3, MOTIR-2011).
+ *
+ * Unbounded, a Fly that accepts the connection and never answers is waited on
+ * until the platform kills the whole invocation — and on the boot path that
+ * happens AFTER the JIT config is minted and possibly after the machine is
+ * created, so the kill leaves both a registered runner and a live container with
+ * nobody supervising either. Bounded, the same hang is an error the boot path
+ * settles and the reaper can still catch the container.
+ */
 async function request(
   path: string,
   init: { method: string; token: string; body?: string },
 ): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ORCHESTRATOR_REQUEST_TIMEOUT_MS);
   try {
     return await fetch(`${FLY_MACHINES_API}${path}`, {
       method: init.method,
@@ -296,9 +312,15 @@ async function request(
         ...(init.body ? { 'content-type': 'application/json' } : {}),
       },
       ...(init.body ? { body: init.body } : {}),
+      signal: controller.signal,
     });
   } catch (err) {
+    if (controller.signal.aborted) {
+      throw new OrchestratorTimeoutError('fly', ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+    }
     throw new OrchestratorApiError('fly', null, err instanceof Error ? err.message : 'unknown');
+  } finally {
+    clearTimeout(timer);
   }
 }
 
