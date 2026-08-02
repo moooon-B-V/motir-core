@@ -33,13 +33,20 @@ import type { CiRunnerBootData } from '@/lib/jobs/types';
  *
  *  ⚠️ THE PAYLOAD IS THE INTENT ID AND NOTHING ELSE (see `CiRunnerBootData`):
  *  every attribution the boot needs is on the intent row, and a second copy in
- *  the event is a second copy that can disagree. `workspaceId` rides along only
- *  for the `job_run` ledger's scoping. */
+ *  the event is a second copy that can disagree.
+ *
+ *  `workspaceId` is `null` — SYSTEM-SCOPED, the same untenanted shape
+ *  `system.ci-runner-reap` lands on the ledger. It was `''` until MOTIR-1998,
+ *  and that empty string was not a cosmetic wart: it is not nullish, so
+ *  `defineJob` passed it through to `job_run.workspace_id`, where it tripped the
+ *  workspace FK and the row was silently dropped — every fleet boot ran with no
+ *  ledger record at all. `CiRunnerBootData.workspaceId` is typed `null` so this
+ *  line cannot regress to a string without failing the build. */
 export function ciRunnerBootEvent(intentId: string): {
   name: 'system.ci-runner-boot';
   data: CiRunnerBootData;
 } {
-  return { name: 'system.ci-runner-boot', data: { intentId, workspaceId: '' } };
+  return { name: 'system.ci-runner-boot', data: { intentId, workspaceId: null } };
 }
 
 /** What the hot-path dispatch did — returned rather than logged-only so the

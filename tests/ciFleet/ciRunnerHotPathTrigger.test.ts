@@ -142,6 +142,11 @@ async function seedTenant(
         owner: MOTIR_ORG,
         name: 'acme-web',
         defaultBranch: 'main',
+        // Required on `NormalizedRepo` since MOTIR-1959 (#1780). This fixture
+        // came from MOTIR-1996 (#1778), which merged a minute later off a base
+        // that predated the field — so `main` was left red on typecheck though
+        // both PRs were green. See MOTIR-2003.
+        archived: false,
       },
     ],
   });
@@ -219,8 +224,11 @@ describe('a RECORDED intent dispatches its boot from the same request', () => {
     const intent = await db.ciRunnerProvisioningIntent.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
+    // `workspaceId` is `null`, not `''` — an empty string is not nullish, so it
+    // survives `defineJob`'s `?? null`, trips the `job_run` workspace FK and
+    // costs the run its ledger row entirely (MOTIR-1998).
     expect(bootEvents(captured.events)).toEqual([
-      { name: 'system.ci-runner-boot', data: { intentId: intent.id, workspaceId: '' } },
+      { name: 'system.ci-runner-boot', data: { intentId: intent.id, workspaceId: null } },
     ]);
   });
 
