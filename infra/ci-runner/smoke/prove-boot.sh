@@ -57,14 +57,30 @@ cleanup
 # ─────────────────────────────────────────────────────────────────────────────
 # 1 + 2 — the real entrypoint: dockerd up, then run.sh exec'd with the JIT config
 # ─────────────────────────────────────────────────────────────────────────────
-# `--privileged` is what a container needs to run dockerd on a GitHub-hosted
-# runner. On Fly it is not needed and not used: a Machine is a Firecracker
-# microVM whose kernel the image already owns (see the Dockerfile's §7.6 note).
+# ── Two flags that exist ONLY because this runs DinD on a GitHub-hosted runner.
+# Neither is used on Fly, and neither weakens what is being proven:
+#
+#   --privileged        a container needs it to run dockerd. A Fly Machine is a
+#                       Firecracker microVM that already owns its kernel, so it
+#                       is root in its own VM by construction (Dockerfile, §7.6).
+#   -v /var/lib/docker  an anonymous VOLUME for the inner daemon's data dir.
+#                       Without it that dir sits on the outer daemon's overlay2
+#                       rootfs, and overlay-on-overlay fails at container-create
+#                       with `fstype: overlay … err: invalid argument` — which is
+#                       exactly how this check first failed. The volume is real
+#                       filesystem, which is what the inner overlay2 needs.
+#
+# ⚠️ That second flag is a statement about THE TEST HOST, not about the image.
+# On Fly the Machine's rootfs IS a real ext4 block device, so `/var/lib/docker`
+# is already backed by real filesystem and overlay2 works with nothing added.
+# The volume reproduces the Fly condition here rather than papering over a
+# defect — but it does mean CI cannot prove Fly's storage stack, only that the
+# image's docker works when its data dir is real. MOTIR-1928 sees the real one.
 #
 # The JIT config is deliberate garbage. It gets far enough to prove the wiring;
 # GitHub rejecting it is the expected outcome and is the line where CI stops.
 echo "== 1/2 · entrypoint: dockerd, then run.sh as the runner user =="
-docker run -d --name motir-runner-boot --privileged \
+docker run -d --name motir-runner-boot --privileged -v /var/lib/docker \
   -e ACTIONS_RUNNER_INPUT_JITCONFIG="$(printf 'motir-ci-not-a-real-jit-config' | base64 -w0)" \
   -e MOTIR_INTENT_ID=smoke-intent \
   -e MOTIR_WORKFLOW_JOB_ID=0 \
@@ -85,6 +101,18 @@ grep -q 'No such file or directory'           <<<"${boot_log}" && fail "run.sh c
 grep -qi 'permission denied'                  <<<"${boot_log}" && fail "run.sh hit a permission error as the runner user" || ok "no permission error dropping to the runner user"
 grep -qi 'must not run with sudo'             <<<"${boot_log}" && fail "the runner refused the user it was given" || ok "the runner accepted the unprivileged user"
 
+# The strongest thing CI can claim, and it is stronger than "run.sh started":
+# the runner BINARY ran and CONSUMED the JIT config. On the garbage config above
+# it emits a JSON parse error and exits — i.e. it base64-decoded the value the
+# entrypoint handed it and tried to parse the result. Only GitHub's ACCEPTANCE
+# of a real config is left, which is MOTIR-1928's.
+#
+# Matched on the runner's own lifecycle markers rather than the parse message,
+# which is .NET-formatted text that a runner bump could reword.
+grep -qE 'Runner listener|Exiting runner' <<<"${boot_log}" \
+  && ok "the runner binary ran and consumed the JIT config" \
+  || fail "no runner lifecycle output — run.sh started but the runner never did"
+
 echo "  note  live registration / one-job / de-register is NOT proven here — MOTIR-1928 owns it (see this file's header)"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,7 +126,7 @@ echo "  note  live registration / one-job / de-register is NOT proven here — M
 # it (Dockerfile header, "NOT installed").
 echo
 echo "== 3 · a services: container reachable on localhost:5432 =="
-docker run -d --name motir-runner-svc --privileged --entrypoint '' "${IMAGE}" \
+docker run -d --name motir-runner-svc --privileged -v /var/lib/docker --entrypoint '' "${IMAGE}" \
   bash -c 'dockerd >/var/log/dockerd.log 2>&1 & sleep infinity' >/dev/null
 
 svc_ok=1

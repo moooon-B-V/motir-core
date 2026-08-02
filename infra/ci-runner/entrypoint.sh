@@ -87,7 +87,13 @@ else
     fi
     sleep 1
   done
-  log "dockerd ready after $((SECONDS - started_at))s"
+  # The storage driver, logged because `docker version` answering is NOT the
+  # same claim as "this daemon can create a container". A daemon whose data dir
+  # cannot support its snapshotter answers happily and then fails the first
+  # `services:` container with an opaque mount error, mid-job, on the tenant's
+  # metered clock. One cheap line here is the difference between diagnosing that
+  # from the boot log and diagnosing it from a customer's failed build.
+  log "dockerd ready after $((SECONDS - started_at))s (storage driver: $(docker info --format '{{.Driver}}' 2>/dev/null || echo unknown))"
 fi
 
 # ── The runner ───────────────────────────────────────────────────────────────

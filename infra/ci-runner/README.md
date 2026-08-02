@@ -64,6 +64,15 @@ owns that proof**, together with the real p50/p95 boot latency against §6 (this
 image's pull time is a term in it — the compressed size is printed by the build
 workflow's job summary for exactly that attribution).
 
+It also does not prove **Fly's** storage stack. CI runs the image as a container
+on a GitHub-hosted runner, where `/var/lib/docker` would land on the outer
+daemon's overlay2 rootfs and overlay-on-overlay fails at container create; the
+proof mounts a volume there to reproduce the real-filesystem condition a Fly
+Machine has by construction (its rootfs is an ext4 block device). So what CI
+shows is that the image's Docker works when its data dir is real — the Fly one
+is MOTIR-1928's. The entrypoint logs the selected storage driver at boot so that
+diagnosis reads off the boot log rather than off a customer's failed build.
+
 ## Local build
 
 ```sh
