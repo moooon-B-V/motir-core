@@ -605,6 +605,11 @@ So nobody reads silence as an answer:
   that the entrypoint is `generate-jitconfig` → `run.sh`. What toolchain it carries is the
   starter's business and MOTIR-1921's, and it should be derived from what the two starters'
   workflows actually install.
+- **How a Machine OBTAINS the image the digest names — decided later, in
+  [`fleet-image-pull.md`](./fleet-image-pull.md) (MOTIR-2005).** This was not listed here as
+  a deliberate silence; it was an unnoticed one, and the fleet shipped code-complete and
+  unbootable because of it (MOTIR-1980). It is recorded in this list so the seam has a named
+  owner rather than falling between §7.2's digest and MOTIR-1978's publish.
 - **Whether the cold-spare pool is built.** §6 specifies it, MOTIR-1928 measures whether it
   is needed. Building it before the measurement would be optimising against a number nobody
   has.
