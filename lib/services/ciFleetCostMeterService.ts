@@ -142,6 +142,10 @@ export const ciFleetCostMeterService = {
       workspaceId: usage.workspaceId,
       organizationId: usage.orgId,
       projectId: usage.projectId,
+      // This service meters CI RUNNERS only. Index and agent containers share
+      // the fleet org but are dispatched elsewhere and record their own rows —
+      // stating the workload here is what keeps the three separable (MOTIR-1995).
+      workload: 'ci',
       repoFullName: usage.repoFullName,
       workflowJobId: String(usage.workflowJobId),
       cpuKind: usage.cpuKind,

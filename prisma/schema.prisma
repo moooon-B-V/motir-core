@@ -4989,12 +4989,24 @@ model CiContainerUsage {
   /// project must not erase the record that Motir paid for this container.
   projectId      String? @map("project_id")
 
+  /// WHICH workload this container ran. The fleet org is shared — CI runners,
+  /// code-graph index containers (MOTIR-1981) and, later, Epic 9's hosted agents
+  /// all bill the same uncapped Fly account — so a row that cannot say which
+  /// workload it was makes "what did indexing cost us?" unanswerable and merges
+  /// three margins into one number. Defaulted to `ci` so this migration is a
+  /// no-op for the rows this meter writes today.
+  workload      String @default("ci")
+
   /// `owner/name` AS THE INTENT RECORDED IT (§5.5's posture) — the port carries
   /// one string, so the row stores one. The fleet reconciliation splits it.
   repoFullName  String @map("repo_full_name")
   /// GitHub's job id (a STRING — never do math on it), matching
   /// `CiRunnerProvisioningIntent.jobId`. One job, one container.
-  workflowJobId String @map("workflow_job_id")
+  ///
+  /// NULLABLE because only a CI container has one: an index or agent container
+  /// is dispatched directly on the orchestrator port and never touches Actions,
+  /// so there is no job id to record. Required in practice for `workload = 'ci'`.
+  workflowJobId String? @map("workflow_job_id")
 
   /// The machine class ACTUALLY provisioned — reported by the adapter rather
   /// than assumed from the spec, because a provider may fall back to a different
@@ -5008,7 +5020,14 @@ model CiContainerUsage {
   /// is the case `billableSeconds` 0 records.
   containerCreatedAt DateTime  @map("container_created_at")
   containerStartedAt DateTime? @map("container_started_at")
-  containerStoppedAt DateTime  @map("container_stopped_at")
+  /// NULLABLE so a row can exist for a container that is still RUNNING. A CI
+  /// runner lives minutes and is costed at teardown, which is why this was NOT
+  /// NULL; an Epic 9 agent container spans a whole `motir run <story>` — HOURS —
+  /// and under teardown-only costing would produce no row for its entire life,
+  /// accruing spend invisibly against an account Fly provides no cap for. The
+  /// column is relaxed now, while the table is empty; implementing incremental
+  /// accrual is MOTIR-1995's, not this card's.
+  containerStoppedAt DateTime? @map("container_stopped_at")
   /// ceil(stopped − started); 0 when it never started. Fly bills a Machine on
   /// its RUNNING seconds, so this IS the provider's own basis — which is what
   /// makes the fleet reconciliation an audit rather than two estimates.
@@ -5033,8 +5052,13 @@ model CiContainerUsage {
   /// The provider's own terminal state string, and the port's `TeardownReason`.
   /// "How did this container end" is unanswerable from timestamps alone, and it
   /// is the question the fleet's operational story is made of.
-  terminalState  String @map("terminal_state")
-  teardownReason String @map("teardown_reason")
+  ///
+  /// NULLABLE for the same reason as `containerStoppedAt`: a container that has
+  /// not ended yet has no terminal state, and forbidding that row is what would
+  /// hide a long-running container's spend until it stopped. A settled row still
+  /// carries both — enforced by the writer, not by the column.
+  terminalState  String? @map("terminal_state")
+  teardownReason String? @map("teardown_reason")
 
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -5,6 +5,14 @@ import { Prisma, type CiContainerUsage } from '@prisma/client';
 // metered. Single-op methods only (CLAUDE.md 4-layer); every write requires a
 // `tx`, and the reads that guard a write take one too.
 
+/** Which fleet workload a container ran. The fleet org is SHARED — CI runners,
+ *  code-graph index containers (MOTIR-1981) and, later, Epic 9's hosted agents
+ *  all bill one uncapped Fly account — so every row must say which it was, or
+ *  three margins collapse into one number. Required (not defaulted) on the way
+ *  in: a writer that will not name its workload is a writer that will be
+ *  mis-attributed silently. */
+export type CiContainerWorkload = 'ci' | 'index' | 'agent';
+
 export interface CiContainerUsageCreateInput {
   containerProvider: string;
   handleId: string;
@@ -12,8 +20,11 @@ export interface CiContainerUsageCreateInput {
   workspaceId: string;
   organizationId: string;
   projectId: string | null;
+  workload: CiContainerWorkload;
   repoFullName: string;
-  workflowJobId: string;
+  /** NULL for any workload that is not `ci` — only a CI container has a GitHub
+   *  job. Required in practice when `workload === 'ci'`. */
+  workflowJobId: string | null;
   cpuKind: string;
   cpus: number;
   memoryMb: number;
@@ -59,6 +70,7 @@ export const ciContainerUsageRepository = {
         workspaceId: data.workspaceId,
         organizationId: data.organizationId,
         projectId: data.projectId,
+        workload: data.workload,
         repoFullName: data.repoFullName,
         workflowJobId: data.workflowJobId,
         cpuKind: data.cpuKind,
