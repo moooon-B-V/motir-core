@@ -118,7 +118,18 @@ export async function seedHealthyJobSchedules(): Promise<void> {
   const { jobSchedules } = await import('@/lib/jobs/schedules');
   await import('@/lib/jobs/registry');
   const { db } = await import('@/lib/db');
-  const startedAt = new Date(Date.now() - 60_000);
+  // ⚠️ SEEDED AT `now`, NOT AT `now - 60s` — the difference is a CI flake, not a
+  // style preference. `jobScheduleHealthService.judge` holds a schedule to the
+  // tick BEFORE the most recent one, so for the every-minute cron
+  // (`system.ci-runner-provision-sweep`, `* * * * *`) the deadline is
+  // `floor_to_minute(now) - 60s`. A run seeded at exactly `now - 60s` therefore
+  // sits ON that deadline with ZERO margin: if a minute boundary falls between
+  // this seed and the health check's read — a window as wide as the elapsed
+  // time, which on a loaded CI runner is easily a second — the sweep flips to
+  // overdue, the job throws `ScheduledJobsOverdueError`, and the caller sees its
+  // `job_run` row stuck at `running` with no hint why. Seeding at `now` gives a
+  // full minute of margin for the same "this schedule just ran" fixture.
+  const startedAt = new Date();
   for (const { functionId } of jobSchedules()) {
     if (functionId === 'system.daily-health-check') continue;
     await db.jobRun.create({
