@@ -28,6 +28,7 @@ import {
   ciRunnerProvisioningService,
   type RecordQueuedJobOutcome,
 } from './ciRunnerProvisioningService';
+import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
@@ -477,11 +478,17 @@ export const githubWebhookService = {
    * handler that acted on event RECEIPT would silently migrate Motir's own
    * release path onto the fleet, which is the outcome §J exists to prevent.
    *
+   * ⚠️ IT IS ALSO THE FLEET'S HOT-PATH TRIGGER (MOTIR-1996). A recorded intent
+   * dispatches `system.ci-runner-boot` from THIS request, because
+   * `ci-runner-fleet.md` §6's p50 ≤ 30s budget cannot survive waiting out the
+   * minute-granularity provision sweep. The sweep remains as the recovery path;
+   * the two events race and the claim's compare-and-set settles it.
+   *
    * Like the meter above, a failure here does not fail the delivery: an ack that
-   * 500s makes GitHub retry, and a retry cannot fix a bad DB connection. The
-   * `(run_id, run_attempt, job_id)` idempotency key means a later redelivery —
-   * GitHub's own, or a manual replay — records it exactly once, so dropping this
-   * one loses nothing that cannot be recovered.
+   * 500s makes GitHub retry, and a retry cannot fix a bad DB connection — nor a
+   * failed event send. The `(run_id, run_attempt, job_id)` idempotency key means
+   * a later redelivery — GitHub's own, or a manual replay — records it exactly
+   * once, so dropping this one loses nothing that cannot be recovered.
    */
   async handleWorkflowJob(body: Record<string, unknown>): Promise<GithubWebhookResult> {
     const provider = getGitProvider(PROVIDER);
@@ -496,6 +503,19 @@ export const githubWebhookService = {
 
     try {
       const result = await ciRunnerProvisioningService.recordQueuedJob(job, installationId);
+      if (result.outcome === 'recorded') {
+        // THE HOT PATH (MOTIR-1996). §6 budgets p50 ≤ 30s webhook → job started,
+        // so the boot is dispatched HERE rather than waiting out the minute cron.
+        // Only `recorded` dispatches: every other outcome either has no intent to
+        // boot (`not_fleet_job` / `unattributed` / `unknown_*`) or already has one
+        // whose own delivery dispatched for it (`duplicate`).
+        //
+        // Deliberately AWAITED and deliberately unable to fail the delivery:
+        // `dispatchCiRunnerBoot` never throws, so the ack stays fast, stays 200,
+        // and the outcome we report is still what the service decided. A dropped
+        // dispatch is recovered by the provision sweep within the minute.
+        await dispatchCiRunnerBoot(result.intentId);
+      }
       return { event: 'workflow_job', outcome: result.outcome };
     } catch (err) {
       console.error('[githubWebhookService] runner-provisioning intent failed; delivery acked', {
