@@ -4,8 +4,11 @@ import {
   ciRunnerProvisioningIntentRepository as intents,
   CI_RUNNER_INTENT_COMPLETED,
   CI_RUNNER_INTENT_FAILED,
-  CI_RUNNER_INTENT_PENDING,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import {
+  ciRunnerAdmissionService,
+  type AdmissionDeferralReason,
+} from '@/lib/services/ciRunnerAdmissionService';
 import {
   projectRunnerGroupService,
   RunnerGroupNotProvisionedError,
@@ -54,15 +57,20 @@ import type {
 // container, which is the only useful definition of "guaranteed" for something
 // whose failure is silent.
 //
-// ⚠️ WHO CALLS THIS, AND WHAT IS DELIBERATELY NOT HERE. §10 puts the ADMISSION
-// GATE — the per-project in-flight cap, the fleet-wide ceiling and the
+// ⚠️ WHO DECIDES WHETHER THIS RUNS AT ALL. §10 puts the ADMISSION GATE — the
+// per-project in-flight cap, the fleet-wide ceiling and the
 // `ci_credits_exhausted` refusal — in MOTIR-1922, "consulted BEFORE this card
-// provisions". This service therefore takes an intent it is TOLD to run and does
-// not decide whether it should: it reads no cap, no credit balance and no
-// ceiling. The pending-intent sweep below is the honest interim trigger (correct,
-// but a minute-granularity cron, so it does not meet §6's ≤30s p50 budget);
-// MOTIR-1922 owns the hot-path call that does, sitting between the webhook and
-// this service.
+// provisions". It has landed as `ciRunnerAdmissionService`, and {@link
+// ciRunnerBootService.runIntent} consults it EXACTLY WHERE THE CLAIM USED TO BE:
+// the gate decides and claims in one locked transaction, because the claim is
+// what makes an intent count as in-flight and a gate that did not own it would be
+// deciding from a count that excludes the decisions already made. This service
+// still reads no cap, no ceiling and no balance itself — it asks, and it obeys.
+//
+// The pending-intent sweep below remains the trigger. It is honest but slow (a
+// minute-granularity cron cannot meet §6's ≤30s p50 budget); a hot-path call from
+// the `workflow_job` webhook straight to this service is the remaining half of
+// that budget and is tracked as its own card.
 
 /** How long a container has to reach a running state before it is written off as
  *  a boot that never happened. §6 budgets p95 ≤ 60s end to end; double that is a
@@ -117,6 +125,10 @@ export type RunIntentOutcome =
   /** Another provisioner claimed it first. NOT an error: the compare-and-set
    *  worked exactly as intended. */
   | { outcome: 'already_claimed' }
+  /** THE ADMISSION GATE (MOTIR-1922) declined. The intent is still PENDING and
+   *  the next sweep retries it — a job left queued, never a job failed, which is
+   *  what a cap is supposed to feel like. */
+  | { outcome: 'gate_deferred'; reason: AdmissionDeferralReason; detail: string }
   /** This deployment provisions no containers (self-hosted, or unwired). The
    *  claim is RELEASED so a configured instance can take it. */
   | { outcome: 'not_configured' }
@@ -172,10 +184,21 @@ export const ciRunnerBootService = {
 
     if (!isOrchestratorConfigured()) return { outcome: 'not_configured' };
 
-    // THE CLAIM. Atomic `pending → provisioning`; the loser simply stops. See
-    // `claimPending` for why the predicate is the whole guard.
-    const claimed = await withSystemContext((tx) => intents.claimPending(intentId, tx));
-    if (!claimed) return { outcome: 'already_claimed' };
+    // THE ADMISSION GATE, which also takes THE CLAIM (atomic `pending →
+    // provisioning`; the loser simply stops — see `claimPending` for why the
+    // predicate is the whole guard). Nothing below this line is reachable for an
+    // intent the caps or the credit state declined, which is the point: every
+    // line after it costs money.
+    const verdict = await ciRunnerAdmissionService.admit(intent);
+    if (verdict.outcome === 'already_claimed') return { outcome: 'already_claimed' };
+    if (verdict.outcome === 'deferred') {
+      console.warn('[ciRunnerBootService] the admission gate deferred an intent', {
+        intentId,
+        reason: verdict.reason,
+        detail: verdict.detail,
+      });
+      return { outcome: 'gate_deferred', reason: verdict.reason, detail: verdict.detail };
+    }
 
     // ── Everything the boot needs, resolved before anything is spent ──────────
     if (!intent.projectId) {
@@ -686,27 +709,11 @@ async function settleFailed(
 }
 
 /** Put a claimed intent back in the pending pool — for refusals that are about
- *  the ENVIRONMENT (unconfigured, rate-limited) rather than about the job. */
+ *  the ENVIRONMENT (unconfigured, rate-limited) rather than about the job. The
+ *  gate releases the same way for a credit refusal, through the same repository
+ *  method, so a re-queued intent looks identical whichever path re-queued it. */
 async function releaseClaim(intentId: string): Promise<void> {
-  try {
-    await withSystemContext((tx) =>
-      intents.settle(
-        intentId,
-        {
-          status: CI_RUNNER_INTENT_PENDING,
-          teardownReason: null,
-          settledAt: new Date(),
-          failureDetail: null,
-        },
-        tx,
-      ),
-    );
-  } catch (err) {
-    console.error('[ciRunnerBootService] could not release a claim', {
-      intentId,
-      detail: detailOf(err),
-    });
-  }
+  await ciRunnerAdmissionService.releaseClaim(intentId);
 }
 
 /**

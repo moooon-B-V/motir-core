@@ -548,6 +548,42 @@ describe('the CLAIM is the concurrency guard', () => {
   });
 });
 
+describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)', () => {
+  // The wiring assertion, and the one that matters most: a cap that is decided
+  // AFTER the JIT config is minted or the container is booted has already cost
+  // the money it exists to save. So the assertion is not just the outcome — it
+  // is that GitHub was never called and the orchestrator never provisioned.
+  it('a fleet at its ceiling leaves the job QUEUED, with no mint and no container', async () => {
+    vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
+    const fx = await seedTenant();
+    // One runner already in flight — the fleet is full.
+    await db.ciRunnerProvisioningIntent.update({
+      where: { id: (await seedIntent(fx, { jobId: '90001' })).id },
+      data: { status: 'running' },
+    });
+    const queued = await seedIntent(fx, { jobId: '90002' });
+
+    const result = await ciRunnerBootService.runIntent(queued.id, FAST);
+
+    expect(result).toMatchObject({ outcome: 'gate_deferred', reason: 'fleet_ceiling' });
+    expect(mintCalls()).toHaveLength(0);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    // PENDING, so the next sweep retries it — queued, never failed.
+    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: queued.id },
+    });
+    expect(after.status).toBe('pending');
+  });
+
+  it('boots normally when the gate admits', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+
+    expect((await ciRunnerBootService.runIntent(intent.id, FAST)).outcome).toBe('settled');
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+});
+
 describe('the REAPER — the backstop for the orchestrator crashing mid-flight', () => {
   it('finds and destroys an orphan the in-process path missed, and settles its intent', async () => {
     // ⚠️ THE CRASH IS SIMULATED FAITHFULLY: the container is booted and recorded,
