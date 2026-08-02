@@ -311,16 +311,40 @@ is the last pass's, so an un-stepped body that is not idempotent also makes
 Inngest's reported run output disagree with the `job_run` row (which memoized
 the first pass's).
 
-Almost always the fix is to wrap the work in a step. When you cannot — the work
-outlives `maxDuration`, which is rule 2's ceiling on one step — the handler must
-be made explicitly **replay-aware**: record the first pass's outcome in durable
-state keyed by the DISPATCH (`ctx.event.id ?? ctx.runId`, the same identity the
-ledger row correlates by), and have later passes read it back instead of
-re-deriving it. `system.ci-runner-boot` is the worked example (MOTIR-2002): its
-supervision watches a container for up to an hour, twelve times the step
-ceiling, so it stays un-stepped and memoizes its outcome onto the provisioning
-intent. Keying by dispatch rather than a bare flag is what keeps a SECOND
-dispatch from inheriting the first one's answer.
+Almost always the fix is to wrap the work in a step. When the work is LONGER
+than `maxDuration` — rule 2's ceiling on one step — the answer is still steps:
+**split it into short ones and let the RUN span the time**, waiting between them
+with `step.sleep`, which holds no invocation at all. Durable execution is what
+makes a run outlive its invocations; a handler that instead does the long thing
+un-stepped has opted out of it.
+
+`system.ci-runner-boot` is the worked example, and it is worth reading as a
+sequence of two fixes (MOTIR-2002, then MOTIR-2007). Its supervision watches a
+container for up to an hour — twelve times the step ceiling. It first stayed
+un-stepped and was made explicitly **replay-aware**, memoizing its outcome onto
+the provisioning intent keyed by the dispatch. That made the outcome consistent,
+but it could not make the work FIT: the invocation was still killed at 300s, so
+teardown never ran and the intent held a fleet slot until the reaper. MOTIR-2007
+took the shape apart instead — one `step.run` to boot, then a `step.sleep` +
+one-provider-read `step.run` per poll, then a `step.run` to tear down. Every step
+is milliseconds, the run spans the hour, and the memo columns were dropped
+because step memoization gives once-per-run for free.
+
+**The lesson is the ORDER of the two.** Reach for replay-awareness only when the
+work genuinely cannot be split; if it can, splitting is strictly better, because
+it fixes the wall clock as well as the repetition. And note what un-stepped code
+costs you either way: teardown cannot be reached from a `catch` (the executor
+finalizes a failed run before running a step scheduled from one — see the
+`onFailure` note above), so a stepped loop must return TYPED results rather than
+throw, and route its only exit into the teardown step.
+
+⚠️ **Testing a `step.sleep` loop.** `InngestTestEngine` records state only for
+steps that RAN, and a sleep never runs — so an un-stubbed `step.sleep` is
+re-found forever and `execute()` never resolves. It surfaces as a test TIMEOUT,
+which reads like a slow test rather than a missing stub. Pre-fulfil each sleep by
+id in the `steps` option (`{ id: 'supervise-wait:1', handler: () => null }`), and
+supply more than the loop can consume; `tests/jobs/ci-runner-fleet.test.ts`'s
+`sleepSteps()` is the helper.
 
 **A retrying job looks identical to a healthy one.** `defineJob` writes its
 `running` ledger row in a memoized step, so a retry replays it: the row stays
