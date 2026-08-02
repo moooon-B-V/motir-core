@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { db } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
+import { ESTABLISHED_PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';
 
 // Single Prisma operations on the `project_repository` table — a project's
 // REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780).
@@ -599,5 +600,47 @@ export const projectRepoRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<ProjectRepo> {
     return tx.projectRepo.update({ where: { id }, data });
+  },
+
+  /**
+   * The realized repositories of a project's ESTABLISHED rows — the input to the
+   * runner group's access list (Story MOTIR-1916 · MOTIR-1972).
+   *
+   * ⚠️ A PROJECT SPANS N REPOSITORIES (`docs/decisions/project-repository-set.md`
+   * §1.2), so this is a LIST and the one-repo case is the degenerate one. Rows
+   * establish independently and asynchronously (§4.1 — "one may fail or be skipped
+   * while the others succeed"), which is why the caller re-reads the whole set on
+   * every sync rather than appending the row it just settled.
+   *
+   * ESTABLISHED-only, via the same {@link ESTABLISHED_PROJECT_REPO_STATES} filter
+   * every repo-resolution read applies plus a non-null realized repo: a `proposed`
+   * / `creating` / `failed` / `skipped` row names no repository, and there is no
+   * id to access-list.
+   *
+   * `owner` comes back with the id because the CALLER must drop repositories that
+   * are not in Motir's provisioning org — a `connected` row points at a repository
+   * the USER owns, whose id GitHub would refuse to put in a group belonging to
+   * Motir's org. That filter is a policy decision, so it lives in the service; this
+   * read stays a single query and hands over the fact it needs.
+   */
+  async listEstablishedRealizedRepos(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ owner: string; providerRepoId: string }>> {
+    const rows = await tx.projectRepo.findMany({
+      where: {
+        projectId,
+        workspaceId,
+        state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
+        NOT: { githubRepoId: null },
+      },
+      select: { githubRepo: { select: { owner: true, repoId: true } } },
+      orderBy: { position: 'asc' },
+    });
+    return rows
+      .map((row) => row.githubRepo)
+      .filter((repo): repo is { owner: string; repoId: string } => repo !== null)
+      .map((repo) => ({ owner: repo.owner, providerRepoId: repo.repoId }));
   },
 };

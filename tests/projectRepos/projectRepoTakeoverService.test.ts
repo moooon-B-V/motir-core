@@ -17,6 +17,7 @@ import {
 import { encryptToken } from '@/lib/github/tokenCrypto';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 
 // TAKE IT OVER over real Postgres (Story MOTIR-1775 · MOTIR-711) — the handoff that
 // moves a Motir-owned repository into the user's own GitHub.
@@ -56,6 +57,9 @@ interface Call {
 }
 
 let calls: Call[];
+/** The project's own runner group (MOTIR-1972) — the establish/connect
+ *  ARRANGEMENT these tests build now syncs it. */
+let runnerGroups: RunnerGroupFake;
 /** Status the fake GitHub answers the transfer with; 202 is the real success. */
 let transferStatus: number;
 /** Whether the transfer response reports the repo ALREADY under the new owner —
@@ -86,6 +90,10 @@ function installGitHub(): void {
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
         });
       }
+      // Establishing / connecting a row now syncs the project's own runner
+      // group (MOTIR-1972), so this suite's GitHub has to serve those endpoints.
+      const group = await runnerGroups.handle(u, method, body);
+      if (group) return group;
       if (u.endsWith('/actions/permissions') && method === 'PUT') {
         if (actionsStatus !== 204) return json(actionsStatus, { message: 'nope' });
         return new Response(null, { status: 204 });
@@ -258,6 +266,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_APP_ID', '999');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
   _resetInstallationTokenCache();
+  runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   installGitHub();
 });
 
@@ -603,6 +612,10 @@ describe('a set with mixed ownership', () => {
     const fx = await makeWorkItemFixture();
     await connectIdentity(fx);
     const rowId = await connectedRow(fx, 'my-own-api');
+    // The ARRANGEMENT itself now talks to GitHub — connecting a row syncs the
+    // project's runner group (MOTIR-1972) — so the "nothing was called"
+    // assertion below is scoped to what the ACT does, not to the whole test.
+    calls.length = 0;
 
     const err = await projectRepoTakeoverService
       .requestTakeover(rowId, NEW_OWNER, fx.ctx)
@@ -653,6 +666,9 @@ describe('a user with no connected GitHub identity', () => {
   it('gets the typed connect-prompt error, and nothing is called or written', async () => {
     const fx = await makeWorkItemFixture();
     const { rowId } = await motirOwnedRow(fx, 'acme-web');
+    // See above: establishing the row syncs the project's runner group, so the
+    // assertion is about the ACT, not the arrangement.
+    calls.length = 0;
 
     await expect(
       projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx),

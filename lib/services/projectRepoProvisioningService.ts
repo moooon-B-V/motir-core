@@ -4,6 +4,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import {
   RepoNameTakenOnHostError,
@@ -145,6 +146,22 @@ export const projectRepoProvisioningService = {
     // the set service itself.
     const rows = await projectRepoSetService.listByProject(projectId, ctx);
     const projectName = await readProjectName(projectId, ctx);
+
+    // THE RUNNER GROUP FIRST, BEFORE ANY REPOSITORY EXISTS (MOTIR-1972 ·
+    // `docs/decisions/ci-runner-fleet.md` §7.3).
+    //
+    // Creating a repository makes a surface CI can fire on immediately — an
+    // initialised row gets a CI stub commit, which is a push, which queues a job.
+    // If the group landed after that, the first job's provisioning would have no
+    // `runner_group_id` and would have to REFUSE, which is a visible failure on a
+    // brand-new project. Ordering it here closes that race in the safe direction:
+    // the group exists with an EMPTY access list (it grants nothing to anyone,
+    // which is the correct posture for a group whose repositories do not exist
+    // yet), and each row's own sync adds it as it settles.
+    //
+    // Quiet by contract — a group Motir could not create must not stop the project
+    // from getting its repositories; the next sync retries.
+    await projectRunnerGroupService.syncQuietly({ projectId, workspaceId: ctx.workspaceId });
 
     const results: EstablishRowResult[] = [];
     // SEQUENTIAL on purpose — see the module header.

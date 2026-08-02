@@ -19,6 +19,7 @@ import {
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 
 // The repo-CREATION primitive over real Postgres (Story MOTIR-1775 · MOTIR-1781).
 //
@@ -59,6 +60,9 @@ let existingRepos: Map<string, number>;
 /** Repo names the fake GitHub refuses to create, and with which status. */
 let refusals: Map<string, number>;
 let nextRepoId: number;
+/** The project's own GitHub runner group (MOTIR-1972) — establishing a
+ *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
+let runnerGroups: RunnerGroupFake;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -91,6 +95,13 @@ function installGitHub(): void {
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
         });
       }
+      // The project's own RUNNER GROUP (MOTIR-1972) — establishing a repository
+      // now syncs it, so this suite's GitHub has to know about those endpoints.
+      // What the group ends up holding is asserted in
+      // `tests/ciFleet/projectRunnerGroupService.test.ts`; here it just has to be
+      // REAL, so the establish path under test runs the code it really runs.
+      const group = await runnerGroups.handle(u, method, body);
+      if (group) return group;
       // Create — either endpoint. The template endpoint names the NEW repo in the
       // body, exactly as the real one does.
       if (
@@ -163,6 +174,7 @@ beforeEach(async () => {
   existingRepos = new Map();
   refusals = new Map();
   nextRepoId = 900_001;
+  runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -276,7 +288,9 @@ describe('a TWO-row set is seeded PER ROLE', () => {
     expect(String(orgCreate.body!['description'])).toContain('api');
     expect(String(orgCreate.body!['description'])).toContain(fx.project.name);
 
-    const stub = calls.find((c) => c.method === 'PUT')!;
+    // …scoped to the CONTENTS PUT: the runner-group access-list write
+    // (MOTIR-1972) is a PUT too, and it comes first.
+    const stub = calls.find((c) => c.method === 'PUT' && c.url.includes('/contents/'))!;
     expect(stub.url).toContain('/contents/.github/workflows/ci.yml');
     expect(stub.url).toContain('acme-api');
   });
@@ -327,7 +341,12 @@ describe('PARTIAL FAILURE is the main event', () => {
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
     const createsBefore = calls.filter(
-      (c) => c.method === 'POST' && !c.url.includes('access_tokens'),
+      // Runner-group creates are POSTs too (MOTIR-1972) and are not repository
+      // creates — the count this asserts is about repositories.
+      (c) =>
+        c.method === 'POST' &&
+        !c.url.includes('access_tokens') &&
+        !c.url.includes('/actions/runner-groups'),
     );
     expect(createsBefore).toHaveLength(2); // web ok, api refused
 
@@ -341,7 +360,12 @@ describe('PARTIAL FAILURE is the main event', () => {
     ]);
     // Exactly ONE more create call: the settled row was not asked for again.
     const createsAfter = calls.filter(
-      (c) => c.method === 'POST' && !c.url.includes('access_tokens'),
+      // Runner-group creates are POSTs too (MOTIR-1972) and are not repository
+      // creates — the count this asserts is about repositories.
+      (c) =>
+        c.method === 'POST' &&
+        !c.url.includes('access_tokens') &&
+        !c.url.includes('/actions/runner-groups'),
     );
     expect(createsAfter).toHaveLength(3);
     expect(await db.githubRepo.count()).toBe(2);

@@ -401,6 +401,17 @@ export default defineConfig({
         // safety net.
         'lib/github/repoProvisioning.ts',
         'lib/services/projectRepoProvisioningService.ts',
+        // Story MOTIR-1916 · MOTIR-1972 — the PER-PROJECT RUNNER GROUP. Gated
+        // for the same reason the primitive above is, one layer over: an
+        // untested branch here leaves a project sharing a runner group with
+        // another tenant, or with none at all. `docs/decisions/ci-runner-fleet.md`
+        // §7.3 makes the group's access list the thing that stops a runner Motir
+        // booted for project X from serving project Y's queued job — including a
+        // job MOTIR-1922's gate DECLINED — so every branch that decides which
+        // repositories the list holds is a tenancy branch, and its failure is
+        // silent when it happens.
+        'lib/github/runnerGroups.ts',
+        'lib/services/projectRunnerGroupService.ts',
         // Story MOTIR-1775 · MOTIR-1782 — the establish STEP at plan approval.
         // Gated for a different reason than the primitive above: the whole card
         // is a claim about what must NOT be on screen (no repository name, count,
@@ -704,6 +715,15 @@ export default defineConfig({
         // decides whose an existing one is, and neither is undoable.
         'lib/github/repoProvisioning.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/projectRepoProvisioningService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-1916 · MOTIR-1972 — the per-project runner group (see the
+        // `include` note): every branch decides which tenant's repositories a
+        // fleet runner may serve.
+        'lib/github/runnerGroups.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/projectRunnerGroupService.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

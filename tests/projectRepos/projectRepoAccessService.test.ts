@@ -15,6 +15,7 @@ import {
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 
 // COLLABORATOR ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1900).
 //
@@ -61,6 +62,9 @@ let collaborators: Set<string>;
 /** Repo names whose invite answers `204` (the account already has access). */
 let alreadyHasAccess: Set<string>;
 let nextRepoId: number;
+/** The project's own GitHub runner group (MOTIR-1972) — establishing a
+ *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
+let runnerGroups: RunnerGroupFake;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -103,6 +107,10 @@ function installGitHub(): void {
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
         });
       }
+      // The project's own RUNNER GROUP (MOTIR-1972) — establishing a repository
+      // now syncs it, so this suite's GitHub has to know about those endpoints.
+      const group = await runnerGroups.handle(u, method, body);
+      if (group) return group;
 
       // ── The collaborator half ──────────────────────────────────────────────
       const collab = parseCollaboratorPath(u);
@@ -187,6 +195,7 @@ beforeEach(async () => {
   collaborators = new Set();
   alreadyHasAccess = new Set();
   nextRepoId = 900_001;
+  runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
