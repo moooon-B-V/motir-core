@@ -350,6 +350,39 @@ describe('deleteRunnersNamed — cleaning up a mint that never answered', () => 
     expect(runnerCalls().filter((c) => c.method === 'DELETE')).toHaveLength(0);
   });
 
+  it('tolerates a 200 with no `runners` array at all', async () => {
+    // A shape we cannot read must be "nothing to clean up", never a throw: this
+    // runs on a failure path whose job is already going back in the queue, and
+    // an exception here would convert a retryable outcome into an untyped one.
+    handler = () => json(200, { total_count: 0 });
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([]);
+    expect(runnerCalls().filter((c) => c.method === 'DELETE')).toHaveLength(0);
+  });
+
+  it('accepts a STRING id and drops one that is not a number', async () => {
+    // GitHub sends numeric ids, but this is the cleanup path for a call that
+    // ALREADY misbehaved, so the parse is defensive: a numeric string is still a
+    // runner worth de-registering, and an unparseable one is skipped rather than
+    // sent as `/actions/runners/NaN`.
+    handler = (call) =>
+      call.method === 'DELETE'
+        ? new Response(null, { status: 204 })
+        : json(200, {
+            total_count: 2,
+            runners: [
+              { id: '55', name: 'motir-intent-1' },
+              { id: 'not-a-number', name: 'motir-intent-1' },
+            ],
+          });
+
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([55]);
+    expect(
+      runnerCalls()
+        .filter((c) => c.method === 'DELETE')
+        .map((c) => c.url),
+    ).toEqual([`https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/55`]);
+  });
+
   it('surfaces a refusal of the lookup itself', async () => {
     handler = () => json(500, { message: 'Server Error' });
     await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).rejects.toMatchObject({
