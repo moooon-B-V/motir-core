@@ -276,10 +276,26 @@ export type CodeGraphRefreshData = CodeGraphIndexData;
  *
  * It is a `system.*` event because the fleet spans tenants exactly as Motir's
  * infrastructure bill does — the same reason `system.ci-minutes-reconcile` is.
- * `workspaceId` rides along ONLY so the run is scoped on the `job_run` ledger
- * (a real, valid FK); the handler re-reads the intent for everything else, and
- * the event is enqueued via `inngest.send`, never `sendEvent`, like every system
- * job.
+ * The handler re-reads the intent for everything, and the event is enqueued via
+ * `inngest.send`, never `sendEvent`, like every system job.
+ *
+ * ⚠️ `workspaceId` IS TYPED `null`, NOT `string` (MOTIR-1998). It shipped as
+ * `string` carrying `''`, and that empty string voided the ledger row the field
+ * exists to scope: `defineJob` forwards it as `data?.workspaceId ?? null`, and
+ * `''` is not nullish, so `''` reached `job_run.workspace_id`, tripped the
+ * workspace FK (`P2003`), and was swallowed by `isVanishedRunError` — the catch
+ * that exists for a genuinely vanished tenant (MOTIR-1545). The result was NO
+ * ledger row at all for the one job in the system that spends real money per
+ * invocation. `null` is the honest value: the fleet is cross-tenant, the ledger's
+ * `workspace_id` is nullable, and `system.ci-runner-reap` already lands
+ * untenanted rows the same way.
+ *
+ * The type is the literal `null` rather than `string | null` ON PURPOSE — it is
+ * what makes `''` (and any other string) a COMPILE error at the one call site
+ * that builds this event, so the defect cannot recur by editing a literal. If
+ * the fleet ever wants tenant-visible runs, widen this to `string | null` and
+ * thread the intent's real workspace id through `ciRunnerBootEvent`; that is a
+ * deliberate scope change, not a typo away.
  *
  * ONE EVENT PER INTENT, not one per batch: a batch handler that died halfway
  * would leave the containers it had already booted with no supervisor, which is
@@ -288,7 +304,7 @@ export type CodeGraphRefreshData = CodeGraphIndexData;
  */
 export interface CiRunnerBootData {
   intentId: string;
-  workspaceId: string;
+  workspaceId: null;
 }
 
 /**

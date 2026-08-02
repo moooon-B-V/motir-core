@@ -220,8 +220,11 @@ describe('a RECORDED intent dispatches its boot from the same request', () => {
     const intent = await db.ciRunnerProvisioningIntent.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
+    // `workspaceId` is `null`, not `''` — an empty string is not nullish, so it
+    // survives `defineJob`'s `?? null`, trips the `job_run` workspace FK and
+    // costs the run its ledger row entirely (MOTIR-1998).
     expect(bootEvents(captured.events)).toEqual([
-      { name: 'system.ci-runner-boot', data: { intentId: intent.id, workspaceId: '' } },
+      { name: 'system.ci-runner-boot', data: { intentId: intent.id, workspaceId: null } },
     ]);
   });
 

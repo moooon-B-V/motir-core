@@ -8,6 +8,8 @@ import { jobServices } from '@/lib/jobs/services';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { RETRY_POLICIES } from '@/lib/jobs/retries';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
+import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
+import { jobRunsService } from '@/lib/services/jobRunsService';
 import {
   CI_RUNNER_PROVISION_SWEEP_CRON,
   CI_RUNNER_REAP_CRON,
@@ -137,9 +139,14 @@ describe('the sweep fans out ONE event per intent', () => {
 
     expect(result).toEqual({ dispatched: 2 });
     expect(send).toHaveBeenCalledTimes(2);
+    // The literal, spelled out rather than compared to `ciRunnerBootEvent('i1')`
+    // — this is the one place that pins the payload independently of the builder
+    // that produces it. `workspaceId` is `null`, never `''`: an empty string is
+    // not nullish, so it survives `defineJob`'s `?? null` and trips the ledger's
+    // workspace FK, which silently costs the run its `job_run` row (MOTIR-1998).
     expect(send.mock.calls[0]![0]).toEqual({
       name: 'system.ci-runner-boot',
-      data: { intentId: 'i1', workspaceId: '' },
+      data: { intentId: 'i1', workspaceId: null },
     });
   });
 
@@ -178,11 +185,23 @@ describe('the boot and reap handlers DELEGATE', () => {
     const outcome = { outcome: 'unknown_intent' } as const;
     const run = vi.spyOn(ciRunnerBootService, 'runIntent').mockResolvedValue(outcome);
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
-    const { result } = await engine.execute({
-      events: [{ name: 'system.ci-runner-boot', data: { intentId: 'i-42', workspaceId: '' } }],
-    });
+    // Driven with the REAL payload builder, so the handler is exercised against
+    // the event the two senders actually emit rather than a hand-written double.
+    const { result } = await engine.execute({ events: [ciRunnerBootEvent('i-42')] });
 
-    expect(run).toHaveBeenCalledExactlyOnceWith('i-42');
+    // ⚠️ TWICE, not once — asserted exactly, NOT relaxed to `toHaveBeenCalledWith`.
+    // `runIntent` sits OUTSIDE any `step.run` (deliberately — see ciRunnerFleet.ts),
+    // and code outside a step re-executes on every durable-replay pass. Restoring
+    // the ledger row (MOTIR-1998) added the `job-run:succeeded` step, which added a
+    // pass, so the supervision now runs on two of them. Nothing boots twice: the
+    // atomic `pending → provisioning` claim inside `admit` is what the replay's
+    // call loses, returning `already_claimed` having spent nothing.
+    //
+    // That the fleet's money safety rests on the CLAIM rather than on the handler
+    // being replay-safe is MOTIR-2002, logged not absorbed (`notes.html` #27).
+    // When it lands this becomes `toHaveBeenCalledExactlyOnceWith` — and that
+    // edit is the point of spelling the count out here.
+    expect(run.mock.calls).toEqual([['i-42'], ['i-42']]);
     expect(result).toEqual(outcome);
   });
 
@@ -234,5 +253,142 @@ describe('the boot and reap handlers DELEGATE', () => {
       workspaceId: null,
       failure: null,
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOTIR-1998 — the BOOT's ledger row.
+//
+// The boot is the one job in the system that spends real money per invocation,
+// and until this card it wrote NO `job_run` row at all: the event carried
+// `workspaceId: ''`, which is not nullish, so it survived `defineJob`'s
+// `?? null`, reached `job_run.workspace_id`, tripped the workspace FK (`P2003`)
+// and was swallowed by `isVanishedRunError` — the catch that exists for a
+// genuinely vanished tenant (MOTIR-1545). No start, no outcome, no duration,
+// nothing for MOTIR-1928's live verification to read.
+//
+// So these assert the ROW, read back out of real Postgres. Asserting the send
+// (what the earlier suites do, correctly, for the fan-out) cannot see this bug:
+// the event went out perfectly every time.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('a BOOT run is READABLE on the job_run ledger', () => {
+  const SETTLED_OUTCOME = {
+    outcome: 'settled',
+    reason: 'job_completed',
+    containerId: 'c-1',
+    billableSeconds: 42,
+    costUsd: '0.0042',
+    bootLatencyMs: 1200,
+    usage: {
+      handleId: 'c-1',
+      provider: 'fake',
+      region: 'ams',
+      orgId: 'org-1',
+      workspaceId: 'ws-1',
+      projectId: 'proj-1',
+      repoFullName: 'moooon-B-V/motir-core',
+      workflowJobId: 99,
+      cpuKind: 'shared',
+      cpus: 2,
+      memoryMb: 4096,
+      createdAt: new Date('2026-08-02T10:00:00.000Z'),
+      startedAt: new Date('2026-08-02T10:00:05.000Z'),
+      stoppedAt: new Date('2026-08-02T10:00:47.000Z'),
+      billableSeconds: 42,
+      usdPerSecond: '0.0001',
+      costUsd: '0.0042',
+      rateEffectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+      terminalState: 'stopped',
+      teardownReason: 'job_completed',
+    },
+  } as const;
+
+  it('lands EXACTLY ONE succeeded, untenanted row for the event both senders emit', async () => {
+    vi.spyOn(ciRunnerBootService, 'runIntent').mockResolvedValue({ outcome: 'unknown_intent' });
+
+    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    // The REAL payload builder — the whole defect lived in the payload, so a
+    // hand-written event here would test the fix out of existence.
+    await engine.execute({ events: [ciRunnerBootEvent('i-42')] });
+
+    const runs = await db.jobRun.findMany();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      functionId: 'system.ci-runner-boot',
+      eventName: 'system.ci-runner-boot',
+      status: 'succeeded',
+      // Untenanted — the fleet is cross-tenant, exactly like the reaper above.
+      // This is the assertion that was `0 rows` before MOTIR-1998.
+      workspaceId: null,
+      failure: null,
+    });
+  });
+
+  it("carries the run's OUTCOME as the row's output, so a settled run is readable end to end", async () => {
+    // The audit trail `ciRunnerFleet.ts` promises: the container's id, its
+    // billable seconds and its cost, on the ledger, for a post-incident read.
+    vi.spyOn(ciRunnerBootService, 'runIntent').mockResolvedValue(SETTLED_OUTCOME);
+
+    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    await engine.execute({ events: [ciRunnerBootEvent('i-77')] });
+
+    const run = await db.jobRun.findFirstOrThrow();
+    expect(run.status).toBe('succeeded');
+    // `defineJob` JSON-round-trips the handler's return value into `output`, so
+    // the Dates land as ISO strings — assert the persisted shape, not the
+    // in-memory one.
+    expect(run.output).toEqual(JSON.parse(JSON.stringify(SETTLED_OUTCOME)));
+    const output = run.output as { billableSeconds: number; costUsd: string; containerId: string };
+    expect(output.billableSeconds).toBe(42);
+    expect(output.costUsd).toBe('0.0042');
+    expect(output.containerId).toBe('c-1');
+  });
+
+  it('records the outcome of the pass that DID the work, not the replay that found it claimed', async () => {
+    // The ledger's value depends on WHICH invocation's return value it captures,
+    // and `runIntent` runs on more than one replay pass (MOTIR-2002). This pins
+    // the half that matters for MOTIR-1998: `job-run:succeeded` is a STEP, so it
+    // executes once and memoizes — capturing the first pass's real outcome. The
+    // function's own return value is the LAST pass's, which is why the two differ.
+    // MOTIR-2002 makes them agree; until then, the ledger is the truthful surface
+    // and this test is what says so.
+    vi.spyOn(ciRunnerBootService, 'runIntent')
+      .mockResolvedValueOnce(SETTLED_OUTCOME)
+      .mockResolvedValue({ outcome: 'already_claimed' });
+
+    const engine = new InngestTestEngine({ function: ciRunnerBoot });
+    const { result } = await engine.execute({ events: [ciRunnerBootEvent('i-88')] });
+
+    const run = await db.jobRun.findFirstOrThrow();
+    expect(run.output).toEqual(JSON.parse(JSON.stringify(SETTLED_OUTCOME)));
+    // The known, documented disagreement — asserted so it cannot drift unnoticed.
+    expect(result).toEqual({ outcome: 'already_claimed' });
+  });
+
+  it("an EMPTY-STRING workspaceId writes no row at all — the failure mode, pinned so it can't come back quietly", async () => {
+    // Characterization, not aspiration: this is what `''` DOES, and why the
+    // payload's type is `null` rather than `string`. `recordStart` returning
+    // `null` is the P2003 catch doing its job for a tenant that really is gone
+    // (MOTIR-1545) — the bug was feeding it a value that is never a tenant.
+    const started = await jobRunsService.recordStart({
+      workspaceId: '',
+      functionId: 'system.ci-runner-boot',
+      eventName: 'system.ci-runner-boot',
+      eventId: 'evt-empty',
+      attempt: 0,
+    });
+    expect(started).toBeNull();
+    expect(await db.jobRun.count({ where: { eventId: 'evt-empty' } })).toBe(0);
+
+    // The identical call with `null` — the shipped value — persists.
+    const untenanted = await jobRunsService.recordStart({
+      workspaceId: null,
+      functionId: 'system.ci-runner-boot',
+      eventName: 'system.ci-runner-boot',
+      eventId: 'evt-null',
+      attempt: 0,
+    });
+    expect(untenanted).not.toBeNull();
+    expect(await db.jobRun.count({ where: { eventId: 'evt-null' } })).toBe(1);
   });
 });
