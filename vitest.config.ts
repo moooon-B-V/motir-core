@@ -449,6 +449,15 @@ export default defineConfig({
         'lib/orchestrator/adapters/fake/index.ts',
         'lib/orchestrator/adapters/fly/index.ts',
         'lib/orchestrator/adapters/fly/flyMachines.ts',
+        // Story MOTIR-1916 · MOTIR-2006 — THE BOOT PREFLIGHT, joining the same
+        // surface for the same reason, stated at its sharpest by the fault it
+        // exists to catch: MOTIR-1980's fleet shipped code-complete and unable to
+        // pull a single image, and every predicate in the tree answered
+        // "configured". The preflight is the one thing that would have said
+        // otherwise, so an unexercised branch in it is the guarantee going
+        // missing exactly where it went missing before.
+        'lib/orchestrator/imagePull.ts',
+        'lib/services/fleetPreflightService.ts',
         'lib/ciFleet/config.ts',
         'lib/ciFleet/limits.ts',
         'lib/ciFleet/workloads.ts',

@@ -1,4 +1,8 @@
-import { OrchestratorApiError, OrchestratorNotConfiguredError } from '../../errors';
+import {
+  OrchestratorApiError,
+  OrchestratorImageUnpullableError,
+  OrchestratorNotConfiguredError,
+} from '../../errors';
 
 // The FLY MACHINES boundary (Story MOTIR-1916 · MOTIR-1921) — the only module in
 // the repository that speaks Fly, and the reason the rest of the fleet does not
@@ -70,9 +74,32 @@ export function flyFleetConfig(): FlyFleetConfig {
   return { token: token as string, app: app as string, region, image: image as string };
 }
 
-/** Is the fleet's Fly orchestrator wired on this deployment? Never throws — the
- *  selector uses it to decide, and a self-hosted build answering "no" is a
- *  first-class state, not a misconfiguration. */
+/**
+ * Is the fleet's Fly orchestrator WIRED on this deployment? Never throws — the
+ * selector uses it to decide, and a self-hosted build answering "no" is a
+ * first-class state, not a misconfiguration.
+ *
+ * ⚠️ IT ANSWERS "IS THIS DEPLOYMENT WIRED FOR THE FLEET?" — NOT "CAN IT BOOT?".
+ * `docs/decisions/fleet-image-pull.md` §7 SETTLES this deliberately, and settles
+ * it as a presence check that keeps its name honest through a comment rather
+ * than by changing what it does. The distinction is not academic: MOTIR-1980
+ * shipped a fleet that was code-complete and could not boot a single container,
+ * and this predicate returned `true` throughout, because three non-empty strings
+ * were all it ever claimed to check.
+ *
+ * It stays a presence check because of WHERE it is called. `getOrchestrator()`
+ * consults it on EVERY provision and `isOrchestratorConfigured()` on every tick
+ * of the minute-granularity sweep; it is synchronous, and `lib/orchestrator/
+ * index.ts` documents why it must never throw or block. Making it mean
+ * "bootable" would put a registry round-trip on the hot boot path — inside
+ * `docs/decisions/ci-runner-fleet.md` §6's ≤30s p50 budget — and would make a
+ * registry blip indistinguishable from a deployment that was never configured.
+ *
+ * **The question it does not answer has its own function**: `verifyFleetBootable()`
+ * (`lib/orchestrator/index.ts`), async, consumed by the boot preflight in
+ * `system.daily-health-check` and never by the per-job path. If you are about to
+ * strengthen THIS function, that one is what you are looking for.
+ */
 export function isFlyFleetConfigured(): boolean {
   return (
     Boolean(process.env['FLY_FLEET_API_TOKEN']) &&
@@ -132,6 +159,34 @@ function errorDetail(body: unknown): string {
   const record = asRecord(body);
   const message = record?.['error'] ?? record?.['message'];
   return typeof message === 'string' ? message.slice(0, 200) : '';
+}
+
+/**
+ * Is this Fly refusal about the IMAGE rather than about Fly?
+ *
+ * ⚠️ FLY'S OWN DIALECT, MEASURED — not guessed. `docs/decisions/
+ * fleet-image-pull.md` §2.2 recorded, and MOTIR-2006 re-measured live on
+ * 2026-08-02 against a real app, that a machine-create with an unpullable
+ * reference returns **HTTP 400** with the body:
+ *
+ *   {"error":"failed to get manifest ghcr.io/moooon-b-v/motir-sandbox:claude: unauthorized"}
+ *
+ * and creates NO machine — Fly resolves the manifest before it allocates
+ * anything. The other three phrasings are the neighbouring shapes of the same
+ * fault (an unknown digest, a pull that fails after resolution).
+ *
+ * ⚠️ MATCHED ON THE IMAGE-SPECIFIC PHRASING, NEVER ON `unauthorized` ALONE.
+ * `unauthorized` on its own is what Fly says when MOTIR's OWN `FLY_FLEET_API_TOKEN`
+ * is wrong — the opposite diagnosis, and mis-reporting it as an image problem
+ * would send an operator to the registry while the token rots.
+ */
+function isImagePullRefusal(detail: string): boolean {
+  return (
+    /failed to (get|pull|resolve) (the )?manifest/i.test(detail) ||
+    /manifest unknown/i.test(detail) ||
+    /failed to pull image/i.test(detail) ||
+    /image not found/i.test(detail)
+  );
 }
 
 function parseDate(value: unknown): Date | null {
@@ -266,6 +321,18 @@ export const flyMachinesClient = {
    *
    * (The third is the JIT config itself, minted one job at a time; the fourth
    * backstop is the reaper, for the case this process dies mid-flight.)
+   *
+   * ⚠️ HOW THE IMAGE IS AUTHENTICATED: IT ISN'T, AND THAT IS THE DECISION.
+   * `docs/decisions/fleet-image-pull.md` §1 fixes that the runner image is
+   * PUBLIC on GHCR and pulled ANONYMOUSLY; §2.3 records why there was never an
+   * alternative — the Machines API `config` object has no `registry_auth`, no
+   * `docker_auth`, no `image_pull_secret` and no credential field of any name,
+   * so `image: input.image` below is the whole of the pull mechanism and no
+   * plumbing was added here. That absence is load-bearing rather than an
+   * omission, which is why it is written down at the payload instead of left to
+   * be re-derived by whoever next reads this and wonders where the credential
+   * went. A CLOSED-source image does not join this path: §5 mirrors it into
+   * `registry.fly.io`, which Fly authenticates itself, still with nothing here.
    */
   async createMachine(input: CreateMachineInput): Promise<FlyMachine> {
     const { token, app } = flyFleetConfig();
@@ -290,7 +357,16 @@ export const flyMachinesClient = {
       }),
     });
     const body = await readJson(res);
-    if (!res.ok) throw new OrchestratorApiError('fly', res.status, errorDetail(body));
+    if (!res.ok) {
+      // §6.2 — the DISTINGUISHABLE reason. An unpullable image and an
+      // unreachable Fly both arrive here as a non-2xx; only the body tells them
+      // apart, and only here is the body still in scope.
+      const detail = errorDetail(body);
+      if (isImagePullRefusal(detail)) {
+        throw new OrchestratorImageUnpullableError('fly', res.status, input.image, detail);
+      }
+      throw new OrchestratorApiError('fly', res.status, detail);
+    }
     const machine = toFlyMachine(body);
     if (!machine) {
       throw new OrchestratorApiError(

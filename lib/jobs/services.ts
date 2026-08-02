@@ -18,6 +18,7 @@ import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconcil
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
+import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -51,6 +52,7 @@ export const jobServices = {
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   jobScheduleHealth: jobScheduleHealthService,
+  fleetPreflight: fleetPreflightService,
 };
 
 export type JobServices = typeof jobServices;

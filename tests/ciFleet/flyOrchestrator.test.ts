@@ -14,7 +14,11 @@ import {
   toFlyMachine,
 } from '@/lib/orchestrator/adapters/fly/flyMachines';
 import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
-import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
+import {
+  OrchestratorApiError,
+  OrchestratorImageUnpullableError,
+  OrchestratorNotConfiguredError,
+} from '@/lib/orchestrator/errors';
 import type { ContainerHandle, ContainerSpec, UsageAttribution } from '@/lib/orchestrator/types';
 
 // The FLY adapter's wire (Story MOTIR-1916 · MOTIR-1921) — what the port turns
@@ -232,6 +236,71 @@ describe('provision — the two single-use guarantees are in the request body', 
     await expect(flyOrchestrator.provision(SPEC)).rejects.toMatchObject({
       code: 'ORCHESTRATOR_API_FAILED',
     });
+  });
+});
+
+describe('§6.2 — an UNPULLABLE image is its own named failure, not one more 400', () => {
+  // `docs/decisions/fleet-image-pull.md` §6: an unpullable digest and an
+  // unreachable Fly arrive at the same `catch` as a non-2xx, and they are
+  // OPPOSITE problems — one needs a human to fix a registry, the other resolves
+  // itself. Before this they were the same sentence.
+  //
+  // ⚠️ THE FIXTURE IS FLY'S OWN BODY, MEASURED. `{"error":"failed to get manifest
+  // <ref>: unauthorized"}` at HTTP 400, observed live against api.machines.dev
+  // on 2026-08-02 with a private GHCR reference (ADR §2.2, re-run by
+  // MOTIR-2006). Nothing here is a guess about what Fly says.
+  const FLY_MANIFEST_400 = {
+    error: 'failed to get manifest ghcr.io/moooon-b-v/motir-sandbox:claude: unauthorized',
+  };
+
+  it('classifies the measured manifest refusal as OrchestratorImageUnpullableError', async () => {
+    handler = () => json(400, FLY_MANIFEST_400);
+
+    const error = await flyOrchestrator.provision(SPEC).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(OrchestratorImageUnpullableError);
+    // It is STILL an OrchestratorApiError, so every existing catch site keeps
+    // working — the subclass adds a diagnosis, it does not fork the hierarchy.
+    expect(error).toBeInstanceOf(OrchestratorApiError);
+    expect(error).toMatchObject({ status: 400, imageReference: IMAGE });
+    // The MESSAGE is the deliverable: it lands in the intent's `failure_detail`
+    // and in the operator dashboard's failure column, so it has to name the
+    // image and say what happened without a log line beside it.
+    expect((error as Error).message).toContain(IMAGE);
+    expect((error as Error).message).toContain('could not PULL');
+    expect((error as Error).message).toContain('private, absent, or the pinned digest is gone');
+  });
+
+  it.each([
+    ['a manifest Fly could not resolve', { error: 'failed to resolve manifest ghcr.io/x/y' }],
+    ['an unknown manifest', { error: 'manifest unknown' }],
+    ['a pull that failed after resolution', { error: 'failed to pull image ghcr.io/x/y' }],
+    ['an image Fly cannot find', { error: 'image not found' }],
+  ])('also names %s as unpullable', async (_label, body) => {
+    handler = () => json(400, body);
+    await expect(flyOrchestrator.provision(SPEC)).rejects.toBeInstanceOf(
+      OrchestratorImageUnpullableError,
+    );
+  });
+
+  it('does NOT claim an image problem when the FLEET TOKEN is what Fly refused', async () => {
+    // ⚠️ THE MIS-DIAGNOSIS THIS GUARDS AGAINST. Fly says `unauthorized` for a bad
+    // `FLY_FLEET_API_TOKEN` too, and reporting that as "your image is private"
+    // would send an operator to the GHCR settings page while the token rots. The
+    // classifier matches the IMAGE-specific phrasing, never `unauthorized` alone.
+    handler = () => json(401, { error: 'unauthorized' });
+
+    const error = await flyOrchestrator.provision(SPEC).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(OrchestratorApiError);
+    expect(error).not.toBeInstanceOf(OrchestratorImageUnpullableError);
+  });
+
+  it('does NOT claim an image problem for a capacity refusal', async () => {
+    handler = () => json(422, { error: 'insufficient capacity' });
+    await expect(flyOrchestrator.provision(SPEC)).rejects.not.toBeInstanceOf(
+      OrchestratorImageUnpullableError,
+    );
   });
 });
 

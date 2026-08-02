@@ -18,7 +18,11 @@ import {
   RunnerRegistrationRateLimitedError,
 } from '@/lib/github/runnerJitConfig';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
-import { getOrchestrator, isOrchestratorConfigured } from '@/lib/orchestrator';
+import {
+  getOrchestrator,
+  isOrchestratorConfigured,
+  OrchestratorImageUnpullableError,
+} from '@/lib/orchestrator';
 import { flyFleetConfig } from '@/lib/orchestrator/adapters/fly/flyMachines';
 import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
 import { recordContainerUsage } from '@/lib/orchestrator/usageSink';
@@ -140,6 +144,21 @@ export type RunIntentOutcome =
   | { outcome: 'no_runner_group'; detail: string }
   /** The container never existed: the mint or the boot was refused. */
   | { outcome: 'provision_failed'; detail: string }
+  /**
+   * THE RUNNER IMAGE COULD NOT BE PULLED — §6.2 of
+   * `docs/decisions/fleet-image-pull.md`, split out of `provision_failed` so it
+   * is a NAMED condition rather than one more generic provider 400.
+   *
+   * It earns its own arm because the remedy is categorically different from
+   * every other provisioning failure: nothing about the job, the tenant or the
+   * retry changes anything — a human has to fix the image's visibility, its
+   * digest, or the mirror. Every queued job hits it identically, so a fleet in
+   * this state produces a wall of failures that all say the same thing, and the
+   * name is what lets an operator read that wall as ONE fault. The boot-time
+   * preflight (`verifyFleetBootable()`, §6.1) is what should have caught it
+   * first; this is the case where it was pullable then and is not now.
+   */
+  | { outcome: 'image_unpullable'; detail: string }
   /** A container ran and was torn down. `reason` says how it ended. */
   | {
       outcome: 'settled';
@@ -346,6 +365,28 @@ export const ciRunnerBootService = {
       // container will ever claim it, so it is de-registered here rather than
       // left to GitHub — which does not clean it up (§7.4, verified).
       await deregisterQuietly(jit.runnerId, intentId);
+
+      // ⚠️ §6.2 of `docs/decisions/fleet-image-pull.md` — AN UNPULLABLE IMAGE IS
+      // ITS OWN NAMED CONDITION, not a generic boot failure. It is the one
+      // provisioning failure that is about the DEPLOYMENT rather than about this
+      // job, so it settles with a detail that says which image and what the
+      // registry said, and returns an outcome an operator can filter on.
+      //
+      // The teardown reason stays `provision_failed`: that column records how a
+      // CONTAINER ended, and here there was never a container to end. Widening
+      // it would put a boot-time diagnosis in a teardown vocabulary — and every
+      // consumer of that enum would have to learn a value it can never observe.
+      if (err instanceof OrchestratorImageUnpullableError) {
+        const detail = `the runner image could not be pulled: ${detailOf(err)}`;
+        console.error('[ciRunnerBootService] the runner image is not pullable', {
+          intentId,
+          image: err.imageReference,
+          detail: detailOf(err),
+        });
+        await settleFailed(intentId, 'provision_failed', detail);
+        return { outcome: 'image_unpullable', detail };
+      }
+
       const detail = `could not boot a container: ${detailOf(err)}`;
       await settleFailed(intentId, 'provision_failed', detail);
       return { outcome: 'provision_failed', detail };
