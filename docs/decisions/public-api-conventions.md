@@ -249,8 +249,12 @@ last page reports no next cursor rather than requiring an extra empty round trip
 `X-RateLimit-Limit` / `-Remaining` / `-Reset` headers. Motir adopts the mirror's
 number rather than inventing one: it is enough for interactive scripting and
 ordinary integrations, and low enough to bound a runaway loop. It is
-**configurable per environment** (a self-hoster's ceiling is not Motir Cloud's)
-and raising it later is additive under §8.
+**configurable per environment** via `MOTIR_API_V1_RATE_LIMIT` and
+`MOTIR_API_V1_RATE_LIMIT_WINDOW_MS` (documented in `.env.example`) — a
+self-hoster's ceiling is not Motir Cloud's — and raising it later is additive
+under §8. An unset, non-numeric or non-positive value falls back to the default
+rather than disabling the limiter, so a typo in a deploy config cannot silently
+remove the ceiling.
 
 **Rung 2.** `grep` over `lib/` and `app/` confirms **no rate-limit helper exists
 anywhere** — the `rateLimit` hits are Better-Auth's own config plus

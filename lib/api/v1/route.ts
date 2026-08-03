@@ -3,13 +3,19 @@ import { NextResponse } from 'next/server';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import type { TokenScope } from '@/lib/mcp/scopes';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { presentedBearerToken } from '@/lib/api/v1/bearer';
+import { presentedBearerToken, tokenFingerprint } from '@/lib/api/v1/bearer';
 import {
   classifyApiV1Error,
   INTERNAL_ERROR_BODY,
   InsufficientScopeError,
   UnauthenticatedError,
 } from '@/lib/api/v1/errors';
+import {
+  consumeRateLimit,
+  rateLimitHeaders,
+  RateLimitExceededError,
+  retryAfterSeconds,
+} from '@/lib/api/v1/rateLimit';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). EVERY public endpoint composes this one helper, which is what
@@ -20,17 +26,20 @@ import {
 //
 //   1. AUTH — delegates to the shipped `authenticateApiToken(req, scope)`;
 //      `unauthenticated` → 401 (undifferentiated), `forbidden` → 403.
-//   2. The `ServiceContext` the services expect, built from the resolved
+//   2. RATE LIMITING — per token, with `X-RateLimit-*` on every response and a
+//      429 when the budget is spent (MOTIR-1860).
+//   3. The `ServiceContext` the services expect, built from the resolved
 //      `{ userId, workspaceId }`, so the route's single service call runs as
 //      the token owner and the product's own access checks apply unchanged.
-//   3. ERROR MAPPING — a typed service error becomes `{ code, error }` + its
+//   4. ERROR MAPPING — a typed service error becomes `{ code, error }` + its
 //      status; anything unrecognised becomes a bare 500 that leaks nothing.
-//   4. A REQUEST ID on every response, success and failure alike.
+//   5. A REQUEST ID on every response, success and failure alike.
 //
 // Ordering is a contract, not an implementation detail: auth runs BEFORE the
-// handler does any parsing or reading, so an unauthenticated request never
-// reaches a cursor parser or the database. MOTIR-1861 asserts that ordering
-// rather than assuming it.
+// limiter and before the handler does any parsing or reading, so an
+// unauthenticated request neither spends a real token's budget nor reaches a
+// cursor parser or the database. MOTIR-1861 asserts that ordering rather than
+// assuming it.
 //
 // Conventions pinned in `docs/decisions/public-api-conventions.md`.
 
@@ -129,10 +138,19 @@ export function withV1Route<P = Record<string, never>>(
       /* v8 ignore next */
       if (!presentedToken) throw new UnauthenticatedError();
 
-      // ── 2. (MOTIR-1860 seam) the per-token rate limiter runs here, after
-      //       auth so an unauthenticated flood cannot spend a real token's
-      //       budget, and before the handler so no work is done for a
-      //       request that will be refused.
+      // ── 2. Rate-limit, per TOKEN ────────────────────────────────────────
+      // AFTER auth, so an unauthenticated flood cannot spend a real token's
+      // budget (an attacker who knew a token id could otherwise exhaust it
+      // without holding the secret) — and BEFORE the handler, so no work is
+      // done for a request that will be refused.
+      //
+      // The headers go into `responseHeaders`, which every exit path stamps,
+      // so they survive a 429, a mapped error and a 500 alike.
+      const decision = await consumeRateLimit(tokenFingerprint(presentedToken));
+      for (const [header, value] of Object.entries(rateLimitHeaders(decision))) {
+        responseHeaders.set(header, value);
+      }
+      if (!decision.allowed) throw new RateLimitExceededError(retryAfterSeconds(decision));
 
       // ── 3. Run the handler ──────────────────────────────────────────────
       const params = ((await args?.params) ?? {}) as P;
