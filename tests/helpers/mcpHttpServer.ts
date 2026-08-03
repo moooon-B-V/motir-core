@@ -54,6 +54,22 @@ export interface McpTestServerOptions {
    * that only drives MCP should still 404 on everything else.
    */
   cliDeviceRoutes?: boolean;
+  /**
+   * Also serve the PUBLIC API (`/api/v1/**`) — Story 11.1 · Subtask 11.1.6
+   * (MOTIR-1862). The conformance suite drives v1 as an EXTERNAL client would:
+   * a real socket, a real PAT, the real route modules, real Postgres.
+   *
+   * The tree is DISCOVERED, not listed, so an endpoint Stories 11.2 / 11.3 add
+   * is served the moment its file exists — the extensibility the card requires,
+   * so those stories add cases rather than a second harness.
+   */
+  v1Routes?: boolean;
+  /**
+   * Extra handlers mounted at exact pathnames. Lets a suite put a FIXTURE route
+   * behind the same socket — used to drive an envelope behaviour end to end
+   * (e.g. the cross-tenant 404) that no shipped endpoint can raise yet.
+   */
+  extraRoutes?: Record<string, RouteModule>;
 }
 
 export interface McpTestServer {
@@ -129,6 +145,18 @@ export async function startMcpHttpServer(
     ]);
     routes.set('/api/cli/device/start', start as RouteModule);
     routes.set('/api/cli/device/token', token as RouteModule);
+  }
+  if (options.v1Routes) {
+    // DISCOVERED, not listed, so the harness never goes stale: every
+    // `app/api/v1/**/route.ts` is mounted at the pathname Next.js would serve
+    // it from. Imported lazily, for the same reason as the device routes.
+    const { loadV1RouteModules } = await import('./v1RouteAudit');
+    for (const [pathname, mod] of await loadV1RouteModules()) {
+      routes.set(pathname, mod as RouteModule);
+    }
+  }
+  for (const [pathname, mod] of Object.entries(options.extraRoutes ?? {})) {
+    routes.set(pathname, mod);
   }
 
   const server: Server = createServer((req, res) => {

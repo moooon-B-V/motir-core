@@ -117,6 +117,39 @@ export function readRouteSource(repoRoot: string, file: string): string {
   return readFileSync(join(repoRoot, file), 'utf8');
 }
 
+/** The App-Router handler exports a route module can carry. */
+export interface V1RouteModule {
+  GET?: (req: Request) => Promise<Response>;
+  POST?: (req: Request) => Promise<Response>;
+  PUT?: (req: Request) => Promise<Response>;
+  PATCH?: (req: Request) => Promise<Response>;
+  DELETE?: (req: Request) => Promise<Response>;
+}
+
+/**
+ * Every v1 route module, keyed by the PATHNAME Next.js serves it from
+ * (`app/api/v1/me/route.ts` → `/api/v1/me`).
+ *
+ * Uses `import.meta.glob` rather than a templated `import()`: the glob is
+ * statically analysable, so the module graph is known at build time (a
+ * variable specifier is not, and Vite warns that it cannot resolve one). It
+ * still DISCOVERS the tree, so a route added by Stories 11.2 / 11.3 is picked
+ * up with no list to maintain.
+ */
+export async function loadV1RouteModules(): Promise<Map<string, V1RouteModule>> {
+  // ⚠️ `import.meta.glob(...)` must be written out IN FULL: it is a build-time
+  // transform on the literal call expression, not a runtime function, so
+  // aliasing it throws "statically replaced during file transformation".
+  // (Typed by `tests/vite-env.d.ts`.)
+  const loaders = import.meta.glob('../../app/api/v1/**/route.ts');
+  const modules = new Map<string, V1RouteModule>();
+  for (const [key, load] of Object.entries(loaders)) {
+    const pathname = key.replace(/^.*\/app\//, '/').replace(/\/route\.tsx?$/, '');
+    modules.set(pathname, (await load()) as V1RouteModule);
+  }
+  return modules;
+}
+
 /**
  * Blank out comments and string literals so a rule cannot fire on prose.
  * (Without this, the file-header comment explaining "no `db.*` in a route"

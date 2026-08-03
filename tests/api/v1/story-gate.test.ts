@@ -9,6 +9,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import {
   auditV1RouteSource,
   declaredScopes,
+  loadV1RouteModules,
   readRouteSource,
   v1RouteFiles,
 } from '../../helpers/v1RouteAudit';
@@ -393,20 +394,20 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
 
     const foreign = [theirs.workspace.id, theirs.user.id, theirs.user.email];
 
-    for (const file of v1RouteFiles(REPO_ROOT)) {
-      const modulePath = `@/${file.replace(/\.ts$/, '')}`;
-      const mod = (await import(modulePath)) as {
-        GET?: (req: Request) => Promise<Response>;
-      };
+    const modules = await loadV1RouteModules();
+    expect(modules.size, 'the tree really was discovered').toBeGreaterThanOrEqual(2);
+
+    for (const [pathname, mod] of modules) {
       if (!mod.GET) continue;
 
-      const url = `http://localhost:3000/${file.replace(/^app\//, '').replace(/\/route\.ts$/, '')}?limit=100`;
-      const res = await mod.GET(new Request(url, { headers: mine.headers }));
-      expect(res.status, `${file} answers the owning tenant`).toBe(200);
+      const res = await mod.GET(
+        new Request(`http://localhost:3000${pathname}?limit=100`, { headers: mine.headers }),
+      );
+      expect(res.status, `${pathname} answers the owning tenant`).toBe(200);
 
       const serialised = JSON.stringify(await res.json());
       for (const id of foreign) {
-        expect(serialised, `${file} must not leak ${id}`).not.toContain(id);
+        expect(serialised, `${pathname} must not leak ${id}`).not.toContain(id);
       }
     }
   });
