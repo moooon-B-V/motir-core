@@ -1,4 +1,8 @@
-import { verifyFleetBootable, type FleetBootableVerdict } from '@/lib/orchestrator';
+import {
+  verifyFleetBootable,
+  verifyIndexFleetBootable,
+  type FleetBootableVerdict,
+} from '@/lib/orchestrator';
 
 // THE FLEET BOOT PREFLIGHT (Story MOTIR-1916 · MOTIR-2006) — §6.1 of
 // `docs/decisions/fleet-image-pull.md`, given a service seam so a background job
@@ -30,5 +34,22 @@ export const fleetPreflightService = {
    */
   async check(): Promise<FleetBootableVerdict> {
     return verifyFleetBootable();
+  },
+
+  /**
+   * Can this deployment's fleet pull its configured INDEXER image? (MOTIR-2030)
+   *
+   * A SECOND method rather than a widened `check()`, mirroring the split at the
+   * composition root: the two pull paths have two registries, two release lanes
+   * and two failure modes, and `docs/decisions/fleet-image-pull.md` §5's third
+   * constraint requires each to be preflighted independently. The indexer's is
+   * the path §5's second constraint makes more likely to go missing —
+   * `registry.fly.io` garbage-collects unreferenced images, and a fleet whose
+   * machines are ephemeral by design references nothing between jobs.
+   *
+   * Never throws, for the same reason {@link check} does not.
+   */
+  async checkIndexFleet(): Promise<FleetBootableVerdict> {
+    return verifyIndexFleetBootable();
   },
 };
