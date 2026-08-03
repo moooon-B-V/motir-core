@@ -1,0 +1,49 @@
+name: Buildx (mirror-first)
+description: >-
+  Boot BuildKit for a Docker build with EVERY docker.io pull routed through a
+  registry mirror — the builder image itself, the `# syntax=` frontend, and each
+  Dockerfile's FROM base. Replaces a bare `docker/setup-buildx-action@v3`, which
+  pulls `moby/buildkit` anonymously from `registry-1.docker.io` and kills the job
+  in ~30 s, before a line of repo code runs, whenever Docker Hub blips
+  (MOTIR-2018).
+
+# Why a composite action rather than three copies of the same `with:` block:
+# `setup-buildx-action` needs TWO settings that only work together, and a fourth
+# buildkit job added later would get neither by default. One definition means a
+# new Docker-building job inherits the mirror by construction — the same reason
+# `.github/actions/postgres` exists (MOTIR-1742), and the reason
+# `tests/ci-buildkit-registry.test.ts` forbids calling the upstream action
+# directly.
+
+runs:
+  using: composite
+  steps:
+    # TWO separate registry paths, and each needs its own fix — this is the part
+    # that is easy to half-do:
+    #
+    #  1. `driver-opts: image=` — the BuildKit container the runner's docker
+    #     daemon pulls to become a builder. buildkitd does not exist yet at this
+    #     point, so its own registry config cannot cover this pull; the mirror
+    #     has to be spelled into the reference.
+    #  2. `buildkitd-config-inline` — everything buildkitd pulls AFTERWARDS: the
+    #     `# syntax=docker/dockerfile:1` frontend both Dockerfiles declare, and
+    #     every `FROM` (ubuntu@sha256:… for the runner image, node:… for the
+    #     sandbox). Left out, the builder boots from the mirror and then goes
+    #     straight back to Docker Hub for the bases.
+    #
+    # `mirror.gcr.io` is a read-through cache of Docker Hub, anonymous and
+    # unauthenticated, already trusted in this repo by `.github/actions/postgres`
+    # (MOTIR-1742). BuildKit falls back to the upstream registry when a mirror
+    # misses or fails, so case 2 keeps Docker Hub as a backstop rather than
+    # trading one single point of failure for another. Case 1 has no fallback
+    # slot — a single `image=` reference is all the action accepts.
+    #
+    # Pulls are byte-identical either way: the runner image's FROM is already
+    # digest-pinned (§7.2), and a mirror that served different bytes could not
+    # satisfy that digest.
+    - uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: image=mirror.gcr.io/moby/buildkit:buildx-stable-1
+        buildkitd-config-inline: |
+          [registry."docker.io"]
+            mirrors = ["mirror.gcr.io"]
