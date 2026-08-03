@@ -574,6 +574,96 @@ export interface CodeGraphIndexResult {
   commitSha: string;
 }
 
+// The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai
+// (MOTIR-1989 / MOTIR-1986). `credential` is OPAQUE to motir-core: motir-ai signs
+// it and motir-ai verifies it, and nothing here parses, inspects or re-signs it.
+//
+// ⚠️ THE RESPONSE DELIBERATELY DOES NOT CARRY `aiProjectId`, and that absence is
+// the contract rather than an omission. motir-core passes the credential straight
+// through to a container; motir-ai resolves the project identity FROM the
+// credential on every container-facing call, so "nothing in a request body can
+// name a project" (`motir-ai/docs/contract.md`). A field here would hand
+// motir-core an internal identity of the closed layer that it has no use for.
+export interface CodeGraphRunCredential {
+  /** The bearer the container presents. Opaque; treat as a secret. */
+  credential: string;
+  /** ISO-8601 — when it stops working. Minutes away, by design. */
+  expiresAt: string;
+}
+
+/**
+ * POST /v1/code-graph/run-credential — mint ONE index run's motir-ai credential
+ * (MOTIR-1989; motir-ai's half is MOTIR-1986).
+ *
+ * `serviceAuth`-gated: motir-core is the caller, so this is the ONE call in the
+ * flow that carries `MOTIR_AI_SERVICE_TOKEN`. What comes back authorizes exactly
+ * two operations (`upload-grant`, `record-pointer`) for exactly one
+ * `(project, repo, run)`, for minutes — and the container-facing routes REFUSE the
+ * broad service token outright, so a misconfigured dispatch that handed a
+ * container the service token fails loudly instead of silently granting it every
+ * project.
+ *
+ * ⚠️ CREDENTIAL SCOPE IS THE ISOLATION BOUNDARY
+ * (`docs/decisions/code-graph-index-fleet.md` §4). The fleet org is shared with CI
+ * runners that execute customer-authored code, so a container's blast radius is
+ * decided entirely by what it is handed. This is the narrow thing it is handed —
+ * which is only true while the caller treats a failed mint as FATAL. There is no
+ * broader credential to fall back to, and reaching for one would dissolve the
+ * decision that made one shared org acceptable.
+ *
+ * The `(org, workspace, project)` triple find-or-creates the `AiProject`, exactly
+ * as a job submit does. A non-2xx maps through the §5 problem+json taxonomy to a
+ * typed error; a motir-ai that never answers becomes `MotirAiUnavailableError`
+ * under the standard deadline. It is a small JSON round trip, so it takes the
+ * ORDINARY timeout, never the index upload's long one.
+ */
+export async function mintCodeGraphRunCredential(input: {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoRef: string;
+  /** The dispatching run, carried for attribution; not itself an authority. */
+  runId: string;
+  /** Optional; motir-ai clamps it to [60, 3600]. Omit to take its default. */
+  ttlSeconds?: number;
+}): Promise<CodeGraphRunCredential> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/code-graph/run-credential`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({
+      coreOrganizationId: input.coreOrganizationId,
+      coreWorkspaceId: input.coreWorkspaceId,
+      coreProjectId: input.coreProjectId,
+      repoRef: input.repoRef,
+      runId: input.runId,
+      ...(input.ttlSeconds === undefined ? {} : { ttlSeconds: input.ttlSeconds }),
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+
+  // ⚠️ THE BODY IS VALIDATED, not cast. Everywhere else in this client a cast is
+  // fine: the value lands in a DTO a human reads, and a missing field renders as
+  // blank. Here it lands in a CONTAINER SPEC. A response that parsed but carried
+  // no `credential` would boot a machine with an empty
+  // `MOTIR_INDEX_RUN_CREDENTIAL`, which the container reports as a CONFIG failure
+  // — blaming the dispatch for a defect in the response, one process away from
+  // anything that could see it. So a malformed body fails HERE, before a spec
+  // exists.
+  const body = (await res.json()) as Partial<CodeGraphRunCredential> | null;
+  if (!body || typeof body.credential !== 'string' || body.credential.length === 0) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned no credential from POST /v1/code-graph/run-credential',
+    );
+  }
+  if (typeof body.expiresAt !== 'string' || body.expiresAt.length === 0) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned a run credential with no expiry from POST /v1/code-graph/run-credential',
+    );
+  }
+  return { credential: body.credential, expiresAt: body.expiresAt };
+}
+
 // POST /v1/code-graph/index — hand a repo's raw gzipped-tarball BYTES to motir-ai
 // to build/refresh a project's code graph (MOTIR-1500, the producer half). This
 // is the ONE binary method on the boundary: unlike every JSON method above, the

@@ -1,6 +1,12 @@
 import { registerGitProvider } from '../registry';
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import { REPO_TARBALL_TIMEOUT_MS, type GitProvider } from '../provider';
+import {
+  RepoTarballUrlMissingLocationError,
+  RepoTarballUrlNotRedirectedError,
+  RepoTarballUrlTimeoutError,
+  RepoTarballUrlUnreachableError,
+} from '../errors';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -145,6 +151,60 @@ export const githubProvider: GitProvider = {
     }
     if (!res.ok) throw new Error(`GitHub tarball endpoint returned ${res.status}`);
     return res.arrayBuffer();
+  },
+
+  async resolveRepoTarballUrl(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<string> {
+    const { token } = await mintInstallationToken(installationId);
+    // ⚠️ `redirect: 'manual'` IS THE WHOLE METHOD. The sibling above lets `fetch`
+    // follow the 302 and then buffers what comes back; this one stops at the
+    // redirect and takes the URL. Same endpoint, same credential, and the body —
+    // the several hundred megabytes that OOM'd the function — is never read.
+    //
+    // What comes back in `Location` is a `codeload.github.com` URL authorized by
+    // its OWN signed query string. That is not an assumption: it is the mechanism
+    // `fetchRepoTarball` already depends on (see its comment — `fetch` strips
+    // `Authorization` on the cross-origin hop and the fetch still works), so the
+    // installation token does not reach `codeload` today either. Handing the URL
+    // to a container therefore leaks nothing and is strictly less privilege than
+    // handing over the token (`docs/decisions/code-graph-index-fleet.md` §10).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(`${GITHUB_API}/repos/${owner}/${name}/tarball/${ref}`, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw controller.signal.aborted
+        ? new RepoTarballUrlTimeoutError(REPO_TARBALL_TIMEOUT_MS)
+        : new RepoTarballUrlUnreachableError(err instanceof Error ? err.message : 'unknown');
+    } finally {
+      clearTimeout(timer);
+    }
+
+    // A 200 here would mean the host served the BYTES rather than a redirect —
+    // the one outcome this method exists to avoid — so it is a failure, not a
+    // success to be silently discarded. Every non-3xx lands in the same arm and
+    // carries its status, which is what tells an operator whether to look at the
+    // installation (404 / 403) or at GitHub (5xx).
+    if (res.status < 300 || res.status >= 400) {
+      throw new RepoTarballUrlNotRedirectedError(res.status);
+    }
+    const location = res.headers.get('location');
+    if (!location) throw new RepoTarballUrlMissingLocationError(res.status);
+    return location;
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {

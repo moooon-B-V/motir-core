@@ -14,7 +14,17 @@ export {
   registeredGitProviderIds,
   UnknownGitProviderError,
 } from './registry';
-export type { GitProvider } from './provider';
+export { requireRepoTarballUrlResolver, REPO_TARBALL_TIMEOUT_MS } from './provider';
+export type { GitProvider, RepoTarballUrlResolver } from './provider';
+export {
+  RepoTarballUrlError,
+  RepoTarballUrlMissingLocationError,
+  RepoTarballUrlNotRedirectedError,
+  RepoTarballUrlTimeoutError,
+  RepoTarballUrlUnreachableError,
+  RepoTarballUrlUnsupportedError,
+} from './errors';
+export type { RepoTarballUrlFailure } from './errors';
 export type {
   ChangeRequestLifecycle,
   ChangeRequestState,
