@@ -599,9 +599,13 @@ describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and 
     });
     // The manifest call went to Fly's registry for the indexer's repository. A
     // preflight that re-probed `MOTIR_RUNNER_IMAGE` would have hit ghcr.io.
-    const called = fetchSpy.mock.calls.map((c) => String(c[0]));
-    expect(called.some((u) => u.includes('registry.fly.io'))).toBe(true);
-    expect(called.some((u) => u.includes('ghcr.io'))).toBe(false);
+    // ⚠️ Compare the parsed HOST, never a substring of the URL: `ghcr.io` can
+    // appear in a path or query of a request to somewhere else entirely, so a
+    // substring test both under- and over-matches (CodeQL
+    // `js/incomplete-url-substring-sanitization`).
+    const hosts = fetchSpy.mock.calls.map((c) => new URL(String(c[0])).host);
+    expect(hosts).toContain('registry.fly.io');
+    expect(hosts).not.toContain('ghcr.io');
   });
 
   it('answers `unpullable` naming the INDEXER reference — §5.2 GC is the likeliest cause', async () => {

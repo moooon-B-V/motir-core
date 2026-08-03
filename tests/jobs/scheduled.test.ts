@@ -319,8 +319,12 @@ describe("the INDEXER image's preflight rides the same health check", () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
-        // The runner resolves; only Fly's registry is unreachable.
-        if (String(rawUrl).includes('registry.fly.io')) {
+        // The runner resolves; only Fly's registry is unreachable. Matched on
+        // the parsed HOST rather than a substring of the URL — the host is the
+        // thing that is actually unreachable, and a substring test would also
+        // fire for any other host carrying it in a path (CodeQL
+        // `js/incomplete-url-substring-sanitization`).
+        if (new URL(String(rawUrl)).host === 'registry.fly.io') {
           throw new Error('getaddrinfo ENOTFOUND registry.fly.io');
         }
         return serveManifest(rawUrl, init, [RUNNER_REPO]);
