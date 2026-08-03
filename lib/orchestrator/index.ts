@@ -153,13 +153,18 @@ export function indexFleetConfig(): IndexFleetConfig {
 }
 
 /**
- * What the boot preflight concluded about this deployment's runner image.
+ * What the boot preflight concluded about ONE of this deployment's pull paths.
  *
  * Four arms, and the split between the last two is the whole reason this is not
  * a boolean: `unpullable` is a DEFINITE registry refusal that no amount of
  * waiting fixes, while `indeterminate` means the probe could not reach the
  * registry at all. Only the first fails the health check loudly — see
  * `system.daily-health-check`.
+ *
+ * ⚠️ IT DESCRIBES ONE IMAGE, AND THAT IS DELIBERATE (MOTIR-2030). `reference` is
+ * a single string, so the fleet's SECOND pull path gets its own verdict rather
+ * than widening this one. See {@link verifyIndexFleetBootable} for why a
+ * per-path verdict is the honest shape.
  */
 export type FleetBootableVerdict =
   /** The registry served the manifest anonymously. A Fly Machine can boot it. */
@@ -224,6 +229,20 @@ export async function verifyFleetBootable(): Promise<FleetBootableVerdict> {
     };
   }
 
+  return probeToVerdict(image);
+}
+
+/**
+ * One pull path's probe, mapped onto the verdict's three non-trivial arms.
+ *
+ * Shared by both preflights (MOTIR-2030) so the two paths cannot drift in what
+ * `unpullable` vs `indeterminate` MEANS — which is the one distinction the
+ * health check branches on, and therefore the one a second copy would eventually
+ * get subtly wrong. The `not_applicable` arm is NOT here: it is decided from
+ * CONFIGURATION, before there is an image to probe, and each path decides it
+ * differently.
+ */
+async function probeToVerdict(image: string): Promise<FleetBootableVerdict> {
   const probe = await probeImagePull(image);
   if (probe.pullable === true) {
     return { verdict: 'bootable', reference: probe.reference, digest: probe.digest };
@@ -236,6 +255,68 @@ export async function verifyFleetBootable(): Promise<FleetBootableVerdict> {
     };
   }
   return { verdict: 'indeterminate', reference: probe.reference, detail: probe.detail };
+}
+
+/**
+ * CAN THIS DEPLOYMENT BOOT AN INDEX CONTAINER? — the INDEXER image's own
+ * preflight (MOTIR-2030), and the twin of {@link verifyFleetBootable}.
+ *
+ * ⚠️ A SECOND PULL PATH NEEDS A SECOND PREFLIGHT, AND THE ADR SAYS SO IN THOSE
+ * WORDS. `docs/decisions/fleet-image-pull.md` §5 lists three constraints on the
+ * indexer's mirror and the third is this one verbatim: *"It is a second pull
+ * path. The fleet then has two, and each needs §6's preflight independently."*
+ * Before MOTIR-1989 there was one image and `verifyFleetBootable()` covered the
+ * fleet; after it there are two, with two registries, two release lanes and two
+ * failure modes — and the indexer's was probed by nothing.
+ *
+ * ⚠️ AND IT IS THE PATH MORE LIKELY TO GO MISSING. §5's second constraint:
+ * `registry.fly.io` garbage-collects UNREFERENCED images ("we clean old ones up
+ * after a few days"), and the reading that a live Machine's image is immune is
+ * precisely the wrong shape for a fleet whose machines are ephemeral by design —
+ * between jobs, nothing references it. Fly publishes no retention SLA, so this
+ * cannot be reasoned away; §6 names the preflight as "what turns a GC'd image
+ * into a loud failure instead of an outage."
+ *
+ * ⚠️ WHY A SEPARATE FUNCTION RATHER THAN A WIDER VERDICT.
+ * {@link FleetBootableVerdict} is single-image by construction, and the two paths
+ * genuinely fail independently: the CI runner can be perfectly pullable on a
+ * deployment whose indexer image was collected last night. One verdict covering
+ * both would have to pick which reference to name, and the operator surface is a
+ * MESSAGE — naming the wrong image is worse than naming none.
+ *
+ * NEVER THROWS, for the reason its twin does not: the caller is a health check.
+ */
+export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> {
+  if (selectedOrchestratorProvider() === 'fake') {
+    return {
+      verdict: 'not_applicable',
+      detail: 'the fake orchestrator is selected; no image is pulled',
+    };
+  }
+  let image: string;
+  try {
+    // ⚠️ THE ACCESSOR, NOT THE PREDICATE — the same choice, for the same reason,
+    // its twin makes over `isFlyFleetConfigured()`: `indexFleetConfig()` is what
+    // would actually be used to boot an index container, so consulting it here
+    // leaves no way for the preflight and the boot to disagree about what
+    // "configured" means. It also folds BOTH not-applicable shapes into one
+    // branch — no fleet at all, and a fleet with no indexer image.
+    image = indexFleetConfig().image;
+  } catch {
+    // ⚠️ `not_applicable`, NEVER `unpullable`. A deployment that runs CI but has
+    // not wired `MOTIR_INDEXER_IMAGE` is a deployment that does not INDEX — not a
+    // broken one — and reporting it as a registry refusal would fail a daily
+    // health check over a feature nobody enabled. That is the false alarm that
+    // teaches an operator to ignore the row, which is how the next MOTIR-1980
+    // gets missed. `isIndexFleetConfigured()` is what keeps such a deployment out
+    // of the index path; this is the preflight agreeing with it.
+    return {
+      verdict: 'not_applicable',
+      detail: 'this deployment is not configured to run index containers',
+    };
+  }
+
+  return probeToVerdict(image);
 }
 
 export * from './types';

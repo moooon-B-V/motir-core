@@ -4,7 +4,11 @@ import {
   parseImageReference,
   probeImagePull,
 } from '@/lib/orchestrator/imagePull';
-import { OrchestratorImageUnpullableError, verifyFleetBootable } from '@/lib/orchestrator';
+import {
+  OrchestratorImageUnpullableError,
+  verifyFleetBootable,
+  verifyIndexFleetBootable,
+} from '@/lib/orchestrator';
 
 // THE FLEET BOOT PREFLIGHT (Story MOTIR-1916 · MOTIR-2006) — §6.1 + §7 of
 // `docs/decisions/fleet-image-pull.md`.
@@ -523,6 +527,171 @@ describe('verifyFleetBootable — §7: the predicate `isFlyFleetConfigured()` de
     vi.stubGlobal('fetch', fetchSpy);
 
     await expect(verifyFleetBootable()).resolves.toMatchObject({ verdict: 'not_applicable' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── THE INDEXER IMAGE'S OWN PREFLIGHT (MOTIR-2030) ───────────────────────────
+//
+// `docs/decisions/fleet-image-pull.md` §5's third constraint, in one sentence:
+// "It is a second pull path. The fleet then has two, and each needs §6's
+// preflight independently." MOTIR-1989 added the second path; until now
+// `verifyFleetBootable()` probed one image and the indexer's was checked by
+// nothing.
+//
+// §5's SECOND constraint is why this is the path that matters most:
+// `registry.fly.io` garbage-collects UNREFERENCED images, and a fleet whose
+// machines are ephemeral by design references nothing between jobs. So the image
+// more likely to vanish was the one with no assertion over it — the MOTIR-1980
+// shape ("every predicate answers configured") re-opened one workload over.
+//
+// The fixtures below give the two paths DIFFERENT references on purpose. A test
+// where both images are the same string would pass for a preflight that probed
+// the runner's image twice, which is precisely the bug being fixed.
+
+const INDEXER_IMAGE =
+  'registry.fly.io/motir-ci-fleet/motir-indexer@sha256:9f2c1ab4de77c0138a6d5e4b2f0c9a7318e4d6b5c2019fae83d7c4b6e5109a2d';
+
+/** The Fly registry's challenge, scoped to the INDEXER repository — so a probe
+ *  that asked about the runner instead would be visibly asking the wrong one. */
+const FLY_CHALLENGE =
+  'Bearer realm="https://registry.fly.io/token",service="registry.fly.io",scope="repository:motir-ci-fleet/motir-indexer:pull"';
+
+describe('verifyIndexFleetBootable — §5.3: the fleet has TWO pull paths, and each needs its own preflight', () => {
+  /** A cloud deployment wired for CI. `indexerImage` omitted = indexing not
+   *  wired, which is the state the `not_applicable` arm exists for. */
+  function stubIndexEnv(indexerImage?: string) {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', PUBLIC_IMAGE);
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', indexerImage ?? '');
+  }
+
+  /** A registry that serves the manifest to a bearer, and hands out an anonymous
+   *  token only for the repositories named. Mirrors `ghcrLike`, over the Fly
+   *  challenge the indexer's mirror actually returns. */
+  function flyLike(publicRepos: string[]) {
+    return vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
+      const url = new URL(String(rawUrl));
+      if (url.pathname === '/token') {
+        const scope = url.searchParams.get('scope') ?? '';
+        return publicRepos.some((repo) => scope.includes(repo))
+          ? json(200, { token: 'anon-pull-token' })
+          : json(401, { errors: [{ code: 'UNAUTHORIZED', message: 'authentication required' }] });
+      }
+      const auth = (init?.headers as Record<string, string> | undefined)?.['authorization'];
+      return auth
+        ? json(200, {}, { 'docker-content-digest': 'sha256:9f2c1ab4' })
+        : json(401, {}, { 'www-authenticate': FLY_CHALLENGE });
+    });
+  }
+
+  it("probes the INDEXER image — not the runner's — and answers `bootable`", async () => {
+    stubIndexEnv(INDEXER_IMAGE);
+    const fetchSpy = flyLike(['motir-ci-fleet/motir-indexer']);
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(verifyIndexFleetBootable()).resolves.toEqual({
+      verdict: 'bootable',
+      reference: INDEXER_IMAGE,
+      digest: 'sha256:9f2c1ab4',
+    });
+    // The manifest call went to Fly's registry for the indexer's repository. A
+    // preflight that re-probed `MOTIR_RUNNER_IMAGE` would have hit ghcr.io.
+    // ⚠️ Compare the parsed HOST, never a substring of the URL: `ghcr.io` can
+    // appear in a path or query of a request to somewhere else entirely, so a
+    // substring test both under- and over-matches (CodeQL
+    // `js/incomplete-url-substring-sanitization`).
+    const hosts = fetchSpy.mock.calls.map((c) => new URL(String(c[0])).host);
+    expect(hosts).toContain('registry.fly.io');
+    expect(hosts).not.toContain('ghcr.io');
+  });
+
+  it('answers `unpullable` naming the INDEXER reference — §5.2 GC is the likeliest cause', async () => {
+    // The garbage-collected mirror, caught. `absent` is exactly what a registry
+    // says about a digest it has cleaned up.
+    stubIndexEnv(INDEXER_IMAGE);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (rawUrl: string): Promise<Response> => {
+        const url = new URL(String(rawUrl));
+        if (url.pathname === '/token') return json(200, { token: 'anon-pull-token' });
+        return json(404, { errors: [{ code: 'MANIFEST_UNKNOWN' }] });
+      }),
+    );
+
+    const verdict = await verifyIndexFleetBootable();
+
+    expect(verdict.verdict).toBe('unpullable');
+    // ⚠️ THE INDEXER'S reference, never the runner's. The operator surface is a
+    // message; naming the wrong image sends the fix to the wrong registry.
+    expect(verdict).toMatchObject({ reference: INDEXER_IMAGE });
+    expect((verdict as { reference: string }).reference).not.toBe(PUBLIC_IMAGE);
+    expect((verdict as { detail: string }).detail).toContain('registry.fly.io');
+    expect((verdict as { detail: string }).detail).toContain('absent');
+  });
+
+  it('answers `indeterminate` — NOT `unpullable` — when the registry cannot be reached', async () => {
+    // The same boundary its twin holds: a transport failure is never a claim
+    // about the image.
+    stubIndexEnv(INDEXER_IMAGE);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('getaddrinfo ENOTFOUND registry.fly.io');
+      }),
+    );
+
+    await expect(verifyIndexFleetBootable()).resolves.toMatchObject({
+      verdict: 'indeterminate',
+      reference: INDEXER_IMAGE,
+    });
+  });
+
+  it('answers `not_applicable` when MOTIR_INDEXER_IMAGE is UNSET on a working CI deployment', async () => {
+    // ⚠️ THE ARM THIS CARD EXISTS FOR. A deployment that runs CI but has not
+    // wired the indexer simply does not INDEX — it is not broken — and reporting
+    // it `unpullable` would fail a daily health check over a feature nobody
+    // enabled. That false alarm is what teaches an operator to ignore the row,
+    // which is how the next MOTIR-1980 gets missed.
+    stubIndexEnv(); // fleet fully configured; only the indexer image is absent
+    const fetchSpy = vi.fn(async () => json(200, {}));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const verdict = await verifyIndexFleetBootable();
+
+    expect(verdict.verdict).toBe('not_applicable');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // And the RUNNER path on the very same deployment is unaffected — the two
+    // verdicts are independent, which is the whole point of splitting them.
+    vi.stubGlobal('fetch', flyLike([]));
+    await expect(verifyFleetBootable()).resolves.toMatchObject({ verdict: 'unpullable' });
+  });
+
+  it('answers `not_applicable` on the fake adapter, and touches no network', async () => {
+    // `indexFleetConfig()` returns a well-formed fake DIGEST under the fake
+    // adapter, so a preflight that probed it unconditionally would try to reach
+    // a registry for `motir/indexer@sha256:fake`. It must not.
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', INDEXER_IMAGE);
+    const fetchSpy = vi.fn(async () => json(200, {}));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(verifyIndexFleetBootable()).resolves.toMatchObject({ verdict: 'not_applicable' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('answers `not_applicable` on an UNWIRED deployment — a self-hosted build is not a fault', async () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    vi.stubEnv('FLY_FLEET_APP', '');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
+    const fetchSpy = vi.fn(async () => json(200, {}));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(verifyIndexFleetBootable()).resolves.toMatchObject({ verdict: 'not_applicable' });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
