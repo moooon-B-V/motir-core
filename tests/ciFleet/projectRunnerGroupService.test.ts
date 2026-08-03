@@ -19,6 +19,10 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
+import {
+  createActionsVariableFake,
+  type ActionsVariableFake,
+} from '../helpers/actionsVariableFake';
 
 // The PER-PROJECT RUNNER GROUP over real Postgres (Story MOTIR-1916 · MOTIR-1972
 // · `docs/decisions/ci-runner-fleet.md` §7.3).
@@ -63,6 +67,7 @@ let existingRepos: Map<string, number>;
 let refusals: Map<string, number>;
 let nextRepoId: number;
 let runnerGroups: RunnerGroupFake;
+let actionsVariables: ActionsVariableFake;
 /** Awaited inside the access-list PUT — the concurrency seam (test 5). */
 let beforeRepositoriesPut: ((groupId: number, ids: number[]) => Promise<void>) | null;
 
@@ -94,6 +99,14 @@ function installGitHub(): void {
       }
       const group = await runnerGroups.handle(u, method, body);
       if (group) return group;
+
+      // The org's FLEET RUNNER VARIABLE (MOTIR-2015) — establishing a repository
+      // now ensures `MOTIR_RUNNER`, so this suite's GitHub has to know about those
+      // endpoints too. The service swallows its own failures by contract, so an
+      // unfaked call here would be INVISIBLE rather than loud: green, silent, and
+      // no longer describing what the product does.
+      const variable = actionsVariables.handle(u, method, body);
+      if (variable) return variable;
 
       if (
         method === 'POST' &&
@@ -156,6 +169,7 @@ beforeEach(async () => {
   refusals = new Map();
   nextRepoId = 910_001;
   beforeRepositoriesPut = null;
+  actionsVariables = createActionsVariableFake(MOTIR_ORG);
   runnerGroups = createRunnerGroupFake(MOTIR_ORG, {
     beforeRepositoriesPut: (groupId, ids) => beforeRepositoriesPut?.(groupId, ids),
   });

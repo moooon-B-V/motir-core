@@ -25,6 +25,10 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
+import {
+  createActionsVariableFake,
+  type ActionsVariableFake,
+} from '../helpers/actionsVariableFake';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -95,6 +99,7 @@ interface GithubCall {
 
 let githubCalls: GithubCall[];
 let runnerGroups: RunnerGroupFake;
+let actionsVariables: ActionsVariableFake;
 let captured: { events: CapturedJobEvent[]; restore: () => void };
 /** The `workflow_run` jobs payload the minute meter reads. Set per test. */
 let jobsBody: unknown;
@@ -291,6 +296,7 @@ beforeEach(async () => {
   mintedRunnerSeq = 0;
   jobsBody = null;
   creditBalance = 1_000;
+  actionsVariables = createActionsVariableFake(MOTIR_ORG);
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
 
   // The fleet is CONFIGURED and this is a CLOUD deployment — the two conditions
@@ -324,6 +330,14 @@ beforeEach(async () => {
 
       const group = await runnerGroups.handle(call.url, call.method, call.body);
       if (group) return group;
+
+      // The org's FLEET RUNNER VARIABLE (MOTIR-2015) — establishing a repository
+      // now ensures `MOTIR_RUNNER`, so this suite's GitHub has to know about those
+      // endpoints too. The service swallows its own failures by contract, so an
+      // unfaked call here would be INVISIBLE rather than loud: green, silent, and
+      // no longer describing what the product does.
+      const variable = actionsVariables.handle(call.url, call.method, call.body);
+      if (variable) return variable;
 
       if (call.url.endsWith(`/orgs/${MOTIR_ORG}/installation`)) return json(200, { id: 556677 });
       if (call.url.includes('/access_tokens')) {

@@ -61,11 +61,30 @@ import {
 //     RUN's own repository owner, so a transferred repo stops being metered with
 //     no branch here at all. There is an assertion for that, deliberately, and no
 //     code — the test is what keeps the property from being quietly lost.
-//   * rewrite workflow files. §N has the starters select their runner via
-//     `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}`, and `MOTIR_RUNNER`
-//     is simply absent in the user's account — so a handed-over repo falls back to
-//     GitHub-hosted runners by construction, with nothing for this card to
-//     remember to do.
+//   * rewrite workflow files, OR UNSET `MOTIR_RUNNER`. §N has the starters select
+//     their runner via `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}`, and
+//     `MOTIR_RUNNER` is simply absent in the user's account — so a handed-over repo
+//     falls back to GitHub-hosted runners by construction, with nothing for this
+//     card to remember to do.
+//
+//     ⚠️ THAT IS TRUE BECAUSE THE VARIABLE IS WRITTEN AT **ORG** SCOPE, and it is
+//     the reason MOTIR-2015 chose org over repo (ADR §N.1). An ORGANIZATION
+//     variable is a property of the ORG: the transfer moves the repository OUT of
+//     `motir-projects`, so it stops resolving `motir-projects`' variables the
+//     instant the move lands — no call, no ordering constraint, nothing to retry.
+//     A REPOSITORY variable would be the opposite. It travels WITH the repository
+//     and takes PRECEDENCE over the org's, so a handed-over repo would keep asking
+//     for `motir-runner` in an account where no runner will ever register, and
+//     every job in it would queue until GitHub expires it at 24 hours. Unsetting it
+//     would then have to happen HERE, ordered BEFORE the transfer for the same
+//     reason §G orders the Actions re-enable before it — after the move the
+//     provisioning App no longer reaches the repository, so a missed unset would be
+//     permanent. **So if a future card ever introduces a repository-scoped
+//     `MOTIR_RUNNER` (§7.3's per-project-label fallback, if the runner-group
+//     ceiling binds), the unset belongs in this saga, in the same diff.**
+//     `lib/github/actionsVariables.ts` deliberately ships no repo-scoped writer so
+//     that cannot happen by accident, and `projectRepoTakeoverService.test.ts`
+//     asserts this path makes no Actions-variable call at all.
 
 /** How far a takeover got. Returned for the surface + the tests; never thrown. */
 export interface TakeoverOutcome {

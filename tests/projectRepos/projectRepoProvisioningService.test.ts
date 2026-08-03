@@ -12,6 +12,7 @@ import {
   _setReadinessPollForTests,
 } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
 import {
   SEED_SOURCE_INITIALISED,
   SEED_SOURCE_PLATFORM_STARTER,
@@ -20,6 +21,10 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
+import {
+  createActionsVariableFake,
+  type ActionsVariableFake,
+} from '../helpers/actionsVariableFake';
 
 // The repo-CREATION primitive over real Postgres (Story MOTIR-1775 · MOTIR-1781).
 //
@@ -63,6 +68,7 @@ let nextRepoId: number;
 /** The project's own GitHub runner group (MOTIR-1972) — establishing a
  *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
 let runnerGroups: RunnerGroupFake;
+let actionsVariables: ActionsVariableFake;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -102,6 +108,14 @@ function installGitHub(): void {
       // REAL, so the establish path under test runs the code it really runs.
       const group = await runnerGroups.handle(u, method, body);
       if (group) return group;
+
+      // The org's FLEET RUNNER VARIABLE (MOTIR-2015) — establishing a repository
+      // now ensures `MOTIR_RUNNER`, so this suite's GitHub has to know about those
+      // endpoints too. The service swallows its own failures by contract, so an
+      // unfaked call here would be INVISIBLE rather than loud: green, silent, and
+      // no longer describing what the product does.
+      const variable = actionsVariables.handle(u, method, body);
+      if (variable) return variable;
       // Create — either endpoint. The template endpoint names the NEW repo in the
       // body, exactly as the real one does.
       if (
@@ -174,6 +188,7 @@ beforeEach(async () => {
   existingRepos = new Map();
   refusals = new Map();
   nextRepoId = 900_001;
+  actionsVariables = createActionsVariableFake(MOTIR_ORG);
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
@@ -341,12 +356,14 @@ describe('PARTIAL FAILURE is the main event', () => {
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
     const createsBefore = calls.filter(
-      // Runner-group creates are POSTs too (MOTIR-1972) and are not repository
-      // creates — the count this asserts is about repositories.
+      // Runner-group creates (MOTIR-1972) and the fleet runner VARIABLE's create
+      // (MOTIR-2015) are POSTs too, and neither is a repository create — the count
+      // this asserts is about repositories.
       (c) =>
         c.method === 'POST' &&
         !c.url.includes('access_tokens') &&
-        !c.url.includes('/actions/runner-groups'),
+        !c.url.includes('/actions/runner-groups') &&
+        !c.url.includes('/actions/variables'),
     );
     expect(createsBefore).toHaveLength(2); // web ok, api refused
 
@@ -360,12 +377,14 @@ describe('PARTIAL FAILURE is the main event', () => {
     ]);
     // Exactly ONE more create call: the settled row was not asked for again.
     const createsAfter = calls.filter(
-      // Runner-group creates are POSTs too (MOTIR-1972) and are not repository
-      // creates — the count this asserts is about repositories.
+      // Runner-group creates (MOTIR-1972) and the fleet runner VARIABLE's create
+      // (MOTIR-2015) are POSTs too, and neither is a repository create — the count
+      // this asserts is about repositories.
       (c) =>
         c.method === 'POST' &&
         !c.url.includes('access_tokens') &&
-        !c.url.includes('/actions/runner-groups'),
+        !c.url.includes('/actions/runner-groups') &&
+        !c.url.includes('/actions/variables'),
     );
     expect(createsAfter).toHaveLength(3);
     expect(await db.githubRepo.count()).toBe(2);
@@ -423,6 +442,72 @@ describe('PARTIAL FAILURE is the main event', () => {
     const mirrored = await db.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } });
     expect(mirrored.workspaceId).toBe(other.workspaceId);
     expect(await db.githubRepo.count()).toBe(1);
+  });
+});
+
+describe('the fleet runner variable (MOTIR-2015)', () => {
+  it('ensures MOTIR_RUNNER on the ORG before any repository exists', async () => {
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'web', 'acme-web');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // The variable a scaffolded repo's `runs-on` reads. Without it every
+    // `${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` resolves to `ubuntu-latest`,
+    // no queued job's labels name the fleet, and `isMotirFleetJob` refuses every
+    // job that will ever exist — the defect this card was filed for.
+    expect(actionsVariables.variables.get(MOTIR_RUNNER_VARIABLE)).toEqual({
+      name: MOTIR_RUNNER_VARIABLE,
+      value: MOTIR_RUNNER_LABEL,
+      visibility: 'private',
+    });
+
+    // BEFORE the repository, not after: an initialised row's CI-stub commit is a
+    // push, which queues a job seconds after the repo appears. A variable written
+    // afterwards would leave a project's very first job on GitHub-hosted.
+    const firstVariableCall = calls.findIndex((c) => c.url.includes('/actions/variables'));
+    const firstRepoCreate = calls.findIndex(
+      (c) => c.method === 'POST' && (c.url.includes('/generate') || c.url.endsWith('/repos')),
+    );
+    expect(firstVariableCall).toBeGreaterThanOrEqual(0);
+    expect(firstVariableCall).toBeLessThan(firstRepoCreate);
+  });
+
+  it('is ORG-scoped, never per repository — the property the handover rests on', async () => {
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'web', 'acme-web');
+    await addRow(fx, 'api', 'acme-api');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // A REPOSITORY variable would travel with the repo through MOTIR-711's
+    // transfer and take precedence over the org's, leaving a handed-over repo
+    // asking for a runner nobody will boot — every job queued until GitHub expires
+    // it at 24h. Two rows, and still not one repo-scoped variable call.
+    const variableCalls = calls.filter((c) => c.url.includes('/actions/variables'));
+    expect(variableCalls.length).toBeGreaterThan(0);
+    for (const call of variableCalls) {
+      expect(call.url).toContain(`/orgs/${MOTIR_ORG}/actions/variables`);
+      expect(call.url).not.toContain('/repos/');
+    }
+    // ...and it is ensured once for the RUN, not once per row.
+    expect(actionsVariables.writeCalls()).toHaveLength(1);
+  });
+
+  it('a GitHub refusal never fails an establishment — the repository still lands', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'web', 'acme-web');
+    actionsVariables.failWith(403, 5);
+
+    const result = await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // ADR §4.2: a created repository cannot be rolled back, so nothing about the
+    // fleet may turn a settled row into a failed one. Its CI simply runs
+    // GitHub-hosted — exactly what the `|| 'ubuntu-latest'` fallback is for — until
+    // a later establishment re-runs the ensure.
+    expect(result.rows[0]).toMatchObject({ outcome: 'created' });
+    expect(result.rows[0]!.row?.state).toBe('created');
   });
 });
 

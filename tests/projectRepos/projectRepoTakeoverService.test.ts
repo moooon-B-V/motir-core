@@ -284,6 +284,32 @@ afterAll(async () => {
 
 // ── §G — the ORDER of the two host calls ────────────────────────────────────
 
+describe('the runner variable needs no unset — the ORG scope is the mechanism (MOTIR-2015)', () => {
+  it('makes NO Actions-variable call on the handover path, and needs none', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    const { rowId } = await motirOwnedRow(fx, 'acme-web');
+
+    await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
+
+    // §N.1. `MOTIR_RUNNER` is an ORGANIZATION variable, so it is a property of
+    // `motir-projects` and not of the repository: the transfer moves the repo OUT
+    // of the org, it stops resolving the org's variables the instant the move
+    // lands, `vars.MOTIR_RUNNER` is empty in the new owner's account, and
+    // `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` falls back on its own.
+    //
+    // This asserts the ABSENCE deliberately, because the absence is the design.
+    // A REPOSITORY variable would travel with the repo and take PRECEDENCE, so the
+    // handed-over repo would keep asking for `motir-runner` in an account where no
+    // runner will ever register — and a job nobody can serve does not fail, it
+    // QUEUES until GitHub expires it at 24 hours. If a future card ever introduces
+    // a repo-scoped `MOTIR_RUNNER` (§7.3's per-project-label fallback), this test
+    // is what will fail, and the unset belongs in this saga, ordered BEFORE the
+    // transfer for the same reason §G orders the Actions re-enable before it.
+    expect(calls.filter((c) => c.url.includes('/actions/variables'))).toEqual([]);
+  });
+});
+
 describe('the Actions re-enable', () => {
   it('happens BEFORE the transfer — the ordering §G makes binding', async () => {
     // The whole point: once the repo leaves Motir's org, the provisioning App's
