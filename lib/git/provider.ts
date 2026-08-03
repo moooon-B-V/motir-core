@@ -1,3 +1,4 @@
+import { RepoTarballUrlUnsupportedError } from './errors';
 import type {
   ChangeRequestLifecycle,
   GitProviderId,
@@ -73,6 +74,46 @@ export interface GitProvider {
     name: string,
     ref: string,
   ): Promise<ArrayBuffer>;
+
+  /**
+   * Resolve the host's PRE-SIGNED archive URL for a repo at `ref` — **without
+   * downloading the body** (MOTIR-1989).
+   *
+   * ⚠️ OPTIONAL, and for the same structural reason the metering reads below are:
+   * a method every host genuinely backs is required here; one only some hosts can
+   * back is DECLARED, never mandated. GitHub 302-redirects
+   * `/repos/{owner}/{name}/tarball/{ref}` to a `codeload.github.com` URL whose
+   * SIGNED QUERY STRING is the whole authorization, so the resolved URL is
+   * self-authorizing and single-repo. GitLab's archive endpoint streams the bytes
+   * against a `PRIVATE-TOKEN` header instead — there is no self-authorizing URL to
+   * hand out, so it does not implement this, and a stub would model a capability
+   * its host does not have.
+   *
+   * ⚠️ WHAT THIS IS FOR, so the contract is not weakened by accident. The resolved
+   * URL is handed to a fleet CONTAINER that holds no GitHub credential at all
+   * (`docs/decisions/code-graph-index-fleet.md` §10). Handing over the URL leaks
+   * nothing and is strictly LESS privilege than an installation token, which would
+   * grant repo-wide API access for its lifetime — but that is true only because the
+   * URL is short-lived and scoped to one repo. An implementation that returned a
+   * long-lived or org-wide URL, or that appended a token to it, would break the
+   * decision this capability exists to satisfy.
+   *
+   * Implementations MUST bound the request with {@link REPO_TARBALL_TIMEOUT_MS},
+   * MUST NOT read the response body, and MUST throw a typed `RepoTarballUrlError`
+   * (`lib/git/errors.ts`) rather than returning an empty or partial URL: a falsy
+   * URL would reach a container spec and fail there, blaming the repo for a defect
+   * in the dispatcher.
+   *
+   * Resolve it through {@link requireRepoTarballUrlResolver}, never by reading this
+   * property directly — that helper is what turns "this host cannot" into a loud
+   * refusal instead of a silent fallback to {@link GitProvider.fetchRepoTarball}.
+   */
+  resolveRepoTarballUrl?(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<string>;
 
   /**
    * Fetch an installation's account (login + type) from the host, given only the
@@ -175,4 +216,35 @@ export interface GitProvider {
     month: number,
     token: string,
   ): Promise<NormalizedComputeUsageLine[]>;
+}
+
+/** What {@link requireRepoTarballUrlResolver} hands back — the capability, bound
+ *  to its provider, with the optionality already discharged. */
+export type RepoTarballUrlResolver = (
+  installationId: string,
+  owner: string,
+  name: string,
+  ref: string,
+) => Promise<string>;
+
+/**
+ * The provider's tarball-URL resolver, or a LOUD refusal (MOTIR-1989).
+ *
+ * ⚠️ THIS FUNCTION IS THE POINT OF MAKING THE CAPABILITY OPTIONAL. An optional
+ * method invites `provider.resolveRepoTarballUrl?.(…) ?? somethingElse`, and the
+ * `somethingElse` a caller reaches for is `fetchRepoTarball` — which buffers a
+ * whole repo into the function's heap, i.e. exactly the OOM
+ * (`docs/decisions/code-graph-index-fleet.md` §2: `motir-core`, 5/5 attempts) that
+ * moving indexing onto containers exists to remove. So there is one way to reach
+ * the capability and it either returns it or throws.
+ *
+ * It mirrors `projectRunnerGroupService.requireRunnerGroupId` and
+ * `getOrchestrator()`: a nullable return invites a lenient fallback at the call
+ * site, and the lenient fallback here is silently doing the expensive, failing
+ * thing while reporting success.
+ */
+export function requireRepoTarballUrlResolver(provider: GitProvider): RepoTarballUrlResolver {
+  const resolve = provider.resolveRepoTarballUrl;
+  if (!resolve) throw new RepoTarballUrlUnsupportedError(provider.id);
+  return resolve.bind(provider);
 }
