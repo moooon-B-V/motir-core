@@ -57,10 +57,17 @@ jobs:
       # a layer that cannot work on arm64 fails the build rather than shipping.
       - uses: docker/setup-qemu-action@v3
         if: ${{ inputs.publish }}
+        with:
+          # Mirror-first for the same reason as the builder below — binfmt is
+          # one more anonymous Docker Hub pull that can kill a RELEASE run
+          # before any build starts (MOTIR-2018).
+          image: mirror.gcr.io/tonistiigi/binfmt:latest
       # buildx + the gha layer cache: the apt/gh layers are identical across
       # every run and across the profile matrix below, so only the layers this
-      # commit actually changed are rebuilt.
-      - uses: docker/setup-buildx-action@v3
+      # commit actually changed are rebuilt. Mirror-first (MOTIR-2018): the
+      # builder image, the `# syntax=` frontend and this Dockerfile's `FROM
+      # node:…` base all come from a mirror rather than Docker Hub anonymously.
+      - uses: ./.github/actions/buildx
       - name: Build the base image
         uses: docker/build-push-action@v6
         with:
@@ -163,7 +170,9 @@ jobs:
       # only on the release lane, where a multi-arch push actually happens.
       - uses: docker/setup-qemu-action@v3
         if: ${{ inputs.publish }}
-      - uses: docker/setup-buildx-action@v3
+        with:
+          image: mirror.gcr.io/tonistiigi/binfmt:latest
+      - uses: ./.github/actions/buildx
       - name: Build with AGENT=${{ matrix.profile.id }}
         uses: docker/build-push-action@v6
         with:

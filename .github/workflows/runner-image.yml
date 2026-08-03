@@ -66,7 +66,10 @@ jobs:
       - name: Assert the sources
         run: infra/ci-runner/smoke/assert-image.sh --sources
 
-      - uses: docker/setup-buildx-action@v3
+      # Mirror-first — a bare `setup-buildx-action` pulls its builder, the
+      # `# syntax=` frontend, and this image's `FROM ubuntu@…` base anonymously
+      # from Docker Hub, and dies in ~30 s when Hub blips (MOTIR-2018).
+      - uses: ./.github/actions/buildx
 
       # linux/amd64 only — Fly Machines are x86-64 and the fleet runs in `iad`
       # (§8, §11). No QEMU leg, unlike the sandbox matrix.
