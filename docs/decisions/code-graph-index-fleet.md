@@ -1,0 +1,489 @@
+# Indexing the code graph on the container fleet
+
+**Status:** accepted · **Date:** 2026-08-03 · **Card:** MOTIR-1987 (Story MOTIR-1981 — index
+the code graph on the fleet orchestrator) · **Implemented by:** MOTIR-1986, MOTIR-1988,
+MOTIR-1989, MOTIR-1990, MOTIR-1995 · **Evidence pinned at:** `motir-core` `origin/main` @
+`7df65d66` · `motir-ai` `origin/main` @ `a4bc960`
+
+`docs/decisions/ci-runner-fleet.md` decided that Motir runs its own container fleet and what
+isolates the containers on it. This record decides the **second workload** to land on that
+fleet — the **code-graph index** — and, in doing so, generalizes two of that document's
+arguments from "CI runners" to "every container Motir boots."
+
+This is a `decision` card: **it fixes shapes and ships no behaviour.** Per `notes.html` #50 —
+_a decision card is not an implementation_ — **nothing described here is a precondition any
+sibling card may assume is present.** §12 names which card wires each part.
+
+---
+
+## §0 — What this record is, and the one rule for reading it
+
+Nine decisions, all settled at plan time on MOTIR-1981 (2026-08-02) with their evidence. This
+document is their durable home, because a work-item description is not where an architecture
+lives: sibling cards cite this by path instead of each carrying the argument in its own body.
+It **records** those decisions. It does not re-open them.
+
+**It records the REJECTED alternatives with equal weight, and that is the point.** Three of
+the nine were **proposed, pinned, and then reversed** during a single day's planning. An
+argument that was strong enough to win once is strong enough to be re-proposed by the next
+reader, and a record that lists only winners cannot tell that reader whether their idea was
+rejected or simply never considered. §3.1, §5.1 and §8.1 are those three.
+
+**Two corrections to the source card's own rationale are recorded inline**, because verifying
+the evidence is what an ADR is for and the alternative is a document that reads as settled
+while resting on a false premise:
+
+- **§7.2** — the card justified the shared spend exposure as "one org means one provider spend
+  cap … the provider cap is a backstop." **There is no provider spend cap.** Fly offers
+  neither a cap nor a billing alert (`ci-runner-fleet.md` §9), and MOTIR-1997 has already
+  shipped the product-side ceiling that actually holds the invoice.
+- **§8.3** — the card rejected production-placement partly because the per-workspace admission
+  cap "bounds `moooon` like any tenant." The **shipped** per-tenant CI cap **exempts** the meta
+  org (`PROJECT_IN_FLIGHT_CAPS.meta = null`). MOTIR-1990 must not copy that exemption, or the
+  rejection loses its support.
+
+Neither changes a decision. Both change what the decision is allowed to claim.
+
+## §1 — The nine decisions, in one table
+
+| #   | Decision                                                                                    | Where                  |
+| --- | ------------------------------------------------------------------------------------------- | ---------------------- |
+| 1   | Indexing runs in a **container on the `ContainerOrchestrator` port**, not a Vercel function | [§2](#2--decision-1)   |
+| 2   | Containers run in the **shared `motir-fleet` org** — not production, not a per-workload org | [§3](#3--decision-2)   |
+| 3   | Isolation comes from **credential scope**, not org count                                    | [§4](#4--decision-3)   |
+| 4   | The **container builds** the graph; motir-ai is **control plane only**                      | [§5](#5--decision-4)   |
+| 5   | **One container per REPO**, forced by the shipped ledger contract                           | [§6](#6--decision-5)   |
+| 6   | The concurrency cap lives in the **orchestrator's admission control**                       | [§7](#7--decision-6)   |
+| 7   | The **META org runs indexing on the fleet**, exactly like a customer                        | [§8](#8--decision-7)   |
+| 8   | `isMeta` bypasses the **CHARGE** — not the placement and **not the meter**                  | [§9](#9--decision-8)   |
+| 9   | The container holds **no GitHub credential**                                                | [§10](#10--decision-9) |
+
+§11 records what this deliberately does **not** change. §12 binds it to MOTIR-1981's cards.
+
+## §2 — Decision 1
+
+**Indexing runs in a container on the `ContainerOrchestrator` port, not in a Vercel function.**
+
+The old path is `system.code-graph-index`: fetch a whole repo tarball into the function's heap
+(`fetchRepoTarball` → `res.arrayBuffer()`, `lib/git/providers/github.ts:147`), POST those bytes
+to motir-ai, and have motir-ai parse them inside that one synchronous request.
+
+**Every failure of that path descends from one shape** — a whole-repo fetch and a synchronous
+build inside a memory- and time-bounded function. Measured, not characterised:
+
+| symptom                                | evidence                                                                                                                                                                                                                       | why a container removes it                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| **OOM on a large repo**                | `instance was killed because it ran out of available memory` — `motir-core`, **5/5 attempts**, 2026-08-02 (logged as MOTIR-1976, archived when this story superseded the patch)                                                | the fetch happens in a container sized for it               |
+| **180 s motir-ai deadline**            | `MOTIR_AI_INDEX_TIMEOUT_MS = 180_000` (`lib/ai/motirAiClient.ts:94`); **3 repos dead-lettered** on `MotirAiUnavailableError … within 180000ms`                                                                                 | the expensive parse leaves the synchronous call             |
+| **`maxDuration = 300`**                | `app/api/inngest/route.ts:38`; MOTIR-1974's checkpointing exists only to fit under it                                                                                                                                          | the work is not on Vercel                                   |
+| **200 MB ingress ceiling**             | `CODE_GRAPH_MAX_BODY_BYTES`, `motir-ai/src/app.ts` — recorded in `docs/decisions/code-access-for-planning.md:51`. Never reached, but structurally next                                                                         | the upload becomes an ~8–80 MB graph, not a ~350 MB tarball |
+| **tarball re-fetched PER PROJECT**     | bytes cannot cross an Inngest step boundary — see the MOTIR-1974 note in `lib/jobs/codeGraphSteps.ts`                                                                                                                          | one container fetches once and builds once                  |
+| **motir-ai is the throughput ceiling** | `indexParseGate = new Semaphore(1)` (`motir-ai/src/codegraph/indexConcurrency.ts:102`); ~**924 MB** peak RSS per index (MOTIR-1515); `fly.toml` scales on `soft_limit = 20` **requests**, which long index requests never trip | the build leaves motir-ai; capacity becomes container count |
+
+The port already exists and already has a consumer: `ContainerOrchestrator`
+(`lib/orchestrator/types.ts:155`) with `provision` / `teardown` / `describe`, the Fly adapter,
+and a `fake` adapter for tests. Indexing is its **second** consumer; Epic 9's hosted agents are
+the third.
+
+**Why this is not a fourth patch to the old path.** MOTIR-1974, MOTIR-1976 and MOTIR-1977 are
+three consecutive cards on one code path, and MOTIR-1983 logs the planning bug that no gate
+asked whether the **shape** was wrong. This is that question answered: the shape was wrong.
+
+## §3 — Decision 2
+
+**Containers run in the SHARED fleet org, `motir-fleet`** — alongside CI runners and Epic 9's
+hosted agents. **Not** the production org (`motir-ai` / `motir-gateway`), and **not** a
+per-workload org. The org was stood up and wired by MOTIR-1979; its slug is immutable, which
+is why the rename happened before anything else consumed it.
+
+### §3.1 — REJECTED: a dedicated `motir-index-fleet` org
+
+**Proposed, pinned, and then reversed on 2026-08-02.** The argument was structural and not
+obviously wrong: Fly's 6PN private network is **organization-scoped and on by default**
+(`lib/orchestrator/adapters/fly/flyMachines.ts:21-25`), so an index container holding a repo
+credential would share a network with CI containers that execute customer-authored code.
+
+**It was rejected as inconsistent with the shipped model**, on two counts:
+
+1. `motir-ci-fleet` (as it then was) **already** places tenant A's runner beside tenant B's on
+   one 6PN. A third org would harden index-vs-CI adjacency while leaving tenant-vs-tenant
+   adjacency — the larger surface — exactly as it was.
+2. `ci-runner-fleet.md` §7.5 argues only against sharing a 6PN with **production**: _"customer
+   code, inside Motir's own production network, by default."_ It does not argue for one org per
+   workload, and reading it that way over-extends it.
+
+**Recorded because the intuition will recur.** "An index container next to a CI container feels
+unsafe" is a reasonable first reaction, and it costs a Fly org, a payment method, a token, a set
+of env vars and a provisioning card (MOTIR-1984, archived) every time someone has it. §4 is the
+answer to it.
+
+## §4 — Decision 3
+
+**Isolation comes from CREDENTIAL SCOPE, not org count.**
+
+`ci-runner-fleet.md` §7.4 chose JIT configuration over a registration token for one reason,
+stated there in CI's vocabulary: a registration token _"can register **any** runner in the
+org"_, while a JIT config is _"one runner, one config, no registration capability inside the
+container."_ **What makes the fleet safe is that the container holds nothing worth stealing.**
+
+**This record generalizes that from a runner rule to a fleet rule:** _every container the fleet
+boots carries only narrowly-scoped, short-lived credentials, whatever its workload._ For
+indexing that means a **pre-signed single-repo tarball URL** (§10) and a **motir-ai token scoped
+to this run** — never a shared service token, never a DB credential, never an object-storage
+credential, never a Fly token, never a GitHub App key.
+
+**Why this is stronger than org separation, not weaker.** Org separation is a property of the
+network; credential scope is a property of the container. A third org would have defended
+index-vs-CI and nothing else. Credential scope also defends **tenant-vs-tenant** — the case org
+separation never addressed, because both tenants are in the same org either way — and it keeps
+holding if a fourth workload lands tomorrow without its own org.
+
+**Production stays separate, and for a different reason.** Not "because it is a different
+workload" but because production is **long-lived and holds the real secrets and the real DB
+reach**. A fleet container is ephemeral and holds one job's credential. That asymmetry, not the
+org count, is the boundary — which is why §7.5's separation survives this generalization intact
+rather than being generalized away.
+
+## §5 — Decision 4
+
+**The container BUILDS the graph; motir-ai is control plane only.** motir-ai mints a scoped
+upload URL and records the snapshot pointer. The **graph bytes go container → object storage
+directly** and never pass through motir-ai.
+
+**Why the delta is small.** motir-ai already separates the two halves: `graphIndexPublisher`
+builds, `graphSnapshotStore` content-hashes into object storage, and
+`codeRepoService.recordSnapshot` writes the pointer. Moving only the BUILD leaves the persist
+path where it is.
+
+**What it buys, in the units the failure modes were measured in** (§2):
+
+- The upload shrinks from a ~350 MB **tarball** to an ~8–80 MB **graph**.
+- motir-ai's **1-permit parse gate leaves the index critical path**. That gate is not a
+  conservative guess: `motir-ai/docs/decisions/codegraph-production-topology.md` §2 records the
+  measurement — the max-safe concurrent index at 512 MB was **N = 0**, a single whole-tree index
+  peaks at **924 MB RSS** with **861 MB of it off the V8 heap**, and two would stack. **One index
+  per machine is a measured ceiling, not a policy**, which is precisely why capacity has to
+  become container count rather than a bigger number in `fly.toml`.
+- No DB credential and no object-storage credential ever enter a container (§4).
+
+### §5.1 — REJECTED: the container calls motir-ai's tarball ingest route, and motir-ai builds
+
+**Pinned, then reversed.** The container would fetch the repo and POST the bytes to
+`POST /v1/code-graph/index`, leaving the parse in motir-ai. Rejected on three counts:
+
+1. **It makes the container a download proxy.** The container's whole justification is that the
+   heavy work needs a box sized for it; a container that only moves bytes has no reason to exist
+   and re-introduces the 200 MB ingress bound it was meant to escape.
+2. **It leaves `indexParseGate`'s 1-permit ceiling in the critical path** — the throughput
+   ceiling §2's last row identifies. Capacity would still be "one index at a time per motir-ai
+   machine," and the container would have bought nothing.
+3. **It falsifies §4's own rationale.** A container that parses nothing holds nothing and needs
+   no isolation argument — so the credential-scope reasoning that justifies the whole shape
+   would have had no subject.
+
+It also rested on a **false claim**: that an embedded indexer needs motir-ai's DB credential.
+motir-ai's build/persist split (above) means the container can hand over an artifact while
+holding only a run-scoped token.
+
+## §6 — Decision 5
+
+**One container per REPO.** This is not a preference; it is **forced by the shipped ledger
+contract**, in two places that already read it:
+
+- `jobRunRepository.listSucceededCodeGraphIndexRepoRefs` (`lib/repositories/jobRunRepository.ts:101`)
+  reads `output.repoRef` off each **succeeded** `system.code-graph-index` row and builds a set.
+  A run carrying no `repoRef` deliberately does not count as an index.
+- `MigrateIndexRepoDto` (`lib/dto/migrateOnboarding.ts:65`) is **one row per repo**, and
+  `MigrateIndexStatusDto.allIndexed` gates the onboarding wizard's Next button off exactly that
+  set.
+
+**So a run means "this one repoRef is indexed."** Batching N repos into one container would emit
+one `repoRef` for N repos, and the other **N−1 would read as never-indexed forever** — the sweep
+gate would never close and the wizard's rows would never all turn green.
+
+Note the same DTO already records a related limitation in its own comment: _"the ledger cannot
+tie a running row to a specific repo, so the in-flight state is aggregate, not per-repo."_
+One-container-per-repo is what keeps the **succeeded** state per-repo, which is the state both
+consumers actually gate on. **Re-modelling the ledger to allow batching is out of scope.**
+
+## §7 — Decision 6
+
+**The concurrency cap lives in the ORCHESTRATOR's admission control** — a global bound from
+config, with a per-workspace bound of `ceil(global / 2)` so one tenant cannot starve another.
+MOTIR-1990 owns it.
+
+**Not in Inngest.** Per-tenant concurrency there would need a **keyed** limit, and `defineJob`
+discards Inngest's concurrency `key`/`scope` entirely (MOTIR-1982) — so the substrate cannot
+express it today. This is why MOTIR-1981 is **not** `blocked_by` that bug: the cap is being put
+somewhere that can hold it, not waiting for the place that cannot.
+
+The shipped `concurrency: 2` on the job (`lib/jobs/definitions/codeGraphIndex.ts:35`) was never
+a tenancy control — its own comment records what it was for: five simultaneous runs against a
+scale-to-zero motir-ai whose **cold start alone took 23.3 s** on 2026-08-02, each paying it and
+none benefiting.
+
+### §7.2 — CORRECTION: there is no provider spend cap underneath any of this
+
+MOTIR-1981 justified the shared-org exposure as: _"one org means one provider spend cap, so a
+runaway in any workload could stop all three — accepted only because each workload carries its
+own in-Motir admission cap, making the provider cap a backstop rather than the operative
+control."_
+
+**The premise is false, and the conclusion is stronger without it.** `ci-runner-fleet.md` §9
+established, quoting Fly's own cost-management documentation, that **Fly offers neither a
+spending cap nor a billing alert**: _"We don't support billing alerts (yet), so budget
+accordingly"_ and _"Free allowances don't cap your bill. … there's no soft ceiling. If you go
+over, we'll bill you."_ MOTIR-1935 — the card titled _"set the fleet's provider-side spending
+cap + alerts"_ — closed with that finding: there was no cap and no alert to set.
+
+**Nothing sits underneath the product-side number.** So the layering, stated accurately:
+
+| layer                                                              | what it bounds                                  | owner                    |
+| ------------------------------------------------------------------ | ----------------------------------------------- | ------------------------ |
+| `MOTIR_FLEET_MAX_IN_FLIGHT` — the **cross-workload** fleet ceiling | **the invoice** — every container, any workload | MOTIR-1997 (**shipped**) |
+| Per-workspace index cap, `ceil(global / 2)`                        | **index fairness** — tenant vs tenant           | MOTIR-1990 (this story)  |
+| Per-project CI cap (`PROJECT_IN_FLIGHT_CAPS`)                      | CI fairness                                     | MOTIR-1922 (shipped)     |
+| Epic 9's agent cap                                                 | seats                                           | Epic 9                   |
+| ~~Provider spend cap~~                                             | **does not exist**                              | —                        |
+
+**MOTIR-1997 was caused by these decisions and has already landed.** Its registry comment
+(`lib/ciFleet/workloads.ts`) names them directly: _"MOTIR-1981 decisions 2–3 put CODE-GRAPH
+INDEX containers in the same Fly org and Epic 9 adds HOSTED AGENT containers; neither writes a
+runner intent. Two independent per-workload caps do not compose into a bound."_ The ceiling now
+counts every container under one `fleet` admission lock, summed by `fleetCeilingService.census`
+over a **totality-guarded** `Record<FleetWorkloadKind, …>` — `code_graph_index` is already a
+declared member, so this workload is counted **before** it ships rather than after.
+
+**Two consequences MOTIR-1990 must honour:**
+
+- Its per-workspace cap is **fairness underneath the ceiling**, not the spend bound. The spend
+  bound is `MOTIR_FLEET_MAX_IN_FLIGHT` (default `DEFAULT_FLEET_IN_FLIGHT_CEILING = 24`,
+  `lib/ciFleet/limits.ts:55`), and it is not this story's to re-derive.
+- The index dispatcher must **take a `fleet_in_flight_slot`**, because that is how a workload
+  with no intent table of its own becomes visible to the census. A cap that only counts index
+  containers repeats exactly the defect MOTIR-1997 fixed.
+
+This is `notes.html` #185 applied rather than restated: _express enforcement in terms the
+product controls, not in the provider's billing controls._ The shared org's real accepted cost
+is not "one provider cap for three workloads" — it is **one invoice with nothing but Motir's own
+counter in front of it.**
+
+## §8 — Decision 7
+
+**The META org runs indexing ON the fleet, by the same path a customer takes.**
+
+### §8.1 — The test is CIRCULARITY, not meta-vs-customer
+
+MOTIR-1915 keeps `moooon-B-V`'s **CI** on GitHub-hosted runners, and its reason is specific:
+_"don't put your own release path on infrastructure you are still building."_ A broken CI fleet
+would block shipping the fix to the CI fleet.
+
+**That reasoning does not extend to indexing.** A broken index fleet makes Motir's planner
+code-blind; it does **not** block shipping. There is no circular dependency, so the exclusion
+does not carry over. Read the exclusion as _"is our own recovery path on this?"_ — not as
+_"is this ours?"_
+
+_(For Epic 9 the test bites again: if Motir's own story runs move to hosted agents on the fleet,
+a broken fleet means no agent to fix it. That is acceptable **only while a non-fleet escape
+hatch exists** — today the BYOK/local CLI path. Recorded here because it is the same test, not
+because this story decides it.)_
+
+### §8.2 — REJECTED: run meta's containers in the production org
+
+**Defensible on its face**, which is why it needs recording: meta indexing parses _Motir's own_
+source, which is trusted, so the untrusted-input rationale for fleet isolation genuinely does
+not apply to it.
+
+**Rejected for EXERCISE, not for security.** `moooon` is currently the only real tenant, so
+meta-in-production means **nothing runs in the fleet at all**. The index path would ship, pass
+its `fake`-adapter tests, and sit as **dead code** until the first customer connects a repo —
+surfacing every wiring bug at once, in front of that customer.
+
+**That is a shape this project has already paid for.** MOTIR-1980 records it: _"the fleet
+shipped code-complete and UNBOOTABLE"_ — five green cards, an unbuilt runner image, an unwired
+org, and nothing able to start. Placing meta in production would reproduce it deliberately.
+
+It would also require an **`isMeta` branch in the boot path** — a code path only meta takes,
+which means the tested path is the one nobody runs, and the untested path is the one every
+customer gets.
+
+**The budget concern that motivates it is real and is solved elsewhere:** meta metered as its
+own queryable line (§9), plus the admission cap that bounds `moooon` like any tenant (§8.3).
+**Org placement is the wrong lever for an accounting problem.**
+
+### §8.3 — CORRECTION: "bounded like any tenant" is not what the shipped cap does
+
+§8.2's rejection leans on meta being bounded by the per-tenant cap. The **shipped CI** cap does
+the opposite: `PROJECT_IN_FLIGHT_CAPS.meta = null` (`lib/ciFleet/limits.ts:85`) — meta is
+**exempt** from the per-project allowance, by MOTIR-1922's acceptance criterion.
+
+The exemption is bounded and honest about itself: its comment reads _"exempt per the card, and
+ONLY from this cap"_, and `fleetCeilingService`'s NO-BYPASS block is explicit that `isMeta` does
+not lift the fleet ceiling — _"a meta-org runaway costs Motir exactly as much as any other."_
+So meta is bounded by **the invoice ceiling**, not by a per-tenant one.
+
+**Binding on MOTIR-1990: the per-workspace index cap applies to the meta workspace.** Do not
+copy `PROJECT_IN_FLIGHT_CAPS`'s meta row into the index cap. The reasons differ — CI's exemption
+is about a tier allowance for work Motir is not billing itself for, while the index cap's job is
+**tenant-vs-tenant fairness**, and `moooon` indexing its own repos can starve a customer exactly
+as any tenant can. If MOTIR-1990 concludes otherwise, §8.2's rejection needs re-deciding, not
+quietly weakening.
+
+## §9 — Decision 8
+
+**`isMeta` bypasses the CHARGE — not the PLACEMENT, and not the METER.**
+
+Meta compute runs **on the same fleet, by the same path**, and is **metered as COGS attributed
+to Motir**, queryable as its own line. It simply never debits a ledger. Unmetered dogfooding is
+unbounded and invisible spend, and "we don't bill ourselves" is not a reason not to know the
+number.
+
+### §9.1 — The generalization, and why it is recorded as a warning
+
+**`isMeta` is a BILLING flag that has been used as a proxy for "this workload is not real."**
+That proxy was safe while meta ran nothing on shared infrastructure. **It stops being safe the
+moment meta shares infrastructure with customers** — which is what decision 7 does.
+
+**Every `isMeta` branch should be read as _"should this be un-charged?"_ — never as _"should
+this be un-measured?"_ or _"should this run somewhere else?"_**
+
+**This is not hypothetical; it is live in shipped code.** `ciFleetCostMeterService`
+(`lib/services/ciFleetCostMeterService.ts:117-121`) resolves `isMeta` and returns
+`{ outcome: 'bypassed_meta' }` **before** writing the usage row — so a meta container's
+**container-seconds and cost are not recorded at all**, not merely not charged. The stated
+rationale is about billing (_"attributing this cost would bill the house to itself"_), but the
+implementation drops the measurement. The same shape sits in `ciMinutesMeterService`
+(`bypassed_meta`) and in `allowance.ts`'s `bypassed` state.
+
+For CI the branch is currently **unreachable** — MOTIR-1915 keeps `moooon-B-V` off fleet
+runners, so no meta CI container exists to meter — and that unreachability is exactly why it
+survived unexamined. **Decision 7 makes the equivalent branch reachable for indexing.**
+
+**Binding on MOTIR-1995 (the index COGS meter):** meta index containers are **metered**, with
+their seconds and cost attributed to the org and distinguishable from CI and agent spend within
+the shared org. `isMeta` may suppress a charge; it may not skip the write. Whether
+`ciFleetCostMeterService`'s CI bypass should change is **not decided here** — it is a live
+question about a different workload, and this record only fixes that the index meter must not
+inherit the pattern.
+
+The separability itself is already prepared: the CI meter stamps `workload: 'ci'` on its rows,
+with a comment naming index and agent containers as recording their own.
+
+## §10 — Decision 9
+
+**The container holds NO GitHub credential.**
+
+motir-core resolves GitHub's **pre-signed `codeload` URL** and passes that URL — not a token —
+in the container spec. GitHub 302-redirects `/repos/{owner}/{repo}/tarball/{ref}` to a
+`codeload.github.com` URL **authorized by its own signed query string**.
+
+**The evidence is already in the code**, in the comment on today's fetch
+(`lib/git/providers/github.ts:124-129`): _"GitHub 302-redirects `/tarball` to a PRE-SIGNED
+codeload.github.com URL. `fetch` follows the redirect and (per the fetch spec) STRIPS the
+[`Authorization` header] … the codeload URL is already authorized by its signed query string."_
+
+So the property this decision relies on is **not a new assumption** — it is the mechanism the
+current path already depends on, observed rather than hoped for: the installation token does
+not reach `codeload` today either. **Handing the resolved URL to a container therefore leaks
+nothing, and is strictly less privilege than handing over an installation token**, which would
+grant repo-wide API access for its lifetime.
+
+**What MOTIR-1989 must change:** today's call lets `fetch` follow the redirect internally and
+buffers the body (`res.arrayBuffer()`, the OOM in §2). Dispatch instead issues the request with
+`redirect: 'manual'` and reads the `Location` header, so the **URL** — not the bytes — is what
+crosses into the container spec. The URL is short-lived and single-repo, which is §4's rule
+satisfied for the fetch half; the motir-ai run-scoped token (MOTIR-1986) is §4 satisfied for the
+upload half.
+
+## §11 — What this does NOT change
+
+**The `motir-projects`-only CI boundary is untouched** (MOTIR-1915 / MOTIR-1916). This story
+uses the **orchestrator PORT**, not the runner layer: **no runner registers, no `runs-on`
+resolves, no `workflow_job` fires, and nothing bills as CI minutes.** Sharing an org does not
+change that — **a container is not a runner.** No `moooon-B-V` repo gains a Motir `runs-on`
+label and no GitHub runner is provisioned for one.
+
+**Indexing cannot be a GitHub Actions workflow, and this is a hard constraint, not a
+preference.** It must work for **BYOK repos Motir does not own** (MOTIR-1754): injecting a
+workflow file mutates a customer's code, requires Actions to be enabled, and is impossible on a
+read-only connection. It would also gate a user's code graph behind their **CI credit balance** —
+`ci_credits_exhausted` would silently mean "your planner is code-blind." Two unrelated products
+would share one refusal.
+
+**Still building in-process, unchanged:** `system.code-graph-refresh` and motir-ai's
+**hydrate-on-read** path both keep running behind `indexParseGate`. **Retiring motir-ai's
+tarball ingest route is a later decision**, not this one — the route stays.
+
+**Not decided here:** MOTIR-1974's checkpointing is not re-opened; how the product _asks_ for a
+repo or surfaces index _freshness_ stays with MOTIR-1754; motir-ai's graph **engine** and its
+1-permit semaphore are unchanged and not weakened; Epic 9's container lifetime, cap and metering
+remain Epic 9's.
+
+### §11.1 — The workload asymmetry, for whoever reads this from Epic 9
+
+Index containers and agent containers are shaped differently, and the numbers here do not
+transfer:
+
+| axis             | index container          | agent container (Epic 9) |
+| ---------------- | ------------------------ | ------------------------ |
+| lifetime         | **minutes** — job-shaped | **hours** — story-shaped |
+| credential       | per-**job**              | per-**session**          |
+| what a cap means | **throughput**           | **seats**                |
+
+Two consequences. A cap number that reads as "throughput" for indexing reads as "seats" for
+agents, so **Epic 9 must size its own** rather than copy §7's. And **teardown-time costing
+under-reports a long-running container for its whole life** — the index meter records at
+teardown because minutes-long containers make that accurate; hours-long ones do not.
+
+`DEFAULT_FLEET_SLOT_TTL_SECONDS` is 6 hours (`lib/ciFleet/limits.ts:70`) and is a **safety net,
+not a timeout** — deliberately longer than any container Motir boots. An agent workload should
+check that assumption against its own lifetime rather than inherit it.
+
+## §12 — Binding on MOTIR-1981's cards
+
+Per `notes.html` #50, this record ships nothing. Each line below is what a sibling card owns,
+and each may cite **this file by path** instead of restating the argument:
+
+| Card           | Owns                                                                                                                                  | Sections       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **MOTIR-1986** | motir-ai reduced to control plane: run-scoped credential, single-key upload URL, pointer recorded                                     | §4, §5         |
+| **MOTIR-1988** | the indexer image — fetch a tarball URL, build the graph, hand over the pointer; digest-pinned, mirrored per `fleet-image-pull.md` §1 | §5, §10        |
+| **MOTIR-1989** | dispatch a container instead of fetching in-function; `redirect: 'manual'`; the ledger contract preserved                             | §2, §6, §10    |
+| **MOTIR-1990** | the admission cap — global + per-workspace `ceil(global / 2)`; takes a `fleet_in_flight_slot`; **no meta exemption**                  | §7, §7.2, §8.3 |
+| **MOTIR-1995** | the COGS meter — per-container seconds + cost, `workload` stamped, **meta metered and not charged**                                   | §9, §9.1       |
+| **MOTIR-1994** | live verification that a container really boots in `motir-fleet` and its credentials are provably narrow                              | §3, §4         |
+
+**Already shipped, and load-bearing for this story:** MOTIR-1979 (the `motir-fleet` org),
+MOTIR-1997 (the cross-workload ceiling that counts `code_graph_index` before it exists),
+MOTIR-2005 / MOTIR-2006 (how a fleet machine obtains image bytes — the indexer image is built
+from motir-ai's **closed** source, so `fleet-image-pull.md` §1 puts it in the **mirror** column).
+
+## §13 — Sources
+
+**Read or measured 2026-08-02 – 2026-08-03.** Code references are pinned at `motir-core`
+`7df65d66` and `motir-ai` `a4bc960`.
+
+- `docs/decisions/ci-runner-fleet.md` — **§7.4** (JIT config over registration token, the
+  argument §4 generalizes), **§7.5** (org-scoped 6PN; production separation), **§9** (Fly offers
+  neither a spending cap nor an alert), **§9.1a** (the cross-workload amendment).
+- `docs/decisions/fleet-image-pull.md` §1 — public-vs-mirror by source visibility.
+- `docs/decisions/code-access-for-planning.md:51` — the 200 MB ingress bound.
+- `motir-ai/docs/decisions/codegraph-production-topology.md` §1–§2 — the measured
+  one-index-per-machine ceiling (924 MB peak, 861 MB off-heap; N = 0 safe at 512 MB), grounded in
+  MOTIR-1515's `results-local.md`.
+- `lib/orchestrator/types.ts:155` · `lib/orchestrator/adapters/fly/flyMachines.ts:21` — the port,
+  and the 6PN comment §3.1 rests on.
+- `lib/git/providers/github.ts:109-147` — `fetchRepoTarball`, the `res.arrayBuffer()` that OOMs,
+  and the pre-signed `codeload` redirect §10 rests on.
+- `lib/repositories/jobRunRepository.ts:101` · `lib/dto/migrateOnboarding.ts:65` — the per-repo
+  `output.repoRef` contract §6 rests on.
+- `lib/ciFleet/workloads.ts` · `lib/services/fleetCeilingService.ts` · `lib/ciFleet/limits.ts:55,70,85` —
+  the shipped cross-workload ceiling, its census, and the per-tier caps.
+- `lib/services/ciFleetCostMeterService.ts:117-121` · `lib/services/ciMinutesMeterService.ts` ·
+  `lib/ciMetering/allowance.ts:60` — the live `bypassed_meta` instances §9.1 warns about.
+- `lib/ai/motirAiClient.ts:94` · `app/api/inngest/route.ts:38` ·
+  `lib/jobs/definitions/codeGraphIndex.ts:24-35` — the deadlines and the old cap.
+- `motir-ai/src/codegraph/indexConcurrency.ts:102` · `motir-ai/fly.toml` — the 1-permit gate and
+  the request-based scaling that long indexes never trip.
+- `notes.html` **#50** (a decision card is not an implementation), **#185** (express enforcement
+  in terms the product controls).
