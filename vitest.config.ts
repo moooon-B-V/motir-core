@@ -462,6 +462,22 @@ export default defineConfig({
         // missing exactly where it went missing before.
         'lib/orchestrator/imagePull.ts',
         'lib/services/fleetPreflightService.ts',
+        // Story MOTIR-1981 · MOTIR-1992 — THE INDEX FLEET, joining the gate for
+        // the reason §6 states: this path's whole output is a `job_run` row that
+        // is a PERMANENT claim that a repo has a code graph. Everything
+        // downstream — the enqueue gate, the operator sweep, the onboarding
+        // wizard's Next button — trusts that claim without re-checking it, so an
+        // unexercised branch here is a repo that is silently never indexed (or
+        // silently claimed and never built) with nothing anywhere to say so.
+        // `indexImage.ts` sits with them because the image reference IS the
+        // deliverable a container boots on: MOTIR-1980 shipped a fleet whose
+        // every predicate answered "configured" and which could not pull a
+        // single image.
+        'lib/services/codeGraphIndexDispatchService.ts',
+        'lib/services/codeGraphIndexAdmissionService.ts',
+        'lib/jobs/indexFleetSteps.ts',
+        'lib/jobs/definitions/codeGraphIndex.ts',
+        'lib/orchestrator/adapters/fly/indexImage.ts',
         'lib/ciFleet/config.ts',
         'lib/ciFleet/limits.ts',
         'lib/ciFleet/workloads.ts',
@@ -595,6 +611,20 @@ export default defineConfig({
         'lib/orchestrator/adapters/fake/index.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/orchestrator/adapters/fly/index.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/orchestrator/adapters/fly/flyMachines.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-1981 · MOTIR-1992 — the index fleet (see the include list).
+        'lib/services/codeGraphIndexDispatchService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/codeGraphIndexAdmissionService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/jobs/indexFleetSteps.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/codeGraphIndex.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/orchestrator/adapters/fly/indexImage.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/config.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/limits.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/workloads.ts': { branches: 90, functions: 90, lines: 90 },
