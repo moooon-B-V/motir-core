@@ -96,6 +96,7 @@ function usageFor(fx: Fixture, overrides: Partial<ContainerUsage> = {}): Contain
     workspaceId: fx.workspaceId,
     projectId: fx.projectId,
     repoFullName: fx.repoFullName,
+    workload: 'ci_runner',
     workflowJobId: 44001,
     cpuKind: 'performance',
     cpus: 2,
@@ -161,6 +162,34 @@ describe('recording one container', () => {
     expect(rollup.costUsd.toFixed(12)).toBe('0.007592651760');
     expect(row.costUsd.toFixed(12)).toBe('0.007592651760');
     expect(row.usdPerSecond.toFixed(12)).toBe(IAD_USD_PER_SECOND);
+  });
+
+  it('a JOBLESS container stores a NULL job id, never the string "null" (MOTIR-2025)', async () => {
+    // ⚠️ THE TRAP THIS CLOSES. The port's `workflowJobId` became nullable when
+    // indexing joined the fleet, and the write was a bare `String(...)` —
+    // `String(null)` is the four-character string `'null'`, which the column
+    // accepts happily and which makes "this workload has no job" indistinguish-
+    // able from a job actually called that. The column has been `String?` since
+    // it was written, for exactly this row.
+    const fx = await seedTenant();
+
+    const outcome = await ciFleetCostMeterService.recordContainerUsage(
+      usageFor(fx, { workload: 'code_graph_index', workflowJobId: null }),
+    );
+
+    expect(outcome).toMatchObject({ outcome: 'recorded' });
+    const row = await db.ciContainerUsage.findFirstOrThrow();
+    expect(row.workflowJobId).toBeNull();
+    expect(row.workflowJobId).not.toBe('null');
+    // Everything else about the row is written exactly as it always was — this
+    // card widens the port, it does not re-shape the meter (MOTIR-1995 owns
+    // teaching this column the workload it is now carried on the record).
+    expect(row).toMatchObject({
+      containerProvider: 'fake',
+      repoFullName: 'motir-projects/acme-web',
+      billableSeconds: 240,
+      teardownReason: 'job_completed',
+    });
   });
 
   it('is IDEMPOTENT per runner — the second teardown of a handle changes nothing', async () => {

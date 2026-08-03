@@ -28,6 +28,7 @@ const ATTRIBUTION: UsageAttribution = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   repoFullName: 'motir-projects/acme-web',
+  workload: 'ci_runner',
   workflowJobId: 44001,
   size: FLEET_CONTAINER_SIZE,
   observedStartedAt: null,

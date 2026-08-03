@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FLEET_METADATA_KEY,
-  FLEET_METADATA_VALUE,
+  FLEET_METADATA_VALUES,
   flyOrchestrator,
 } from '@/lib/orchestrator/adapters/fly';
 import {
+  exitCodeOf,
   flyFleetConfig,
   isFlyFleetConfigured,
   isPreStartState,
@@ -63,7 +64,10 @@ function machine(
     region?: string;
     createdAt?: string | null;
     metadata?: Record<string, string> | null;
-    events?: Array<{ type: string; status?: string; timestamp: number }>;
+    /** Loosely typed on purpose: an `exit` event nests its code under
+     *  `request.exit_event`, and several cases here feed deliberately malformed
+     *  timestamps to prove the parser tolerates them. */
+    events?: Array<Record<string, unknown>>;
   } = {},
 ): Record<string, unknown> {
   return {
@@ -80,7 +84,7 @@ function machine(
       metadata:
         overrides.metadata === null
           ? {}
-          : (overrides.metadata ?? { [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE }),
+          : (overrides.metadata ?? { [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES.ci_runner }),
     },
     events: overrides.events ?? [
       { type: 'start', status: 'started', timestamp: Date.parse('2026-08-02T10:00:10.000Z') },
@@ -93,6 +97,7 @@ const SPEC: ContainerSpec = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   repoFullName: 'motir-projects/acme-web',
+  workload: 'ci_runner',
   workflowJobId: 44001,
   image: IMAGE,
   size: FLEET_CONTAINER_SIZE,
@@ -106,6 +111,7 @@ const ATTRIBUTION: UsageAttribution = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   repoFullName: 'motir-projects/acme-web',
+  workload: 'ci_runner',
   workflowJobId: 44001,
   size: FLEET_CONTAINER_SIZE,
   observedStartedAt: null,
@@ -207,10 +213,81 @@ describe('provision — the two single-use guarantees are in the request body', 
     await flyOrchestrator.provision(SPEC);
     const config = calls[0]!.body?.['config'] as Record<string, unknown>;
     expect(config['metadata']).toMatchObject({
-      [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE,
+      [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES.ci_runner,
       motir_org_id: 'org-1',
       motir_project_id: 'proj-1',
     });
+  });
+
+  // ── the WORKLOAD, at the provider (MOTIR-2025) ──────────────────────────
+
+  it('a CI spec still produces TODAY’S exact machine name and metadata keys', async () => {
+    // ⚠️ THE REGRESSION GUARD FOR THE WHOLE CARD. Teaching the port a second
+    // workload is only safe if the first one did not move: machines already
+    // running in the fleet app are named `motir-runner-<jobId>` and tagged
+    // `ci-runner`, and `reap()` recognises its own containers by exactly that
+    // tag. This asserts the NAME and the metadata KEY SET, so a drift in either
+    // — a renamed prefix, an added or dropped key — fails here rather than
+    // stranding live machines outside the sweep that stops them billing.
+    handler = () => json(200, machine());
+    await flyOrchestrator.provision(SPEC);
+    const body = calls[0]!.body!;
+    const config = body['config'] as Record<string, unknown>;
+    expect(body['name']).toBe('motir-runner-44001');
+    expect(config['metadata']).toEqual({
+      motir_fleet: 'ci-runner',
+      motir_intent_id: '44001',
+      motir_org_id: 'org-1',
+      motir_project_id: 'proj-1',
+    });
+  });
+
+  it('an INDEX container is neither named nor tagged as a CI runner', async () => {
+    // The card's reason for existing: an index container has no GitHub job at
+    // all, so before this it could only have been booted by inventing a job id —
+    // which would have named it `motir-runner-<a lie>` and tagged it `ci-runner`
+    // in the Fly console and to the reaper.
+    handler = () => json(200, machine());
+    await flyOrchestrator.provision({
+      ...SPEC,
+      workload: 'code_graph_index',
+      workflowJobId: null,
+    });
+    const body = calls[0]!.body!;
+    const metadata = (body['config'] as Record<string, unknown>)['metadata'] as Record<
+      string,
+      string
+    >;
+    expect(body['name']).not.toMatch(/^motir-runner-/);
+    expect(body['name']).toMatch(/^motir-index-/);
+    expect(metadata['motir_fleet']).toBe('code-graph-index');
+    expect(metadata['motir_fleet']).not.toBe('ci-runner');
+    // An empty `motir_intent_id` reads as an intent that could NOT be resolved,
+    // which is a different and worse claim than "this workload has none".
+    expect(metadata).not.toHaveProperty('motir_intent_id');
+    expect(metadata['motir_org_id']).toBe('org-1');
+    expect(metadata['motir_project_id']).toBe('proj-1');
+  });
+
+  it("a jobless container's name is stable, and DIFFERENT per repo in one project", async () => {
+    // A Fly machine name is unique within the app, and a Motir project spans
+    // several repositories — so a name built from the project alone would
+    // collide the moment two of its repos indexed at once. Determinism is the
+    // other half: the same unit of work must always produce the same name, or an
+    // orphan in the console stops being traceable to what it served.
+    const nameFor = async (spec: Parameters<typeof flyOrchestrator.provision>[0]) => {
+      calls = [];
+      handler = () => json(200, machine());
+      await flyOrchestrator.provision(spec);
+      return calls[0]!.body!['name'] as string;
+    };
+    const base = { ...SPEC, workload: 'code_graph_index' as const, workflowJobId: null };
+    const first = await nameFor(base);
+    expect(await nameFor(base)).toBe(first);
+    expect(await nameFor({ ...base, repoFullName: 'motir-projects/acme-api' })).not.toBe(first);
+    expect(await nameFor({ ...base, projectId: 'proj-2' })).not.toBe(first);
+    // Fly's own charset: lower-case alphanumerics and hyphens.
+    expect(first).toMatch(/^[a-z0-9][a-z0-9-]*$/);
   });
 
   it('returns an opaque handle carrying the provider, id, region and creation instant', async () => {
@@ -351,6 +428,71 @@ describe('describe — GONE is a real answer', () => {
       status: 500,
     });
   });
+
+  // ── the EXIT REASON (MOTIR-2025) ────────────────────────────────────────
+
+  it("reports the container's exit code from Fly's `exit_event`", async () => {
+    // For an index container this number is the ENTIRE diagnostic channel: it
+    // writes no ledger row, so `30` (BUILD) versus `50` (CREDENTIAL_REFUSED) is
+    // the only thing distinguishing "the repo does not compile" from "the
+    // credential Motir minted was refused".
+    handler = () =>
+      json(200, {
+        ...machine({ state: 'stopped' }),
+        events: [
+          { type: 'start', timestamp: Date.parse('2026-08-02T10:00:10.000Z') },
+          {
+            type: 'exit',
+            timestamp: Date.parse('2026-08-02T10:04:10.000Z'),
+            request: { exit_event: { exit_code: 30, guest_exit_code: 30, oom_killed: false } },
+          },
+        ],
+      });
+    const status = await flyOrchestrator.describe(HANDLE);
+    expect(status.exitCode).toBe(30);
+    // ⚠️ A PLAIN NUMBER, not a Fly event — §4 rule 1 holds through this field.
+    expect(typeof status.exitCode).toBe('number');
+  });
+
+  it('reports a successful exit as 0 — distinguishable from "code unknown"', async () => {
+    handler = () =>
+      json(200, {
+        ...machine({ state: 'stopped' }),
+        events: [
+          {
+            type: 'exit',
+            timestamp: Date.parse('2026-08-02T10:04:10.000Z'),
+            request: { exit_event: { guest_exit_code: 0, exit_code: 0 } },
+          },
+        ],
+      });
+    // `0` and `null` must never collapse into each other: one says the indexer
+    // finished, the other says nobody knows whether it did.
+    expect((await flyOrchestrator.describe(HANDLE)).exitCode).toBe(0);
+  });
+
+  it('reports null when the machine is GONE — the code went with it', async () => {
+    handler = () => json(404, { error: 'machine not found' });
+    const status = await flyOrchestrator.describe(HANDLE);
+    expect(status.exitCode).toBeNull();
+    expect(status.exists).toBe(false);
+  });
+
+  it('reports null when the machine exited but Fly kept no code', async () => {
+    handler = () =>
+      json(200, {
+        ...machine({ state: 'stopped' }),
+        events: [{ type: 'exit', timestamp: Date.parse('2026-08-02T10:04:10.000Z') }],
+      });
+    // "Stopped, code unknown" is the port's third outcome, and the consumer has
+    // to treat it as its own case rather than as success.
+    expect((await flyOrchestrator.describe(HANDLE)).exitCode).toBeNull();
+  });
+
+  it('reports null for a machine that is still RUNNING', async () => {
+    handler = () => json(200, machine());
+    expect((await flyOrchestrator.describe(HANDLE)).exitCode).toBeNull();
+  });
 });
 
 describe('teardown — destroys, and RETURNS what it cost', () => {
@@ -457,6 +599,47 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
       ]);
     expect(await flyOrchestrator.reap(OLDER_THAN, resolveAll)).toEqual([]);
     expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
+  });
+
+  it('sweeps EVERY registered workload, not just the runners (MOTIR-2025)', async () => {
+    // ⚠️ THE FAILURE THIS CLOSES. The sweep used to match one hardcoded tag
+    // value, so the instant the fleet had a second workload it would have walked
+    // straight past a leaked index or agent container — which bills exactly like
+    // a runner does, in an org `ci-runner-fleet.md` §9 records has neither a
+    // spending cap nor a billing alert underneath it.
+    const old = '2026-08-02T09:00:00.000Z';
+    handler = (call) => {
+      if (call.method === 'GET') {
+        return json(200, [
+          machine({ id: 'runner', createdAt: old, metadata: { motir_fleet: 'ci-runner' } }),
+          machine({ id: 'index', createdAt: old, metadata: { motir_fleet: 'code-graph-index' } }),
+          machine({ id: 'agent', createdAt: old, metadata: { motir_fleet: 'hosted-agent' } }),
+          machine({ id: 'stranger', createdAt: old, metadata: { motir_fleet: 'something-else' } }),
+        ]);
+      }
+      return new Response(null, { status: 200 });
+    };
+
+    const usages = await flyOrchestrator.reap(OLDER_THAN, resolveAll);
+
+    expect(usages.map((u) => u.handleId).sort()).toEqual(['agent', 'index', 'runner']);
+    // The stranger is still NOT ours to destroy: recognising more workloads must
+    // not widen the sweep to the whole Fly organisation.
+    expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toHaveLength(3);
+    expect(calls.some((c) => c.method === 'DELETE' && c.url.includes('stranger'))).toBe(false);
+  });
+
+  it('every tag value the registry declares is one the sweep answers to', () => {
+    // A registry entry the reaper does not recognise is a workload that leaks
+    // silently. Asserted over the RECORD rather than a list of literals, so a
+    // fourth workload cannot be added with a tag nothing sweeps.
+    for (const [kind, value] of Object.entries(FLEET_METADATA_VALUES)) {
+      expect(value, kind).toMatch(/^[a-z0-9-]+$/);
+    }
+    expect(new Set(Object.values(FLEET_METADATA_VALUES)).size).toBe(
+      Object.keys(FLEET_METADATA_VALUES).length,
+    );
+    expect(FLEET_METADATA_VALUES.ci_runner).toBe('ci-runner');
   });
 
   it('reports — and does NOT destroy — a fleet machine Fly describes with no creation instant', async () => {
@@ -576,9 +759,11 @@ describe('toFlyMachine tolerates every shape Fly actually sends', () => {
   it('keeps only STRING metadata, so a non-string tag cannot masquerade as one', () => {
     const parsed = toFlyMachine({
       id: 'm1',
-      config: { metadata: { [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE, port: 8080, on: true } },
+      config: {
+        metadata: { [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES.ci_runner, port: 8080, on: true },
+      },
     });
-    expect(parsed?.metadata).toEqual({ [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE });
+    expect(parsed?.metadata).toEqual({ [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES.ci_runner });
   });
 
   it('tolerates an events value that is not an array, and entries that are not events', () => {
@@ -653,6 +838,122 @@ describe('the §5 instants, read from Fly’s event log', () => {
   it('is null when the machine has stopped-ish events but none with an instant', () => {
     const parsed = toFlyMachine({ id: 'm1', events: [{ type: 'exit', timestamp: 'x' }] });
     expect(stoppedAtOf(parsed!)).toBeNull();
+  });
+});
+
+describe('the exit CODE, read from Fly’s event log (MOTIR-2025)', () => {
+  const at = (iso: string) => Date.parse(iso);
+
+  it("prefers the GUEST's own code over the machine-level one", () => {
+    // They agree on the ordinary paths and diverge exactly where it matters. The
+    // guest's is what the container's own `exit(n)` returned — the indexer's
+    // taxonomy value; the machine-level one is a number about Fly's supervisor.
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        {
+          type: 'exit',
+          timestamp: at('2026-08-02T10:04:00.000Z'),
+          request: { exit_event: { guest_exit_code: 50, exit_code: 0 } },
+        },
+      ],
+    });
+    expect(exitCodeOf(parsed!)).toBe(50);
+  });
+
+  it('falls back to the machine-level code when Fly sent no guest code', () => {
+    // A code we could have had is worse lost than approximated.
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        {
+          type: 'exit',
+          timestamp: at('2026-08-02T10:04:00.000Z'),
+          request: { exit_event: { exit_code: 137 } },
+        },
+      ],
+    });
+    expect(exitCodeOf(parsed!)).toBe(137);
+  });
+
+  it('takes the LATEST exit event, matching how the stop instant is read', () => {
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        {
+          type: 'exit',
+          timestamp: at('2026-08-02T10:09:00.000Z'),
+          request: { exit_event: { guest_exit_code: 41 } },
+        },
+        {
+          type: 'exit',
+          timestamp: at('2026-08-02T10:04:00.000Z'),
+          request: { exit_event: { guest_exit_code: 20 } },
+        },
+      ],
+    });
+    expect(exitCodeOf(parsed!)).toBe(41);
+  });
+
+  it('uses an UNDATED exit event only when nothing dated reported a code', () => {
+    const undatedOnly = toFlyMachine({
+      id: 'm1',
+      events: [{ type: 'exit', timestamp: 'x', request: { exit_event: { guest_exit_code: 70 } } }],
+    });
+    expect(exitCodeOf(undatedOnly!)).toBe(70);
+
+    const datedWins = toFlyMachine({
+      id: 'm1',
+      events: [
+        { type: 'exit', timestamp: 'x', request: { exit_event: { guest_exit_code: 70 } } },
+        {
+          type: 'exit',
+          timestamp: at('2026-08-02T10:04:00.000Z'),
+          request: { exit_event: { guest_exit_code: 10 } },
+        },
+      ],
+    });
+    expect(exitCodeOf(datedWins!)).toBe(10);
+  });
+
+  it('ignores a code on any event that is not an exit', () => {
+    const parsed = toFlyMachine({
+      id: 'm1',
+      events: [
+        {
+          type: 'start',
+          timestamp: at('2026-08-02T10:00:00.000Z'),
+          request: { exit_event: { guest_exit_code: 99 } },
+        },
+      ],
+    });
+    expect(exitCodeOf(parsed!)).toBeNull();
+  });
+
+  it('is null for every shape Fly sends without a usable code', () => {
+    // Each of these is a real answer of "unknown", never a zero — a parser that
+    // defaulted to 0 would report every unreadable container as a success.
+    const shapes: Array<Record<string, unknown>> = [
+      { type: 'exit', timestamp: at('2026-08-02T10:04:00.000Z') },
+      { type: 'exit', timestamp: at('2026-08-02T10:04:00.000Z'), request: {} },
+      { type: 'exit', timestamp: at('2026-08-02T10:04:00.000Z'), request: { exit_event: null } },
+      {
+        type: 'exit',
+        timestamp: at('2026-08-02T10:04:00.000Z'),
+        request: { exit_event: { guest_exit_code: 'thirty' } },
+      },
+      {
+        type: 'exit',
+        timestamp: at('2026-08-02T10:04:00.000Z'),
+        request: { exit_event: { guest_exit_code: Number.NaN } },
+      },
+    ];
+    for (const event of shapes) {
+      expect(
+        exitCodeOf(toFlyMachine({ id: 'm1', events: [event] })!),
+        JSON.stringify(event),
+      ).toBeNull();
+    }
   });
 });
 

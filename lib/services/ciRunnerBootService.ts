@@ -20,6 +20,7 @@ import {
   RUNNER_JIT_REQUEST_TIMEOUT_MS,
 } from '@/lib/github/runnerJitConfig';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   getOrchestrator,
   isOrchestratorConfigured,
@@ -112,6 +113,17 @@ import type {
 // minute-granularity cron cannot meet §6's ≤30s p50 budget); a hot-path call from
 // the `workflow_job` webhook straight to this service is the remaining half of
 // that budget and is tracked as its own card.
+
+/**
+ * WHAT THIS SERVICE BOOTS (MOTIR-2025). The orchestrator port carries a workload
+ * now, and this is the only producer of a `ci_runner` one — index and agent
+ * containers are dispatched by their own services onto the same port.
+ *
+ * Named once rather than repeated at the four sites that need it, so a reader
+ * asking "does this service ever boot anything else?" gets the answer from one
+ * grep instead of four string literals.
+ */
+const CI_RUNNER_WORKLOAD = 'ci_runner' satisfies FleetWorkloadKind;
 
 /** How long a container has to reach a running state before it is written off as
  *  a boot that never happened. §6 budgets p95 ≤ 60s end to end; double that is a
@@ -536,6 +548,7 @@ export const ciRunnerBootService = {
         workspaceId: intent.workspaceId,
         projectId: intent.projectId,
         repoFullName: `${intent.repoOwner}/${intent.repoName}`,
+        workload: CI_RUNNER_WORKLOAD,
         workflowJobId,
         size: FLEET_CONTAINER_SIZE,
         // A reaped container's start instant is whatever the provider still
@@ -602,6 +615,10 @@ export const ciRunnerBootService = {
       workspaceId: intent.workspaceId,
       projectId,
       repoFullName: `${intent.repoOwner}/${intent.repoName}`,
+      // This service boots CI RUNNERS and nothing else. Saying so is what keeps
+      // the machine's name and its fleet tag exactly what they were before the
+      // port learned a second workload (MOTIR-2025).
+      workload: CI_RUNNER_WORKLOAD,
       workflowJobId,
       image,
       size: FLEET_CONTAINER_SIZE,
@@ -1026,6 +1043,7 @@ async function settleSupervisedContainer(
     workspaceId: session.attribution.workspaceId,
     projectId: session.attribution.projectId,
     repoFullName: session.attribution.repoFullName,
+    workload: CI_RUNNER_WORKLOAD,
     workflowJobId: session.attribution.workflowJobId,
     size: FLEET_CONTAINER_SIZE,
     observedStartedAt,

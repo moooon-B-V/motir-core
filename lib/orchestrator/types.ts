@@ -1,3 +1,5 @@
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+
 // The CONTAINER-ORCHESTRATOR PORT (Story MOTIR-1916 · MOTIR-1921) —
 // `docs/decisions/ci-runner-fleet.md` §4 and §5, transcribed into the codebase
 // as the seam every fleet card codes against.
@@ -18,6 +20,20 @@
 // PHYSICAL quantity emitted by the same operation that guarantees teardown, so
 // the two cannot drift, and MOTIR-1924's meter cannot be silently skipped by a
 // path that tears down and returns early.
+
+// ⚠️ THE PORT CARRIES A WORKLOAD (MOTIR-2025). It shipped with exactly one
+// consumer and was shaped like it: a spec could only describe a CI runner, and a
+// status could not say why a container stopped. `code-graph-index-fleet.md` §2
+// makes indexing the SECOND consumer, and §11 records that an index container
+// has no GitHub job at all — "no runner registers, no `runs-on` resolves, no
+// `workflow_job` fires" — so it could only have filled `workflowJobId` by
+// inventing a number, which would name the machine `motir-runner-<a lie>` and
+// tag it as a CI runner in the Fly console and to the reaper.
+//
+// So the spec NAMES its workload and `workflowJobId` is nullable. The database
+// was already there and already said why: `CiContainerUsage.workflowJobId` is
+// `String?` with the comment "NULLABLE because only a CI container has one". The
+// column anticipated this; the TypeScript did not.
 
 /** Which implementation is behind the port. `fake` is a first-class member, not
  *  a test artifact: §4's rule 2 requires it to ship alongside the Fly adapter,
@@ -48,8 +64,27 @@ export interface ContainerSpec {
   readonly workspaceId: string;
   readonly projectId: string;
   readonly repoFullName: string;
-  /** The GitHub job this container exists to serve. One job, one container. */
-  readonly workflowJobId: number;
+  /**
+   * WHAT this container is, from the fleet's own registry
+   * (`lib/ciFleet/workloads.ts`). MOTIR-1997 declared `code_graph_index` and
+   * `hosted_agent` on that union BEFORE either shipped, precisely so a new
+   * workload would be COUNTED rather than discovered; the same reasoning applies
+   * one layer down, to how the container is NAMED and TAGGED at the provider.
+   *
+   * The adapter derives the machine's name and its fleet metadata from this, so
+   * an index container is recognisable in the provider's console — and to
+   * `reap()` — as what it actually is.
+   */
+  readonly workload: FleetWorkloadKind;
+  /**
+   * The GitHub job this container exists to serve. One job, one container.
+   *
+   * NULL for every workload that is not a CI runner. An index or agent container
+   * is dispatched straight onto this port and never touches Actions, so there is
+   * no job id to carry — and inventing one to satisfy the type would make the
+   * container unattributable at the provider.
+   */
+  readonly workflowJobId: number | null;
   /** OCI image ref for the runner image (digest-pinned, never a tag). */
   readonly image: string;
   /** Linux-2-core-EQUIVALENT is fixed by ci-minutes-allowance.md §M. */
@@ -102,6 +137,32 @@ export interface ContainerStatus {
   readonly createdAt: Date | null;
   readonly startedAt: Date | null;
   readonly stoppedAt: Date | null;
+  /**
+   * The container's own exit status, when the provider still reports one.
+   *
+   * ⚠️ FOR A CI RUNNER THIS CARRIED NO INFORMATION — the runner reports to
+   * GitHub, so Motir never needed to know how the process ended. FOR AN INDEX
+   * CONTAINER IT IS THE ENTIRE DIAGNOSTIC CHANNEL: the container writes no
+   * ledger row and its logs are the operator's, so the dispatcher sees a machine
+   * that stopped and a number. `motir-ai`'s indexer image spends a whole
+   * taxonomy on it (`src/indexer/exitCodes.ts`: `10` CONFIG · `20` FETCH · `30`
+   * BUILD · `40` UPLOAD · `41` RECORD · `50` CREDENTIAL_REFUSED · `70`
+   * UNEXPECTED, every value kept below 125 so `137` stays unambiguously the
+   * kernel's OOM-kill), and none of it reached Motir through a port that only
+   * said `state: 'stopped'`.
+   *
+   * ⚠️ `null` IS A REAL ANSWER, NOT A GAP, and the consumer must treat it as its
+   * own case rather than as success. `auto_destroy` means a machine may be gone
+   * before anyone can read it, and a provider is not obliged to have kept the
+   * exit event. "Stopped, code unknown" is a third outcome beside "exited 0" and
+   * "exited 30".
+   *
+   * ⚠️ THE PORT DOES NOT INTERPRET THE NUMBER. Mapping `20` to "re-dispatch" and
+   * `50` to "mint a fresh credential" belongs to the dispatch service; here it
+   * simply becomes observable, as a plain number — never as a provider event
+   * type (§4 rule 1).
+   */
+  readonly exitCode: number | null;
 }
 
 /**
@@ -125,7 +186,15 @@ export interface ContainerUsage {
   readonly workspaceId: string;
   readonly projectId: string;
   readonly repoFullName: string;
-  readonly workflowJobId: number;
+  /** WHICH workload this container ran. The fleet org is SHARED — runners, index
+   *  containers and Epic 9's agents all bill the same uncapped account — so a
+   *  cost row that cannot say which workload it was merges three margins into
+   *  one number and makes "what did indexing cost us?" unanswerable. */
+  readonly workload: FleetWorkloadKind;
+  /** Null for every non-CI workload; see `ContainerSpec.workflowJobId`. The
+   *  `ci_container_usage.workflow_job_id` column is already `String?` for
+   *  exactly this reason. */
+  readonly workflowJobId: number | null;
 
   // The machine class actually provisioned (may differ from requested on a
   // fallback), which is why it is reported rather than assumed from the spec.
@@ -196,7 +265,12 @@ export interface UsageAttribution {
   readonly workspaceId: string;
   readonly projectId: string;
   readonly repoFullName: string;
-  readonly workflowJobId: number;
+  /** Threaded in for the same reason the rest of the attribution is: the reaper
+   *  builds this from the PERSISTED record after a crash, and a usage row that
+   *  cannot name its workload is a cost nobody can assign. */
+  readonly workload: FleetWorkloadKind;
+  /** Null for every non-CI workload; see `ContainerSpec.workflowJobId`. */
+  readonly workflowJobId: number | null;
   readonly size: ContainerSize;
   /**
    * When the CALLER saw the container start, if it did.
