@@ -147,7 +147,12 @@ export const ciFleetCostMeterService = {
       // stating the workload here is what keeps the three separable (MOTIR-1995).
       workload: 'ci',
       repoFullName: usage.repoFullName,
-      workflowJobId: String(usage.workflowJobId),
+      // ⚠️ `String(null)` IS `'null'`, NOT NULL. The port's `workflowJobId` is
+      // nullable since MOTIR-2025 and the column has been `String?` since it was
+      // written ("NULLABLE because only a CI container has one"); a bare
+      // `String()` would have written the four-character string `null` into it
+      // and made the absence indistinguishable from a job actually called that.
+      workflowJobId: usage.workflowJobId === null ? null : String(usage.workflowJobId),
       cpuKind: usage.cpuKind,
       cpus: usage.cpus,
       memoryMb: usage.memoryMb,

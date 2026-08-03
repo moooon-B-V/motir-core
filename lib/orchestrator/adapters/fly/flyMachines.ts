@@ -126,8 +126,17 @@ export interface FlyMachine {
   /** Fly's `events` array — "provide[s] log of what's happened with this
    *  Machine", each entry timestamped. The source of PROVIDER-ATTESTED start and
    *  stop instants (§5), which is what makes the monthly reconciliation an audit
-   *  rather than a comparison of two estimates. */
-  readonly events: ReadonlyArray<{ type: string; status: string; timestamp: Date | null }>;
+   *  rather than a comparison of two estimates — and, since MOTIR-2025, of the
+   *  container's EXIT CODE, which is the whole diagnostic channel for a workload
+   *  that reports to nobody. */
+  readonly events: ReadonlyArray<{
+    type: string;
+    status: string;
+    timestamp: Date | null;
+    /** From this event's `request.exit_event`; null on every event that is not an
+     *  exit, and on an exit Fly described without one. */
+    exitCode: number | null;
+  }>;
 }
 
 export interface CreateMachineInput {
@@ -205,6 +214,32 @@ function parseDate(value: unknown): Date | null {
   return null;
 }
 
+/**
+ * The container's own exit status out of one Fly machine event.
+ *
+ * ⚠️ THE GUEST'S CODE WINS, AND THE DISTINCTION IS THE WHOLE POINT. Fly's
+ * `request.exit_event` carries two numbers: `guest_exit_code` is what the
+ * process INSIDE the machine returned — the indexer's own
+ * `src/indexer/exitCodes.ts` value, the thing the dispatcher has to classify —
+ * while `exit_code` is the machine-level code its init reports. They agree on
+ * the ordinary paths and diverge exactly where it matters (a signalled or
+ * OOM-killed guest), so reading the machine-level one would quietly turn "the
+ * indexer refused the credential" into a number about Fly's supervisor.
+ *
+ * Both are read because Fly has populated the pair differently over time and a
+ * missing `guest_exit_code` must degrade to the other number rather than to
+ * `null` — a code we could have had is worse lost than approximated.
+ */
+function exitCodeOfEvent(event: Record<string, unknown>): number | null {
+  const exitEvent = asRecord(asRecord(event['request'])?.['exit_event']);
+  if (!exitEvent) return null;
+  for (const key of ['guest_exit_code', 'exit_code']) {
+    const value = exitEvent[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
 function stringMap(value: unknown): Record<string, string> {
   const record = asRecord(value);
   if (!record) return {};
@@ -229,6 +264,7 @@ export function toFlyMachine(body: unknown): FlyMachine | null {
         type: typeof event['type'] === 'string' ? event['type'] : '',
         status: typeof event['status'] === 'string' ? event['status'] : '',
         timestamp: parseDate(event['timestamp']),
+        exitCode: exitCodeOfEvent(event),
       },
     ];
   });
@@ -271,6 +307,34 @@ export function startedAtOf(machine: FlyMachine): Date | null {
     if (event.type === 'start' && event.timestamp) return event.timestamp;
   }
   return null;
+}
+
+/**
+ * The container's exit code, from the LATEST exit event that reported one.
+ *
+ * `null` when the machine never exited, when Fly kept no exit event, or when the
+ * machine is already gone — all three are the port's "stopped, code unknown",
+ * which `ContainerStatus.exitCode` documents as a real answer rather than a gap.
+ *
+ * LATEST rather than first, matching {@link stoppedAtOf}: `restart: { policy:
+ * 'no' }` means a fleet machine exits once, but an event log that somehow holds
+ * two must report the one that ended the container, not the one it survived.
+ * Events with no timestamp cannot be ordered, so they lose to any that can be —
+ * and are used only when nothing else reported a code at all.
+ */
+export function exitCodeOf(machine: FlyMachine): number | null {
+  let latest: { at: number; code: number } | null = null;
+  let undated: number | null = null;
+  for (const event of machine.events) {
+    if (event.type !== 'exit' || event.exitCode === null) continue;
+    if (!event.timestamp) {
+      if (undated === null) undated = event.exitCode;
+      continue;
+    }
+    const at = event.timestamp.getTime();
+    if (latest === null || at > latest.at) latest = { at, code: event.exitCode };
+  }
+  return latest?.code ?? undated;
 }
 
 /** The instant the machine stopped or was destroyed, from Fly's event log. */

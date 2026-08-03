@@ -1,4 +1,5 @@
 import {
+  exitCodeOf,
   flyFleetConfig,
   flyMachinesClient,
   isTerminalState,
@@ -7,6 +8,7 @@ import {
   type FlyMachine,
 } from './flyMachines';
 import { buildContainerUsage } from '../../usage';
+import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import type {
   ContainerHandle,
   ContainerOrchestrator,
@@ -32,12 +34,98 @@ import type {
  *  Metadata rather than a name convention: a name can be typed by hand in the
  *  Fly console, metadata is what Motir's own code writes. */
 export const FLEET_METADATA_KEY = 'motir_fleet';
-export const FLEET_METADATA_VALUE = 'ci-runner';
+
+/**
+ * The tag's VALUE, per workload (MOTIR-2025) — it used to be the constant
+ * `'ci-runner'`, which was accurate while the fleet had one consumer and became
+ * a lie the moment it had two.
+ *
+ * ⚠️ TOTAL BY CONSTRUCTION, deliberately mirroring `FLEET_WORKLOADS`: adding a
+ * member to `FleetWorkloadKind` without giving it a tag is a COMPILE error, not
+ * a container that boots tagged as something it is not. An index machine
+ * mis-tagged `ci-runner` is unattributable in the Fly console AND indistinguish-
+ * able to `reap()`, which is the failure this record exists to make impossible.
+ *
+ * ⚠️ THE `ci_runner` VALUE IS FROZEN. Machines already running in the fleet app
+ * carry `ci-runner`, and `reap()` recognises its own containers by exactly this
+ * string — changing it would strand every live machine outside the sweep that
+ * exists to stop them billing.
+ */
+export const FLEET_METADATA_VALUES: Record<FleetWorkloadKind, string> = {
+  ci_runner: 'ci-runner',
+  code_graph_index: 'code-graph-index',
+  hosted_agent: 'hosted-agent',
+};
+
+/** Every tag value the fleet answers to — what makes a machine one of OURS,
+ *  whatever it is running. `reap()` sweeps the set, never a single value. */
+const FLEET_METADATA_VALUE_SET: ReadonlySet<string> = new Set(Object.values(FLEET_METADATA_VALUES));
 
 /** Machine metadata naming the intent a container serves, so the reaper can
  *  resolve attribution from the PROVIDER's own record rather than from a Motir
  *  table it may disagree with. */
 export const FLEET_METADATA_INTENT_KEY = 'motir_intent_id';
+
+/**
+ * The machine-NAME prefix per workload — how a human tells the containers apart
+ * in the Fly console, where the metadata is one click further away.
+ *
+ * `ci_runner`'s is frozen for the same reason its tag is: `motir-runner-<jobId>`
+ * is the name the operator runbook, the console and MOTIR-1921's own tests read.
+ */
+const FLEET_MACHINE_NAME_PREFIXES: Record<FleetWorkloadKind, string> = {
+  ci_runner: 'motir-runner',
+  code_graph_index: 'motir-index',
+  hosted_agent: 'motir-agent',
+};
+
+/** Fly machine names are lower-case alphanumerics and hyphens. */
+function slug(value: string, maxLength: number): string {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, maxLength)
+      .replace(/-+$/, '') || 'x'
+  );
+}
+
+/** FNV-1a, 32-bit, as 8 hex digits — a stable discriminator for a name whose
+ *  readable part has to be truncated. Chosen because the plan loader already
+ *  uses FNV-1a for deterministic derivation, not for any cryptographic property. */
+function shortHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
+ * A deterministic, attributable machine name — derived from the WORKLOAD, not
+ * hardcoded to the runner shape.
+ *
+ * The property that matters is the one the original comment named: an orphan in
+ * the Fly console is traceable to the work it served with no reverse lookup.
+ *
+ * ⚠️ THE CI NAME IS BYTE-FOR-BYTE WHAT IT WAS. GitHub's job id is the strongest
+ * discriminator a container can carry — one job, one container — so it stays the
+ * name whenever it exists.
+ *
+ * A workload with no job id is discriminated by the pair that DOES identify it:
+ * the repository and the project. Both go in, the repo readably and the pair as
+ * a hash, because a Motir project spans several repositories and a project
+ * spans several containers — a name built from either alone would collide, and a
+ * Fly machine name has to be unique within the app.
+ */
+function machineNameFor(spec: ContainerSpec): string {
+  const prefix = FLEET_MACHINE_NAME_PREFIXES[spec.workload];
+  if (spec.workflowJobId !== null) return `${prefix}-${spec.workflowJobId}`;
+  const repo = slug(spec.repoFullName.split('/').pop() ?? spec.repoFullName, 24);
+  return `${prefix}-${repo}-${shortHash(`${spec.repoFullName}:${spec.projectId}`)}`;
+}
 
 /**
  * Turn a Fly Machine into the port's opaque handle.
@@ -90,9 +178,9 @@ export const flyOrchestrator: ContainerOrchestrator = {
     const config = flyFleetConfig();
     const machine = await flyMachinesClient.createMachine({
       // A deterministic, attributable name: an orphan in the Fly console is
-      // traceable to the job it served with no reverse lookup, the same property
+      // traceable to the work it served with no reverse lookup, the same property
       // `runnerGroupNameFor` gives a runner group.
-      name: `motir-runner-${spec.workflowJobId}`,
+      name: machineNameFor(spec),
       region: spec.region || config.region,
       image: spec.image,
       cpuKind: spec.size.cpuKind,
@@ -100,8 +188,14 @@ export const flyOrchestrator: ContainerOrchestrator = {
       memoryMb: spec.size.memoryMb,
       env: spec.env,
       metadata: {
-        [FLEET_METADATA_KEY]: FLEET_METADATA_VALUE,
-        [FLEET_METADATA_INTENT_KEY]: String(spec.workflowJobId),
+        [FLEET_METADATA_KEY]: FLEET_METADATA_VALUES[spec.workload],
+        // Only a CI container has an Actions job to name. The key is OMITTED
+        // rather than set to a placeholder for a workload that has none: an
+        // empty `motir_intent_id` reads, in the console and to anything that
+        // greps metadata, as an intent that could not be resolved.
+        ...(spec.workflowJobId !== null
+          ? { [FLEET_METADATA_INTENT_KEY]: String(spec.workflowJobId) }
+          : {}),
         motir_org_id: spec.orgId,
         motir_project_id: spec.projectId,
       },
@@ -122,6 +216,10 @@ export const flyOrchestrator: ContainerOrchestrator = {
         createdAt: handle.createdAt,
         startedAt: null,
         stoppedAt: null,
+        // GONE takes the exit code with it. The consumer has to treat "stopped,
+        // code unknown" as its own case, which is why the port documents `null`
+        // as an answer rather than as a missing success.
+        exitCode: null,
       };
     }
     return {
@@ -132,6 +230,7 @@ export const flyOrchestrator: ContainerOrchestrator = {
       createdAt: machine.createdAt ?? handle.createdAt,
       startedAt: startedAtOf(machine),
       stoppedAt: stoppedAtOf(machine),
+      exitCode: exitCodeOf(machine),
     };
   },
 
@@ -176,7 +275,11 @@ export const flyOrchestrator: ContainerOrchestrator = {
     const usages: ContainerUsage[] = [];
 
     for (const machine of machines) {
-      if (machine.metadata[FLEET_METADATA_KEY] !== FLEET_METADATA_VALUE) continue;
+      // ⚠️ THE WHOLE FLEET, NOT JUST THE RUNNERS. The sweep recognises any tag
+      // value the registry declares — an index or agent container leaked by a
+      // dead dispatcher bills exactly like a runner does, and a reaper that
+      // matched one hardcoded string would walk straight past it.
+      if (!FLEET_METADATA_VALUE_SET.has(machine.metadata[FLEET_METADATA_KEY] ?? '')) continue;
       const createdAt = machine.createdAt;
       // A machine with no creation instant cannot be aged, and destroying it on a
       // guess could kill a container that booted a second ago. Report it instead
