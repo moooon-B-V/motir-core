@@ -1,5 +1,10 @@
 import { flyOrchestrator } from './adapters/fly';
 import { flyFleetConfig, isFlyFleetConfigured } from './adapters/fly/flyMachines';
+import {
+  flyIndexerImage,
+  isFlyIndexerImageConfigured,
+  INDEXER_IMAGE_ENV_VAR,
+} from './adapters/fly/indexImage';
 import { fakeOrchestrator } from './adapters/fake';
 import { OrchestratorNotConfiguredError } from './errors';
 import { probeImagePull } from './imagePull';
@@ -55,6 +60,96 @@ export function getOrchestrator(): ContainerOrchestrator {
  *  every minute. */
 export function isOrchestratorConfigured(): boolean {
   return selectedOrchestratorProvider() === 'fake' || isFlyFleetConfigured();
+}
+
+// ── The INDEX workload's configuration (MOTIR-1981 · MOTIR-1989) ─────────────
+//
+// The index fleet needs everything the CI fleet needs (an orchestrator that can
+// boot a machine) PLUS its own digest-pinned image, which is a different image
+// with its own release lane. The two accessors below are the index workload's
+// twin of `getOrchestrator()` / `isOrchestratorConfigured()`, and they live here
+// — the composition root — for the reason that function does: this is the one
+// file outside `adapters/fly/` permitted to name the adapter, so the CONFIG
+// stays Fly-shaped in exactly one place and every consumer above sees a
+// provider-neutral `{ image, region }`.
+
+/** What an index container needs from this deployment's configuration. Neutral:
+ *  no Fly type, no token, no app name — a second adapter fills the same shape. */
+export interface IndexFleetConfig {
+  /** The digest-pinned indexer image. On Fly, the `registry.fly.io` reference. */
+  readonly image: string;
+  readonly region: string;
+}
+
+/**
+ * Is this deployment wired to run INDEX containers? Never throws.
+ *
+ * True on the `fake` adapter — which is what the test suites select — for the
+ * same reason `isOrchestratorConfigured()` is: the fake boots no real machine, so
+ * there is no image to pull and nothing to configure. Requiring a real image
+ * there would put a production-only variable in front of every test that drives
+ * the port, and the usual response to that is a placeholder in the test env,
+ * which is the same placeholder that would then work in production.
+ */
+export function isIndexFleetConfigured(): boolean {
+  if (selectedOrchestratorProvider() === 'fake') return true;
+  return isFlyFleetConfigured() && isFlyIndexerImageConfigured();
+}
+
+/**
+ * The index workload's configuration, or the typed not-configured error naming
+ * EVERY missing variable at once.
+ *
+ * ⚠️ ALL OF THEM, NOT THE FIRST. A misconfigured deployment discovers its gaps
+ * one boot at a time otherwise, and every one of those boots is a billed machine
+ * and a dead-lettered run. `flyFleetConfig()` already collects its three; this
+ * adds the image to the same message.
+ *
+ * ⚠️ AND IT THROWS RATHER THAN NO-OPPING. `docs/decisions/code-graph-index-fleet.md`
+ * §5's hard constraint is the ledger: one `job_run` per repo, `succeeded`, with
+ * one `output.repoRef`. A path that quietly returned "nothing to do" when
+ * unconfigured would still let the job record that row — telling the enqueue gate
+ * (`listSucceededCodeGraphIndexRepoRefs`) and the onboarding wizard's per-repo
+ * rows that a repo is indexed when nothing ever ran. Unconfigured must be
+ * LOUD; {@link isIndexFleetConfigured} is what keeps a self-hosted deploy out of
+ * this path, and it is not a licence to be silent once inside it.
+ *
+ * ⚠️ IT ALSO REQUIRES `MOTIR_RUNNER_IMAGE`, WHICH INDEXING DOES NOT USE — stated
+ * rather than hidden. The index workload shares the fleet's Fly ORG, APP and
+ * TOKEN with CI (§3: one shared `motir-fleet` org), and those three arrive
+ * through `flyFleetConfig()`, which also demands the CI runner's image. Reading
+ * the app and token here instead would put a SECOND copy of two env-var names in
+ * the codebase, which `lib/ciFleet/config.ts` records the cost of: "two literals
+ * that agree today are not one constant." No deployment is affected — the cloud
+ * sets both, and a self-hosted one sets neither — so the coupling is accepted and
+ * named. Splitting the accessor belongs with the second adapter, alongside the
+ * `defaultSpecDefaults()` the port boundary's own guard already anticipates.
+ */
+export function indexFleetConfig(): IndexFleetConfig {
+  if (selectedOrchestratorProvider() === 'fake') {
+    // The fake adapter boots nothing, so this reference is never pulled. It is
+    // still a well-formed DIGEST rather than a tag, so a test asserting "the spec
+    // is digest-pinned" exercises the real shape.
+    return { image: 'motir/indexer@sha256:fake', region: 'iad' };
+  }
+  const missing: string[] = [];
+  let region = 'iad';
+  try {
+    region = flyFleetConfig().region;
+  } catch (err) {
+    // Its message already reads `set A, B, C` — unwrap the verb so this one can
+    // re-add it once, over the union of BOTH accessors' missing variables.
+    const detail = err instanceof Error ? err.message.replace(/^set /, '') : '';
+    missing.push(detail || 'the fleet configuration');
+  }
+  const image = flyIndexerImage();
+  if (!image) missing.push(INDEXER_IMAGE_ENV_VAR);
+  // `|| !image` is what narrows the type; `missing.length` alone cannot, and a
+  // cast here would be a cast that outlives the reason for it.
+  if (missing.length > 0 || !image) {
+    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  }
+  return { image, region };
 }
 
 /**
