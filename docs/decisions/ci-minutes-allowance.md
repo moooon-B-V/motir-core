@@ -1163,6 +1163,70 @@ nothing for MOTIR-711 to remember to do.**
   mis-set or unset on `motir-projects`, jobs fall back to GitHub-hosted and the $0 spending
   limit turns a silent cost into a loud failure.
 
+#### §N.1 — The WRITER: org scope confirmed, `visibility: private`, and why the handover needs no unset (MOTIR-2015, 2026-08-02)
+
+**§N said the variable "is set at the org level" and no card ever set it.** The reader shipped
+(MOTIR-1925, 5 job sites) and the writer was nobody's deliverable, so
+`GET /orgs/motir-projects/actions/variables` was **empty**: `runs-on` always resolved to
+`ubuntu-latest`, no queued job's requested labels ever carried the fleet label, and
+`isMotirFleetJob()` refused **every** job that would ever exist. MOTIR-2015 ships the writer
+and settles the three things §N left implicit.
+
+**1 · The level is ORGANIZATION. Confirmed, not re-opened — and now also forced by the
+grant.** §7.3 of `ci-runner-fleet.md` already treats org-level as the baseline and names the
+**repository** level as a _reserved lever_ ("the fallback, if a group ceiling binds"), which
+per-project runner groups holding empirically (MOTIR-1928, 2026-08-02) means is not needed.
+Spending that lever as the default would leave nothing in reserve for the case it exists for.
+Independently: MOTIR-2016 granted `motir-studio` **`organization_actions_variables: write`**
+and _not_ the repository-level `variables` permission, so the org path is the only one the
+credential reaches. **A repo-level default is therefore both unnecessary and, today,
+impossible** — and the code says so structurally: `lib/github/actionsVariables.ts` ships
+**no repository-scoped writer at all**.
+
+**2 · The handover needs NO unset, and the mechanism is the scope itself.** An organization
+variable is a property of the **org**, not of the repository. MOTIR-711 transfers the
+repository OUT of `motir-projects`, so it stops resolving `motir-projects`' variables the
+instant the move lands — `vars.MOTIR_RUNNER` is empty in the new owner's account, `runs-on`
+falls back to `ubuntu-latest`, and there is no call to make, no ordering to get right, and
+nothing to retry. This is what §N's "nothing for MOTIR-711 to remember to do" was always
+resting on; it is now stated as the load-bearing property it is.
+
+> ⚠️ **The repo-level alternative would have inverted this.** Repository variables take
+> **precedence** over organization ones and travel **with** the repository, so a handed-over
+> repo would keep asking for `motir-runner` in an account where no runner will ever register —
+> and a job nobody can serve does not fail, it **queues until GitHub expires it at 24 hours**.
+> The `|| 'ubuntu-latest'` fallback only rescues a repo whose variable is _absent_. So the
+> unset would have had to live in the takeover saga, ordered **before** the transfer for the
+> same reason §G orders the Actions re-enable before it: afterwards the provisioning App no
+> longer reaches the repository, making a missed unset permanent. **If §7.3's per-project-label
+> fallback is ever taken, the unset ships in the same diff as the repo-scoped write** —
+> `projectRepoTakeoverService`'s header carries this note at the site that would own it.
+
+**3 · `visibility: private`, not `all`.** The variable is scoped to the org's **private**
+repositories — exactly the set Motir provisions (both creation paths pass `private: true`).
+The fleet's runner groups carry `allows_public_repositories: false` (§7, a fork's PR can
+execute arbitrary code on a self-hosted runner), so a **public** repo in Motir's org that
+resolved this variable would request a runner the group may never give it, and queue for 24
+hours rather than fail. Scoping to private makes that repo fall back to GitHub-hosted instead:
+**the one visibility the fleet refuses to serve is the one that never sees the variable.**
+
+**Where it is written, and what it costs.** `fleetRunnerVariableService.ensureQuietly()` runs
+in `projectRepoProvisioningService.establishSet`, immediately after the runner-group sync and
+**before any repository exists** — the same race the group's ordering closes, since an
+initialised row's CI-stub commit is a push that queues a job seconds after the repo appears.
+It is org-wide, so it is one conditional `GET` per establish **run** (not per row) and no write
+once the value is right; re-running it is also the **self-healing** path for a variable an
+operator deletes or edits by hand. Quiet by the same contract as the group (ADR §4.2): a
+repository whose variable could not be written is a working repository whose CI runs
+GitHub-hosted — which is precisely what the fallback is for — never a failed establishment.
+
+**The value comes from `MOTIR_RUNNER_LABEL`, imported.** Never a second literal: §M's
+constraints and MOTIR-1964 already record what one duplicated `'motir-runner'` cost, and a
+literal _here_ would be worse than that one, because this is the value GitHub actually serves
+to workflows. Edit it alone and every job requests a label the gate no longer recognises — the
+fleet stops booting while every workflow still reports green. A test fails if the literal
+reappears at the write site.
+
 #### §O — Label-scope the `workflow_job` listener; `isMeta` and `moooon-B-V` are DIFFERENT AXES
 
 **The `workflow_job` `queued` event fires for GitHub-hosted jobs too** — including every one

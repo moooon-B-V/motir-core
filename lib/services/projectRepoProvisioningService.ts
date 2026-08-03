@@ -5,6 +5,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+import { fleetRunnerVariableService } from '@/lib/services/fleetRunnerVariableService';
 import { enqueueCodeGraphIndex } from '@/lib/github/indexEnqueue';
 import {
   RepoNameTakenOnHostError,
@@ -162,6 +163,25 @@ export const projectRepoProvisioningService = {
     // Quiet by contract — a group Motir could not create must not stop the project
     // from getting its repositories; the next sync retries.
     await projectRunnerGroupService.syncQuietly({ projectId, workspaceId: ctx.workspaceId });
+
+    // AND THE RUNNER VARIABLE, FOR THE SAME REASON AND IN THE SAME WINDOW
+    // (MOTIR-2015 · `docs/decisions/ci-runner-fleet.md` §N.1).
+    //
+    // The group decides WHICH runners may serve a repository; `vars.MOTIR_RUNNER`
+    // is what makes the repository ASK for one at all — the starter's
+    // `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` and the CI stub below
+    // both read it. Ordering it here, before any repository exists, closes the same
+    // race the group's ordering closes: an initialised row's CI-stub commit is a
+    // push, which queues a job within seconds of the repository appearing, and a
+    // variable written after that would leave the project's very first job on
+    // GitHub-hosted for no reason anyone could later explain.
+    //
+    // ORG-WIDE, so this is one conditional GET per establish run and not per row —
+    // and re-running it is the self-healing path for a variable deleted out of
+    // band. Quiet by the same contract as the group: a repository whose variable
+    // could not be written is a working repository whose CI runs GitHub-hosted,
+    // which is exactly what the `|| 'ubuntu-latest'` fallback is for.
+    await fleetRunnerVariableService.ensureQuietly();
 
     const results: EstablishRowResult[] = [];
     // SEQUENTIAL on purpose — see the module header.

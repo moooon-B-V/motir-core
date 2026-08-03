@@ -26,6 +26,10 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workIt
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../../helpers/runnerGroupFake';
+import {
+  createActionsVariableFake,
+  type ActionsVariableFake,
+} from '../../helpers/actionsVariableFake';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Story-level GATE for "Establish the project's REPOSITORY SET at plan
@@ -92,6 +96,7 @@ let nextRepoId: number;
 /** The project's own GitHub runner group (MOTIR-1972) — establishing a
  *  repository now syncs it, so this suite's GitHub serves those endpoints too. */
 let runnerGroups: RunnerGroupFake;
+let actionsVariables: ActionsVariableFake;
 
 /**
  * A GitHub good enough to establish against: it resolves the provisioning
@@ -121,6 +126,14 @@ function installGitHub(): void {
       // now syncs it, so this suite's GitHub has to know about those endpoints.
       const group = await runnerGroups.handle(u, method, body);
       if (group) return group;
+
+      // The org's FLEET RUNNER VARIABLE (MOTIR-2015) — establishing a repository
+      // now ensures `MOTIR_RUNNER`, so this suite's GitHub has to know about those
+      // endpoints too. The service swallows its own failures by contract, so an
+      // unfaked call here would be INVISIBLE rather than loud: green, silent, and
+      // no longer describing what the product does.
+      const variable = actionsVariables.handle(u, method, body);
+      if (variable) return variable;
       if (
         method === 'POST' &&
         (u.includes('/generate') || u.endsWith(`/orgs/${MOTIR_ORG}/repos`))
@@ -195,6 +208,7 @@ beforeEach(async () => {
   existingRepos = new Map();
   refusals = new Map();
   nextRepoId = 700_001;
+  actionsVariables = createActionsVariableFake(MOTIR_ORG);
   runnerGroups = createRunnerGroupFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
