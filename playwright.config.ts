@@ -87,6 +87,19 @@ for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
 process.env['INNGEST_DEV'] ??= '1';
 process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 
+// Story MOTIR-1981 · MOTIR-1993 — the container fleet's adapter SELECTOR, the
+// same `MOTIR_FLEET_ORCHESTRATOR` variable `selectedOrchestratorProvider()`
+// reads in production. Unset means `fly`, so leaving it alone would point this
+// lane at a real fleet: an E2E that touched the index/CI dispatch path would
+// need a Fly org and token, and could bill a machine. `fake` is the shipped
+// alternative (`lib/orchestrator/adapters/fake/` — a real adapter behind the
+// port, not a test fixture), and it is selected HERE rather than by a mock
+// because the app runs in a separately-spawned process an in-process mock
+// cannot reach. Set on the RUNNER too (below it also rides webServer.env), so a
+// spec or seed helper that reads the selector sees the same answer the server
+// does. `??=` keeps a deliberate local override (e.g. a `fly` smoke) possible.
+process.env['MOTIR_FLEET_ORCHESTRATOR'] ??= 'fake';
+
 /**
  * Playwright config for motir-core's E2E auth smoke suite.
  *
@@ -299,6 +312,12 @@ export default defineConfig({
         GITLAB_APP_CLIENT_ID: E2E_GITLAB_CLIENT_ID,
         GITLAB_APP_CLIENT_SECRET: E2E_GITLAB_CLIENT_SECRET,
         GITLAB_TOKEN_ENCRYPTION_KEY: E2E_GITLAB_TOKEN_ENCRYPTION_KEY,
+        // Story MOTIR-1981 · MOTIR-1993: the fleet adapter selector, handed to
+        // the SERVER (the runner sets its own copy at module scope above). This
+        // is the seam the app reads at boot — `webServer.env` REPLACES the
+        // child's environment for these keys, so an inherited `fly` from the
+        // developer's shell cannot leak in.
+        MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR'] ?? 'fake',
       },
     },
     {
