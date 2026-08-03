@@ -20,6 +20,7 @@ const SPEC: ContainerSpec = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   repoFullName: 'motir-projects/acme-web',
+  workload: 'ci_runner',
   workflowJobId: 44001,
   image: 'motir/ci-runner@sha256:abc',
   size: FLEET_CONTAINER_SIZE,
@@ -33,6 +34,7 @@ const ATTRIBUTION: UsageAttribution = {
   workspaceId: 'ws-1',
   projectId: 'proj-1',
   repoFullName: 'motir-projects/acme-web',
+  workload: 'ci_runner',
   workflowJobId: 44001,
   size: FLEET_CONTAINER_SIZE,
   observedStartedAt: null,
@@ -128,6 +130,75 @@ describe('the fake satisfies the same port contract as Fly', () => {
       fakeOrchestrator.teardown(handle, 'job_completed', ATTRIBUTION),
     ).rejects.toMatchObject({ code: 'ORCHESTRATOR_API_FAILED' });
     expect(fakeOrchestrator.liveContainerIds()).toEqual([handle.id]);
+  });
+
+  // ── the EXIT REASON, driven through the fake (MOTIR-2025) ───────────────
+
+  it('a container can be completed with a chosen exit code, and `describe` reports it', async () => {
+    // The control the index dispatcher is built against: the whole classification
+    // it will do — `20` re-dispatch, `50` mint a fresh credential — is a function
+    // of this number, and this is the only way to exercise every branch of it
+    // without booting real containers.
+    const handle = await fakeOrchestrator.provision(SPEC);
+    fakeOrchestrator.completeJob(handle.id, { exitCode: 50 });
+    expect((await fakeOrchestrator.describe(handle)).exitCode).toBe(50);
+  });
+
+  it('reports the code of a container that has already SELF-DESTROYED', async () => {
+    // ⚠️ `exists: false` IS THE HAPPY PATH — `auto_destroy` means a successful
+    // run ends with the machine deleting itself. A fake that dropped the code
+    // there could not exercise the one case that matters most: a container that
+    // ran, failed at BUILD, and took itself away.
+    const handle = await fakeOrchestrator.provision(SPEC);
+    fakeOrchestrator.completeJob(handle.id, { exitCode: 30 });
+    const status = await fakeOrchestrator.describe(handle);
+    expect(status.exists).toBe(false);
+    expect(status.exitCode).toBe(30);
+  });
+
+  it('distinguishes exit 0 from "stopped, code unknown"', async () => {
+    const succeeded = await fakeOrchestrator.provision(SPEC);
+    fakeOrchestrator.completeJob(succeeded.id, { exitCode: 0 });
+    expect((await fakeOrchestrator.describe(succeeded)).exitCode).toBe(0);
+
+    // The DEFAULT is `null`, not `0`: a machine that deleted itself before
+    // anyone read it genuinely has no observable code, and defaulting to success
+    // would let a consumer that never handles the unknown case pass its tests.
+    const unknown = await fakeOrchestrator.provision(SPEC);
+    fakeOrchestrator.completeJob(unknown.id);
+    expect((await fakeOrchestrator.describe(unknown)).exitCode).toBeNull();
+  });
+
+  it('a running container has no exit code yet', async () => {
+    const handle = await fakeOrchestrator.provision(SPEC);
+    expect((await fakeOrchestrator.describe(handle)).exitCode).toBeNull();
+  });
+
+  it('an INDEX spec — no job id at all — provisions and is recorded as itself', async () => {
+    // The type-level half of the card: a spec with `workload:
+    // 'code_graph_index'` and a NULL `workflowJobId` type-checks and provisions.
+    // Before this it could not be expressed at all.
+    const indexSpec: ContainerSpec = {
+      ...SPEC,
+      workload: 'code_graph_index',
+      workflowJobId: null,
+    };
+    const handle = await fakeOrchestrator.provision(indexSpec);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([handle.id]);
+    expect(fakeOrchestrator.specs.at(-1)).toMatchObject({
+      workload: 'code_graph_index',
+      workflowJobId: null,
+    });
+
+    const usage = await fakeOrchestrator.teardown(handle, 'job_completed', {
+      ...ATTRIBUTION,
+      workload: 'code_graph_index',
+      workflowJobId: null,
+    });
+    // The cost row says WHICH workload it was — the fleet org is shared, so a
+    // row that could not would merge three margins into one number.
+    expect(usage.workload).toBe('code_graph_index');
+    expect(usage.workflowJobId).toBeNull();
   });
 });
 

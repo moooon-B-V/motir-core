@@ -43,6 +43,10 @@ interface FakeMachine {
   createdAt: Date;
   startedAt: Date | null;
   stoppedAt: Date | null;
+  /** What the container's own process exited with, once it has. Null while it is
+   *  still running, and null for a container that stopped without one being
+   *  observable — the port's "stopped, code unknown". */
+  exitCode: number | null;
   /** True once the container self-destroyed (the `auto_destroy` happy path). */
   gone: boolean;
 }
@@ -68,10 +72,19 @@ export interface FakeOrchestratorControls {
   /** Make the next `teardown` throw — used to prove the caller still records the
    *  failure rather than losing the container silently. */
   failNextTeardown(detail?: string): void;
-  /** Simulate the job finishing: the runner exits and `auto_destroy` deletes the
-   *  machine, so a later `describe` reports it GONE — the happy path, and the
-   *  one that proves teardown works without a machine to read. */
-  completeJob(handleId: string): void;
+  /**
+   * Simulate the job finishing: the runner exits and `auto_destroy` deletes the
+   * machine, so a later `describe` reports it GONE — the happy path, and the one
+   * that proves teardown works without a machine to read.
+   *
+   * `exitCode` is what the container's own process returned (MOTIR-2025). It
+   * defaults to `null` — "stopped, code unknown" — because that is the honest
+   * default for a machine that deleted itself, and because defaulting to `0`
+   * would let a consumer that forgot to handle the unknown case pass its tests
+   * by reading a success Motir never observed. Pass a number to drive the
+   * indexer's taxonomy (`30` BUILD, `50` CREDENTIAL_REFUSED, `137` OOM).
+   */
+  completeJob(handleId: string, options?: { exitCode?: number | null }): void;
   /** Pretend this container was created earlier, so `reap(olderThan)` sees it. */
   backdate(handleId: string, createdAt: Date): void;
   /** Every container the fake has ever been asked to boot, in order. */
@@ -139,11 +152,12 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
     nextTeardownFailure = detail;
   },
 
-  completeJob(handleId) {
+  completeJob(handleId, options = {}) {
     const machine = machines.get(handleId);
     if (!machine) throw new Error(`fake orchestrator has no container ${handleId}`);
     machine.state = 'destroyed';
     machine.stoppedAt = new Date();
+    machine.exitCode = options.exitCode ?? null;
     // `auto_destroy: true` — the machine deletes ITSELF, so the provider no
     // longer has it. This is what makes the happy path the hardest case for
     // metering, and the reason `UsageAttribution.observedStartedAt` exists.
@@ -187,6 +201,7 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
       createdAt,
       startedAt: behaviour === 'never_start' ? null : createdAt,
       stoppedAt: null,
+      exitCode: null,
       gone: false,
     });
     provisioned.push(handle);
@@ -204,6 +219,13 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
         createdAt: machine?.createdAt ?? handle.createdAt,
         startedAt: machine?.startedAt ?? null,
         stoppedAt: machine?.stoppedAt ?? null,
+        // ⚠️ THE FAKE STILL REPORTS THE CODE OF A CONTAINER THAT IS GONE, and it
+        // has to: `exists: false` is the happy path for `auto_destroy`, so a
+        // fake that dropped the code there could not exercise the ONE case the
+        // index dispatcher is built around — a machine that ran, exited 30, and
+        // deleted itself. A container the fake never held reports null, which is
+        // the genuinely-unobservable case.
+        exitCode: machine?.exitCode ?? null,
       };
     }
     return {
@@ -216,6 +238,7 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
       createdAt: machine.createdAt,
       startedAt: machine.startedAt,
       stoppedAt: machine.stoppedAt,
+      exitCode: machine.exitCode,
     };
   },
 

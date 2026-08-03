@@ -93,6 +93,7 @@ export function buildContainerUsage(input: {
     workspaceId: attribution.workspaceId,
     projectId: attribution.projectId,
     repoFullName: attribution.repoFullName,
+    workload: attribution.workload,
     workflowJobId: attribution.workflowJobId,
 
     cpuKind: attribution.size.cpuKind,

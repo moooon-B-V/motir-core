@@ -88,6 +88,7 @@ const SETTLED_OUTCOME = {
     workspaceId: 'ws-1',
     projectId: 'proj-1',
     repoFullName: 'moooon-B-V/motir-core',
+    workload: 'ci_runner',
     workflowJobId: 99,
     cpuKind: 'shared',
     cpus: 2,
@@ -509,6 +510,7 @@ const SESSION = {
     workspaceId: 'ws-1',
     projectId: 'proj-1',
     repoFullName: 'moooon-B-V/motir-core',
+    workload: 'ci_runner',
     workflowJobId: 99,
   },
 };
