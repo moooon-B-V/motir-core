@@ -8,30 +8,67 @@ import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
+import { jobServices } from '@/lib/jobs/services';
+import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
+import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
+import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { githubProvider } from '@/lib/git/providers/github';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
-// system.code-graph-index / -refresh — the STEP SHAPE (MOTIR-1974). Driven
-// IN-PROCESS via @inngest/test against a REAL Postgres, with only the two
-// externals stubbed (the GitHub tarball fetch, the motir-ai upload).
+// system.code-graph-index — THE DURABLE STEP SHAPE (MOTIR-2027), and
+// system.code-graph-refresh — the shape it USED to share (MOTIR-1974).
 //
-// What is under test is not "does it index" — the service test covers that —
-// but the DURABLE SHAPE, because the shape is what failed in production. Both
-// jobs used to do everything in one `step.run`, so a single platform invocation
-// had to cover the fetch plus one upload per project; every production run hit
-// `FUNCTION_INVOCATION_TIMEOUT` and dead-lettered, tiny repos included. A run
-// must now checkpoint BETWEEN projects, which is exactly what these assertions
-// pin: the number of steps, and their ids.
+// Driven IN-PROCESS via @inngest/test against a REAL Postgres, on the `fake`
+// orchestrator, with only the two externals stubbed (GitHub's tarball redirect,
+// motir-ai's run-credential mint).
+//
+// What is under test is not "does it index" — `tests/ciFleet/
+// codeGraphIndexDispatch.test.ts` covers the dispatch service — but the DURABLE
+// SHAPE and the LEDGER CONTRACT, because those are what production breaks on:
+//
+//   • The shape. An index run is minutes and `app/api/inngest/route.ts` pins
+//     `maxDuration = 300`, so supervision must be a SEQUENCE OF BOUNDED STEPS
+//     with `ctx.step.sleep` between them, never a loop inside one step. That is
+//     the MOTIR-2007 defect applied to a second workload.
+//   • The ledger. Whatever the fan-out does internally — one container per
+//     (repo × project) — the JOB still writes ONE `job_run` per repo with ONE
+//     `output.repoRef`, because `listSucceededCodeGraphIndexRepoRefs` and the
+//     onboarding wizard's per-repo rows read exactly that
+//     (`docs/decisions/code-graph-index-fleet.md` §6).
+//   • And no repo tarball ever enters the function again (§2).
 //
 // @inngest/test hands back a mocked `ctx`, so `ctx.step.run` is a spy and the
 // step ids it was called with are directly assertable — the closest thing to
 // observing the executor's checkpoints from a unit test.
+//
+// ⚠️ `step.sleep` HANGS `InngestTestEngine` UNLESS ITS STATE IS SUPPLIED. The
+// engine only records state for steps that RAN, and a sleep never "runs" — so an
+// un-stubbed sleep is re-found forever and `execute()` never resolves (it fails
+// as a test TIMEOUT, which reads like a slow test rather than a missing stub).
+// `sleepSteps()` pre-fulfils them; supply more than the loop can use.
 
 const PASSWORD = 'hunter2hunter2';
 const TARBALL = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x11, 0x22]);
+const TARBALL_URL =
+  'https://codeload.github.com/moooon/motir-core/legacy.tar.gz/refs/heads/main?token=PRESIGNED';
+const AI_URL = 'https://ai.example.test';
+const SERVICE_TOKEN = 'svc-token-must-never-reach-a-container';
+const RUN_CREDENTIAL = 'mrc1.payload.signature';
+const REPO_REF = 'moooon/motir-core';
 
-function stubGithubTarball(): void {
+/** Set by the tarball response's traps: TRUE means something buffered the body. */
+let tarballBodyTouched = false;
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+function stubAppCredentials(): void {
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },
@@ -39,21 +76,73 @@ function stubGithubTarball(): void {
   });
   vi.stubEnv('GITHUB_APP_ID', '999');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+}
+
+/**
+ * The INDEX job's world: the `fake` orchestrator, motir-ai reachable for the
+ * run-credential mint, and GitHub answering the tarball request with the 302 the
+ * resolver reads a `Location` off.
+ *
+ * ⚠️ THE REDIRECT'S BODY IS A TRAP, not a payload. Reading it is the §2 OOM this
+ * whole architecture removes, so every buffering method fails loudly instead of
+ * quietly costing a few hundred megabytes.
+ */
+function stubIndexFleet(): void {
+  stubAppCredentials();
+  vi.stubEnv('MOTIR_AI_URL', AI_URL);
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', SERVICE_TOKEN);
+  // Select the FAKE adapter the way a deployment selects Fly.
+  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string): Promise<Response> => {
-      const u = String(url);
-      if (u.includes('/access_tokens')) {
-        return new Response(
-          JSON.stringify({
-            token: 'ghs_x',
-            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
+      // Matched on the PARSED url, never `includes()` — a substring host check is
+      // a HIGH CodeQL alert in this repo, test fixtures included.
+      const parsed = new URL(String(url));
+      if (parsed.host === new URL(AI_URL).host) {
+        return json(201, {
+          credential: RUN_CREDENTIAL,
+          expiresAt: new Date(Date.now() + 900_000).toISOString(),
+        });
       }
-      if (u.includes('/tarball/')) return new Response(TARBALL, { status: 200 });
-      throw new Error(`unexpected fetch to ${u}`);
+      if (parsed.pathname.endsWith('/access_tokens')) {
+        return json(201, {
+          token: 'ghs_installation_must_never_reach_a_container',
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        });
+      }
+      if (parsed.pathname.includes('/tarball/')) {
+        const res = new Response(null, { status: 302, headers: { location: TARBALL_URL } });
+        const trap = (name: string) => () => {
+          tarballBodyTouched = true;
+          throw new Error(`the index path read the tarball body via ${name}()`);
+        };
+        for (const name of ['arrayBuffer', 'blob', 'text', 'json'] as const) {
+          Object.defineProperty(res, name, { value: trap(name) });
+        }
+        return res;
+      }
+      throw new Error(`unexpected fetch to ${parsed.href}`);
+    }),
+  );
+}
+
+/** The REFRESH job's world — unchanged: it still fetches the bytes in-process. */
+function stubGithubTarball(): void {
+  stubAppCredentials();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string): Promise<Response> => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname.endsWith('/access_tokens')) {
+        return json(200, {
+          token: 'ghs_x',
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        });
+      }
+      if (parsed.pathname.includes('/tarball/')) return new Response(TARBALL, { status: 200 });
+      throw new Error(`unexpected fetch to ${parsed.href}`);
     }),
   );
 }
@@ -106,10 +195,66 @@ function stepIds(ctx: { step: { run: { mock: { calls: unknown[][] } } } }): stri
   return ctx.step.run.mock.calls.map((call) => String(call[0]));
 }
 
+/** Pre-fulfilled `step.sleep` state, so the engine can cross the boundaries. */
+function sleepSteps(projectIds: string[], perProject = 6) {
+  return projectIds.flatMap((projectId) =>
+    Array.from({ length: perProject }, (_, i) => ({
+      id: `index-wait:${projectId}:${i + 1}`,
+      handler: () => null,
+    })),
+  );
+}
+
+const indexEvent = (installationId: string, workspaceId: string) => ({
+  name: 'system.code-graph-index' as const,
+  // ⚠️ THE EVENT ID IS PINNED. `InngestTestEngine` mints a FRESH one (and a
+  // fresh runId) per execution, and `defineJob` correlates its ledger row by
+  // (functionId, eventId) — so a generated id makes a two-execution assertion
+  // read two different runs.
+  id: `evt-${installationId}`,
+  data: {
+    installationId,
+    workspaceId,
+    repoOwner: 'moooon',
+    repoName: 'motir-core',
+    defaultBranch: 'main',
+  },
+});
+
+/**
+ * The container exits WHILE SUPERVISION SLEEPS — which is what really happens,
+ * and the only way a real poll ever sees a terminal machine. Wraps the genuine
+ * `pollIndexContainer` rather than replacing it, so the classification, the
+ * deadlines and the read-failure tolerance are all still the shipped ones.
+ */
+function containerExitsWith(exitCode: number | null): void {
+  const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
+    codeGraphIndexDispatchService,
+  );
+  vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockImplementation(
+    async (session, previous, options) => {
+      for (const id of fakeOrchestrator.liveContainerIds()) {
+        fakeOrchestrator.completeJob(id, { exitCode });
+      }
+      return realPoll(session, previous, options);
+    },
+  );
+}
+
+/** The `system.code-graph-index` ledger rows, newest last. */
+async function indexRuns() {
+  return db.jobRun.findMany({
+    where: { functionId: 'system.code-graph-index' },
+    orderBy: { startedAt: 'asc' },
+  });
+}
+
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
   _resetInstallationTokenCache();
+  fakeOrchestrator.reset();
+  tarballBodyTouched = false;
 });
 
 afterEach(() => {
@@ -122,115 +267,522 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-describe('system.code-graph-index — one checkpointed step per project', () => {
-  it('resolves in its own step, then indexes each project in a step of its own', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-multi', 3);
-    stubGithubTarball();
-    const indexSpy = vi.spyOn(motirAiClient, 'indexCodeGraph').mockResolvedValue({
-      status: 'ok',
-      repoRef: 'moooon/motir-core',
-      filesIndexed: 12,
-      nodesChanged: 3,
-      edgesChanged: 4,
-      commitSha: 'abc',
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SHAPE — boot → poll(×N) → settle, per project, as separate durable steps.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('system.code-graph-index — durable steps, never a supervision loop', () => {
+  it('drives boot → poll → settle as SEPARATE steps per project, sleeping in between', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-shape', 2);
+    stubIndexFleet();
+    containerExitsWith(0);
+    // The in-process composition exists for scripts and the service's own suite.
+    // A job that called it would rebuild the hour-long invocation MOTIR-2007
+    // removed for CI — so the assertion is that the JOB never touches it.
+    const inProcess = vi.spyOn(codeGraphIndexDispatchService, 'runIndexContainer');
+    const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, ctx } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
     });
 
-    const engine = new InngestTestEngine({
-      function: codeGraphIndex,
-      events: [
-        {
-          name: 'system.code-graph-index',
-          data: {
-            installationId,
-            workspaceId,
-            repoOwner: 'moooon',
-            repoName: 'motir-core',
-            defaultBranch: 'main',
-            archived: false,
-          },
-        },
-      ],
-    });
-    const { result, ctx } = await engine.execute();
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
+    expect(inProcess).not.toHaveBeenCalled();
 
-    expect(result).toEqual({ indexed: true, repoRef: 'moooon/motir-core', projectsIndexed: 3 });
-    expect(indexSpy).toHaveBeenCalledTimes(3);
-
-    // THE REGRESSION. The work is spread over one resolve step plus a step per
-    // project — never a single step covering the fetch and all three uploads,
-    // which is the shape that could not finish inside one invocation. (The
-    // `job-run:*` steps are the defineJob ledger wrapper's own.)
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
     expect(ids[0]).toBe('resolve-target');
-    expect(ids.slice(1).sort()).toEqual(projectIds.map((id) => `index-project:${id}`).sort());
-    expect(ids).toHaveLength(4);
-  });
+    expect(ids[1]).toBe('assert-fleet-configured');
+    // Each project's three phases are three DISTINCT checkpoints, in order — the
+    // property that makes a step, not the run, the unit `maxDuration` applies to.
+    for (const projectId of projectIds) {
+      const own = ids.filter((id) => id.endsWith(`:${projectId}`) || id.includes(`:${projectId}:`));
+      expect(own[0]).toBe(`index-boot:${projectId}`);
+      expect(own[1]).toBe(`index-poll:${projectId}:1`);
+      expect(own.at(-1)).toBe(`index-settle:${projectId}`);
+    }
 
-  it('keys each project step by project id, so a replay memoizes the same unit of work', async () => {
-    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-key', 1);
-    stubGithubTarball();
-    vi.spyOn(motirAiClient, 'indexCodeGraph').mockResolvedValue({
-      status: 'ok',
-      repoRef: 'moooon/motir-core',
-      filesIndexed: 1,
-      nodesChanged: 0,
-      edgesChanged: 0,
-      commitSha: 'abc',
+    // ⚠️ NO STEP CONTAINS A SUPERVISION LOOP. The boot step's own resolved value
+    // is a SESSION awaiting supervision — not a settled outcome — so the boot
+    // cannot have waited for the container inside its own step. A regression
+    // that awaited the run inside `bootIndexContainer` fails right here.
+    for (const call of boot.mock.results) {
+      expect(await call.value).toMatchObject({ phase: 'supervising' });
+    }
+  }, 30_000);
+
+  it('supervises across MANY poll steps, then settles — a container outliving one invocation', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-long', 1);
+    stubIndexFleet();
+    // Not terminal until the fourth poll: a container that ran for longer than
+    // the supervising invocation could itself have lasted.
+    const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
+      codeGraphIndexDispatchService,
+    );
+    let polls = 0;
+    const poll = vi
+      .spyOn(codeGraphIndexDispatchService, 'pollIndexContainer')
+      .mockImplementation(async (session, previous, options) => {
+        polls += 1;
+        if (polls >= 4) {
+          for (const id of fakeOrchestrator.liveContainerIds()) {
+            fakeOrchestrator.completeJob(id, { exitCode: 0 });
+          }
+        }
+        return realPoll(session, previous, options);
+      });
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, ctx } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
     });
 
-    const engine = new InngestTestEngine({
-      function: codeGraphIndex,
-      events: [
-        {
-          name: 'system.code-graph-index',
-          data: {
-            installationId,
-            workspaceId,
-            repoOwner: 'moooon',
-            repoName: 'motir-core',
-            defaultBranch: 'main',
-          },
-        },
-      ],
-    });
-    const { ctx } = await engine.execute();
+    expect(poll).toHaveBeenCalledTimes(4);
+    const projectId = projectIds[0]!;
+    // Four polls means four checkpoints, each its own invocation budget — and a
+    // sleep between every pair, which costs no invocation at all.
+    expect(stepIds(ctx)).toEqual(
+      expect.arrayContaining([
+        `index-poll:${projectId}:1`,
+        `index-poll:${projectId}:4`,
+        `index-settle:${projectId}`,
+      ]),
+    );
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    // Teardown was reached — the guarantee the whole stepped shape exists for.
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.teardowns).toHaveLength(1);
+  }, 30_000);
 
-    // A positional id ('index-project:0') would re-point at a different project
-    // if the workspace's project list changed between attempts; the project id
-    // cannot.
-    expect(stepIds(ctx)).toContain(`index-project:${projectIds[0]}`);
-  });
+  it('NEVER materializes the repo tarball in the function', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-bytes', 2);
+    stubIndexFleet();
+    containerExitsWith(0);
+    // The two ways bytes used to enter this process: the buffering fetch, and
+    // the motir-ai upload that carried them.
+    const fetchBytes = vi.spyOn(githubProvider, 'fetchRepoTarball');
+    const upload = vi.spyOn(motirAiClient, 'indexCodeGraph');
 
-  it('resolves in ONE step and skips the fan-out entirely for a vanished tenant', async () => {
-    const engine = new InngestTestEngine({
-      function: codeGraphIndex,
-      events: [
-        {
-          name: 'system.code-graph-index',
-          data: {
-            installationId: 'inst-gone',
-            workspaceId: 'ws-gone',
-            repoOwner: 'moooon',
-            repoName: 'motir-core',
-            defaultBranch: 'main',
-          },
-        },
-      ],
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
     });
-    const { result, ctx } = await engine.execute();
+
+    expect(result).toMatchObject({ indexed: true });
+    // ⚠️ THE DEFECT, INVERTED (§2). `motir-core` itself exhausted 5/5 attempts on
+    // the old path because the function buffered a whole repo; the pre-signed URL
+    // now goes to the container and the body is never read here at all.
+    expect(tarballBodyTouched).toBe(false);
+    expect(fetchBytes).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+    // What the container was actually handed: the resolved URL, not a token.
+    for (const spec of fakeOrchestrator.specs) {
+      expect(spec.env['MOTIR_INDEX_TARBALL_URL']).toBe(TARBALL_URL);
+    }
+  }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE LEDGER CONTRACT — one `job_run` per REPO, one `output.repoRef` (§6).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the ledger stays per REPO however many containers the fan-out boots', () => {
+  it.each([1, 2])(
+    'writes ONE succeeded run with ONE repoRef for a workspace with %i project(s)',
+    async (projectCount) => {
+      const { workspaceId, projectIds, installationId } = await seedWorkspace(
+        `cgf-ledger${projectCount}`,
+        projectCount,
+      );
+      stubIndexFleet();
+      containerExitsWith(0);
+
+      const engine = new InngestTestEngine({ function: codeGraphIndex });
+      const { result } = await engine.execute({
+        events: [indexEvent(installationId, workspaceId)],
+        steps: sleepSteps(projectIds),
+      });
+
+      // One container PER (repo × project) — the fan-out really did widen.
+      expect(fakeOrchestrator.provisioned).toHaveLength(projectCount);
+      expect(result).toEqual({
+        indexed: true,
+        repoRef: REPO_REF,
+        projectsIndexed: projectCount,
+      });
+
+      // ⚠️ AND THE LEDGER DID NOT. Two projects must not become two rows or two
+      // repoRefs: `listSucceededCodeGraphIndexRepoRefs` builds the indexed SET
+      // from these rows, and the wizard's per-repo rows and `allIndexed` gate on
+      // it. This is the case that proves the ledger did not become per-project.
+      const runs = await indexRuns();
+      expect(runs).toHaveLength(1);
+      expect(runs[0]!.status).toBe('succeeded');
+      expect(runs[0]!.output).toEqual({
+        indexed: true,
+        repoRef: REPO_REF,
+        projectsIndexed: projectCount,
+      });
+    },
+    30_000,
+  );
+
+  it('the enqueue gate reads the run back as exactly one indexed repoRef', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-gate', 2);
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    });
+
+    // Read BACK through the consumer, not through the row: the contract is what
+    // the gate and the onboarding wizard see, and a shape change that still
+    // stored "something" would pass a row assertion and fail here.
+    const { withSystemContext } = await import('@/lib/workspaces/context');
+    const { jobRunRepository } = await import('@/lib/repositories/jobRunRepository');
+    const refs = await withSystemContext((tx) =>
+      jobRunRepository.listSucceededCodeGraphIndexRepoRefs(workspaceId, tx),
+    );
+    expect(refs).toEqual([REPO_REF]);
+  }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE THREE NO-OP VERDICTS — the shipped contract that the job never throws on
+// a tenant that went away, and the ledger records WHY nothing was indexed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged', () => {
+  it('installation_missing: resolves in ONE step, boots nothing, and records the reason', async () => {
+    const { workspaceId } = await seedWorkspace('cgf-noinst', 1);
+    stubIndexFleet();
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, ctx } = await engine.execute({
+      events: [indexEvent('inst-gone', workspaceId)],
+    });
 
     expect(result).toEqual({ indexed: false, reason: 'installation_missing' });
-    expect(stepIds(ctx).filter((id) => id.startsWith('index-project:'))).toEqual([]);
+    const runs = await indexRuns();
+    expect(runs[0]!.status).toBe('succeeded');
+    expect(runs[0]!.output).toEqual({ indexed: false, reason: 'installation_missing' });
+    // Nothing was spent: not the config gate, not a container.
+    expect(stepIds(ctx)).not.toContain('assert-fleet-configured');
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
+  it('no_projects: a workspace with nothing to index boots nothing and records the reason', async () => {
+    const { workspaceId, installationId } = await seedWorkspace('cgf-noproj', 0);
+    stubIndexFleet();
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, ctx } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+    });
+
+    expect(result).toEqual({ indexed: false, reason: 'no_projects' });
+    const runs = await indexRuns();
+    expect(runs[0]!.output).toEqual({ indexed: false, reason: 'no_projects' });
+    expect(stepIds(ctx)).not.toContain('assert-fleet-configured');
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+
+  it('workspace_missing: a vanished tenant is a clean no-op, never a throw', async () => {
+    const { installationId } = await seedWorkspace('cgf-nows', 1);
+    stubIndexFleet();
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, error, ctx } = (await engine.execute({
+      events: [indexEvent(installationId, 'ws-gone')],
+    })) as { result?: unknown; error?: unknown; ctx: Parameters<typeof stepIds>[0] };
+
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ indexed: false, reason: 'workspace_missing' });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(stepIds(ctx)).not.toContain('assert-fleet-configured');
+    // ⚠️ THIS VERDICT ALONE HAS NO LEDGER ROW, and that is `job_run.workspaceId`'s
+    // FK rather than a gap here: `recordStart` catches the P2003 for a tenant that
+    // is already gone (MOTIR-1545) and returns null, so there is no row to flip.
+    // The verdict is still the run's RESULT, which is what the assertion above
+    // pins — and a workspace that exists (the two cases above) does get the row.
+    expect(await indexRuns()).toEqual([]);
   });
 });
 
-describe('system.code-graph-refresh — the same shape', () => {
-  it('checkpoints per project too (it drives the same steps as the index job)', async () => {
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP IDS ARE KEYED BY projectId — what Inngest memoizes against.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('step ids identify the SAME unit of work on every replay', () => {
+  it('keys boot / poll / settle by project id, never by loop position', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-keys', 2);
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { ctx } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    });
+
+    const ids = stepIds(ctx);
+    for (const projectId of projectIds) {
+      expect(ids).toContain(`index-boot:${projectId}`);
+      expect(ids).toContain(`index-poll:${projectId}:1`);
+      expect(ids).toContain(`index-settle:${projectId}`);
+    }
+    // A positional id would re-point at a DIFFERENT project if the workspace's
+    // project list changed between attempts. None exists.
+    expect(ids.filter((id) => /^index-(boot|settle):\d+$/.test(id))).toEqual([]);
+  }, 30_000);
+
+  it('a replay after the project list changed resumes the MEMOIZED project', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-replay', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    const memoizedProjectId = projectIds[0]!;
+
+    // The replay: `resolve-target` comes back from Inngest's memo, and the
+    // workspace has since gained a project the memo never saw. A run that
+    // re-derived its fan-out from the live list would now index the NEW project.
+    const resolved = await codeGraphIndexService.resolveIndexTarget({
+      installationId,
+      workspaceId,
+      repoOwner: 'moooon',
+      repoName: 'motir-core',
+      defaultBranch: 'main',
+    });
+    const drifted = await projectsService.createProject({
+      workspaceId,
+      actorUserId: (await db.user.findFirstOrThrow()).id,
+      name: 'Added between attempts',
+      identifier: 'DRIFT',
+    });
+    const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, ctx } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: [
+        { id: 'resolve-target', handler: () => resolved },
+        ...sleepSteps([memoizedProjectId, drifted.id]),
+      ],
+    });
+
+    // It resumed the SAME project's work. The drifted project is not indexed by
+    // this run — it belongs to the next one, which will resolve it for itself.
+    expect(stepIds(ctx)).toContain(`index-boot:${memoizedProjectId}`);
+    expect(stepIds(ctx)).not.toContain(`index-boot:${drifted.id}`);
+    expect(boot.mock.calls.map((call) => call[0]!.projectId)).toEqual([memoizedProjectId]);
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+  }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FAILURE — the run FAILS, loudly and by name, rather than claiming a repo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a container that did not index FAILS the run', () => {
+  it.each([
+    [30, 'graph_unbuildable'],
+    [137, 'out_of_memory'],
+    [50, 'credential_refused'],
+    [null, 'exit_unobserved'],
+  ] as const)(
+    'exit %s surfaces the NAMED class %s, and records no success',
+    async (code, name) => {
+      const { workspaceId, projectIds, installationId } = await seedWorkspace(
+        `cgf-x${code ?? 'null'}`,
+        1,
+      );
+      stubIndexFleet();
+      containerExitsWith(code);
+
+      const engine = new InngestTestEngine({ function: codeGraphIndex });
+      // `@inngest/test` CAPTURES a handler throw onto `error` (serialized, so the
+      // subclass name flattens to `Error`) rather than rejecting `execute()`.
+      const { result, error } = (await engine.execute({
+        events: [indexEvent(installationId, workspaceId)],
+        steps: sleepSteps(projectIds),
+      })) as { result?: unknown; error?: { message?: string } };
+
+      expect(result).toBeUndefined();
+      // The exit code is the container's entire diagnostic channel, so the run
+      // reports what happened by NAME — "the parser died on this tree" and "the
+      // kernel killed it" are different on-call responses.
+      expect(error?.message).toContain(name);
+      expect(error?.message).toContain(REPO_REF);
+
+      // ⚠️ AND NOTHING CLAIMS THE REPO. A `succeeded` row carrying an
+      // `output.repoRef` would tell the enqueue gate and the wizard that this repo
+      // has a code graph, forever — for a container that did not build one.
+      const runs = await indexRuns();
+      expect(runs.filter((run) => run.status === 'succeeded')).toEqual([]);
+      expect(runs.every((run) => run.output === null)).toBe(true);
+      // The container was still torn down: failure is not a leak.
+      expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    },
+    30_000,
+  );
+
+  it('stops at the FIRST failing project rather than booting the rest', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-firstfail', 3);
+    stubIndexFleet();
+    containerExitsWith(30);
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    });
+
+    // One container, not three. A retry RESUMES from the memoized steps, so
+    // failing fast costs nothing and spends nothing.
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  }, 30_000);
+
+  it('a container that never STARTED fails as never_started, carrying supervision’s own detail', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-nostart', 1);
+    stubIndexFleet();
+    // The boot deadline firing is a wall-clock event (120s), so it is driven at
+    // the poll rather than by waiting: the provider reported a machine, and it
+    // never reached a running state.
+    vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockResolvedValue({
+      done: true,
+      reason: 'provision_failed',
+      startedAt: null,
+      exitCode: null,
+      failureDetail: 'the container never started',
+    });
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, error } = (await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    })) as { result?: unknown; error?: { message?: string } };
+
+    expect(result).toBeUndefined();
+    // A boot that never happened is its OWN class — not `graph_unbuildable`,
+    // which would send an operator looking at the repo instead of the fleet —
+    // and the run reports supervision's own detail rather than the exit's.
+    expect(error?.message).toContain('never_started');
+    expect(error?.message).toContain('the container never started');
+    // It was still torn down: a machine nothing destroys is billed until the reaper.
+    expect(fakeOrchestrator.teardowns).toHaveLength(1);
+    expect((await indexRuns()).filter((run) => run.status === 'succeeded')).toEqual([]);
+  }, 30_000);
+
+  it('a provider that refuses to boot fails the run — no container, no success', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-noboot', 1);
+    stubIndexFleet();
+    fakeOrchestrator.failNextProvision('no capacity in iad');
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, error } = (await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    })) as { result?: unknown; error?: { message?: string } };
+
+    expect(result).toBeUndefined();
+    expect(error?.message).toContain('provision_failed');
+    expect((await indexRuns()).filter((run) => run.status === 'succeeded')).toEqual([]);
+  }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE CONFIG GATE — unconfigured must be LOUD, never a silent `succeeded` row.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('an unconfigured index fleet fails the run loudly', () => {
+  it('gates BEFORE the fan-out and writes no succeeded row with a repoRef', async () => {
+    const { workspaceId, installationId } = await seedWorkspace('cgf-unconfigured', 2);
+    stubIndexFleet();
+    // Select the REAL adapter on a deployment that has none of its variables —
+    // exactly a self-hosted build, or a cloud one that lost its secrets.
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    for (const name of [
+      'FLY_FLEET_API_TOKEN',
+      'FLY_FLEET_APP',
+      'MOTIR_RUNNER_IMAGE',
+      'MOTIR_INDEXER_IMAGE',
+    ]) {
+      vi.stubEnv(name, undefined);
+    }
+    const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, error, ctx } = (await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+    })) as { result?: unknown; error?: { message?: string }; ctx: Parameters<typeof stepIds>[0] };
+
+    // LOUD: the run fails, naming what to set — never a quiet "nothing to do".
+    expect(result).toBeUndefined();
+    expect(error?.message).toMatch(/set /i);
+    expect(stepIds(ctx)).toContain('assert-fleet-configured');
+    // Nothing was attempted or billed.
+    expect(boot).not.toHaveBeenCalled();
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+
+    // ⚠️ THE ROW THAT MUST NOT EXIST. A `succeeded` run carrying an
+    // `output.repoRef` in this state is indistinguishable from a real index
+    // everywhere downstream — the enqueue gate skips the repo and the wizard
+    // ticks it — for a deployment that cannot index anything at all.
+    const runs = await indexRuns();
+    expect(runs.filter((run) => run.status === 'succeeded')).toEqual([]);
+    expect(runs.some((run) => run.output !== null)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE DEFINITION — two values this card must NOT change (MOTIR-1990 owns them).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the job definition’s concurrency and retry policy are untouched', () => {
+  it('keeps concurrency: 2 and retryPolicy: idempotent', () => {
+    // Read off the SHIPPED function object — the config Inngest was actually
+    // constructed with — rather than re-invoking `defineJob` with the options a
+    // test believes the definition passes.
+    const config = (codeGraphIndex as unknown as { opts: Record<string, unknown> }).opts as {
+      id?: string;
+      retries?: number;
+      concurrency?: { limit: number };
+    };
+
+    expect(config.id).toBe('system.code-graph-index');
+    // MOTIR-1990 owns every concurrency number in this fleet (§7). A stepped
+    // supervision loop holds its slot for the CONTAINER'S whole life rather than
+    // for one fetch-and-upload, which is a fact that card must price in — and a
+    // change this one may not make.
+    expect(config.concurrency).toEqual({ limit: 2 });
+    // `idempotent` = 5 attempts = 4 Inngest retries. Re-indexing converges: a
+    // re-dispatched container rebuilds the same graph over the same key.
+    expect(config.retries).toBe(4);
+  });
+
+  it('exposes the dispatch service on the job DI seam', () => {
+    // The 4-layer seam: `defineJob` hands the handler `jobServices`, so the step
+    // shape drives the real singleton rather than importing it ad hoc.
+    expect(jobServices.codeGraphIndexDispatch).toBe(codeGraphIndexDispatchService);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REFRESH — untouched (§11: "Still building in-process, unchanged").
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('system.code-graph-refresh — the shape it kept', () => {
+  it('checkpoints per project and still builds IN-PROCESS', async () => {
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-refresh', 2);
     stubGithubTarball();
-    vi.spyOn(motirAiClient, 'indexCodeGraph').mockResolvedValue({
+    const upload = vi.spyOn(motirAiClient, 'indexCodeGraph').mockResolvedValue({
       status: 'ok',
-      repoRef: 'moooon/motir-core',
+      repoRef: REPO_REF,
       filesIndexed: 5,
       nodesChanged: 1,
       edgesChanged: 1,
@@ -255,8 +807,11 @@ describe('system.code-graph-refresh — the same shape', () => {
     });
     const { result, ctx } = await engine.execute();
 
-    expect(result).toEqual({ indexed: true, repoRef: 'moooon/motir-core', projectsIndexed: 2 });
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
     const ids = stepIds(ctx).filter((id) => id.startsWith('index-project:'));
     expect(ids.sort()).toEqual(projectIds.map((id) => `index-project:${id}`).sort());
-  });
+    // Refresh keeps the bytes path — it uploads, and it boots no container.
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  }, 30_000);
 });

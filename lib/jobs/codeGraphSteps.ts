@@ -6,11 +6,18 @@ import type {
   IndexTarget,
 } from '@/lib/services/codeGraphIndexService';
 
-// The STEP SHAPE shared by the two code-graph jobs — `system.code-graph-index`
-// (first index on repo add) and `system.code-graph-refresh` (a default-branch
-// push). They differ only in what triggers them; the work they drive is the same
-// service, so the durable-execution shape lives here once rather than being
-// copied into both definitions and drifting.
+// The STEP SHAPE of `system.code-graph-refresh` (a default-branch push) — an
+// in-process fetch-and-upload, one checkpointed step per project.
+//
+// ⚠️ IT WAS SHARED WITH `system.code-graph-index` UNTIL MOTIR-2027, and the two
+// parting is the decision, not an accident of refactoring. The index job now
+// dispatches a CONTAINER per (repo × project) and supervises it in bounded steps
+// (`lib/jobs/indexFleetSteps.ts`); refresh KEEPS building in-process
+// (`docs/decisions/code-graph-index-fleet.md` §11: "Still building in-process,
+// unchanged"). One function serving both would have had to grow a mode flag
+// across two genuinely different execution shapes, so they stopped sharing
+// instead. Everything below is exactly what both jobs ran before, and the only
+// caller left is `codeGraphRefresh`.
 //
 // ⚠️ THE SHAPE IS THE FIX (MOTIR-1974). Inngest checkpoints BETWEEN steps and
 // re-invokes the handler at each boundary, so a STEP — not a run — is the unit
