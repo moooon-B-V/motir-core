@@ -1,0 +1,239 @@
+import { indexFleetConfig } from '@/lib/orchestrator';
+import {
+  INDEX_FLEET_TIME_BUDGETS,
+  INITIAL_INDEX_POLL_STATE,
+  indexPollWaitMs,
+  type IndexDispatchOutcome,
+  type IndexPollResult,
+  type IndexSession,
+} from '@/lib/services/codeGraphIndexDispatchService';
+import type { JobContext } from './defineJob';
+import type { JobServices } from './services';
+import type {
+  IndexRepoInput,
+  IndexRepoResult,
+  IndexTarget,
+} from '@/lib/services/codeGraphIndexService';
+
+// THE DURABLE STEP SHAPE for `system.code-graph-index` (Story MOTIR-1981 ·
+// MOTIR-2027) — the last card of the dispatch chain. The job stops fetching
+// bytes and starts driving `codeGraphIndexDispatchService` as durable steps, so
+// NO REPO TARBALL EVER ENTERS A VERCEL FUNCTION AGAIN.
+//
+// `docs/decisions/code-graph-index-fleet.md` §2 (every failure of the old path
+// descends from one shape) and §6 (the ledger contract that forces one row per
+// repo).
+//
+//   step  resolve-target                 DB reads only — UNCHANGED
+//     ↓   (the three no-op verdicts return here, exactly as before)
+//   step  assert-fleet-configured        the gate, BEFORE anything is spent
+//   for each projectId of target.projectIds:
+//   step    index-boot:<projectId>       mint + resolve + provision   (bounded)
+//   step    sleep index-wait:<pid>:<n>   ctx.step.sleep — costs no invocation
+//   step    index-poll:<pid>:<n>         ONE describe                 (bounded)
+//     ↓     …until a `done` verdict
+//   step    index-settle:<projectId>     teardown + the typed outcome (bounded)
+//
+// ⚠️ WHY STEPPED, AND NOT A LOOP INSIDE ONE STEP. An index run is minutes;
+// `app/api/inngest/route.ts` pins `maxDuration = 300`. This is the MOTIR-2007
+// shape applied to a second workload — there, an hour-long supervision loop
+// inside one invocation meant every CI job over ~5 minutes had its supervisor
+// killed: the intent stuck, the container's cost unrecorded, and the run
+// dead-lettered while the job had actually succeeded. A STEP, NOT A RUN, IS THE
+// UNIT THE PLATFORM'S TIMEOUT APPLIES TO (`docs/jobs.md` rule 1), so the WAITING
+// is `ctx.step.sleep` — which holds no invocation at all — and every `step.run`
+// does one small thing. `codeGraphIndexDispatchService` is built for exactly
+// this: its three operations are individually bounded and its poll NEVER THROWS,
+// because in a stepped world teardown cannot be reached from a `catch`
+// (PRODECT_FINDINGS #39).
+//
+// ⚠️ STEP IDS ARE KEYED BY `projectId`, NEVER BY LOOP POSITION. The id is what
+// Inngest memoizes against, so it must identify the SAME unit of work on every
+// replay; a positional index would silently re-point at another project if the
+// workspace's project list changed between attempts. The poll and its preceding
+// sleep also carry the ITERATION, so a replay reproduces the same sequence.
+//
+// ⚠️ THE LEDGER CONTRACT DOES NOT MOVE (§6). Whatever the fan-out does
+// internally — one container per (repo × project), MOTIR-2026 — the JOB still
+// produces ONE `job_run` per repo, `succeeded`, with ONE `output.repoRef`. That
+// is the shape `jobRunRepository.listSucceededCodeGraphIndexRepoRefs` reads to
+// build the indexed set, and the shape `MigrateIndexRepoDto` /
+// `MigrateIndexStatusDto.allIndexed` gates the onboarding wizard's per-repo rows
+// and its Next button on. So {@link IndexRepoResult} keeps its current fields,
+// and a run that did not index every project THROWS rather than returning a
+// diminished success — see {@link IndexDispatchFailedError}.
+//
+// ⚠️ `system.code-graph-refresh` IS UNTOUCHED. It keeps today's in-process shape
+// (§11: "Still building in-process, unchanged") and therefore keeps
+// `runCodeGraphIndexSteps` in `codeGraphSteps.ts`; the two jobs stop sharing one
+// function rather than one of them growing a mode flag.
+
+/**
+ * A dispatched index container did not index its project.
+ *
+ * ⚠️ IT THROWS RATHER THAN DEGRADING THE RESULT, and that is the ledger contract
+ * being enforced, not a style choice. `defineJob` writes `output` only on the
+ * success path, so a throw is what keeps a `succeeded` row carrying an
+ * `output.repoRef` out of the ledger for a repo nothing indexed — a row that
+ * would tell the enqueue gate and the onboarding wizard that the repo has a code
+ * graph, forever, to every reader (§6).
+ *
+ * The message carries the dispatch service's NAMED exit class, never a bare
+ * number: "the parser died on this tree" (`graph_unbuildable`), "motir-ai
+ * refused the pointer" (`pointer_unrecorded`) and "the kernel OOM-killed it"
+ * (`out_of_memory`) are three different on-call responses, and the operator
+ * reads them off the failed run.
+ */
+export class IndexDispatchFailedError extends Error {
+  readonly code = 'INDEX_DISPATCH_FAILED' as const;
+  constructor(
+    readonly repoRef: string,
+    readonly projectId: string,
+    /** The dispatch service's outcome discriminator, or its named exit class. */
+    readonly exitClass: string,
+    detail: string,
+  ) {
+    super(`Indexing ${repoRef} into project ${projectId} failed (${exitClass}): ${detail}`);
+    this.name = 'IndexDispatchFailedError';
+  }
+}
+
+/**
+ * Drive ONE repo's container-based index as durable steps.
+ *
+ * Returns the same {@link IndexRepoResult} the in-process shape returned — the
+ * ledger's contract — or throws {@link IndexDispatchFailedError} for a container
+ * that did not reach exit 0.
+ */
+export async function runIndexFleetSteps(
+  ctx: JobContext,
+  services: JobServices,
+  input: IndexRepoInput,
+): Promise<IndexRepoResult> {
+  const target = (await ctx.step.run('resolve-target', () =>
+    services.codeGraph.resolveIndexTarget(input),
+  )) as IndexTarget;
+  // ⚠️ UNCHANGED, AND BEFORE THE GATE. A vanished tenant / project-less
+  // workspace is a clean no-op whose reason IS the run's ledger output — the
+  // shipped contract that this job never throws on a tenant that went away. Its
+  // three verdicts must keep reaching the ledger on a deployment that could not
+  // have indexed anything anyway, so the config gate cannot come first.
+  if (!target.indexed) return target;
+
+  // ⚠️ THE CONFIG GATE, AND IT FAILS LOUDLY. `indexFleetConfig()` names EVERY
+  // missing variable at once and throws. A path that quietly returned "nothing
+  // to do" when unconfigured would still let this job record a `succeeded`
+  // `job_run` carrying an `output.repoRef` for a repo nothing ever indexed —
+  // indistinguishable from success everywhere downstream. Its own step, so the
+  // deployment fault is one named checkpoint rather than N boot failures, and so
+  // it fires BEFORE the first container is billed.
+  await ctx.step.run('assert-fleet-configured', () => {
+    indexFleetConfig();
+    return { configured: true };
+  });
+
+  for (const projectId of target.projectIds) {
+    const booted = await ctx.step.run(`index-boot:${projectId}`, () =>
+      services.codeGraphIndexDispatch.bootIndexContainer({
+        installationId: input.installationId,
+        providerId: target.providerId,
+        organizationId: target.organizationId,
+        workspaceId: input.workspaceId,
+        projectId,
+        repoOwner: input.repoOwner,
+        repoName: input.repoName,
+        repoRef: target.repoRef,
+        defaultBranch: input.defaultBranch,
+        // The dispatching run, carried into the run-scoped motir-ai credential
+        // for attribution. Read once at the top of the handler and consumed
+        // INSIDE a memoized step, so a replay pass (which Inngest re-invokes
+        // with the same run) never re-mints against a different identity.
+        runId: ctx.runId,
+      }),
+    );
+    // Nothing was provisioned — no container to supervise or tear down. The
+    // outcome is terminal, and it is a FAILURE: no project was indexed, so the
+    // run must not go on to claim the repo.
+    if (booted.phase === 'terminal')
+      throw dispatchFailure(target.repoRef, projectId, booted.outcome);
+
+    const session: IndexSession = booted.session;
+    let state = INITIAL_INDEX_POLL_STATE;
+    let verdict: Extract<IndexPollResult, { done: true }> | null = null;
+
+    for (
+      let iteration = 1;
+      iteration <= INDEX_FLEET_TIME_BUDGETS.maxPollIterations;
+      iteration += 1
+    ) {
+      // Free waiting: Inngest schedules the resume, so the interval costs a
+      // checkpoint rather than an invocation. `indexPollWaitMs` is PURE — a
+      // function of the iteration, never of the clock — because a replay pass
+      // re-derives every sleep in the loop, and a wall-clock input would make
+      // two passes of the same run disagree about how long to wait.
+      await ctx.step.sleep(`index-wait:${projectId}:${iteration}`, indexPollWaitMs(iteration));
+      // ONE provider read, then return. This is the step the card exists to
+      // bound; `pollIndexContainer` never throws, because a throw here would end
+      // the run WITHOUT teardown.
+      const polled: IndexPollResult = await ctx.step.run(
+        `index-poll:${projectId}:${iteration}`,
+        () => services.codeGraphIndexDispatch.pollIndexContainer(session, state),
+      );
+      if (polled.done) {
+        verdict = polled;
+        break;
+      }
+      state = polled;
+    }
+
+    // ⚠️ TEARDOWN IS REACHED ON EVERY PATH OUT OF THE LOOP — the stepped form of
+    // the `finally` a synchronous supervisor would have relied on. The loop can
+    // only exit with a `done` verdict or by exhausting the static iteration
+    // ceiling, and both arrive here.
+    const outcome: IndexDispatchOutcome = await ctx.step.run(`index-settle:${projectId}`, () =>
+      services.codeGraphIndexDispatch.settleIndexContainer(
+        session,
+        verdict ?? {
+          done: true,
+          reason: 'job_timed_out',
+          startedAt: state.startedAt,
+          exitCode: null,
+          failureDetail: `supervision hit the ${INDEX_FLEET_TIME_BUDGETS.maxPollIterations}-poll ceiling`,
+        },
+      ),
+    );
+
+    // ⚠️ ONLY EXIT 0 INDEXED. `verdict.indexed` is true for that and nothing
+    // else — an unobserved exit, a torn-down-but-unclassified run and a failed
+    // teardown all leave it false — so this is the single place the run decides
+    // whether the repo may be claimed.
+    if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
+      throw dispatchFailure(target.repoRef, projectId, outcome);
+    }
+  }
+
+  // The ledger's row: ONE per repo, with ONE `output.repoRef`, reached only when
+  // EVERY project's container exited 0.
+  return {
+    indexed: true,
+    repoRef: target.repoRef,
+    projectsIndexed: target.projectIds.length,
+  };
+}
+
+/** The named failure for a dispatch outcome that did not index. */
+function dispatchFailure(
+  repoRef: string,
+  projectId: string,
+  outcome: IndexDispatchOutcome,
+): IndexDispatchFailedError {
+  if (outcome.outcome === 'settled') {
+    return new IndexDispatchFailedError(
+      repoRef,
+      projectId,
+      outcome.verdict.exitClass,
+      outcome.failureDetail ?? outcome.verdict.detail,
+    );
+  }
+  return new IndexDispatchFailedError(repoRef, projectId, outcome.outcome, outcome.detail);
+}

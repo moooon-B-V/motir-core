@@ -309,8 +309,16 @@ tarball fetch plus one motir-ai upload per project inside a single `step.run`,
 against an undeclared `maxDuration`, with no deadline on either call. All five
 production repos exhausted all five attempts on `FUNCTION_INVOCATION_TIMEOUT`
 and dead-lettered — including a repo small enough that size cannot explain it.
-It now runs one `resolve-target` step plus one `index-project:<id>` step per
-project (`lib/jobs/codeGraphSteps.ts`).
+The first fix (MOTIR-1974) split it into one `resolve-target` step plus one
+`index-project:<id>` step per project — the shape `system.code-graph-refresh`
+still runs (`lib/jobs/codeGraphSteps.ts`). MOTIR-2027 then took the INDEX job off
+the bytes path entirely: it dispatches one container per (repo × project) and
+supervises it as `index-boot:<id>` → `ctx.step.sleep` → `index-poll:<id>:<n>` →
+`index-settle:<id>` (`lib/jobs/indexFleetSteps.ts`), so the run spans minutes and
+no step does — the same move `system.ci-runner-boot` made in MOTIR-2007. The
+ledger contract is unchanged either way: ONE `job_run` per repo carrying one
+`output.repoRef`, which is what makes a failed container fail the RUN rather than
+record a diminished success.
 
 **4 · Code OUTSIDE a step runs once per PASS, not once per run.** The same
 re-invocation that makes rule 1 true also re-executes everything in the handler
