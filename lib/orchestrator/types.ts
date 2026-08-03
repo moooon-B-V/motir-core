@@ -218,6 +218,64 @@ export interface ContainerUsage {
 }
 
 /**
+ * A CHECKPOINT on a container that is STILL RUNNING (Story MOTIR-1981 ·
+ * MOTIR-1995) — the same §5 record, minus the two facts only an ending supplies.
+ *
+ * ⚠️ WHY THE SETTLE-ONLY RECORD ABOVE IS NOT ENOUGH. `ContainerUsage` is produced
+ * BY `teardown`, which is what makes the meter unskippable — and which also means
+ * a container produces no row at all until it ends. That is right for a container
+ * that lives minutes and wrong for one that lives hours: an Epic 9 agent container
+ * spans a whole `motir run <story>`, so under teardown-only costing its entire
+ * life is invisible spend against a Fly account that offers NEITHER a spending cap
+ * NOR a billing alert (`ci-runner-fleet.md` §9). "We will know what it cost once it
+ * stops" is not a bound; it is a bound-shaped statement about the past.
+ *
+ * So supervision reports what a live container has accrued so far, and teardown's
+ * record RECONCILES rather than being the only write. An index container is
+ * job-shaped and would not have needed this; it is built here because the meter is
+ * being written once, and retrofitting it after Epic 9 ships costs a migration and
+ * a period of blind spend.
+ *
+ * ⚠️ `accruedSeconds` IS ABSOLUTE-TO-DATE, NOT A DELTA SINCE THE LAST CHECKPOINT,
+ * and that is the whole idempotency argument. Supervision runs as durable Inngest
+ * steps which RE-EXECUTE on replay, so a delta-shaped report would double-count
+ * every replayed poll — silently, and in the direction that overstates Motir's own
+ * cost. An absolute figure makes a replay a no-op by arithmetic instead of by
+ * bookkeeping: the writer subtracts what it already stored.
+ *
+ * There is no `startedAt: null` case here, unlike `ContainerUsage`: a container
+ * that has not started has accrued nothing, so there is nothing to checkpoint.
+ */
+export interface ContainerAccrual {
+  readonly handleId: string;
+  readonly provider: OrchestratorProvider;
+  readonly region: string;
+
+  readonly orgId: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly repoFullName: string;
+  readonly workload: FleetWorkloadKind;
+  readonly workflowJobId: number | null;
+
+  readonly cpuKind: 'shared' | 'performance';
+  readonly cpus: number;
+  readonly memoryMb: number;
+
+  readonly createdAt: Date;
+  readonly startedAt: Date;
+  /** When the container was OBSERVED running — the instant the rate resolves at
+   *  and, on the row's first write, the period it is bucketed into. */
+  readonly observedAt: Date;
+  /** ceil(observedAt − startedAt). TOTAL seconds so far, never an increment. */
+  readonly accruedSeconds: number;
+
+  readonly usdPerSecond: string; // decimal string — never a float
+  readonly costUsd: string; // accruedSeconds × usdPerSecond
+  readonly rateEffectiveFrom: Date | null;
+}
+
+/**
  * The port. Four operations, and the fourth is the one that makes the other
  * three survivable.
  */

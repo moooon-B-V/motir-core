@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
+import type { CiContainerWorkload } from '@/lib/repositories/ciContainerUsageRepository';
 
 // THE FLEET WORKLOAD REGISTRY (Story MOTIR-1916 · MOTIR-1997) — the list of
 // everything that can be running a container on Motir's fleet, and where each
@@ -100,6 +101,40 @@ export const FLEET_WORKLOADS: Record<FleetWorkloadKind, FleetWorkload> = {
 /** Every registered kind, in a stable order — the iteration order of the
  *  registry, so a new workload appears in every breakdown without a second edit. */
 export const FLEET_WORKLOAD_KINDS = Object.keys(FLEET_WORKLOADS) as FleetWorkloadKind[];
+
+/**
+ * THE COST AXIS (Story MOTIR-1981 · MOTIR-1995) — this registry's kind as the
+ * COGS meter records it.
+ *
+ * ⚠️ WHY TWO VOCABULARIES FOR ONE THING, AND WHY THAT IS NOT DRIFT. The registry
+ * names an OPERATIONAL kind (`ci_runner` is a thing that registers with GitHub
+ * and holds a provisioning intent); `ci_container_usage.workload` names a
+ * COMMERCIAL LINE — `ci` / `index` / `agent` — and shipped with MOTIR-1924, ahead
+ * of two of its three values, for the same reason the union did. Collapsing them
+ * would mean either renaming a persisted column's values (rewriting history to
+ * match a code identifier) or renaming the union to match the database. Mapping
+ * once, HERE, is what keeps both stable.
+ *
+ * ⚠️ TOTAL BY CONSTRUCTION, exactly like {@link FLEET_WORKLOADS}. A fourth
+ * workload that does not declare its cost line is a COMPILE error rather than
+ * spend recorded under whatever value the writer happened to pass — which is the
+ * failure MOTIR-1981 was filed over, one field along: the story claimed index
+ * container-seconds were already "attributable per MOTIR-1924's cost meter" when
+ * nothing mapped them at all. Do not weaken it to a `Partial` or a lookup with a
+ * fallback; a fallback here silently merges a new workload into an existing line.
+ */
+export const CONTAINER_WORKLOAD_BY_FLEET_KIND: Record<FleetWorkloadKind, CiContainerWorkload> = {
+  ci_runner: 'ci',
+  code_graph_index: 'index',
+  hosted_agent: 'agent',
+};
+
+/** The cost line a container of this kind is recorded under. A function rather
+ *  than direct indexing at the call sites, so the map has ONE reader and the
+ *  meter never has to know the registry's shape. */
+export function containerWorkloadFor(kind: FleetWorkloadKind): CiContainerWorkload {
+  return CONTAINER_WORKLOAD_BY_FLEET_KIND[kind];
+}
 
 /** The workloads that register their containers in `fleet_in_flight_slot`
  *  rather than counting a table of their own. Exported so the seam is
