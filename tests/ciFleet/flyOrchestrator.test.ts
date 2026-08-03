@@ -15,9 +15,11 @@ import {
 } from '@/lib/orchestrator/adapters/fly/flyMachines';
 import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
 import {
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
   OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
 } from '@/lib/orchestrator/errors';
 import type { ContainerHandle, ContainerSpec, UsageAttribution } from '@/lib/orchestrator/types';
 
@@ -39,10 +41,12 @@ interface Call {
   url: string;
   method: string;
   body: Record<string, unknown> | null;
+  /** The deadline's `AbortSignal` — null is the regression MOTIR-2011 fixed. */
+  signal: AbortSignal | null;
 }
 
 let calls: Call[];
-let handler: (call: Call) => Response;
+let handler: (call: Call) => Response | Promise<Response>;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -128,6 +132,7 @@ beforeEach(() => {
         url: String(url),
         method: init?.method ?? 'GET',
         body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
+        signal: init?.signal ?? null,
       };
       calls.push(call);
       return handler(call);
@@ -744,5 +749,101 @@ describe('the reaper keeps sweeping when ONE machine refuses to die', () => {
     // exists to prevent, so one refusal must not abandon the others.
     expect(usages.map((u) => u.handleId)).toEqual(['compliant']);
     expect(error).toHaveBeenCalled();
+  });
+});
+
+describe('deadlines — the provider cannot hold an invocation open (docs/jobs.md rule 3, MOTIR-2011)', () => {
+  /** A provider that ACCEPTS the request and never answers. Unbounded, this is
+   *  what rides all the way to `FUNCTION_INVOCATION_TIMEOUT`. */
+  function stallUntilAborted(signal: AbortSignal | null): Promise<Response> {
+    return new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('This operation was aborted', 'AbortError')),
+      );
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a provision that never answers becomes a TYPED timeout, inside the budget', async () => {
+    // ⚠️ THE WORST PLACE FOR AN UNBOUNDED CALL. This one runs AFTER the JIT
+    // config is minted, so the invocation kill it used to cause left both a
+    // registered runner and (possibly) a machine, with the boot's cleanup
+    // unreachable on the other side of a process that no longer exists.
+    vi.useFakeTimers();
+    handler = (call) => stallUntilAborted(call.signal);
+
+    const settled = flyOrchestrator.provision(SPEC).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(ORCHESTRATOR_REQUEST_TIMEOUT_MS - 1);
+    await expect(Promise.race([settled, Promise.resolve('still pending')])).resolves.toBe(
+      'still pending',
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    const err = await settled;
+    expect(err).toBeInstanceOf(OrchestratorTimeoutError);
+    expect(err).toMatchObject({
+      code: 'ORCHESTRATOR_TIMEOUT',
+      retryable: true,
+      provider: 'fly',
+    });
+    expect((err as Error).message).toContain(String(ORCHESTRATOR_REQUEST_TIMEOUT_MS));
+  });
+
+  it('the POLL read is bounded too — one hung read must not span the whole step', async () => {
+    vi.useFakeTimers();
+    handler = (call) => stallUntilAborted(call.signal);
+
+    const settled = flyOrchestrator.describe(HANDLE).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+
+    expect(await settled).toBeInstanceOf(OrchestratorTimeoutError);
+  });
+
+  it('the TEARDOWN destroy is bounded — the guarantee cannot be held open by the provider', async () => {
+    vi.useFakeTimers();
+    // The pre-teardown read is deliberately quiet (`readQuietly`), so it absorbs
+    // its own timeout and the destroy is the call that must surface one.
+    handler = (call) => stallUntilAborted(call.signal);
+
+    const settled = flyOrchestrator.teardown(HANDLE, 'job_completed', ATTRIBUTION).catch((e) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    // Two sequential deadlines: the quiet read, then the destroy.
+    await vi.advanceTimersByTimeAsync(ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(ORCHESTRATOR_REQUEST_TIMEOUT_MS);
+
+    expect(await settled).toBeInstanceOf(OrchestratorTimeoutError);
+  });
+
+  it('EVERY Machines-API request carries the signal — asserted on the wire, not on a call count', async () => {
+    // A property of every observed request, so a new endpoint inherits the
+    // deadline instead of quietly escaping it.
+    handler = (call) => (call.method === 'DELETE' ? json(200, {}) : json(200, machine()));
+
+    await flyOrchestrator.provision(SPEC);
+    await flyOrchestrator.describe(HANDLE);
+    await flyOrchestrator.teardown(HANDLE, 'job_completed', ATTRIBUTION);
+
+    expect(calls.length).toBeGreaterThanOrEqual(4);
+    for (const call of calls) {
+      expect(call.signal, `${call.method} ${call.url} carries no deadline`).toBeInstanceOf(
+        AbortSignal,
+      );
+    }
+  });
+
+  it('a transport failure is still the generic API error, NOT a timeout', async () => {
+    handler = () => {
+      throw new TypeError('fetch failed');
+    };
+    const err = await flyOrchestrator.describe(HANDLE).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OrchestratorApiError);
+    expect(err).not.toBeInstanceOf(OrchestratorTimeoutError);
   });
 });

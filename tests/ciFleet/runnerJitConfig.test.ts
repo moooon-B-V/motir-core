@@ -2,8 +2,10 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   RunnerJitApiError,
+  RunnerJitTimeoutError,
   RunnerRegistrationRateLimitedError,
   runnerJitConfigClient,
+  RUNNER_JIT_REQUEST_TIMEOUT_MS,
 } from '@/lib/github/runnerJitConfig';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -28,10 +30,12 @@ interface Call {
   url: string;
   method: string;
   body: Record<string, unknown> | null;
+  /** The deadline's `AbortSignal` — null is the regression MOTIR-2011 fixed. */
+  signal: AbortSignal | null;
 }
 
 let calls: Call[];
-let handler: (call: Call) => Response;
+let handler: (call: Call) => Response | Promise<Response>;
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -74,6 +78,7 @@ beforeEach(() => {
         url: String(url),
         method: init?.method ?? 'GET',
         body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
+        signal: init?.signal ?? null,
       };
       calls.push(call);
       if (call.url.endsWith(`/orgs/${MOTIR_ORG}/installation`)) {
@@ -287,5 +292,199 @@ describe('deleteRunner — the dangling-JIT cleanup', () => {
       code: 'RUNNER_JIT_API_FAILED',
       status: 500,
     });
+  });
+});
+
+describe('deleteRunnersNamed — cleaning up a mint that never answered', () => {
+  /** GitHub's list-runners shape, narrowed to what the client reads. */
+  function runnerList(...runners: Array<{ id: number; name: string }>): Response {
+    return json(200, { total_count: runners.length, runners });
+  }
+
+  it('finds the runner by NAME and de-registers it — the mint gave back no id', async () => {
+    // The whole reason this method exists: §7.4 says the runner is registered
+    // BEFORE the mint responds, so a mint that times out is exactly the case
+    // with a dangling runner and nothing to name it by except the deterministic
+    // name the mint was asked for.
+    handler = (call) =>
+      call.method === 'DELETE'
+        ? new Response(null, { status: 204 })
+        : runnerList({ id: 9001, name: 'motir-intent-1' });
+
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([
+      9001,
+    ]);
+
+    const [lookup, remove] = runnerCalls();
+    expect(lookup?.method).toBe('GET');
+    expect(lookup?.url).toContain('name=motir-intent-1');
+    expect(remove?.method).toBe('DELETE');
+    expect(remove?.url).toBe(`https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/9001`);
+  });
+
+  it('DELETES ONLY AN EXACT NAME MATCH, even when GitHub returns the whole list', async () => {
+    // ⚠️ The assertion that keeps this method from being a fleet-wide outage. If
+    // a GitHub that ignored the `name` filter answered with every runner in the
+    // org, an unfiltered delete would de-register every container mid-job. The
+    // client-side match is what makes that impossible rather than unlikely.
+    handler = (call) =>
+      call.method === 'DELETE'
+        ? new Response(null, { status: 204 })
+        : runnerList(
+            { id: 1, name: 'motir-intent-1-old' },
+            { id: 2, name: 'motir-intent-1' },
+            { id: 3, name: 'some-other-tenant-runner' },
+          );
+
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([2]);
+    expect(
+      runnerCalls()
+        .filter((c) => c.method === 'DELETE')
+        .map((c) => c.url),
+    ).toEqual([`https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/2`]);
+  });
+
+  it('reports NOTHING removed when GitHub registered nothing — the good case', async () => {
+    handler = () => runnerList();
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([]);
+    expect(runnerCalls().filter((c) => c.method === 'DELETE')).toHaveLength(0);
+  });
+
+  it('tolerates a 200 with no `runners` array at all', async () => {
+    // A shape we cannot read must be "nothing to clean up", never a throw: this
+    // runs on a failure path whose job is already going back in the queue, and
+    // an exception here would convert a retryable outcome into an untyped one.
+    handler = () => json(200, { total_count: 0 });
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([]);
+    expect(runnerCalls().filter((c) => c.method === 'DELETE')).toHaveLength(0);
+  });
+
+  it('accepts a STRING id and drops one that is not a number', async () => {
+    // GitHub sends numeric ids, but this is the cleanup path for a call that
+    // ALREADY misbehaved, so the parse is defensive: a numeric string is still a
+    // runner worth de-registering, and an unparseable one is skipped rather than
+    // sent as `/actions/runners/NaN`.
+    handler = (call) =>
+      call.method === 'DELETE'
+        ? new Response(null, { status: 204 })
+        : json(200, {
+            total_count: 2,
+            runners: [
+              { id: '55', name: 'motir-intent-1' },
+              { id: 'not-a-number', name: 'motir-intent-1' },
+            ],
+          });
+
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).resolves.toEqual([55]);
+    expect(
+      runnerCalls()
+        .filter((c) => c.method === 'DELETE')
+        .map((c) => c.url),
+    ).toEqual([`https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/55`]);
+  });
+
+  it('surfaces a refusal of the lookup itself', async () => {
+    handler = () => json(500, { message: 'Server Error' });
+    await expect(runnerJitConfigClient.deleteRunnersNamed('motir-intent-1')).rejects.toMatchObject({
+      code: 'RUNNER_JIT_API_FAILED',
+      status: 500,
+    });
+  });
+});
+
+describe('deadlines — every call is bounded (docs/jobs.md rule 3, MOTIR-2011)', () => {
+  /** A transport that ACCEPTS the request and never answers — the shape that used
+   *  to ride all the way to the platform's `FUNCTION_INVOCATION_TIMEOUT`. */
+  function stallUntilAborted(signal: AbortSignal | null): Promise<Response> {
+    return new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('This operation was aborted', 'AbortError')),
+      );
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a mint that never answers becomes a TYPED timeout, inside the budget', async () => {
+    vi.useFakeTimers();
+    handler = (call) => stallUntilAborted(call.signal);
+
+    const pending = runnerJitConfigClient.mint({
+      name: 'motir-intent-1',
+      runnerGroupId: 5042,
+      labels: [MOTIR_RUNNER_LABEL],
+    });
+    const settled = pending.catch((e: unknown) => e);
+
+    // Let the App-auth handshake finish so the mint's own deadline is ARMED —
+    // asserted rather than assumed, because advancing before the timer exists
+    // would make this test pass for the wrong reason.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runnerCalls()).toHaveLength(1);
+
+    // One millisecond short of the deadline it is still waiting: the bound is
+    // the stated number, not "eventually".
+    await vi.advanceTimersByTimeAsync(RUNNER_JIT_REQUEST_TIMEOUT_MS - 1);
+    await expect(Promise.race([settled, Promise.resolve('still pending')])).resolves.toBe(
+      'still pending',
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    const err = await settled;
+    expect(err).toBeInstanceOf(RunnerJitTimeoutError);
+    expect(err).toMatchObject({ code: 'RUNNER_JIT_TIMEOUT', retryable: true, operation: 'mint' });
+    // The message names the number an operator would have to change.
+    expect((err as Error).message).toContain(String(RUNNER_JIT_REQUEST_TIMEOUT_MS));
+  });
+
+  it('the de-registration is bounded too — the cleanup path cannot hang the cleanup', async () => {
+    vi.useFakeTimers();
+    handler = (call) => stallUntilAborted(call.signal);
+
+    const settled = runnerJitConfigClient.deleteRunner(9001).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(RUNNER_JIT_REQUEST_TIMEOUT_MS);
+
+    expect(await settled).toBeInstanceOf(RunnerJitTimeoutError);
+  });
+
+  it('EVERY request the module makes carries the signal — asserted on the wire, not on a call count', async () => {
+    // ⚠️ Written as a property of every observed request rather than as a list
+    // of today's three call sites: a fourth endpoint added later inherits this
+    // assertion instead of quietly escaping it.
+    handler = (call) => {
+      if (call.url.includes('generate-jitconfig')) return mintSuccess();
+      if (call.method === 'DELETE') return new Response(null, { status: 204 });
+      return json(200, { total_count: 1, runners: [{ id: 9001, name: 'motir-intent-1' }] });
+    };
+
+    await runnerJitConfigClient.mint({
+      name: 'motir-intent-1',
+      runnerGroupId: 5042,
+      labels: [MOTIR_RUNNER_LABEL],
+    });
+    await runnerJitConfigClient.deleteRunner(9001);
+    await runnerJitConfigClient.deleteRunnersNamed('motir-intent-1');
+
+    expect(runnerCalls().length).toBeGreaterThanOrEqual(4);
+    for (const call of runnerCalls()) {
+      expect(call.signal, `${call.method} ${call.url} carries no deadline`).toBeInstanceOf(
+        AbortSignal,
+      );
+    }
+  });
+
+  it('a transport failure is still the generic API error, NOT a timeout', async () => {
+    // The distinction the boot path branches on: "GitHub refused the connection"
+    // and "GitHub never answered" leave different debris behind, so collapsing
+    // them would send the wrong cleanup.
+    handler = () => {
+      throw new TypeError('fetch failed');
+    };
+    const err = await runnerJitConfigClient.deleteRunner(9001).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RunnerJitApiError);
+    expect(err).not.toBeInstanceOf(RunnerJitTimeoutError);
   });
 });
