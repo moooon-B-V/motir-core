@@ -1,11 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { generateKeyPairSync } from 'node:crypto';
 import { InngestTestEngine } from '@inngest/test';
 import { db } from '@/lib/db';
-import { usersService } from '@/lib/services/usersService';
-import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
 import { jobServices } from '@/lib/jobs/services';
@@ -23,6 +19,20 @@ import { githubProvider } from '@/lib/git/providers/github';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import {
+  containerExitsWith,
+  INDEX_REPO_REF,
+  INDEX_TARBALL_URL,
+  indexEventFor,
+  indexJobRuns,
+  indexSleepSteps,
+  indexStepIds,
+  resetTarballBodyTrap,
+  seedIndexWorkspace,
+  stubGithubTarballBytes,
+  stubIndexFleet,
+  tarballBodyWasTouched,
+} from '../helpers/indexFleet';
 
 // system.code-graph-index — THE DURABLE STEP SHAPE (MOTIR-2027), and
 // system.code-graph-refresh — the shape it USED to share (MOTIR-1974).
@@ -56,208 +66,21 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // as a test TIMEOUT, which reads like a slow test rather than a missing stub).
 // `sleepSteps()` pre-fulfils them; supply more than the loop can use.
 
-const PASSWORD = 'hunter2hunter2';
 const TARBALL = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x11, 0x22]);
-const TARBALL_URL =
-  'https://codeload.github.com/moooon/motir-core/legacy.tar.gz/refs/heads/main?token=PRESIGNED';
-const AI_URL = 'https://ai.example.test';
-const SERVICE_TOKEN = 'svc-token-must-never-reach-a-container';
-const RUN_CREDENTIAL = 'mrc1.payload.signature';
-const REPO_REF = 'moooon/motir-core';
 
-/** Set by the tarball response's traps: TRUE means something buffered the body. */
-let tarballBodyTouched = false;
-
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-function stubAppCredentials(): void {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
-  vi.stubEnv('GITHUB_APP_ID', '999');
-  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
-}
-
-/**
- * The INDEX job's world: the `fake` orchestrator, motir-ai reachable for the
- * run-credential mint, and GitHub answering the tarball request with the 302 the
- * resolver reads a `Location` off.
- *
- * ⚠️ THE REDIRECT'S BODY IS A TRAP, not a payload. Reading it is the §2 OOM this
- * whole architecture removes, so every buffering method fails loudly instead of
- * quietly costing a few hundred megabytes.
- */
-function stubIndexFleet(): void {
-  stubAppCredentials();
-  vi.stubEnv('MOTIR_AI_URL', AI_URL);
-  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', SERVICE_TOKEN);
-  // Select the FAKE adapter the way a deployment selects Fly.
-  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
-
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string): Promise<Response> => {
-      // Matched on the PARSED url, never `includes()` — a substring host check is
-      // a HIGH CodeQL alert in this repo, test fixtures included.
-      const parsed = new URL(String(url));
-      if (parsed.host === new URL(AI_URL).host) {
-        return json(201, {
-          credential: RUN_CREDENTIAL,
-          expiresAt: new Date(Date.now() + 900_000).toISOString(),
-        });
-      }
-      if (parsed.pathname.endsWith('/access_tokens')) {
-        return json(201, {
-          token: 'ghs_installation_must_never_reach_a_container',
-          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-        });
-      }
-      if (parsed.pathname.includes('/tarball/')) {
-        const res = new Response(null, { status: 302, headers: { location: TARBALL_URL } });
-        const trap = (name: string) => () => {
-          tarballBodyTouched = true;
-          throw new Error(`the index path read the tarball body via ${name}()`);
-        };
-        for (const name of ['arrayBuffer', 'blob', 'text', 'json'] as const) {
-          Object.defineProperty(res, name, { value: trap(name) });
-        }
-        return res;
-      }
-      throw new Error(`unexpected fetch to ${parsed.href}`);
-    }),
-  );
-}
-
-/** The REFRESH job's world — unchanged: it still fetches the bytes in-process. */
-function stubGithubTarball(): void {
-  stubAppCredentials();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string): Promise<Response> => {
-      const parsed = new URL(String(url));
-      if (parsed.pathname.endsWith('/access_tokens')) {
-        return json(200, {
-          token: 'ghs_x',
-          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-        });
-      }
-      if (parsed.pathname.includes('/tarball/')) return new Response(TARBALL, { status: 200 });
-      throw new Error(`unexpected fetch to ${parsed.href}`);
-    }),
-  );
-}
-
-/** Seed a workspace with `projectCount` projects + one connected repo. */
-async function seedWorkspace(
-  slug: string,
-  projectCount: number,
-): Promise<{ workspaceId: string; projectIds: string[]; installationId: string }> {
-  const user = await usersService.createUser({
-    email: `${slug}@example.com`,
-    password: PASSWORD,
-    name: 'Owner',
-  });
-  const { workspace } = await workspacesService.createWorkspace({
-    name: `WS ${slug}`,
-    ownerUserId: user.id,
-  });
-  // Drop any auto-seeded project so the count is exactly what the test asked for.
-  await db.project.deleteMany({ where: { workspaceId: workspace.id } });
-  const projectIds: string[] = [];
-  for (let i = 0; i < projectCount; i += 1) {
-    const project = await projectsService.createProject({
-      workspaceId: workspace.id,
-      actorUserId: user.id,
-      name: `P${i}`,
-      identifier: `PRJ${i}${slug.slice(-1).toUpperCase()}`,
-    });
-    projectIds.push(project.id);
-  }
-  const installationId = `inst-${slug}`;
-  await githubInstallationService.persistInstallation({
-    workspaceId: workspace.id,
-    installation: { installationId, accountLogin: 'moooon', accountType: 'Organization' },
-    repos: [
-      {
-        providerRepoId: '77',
-        owner: 'moooon',
-        name: 'motir-core',
-        defaultBranch: 'main',
-        archived: false,
-      },
-    ],
-  });
-  return { workspaceId: workspace.id, projectIds, installationId };
-}
-
-/** The step ids a run passed to `step.run`, in call order. */
-function stepIds(ctx: { step: { run: { mock: { calls: unknown[][] } } } }): string[] {
-  return ctx.step.run.mock.calls.map((call) => String(call[0]));
-}
-
-/**
- * Pre-fulfilled `step.sleep` state, so the engine can cross the boundaries —
- * BOTH kinds: the admission queue's waits and supervision's poll waits.
- */
-function sleepSteps(projectIds: string[], perProject = 6) {
-  return projectIds.flatMap((projectId) =>
-    Array.from({ length: perProject }, (_, i) => i + 1).flatMap((n) => [
-      { id: `index-wait:${projectId}:${n}`, handler: () => null },
-      { id: `index-admit-wait:${projectId}:${n}`, handler: () => null },
-    ]),
-  );
-}
-
-const indexEvent = (installationId: string, workspaceId: string) => ({
-  name: 'system.code-graph-index' as const,
-  // ⚠️ THE EVENT ID IS PINNED. `InngestTestEngine` mints a FRESH one (and a
-  // fresh runId) per execution, and `defineJob` correlates its ledger row by
-  // (functionId, eventId) — so a generated id makes a two-execution assertion
-  // read two different runs.
-  id: `evt-${installationId}`,
-  data: {
-    installationId,
-    workspaceId,
-    repoOwner: 'moooon',
-    repoName: 'motir-core',
-    defaultBranch: 'main',
-  },
-});
-
-/**
- * The container exits WHILE SUPERVISION SLEEPS — which is what really happens,
- * and the only way a real poll ever sees a terminal machine. Wraps the genuine
- * `pollIndexContainer` rather than replacing it, so the classification, the
- * deadlines and the read-failure tolerance are all still the shipped ones.
- */
-function containerExitsWith(exitCode: number | null): void {
-  const realPoll = codeGraphIndexDispatchService.pollIndexContainer.bind(
-    codeGraphIndexDispatchService,
-  );
-  vi.spyOn(codeGraphIndexDispatchService, 'pollIndexContainer').mockImplementation(
-    async (session, previous, options) => {
-      for (const id of fakeOrchestrator.liveContainerIds()) {
-        fakeOrchestrator.completeJob(id, { exitCode });
-      }
-      return realPoll(session, previous, options);
-    },
-  );
-}
-
-/** The `system.code-graph-index` ledger rows, newest last. */
-async function indexRuns() {
-  return db.jobRun.findMany({
-    where: { functionId: 'system.code-graph-index' },
-    orderBy: { startedAt: 'asc' },
-  });
-}
+// The world this suite drives is the SHARED index-fleet fixture
+// (`tests/helpers/indexFleet.ts`), so the seam suite that reads the ledger's
+// real consumers measures the same one. The aliases below keep this file's call
+// sites reading as they did when the fixture was inlined here.
+const TARBALL_URL = INDEX_TARBALL_URL;
+const REPO_REF = INDEX_REPO_REF;
+const seedWorkspace = seedIndexWorkspace;
+const stepIds = indexStepIds;
+const sleepSteps = indexSleepSteps;
+const indexRuns = indexJobRuns;
+const stubGithubTarball = () => stubGithubTarballBytes(TARBALL);
+const indexEvent = (installationId: string, workspaceId: string) =>
+  indexEventFor({ installationId, workspaceId, eventId: `evt-${installationId}` });
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -269,7 +92,7 @@ beforeEach(async () => {
   await db.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
-  tarballBodyTouched = false;
+  resetTarballBodyTrap();
 });
 
 afterEach(() => {
@@ -393,7 +216,7 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     // ⚠️ THE DEFECT, INVERTED (§2). `motir-core` itself exhausted 5/5 attempts on
     // the old path because the function buffered a whole repo; the pre-signed URL
     // now goes to the container and the body is never read here at all.
-    expect(tarballBodyTouched).toBe(false);
+    expect(tarballBodyWasTouched()).toBe(false);
     expect(fetchBytes).not.toHaveBeenCalled();
     expect(upload).not.toHaveBeenCalled();
     // What the container was actually handed: the resolved URL, not a token.

@@ -75,6 +75,21 @@ describe('the indexer image accessor (the Fly-side read)', () => {
     expect(() => requireFlyIndexerImage()).toThrow(new RegExp(INDEXER_IMAGE_ENV_VAR));
   });
 
+  it('requireFlyIndexerImage RETURNS the configured reference on a wired deployment', () => {
+    // The accessor's success path — the half that actually boots a container.
+    // Asserting only the throw leaves the branch that produces the image
+    // reference unexecuted, so a regression returning the variable's NAME, a
+    // trimmed-to-empty value, or the CI runner's image would go unnoticed here
+    // and surface as an image-pull refusal at boot.
+    const reference = 'registry.fly.io/motir-fleet@sha256:' + 'd'.repeat(64);
+    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, `  ${reference}  `);
+    // Trimmed, and it is the DIGEST-pinned mirror reference — never the GHCR one
+    // (`docs/decisions/fleet-image-pull.md` §0: Fly's create payload has no field
+    // for registry auth, so a private third-party image cannot be pulled at all).
+    expect(requireFlyIndexerImage()).toBe(reference);
+    expect(isFlyIndexerImageConfigured()).toBe(true);
+  });
+
   it('the predicate never throws, whatever the environment', () => {
     expect(() => isFlyIndexerImageConfigured()).not.toThrow();
     vi.stubEnv(INDEXER_IMAGE_ENV_VAR, 'x');
