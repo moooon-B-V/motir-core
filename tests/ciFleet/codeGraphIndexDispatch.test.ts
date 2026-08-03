@@ -5,12 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyIndexExit,
   codeGraphIndexDispatchService,
+  indexAdmissionWaitMs,
   indexPollWaitMs,
+  INDEX_ADMISSION_BUDGETS,
   INDEX_FLEET_TIME_BUDGETS,
   INITIAL_INDEX_POLL_STATE,
   type IndexDispatchInput,
   type IndexSession,
 } from '@/lib/services/codeGraphIndexDispatchService';
+import {
+  codeGraphIndexAdmissionService,
+  indexSlotRef,
+  type IndexAdmission,
+} from '@/lib/services/codeGraphIndexAdmissionService';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import {
   OrchestratorImageUnpullableError,
@@ -70,7 +77,39 @@ const FAST = {
   indexTimeoutMs: 500,
   pollIntervalMs: 1,
   maxPollIntervalMs: 1,
+  admissionWaitMs: 1,
+  maxAdmissionWaitMs: 1,
 } as const;
+
+/**
+ * A GRANTED admission — the ticket MOTIR-1990 makes `bootIndexContainer` require.
+ *
+ * ⚠️ THE GATE ITSELF IS STUBBED IN THIS FILE, and that is the file boundary
+ * rather than a shortcut. The admission cap is a locked decision whose whole
+ * content is what happens when TRANSACTIONS RACE, so it has its own suite
+ * (`codeGraphIndexAdmission.test.ts`) that races real ones at it. THIS suite is
+ * about the spec, the exit taxonomy, the supervision loop and the COGS meter —
+ * so it supplies the ticket and asserts the one thing the gate cannot see from
+ * its own side: that every path leaving NO CONTAINER BEHIND gives the slot back.
+ */
+const ADMISSION: IndexAdmission = {
+  slotRef: indexSlotRef('proj-1', 'moooon-B-V/motir-core'),
+  admittedAt: '2026-08-03T12:00:00.000Z',
+  detail: 'granted by the test',
+};
+
+/** The slot releases this dispatch performed. */
+let released: string[] = [];
+
+/** The ticket for one dispatch input — the slot ref the gate would have granted
+ *  for that (repo × project), so a stubbed grant still names the real key. */
+function admissionFor(input: IndexDispatchInput): IndexAdmission {
+  return {
+    slotRef: indexSlotRef(input.projectId, input.repoRef),
+    admittedAt: ADMISSION.admittedAt,
+    detail: 'granted by the test',
+  };
+}
 
 interface Call {
   url: string;
@@ -130,6 +169,16 @@ beforeEach(() => {
   tarballBodyTouched = false;
   credentialResponder = credentialResponse;
   tarballResponder = redirectResponse;
+  released = [];
+  vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
+    outcome: 'admitted',
+    admission: ADMISSION,
+    census: { total: 1, byWorkload: { ci_runner: 0, code_graph_index: 1, hosted_agent: 0 } },
+  });
+  vi.spyOn(codeGraphIndexAdmissionService, 'release').mockImplementation(async (slotRef) => {
+    released.push(slotRef);
+    return true;
+  });
 
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
@@ -246,7 +295,7 @@ describe('the booted spec carries no credential the container has no use for', (
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly-token-must-never-reach-a-container');
     vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'object-store-secret');
 
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     expect(booted.phase).toBe('supervising');
 
     const spec = fakeOrchestrator.specs[0]!;
@@ -273,7 +322,7 @@ describe('the booted spec carries no credential the container has no use for', (
 
 describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls', () => {
   it('mints the credential for THIS (project, repoRef, run) and boots one container', async () => {
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
 
     expect(motirAiCalls()).toHaveLength(1);
@@ -311,9 +360,9 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
     vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
     vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
 
-    await expect(codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST)).rejects.toThrow(
-      OrchestratorNotConfiguredError,
-    );
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow(OrchestratorNotConfiguredError);
     // It refused BEFORE spending anything: no credential minted, no container.
     expect(motirAiCalls()).toHaveLength(0);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
@@ -323,9 +372,9 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
     credentialResponder = () =>
       json(503, { type: 'about:blank', title: 'unavailable', status: 503 });
 
-    await expect(codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST)).rejects.toThrow(
-      MotirAiUnavailableError,
-    );
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow(MotirAiUnavailableError);
     // ⚠️ THE POINT OF THE TEST. Not merely "it threw": NO container was booted,
     // so no spec exists that could have carried `MOTIR_AI_SERVICE_TOKEN` or any
     // broader identity in the credential's place.
@@ -338,22 +387,26 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
     // the one outcome the seam exists to avoid.
     tarballResponder = () => new Response(null, { status: 200 });
 
-    await expect(codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST)).rejects.toThrow(
-      RepoTarballUrlNotRedirectedError,
-    );
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow(RepoTarballUrlNotRedirectedError);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
   });
 
   it('refuses a host with no self-authorizing archive URL rather than downloading the repo', async () => {
     await expect(
-      codeGraphIndexDispatchService.bootIndexContainer({ ...INPUT, providerId: 'gitlab' }, FAST),
+      codeGraphIndexDispatchService.bootIndexContainer(
+        { ...INPUT, providerId: 'gitlab' },
+        ADMISSION,
+        FAST,
+      ),
     ).rejects.toThrow(RepoTarballUrlUnsupportedError);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
   });
 
   it('reports a terminal outcome when the provider refuses, leaving no container', async () => {
     fakeOrchestrator.failNextProvision('the fake refused');
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
 
     expect(booted).toMatchObject({ phase: 'terminal', outcome: { outcome: 'provision_failed' } });
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
@@ -371,7 +424,7 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
         'unauthorized',
       ),
     );
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
 
     expect(booted).toMatchObject({ phase: 'terminal', outcome: { outcome: 'image_unpullable' } });
     if (booted.phase !== 'terminal' || booted.outcome.outcome !== 'image_unpullable') {
@@ -381,11 +434,202 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
   });
 });
 
+// ── The admission slot's LIFETIME (MOTIR-1990) ─────────────────────────────
+
+describe('the admission slot is held for exactly as long as a container exists', () => {
+  // The whole reason `bootIndexContainer` takes the ticket rather than looking
+  // it up: it is the function that knows whether a container was left behind, so
+  // it is the only one that can decide whether capacity may go back.
+  it('carries the slot onto the SESSION, so a later step can release it', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected to be supervising');
+
+    expect(booted.session.slotRef).toBe(ADMISSION.slotRef);
+    // Still serializable — the slot ref crosses a step boundary with the session.
+    expect(JSON.parse(JSON.stringify(booted.session))).toEqual(booted.session);
+    // Nothing released while the container is alive.
+    expect(released).toEqual([]);
+  });
+
+  // ⚠️ THE LEAK CLASS THIS CLOSES. Every one of these leaves NO container, so
+  // holding capacity for it would shrink the fleet by one for the slot's whole
+  // TTL — and a deployment failing every boot would shrink it to nothing while
+  // booting nothing at all.
+  it.each([
+    [
+      'a credential that cannot be minted',
+      () => {
+        credentialResponder = () => json(503, { title: 'unavailable', status: 503 });
+      },
+    ],
+    [
+      'a tarball URL that cannot be resolved',
+      () => {
+        tarballResponder = () => new Response(null, { status: 200 });
+      },
+    ],
+  ])('gives the slot back when the boot throws on %s', async (_label, arrange) => {
+    arrange();
+
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow();
+
+    expect(released).toEqual([ADMISSION.slotRef]);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
+  it('gives the slot back when the provider refuses to provision', async () => {
+    fakeOrchestrator.failNextProvision('the fake refused');
+
+    await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+
+    expect(released).toEqual([ADMISSION.slotRef]);
+  });
+
+  it('gives the slot back once the container is torn down', async () => {
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    expect(outcome.outcome).toBe('settled');
+    expect(released).toEqual([ADMISSION.slotRef]);
+  });
+
+  // ⚠️ THE ONE DIRECTION THE CEILING MUST NEVER ERR IN. A failed teardown means
+  // the container MAY STILL BE RUNNING and still spending, so its slot stays and
+  // ages out through `expires_at` while the reaper works. Releasing here would
+  // under-count a live container.
+  it('does NOT release when the teardown failed — the container may still be running', async () => {
+    fakeOrchestrator.failNextTeardown('the fake refused to tear down');
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    expect(outcome.outcome).toBe('teardown_failed');
+    expect(released).toEqual([]);
+  });
+});
+
+// ── Over the cap means WAIT, never drop (MOTIR-1990) ───────────────────────
+
+describe('the in-process composition QUEUES for admission rather than dropping', () => {
+  it('retries a deferred admission and boots as soon as capacity frees', async () => {
+    const admit = vi.mocked(codeGraphIndexAdmissionService.admit);
+    admit
+      .mockResolvedValueOnce({
+        outcome: 'deferred',
+        reason: 'workspace_index_cap',
+        detail: 'the workspace is at its index cap (3/3, half of the global 6)',
+      })
+      .mockResolvedValueOnce({
+        outcome: 'deferred',
+        reason: 'index_cap',
+        detail: 'indexing is at its global cap (6/6)',
+      });
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    // It waited twice and then ran. Nothing was dropped and nothing failed.
+    expect(admit).toHaveBeenCalledTimes(3);
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+  });
+
+  // A gate that failed CLOSED is a transient the caller must be allowed to
+  // recover from — refusing to wait on it would turn one bad read into a dropped
+  // index, which is the outcome the rule exists to forbid.
+  it('waits through a fail-CLOSED gate too, then proceeds', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValueOnce({
+      outcome: 'deferred',
+      reason: 'gate_unavailable',
+      detail: 'the index in-flight counts could not be established: connection reset',
+    });
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    expect(outcome.outcome).toBe('settled');
+  });
+
+  // ⚠️ AND WHEN THE BUDGET RUNS OUT IT FAILS LOUDLY — it does not quietly return
+  // a success. §6: a `succeeded` row carrying an `output.repoRef` is a permanent
+  // claim to every reader that the repo has a code graph.
+  it('reports admission_deferred — never a settled run — when the wait is exhausted', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValue({
+      outcome: 'deferred',
+      reason: 'fleet_ceiling',
+      detail: 'the fleet is at its in-flight ceiling (24/24: CI runners 24)',
+    });
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      maxAdmissionAttempts: 3,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'admission_deferred', reason: 'fleet_ceiling' });
+    expect((outcome as { detail: string }).detail).toContain('refused for 3 attempts');
+    // NOTHING was booted, and no capacity is held for a container that does not
+    // exist.
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(released).toEqual([]);
+  });
+
+  // A redelivery of a job whose container is already up must not be refused
+  // capacity it is already holding — it proceeds on the slot it has.
+  it('proceeds on an ALREADY-HELD slot instead of waiting for a new one', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValue({
+      outcome: 'already_held',
+      admission: ADMISSION,
+    });
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    expect(outcome.outcome).toBe('settled');
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).toHaveBeenCalledTimes(1);
+  });
+
+  it('backs the retry off, and never past its ceiling', () => {
+    const opts = { admissionWaitMs: 5_000, maxAdmissionWaitMs: 60_000 };
+    expect(indexAdmissionWaitMs(1, opts)).toBe(5_000);
+    expect(indexAdmissionWaitMs(2, opts)).toBe(10_000);
+    expect(indexAdmissionWaitMs(4, opts)).toBe(40_000);
+    expect(indexAdmissionWaitMs(50, opts)).toBe(60_000);
+    // PURE — a function of the attempt, never of the clock, because a durable
+    // replay re-derives every wait.
+    expect(indexAdmissionWaitMs(3, opts)).toBe(indexAdmissionWaitMs(3, opts));
+  });
+
+  // ⚠️ THE WAITING BUDGET MUST OUTLAST THE LONGEST CONTAINER, or "wait" becomes
+  // "drop" whenever the lane is genuinely full: every slot-holder is hard-killed
+  // at `indexTimeoutMs`, so a budget shorter than that could expire while the
+  // containers ahead were all still legitimately running.
+  it('waits longer than the hard kill on the containers it is queued behind', () => {
+    const { maxAttempts, baseWaitMs, maxWaitMs } = INDEX_ADMISSION_BUDGETS;
+    let total = 0;
+    for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
+      total += indexAdmissionWaitMs(attempt);
+    }
+    expect(baseWaitMs).toBeLessThanOrEqual(maxWaitMs);
+    expect(total).toBeGreaterThan(INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs);
+  });
+});
+
 // ── Poll ───────────────────────────────────────────────────────────────────
 
 describe('pollIndexContainer — one read, no loop, and it never throws', () => {
   async function boot(): Promise<IndexSession> {
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     return booted.session;
   }
@@ -522,7 +766,7 @@ describe('every path out of supervision tears the container down', () => {
   });
 
   it('reports rather than throws when there is no orchestrator left to tear down THROUGH', async () => {
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
@@ -674,7 +918,7 @@ describe('the index fleet time budgets fit under the platform ceiling', () => {
 
 describe('the defaults are the shipped ones — the test seams only shorten them', () => {
   it('boots and polls on the module constants when no options are passed', async () => {
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION);
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     // The default run timeout is what the container is booted with, so a spec
     // built without options carries the shipped deadline rather than a test one.
@@ -711,7 +955,7 @@ describe('the defaults are the shipped ones — the test seams only shorten them
 
   it('describes a non-Error rejection rather than losing it', async () => {
     vi.spyOn(fakeOrchestrator, 'provision').mockRejectedValueOnce('the provider threw a string');
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     expect(booted).toMatchObject({
       phase: 'terminal',
       outcome: { outcome: 'provision_failed', detail: expect.stringContaining('unknown') },
@@ -722,7 +966,7 @@ describe('the defaults are the shipped ones — the test seams only shorten them
     // The provider reported a successful create and the container stopped
     // without ever running — a provisioning failure, not a completed index.
     fakeOrchestrator.setBootBehaviour('never_start');
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     fakeOrchestrator.completeJob(booted.session.handle.id, { exitCode: null });
 
@@ -742,7 +986,7 @@ describe('the defaults are the shipped ones — the test seams only shorten them
   });
 
   it('adopts the provider-reported start instant when a poll first sees it terminal', async () => {
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     // It ran and finished between two polls: this process never observed it
     // running, but the provider still reports when it started.
@@ -852,7 +1096,11 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // The incremental half. An index container is job-shaped and would survive on
     // teardown-time costing alone; this is here because Epic 9's agent container is
     // story-shaped (HOURS) and reaches teardown far too late to be the first write.
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(dbInput, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      dbInput,
+      admissionFor(dbInput),
+      FAST,
+    );
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
 
@@ -883,7 +1131,11 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // because the checkpoint reports the container's TOTAL to date rather than a
     // delta — a delta here would overstate Motir's own cost on every replay,
     // silently.
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(dbInput, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      dbInput,
+      admissionFor(dbInput),
+      FAST,
+    );
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
     const options = { ...FAST, indexTimeoutMs: 600_000, now: () => observedAt };
@@ -909,7 +1161,11 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // The two seams meeting: the poll's partial figure and the teardown's true total
     // land on ONE row and ONE rollup, which is what "extended, not duplicated" means
     // once both moments write.
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(dbInput, FAST);
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
+      dbInput,
+      admissionFor(dbInput),
+      FAST,
+    );
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
     const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
     await codeGraphIndexDispatchService.pollIndexContainer(

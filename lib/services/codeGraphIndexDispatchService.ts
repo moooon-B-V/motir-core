@@ -1,4 +1,10 @@
 import { mintCodeGraphRunCredential, motirAiBaseUrl } from '@/lib/ai/motirAiClient';
+import {
+  codeGraphIndexAdmissionService,
+  type IndexAdmission,
+  type IndexAdmissionDeferralReason,
+  type IndexAdmissionVerdict,
+} from '@/lib/services/codeGraphIndexAdmissionService';
 import { getGitProvider, requireRepoTarballUrlResolver } from '@/lib/git';
 import type { GitProviderId } from '@/lib/git/types';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
@@ -76,10 +82,23 @@ import type {
 // branch as "should this be un-charged?", never as "should this run somewhere
 // else?"). A meta-only path would mean the tested path is the one nobody runs.
 //
-// ⚠️ WHAT THIS DELIBERATELY DOES NOT DO. The admission cap and the
-// `fleet_in_flight_slot` are MOTIR-1990's — no concurrency number is inlined
-// here. `system.code-graph-refresh` and motir-ai's hydrate-on-read path are
-// untouched.
+// ⚠️ NOTHING BOOTS WITHOUT AN ADMISSION (MOTIR-1990). `bootIndexContainer`
+// REQUIRES an {@link IndexAdmission} — the granted ticket
+// `codeGraphIndexAdmissionService.admit` returns once it has taken a
+// `fleet_in_flight_slot` under the fleet lock. That is the same compile-time
+// trick the repository layer uses with `tx` (CLAUDE.md: *"required so TypeScript
+// catches missing-tx bugs"*): booting an index container outside the cap is a
+// type error rather than a review comment. NO concurrency number is inlined in
+// this file — every one of them is config, read in `lib/ciFleet/limits.ts`.
+//
+// The slot's LIFETIME is this service's: taken by the admission, released by
+// {@link codeGraphIndexDispatchService.settleIndexContainer} once the container
+// is really gone — and by `bootIndexContainer` itself on every path where the
+// boot did not leave a container behind, so a failed mint or an unpullable image
+// gives capacity straight back instead of holding it until the TTL.
+//
+// ⚠️ WHAT THIS DELIBERATELY DOES NOT DO. `system.code-graph-refresh` and
+// motir-ai's hydrate-on-read path are
 //
 // ⚠️ THE COGS METER IS NOW WIRED (MOTIR-1995). MOTIR-2026 carried the usage record
 // OUT on the outcome and wrote no row, because attributing it was this card's. It
@@ -229,12 +248,59 @@ export const INDEX_FLEET_TIME_BUDGETS = {
   maxConsecutiveReadFailures: MAX_CONSECUTIVE_READ_FAILURES,
 } as const;
 
+/** The first wait after a deferred admission. */
+const ADMISSION_RETRY_BASE_MS = 5_000;
+
+/** The ceiling the admission wait backs off to. A minute is short next to the
+ *  half-hour a container may hold its slot for, so a freed slot is claimed
+ *  promptly rather than after an idle lane. */
+const ADMISSION_RETRY_MAX_MS = 60_000;
+
+const ADMISSION_RETRY_FACTOR = 2;
+
+/**
+ * How many times a dispatch asks for admission before it gives up WAITING.
+ *
+ * ⚠️ OVER THE CAP MEANS WAIT, NEVER DROP — that is the card's rule and the reason
+ * this number is what it is. Dropping an index leaves a repo permanently
+ * unindexed behind a `succeeded`-looking ledger, which is the exact failure §6's
+ * one-row-per-repo contract exists to remove.
+ *
+ * Sixty attempts on the backoff above is a little under an hour of waiting, which
+ * is DELIBERATELY LONGER THAN THE LONGEST CONTAINER: {@link
+ * DEFAULT_INDEX_TIMEOUT_MS} hard-kills at thirty minutes, so every container
+ * holding a slot when this dispatch first queued has certainly ended before the
+ * budget runs out — the lane cannot still be full for the same reason it was
+ * full at the start. Exhausting it therefore means something is wrong with the
+ * FLEET rather than busy, and that is a loud failure (a failed `job_run` an
+ * operator can see), never a silent skip.
+ *
+ * A bound rather than an unbounded wait for the same reason the poll loop has
+ * one: a durable loop with no static ceiling is a runaway, and Inngest's own
+ * retry budget is the outer recovery for the case this one hits.
+ */
+const MAX_ADMISSION_ATTEMPTS = 60;
+
+/** The admission-side budgets, stated once and asserted in the suite. */
+export const INDEX_ADMISSION_BUDGETS = {
+  maxAttempts: MAX_ADMISSION_ATTEMPTS,
+  baseWaitMs: ADMISSION_RETRY_BASE_MS,
+  maxWaitMs: ADMISSION_RETRY_MAX_MS,
+} as const;
+
 /** Seams the tests drive. Defaults are the constants above. */
 export interface IndexSupervisionOptions {
   bootDeadlineMs?: number;
   indexTimeoutMs?: number;
   pollIntervalMs?: number;
   maxPollIntervalMs?: number;
+  /** The admission backoff's base + ceiling, so a queueing test is milliseconds. */
+  admissionWaitMs?: number;
+  maxAdmissionWaitMs?: number;
+  /** How many times the in-process composition asks for admission before giving
+   *  up. Bounded by {@link MAX_ADMISSION_ATTEMPTS} — a test may lower it, never
+   *  raise it past the shipped ceiling. */
+  maxAdmissionAttempts?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -285,6 +351,16 @@ export interface IndexSession {
   readonly credentialExpiresAt: string;
   readonly runId: string;
   readonly repoRef: string;
+  /**
+   * The `fleet_in_flight_slot` this container occupies (MOTIR-1990).
+   *
+   * Carried on the SESSION, not held in a closure, precisely because the session
+   * is the only thing that crosses the step boundary: the admission happens in
+   * one durable step and the release happens in another, minutes later, possibly
+   * in a different invocation. A slot whose ref lived only in memory would be a
+   * slot nothing could ever give back.
+   */
+  readonly slotRef: string;
   readonly attribution: {
     readonly orgId: string;
     readonly workspaceId: string;
@@ -392,6 +468,16 @@ export type IndexDispatchOutcome =
    *  requires a `provision` that throws to leave none behind. */
   | { outcome: 'provision_failed'; detail: string }
   /**
+   * ADMISSION WAS NEVER GRANTED — the caps held for the whole waiting budget
+   * (MOTIR-1990). Its own outcome, not folded into `provision_failed`, because
+   * nothing was provisioned and nothing about THIS repo is wrong: the fleet was
+   * full, for longer than any container may live, which is a fleet fault an
+   * operator must see. The run FAILS on it rather than recording a success —
+   * §6's ledger contract is what makes "skipped quietly" the unacceptable
+   * alternative.
+   */
+  | { outcome: 'admission_deferred'; reason: IndexAdmissionDeferralReason; detail: string }
+  /**
    * THE INDEXER IMAGE COULD NOT BE PULLED — `fleet-image-pull.md` §6.2, split out
    * of `provision_failed` because the remedy is categorically different: nothing
    * about this repo, this tenant or a retry changes anything, a human has to fix
@@ -448,6 +534,24 @@ export function indexPollWaitMs(iteration: number, options: IndexSupervisionOpti
   const base = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const cap = options.maxPollIntervalMs ?? MAX_POLL_INTERVAL_MS;
   const grown = base * POLL_BACKOFF_FACTOR ** Math.max(0, iteration - 1);
+  return Math.min(Math.max(base, grown), Math.max(base, cap));
+}
+
+/**
+ * How long to wait before admission attempt number `attempt` (1-based).
+ *
+ * PURE, and a function of the ATTEMPT rather than of the clock — the same
+ * contract {@link indexPollWaitMs} has and for the same reason: the durable loop
+ * re-derives every wait on a replay pass, and a wall-clock input would make two
+ * passes of one run schedule different sleeps.
+ */
+export function indexAdmissionWaitMs(
+  attempt: number,
+  options: IndexSupervisionOptions = {},
+): number {
+  const base = options.admissionWaitMs ?? ADMISSION_RETRY_BASE_MS;
+  const cap = options.maxAdmissionWaitMs ?? ADMISSION_RETRY_MAX_MS;
+  const grown = base * ADMISSION_RETRY_FACTOR ** Math.max(0, attempt - 1);
   return Math.min(Math.max(base, grown), Math.max(base, cap));
 }
 
@@ -578,6 +682,39 @@ function supervisionVerdict(
 
 export const codeGraphIndexDispatchService = {
   /**
+   * STEP 0 — THE ADMISSION CAP (MOTIR-1990). Ask for a slot; do not boot without
+   * one.
+   *
+   * Bounded by construction: one locked transaction, four counted reads, no
+   * external call and no wait — so the step it runs in is milliseconds even when
+   * the answer is "wait". THE WAITING IS THE CALLER'S, and deliberately so: a
+   * gate that slept inside itself would hold an Inngest invocation open for the
+   * duration, which is the shape MOTIR-2007 removed from this fleet. The step
+   * driver sleeps with `ctx.step.sleep` (no invocation at all) and asks again;
+   * {@link runIndexContainer} does the in-process equivalent.
+   *
+   * Thin by design — the decision, the lock and every number live in
+   * `codeGraphIndexAdmissionService` / `lib/ciFleet/limits.ts`. This is the seam
+   * that puts them on the dispatch path, so the job never has to know that a
+   * `fleet_in_flight_slot` exists.
+   */
+  async admitIndexContainer(
+    input: IndexDispatchInput,
+    options: IndexSupervisionOptions = {},
+  ): Promise<IndexAdmissionVerdict> {
+    return codeGraphIndexAdmissionService.admit({
+      projectId: input.projectId,
+      repoRef: input.repoRef,
+      workspaceId: input.workspaceId,
+      organizationId: input.organizationId,
+      // The container's REAL hard kill, which the slot's safety net is derived
+      // from. A shorter value would stop counting a container that is still
+      // running and spending — the one direction the ceiling must never err in.
+      containerTimeoutMs: options.indexTimeoutMs ?? DEFAULT_INDEX_TIMEOUT_MS,
+    });
+  },
+
+  /**
    * STEP 1 — resolve, mint, boot, and hand back a session.
    *
    * Everything that has to happen exactly once and costs money: the config gate,
@@ -609,42 +746,69 @@ export const codeGraphIndexDispatchService = {
    * A PROVISION that fails is different in kind — it is about this dispatch, the
    * port guarantees no container was left behind, and its reason is diagnostic —
    * so it comes back as a terminal outcome the ledger can record.
+   *
+   * ⚠️ `admission` IS REQUIRED, and that is the cap's enforcement (MOTIR-1990).
+   * It is the ticket {@link admitIndexContainer} hands back once a
+   * `fleet_in_flight_slot` is really taken, so there is no way to reach this
+   * function without having been counted — the same compile-time shape the
+   * repository layer gets from a non-optional `tx`. NOTHING here re-checks a cap:
+   * the decision was made under the lock, and re-deciding outside it would be the
+   * TOCTOU the lock exists to close.
+   *
+   * ⚠️ AND EVERY FAILURE PATH GIVES THE SLOT BACK. A mint that throws, an
+   * unresolvable URL, a refused provision — none of them leaves a container
+   * behind, so none of them may leave capacity held. Without this the slot would
+   * sit until its TTL ages it out, and a deployment failing every boot would
+   * silently shrink the fleet to nothing while booting no containers at all.
    */
   async bootIndexContainer(
     input: IndexDispatchInput,
+    admission: IndexAdmission,
     options: IndexSupervisionOptions = {},
   ): Promise<IndexBootResult> {
     const now = options.now ?? (() => new Date());
     const indexTimeoutMs = options.indexTimeoutMs ?? DEFAULT_INDEX_TIMEOUT_MS;
 
-    // ── 0 · The deployment gate, BEFORE anything is spent ────────────────────
-    const fleet = indexFleetConfig();
-    const aiBaseUrl = motirAiBaseUrl();
-    const orchestrator = getOrchestrator();
+    let fleet: IndexFleetConfig;
+    let aiBaseUrl: string;
+    let orchestrator: ContainerOrchestrator;
+    let credential: Awaited<ReturnType<typeof mintCodeGraphRunCredential>>;
+    let tarballUrl: string;
+    try {
+      // ── 0 · The deployment gate, BEFORE anything is spent ──────────────────
+      fleet = indexFleetConfig();
+      aiBaseUrl = motirAiBaseUrl();
+      orchestrator = getOrchestrator();
 
-    // ── 1 · Mint THIS run's motir-ai credential ──────────────────────────────
-    // Scoped to one (project, repo, run) for minutes, and the only motir-ai
-    // credential the container is given.
-    const credential = await mintCodeGraphRunCredential({
-      coreOrganizationId: input.organizationId,
-      coreWorkspaceId: input.workspaceId,
-      coreProjectId: input.projectId,
-      repoRef: input.repoRef,
-      runId: input.runId,
-    });
+      // ── 1 · Mint THIS run's motir-ai credential ────────────────────────────
+      // Scoped to one (project, repo, run) for minutes, and the only motir-ai
+      // credential the container is given.
+      credential = await mintCodeGraphRunCredential({
+        coreOrganizationId: input.organizationId,
+        coreWorkspaceId: input.workspaceId,
+        coreProjectId: input.projectId,
+        repoRef: input.repoRef,
+        runId: input.runId,
+      });
 
-    // ── 2 · Resolve the pre-signed tarball URL ───────────────────────────────
-    // AFTER the mint, deliberately: the URL is the shorter-lived of the two
-    // secrets, so its clock starts as late as possible before the boot. Reached
-    // through the REQUIRE helper, which is what turns "this host cannot" into a
-    // refusal instead of a fallback to downloading the bytes.
-    const resolveTarballUrl = requireRepoTarballUrlResolver(getGitProvider(input.providerId));
-    const tarballUrl = await resolveTarballUrl(
-      input.installationId,
-      input.repoOwner,
-      input.repoName,
-      input.defaultBranch,
-    );
+      // ── 2 · Resolve the pre-signed tarball URL ─────────────────────────────
+      // AFTER the mint, deliberately: the URL is the shorter-lived of the two
+      // secrets, so its clock starts as late as possible before the boot. Reached
+      // through the REQUIRE helper, which is what turns "this host cannot" into a
+      // refusal instead of a fallback to downloading the bytes.
+      const resolveTarballUrl = requireRepoTarballUrlResolver(getGitProvider(input.providerId));
+      tarballUrl = await resolveTarballUrl(
+        input.installationId,
+        input.repoOwner,
+        input.repoName,
+        input.defaultBranch,
+      );
+    } catch (err) {
+      // The three loud failures still throw — the ledger must never record a
+      // success for a repo nothing indexed — but the capacity goes back first.
+      await codeGraphIndexAdmissionService.release(admission.slotRef);
+      throw err;
+    }
 
     // ── 3 · Boot exactly one container ───────────────────────────────────────
     const spec = codeGraphIndexDispatchService.buildIndexSpec({
@@ -660,6 +824,9 @@ export const codeGraphIndexDispatchService = {
     try {
       handle = await orchestrator.provision(spec);
     } catch (err) {
+      // The port guarantees a failed `provision` left no container behind, so
+      // the slot stands for nothing and is released rather than aged out.
+      await codeGraphIndexAdmissionService.release(admission.slotRef);
       if (err instanceof OrchestratorImageUnpullableError) {
         const detail = `the indexer image could not be pulled: ${detailOf(err)}`;
         console.error('[codeGraphIndexDispatchService] the indexer image is not pullable', {
@@ -686,6 +853,7 @@ export const codeGraphIndexDispatchService = {
         credentialExpiresAt: credential.expiresAt,
         runId: input.runId,
         repoRef: input.repoRef,
+        slotRef: admission.slotRef,
         attribution: {
           orgId: input.organizationId,
           workspaceId: input.workspaceId,
@@ -838,6 +1006,14 @@ export const codeGraphIndexDispatchService = {
    * the usage record — the port made that unskippable so a container cannot be
    * destroyed without its cost row existing — and the record rides out on the
    * outcome for MOTIR-1995's meter to persist.
+   *
+   * ⚠️ AND IT GIVES THE ADMISSION SLOT BACK — but ONLY once the container is
+   * really gone (MOTIR-1990). A teardown that FAILED means the container may
+   * still be running and still spending, so its slot deliberately stays: it ages
+   * out through `expires_at` while the reaper does its work. Releasing there
+   * would under-count a live container, which is the one direction the ceiling
+   * must never err in. A teardown that had no orchestrator to reach is the same
+   * case for the same reason.
    */
   async settleIndexContainer(
     session: IndexSession,
@@ -898,6 +1074,15 @@ export const codeGraphIndexDispatchService = {
     // as this run's operational trail, while the row this writes is the queryable,
     // aggregated, tenant-attributed one the margin readout reads.
     await recordContainerUsage(usage);
+
+    // AND GIVE THE CAPACITY BACK (MOTIR-1990). After the cost is recorded, so the
+    // slot a queued dispatch is about to claim is never freed before the spend it
+    // stood for has been written down. The container is provably gone, so the
+    // capacity is provably free — which is only true on THIS path: a failed
+    // teardown returned above without releasing, because that container may still
+    // be running and under-counting a live one is the direction the ceiling must
+    // never err in.
+    await codeGraphIndexAdmissionService.release(session.slotRef);
 
     return {
       outcome: 'settled',
@@ -984,7 +1169,18 @@ export const codeGraphIndexDispatchService = {
     options: IndexSupervisionOptions = {},
   ): Promise<IndexDispatchOutcome> {
     const sleep = options.sleep ?? sleepFor;
-    const booted = await this.bootIndexContainer(input, options);
+
+    // ── 0 · QUEUE FOR ADMISSION — over the cap means WAIT, never drop ─────────
+    const admitted = await this.waitForAdmission(input, sleep, options);
+    if (admitted.outcome === 'deferred') {
+      return {
+        outcome: 'admission_deferred',
+        reason: admitted.reason,
+        detail: admitted.detail,
+      };
+    }
+
+    const booted = await this.bootIndexContainer(input, admitted.admission, options);
     if (booted.phase === 'terminal') return booted.outcome;
 
     let state = INITIAL_INDEX_POLL_STATE;
@@ -1003,6 +1199,51 @@ export const codeGraphIndexDispatchService = {
       exitCode: null,
       failureDetail: `supervision hit the ${MAX_POLL_ITERATIONS}-poll ceiling`,
     });
+  },
+
+  /**
+   * Ask for admission until it is granted or the waiting budget runs out — the
+   * IN-PROCESS half of "over the cap means WAIT, never drop" (MOTIR-1990).
+   *
+   * The stepped driver (`lib/jobs/indexFleetSteps.ts`) implements the same loop
+   * with `ctx.step.sleep`, which costs no invocation, and that is the production
+   * path. This one exists for the same reason {@link runIndexContainer} does —
+   * it is the honest in-process composition, and it is what lets a suite drive a
+   * genuine over-cap BURST at millisecond waits and watch every repo get through.
+   *
+   * A `gate_unavailable` deferral is retried like any other: the gate failing
+   * closed is a transient it must be allowed to recover from, and refusing to
+   * wait on it would turn one bad read into a dropped index — the outcome the
+   * whole rule exists to forbid.
+   */
+  async waitForAdmission(
+    input: IndexDispatchInput,
+    sleep: (ms: number) => Promise<void>,
+    options: IndexSupervisionOptions = {},
+  ): Promise<
+    | Extract<IndexAdmissionVerdict, { outcome: 'admitted' | 'already_held' }>
+    | Extract<IndexAdmissionVerdict, { outcome: 'deferred' }>
+  > {
+    const attempts = Math.min(
+      options.maxAdmissionAttempts ?? MAX_ADMISSION_ATTEMPTS,
+      MAX_ADMISSION_ATTEMPTS,
+    );
+    let last: Extract<IndexAdmissionVerdict, { outcome: 'deferred' }> = {
+      outcome: 'deferred',
+      reason: 'gate_unavailable',
+      detail: 'admission was never attempted',
+    };
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const verdict = await this.admitIndexContainer(input, options);
+      if (verdict.outcome !== 'deferred') return verdict;
+      last = verdict;
+      // No wait after the LAST attempt — nothing would observe it.
+      if (attempt < attempts) await sleep(indexAdmissionWaitMs(attempt, options));
+    }
+    return {
+      ...last,
+      detail: `index admission was refused for ${attempts} attempts (${last.reason}): ${last.detail}`,
+    };
   },
 };
 

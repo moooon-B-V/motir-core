@@ -11,6 +11,13 @@ import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
 import { jobServices } from '@/lib/jobs/services';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
+import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
+import { INDEX_ADMISSION_BUDGETS } from '@/lib/services/codeGraphIndexDispatchService';
+import {
+  DEFAULT_INDEX_IN_FLIGHT_CAP,
+  indexInFlightCap,
+  workspaceIndexInFlightCap,
+} from '@/lib/ciFleet/limits';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import { githubProvider } from '@/lib/git/providers/github';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
@@ -195,13 +202,16 @@ function stepIds(ctx: { step: { run: { mock: { calls: unknown[][] } } } }): stri
   return ctx.step.run.mock.calls.map((call) => String(call[0]));
 }
 
-/** Pre-fulfilled `step.sleep` state, so the engine can cross the boundaries. */
+/**
+ * Pre-fulfilled `step.sleep` state, so the engine can cross the boundaries —
+ * BOTH kinds: the admission queue's waits and supervision's poll waits.
+ */
 function sleepSteps(projectIds: string[], perProject = 6) {
   return projectIds.flatMap((projectId) =>
-    Array.from({ length: perProject }, (_, i) => ({
-      id: `index-wait:${projectId}:${i + 1}`,
-      handler: () => null,
-    })),
+    Array.from({ length: perProject }, (_, i) => i + 1).flatMap((n) => [
+      { id: `index-wait:${projectId}:${n}`, handler: () => null },
+      { id: `index-admit-wait:${projectId}:${n}`, handler: () => null },
+    ]),
   );
 }
 
@@ -252,6 +262,11 @@ async function indexRuns() {
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
+  // The admission slots are real rows and no FK cascade reaches them (a slot must
+  // survive the deletion of whatever it pointed at — the model comment). A file
+  // that left them behind would slowly fill the index lane and start deferring
+  // its own later cases.
+  await db.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
   tarballBodyTouched = false;
@@ -294,12 +309,15 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
     expect(ids[0]).toBe('resolve-target');
     expect(ids[1]).toBe('assert-fleet-configured');
-    // Each project's three phases are three DISTINCT checkpoints, in order — the
-    // property that makes a step, not the run, the unit `maxDuration` applies to.
+    // Each project's phases are DISTINCT checkpoints, in order — the property
+    // that makes a step, not the run, the unit `maxDuration` applies to. The cap
+    // is the first of them (MOTIR-1990): nothing may be booted before a
+    // `fleet_in_flight_slot` has been taken for it.
     for (const projectId of projectIds) {
       const own = ids.filter((id) => id.endsWith(`:${projectId}`) || id.includes(`:${projectId}:`));
-      expect(own[0]).toBe(`index-boot:${projectId}`);
-      expect(own[1]).toBe(`index-poll:${projectId}:1`);
+      expect(own[0]).toBe(`index-admit:${projectId}:1`);
+      expect(own[1]).toBe(`index-boot:${projectId}`);
+      expect(own[2]).toBe(`index-poll:${projectId}:1`);
       expect(own.at(-1)).toBe(`index-settle:${projectId}`);
     }
 
@@ -740,11 +758,131 @@ describe('an unconfigured index fleet fails the run loudly', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE DEFINITION — two values this card must NOT change (MOTIR-1990 owns them).
+// THE ADMISSION CAP, as durable steps — over the cap means WAIT (MOTIR-1990).
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('the job definition’s concurrency and retry policy are untouched', () => {
-  it('keeps concurrency: 2 and retryPolicy: idempotent', () => {
+describe('the admission cap queues in STEPS, and nothing is dropped', () => {
+  // ⚠️ THE SHAPE THE CARD TURNS ON. A deferral must produce ANOTHER attempt under
+  // a DIFFERENT step id, with `ctx.step.sleep` between them. One shared id would
+  // let Inngest memoize the first `deferred` answer for the life of the run, and
+  // an index that waits could then never be admitted — "wait" would silently
+  // become "drop".
+  it('asks again under a NEW step id after a deferral, and boots once admitted', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-queue', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    // ⚠️ Bind the REAL method BEFORE spying, or the fall-through below re-enters
+    // the spy and recurses forever.
+    const real = codeGraphIndexAdmissionService.admit.bind(codeGraphIndexAdmissionService);
+    const admit = vi.spyOn(codeGraphIndexAdmissionService, 'admit');
+    admit
+      .mockResolvedValueOnce({
+        outcome: 'deferred',
+        reason: 'index_cap',
+        detail: 'indexing is at its global cap (6/6)',
+      })
+      .mockResolvedValueOnce({
+        outcome: 'deferred',
+        reason: 'workspace_index_cap',
+        detail: 'the workspace is at its index cap (3/3, half of the global 6)',
+      })
+      .mockImplementation(real);
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, ctx } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    });
+
+    // It waited twice and then indexed. NOTHING was dropped.
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    const projectId = projectIds[0]!;
+    const ids = stepIds(ctx);
+    expect(ids).toContain(`index-admit:${projectId}:1`);
+    expect(ids).toContain(`index-admit:${projectId}:2`);
+    expect(ids).toContain(`index-admit:${projectId}:3`);
+    // Every attempt is its own checkpoint, so none of them is memoized into the
+    // previous one's answer.
+    expect(new Set(ids).size).toBe(ids.length);
+    // The WAITING is a sleep — it costs a checkpoint, never an invocation.
+    const sleeps = (
+      ctx as unknown as { step: { sleep: { mock: { calls: unknown[][] } } } }
+    ).step.sleep.mock.calls.map((call) => String(call[0]));
+    expect(sleeps).toContain(`index-admit-wait:${projectId}:1`);
+    expect(sleeps).toContain(`index-admit-wait:${projectId}:2`);
+  }, 30_000);
+
+  // The cap is STRUCTURAL on this path, not conventional: `bootIndexContainer`
+  // requires the ticket, so a boot with no admission is a type error — and this
+  // is the runtime half, that the ticket a boot receives is the one the gate
+  // actually granted.
+  it('boots on the ticket the gate granted, and never before it', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-ticket', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    });
+
+    expect(boot).toHaveBeenCalledTimes(1);
+    const admission = boot.mock.calls[0]![1];
+    expect(admission.slotRef).toBe(`${projectIds[0]}:${REPO_REF}`);
+    // And the slot really was taken and then given back — the container is gone,
+    // so the capacity is free.
+    expect(await db.fleetInFlightSlot.count()).toBe(0);
+  }, 30_000);
+
+  // ⚠️ THE LEDGER CONTRACT UNDER A REFUSAL (§6). A run that could not get
+  // capacity must FAIL, never record a `succeeded` row carrying an
+  // `output.repoRef` — that row is a permanent claim, to every reader, that the
+  // repo has a code graph.
+  it('FAILS the run when admission is never granted — it never claims the repo', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-starved', 1);
+    stubIndexFleet();
+    vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
+      outcome: 'deferred',
+      reason: 'fleet_ceiling',
+      detail: 'the fleet is at its in-flight ceiling (24/24: CI runners 24)',
+    });
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { error } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      // Enough sleeps for the whole waiting budget.
+      steps: sleepSteps(projectIds, INDEX_ADMISSION_BUDGETS.maxAttempts),
+    });
+
+    // The named failure, not a bare throw: the operator reads the reason off it.
+    expect((error as Error).message).toContain('admission_deferred');
+    expect((error as Error).message).toContain('fleet_ceiling');
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    // The ledger recorded a FAILED run, not a success with an `output.repoRef`.
+    const runs = await indexRuns();
+    expect(runs.at(-1)?.status).not.toBe('succeeded');
+    expect(runs.at(-1)?.output).toBeNull();
+  }, 60_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE DEFINITION — the cap is NOT here, and must never come back (MOTIR-1990).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the job definition carries NO concurrency number', () => {
+  // ⚠️ A REGRESSION GUARD, not a tautology. `concurrency: 2` lived here until
+  // MOTIR-1990 and the temptation to put a number back is exactly what §7
+  // forbids. Two reasons it must stay absent, both fatal:
+  //   • It would make the CONFIGURED cap a lie. A stepped supervision loop holds
+  //     its Inngest slot for the CONTAINER'S WHOLE LIFE, so a limit of 2 beside a
+  //     configured cap of six means two, whatever an operator sets.
+  //   • It is UNKEYED, which is the starvation it was meant to prevent — one
+  //     tenant's five repos ahead of another's first index. A per-tenant limit
+  //     here would need a KEYED concurrency, which `defineJob` discards entirely
+  //     (MOTIR-1982) — the bug this card deliberately does not wait on.
+  it('leaves concurrency to the orchestrator’s admission cap, and keeps the retry policy', () => {
     // Read off the SHIPPED function object — the config Inngest was actually
     // constructed with — rather than re-invoking `defineJob` with the options a
     // test believes the definition passes.
@@ -755,14 +893,20 @@ describe('the job definition’s concurrency and retry policy are untouched', ()
     };
 
     expect(config.id).toBe('system.code-graph-index');
-    // MOTIR-1990 owns every concurrency number in this fleet (§7). A stepped
-    // supervision loop holds its slot for the CONTAINER'S whole life rather than
-    // for one fetch-and-upload, which is a fact that card must price in — and a
-    // change this one may not make.
-    expect(config.concurrency).toEqual({ limit: 2 });
+    expect(config.concurrency).toBeUndefined();
     // `idempotent` = 5 attempts = 4 Inngest retries. Re-indexing converges: a
     // re-dispatched container rebuilds the same graph over the same key.
     expect(config.retries).toBe(4);
+  });
+
+  // Where the number went. Both are read from config so an operator can move
+  // them against the fleet spend cap with no deploy, and the per-tenant one is
+  // DERIVED from the global so the two cannot drift apart.
+  it('puts the numbers in config, with the per-workspace one derived', () => {
+    expect(indexInFlightCap()).toBe(DEFAULT_INDEX_IN_FLIGHT_CAP);
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '10');
+    expect(indexInFlightCap()).toBe(10);
+    expect(workspaceIndexInFlightCap(indexInFlightCap())).toBe(5);
   });
 
   it('exposes the dispatch service on the job DI seam', () => {

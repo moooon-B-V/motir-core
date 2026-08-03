@@ -26,6 +26,13 @@ import type { PmTier } from '@/lib/billing/entitlements';
 // the product controls, so that changing provider changes nothing about what
 // stops the spend.
 //
+//   * The INDEX caps (MOTIR-1990) are a third kind again: a WORKLOAD bound and a
+//     per-TENANT bound on that workload, both underneath the ceiling. The global
+//     one keys off the environment (it is sized against the fleet spend cap); the
+//     per-workspace one keys off NEITHER environment nor tier — it is DERIVED as
+//     `ceil(global / 2)`, because the property being enforced is a relation
+//     ("no tenant holds more than half"), not a number.
+//
 // ⚠️ THE CEILING IS CROSS-WORKLOAD AS OF MOTIR-1997, and the env var is
 // unchanged on purpose. `MOTIR_FLEET_MAX_IN_FLIGHT` used to mean "CI runners";
 // it now means "containers, of any workload" — CI runners, MOTIR-1981/1990's
@@ -37,6 +44,10 @@ import type { PmTier } from '@/lib/billing/entitlements';
 
 /** The env var an operator raises or lowers the fleet ceiling with. */
 const FLEET_CEILING_ENV = 'MOTIR_FLEET_MAX_IN_FLIGHT';
+
+/** The env var an operator raises or lowers the INDEX workload's own cap with
+ *  (MOTIR-1990). Fairness and throughput, UNDERNEATH the ceiling above. */
+const INDEX_CAP_ENV = 'MOTIR_INDEX_MAX_IN_FLIGHT';
 
 /** The env var that tunes how long an unreleased slot keeps occupying capacity
  *  before the safety net ages it out. */
@@ -68,6 +79,29 @@ export const DEFAULT_FLEET_IN_FLIGHT_CEILING = 24;
  * clears within a working day rather than never.
  */
 export const DEFAULT_FLEET_SLOT_TTL_SECONDS = 6 * 60 * 60;
+
+/**
+ * THE GLOBAL INDEX CAP when the environment sets none — how many code-graph
+ * INDEX containers may run at once, across every tenant (MOTIR-1990,
+ * `docs/decisions/code-graph-index-fleet.md` §7).
+ *
+ * ⚠️ IT IS NOT THE SPEND BOUND, and §7.2 is explicit that it must not be read as
+ * one: `MOTIR_FLEET_MAX_IN_FLIGHT` bounds the invoice, over every workload, with
+ * nothing but Motir's own counter underneath it. THIS number is index fairness
+ * and index throughput — it keeps one workload from consuming the whole ceiling
+ * and starving CI, and it is the number an operator moves when the fleet spend
+ * cap moves.
+ *
+ * Six, chosen against the two figures that bracket it: the ceiling it sits under
+ * (`DEFAULT_FLEET_IN_FLIGHT_CEILING = 24`, so indexing can take at most a
+ * quarter of the fleet and CI is never squeezed out by a repo-connect burst),
+ * and the value it replaces (the job's `concurrency: 2`, which under the stepped
+ * supervision shape would have held its Inngest slot for the CONTAINER'S WHOLE
+ * LIFE and hard-capped the fleet at two regardless of what was configured here).
+ * It is a starting number to tune against MOTIR-1995's real index spend, not a
+ * capacity claim.
+ */
+export const DEFAULT_INDEX_IN_FLIGHT_CAP = 6;
 
 /**
  * The PER-TIER concurrency allowance — the §4-style "tunable policy" table, the
@@ -156,6 +190,42 @@ export function fleetSlotTtlSeconds(): number {
   /* istanbul ignore next -- unreachable for the same reason as the ceiling
      above: a non-null fallback means the reader never answers null. */
   return readCeilingEnv(FLEET_SLOT_TTL_ENV, DEFAULT_FLEET_SLOT_TTL_SECONDS) ?? 0;
+}
+
+/**
+ * THE GLOBAL INDEX CAP — the maximum number of code-graph index containers the
+ * whole fleet may have in flight at once, across every tenant.
+ *
+ * Read from the environment on every call, never captured in a module constant:
+ * §7 requires that moving it needs no code change, because it is sized against
+ * the fleet spend cap and has to follow when that moves. Always a number for the
+ * same reason the ceiling is — an unbounded index workload is not expressible —
+ * and `0` is the index-only kill switch, stopping indexing without touching CI.
+ */
+export function indexInFlightCap(): number {
+  /* istanbul ignore next -- the `?? 0` is UNREACHABLE for the same reason as
+     `fleetInFlightCeiling`'s: a non-null fallback means the shared reader cannot
+     answer null here. */
+  return readCeilingEnv(INDEX_CAP_ENV, DEFAULT_INDEX_IN_FLIGHT_CAP) ?? 0;
+}
+
+/**
+ * THE PER-WORKSPACE INDEX CAP — `ceil(global / 2)`, so no single tenant can hold
+ * more than half the index lane.
+ *
+ * ⚠️ DERIVED, NEVER SEPARATELY CONFIGURED, and that is the decision rather than
+ * an implementation detail (§7). Two independent numbers drift — an operator
+ * raises one and forgets the other, and the fairness property silently stops
+ * holding — while the invariant that actually matters, *"no tenant takes more
+ * than half"*, is only expressible as a RELATION between them. So there is
+ * deliberately no `MOTIR_INDEX_MAX_IN_FLIGHT_PER_WORKSPACE`.
+ *
+ * `ceil`, not `floor`: at a global cap of 1 the floor would be 0, which is not
+ * "fair" but "nothing indexes, ever". The rounding always errs toward work
+ * happening, and the global cap is what keeps that bounded.
+ */
+export function workspaceIndexInFlightCap(globalCap: number): number {
+  return Math.ceil(globalCap / 2);
 }
 
 /** The env var that overrides one tier's per-project allowance, e.g.
