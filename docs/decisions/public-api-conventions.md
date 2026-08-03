@@ -101,9 +101,21 @@ bearer PATs.
 session-cookie fallback (§9 records why each is rejected).
 
 **A token is bound to ONE workspace.** `apiTokensService.verify` returns the
-`workspaceId` the token was minted for, and v1 never widens past it. This is
-what makes cross-tenant isolation (§4) a property of the credential rather than
-a check each endpoint must remember.
+`workspaceId` the token was minted for, and **every RESOURCE endpoint stays
+inside it**. This is what makes cross-tenant isolation (§4) a property of the
+credential rather than a check each endpoint must remember.
+
+**The one carve-out — account-level DISCOVERY reads.** `GET /api/v1/me` and
+`GET /api/v1/workspaces` answer at the level of the token OWNER rather than the
+bound workspace, because a client holding a fresh token otherwise has no way to
+learn which workspace ids exist for it, and would have to discover them by
+guessing. The disclosure is bounded and deliberate: exactly what the owner
+already sees in their own workspace switcher — their own memberships, nothing
+about another user's, and **no resource inside any workspace**, bound or not.
+This carve-out is closed: a new v1 endpoint is bound-workspace-scoped unless it
+is added here, which is an ADR amendment, not a route-level choice. (The
+precedent is the shipped `GET /api/me/api-tokens`, which lists a user's tokens
+account-level for the same reason.)
 
 ### 3. Scopes — reuse `TokenScope` verbatim, mapped PER OPERATION
 
