@@ -548,12 +548,33 @@ export default defineConfig({
         'lib/jobs/schedules.ts',
         'lib/services/jobScheduleHealthService.ts',
         'lib/jobs/definitions/dailyHealthCheck.ts',
+        // Story 11.1 (the public `/api/v1` foundation) · Subtask 11.1.5 — the
+        // whole v1 envelope gates from day one. Every branch here is a way the
+        // PUBLIC contract can be wrong for a third party: an auth gate that
+        // admits, a cursor that skips a row, a limiter that leaks, an error
+        // path that leaks a stack. Stories 11.2 / 11.3 add endpoints ON TOP of
+        // these files, so the gate must already be load-bearing when they land.
+        'lib/api/v1/route.ts',
+        'lib/api/v1/errors.ts',
+        'lib/api/v1/bearer.ts',
+        'lib/api/v1/pagination.ts',
+        'lib/api/v1/rateLimit.ts',
+        'app/api/v1/me/route.ts',
+        'app/api/v1/workspaces/route.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
       // independently, so a regression in any one fails the run (rather than a
       // blended average hiding a weak module).
       thresholds: {
+        // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.
+        'lib/api/v1/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/rateLimit.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/me/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/workspaces/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1775 · MOTIR-1896 — the CI-minutes meter.
         'lib/ciMetering/runnerRates.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciMetering/normalize.ts': { branches: 90, functions: 90, lines: 90 },

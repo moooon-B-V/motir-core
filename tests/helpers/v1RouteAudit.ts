@@ -1,0 +1,133 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+// The `/api/v1` route-tree analyser (Story 11.1 · Subtask 11.1.5 —
+// MOTIR-1861). Source-level guards for the properties a coverage percentage
+// cannot see: that a route stays a thin adapter, that it goes through the
+// shared wrapper, and that it declares a scope.
+//
+// It lives in a helper rather than inline in one test because the guards must
+// be run against TWO inputs: the real route tree (does the product hold?) and
+// a deliberately-violating synthetic source (does the guard actually catch
+// it?). A guard that has never been shown to fail is not a guard.
+//
+// Written to keep holding for routes Stories 11.2 / 11.3 add later — it walks
+// the tree, so a new route is audited the moment it exists, with no list to
+// update.
+
+/** Every HTTP verb Next.js will route to a handler export. */
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
+
+export interface RouteViolation {
+  /** Repo-relative path of the offending file. */
+  file: string;
+  /** A stable identifier for the rule that was broken. */
+  rule: 'prisma-in-route' | 'transaction-in-route' | 'bypasses-wrapper' | 'no-scope-declared';
+  detail: string;
+}
+
+/** Every `route.ts` under `app/api/v1`, repo-relative. */
+export function v1RouteFiles(repoRoot: string): string[] {
+  const root = join(repoRoot, 'app', 'api', 'v1');
+  const found: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (entry === 'route.ts' || entry === 'route.tsx') found.push(full);
+    }
+  };
+  walk(root);
+  return found.map((f) => relative(repoRoot, f)).sort();
+}
+
+/**
+ * Audit ONE route source. Returns every rule it breaks (empty = clean).
+ *
+ * Deliberately source-level rather than runtime: the 4-layer contract is a
+ * property of how the file is WRITTEN, and a runtime check would only catch a
+ * violation on a code path a test happened to exercise.
+ */
+export function auditV1RouteSource(file: string, source: string): RouteViolation[] {
+  const violations: RouteViolation[] = [];
+  const code = stripCommentsAndStrings(source);
+
+  // ── The 4-layer contract: a route is a thin adapter ──────────────────────
+  if (/\bdb\s*\./.test(code) || /@\/lib\/db/.test(source)) {
+    violations.push({
+      file,
+      rule: 'prisma-in-route',
+      detail: 'a v1 route reaches for the Prisma client; the missing piece is a service method',
+    });
+  }
+  if (/\$transaction\s*\(/.test(code)) {
+    violations.push({
+      file,
+      rule: 'transaction-in-route',
+      detail: 'a v1 route opens a transaction; transactions belong to the service layer',
+    });
+  }
+
+  // ── Every handler export goes through the shared wrapper ─────────────────
+  // The wrapper is where auth, the scope gate, the error envelope, the request
+  // id and the rate limiter live, so a route that hand-rolls an export escapes
+  // ALL of them at once.
+  for (const method of HTTP_METHODS) {
+    const declaresFunction = new RegExp(`export\\s+(async\\s+)?function\\s+${method}\\b`).test(
+      code,
+    );
+    const declaresConst = new RegExp(`export\\s+const\\s+${method}\\s*=`).test(code);
+    if (!declaresFunction && !declaresConst) continue;
+
+    const throughWrapper = new RegExp(
+      `export\\s+const\\s+${method}\\s*=\\s*withV1Route\\s*[<(]`,
+    ).test(code);
+    if (!throughWrapper) {
+      violations.push({
+        file,
+        rule: 'bypasses-wrapper',
+        detail: `${method} is exported without withV1Route`,
+      });
+    }
+  }
+
+  // ── Every route DECLARES its required scope ──────────────────────────────
+  const wrapperCalls = code.match(/withV1Route\s*[<(]/g)?.length ?? 0;
+  const scopeDeclarations = source.match(/scope\s*:\s*['"][a-z_:]+['"]/g)?.length ?? 0;
+  if (wrapperCalls > 0 && scopeDeclarations < wrapperCalls) {
+    violations.push({
+      file,
+      rule: 'no-scope-declared',
+      detail: `${wrapperCalls} wrapper call(s) but only ${scopeDeclarations} scope declaration(s)`,
+    });
+  }
+
+  return violations;
+}
+
+/** Every scope literal a route declares, in source order. */
+export function declaredScopes(source: string): string[] {
+  return (source.match(/scope\s*:\s*['"]([a-z_:]+)['"]/g) ?? []).map((m) =>
+    m.replace(/.*['"]([a-z_:]+)['"].*/, '$1'),
+  );
+}
+
+/** Read a route file's source, repo-relative. */
+export function readRouteSource(repoRoot: string, file: string): string {
+  return readFileSync(join(repoRoot, file), 'utf8');
+}
+
+/**
+ * Blank out comments and string literals so a rule cannot fire on prose.
+ * (Without this, the file-header comment explaining "no `db.*` in a route"
+ * would itself trip the `db.` guard — a guard that flags its own
+ * documentation teaches people to delete the documentation.)
+ */
+function stripCommentsAndStrings(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\/[^\n]*/g, ' ')
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``');
+}

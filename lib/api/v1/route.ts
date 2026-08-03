@@ -128,31 +128,41 @@ export function withV1Route<P = Record<string, never>>(
       // ── 1. Authenticate, BEFORE any parsing or reading ──────────────────
       const presentedToken = presentedBearerToken(req);
       const auth = await authenticateApiToken(req, options.scope);
-      if (!auth.ok) {
-        throw auth.reason === 'forbidden'
-          ? new InsufficientScopeError(options.scope)
-          : new UnauthenticatedError();
-      }
-      // `authenticateApiToken` only returns ok for a token it read off this
-      // request, so the header parse above cannot have missed it.
+
+      // 401 exits here, WITHOUT touching the limiter. The budget belongs to a
+      // credential, so a request we could not identify must not be able to
+      // spend one: otherwise anyone who learned a token's fingerprint could
+      // exhaust its budget without ever holding the secret.
+      if (!auth.ok && auth.reason === 'unauthenticated') throw new UnauthenticatedError();
+      // `authenticateApiToken` never gets past the unauthenticated branch for a
+      // request it could not read a token off, so the parse above cannot have
+      // missed it.
       /* v8 ignore next */
       if (!presentedToken) throw new UnauthenticatedError();
 
       // ── 2. Rate-limit, per TOKEN ────────────────────────────────────────
-      // AFTER auth, so an unauthenticated flood cannot spend a real token's
-      // budget (an attacker who knew a token id could otherwise exhaust it
-      // without holding the secret) — and BEFORE the handler, so no work is
-      // done for a request that will be refused.
+      // Everything from here holds a VALID token — `ok`, or `forbidden`, which
+      // means the credential resolved but lacks the scope. Both are metered.
+      //
+      // ⚠️ The scope refusal is metered DELIBERATELY, and the ordering is the
+      // whole point: if 403s were free, a holder of any valid token could
+      // hammer an endpoint whose scope it lacks — a full token lookup per
+      // request — with no ceiling at all. Refusing a request is not the same as
+      // it being free to serve. It also means a 429 outranks a 403: a caller
+      // over its budget is told to back off regardless of what it asked for.
       //
       // The headers go into `responseHeaders`, which every exit path stamps,
-      // so they survive a 429, a mapped error and a 500 alike.
+      // so they survive a 429, a 403, a mapped error and a 500 alike.
       const decision = await consumeRateLimit(tokenFingerprint(presentedToken));
       for (const [header, value] of Object.entries(rateLimitHeaders(decision))) {
         responseHeaders.set(header, value);
       }
       if (!decision.allowed) throw new RateLimitExceededError(retryAfterSeconds(decision));
 
-      // ── 3. Run the handler ──────────────────────────────────────────────
+      // ── 3. Enforce the declared scope ───────────────────────────────────
+      if (!auth.ok) throw new InsufficientScopeError(options.scope);
+
+      // ── 4. Run the handler ──────────────────────────────────────────────
       const params = ((await args?.params) ?? {}) as P;
       const response = await handler({
         req,
