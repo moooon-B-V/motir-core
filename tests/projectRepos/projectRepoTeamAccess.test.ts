@@ -14,6 +14,10 @@ import {
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import {
+  createActionsVariableFake,
+  type ActionsVariableFake,
+} from '../helpers/actionsVariableFake';
 
 // TEAM CODE ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1910).
 //
@@ -60,6 +64,7 @@ let existingRepos: Map<string, number>;
 let inviteRefusals: Set<string>;
 let collaborators: Set<string>;
 let nextRepoId: number;
+let actionsVariables: ActionsVariableFake;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -128,6 +133,19 @@ function installGitHub(): void {
         return json(200, { id, name, owner: { login: MOTIR_ORG }, default_branch: 'main' });
       }
       if (method === 'PUT') return json(201, { content: {} });
+
+      // The org's FLEET RUNNER VARIABLE (MOTIR-2015) — establishing a repository
+      // now ensures `MOTIR_RUNNER`. The service swallows its own failures by
+      // contract, so an unfaked call would be INVISIBLE here rather than loud: this
+      // suite's `throw` below would be caught and discarded, leaving the seam
+      // green, silent, and no longer describing what the product does.
+      //
+      // (This suite has no runner-GROUP fake and relies on that same swallow for
+      // MOTIR-1972's sync — a pre-existing gap this card does not widen and does
+      // not pretend to close.)
+      const variable = actionsVariables.handle(u, method, body);
+      if (variable) return variable;
+
       throw new Error(`unexpected fetch: ${method} ${u}`);
     }),
   );
@@ -223,6 +241,7 @@ beforeEach(async () => {
   inviteRefusals = new Set();
   collaborators = new Set();
   nextRepoId = 900_001;
+  actionsVariables = createActionsVariableFake(MOTIR_ORG);
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
     publicKeyEncoding: { type: 'spki', format: 'pem' },

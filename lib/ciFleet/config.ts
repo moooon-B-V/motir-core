@@ -68,6 +68,29 @@ import { MOTIR_FLEET_RUNNER_LABEL } from '@/lib/ciMetering/runnerRates';
 export const MOTIR_RUNNER_LABEL = MOTIR_FLEET_RUNNER_LABEL;
 
 /**
+ * The GitHub Actions VARIABLE NAME the starter's workflows read the label out of
+ * — the other half of §N's portability seam, and the name MOTIR-2015's writer
+ * creates in Motir's provisioning org.
+ *
+ * `runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}` is a contract between a
+ * workflow file in a repository Motir does not control after handover and a
+ * variable Motir writes. Both halves have to agree on this exact string, and only
+ * one of them lives in this codebase — the other is committed YAML in
+ * `nextjs-prisma-vercel-starter` (MOTIR-1925, all 5 job sites) and in the CI stub
+ * `lib/github/repoProvisioning.ts` seeds into an initialised repo. A rename here
+ * that is not made in both places does not fail anything: the variable is simply
+ * never read, `runs-on` silently resolves to `ubuntu-latest`, and the fleet stops
+ * booting with every job still green. That is precisely the defect MOTIR-2015 was
+ * filed for, so the name is a NAMED CONSTANT rather than an inline string at the
+ * write site — one place to grep, and one place a rename has to start.
+ *
+ * ⚠️ NOT the label. {@link MOTIR_RUNNER_LABEL} is the VALUE this variable carries
+ * (`motir-runner`, constrained by §M); this is the KEY it is stored under. They
+ * are different strings with different constraints and must never be conflated.
+ */
+export const MOTIR_RUNNER_VARIABLE = 'MOTIR_RUNNER';
+
+/**
  * Does this job's REQUESTED runner labels name the Motir fleet? The §O gate,
  * and the only question that decides whether an intent is emitted.
  *
