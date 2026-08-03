@@ -1,6 +1,12 @@
 import { Prisma } from '@prisma/client';
 import { resolveContainerRate, UNPRICED_USD_PER_SECOND } from './rates';
-import type { ContainerHandle, ContainerUsage, TeardownReason, UsageAttribution } from './types';
+import type {
+  ContainerAccrual,
+  ContainerHandle,
+  ContainerUsage,
+  TeardownReason,
+  UsageAttribution,
+} from './types';
 
 // Building the CONTAINER-SECONDS RECORD (§5) — the one place a `ContainerUsage`
 // is constructed, shared by every adapter.
@@ -114,9 +120,73 @@ export function buildContainerUsage(input: {
   };
 }
 
+/**
+ * Assemble a CHECKPOINT on a container that is still running (MOTIR-1995) — the
+ * same arithmetic as {@link buildContainerUsage}, taken at `observedAt` instead of
+ * at a stop.
+ *
+ * ⚠️ `billableSecondsFor` IS REUSED RATHER THAN MIRRORED, and the reuse is the
+ * point: `usage.ts`'s own header gives the reason the computation lives in one
+ * place at all — two constructions of the same figure are two chances to compute
+ * it differently, and the difference would only ever surface months later in a
+ * reconciliation as drift nobody can attribute. A checkpoint is that risk again,
+ * one axis over (the same container, two moments), so it computes seconds through
+ * the SAME function and prices through the SAME resolver.
+ *
+ * The rate resolves at `observedAt`, mirroring the settle's resolve-at-`stoppedAt`:
+ * a container observed before a repricing is costed at the rate that was in force
+ * while it was running. A container running ACROSS a repricing therefore has its
+ * whole accrual re-priced at the newer rate on the next checkpoint, which is the
+ * same answer the settle would have produced on its own — the alternative, pricing
+ * each interval separately, would need a per-interval table this row has no room
+ * for and cannot be reconstructed from a single `usd_per_second`.
+ */
+export function buildContainerAccrual(input: {
+  handle: ContainerHandle;
+  attribution: UsageAttribution;
+  createdAt: Date;
+  startedAt: Date;
+  observedAt: Date;
+}): ContainerAccrual {
+  const { handle, attribution, createdAt, startedAt, observedAt } = input;
+  const accruedSeconds = billableSecondsFor(startedAt, observedAt);
+  const rate = resolveContainerRate(handle.provider, attribution.size, handle.region, observedAt);
+
+  const usdPerSecond = rate?.usdPerSecond ?? UNPRICED_USD_PER_SECOND;
+
+  return {
+    handleId: handle.id,
+    provider: handle.provider,
+    region: handle.region,
+
+    orgId: attribution.orgId,
+    workspaceId: attribution.workspaceId,
+    projectId: attribution.projectId,
+    repoFullName: attribution.repoFullName,
+    workload: attribution.workload,
+    workflowJobId: attribution.workflowJobId,
+
+    cpuKind: attribution.size.cpuKind,
+    cpus: attribution.size.cpus,
+    memoryMb: attribution.size.memoryMb,
+
+    createdAt,
+    startedAt,
+    observedAt,
+    accruedSeconds,
+
+    usdPerSecond,
+    costUsd: new Prisma.Decimal(usdPerSecond).mul(accruedSeconds).toFixed(),
+    rateEffectiveFrom: rate?.effectiveFrom ?? null,
+  };
+}
+
 /** Did this row fall through to the unpriced fallback? The caller logs on true —
  *  a fleet running unpriced is a rate row someone forgot, and it is only ever
- *  noticed if it says so. */
-export function isUnpriced(usage: ContainerUsage): boolean {
+ *  noticed if it says so. Total over both record shapes, because an unpriced
+ *  CHECKPOINT is the same forgotten rate row and has to say so at the same volume
+ *  (it is in fact the EARLIER warning — it fires while the container is still
+ *  running, rather than after the spend is already sunk). */
+export function isUnpriced(usage: ContainerUsage | ContainerAccrual): boolean {
   return usage.rateEffectiveFrom === null;
 }

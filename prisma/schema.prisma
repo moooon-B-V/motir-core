@@ -5041,18 +5041,37 @@ model CiContainerUsage {
   /// runner lives minutes and is costed at teardown, which is why this was NOT
   /// NULL; an Epic 9 agent container spans a whole `motir run <story>` — HOURS —
   /// and under teardown-only costing would produce no row for its entire life,
-  /// accruing spend invisibly against an account Fly provides no cap for. The
-  /// column is relaxed now, while the table is empty; implementing incremental
-  /// accrual is MOTIR-1995's, not this card's.
+  /// accruing spend invisibly against an account Fly provides no cap for.
+  ///
+  /// ⚠️ NULL IS THEREFORE "STILL ACCRUING", AND IT IS THE ROW'S SETTLED FLAG
+  /// (MOTIR-1995 implements the accrual the column was relaxed for). A row with a
+  /// null `container_stopped_at` carries a PARTIAL figure that a later checkpoint
+  /// may raise; a settle writes this instant together with `terminal_state` +
+  /// `teardown_reason` and reconciles `billable_seconds` to the true total. The
+  /// writer enforces the pairing — a settled row never has a null here, and a
+  /// second settle of the same handle changes nothing.
   containerStoppedAt DateTime? @map("container_stopped_at")
-  /// ceil(stopped − started); 0 when it never started. Fly bills a Machine on
-  /// its RUNNING seconds, so this IS the provider's own basis — which is what
-  /// makes the fleet reconciliation an audit rather than two estimates.
+  /// ceil(stopped − started) once settled, and ceil(now − started) at a
+  /// checkpoint; 0 when it never started. Fly bills a Machine on its RUNNING
+  /// seconds, so this IS the provider's own basis — which is what makes the fleet
+  /// reconciliation an audit rather than two estimates.
+  ///
+  /// ⚠️ ABSOLUTE-TO-DATE, NEVER A DELTA (MOTIR-1995). Every accrual write states
+  /// the container's TOTAL seconds so far and the writer derives the rollup's
+  /// increment by subtracting what this column already held. That is what makes a
+  /// replayed checkpoint — the normal case, since supervision runs as durable
+  /// Inngest steps that re-execute on replay — cost exactly nothing.
   billableSeconds    Int       @map("billable_seconds")
 
-  /// The calendar-month bucket, a PURE function of `containerStoppedAt` — the
-  /// same `periodStartFor` the minute meter keys on (§4.5), so the two meters'
-  /// periods always line up.
+  /// The calendar-month bucket — the same `periodStartFor` the minute meter keys
+  /// on (§4.5), so the two meters' periods always line up.
+  ///
+  /// ⚠️ PINNED AT THE ROW'S FIRST WRITE AND NEVER MOVED. For a settle-only
+  /// container that is `periodStartFor(containerStoppedAt)`, unchanged. For a
+  /// checkpointed one it is the period of the FIRST accrual, and a container that
+  /// runs across a month boundary keeps it: the rollup it has already been added
+  /// to is the one the settle must reconcile against, and re-bucketing the row
+  /// would leave the old period's rollup permanently overstated.
   periodStart DateTime @map("period_start")
 
   /// The commercial mapping, resolved from the DATED rate table AT TEARDOWN.
@@ -5100,15 +5119,15 @@ model CiContainerUsage {
   @@map("ci_container_usage")
 }
 
-/// The PER-PERIOD fleet-COST rollup (Story MOTIR-1916 · MOTIR-1924) — the row
-/// that makes "what did this org's CI cost Motir in July?" one indexed read
-/// rather than a scan-and-sum over every container ever booted.
+/// The PER-PERIOD fleet-COST rollup (Story MOTIR-1916 · MOTIR-1924 ·
+/// MOTIR-1995) — the row that makes "what did this org's fleet cost Motir in
+/// July?" one indexed read rather than a scan-and-sum over every container ever
+/// booted.
 ///
 /// The exact shape of `CiPeriodUsage` one meter over, and deliberately so:
 /// keyed by workspace (the tenancy contract), summed by org (where the margin
 /// question is asked), incremented in the SAME transaction as the container row
-/// that feeds it — so a duplicate handle fails the unique index and the
-/// increment rolls back with it, and the two can never disagree.
+/// that feeds it — so the two can never disagree.
 ///
 /// ⚠️ MARGIN IS DERIVED FROM STORED VALUES, NOT FROM LOGS. `CiPeriodUsage` holds
 /// the org's metered Linux-equivalent minutes for the same period and the same
@@ -5124,12 +5143,37 @@ model CiContainerPeriodCost {
   /// Midnight UTC on the 1st of the calendar month (§4.5).
   periodStart DateTime @map("period_start")
 
+  /// WHICH workload these seconds are, and PART OF THE KEY (MOTIR-1995).
+  ///
+  /// ⚠️ THE PER-ROW `workload` ON `CiContainerUsage` IS NOT ENOUGH, and that was
+  /// the gap. This rollup exists so the cost question is ONE indexed read; with a
+  /// single row per (workspace, period) that read returns CI + index + agent
+  /// summed together, and the only way back to "what did indexing cost us?" is
+  /// the scan over per-container rows the rollup exists to avoid. So the three
+  /// workloads get three rows and are separable at the same cost as the total —
+  /// which is `code-graph-index-fleet.md`'s own reason for the discriminator, one
+  /// table further along than MOTIR-1924 could see.
+  ///
+  /// `ci` / `index` / `agent` (`CiContainerWorkload`), defaulted to `ci` so the
+  /// migration is a no-op for every row MOTIR-1924's meter has already written.
+  workload String @default("ci")
+
   /// Σ billable container-seconds — the PHYSICAL total, kept alongside the money
   /// so a re-pricing can be recomputed from it without a backfill (§3.3's rule,
   /// applied to Motir's own cost).
+  ///
+  /// ⚠️ INCREMENTED BY SIGNED DELTAS, NOT ONLY BY WHOLE CONTAINERS (MOTIR-1995).
+  /// A checkpointed container contributes the DIFFERENCE between what it has
+  /// accrued so far and what this rollup already holds for it, so replaying a
+  /// checkpoint adds nothing and a settle that lands BELOW the last checkpoint
+  /// (the container stopped between two observations) corrects downward. The
+  /// physical total therefore always equals Σ of the per-container rows.
   containerSeconds Int     @default(0) @map("container_seconds")
   /// Σ cost in USD. Decimal at the row's own precision, never a float.
   costUsd          Decimal @default(0) @map("cost_usd") @db.Decimal(24, 12)
+  /// How many DISTINCT containers have contributed. Incremented only when a
+  /// container's usage row is first created, never per checkpoint — otherwise a
+  /// long-running container would count itself once per observation.
   containerCount   Int     @default(0) @map("container_count")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -5138,9 +5182,12 @@ model CiContainerPeriodCost {
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  /// One rollup row per workspace per period — the upsert target.
-  @@unique([workspaceId, periodStart])
-  /// The org's cost-for-this-period read, mirroring `CiPeriodUsage`'s.
+  /// One rollup row per workspace per period PER WORKLOAD — the upsert target.
+  @@unique([workspaceId, periodStart, workload])
+  /// The org's cost-for-this-period read, mirroring `CiPeriodUsage`'s. The
+  /// workload is deliberately NOT in the index: both reads this serves — one
+  /// workload's line and the full per-workload breakdown — hit at most three rows
+  /// per workspace in the period, so the extra column would buy nothing.
   @@index([organizationId, periodStart])
   @@map("ci_container_period_cost")
 }

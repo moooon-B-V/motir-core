@@ -20,6 +20,11 @@ import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { db } from '@/lib/db';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
+import { truncateAuthTables } from '../helpers/db';
 
 // THE INDEX DISPATCH SERVICE (Story MOTIR-1981 · MOTIR-2026) —
 // `docs/decisions/code-graph-index-fleet.md` §2 · §4 · §5 · §10.
@@ -478,7 +483,7 @@ describe('every path out of supervision tears the container down', () => {
     expect(fakeOrchestrator.teardowns).toHaveLength(1);
   });
 
-  it('carries the container-seconds record OUT rather than writing it', async () => {
+  it('carries the container-seconds record OUT as well as writing it', async () => {
     const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
       ...FAST,
       sleep: completeWith(0),
@@ -486,7 +491,11 @@ describe('every path out of supervision tears the container down', () => {
 
     if (outcome.outcome !== 'settled') throw new Error('expected a settled outcome');
     // Teardown PRODUCES the usage row — the port makes that unskippable — and the
-    // dispatcher hands it on. Persisting and attributing it is the meter's card.
+    // dispatcher both PERSISTS it (MOTIR-1995) and hands it on. The two are not
+    // redundant: this outcome becomes the durable step's `job_run` ledger entry, the
+    // per-run operational trail, while the persisted row is the aggregated,
+    // tenant-attributed record the margin readout reads. The persistence itself is
+    // asserted against real Postgres further down.
     expect(outcome.usage).toMatchObject({
       handleId: outcome.containerId,
       workload: 'code_graph_index',
@@ -763,5 +772,175 @@ describe('no isMeta branch exists anywhere in this path', () => {
     );
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
     expect(code).not.toMatch(/isMeta/);
+  });
+});
+
+describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
+  // ⚠️ AGAINST REAL POSTGRES, and it has to be. MOTIR-2026 left this seam open —
+  // teardown produced the usage record and the service wrote nothing — so the thing
+  // worth asserting is not that a function was called but that a ROW EXISTS, in a
+  // real tenant, attributed and costed. The rest of this file runs on fabricated
+  // ids (`org-1`), which is why these tests seed their own tenant instead.
+  const PASSWORD = 'hunter2hunter2';
+  /** When the poll observes the container — injected, so the accrued seconds are a
+   *  fixed arithmetic fact rather than a race with the wall clock. */
+  const OBSERVED_AT_MS = 90_000;
+
+  let tenant: { organizationId: string; workspaceId: string; projectId: string };
+  let dbInput: IndexDispatchInput;
+
+  beforeEach(async () => {
+    await db.$executeRawUnsafe(
+      'TRUNCATE TABLE "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
+    );
+    await truncateAuthTables();
+    // The meter is a CLOUD meter (§8.5) — off-cloud there is no fleet to bill.
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+
+    const email = `index-cogs-${Math.random().toString(36).slice(2, 8)}@example.com`;
+    const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: `WS ${email}`,
+      ownerUserId: user.id,
+    });
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      name: 'Acme',
+      identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    });
+    tenant = {
+      organizationId: workspace.organizationId,
+      workspaceId: workspace.id,
+      projectId: project.id,
+    };
+    dbInput = { ...INPUT, ...tenant };
+  });
+
+  it('SETTLE persists the container-seconds row under the `index` line', async () => {
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(dbInput, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    if (outcome.outcome !== 'settled') throw new Error('expected a settled outcome');
+    const row = await db.ciContainerUsage.findFirstOrThrow();
+    expect(row).toMatchObject({
+      handleId: outcome.containerId,
+      containerProvider: 'fake',
+      // The cost AXIS value, mapped from the registry's `code_graph_index` kind —
+      // the mapping whose absence made MOTIR-1981's "already attributable" claim
+      // false.
+      workload: 'index',
+      // An index container has no GitHub job at all (§11), and the column must say
+      // so with a real NULL rather than the string 'null'.
+      workflowJobId: null,
+      organizationId: tenant.organizationId,
+      workspaceId: tenant.workspaceId,
+      projectId: tenant.projectId,
+      repoFullName: 'moooon-B-V/motir-core',
+      teardownReason: 'job_completed',
+    });
+    expect(row.containerStoppedAt).not.toBeNull();
+    // And the rollup carries the same line, so index spend is separable from CI's.
+    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    expect(rollup).toMatchObject({ workload: 'index', containerCount: 1 });
+    expect(rollup.containerSeconds).toBe(row.billableSeconds);
+  });
+
+  it('the POLL checkpoints a still-running container BEFORE it stops', async () => {
+    // The incremental half. An index container is job-shaped and would survive on
+    // teardown-time costing alone; this is here because Epic 9's agent container is
+    // story-shaped (HOURS) and reaches teardown far too late to be the first write.
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(dbInput, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
+
+    const polled = await codeGraphIndexDispatchService.pollIndexContainer(
+      booted.session,
+      INITIAL_INDEX_POLL_STATE,
+      { ...FAST, indexTimeoutMs: 600_000, now: () => observedAt },
+    );
+
+    expect(polled.done).toBe(false);
+    const row = await db.ciContainerUsage.findFirstOrThrow();
+    // A PARTIAL figure, read mid-run — the acceptance criterion in one assertion.
+    expect(row.billableSeconds).toBe(OBSERVED_AT_MS / 1000);
+    expect(row.workload).toBe('index');
+    // The three fields that say "still accruing"; the columns were relaxed to
+    // nullable ahead of this card for exactly this row.
+    expect(row.containerStoppedAt).toBeNull();
+    expect(row.terminalState).toBeNull();
+    expect(row.teardownReason).toBeNull();
+    expect((await db.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(
+      OBSERVED_AT_MS / 1000,
+    );
+  });
+
+  it('a REPLAYED poll adds nothing — the durable step re-executes, the meter does not', async () => {
+    // ⚠️ NOT AN EDGE CASE. `pollIndexContainer` runs inside a durable Inngest step,
+    // which re-executes on replay, so this is the ordinary path. It is free only
+    // because the checkpoint reports the container's TOTAL to date rather than a
+    // delta — a delta here would overstate Motir's own cost on every replay,
+    // silently.
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(dbInput, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
+    const options = { ...FAST, indexTimeoutMs: 600_000, now: () => observedAt };
+
+    await codeGraphIndexDispatchService.pollIndexContainer(
+      booted.session,
+      INITIAL_INDEX_POLL_STATE,
+      options,
+    );
+    await codeGraphIndexDispatchService.pollIndexContainer(
+      booted.session,
+      INITIAL_INDEX_POLL_STATE,
+      options,
+    );
+
+    expect(await db.ciContainerUsage.count()).toBe(1);
+    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    expect(rollup.containerSeconds).toBe(OBSERVED_AT_MS / 1000);
+    expect(rollup.containerCount).toBe(1);
+  });
+
+  it('a checkpointed container RECONCILES at teardown — one row, one container', async () => {
+    // The two seams meeting: the poll's partial figure and the teardown's true total
+    // land on ONE row and ONE rollup, which is what "extended, not duplicated" means
+    // once both moments write.
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(dbInput, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
+    await codeGraphIndexDispatchService.pollIndexContainer(
+      booted.session,
+      INITIAL_INDEX_POLL_STATE,
+      {
+        ...FAST,
+        indexTimeoutMs: 600_000,
+        now: () => observedAt,
+      },
+    );
+    expect((await db.ciContainerUsage.findFirstOrThrow()).containerStoppedAt).toBeNull();
+
+    const live = fakeOrchestrator.liveContainerIds();
+    if (live[0]) fakeOrchestrator.completeJob(live[0], { exitCode: 0 });
+    const settled = await codeGraphIndexDispatchService.settleIndexContainer(booted.session, {
+      done: true,
+      reason: 'job_completed',
+      startedAt: new Date(booted.session.bootedAt).toISOString(),
+      exitCode: 0,
+      failureDetail: null,
+    });
+
+    expect(settled.outcome).toBe('settled');
+    expect(await db.ciContainerUsage.count()).toBe(1);
+    const row = await db.ciContainerUsage.findFirstOrThrow();
+    expect(row.containerStoppedAt).not.toBeNull();
+    expect(row.teardownReason).toBe('job_completed');
+    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    expect(rollup.containerCount).toBe(1);
+    // The rollup equals the row — the invariant a signed-delta rollup has to keep.
+    expect(rollup.containerSeconds).toBe(row.billableSeconds);
   });
 });

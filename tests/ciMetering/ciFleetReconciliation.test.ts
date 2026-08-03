@@ -109,12 +109,15 @@ async function seedMeteredRun(
   });
 }
 
-/** One torn-down container, as the cost meter persists it. */
+/** One torn-down container, as the cost meter persists it. `workload` defaults to
+ *  the CI runner this audit is about; pass `index` / `agent` to seed a container
+ *  from one of the OTHER workloads that share the fleet org (MOTIR-1995). */
 async function seedContainer(
   tenant: Tenant,
   repoName: string,
   billableSeconds: number,
   periodStart: Date = JULY_2026,
+  workload: 'ci' | 'index' | 'agent' = 'ci',
 ): Promise<void> {
   await db.ciContainerUsage.create({
     data: {
@@ -124,7 +127,10 @@ async function seedContainer(
       workspaceId: tenant.workspaceId,
       organizationId: tenant.organizationId,
       repoFullName: `${MOTIR_ORG}/${repoName}`,
-      workflowJobId: String(44000 + Math.floor(Math.random() * 900)),
+      workload,
+      // An index or agent container has no GitHub job at all — the whole reason it
+      // cannot appear in an Actions-based audit.
+      workflowJobId: workload === 'ci' ? String(44000 + Math.floor(Math.random() * 900)) : null,
       cpuKind: 'performance',
       cpus: 2,
       memoryMb: 8192,
@@ -351,6 +357,41 @@ describe('reconcileFleetMonth (against real Postgres)', () => {
     const outcome = await ciMinutesReconciliationService.reconcileFleetMonth(JULY_2026);
 
     expect(outcome).toMatchObject({ outcome: 'reconciled', org: MOTIR_ORG });
+    const reconciled = outcome as Extract<typeof outcome, { outcome: 'reconciled' }>;
+    expect(reconciled.repos).toEqual([
+      {
+        repoName: 'acme-web',
+        meteredMinutes: 20,
+        containerMinutes: 21,
+        containerCount: 5,
+        fleetJobCount: 5,
+        driftMinutes: 1,
+        exceedsTolerance: false,
+      },
+    ]);
+    expect(reconciled.discrepancies).toEqual([]);
+  });
+
+  it('IGNORES index and agent containers — they are not Actions jobs and must not read as drift', async () => {
+    // ⚠️ THE PHANTOM DRIFT, ONE WORKLOAD OVER (MOTIR-1995). This audit's other side
+    // is `ci_workflow_run_usage` — GitHub Actions job wall-clock. An index container
+    // produces no Actions run at all (`code-graph-index-fleet.md` §11: "no runner
+    // registers, no `runs-on` resolves, no `workflow_job` fires"), so every index
+    // second counted here would sit on one side and never the other: one-directional
+    // drift in the very repositories the fleet builds, growing with index volume and
+    // attributable to nothing. That is exactly what §Q.2's audit was created to
+    // REMOVE, so an unfiltered container read would have re-created it.
+    const tenant = await seedTenant('fleet-mixed');
+    await seedMeteredRun(tenant, 'acme-web', [breakdown(MOTIR_FLEET_RUNNER_FAMILY, 20, 5)]);
+    // The CI containers that actually served those 20 metered minutes.
+    for (let i = 0; i < 5; i += 1) await seedContainer(tenant, 'acme-web', 252);
+    // A big index container and an agent container in the same repo and month. Left
+    // in, they add 100 minutes of drift to a repo that is perfectly reconciled.
+    await seedContainer(tenant, 'acme-web', 3000, JULY_2026, 'index');
+    await seedContainer(tenant, 'acme-web', 3000, JULY_2026, 'agent');
+
+    const outcome = await ciMinutesReconciliationService.reconcileFleetMonth(JULY_2026);
+
     const reconciled = outcome as Extract<typeof outcome, { outcome: 'reconciled' }>;
     expect(reconciled.repos).toEqual([
       {

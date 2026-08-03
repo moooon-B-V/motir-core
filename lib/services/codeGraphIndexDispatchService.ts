@@ -9,12 +9,15 @@ import {
   type IndexFleetConfig,
 } from '@/lib/orchestrator';
 import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
+import { buildContainerAccrual } from '@/lib/orchestrator/usage';
+import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator/usageSink';
 import type {
   ContainerHandle,
   ContainerOrchestrator,
   ContainerSpec,
   ContainerUsage,
   TeardownReason,
+  UsageAttribution,
 } from '@/lib/orchestrator/types';
 
 // THE INDEX DISPATCH SERVICE (Story MOTIR-1981 · MOTIR-2026) — boot ONE index
@@ -75,11 +78,33 @@ import type {
 //
 // ⚠️ WHAT THIS DELIBERATELY DOES NOT DO. The admission cap and the
 // `fleet_in_flight_slot` are MOTIR-1990's — no concurrency number is inlined
-// here. The COGS meter is MOTIR-1995's: teardown produces the usage record (the
-// port makes that unskippable) and this service carries it OUT on the outcome,
-// but persisting and attributing it is that card's, so nothing here writes a
-// usage row. `system.code-graph-refresh` and motir-ai's hydrate-on-read path are
+// here. `system.code-graph-refresh` and motir-ai's hydrate-on-read path are
 // untouched.
+//
+// ⚠️ THE COGS METER IS NOW WIRED (MOTIR-1995). MOTIR-2026 carried the usage record
+// OUT on the outcome and wrote no row, because attributing it was this card's. It
+// is attributed here, at the two moments a container's cost becomes knowable, and
+// both go through `usageSink` — never the meter service directly, so the port keeps
+// knowing nothing about tenancy:
+//
+//   * {@link codeGraphIndexDispatchService.settleIndexContainer} → `recordContainerUsage`.
+//     Teardown produces the record and the port makes that unskippable.
+//   * {@link codeGraphIndexDispatchService.pollIndexContainer} → `recordContainerAccrual`.
+//     A CHECKPOINT while the container still runs. An index container is job-shaped
+//     and would survive without it; it is here because the supervision loop is where
+//     a live container's seconds are observable at all, and Epic 9's agent container
+//     — story-shaped, HOURS — reaches teardown far too late to be the first write.
+//     Building it while the loop is being written costs nothing; retrofitting it
+//     after Epic 9 ships costs a migration and a period of blind spend.
+//
+// Neither call can throw (`usageSink`'s contract), which is what lets them sit on a
+// path documented to never throw and inside the `finally`-shaped settle.
+//
+// ⚠️ NO `isMeta` BRANCH HERE EITHER, and now none in the meter it feeds. Motir's own
+// repos dispatch through this identical code into the same org; the meter measures
+// them like any tenant and reads their cost back as its own line. See §9.1 and the
+// meter's header: `isMeta` decides whether spend is CHARGED, never whether it is
+// MEASURED.
 
 /** This service dispatches INDEX containers and nothing else. Named once so the
  *  answer to "does it ever boot anything else?" is one grep, not four literals. */
@@ -92,6 +117,33 @@ const CODE_GRAPH_INDEX_WORKLOAD = 'code_graph_index' satisfies FleetWorkloadKind
  * job that does not exist and tag it as a CI runner to the reaper.
  */
 const NO_WORKFLOW_JOB = null;
+
+/**
+ * The attribution every cost record for this container carries — built ONCE from
+ * the session (MOTIR-1995), because the checkpoint and the teardown must attribute
+ * the SAME container the same way or the settle's delta would land on a different
+ * rollup line than the accrual it is reconciling.
+ *
+ * `observedStartedAt` is the caller's own observation, which for an index container
+ * is usually the ONLY start instant available: `auto_destroy` means a healthy run
+ * ends with the machine deleting itself, taking its event log with it, so without
+ * this the best-behaved containers would produce the zero-second rows.
+ */
+function indexUsageAttribution(
+  session: IndexSession,
+  observedStartedAt: Date | null = null,
+): UsageAttribution {
+  return {
+    orgId: session.attribution.orgId,
+    workspaceId: session.attribution.workspaceId,
+    projectId: session.attribution.projectId,
+    repoFullName: session.attribution.repoFullName,
+    workload: CODE_GRAPH_INDEX_WORKLOAD,
+    workflowJobId: NO_WORKFLOW_JOB,
+    size: FLEET_CONTAINER_SIZE,
+    observedStartedAt,
+  };
+}
 
 /** How long a container has to reach a running state before it is written off as
  *  a boot that never happened. Same figure the CI fleet uses: a deadline that
@@ -362,8 +414,11 @@ export type IndexDispatchOutcome =
       containerId: string;
       billableSeconds: number;
       costUsd: string;
-      /** The §5 container-seconds record, produced BY the teardown. Carried out
-       *  rather than written: persisting and attributing it is MOTIR-1995's. */
+      /** The §5 container-seconds record, produced BY the teardown and PERSISTED
+       *  by it (MOTIR-1995). Still carried out: this outcome is the durable step's
+       *  return value and becomes the run's `job_run` ledger entry, which is a
+       *  different record from the queryable cost row — per-run trail vs.
+       *  aggregated tenant-attributed cost. */
       usage: ContainerUsage;
       failureDetail: string | null;
     }
@@ -728,6 +783,33 @@ export const codeGraphIndexDispatchService = {
 
     if (status.startedAt && !startedAt) startedAt = status.startedAt.toISOString();
 
+    // THE CHECKPOINT (MOTIR-1995) — what this container has cost SO FAR, recorded
+    // before it stops. Only once it has been seen running: a container that has not
+    // started has accrued nothing, and Fly bills a Machine on its RUNNING seconds.
+    //
+    // ⚠️ IT IS SAFE ON THIS PATH FOR TWO INDEPENDENT REASONS, and both are needed.
+    // `recordContainerAccrual` never throws, so it cannot break the never-throws
+    // contract above. And the figure it reports is ABSOLUTE-to-date rather than a
+    // delta, so a durable step that REPLAYS this poll — the normal case, not an edge
+    // one — re-reports the same total and adds nothing. A delta here would have made
+    // every replay overstate Motir's own cost, invisibly.
+    if (startedAt) {
+      await recordContainerAccrual(
+        buildContainerAccrual({
+          handle: {
+            provider: session.handle.provider,
+            id: session.handle.id,
+            region: session.handle.region,
+            createdAt: new Date(session.handle.createdAt),
+          },
+          attribution: indexUsageAttribution(session),
+          createdAt: new Date(session.handle.createdAt),
+          startedAt: new Date(startedAt),
+          observedAt: now(),
+        }),
+      );
+    }
+
     if (status.terminal) {
       // Gone or stopped. If it was never seen running, the container is a boot
       // that never happened — a provisioning failure even though the provider
@@ -788,16 +870,11 @@ export const codeGraphIndexDispatchService = {
     // the reaper reaching the same container later is harmless.
     let usage: ContainerUsage;
     try {
-      usage = await orchestrator.teardown(handle, verdict.reason, {
-        orgId: session.attribution.orgId,
-        workspaceId: session.attribution.workspaceId,
-        projectId: session.attribution.projectId,
-        repoFullName: session.attribution.repoFullName,
-        workload: CODE_GRAPH_INDEX_WORKLOAD,
-        workflowJobId: NO_WORKFLOW_JOB,
-        size: FLEET_CONTAINER_SIZE,
-        observedStartedAt,
-      });
+      usage = await orchestrator.teardown(
+        handle,
+        verdict.reason,
+        indexUsageAttribution(session, observedStartedAt),
+      );
     } catch (err) {
       console.error('[codeGraphIndexDispatchService] could not tear down an index container', {
         containerId: handle.id,
@@ -809,6 +886,18 @@ export const codeGraphIndexDispatchService = {
         detail: `teardown failed for container ${handle.id}; left for the reaper: ${detailOf(err)}`,
       };
     }
+
+    // PERSIST THE COST (MOTIR-1995) — the record teardown just produced, RECONCILED
+    // against whatever the checkpoints already accrued for this container. It runs
+    // after teardown rather than beside it because the container being gone is the
+    // property that actually stops the spend; the sink never throws, so a write
+    // failure cannot turn "destroyed and unrecorded" into "possibly still running".
+    //
+    // The record still rides out on the outcome as well. It is not redundant: the
+    // outcome is the durable step's return value and lands in the `job_run` ledger
+    // as this run's operational trail, while the row this writes is the queryable,
+    // aggregated, tenant-attributed one the margin readout reads.
+    await recordContainerUsage(usage);
 
     return {
       outcome: 'settled',
