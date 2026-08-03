@@ -47,15 +47,38 @@ interface ClientConfig {
   serviceToken: string;
 }
 
+/**
+ * motir-ai's base URL — WITHOUT the service token (MOTIR-2026).
+ *
+ * ⚠️ IT EXISTS SO ONE CALLER CAN HAVE THE URL AND NOT THE TOKEN. A fleet index
+ * container is handed `MOTIR_AI_BASE_URL` and a RUN-SCOPED credential, and
+ * nothing else that reaches motir-ai
+ * (`docs/decisions/code-graph-index-fleet.md` §4). {@link config} cannot serve
+ * that caller: it refuses when `MOTIR_AI_SERVICE_TOKEN` is unset and hands back
+ * the token beside the url, which is precisely the value the container must
+ * never see. Re-reading `MOTIR_AI_URL` at the dispatcher instead would put a
+ * second copy of the variable name — and of the trailing-slash normalisation —
+ * one module away from this one.
+ *
+ * Read at CALL time, like everything else here.
+ */
+export function motirAiBaseUrl(): string {
+  const url = process.env['MOTIR_AI_URL'];
+  if (!url) throw new MotirAiConfigError('MOTIR_AI_URL is not set');
+  return url.replace(/\/+$/, '');
+}
+
 // Read + validate config at CALL time (not module load), so the module imports
 // cleanly in dev/test/CI without these env vars set — and fails FAST with a
 // clear error the moment a caller actually tries to reach motir-ai.
 function config(): ClientConfig {
-  const url = process.env['MOTIR_AI_URL'];
+  // The url is resolved through the exported accessor rather than re-read here,
+  // so both callers normalise it the same way. The ORDER is unchanged: a
+  // deployment missing both variables still hears about the url first.
+  const url = motirAiBaseUrl();
   const serviceToken = process.env['MOTIR_AI_SERVICE_TOKEN'];
-  if (!url) throw new MotirAiConfigError('MOTIR_AI_URL is not set');
   if (!serviceToken) throw new MotirAiConfigError('MOTIR_AI_SERVICE_TOKEN is not set');
-  return { url: url.replace(/\/+$/, ''), serviceToken };
+  return { url, serviceToken };
 }
 
 function authHeaders(serviceToken: string): Record<string, string> {
