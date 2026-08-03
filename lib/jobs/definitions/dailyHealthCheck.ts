@@ -35,8 +35,18 @@ import type { FleetBootableVerdict } from '@/lib/orchestrator';
 // the codebase answered "configured"; the only thing that would have caught it
 // is a scheduled assertion that fails somewhere a person looks.
 //
-// The two probes are independent faults sharing one surface, not one check: a
+// The probes are independent faults sharing one surface, not one check: a
 // stale registry strands functions, an unpullable image strands containers.
+//
+// As of MOTIR-2030 the boot preflight is TWO probes, because the fleet has two
+// pull paths. MOTIR-1989 added the indexer image, and §5's third constraint on
+// its mirror is explicit: "It is a second pull path. The fleet then has two, and
+// each needs §6's preflight independently." They are reported separately rather
+// than merged for the reason the verdict is not a boolean — the operator surface
+// is a MESSAGE, and a message naming the wrong image is worse than none. §5's
+// second constraint is why the indexer's matters most: `registry.fly.io`
+// garbage-collects unreferenced images, and a fleet whose machines are ephemeral
+// by design references nothing between jobs.
 //
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
@@ -63,6 +73,11 @@ export interface DailyHealthCheckResult {
    *  very different states, and a result that only appeared on failure could not
    *  tell them apart. */
   fleet: FleetBootableVerdict;
+  /** The INDEXER image's preflight verdict (MOTIR-2030) — the fleet's second
+   *  pull path, recorded beside the runner's rather than merged into it. A
+   *  deployment that runs CI but does not index reports `not_applicable` here
+   *  while `fleet` says `bootable`, and the ledger can tell those apart. */
+  indexFleet: FleetBootableVerdict;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -110,6 +125,34 @@ export class FleetImageUnpullableError extends Error {
   }
 }
 
+/**
+ * Thrown when the deployment's configured INDEXER image cannot be pulled
+ * (MOTIR-2030) — §5's third constraint, given the loud surface §6 requires.
+ *
+ * A SEPARATE error from {@link FleetImageUnpullableError}, and the message is
+ * the reason: it names the INDEXER's reference, the INDEXER's variable, and the
+ * failure mode peculiar to that path. §5's second constraint makes the likely
+ * cause a GARBAGE-COLLECTED mirror rather than a visibility mistake — Fly cleans
+ * up unreferenced images and a fleet of ephemeral machines references nothing
+ * between jobs — so the message says to re-run the mirror step, which is a
+ * different fix from "check the package's visibility". Telling an operator to
+ * check GHCR visibility for an image Fly quietly collected would send them to
+ * the wrong registry entirely.
+ */
+export class IndexFleetImageUnpullableError extends Error {
+  constructor(readonly verdict: Extract<FleetBootableVerdict, { verdict: 'unpullable' }>) {
+    super(
+      `The fleet's INDEXER image cannot be pulled: ${verdict.reference} — ${verdict.detail}. ` +
+        `No code-graph index container can boot until this is fixed; CI is unaffected ` +
+        `(it pulls a different image). Check that MOTIR_INDEXER_IMAGE names a digest that ` +
+        `still exists, and suspect the mirror first: registry.fly.io garbage-collects ` +
+        `UNREFERENCED images and the fleet's machines are ephemeral, so re-run the ` +
+        `release lane's registry-to-registry copy (docs/decisions/fleet-image-pull.md §5).`,
+    );
+    this.name = 'IndexFleetImageUnpullableError';
+  }
+}
+
 export const dailyHealthCheck = defineJob(
   { id: 'system.daily-health-check', cron: DAILY_HEALTH_CHECK_CRON, retryPolicy: 'none' },
   async (ctx, services): Promise<DailyHealthCheckResult> => {
@@ -119,11 +162,16 @@ export const dailyHealthCheck = defineJob(
       services.jobScheduleHealth.check(),
     );
     const fleet = await ctx.step.run('fleet-boot-preflight', () => services.fleetPreflight.check());
+    const indexFleet = await ctx.step.run('index-fleet-boot-preflight', () =>
+      services.fleetPreflight.checkIndexFleet(),
+    );
 
-    // ⚠️ BOTH PROBES RUN BEFORE EITHER THROWS. A stale registry and an unpullable
-    // image are independent faults, and a run that reported only the first would
-    // hide the second for as many days as the first took to fix. So the reads
-    // are both taken above and only the reporting is ordered.
+    // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stale registry, an
+    // unpullable runner image and an unpullable indexer image are independent
+    // faults, and a run that reported only the first would hide the rest for as
+    // many days as the first took to fix. So all the reads are taken above and
+    // only the reporting is ordered. This is why MOTIR-2030's probe is a second
+    // `step.run` rather than a branch inside the first one.
     //
     // This job's own ledger row is written by `recordStart` BEFORE the handler
     // body runs, so the check always sees a fresh run for
@@ -138,6 +186,13 @@ export const dailyHealthCheck = defineJob(
     // readable; it is just not an alarm.
     if (fleet.verdict === 'unpullable') throw new FleetImageUnpullableError(fleet);
 
-    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet };
+    // The INDEXER path, reported after the runner's and on exactly the same
+    // terms: only a DEFINITE refusal is loud, and `not_applicable` — a deployment
+    // that runs CI but has not wired `MOTIR_INDEXER_IMAGE` — is a green state,
+    // not a fault. Runner first only because a deployment that cannot boot CI has
+    // the larger outage; both verdicts are on the row either way.
+    if (indexFleet.verdict === 'unpullable') throw new IndexFleetImageUnpullableError(indexFleet);
+
+    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet, indexFleet };
   },
 );
