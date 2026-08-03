@@ -1,12 +1,15 @@
 import { indexFleetConfig } from '@/lib/orchestrator';
 import {
+  INDEX_ADMISSION_BUDGETS,
   INDEX_FLEET_TIME_BUDGETS,
   INITIAL_INDEX_POLL_STATE,
+  indexAdmissionWaitMs,
   indexPollWaitMs,
   type IndexDispatchOutcome,
   type IndexPollResult,
   type IndexSession,
 } from '@/lib/services/codeGraphIndexDispatchService';
+import type { IndexAdmissionVerdict } from '@/lib/services/codeGraphIndexAdmissionService';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
 import type {
@@ -28,6 +31,9 @@ import type {
 //     ↓   (the three no-op verdicts return here, exactly as before)
 //   step  assert-fleet-configured        the gate, BEFORE anything is spent
 //   for each projectId of target.projectIds:
+//   step    index-admit:<pid>:<n>        the CAP — one locked decision (bounded)
+//   step    sleep index-admit-wait:<n>   ctx.step.sleep — the QUEUE, if deferred
+//     ↓     …until admitted
 //   step    index-boot:<projectId>       mint + resolve + provision   (bounded)
 //   step    sleep index-wait:<pid>:<n>   ctx.step.sleep — costs no invocation
 //   step    index-poll:<pid>:<n>         ONE describe                 (bounded)
@@ -62,6 +68,16 @@ import type {
 // and its Next button on. So {@link IndexRepoResult} keeps its current fields,
 // and a run that did not index every project THROWS rather than returning a
 // diminished success — see {@link IndexDispatchFailedError}.
+//
+// ⚠️ THE ADMISSION CAP IS A LOOP OF STEPS, NOT A WAIT INSIDE ONE (MOTIR-1990).
+// Each `index-admit:<pid>:<n>` is ONE locked decision, in milliseconds; the
+// QUEUEING between attempts is `ctx.step.sleep`, which holds no invocation at
+// all. The attempt number is in the step id for the same reason the poll's is:
+// the id is what Inngest memoizes against, so a single `index-admit:<pid>` would
+// pin the FIRST answer forever and a deferral would become a permanent one — an
+// index that waits could never be admitted. Over the cap means WAIT; nothing is
+// dropped, and exhausting the whole budget FAILS the run rather than skipping the
+// repo (§6: a `succeeded` row is a permanent claim that the repo is indexed).
 //
 // ⚠️ `system.code-graph-refresh` IS UNTOUCHED. It keeps today's in-process shape
 // (§11: "Still building in-process, unchanged") and therefore keeps
@@ -133,23 +149,37 @@ export async function runIndexFleetSteps(
   });
 
   for (const projectId of target.projectIds) {
+    const dispatchInput = {
+      installationId: input.installationId,
+      providerId: target.providerId,
+      organizationId: target.organizationId,
+      workspaceId: input.workspaceId,
+      projectId,
+      repoOwner: input.repoOwner,
+      repoName: input.repoName,
+      repoRef: target.repoRef,
+      defaultBranch: input.defaultBranch,
+      // The dispatching run, carried into the run-scoped motir-ai credential
+      // for attribution. Read once at the top of the handler and consumed
+      // INSIDE a memoized step, so a replay pass (which Inngest re-invokes
+      // with the same run) never re-mints against a different identity.
+      runId: ctx.runId,
+    };
+
+    // ⚠️ THE CAP, BEFORE ANY CONTAINER IS BOOTED. Nothing below can run without
+    // the ticket this produces — `bootIndexContainer` requires it — so the
+    // global and per-workspace bounds are structural here, not conventional.
+    const admission = await admitWithBackoff(ctx, services, dispatchInput, projectId);
+    if (admission.outcome === 'deferred') {
+      throw dispatchFailure(target.repoRef, projectId, {
+        outcome: 'admission_deferred',
+        reason: admission.reason,
+        detail: admission.detail,
+      });
+    }
+
     const booted = await ctx.step.run(`index-boot:${projectId}`, () =>
-      services.codeGraphIndexDispatch.bootIndexContainer({
-        installationId: input.installationId,
-        providerId: target.providerId,
-        organizationId: target.organizationId,
-        workspaceId: input.workspaceId,
-        projectId,
-        repoOwner: input.repoOwner,
-        repoName: input.repoName,
-        repoRef: target.repoRef,
-        defaultBranch: input.defaultBranch,
-        // The dispatching run, carried into the run-scoped motir-ai credential
-        // for attribution. Read once at the top of the handler and consumed
-        // INSIDE a memoized step, so a replay pass (which Inngest re-invokes
-        // with the same run) never re-mints against a different identity.
-        runId: ctx.runId,
-      }),
+      services.codeGraphIndexDispatch.bootIndexContainer(dispatchInput, admission.admission),
     );
     // Nothing was provisioned — no container to supervise or tear down. The
     // outcome is terminal, and it is a FAILURE: no project was indexed, so the
@@ -218,6 +248,47 @@ export async function runIndexFleetSteps(
     indexed: true,
     repoRef: target.repoRef,
     projectsIndexed: target.projectIds.length,
+  };
+}
+
+/**
+ * Ask for admission, sleeping between attempts, until it is granted or the
+ * waiting budget is exhausted — the durable form of "over the cap means WAIT".
+ *
+ * Every attempt is its OWN step id. That is the load-bearing detail: Inngest
+ * memoizes by id, so one shared id would freeze the first `deferred` answer for
+ * the life of the run and the queue would never move.
+ *
+ * The sleep is `ctx.step.sleep`, so a container waiting an hour for capacity
+ * costs zero invocations and cannot be killed by `maxDuration` — the same reason
+ * supervision waits that way (`docs/jobs.md` rule 1).
+ */
+async function admitWithBackoff(
+  ctx: JobContext,
+  services: JobServices,
+  dispatchInput: Parameters<JobServices['codeGraphIndexDispatch']['admitIndexContainer']>[0],
+  projectId: string,
+): Promise<IndexAdmissionVerdict> {
+  let verdict: IndexAdmissionVerdict = {
+    outcome: 'deferred',
+    reason: 'gate_unavailable',
+    detail: 'admission was never attempted',
+  };
+  for (let attempt = 1; attempt <= INDEX_ADMISSION_BUDGETS.maxAttempts; attempt += 1) {
+    verdict = (await ctx.step.run(`index-admit:${projectId}:${attempt}`, () =>
+      services.codeGraphIndexDispatch.admitIndexContainer(dispatchInput),
+    )) as IndexAdmissionVerdict;
+    if (verdict.outcome !== 'deferred') return verdict;
+    if (attempt < INDEX_ADMISSION_BUDGETS.maxAttempts) {
+      await ctx.step.sleep(
+        `index-admit-wait:${projectId}:${attempt}`,
+        indexAdmissionWaitMs(attempt),
+      );
+    }
+  }
+  return {
+    ...verdict,
+    detail: `index admission was refused for ${INDEX_ADMISSION_BUDGETS.maxAttempts} attempts (${verdict.reason}): ${verdict.detail}`,
   };
 }
 

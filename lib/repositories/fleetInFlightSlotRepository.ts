@@ -107,6 +107,37 @@ export const fleetInFlightSlotRepository = {
     });
   },
 
+  /**
+   * How many slots one workload is holding FOR ONE WORKSPACE — the per-tenant
+   * fairness read (MOTIR-1990's `ceil(global / 2)` cap).
+   *
+   * ⚠️ The same locking contract as {@link countLiveForWorkload}: read under the
+   * `fleet` admission lock, in the same transaction as the take it guards. Two
+   * racers from the same workspace reading this outside the lock both see room.
+   *
+   * ⚠️ `workspace_id` IS ATTRIBUTION, NOT A TENANCY BOUNDARY — the model comment
+   * says so, and this read does not change it. A slot with a NULL workspace is
+   * counted by nobody's per-tenant cap and by everybody's global one, which is
+   * the honest reading of "a container whose tenant was not recorded": it spends,
+   * so it must bound the invoice, but it cannot be attributed to a tenant's
+   * fairness allowance.
+   *
+   * No index of its own on purpose. The predicate rides the existing
+   * `[workload, expiresAt]` index and then filters a set the FLEET CEILING
+   * already bounds — a handful of rows by construction, never a table scan that
+   * grows.
+   */
+  async countLiveForWorkloadInWorkspace(
+    workload: string,
+    workspaceId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.fleetInFlightSlot.count({
+      where: { workload, workspaceId, expiresAt: { gt: now } },
+    });
+  },
+
   /** One slot by its workload-owned key — the read that answers "is this run
    *  still holding capacity?" without counting the whole fleet. */
   async findByRef(

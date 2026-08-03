@@ -29,25 +29,36 @@ import type { CodeGraphIndexData } from '../types';
 // that already succeeded. All the work is delegated to services (the 4-layer
 // "handler is a service caller" rule — the `billingSeatSync` precedent).
 //
-// `concurrency: 2` caps how many repos index at once. The measured aggravator on
-// 2026-08-02 was five runs firing simultaneously at a scale-to-zero motir-ai
-// machine whose cold start alone took 23.3s — each paying it, none benefiting
-// from the machine another had already woken. Serializing to two lets the first
-// wake it for the rest. It bounds RUNS, not steps, so one repo's per-project
-// steps still proceed one after another inside its own run.
+// ⚠️ THERE IS DELIBERATELY NO `concurrency` HERE ANY MORE (MOTIR-1990,
+// `docs/decisions/code-graph-index-fleet.md` §7). The cap lives in the
+// ORCHESTRATOR's admission control — `codeGraphIndexAdmissionService`, a global
+// bound read from `MOTIR_INDEX_MAX_IN_FLIGHT` plus a per-workspace bound of
+// `ceil(global / 2)` — and DO NOT ADD ONE BACK. Three reasons, in order of how
+// badly each bites:
 //
-// ⚠️ AND `2` NOW MEANS SOMETHING MATERIALLY DIFFERENT — flagged forward, not
-// changed here. A stepped supervision loop holds its Inngest concurrency slot
-// for the CONTAINER'S WHOLE LIFE, where the old shape held it for one
-// fetch-and-upload. MOTIR-1990 owns every concurrency number in this fleet
-// (`docs/decisions/code-graph-index-fleet.md` §7) and is the card that must
-// price that in; this one deliberately leaves the value untouched.
+//   1. IT WOULD MAKE THE CONFIGURED CAP A LIE. A stepped supervision loop holds
+//      its Inngest concurrency slot for the CONTAINER'S WHOLE LIFE, where the old
+//      shape held it for one fetch-and-upload. `concurrency: 2` beside a
+//      configured cap of six would mean two, always, whatever an operator set.
+//   2. AN UNKEYED LIMIT IS THE STARVATION IT WAS MEANT TO PREVENT. It is global
+//      and tenant-blind, so one workspace's five repos occupy the lane while
+//      another workspace's first index queues behind all of it — the measured
+//      behaviour §7 records. A per-tenant limit HERE would need a KEYED
+//      concurrency, which `defineJob` discards entirely (MOTIR-1982).
+//   3. ITS ORIGINAL REASON IS GONE. `2` existed for a scale-to-zero motir-ai
+//      whose cold start took 23.3s on 2026-08-02, when five runs each fetched a
+//      tarball and uploaded it from this process. The bytes moved to the
+//      containers (§2); what remains in-process is one short credential mint.
+//      The admission cap bounds the herd far more precisely than a run count did.
+//
+// The cap is now enforced where the containers actually are, which is also the
+// only place that can see the OTHER workloads sharing the invoice (MOTIR-1997).
 //
 // NOTE: this is motir-core's OWN internal job substrate. It is unrelated to
 // motir-ai's frozen JOB_KINDS contract — motir-ai exposes a plain bytes route
 // (`POST /v1/code-graph/index`), NOT a JobKind, so `lib/ai/types.ts` is untouched.
 export const codeGraphIndex = defineJob(
-  { id: 'system.code-graph-index', retryPolicy: 'idempotent', concurrency: 2 },
+  { id: 'system.code-graph-index', retryPolicy: 'idempotent' },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphIndexData;
     return runIndexFleetSteps(ctx, services, {
