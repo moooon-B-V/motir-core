@@ -15,7 +15,11 @@ import * as orchestrator from '@/lib/orchestrator';
 import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
-import { runnerJitConfigClient } from '@/lib/github/runnerJitConfig';
+import {
+  runnerJitConfigClient,
+  RunnerJitTimeoutError,
+  RUNNER_JIT_REQUEST_TIMEOUT_MS,
+} from '@/lib/github/runnerJitConfig';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
@@ -512,6 +516,109 @@ describe('the registration ceiling releases the claim rather than failing the jo
     // nothing. Failing it would drop a job GitHub is genuinely waiting on.
     expect(after.status).toBe('pending');
     expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+});
+
+describe('a mint that BLOWS ITS DEADLINE is early, not broken (MOTIR-2011)', () => {
+  /** The name the boot mints under — deterministic, and the ONLY handle on a
+   *  runner GitHub registered before a timed-out mint could report its id. */
+  function runnerNameFor(intentId: string): string {
+    return `motir-${intentId}`.slice(0, 64);
+  }
+
+  /** GitHub's list-runners answer for the by-name lookup. */
+  function listing(...runners: Array<{ id: number; name: string }>): Response {
+    return json(200, { total_count: runners.length, runners });
+  }
+
+  /** The deadline itself is proven at the wire in `runnerJitConfig.test.ts`; what
+   *  is asked here is what the BOOT PATH does with it, so the error is injected
+   *  rather than waited for — a real 15s stall would buy nothing but 15s. */
+  function mintTimesOut(): void {
+    vi.spyOn(runnerJitConfigClient, 'mint').mockRejectedValue(
+      new RunnerJitTimeoutError('mint', RUNNER_JIT_REQUEST_TIMEOUT_MS),
+    );
+  }
+
+  it('re-queues the intent and de-registers the dangling runner BY NAME', async () => {
+    // §7.4: `generate-jitconfig` registers the runner BEFORE it answers, so a
+    // mint that timed out is the one failure that may have created a runner we
+    // were never told the id of. Unbounded, this path did not exist at all — the
+    // invocation was killed and the runner stayed in the org's list forever.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    mintTimesOut();
+    jitHandler = (call) =>
+      call.method === 'DELETE'
+        ? new Response(null, { status: 204 })
+        : listing({ id: 7734, name: runnerNameFor(intent.id) });
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    // Retryable, and NOT dead-lettered: with `retryPolicy: 'none'` a failed
+    // outcome is where the job would stay.
+    expect(outcome).toEqual({ outcome: 'rate_limited', retryAfterSeconds: null });
+    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(after.status).toBe('pending');
+    expect(after.settledAt).toBeNull();
+    // Nothing was booted, and the runner GitHub had registered is gone.
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(deleteRunnerCalls().map((c) => c.url)).toEqual([
+      `https://api.github.com/orgs/${MOTIR_ORG}/actions/runners/7734`,
+    ]);
+  });
+
+  it('removes nothing when GitHub registered nothing — the timeout that beat the write', async () => {
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    mintTimesOut();
+    jitHandler = () => listing();
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome).toEqual({ outcome: 'rate_limited', retryAfterSeconds: null });
+    expect(deleteRunnerCalls()).toHaveLength(0);
+  });
+
+  it('still re-queues the job when the CLEANUP itself refuses', async () => {
+    // ⚠️ The cleanup is best-effort by design. A lookup that 500s must not turn a
+    // retryable outcome into an untyped throw — that would replace a job GitHub
+    // is still waiting on with a dead-lettered run, which is the exact trade the
+    // whole card is about.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    mintTimesOut();
+    jitHandler = () => json(500, { message: 'Server Error' });
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome).toEqual({ outcome: 'rate_limited', retryAfterSeconds: null });
+    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(after.status).toBe('pending');
+  });
+
+  it('a NON-timeout mint failure still FAILS the intent — the two are not collapsed', async () => {
+    // MUTATION CHECK on the new branch: widen it to catch every mint error and
+    // this fails, because a 422 (a group that does not exist) is not a job that
+    // should be retried forever.
+    const fx = await seedTenant();
+    const intent = await seedIntent(fx);
+    jitHandler = (call) =>
+      call.url.includes('generate-jitconfig')
+        ? json(422, { message: 'Runner group not found' })
+        : new Response(null, { status: 204 });
+
+    const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
+
+    expect(outcome.outcome).toBe('provision_failed');
+    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
+    expect(after.status).toBe('failed');
   });
 });
 

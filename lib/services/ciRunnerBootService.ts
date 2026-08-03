@@ -15,13 +15,16 @@ import {
 } from '@/lib/services/projectRunnerGroupService';
 import {
   runnerJitConfigClient,
+  RunnerJitTimeoutError,
   RunnerRegistrationRateLimitedError,
+  RUNNER_JIT_REQUEST_TIMEOUT_MS,
 } from '@/lib/github/runnerJitConfig';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import {
   getOrchestrator,
   isOrchestratorConfigured,
   OrchestratorImageUnpullableError,
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
 } from '@/lib/orchestrator';
 import { flyFleetConfig } from '@/lib/orchestrator/adapters/fly/flyMachines';
 import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
@@ -209,6 +212,15 @@ const DEFAULT_REAP_AFTER_MS = DEFAULT_JOB_TIMEOUT_MS + 10 * 60_000;
  *        The reaper stays the BACKSTOP: it may only ever see containers
  *        supervision has already given up on, never ones it is about to settle.
  *
+ *   • `mintDeadlineMs` + `containerCallDeadlineMs` ≤ `stepWorkBudgetMs`
+ *        RULE 3's inequality, for the one path that did not hold it (MOTIR-2011).
+ *        Rule 2 bounds the SHAPE of a step; this bounds its CLOCK. The boot step
+ *        makes exactly two external calls — mint, then provision — and their
+ *        deadlines are what turn "this step does one small thing" from a claim
+ *        about the code into a bound on its wall time. They are IMPORTED from
+ *        the two clients rather than restated, so a client that lengthens its
+ *        deadline has to come past the assertion.
+ *
  * Change one of these and the assertion makes you look at the others.
  */
 export const FLEET_TIME_BUDGETS = {
@@ -224,6 +236,11 @@ export const FLEET_TIME_BUDGETS = {
    * and which the test asserts against the route's `maxDuration`.
    */
   stepWorkBudgetMs: 120_000,
+  /** The GitHub `generate-jitconfig` deadline — the boot step's first call. */
+  mintDeadlineMs: RUNNER_JIT_REQUEST_TIMEOUT_MS,
+  /** The container provider's per-call deadline — the boot step's second call,
+   *  and the only call a poll or a teardown step makes. */
+  containerCallDeadlineMs: ORCHESTRATOR_REQUEST_TIMEOUT_MS,
 } as const;
 
 /**
@@ -333,8 +350,17 @@ export type RunIntentOutcome =
   /** This deployment provisions no containers (self-hosted, or unwired). The
    *  claim is RELEASED so a configured instance can take it. */
   | { outcome: 'not_configured' }
-  /** GitHub's registration ceiling is exhausted. RETRYABLE — the claim is
-   *  released and the intent stays pending for the next sweep. */
+  /**
+   * GitHub could not be asked to register a runner right now. RETRYABLE — the
+   * claim is released and the intent stays pending for the next sweep.
+   *
+   * TWO causes, deliberately one outcome (MOTIR-2011): the registration ceiling
+   * is exhausted (`retryAfterSeconds` set, when GitHub said when), or the mint
+   * did not answer inside its deadline (`retryAfterSeconds: null`). They differ
+   * in what caused the wait and not at all in what the fleet should DO — the job
+   * is early, not broken — and the typed error each path logs is what tells an
+   * operator which one happened.
+   */
   | { outcome: 'rate_limited'; retryAfterSeconds: number | null }
   /** The intent names no project, so there is no runner group and no tenant to
    *  bill. Refused (§7.3), never provisioned into the `Default` group. */
@@ -698,10 +724,11 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   // ── 1 · Mint the JIT config ───────────────────────────────────────────────
   // The credential the container receives. ONE runner, ONE config, no
   // registration capability inside the container (§7.4).
+  const runnerName = runnerNameFor(intent);
   let jit;
   try {
     jit = await runnerJitConfigClient.mint({
-      name: runnerNameFor(intent),
+      name: runnerName,
       runnerGroupId,
       // EXACTLY the one §M-compliant label. Not `self-hosted`, not `linux`, not
       // `x64`: a runner carrying GitHub's defaults would match some unrelated
@@ -716,6 +743,27 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       // problem to shape (§6), not a reason to fail a job.
       await releaseClaim(intentId);
       return terminal({ outcome: 'rate_limited', retryAfterSeconds: err.retryAfterSeconds });
+    }
+    if (err instanceof RunnerJitTimeoutError) {
+      // THE MINT WHOSE ANSWER NEVER CAME (MOTIR-2011). GitHub registers the
+      // runner BEFORE it responds (§7.4), so a blown deadline is the one failure
+      // that may have created a runner we were never told the id of — a dangling
+      // registered runner with nothing to name it by. It is hunted down by NAME
+      // first, because the alternative is an offline runner sitting in the org's
+      // list indistinguishable from a wedged fleet runner.
+      //
+      // Then treated exactly like the ceiling: the job is EARLY, not broken.
+      // Failing it would dead-letter a run whose only sin is that a third party
+      // was slow, and `retryPolicy: 'none'` means dead-lettered is where it would
+      // stay.
+      await deregisterByNameQuietly(runnerName, intentId);
+      await releaseClaim(intentId);
+      console.warn('[ciRunnerBootService] the JIT mint blew its deadline — claim released', {
+        intentId,
+        runnerName,
+        timeoutMs: err.timeoutMs,
+      });
+      return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
     }
     const detail = `could not mint a JIT config: ${detailOf(err)}`;
     await settleFailed(intentId, 'provision_failed', detail);
@@ -1061,6 +1109,33 @@ async function deregisterQuietly(runnerId: number | null, intentId: string): Pro
     console.error(
       '[ciRunnerBootService] could not de-register a runner — it may be left dangling',
       { intentId, runnerId, detail: detailOf(err) },
+    );
+  }
+}
+
+/**
+ * De-register the runner a TIMED-OUT mint may have registered — the only cleanup
+ * path that has no id to work from (MOTIR-2011).
+ *
+ * Quiet for the same reason {@link deregisterQuietly} is: this runs on a failure
+ * path whose job is already going back in the queue, and a cleanup that throws
+ * would replace a retryable outcome with an untyped one. A runner that could not
+ * be removed is logged loudly and left to `sweepStaleClaims`.
+ */
+async function deregisterByNameQuietly(runnerName: string, intentId: string): Promise<void> {
+  try {
+    const removed = await runnerJitConfigClient.deleteRunnersNamed(runnerName);
+    if (removed.length > 0) {
+      console.warn('[ciRunnerBootService] de-registered a runner left by a timed-out mint', {
+        intentId,
+        runnerName,
+        runnerIds: removed,
+      });
+    }
+  } catch (err) {
+    console.error(
+      '[ciRunnerBootService] could not de-register a timed-out mint — a runner may be dangling',
+      { intentId, runnerName, detail: detailOf(err) },
     );
   }
 }

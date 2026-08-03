@@ -148,6 +148,8 @@ export {
   OrchestratorApiError,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
 } from './errors';
 export { resolveContainerRate, FLEET_CONTAINER_SIZE } from './rates';
 export { buildContainerUsage, billableSecondsFor, isUnpriced } from './usage';

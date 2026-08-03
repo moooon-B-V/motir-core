@@ -49,6 +49,26 @@ const GITHUB_API = 'https://api.github.com';
  */
 export const GITHUB_RUNNER_REGISTRATIONS_PER_5_MIN = 1500;
 
+/**
+ * THE DEADLINE ON EVERY CALL IN THIS MODULE (`docs/jobs.md` rule 3, MOTIR-2011).
+ *
+ * `fetch` has no timeout of its own, and every call here runs inside a
+ * background-job invocation: an unresponsive GitHub is waited on until the
+ * PLATFORM kills the invocation, which arrives as a bare
+ * `FUNCTION_INVOCATION_TIMEOUT` 504 with no step output — indistinguishable from
+ * a crashed app, and (with the fleet job's `retryPolicy: 'none'`) a straight trip
+ * to `job_run_dlq`. Bounded, the same hang is a typed error the boot path
+ * classifies and releases the claim on, INSIDE the budget.
+ *
+ * 15s rather than `motirAiClient`'s 30s because this is one small JSON call to
+ * `api.github.com` with no think time behind it — nothing here builds a graph or
+ * ships a tarball. It is counted into `FLEET_TIME_BUDGETS.mintDeadlineMs` and
+ * asserted against the route's `maxDuration` in
+ * `tests/ciFleet/fleetTimeBudgets.test.ts`; rule 3's inequality is a property of
+ * the SUM along a step, so this number is not free to grow on its own.
+ */
+export const RUNNER_JIT_REQUEST_TIMEOUT_MS = 15_000;
+
 // ── Typed errors ────────────────────────────────────────────────────────────
 
 /** Any GitHub refusal or transport failure while managing a JIT runner. Carries
@@ -95,6 +115,32 @@ export class RunnerRegistrationRateLimitedError extends Error {
   }
 }
 
+/**
+ * GitHub did not answer inside {@link RUNNER_JIT_REQUEST_TIMEOUT_MS} — RETRYABLE,
+ * and typed so the boot path can say so instead of dying with the invocation.
+ *
+ * Distinct from {@link RunnerJitApiError}'s transport case (`status: null`) on
+ * purpose, and the distinction is operational rather than cosmetic: a refused
+ * connection means GitHub answered "no", while a deadline means Motir stopped
+ * WAITING and therefore does not know what happened on the other side. On a
+ * mint that difference decides the cleanup — the runner may already be
+ * registered, so the caller must go looking for it BY NAME (§7.4's dangling-JIT
+ * case; {@link runnerJitConfigClient.deleteRunnersNamed}).
+ */
+export class RunnerJitTimeoutError extends Error {
+  readonly code = 'RUNNER_JIT_TIMEOUT' as const;
+  readonly retryable = true as const;
+  constructor(
+    /** Which call ran out of time — the log's only clue about what may be left
+     *  behind at GitHub. */
+    readonly operation: string,
+    readonly timeoutMs: number,
+  ) {
+    super(`GitHub did not answer a JIT-runner ${operation} within ${timeoutMs}ms.`);
+    this.name = 'RunnerJitTimeoutError';
+  }
+}
+
 // ── Shapes ──────────────────────────────────────────────────────────────────
 
 /** What a mint returns. `encodedJitConfig` is a CREDENTIAL — it is passed to the
@@ -129,11 +175,24 @@ function errorDetail(body: Record<string, unknown> | null): string {
   return typeof message === 'string' ? message.slice(0, 200) : '';
 }
 
-/** One GitHub call, with transport failures normalized to the typed error. */
+/**
+ * One GitHub call — the module's ONLY `fetch`, so the deadline is applied once
+ * and cannot be forgotten at a new call site. Transport failures normalize to
+ * {@link RunnerJitApiError}, a blown deadline to {@link RunnerJitTimeoutError}.
+ *
+ * `AbortController` + `setTimeout` rather than `AbortSignal.timeout()`, matching
+ * the repository's three existing deadline sites (`motirAiClient.aiFetch`,
+ * `lib/git/providers/github.ts`, `…/gitlab.ts`): the same `signal.aborted` check
+ * tells OUR deadline apart from the runtime's opaque "This operation was
+ * aborted", which is what makes the error message name a number an operator can
+ * act on.
+ */
 async function request(
   url: string,
-  init: { method: string; token: string; body?: string },
+  init: { method: string; token: string; body?: string; operation: string },
 ): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RUNNER_JIT_REQUEST_TIMEOUT_MS);
   try {
     return await fetch(url, {
       method: init.method,
@@ -144,9 +203,18 @@ async function request(
         ...(init.body ? { 'content-type': 'application/json' } : {}),
       },
       ...(init.body ? { body: init.body } : {}),
+      signal: controller.signal,
     });
   } catch (err) {
+    if (controller.signal.aborted) {
+      throw new RunnerJitTimeoutError(init.operation, RUNNER_JIT_REQUEST_TIMEOUT_MS);
+    }
     throw new RunnerJitApiError(null, err instanceof Error ? err.message : 'unknown');
+  } finally {
+    // The deadline bounds TIME-TO-RESPONSE-HEADERS, not body consumption: cleared
+    // the moment `fetch` resolves, exactly as `aiFetch` does. Every body in this
+    // module is a small JSON document, so nothing is left unbounded in practice.
+    clearTimeout(timer);
   }
 }
 
@@ -201,6 +269,7 @@ export const runnerJitConfigClient = {
       {
         method: 'POST',
         token,
+        operation: 'mint',
         body: JSON.stringify({
           name: input.name,
           runner_group_id: input.runnerGroupId,
@@ -253,9 +322,53 @@ export const runnerJitConfigClient = {
     const { org, token } = await provisioningAuth();
     const res = await request(
       `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners/${runnerId}`,
-      { method: 'DELETE', token },
+      { method: 'DELETE', token, operation: 'de-registration' },
     );
     if (res.ok || res.status === 404) return;
     throw new RunnerJitApiError(res.status, errorDetail(await readJson(res)));
+  },
+
+  /**
+   * De-register by NAME — the cleanup for a mint whose ANSWER never arrived
+   * (MOTIR-2011).
+   *
+   * {@link deleteRunner} needs the numeric id from the mint's 201, and a mint
+   * that blows its deadline never delivers one. But §7.4's verified finding is
+   * that `generate-jitconfig` registers the runner BEFORE returning, so a
+   * timed-out mint is precisely the case that can leave a dangling registered
+   * runner — the one case with no id to name it by. The name is the other
+   * handle: `runnerNameFor(intent)` is deterministic, so the runner the mint may
+   * have created is findable without it.
+   *
+   * The `name` query parameter is sent AND the result is filtered again here.
+   * Belt and braces on purpose: if a GitHub that ignored an unknown parameter
+   * returned the whole org's runner list, an unfiltered delete would de-register
+   * the entire fleet mid-job. The client-side match is what makes that
+   * impossible rather than unlikely.
+   *
+   * Returns the ids it removed (empty when GitHub never registered one, which is
+   * the good case). Never throws for "already gone" — {@link deleteRunner}'s 404
+   * tolerance covers the race with the sweeper.
+   */
+  async deleteRunnersNamed(name: string): Promise<number[]> {
+    const { org, token } = await provisioningAuth();
+    const res = await request(
+      `${GITHUB_API}/orgs/${encodeURIComponent(org)}/actions/runners` +
+        `?per_page=100&name=${encodeURIComponent(name)}`,
+      { method: 'GET', token, operation: 'runner lookup' },
+    );
+    const body = await readJson(res);
+    if (!res.ok) throw new RunnerJitApiError(res.status, errorDetail(body));
+
+    const listed = Array.isArray(body?.['runners']) ? (body['runners'] as unknown[]) : [];
+    const ids = listed.flatMap((entry) => {
+      const runner = asRecord(entry);
+      if (runner?.['name'] !== name) return [];
+      const id = typeof runner['id'] === 'number' ? runner['id'] : Number(runner['id']);
+      return Number.isInteger(id) ? [id] : [];
+    });
+
+    for (const id of ids) await runnerJitConfigClient.deleteRunner(id);
+    return ids;
   },
 };
