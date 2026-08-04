@@ -1,10 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { LABEL_TINTS } from '@/lib/labels/labelTint';
 import { AVATAR_COLORS } from '@/lib/projects/avatar';
 import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
-import { contrast, deltaE2000 } from './colorMetrics';
+import { contrast, deltaE2000, mixSrgb } from './colorMetrics';
 
 // MOTIR-2085 — the OTHER four differentiating families, each at the floor its own
 // surface needs.
@@ -37,6 +39,23 @@ import { contrast, deltaE2000 } from './colorMetrics';
 // Every family is derived from its shipped registry (`PRIORITY_OPTIONS`,
 // `LABEL_TINTS`, `AVATAR_COLORS`), never a list hand-copied here, so a registry
 // that grows drags its new member into these checks automatically.
+//
+// MOTIR-2107 — and a family is measured on the value its CONSUMER paints, not
+// on the token. `priority` has TWO shipped consumers doing the two different
+// jobs above, so it takes two measurements; conflating them is the defect that
+// card fixed:
+//
+//   the ICON — `PRIORITY_ICON_EL` (the automation rule editor's priority
+//   Combobox) paints `--el-priority-*` at FULL saturation as a direction arrow.
+//   That is the glyph the ΔE 10 bar was written for, so the source sweep keeps
+//   it, and the routing is pinned so the bar cannot lose its consumer again.
+//
+//   the CHIP — `Pill`'s `priority` variant dilutes the same hue to a 14% wash
+//   over `--el-surface` and prints `--el-text-strong` on it, which is the TINT
+//   shape, not the glyph one. On the SOURCE, graphite's `highest` vs `high`
+//   read 10.02 and passed while the chip a user sees was ΔE 4.6. So the chip is
+//   measured on the RENDERED mix, derived from the Pill's own recipe (see
+//   `pillChipRecipe`) so the floor cannot drift from the component.
 
 const { rules, baseBlock, paletteBlock } = loadTokenLayer();
 const THEMES = ['light', 'dark'] as const;
@@ -47,6 +66,12 @@ const CONTEXTS: ThemeContext[] = PALETTE_IDS.flatMap((palette) =>
 /**
  * The floor for a family whose colour IS the whole signal — the same ΔE2000 10
  * `statusHueSeparation.test.ts` holds the status dot to, for the same reason.
+ *
+ * For `priority` the surface this bar speaks for is the **direction icon** in
+ * the automation rule editor's priority picker (`PRIORITY_ICON_EL`), which
+ * paints `--el-priority-*` undiluted — pinned by the icon-routing test below,
+ * because a bar with no consumer is the MOTIR-2107 defect. The `Pill` CHIP
+ * dilutes the same hue and is measured separately, on what it renders.
  *
  * Tightest surviving pair after MOTIR-2094: garnet/light `highest` vs `high` at
  * **12.40**, then cobalt/dark `medium` vs `low` at **12.44** — real headroom
@@ -76,6 +101,59 @@ const MIN_DELTA_E_GLYPH = 10;
  * colour. See `docs/palettes/{sienna,amber}.md`.
  */
 const MIN_DELTA_E_TINT = 2;
+
+/**
+ * The floor for the priority CHIP — the `Pill` wash, measured on what it
+ * renders (MOTIR-2107).
+ *
+ * Set at the same 2 the pastel tints use, and for the same question: the chip
+ * is a wash BEHIND the cues the element prints itself (its label, plus the
+ * `PRIORITY_META` direction icon), so the bar asks "are these two chips
+ * actually different colours", not "can colour alone carry the difference".
+ *
+ * Diluting to 14% compresses the source ramp by roughly 5–8x, so this is a far
+ * tighter constraint than it looks: the tightest surviving pair is cobalt/dark
+ * `medium` vs `low` at **3.40**, then cobalt/light `medium` vs `low` at 4.24.
+ * Raising it further is a palette redesign, not a bug fix — the same call
+ * MOTIR-2085 made for the pastel ramps. Two pairs are carved out below.
+ */
+const MIN_DELTA_E_CHIP = 2;
+
+/**
+ * The chip floor for the ramp's two NEUTRAL steps (`medium` slate vs `lowest`
+ * stone) — the pair that is DELIBERATELY alike.
+ *
+ * Both ride a neutral Tier-0 source, so their whole separation is lightness,
+ * and lightness is exactly what a 14% wash flattens: measured across all 20
+ * palette x theme contexts the pair spans **1.35** (candy/light) to **4.39**
+ * (citrine/dark) — under the chip floor in four light palettes. Pulling it over
+ * 2 with headroom needs `medium` darkened to a 10–15:1 hue, which makes the
+ * ramp's MIDDLE step its boldest and inverts the hierarchy `highest` is meant
+ * to own (measured on candy / graphite / garnet / citrine, MOTIR-2107). So the
+ * pair is accepted, not fixed — held only to the ~1.0 ΔE2000 just-noticeable
+ * difference, i.e. "not literally the same colour", and separated on screen by
+ * its own icon (Minus vs ArrowDown) and its own label.
+ */
+const MIN_DELTA_E_CHIP_NEUTRAL = 1;
+
+/**
+ * The chip floor for `highest` vs `high` — the ESCALATION pair.
+ *
+ * Both carry the same ArrowUp glyph and near-identical words ("Highest" /
+ * "High"), so the chip is the only cue that separates them at a glance, and
+ * mistaking one for the other is a triage error. They also ride two semantics
+ * (`--color-destructive` / `--color-warning`) a palette moves independently,
+ * which is why they have now collided three times: cobalt rendered **3.83**
+ * (MOTIR-2085), graphite **4.64** (MOTIR-2094) and spectrum **4.17**
+ * (MOTIR-2107) — every one of them while PASSING the source bar.
+ *
+ * So the bar is calibrated above the worst of those three rather than invented:
+ * 5.5 clears graphite's 4.64 with margin. Tightest surviving pair: garnet/light
+ * **6.04**, then sienna/light 6.12. Each palette that fails it takes its own
+ * amber step (see `docs/palettes/{cobalt,graphite,spectrum}.md`) — neither
+ * semantic moves.
+ */
+const MIN_DELTA_E_CHIP_ESCALATION = 5.5;
 
 /** WCAG 1.4.11's 3:1, the bar `docs/palettes/*.md` state for icon/UI hues. */
 const MIN_UI_CONTRAST = 3;
@@ -119,6 +197,9 @@ const floorFor = (family: Family) =>
  */
 const KNOWN_TOO_CLOSE: string[] = [];
 
+/** The same list, for the RENDERED priority chip. Empty, and it should stay so. */
+const KNOWN_CHIP_TOO_CLOSE: string[] = [];
+
 function hueOf(ctx: ThemeContext, token: string): string {
   const { value, unresolved } = resolveToken(rules, ctx, token);
   expect(unresolved, `${ctx.palette}/${ctx.theme} ${token} must resolve`).toEqual([]);
@@ -127,6 +208,74 @@ function hueOf(ctx: ThemeContext, token: string): string {
 
 /** The `--color-*` source a base-block `--el-*` declaration references, if any. */
 const sourceOf = (token: string) => baseBlock[token]?.match(/var\(\s*(--color-[\w-]+)/)?.[1];
+
+/**
+ * The `color-mix()` recipe the SHIPPED `Pill` paints a priority chip with, read
+ * out of the component itself (MOTIR-2107).
+ *
+ * Parsed, not re-typed: a constant copied into this file is a second source of
+ * truth that drifts the first time someone tunes the wash, and the drift is
+ * invisible — the suite keeps passing while measuring a colour the app stopped
+ * rendering. If the recipe stops being a `color-mix` of one `--el-priority-*`
+ * step over one element token, the parse fails loudly here rather than quietly
+ * measuring the wrong thing.
+ */
+function pillChipRecipe(): { percent: number; base: string } {
+  const source = readFileSync(
+    join(process.cwd(), 'packages/design-system/src/components/ui/Pill.tsx'),
+    'utf8',
+  );
+  const recipes = PRIORITY_OPTIONS.map(({ value }) => {
+    const match = source.match(
+      new RegExp(
+        `bg-\\[color-mix\\(in_srgb,var\\(--el-priority-${value}\\)_(\\d+(?:\\.\\d+)?)%,var\\((--el-[\\w-]+)\\)\\)\\]`,
+      ),
+    );
+    if (!match) throw new Error(`Pill.tsx no longer mixes a chip for priority "${value}"`);
+    return { value, percent: Number(match[1]), base: match[2]! };
+  });
+  const [first] = recipes as [(typeof recipes)[number], ...typeof recipes];
+  for (const recipe of recipes) {
+    if (recipe.percent !== first.percent || recipe.base !== first.base) {
+      throw new Error(
+        `Pill.tsx mixes priority steps differently (${recipe.value}: ${recipe.percent}% over ${recipe.base}) — this suite measures ONE recipe`,
+      );
+    }
+  }
+  return { percent: first.percent, base: first.base };
+}
+
+const CHIP = pillChipRecipe();
+
+/** What the `Pill` actually paints for one priority step, in one context. */
+const chipOf = (ctx: ThemeContext, step: string) =>
+  mixSrgb(hueOf(ctx, `--el-priority-${step}`), CHIP.percent, hueOf(ctx, CHIP.base));
+
+const PRIORITY_STEPS = PRIORITY_OPTIONS.map((option) => option.value);
+
+/**
+ * Tier-0 sources whose whole job is to be NEUTRAL. A priority pair drawn from
+ * two of them is the ramp's quiet end (`medium` slate vs `lowest` stone) — the
+ * deliberately-alike pair `MIN_DELTA_E_CHIP_NEUTRAL` speaks for. Derived from
+ * the base block rather than hand-listed, so re-pointing a step at a hue drags
+ * it back under the full chip floor automatically.
+ */
+const NEUTRAL_SOURCES = ['--color-slate', '--color-stone'];
+const isNeutralStep = (step: string) =>
+  NEUTRAL_SOURCES.includes(sourceOf(`--el-priority-${step}`) ?? '');
+const isEscalationPair = (a: string, b: string) =>
+  [a, b].every((step) => step === 'highest' || step === 'high');
+
+const chipFloorFor = (a: string, b: string) => {
+  if (isEscalationPair(a, b)) return MIN_DELTA_E_CHIP_ESCALATION;
+  if (isNeutralStep(a) && isNeutralStep(b)) return MIN_DELTA_E_CHIP_NEUTRAL;
+  return MIN_DELTA_E_CHIP;
+};
+
+/** Every within-ramp priority pair, in registry order. */
+const PRIORITY_PAIRS = PRIORITY_STEPS.flatMap((a, index) =>
+  PRIORITY_STEPS.slice(index + 1).map((b) => [a, b] as const),
+);
 
 describe('family hue separation — each family at the floor its own surface needs', () => {
   it('resolves every family from its shipped registry, in every palette x theme', () => {
@@ -291,10 +440,10 @@ describe('the priority ramp is a GLYPH ramp', () => {
   });
 
   it('keeps highest and high APART, with headroom, in every palette that took an amber step', () => {
-    // The two specific collisions, pinned by name so a regression reads as
-    // itself rather than as one line in the sweep above. Both palettes ship a
-    // red-leaning burnt orange warning next to a danger red, and both answer it
-    // the same way: the PRIORITY ramp takes its own amber step instead of moving
+    // The three specific collisions, pinned by name so a regression reads as
+    // itself rather than as one line in the sweep above. All three palettes ship
+    // a red-leaning warning beside a danger red, and all three answer it the
+    // same way: the PRIORITY ramp takes its own amber step instead of moving
     // either semantic.
     //
     // Asserted against 2x the floor, NOT the floor — because clearing the floor
@@ -302,8 +451,25 @@ describe('the priority ramp is a GLYPH ramp', () => {
     // the cobalt 9.92 that counted as a defect (MOTIR-2094). A documented step
     // exists to buy real margin, so the test asks for margin; a "fix" that lands
     // at 10.1 is not one.
+    //
+    // Which THEME carries the step is pinned per palette: cobalt and graphite
+    // needed only light (their dark hues were already 25.8 apart) and re-assert
+    // the warning source in dark for the cascade pairing; spectrum's dark
+    // rendered 4.77 too (MOTIR-2107), so it carries an amber in both.
     const HEADROOM = MIN_DELTA_E_GLYPH * 2;
-    for (const palette of ['cobalt', 'graphite'] as const) {
+    const AMBER_STEP_PALETTES: Record<string, { light: RegExp; dark: RegExp | string }> = {
+      cobalt: { light: /^#/, dark: 'var(--color-warning)' },
+      graphite: { light: /^#/, dark: 'var(--color-warning)' },
+      spectrum: { light: /^#/, dark: /^#/ },
+    };
+    // Derived, not just listed: any OTHER palette that starts overriding this
+    // step has to be measured here too, so the list cannot silently fall behind.
+    const declaring = PALETTE_IDS.filter(
+      (palette) => '--el-priority-high' in paletteBlock(palette, 'light'),
+    );
+    expect(declaring.sort()).toEqual(Object.keys(AMBER_STEP_PALETTES).sort());
+
+    for (const [palette, declared] of Object.entries(AMBER_STEP_PALETTES)) {
       for (const theme of THEMES) {
         const ctx: ThemeContext = { palette, theme };
         const highest = hueOf(ctx, '--el-priority-highest');
@@ -314,15 +480,108 @@ describe('the priority ramp is a GLYPH ramp', () => {
           `${palette}/${theme} highest vs high needs real headroom, not a rounding pass`,
         ).toBeGreaterThan(HEADROOM);
       }
-      // The step is declared in the LIGHT block only — dark re-asserts the
-      // warning source for the cascade pairing (asserted generally below), so
-      // pin which theme actually carries the amber.
-      expect(paletteBlock(palette, 'light')['--el-priority-high']).toMatch(/^#/);
-      expect(paletteBlock(palette, 'dark')['--el-priority-high']).toBe('var(--color-warning)');
+      const inLight = paletteBlock(palette, 'light')['--el-priority-high'];
+      const inDark = paletteBlock(palette, 'dark')['--el-priority-high'];
+      expect(inLight, `${palette} light`).toMatch(declared.light);
+      if (typeof declared.dark === 'string') expect(inDark, `${palette} dark`).toBe(declared.dark);
+      else expect(inDark, `${palette} dark`).toMatch(declared.dark);
     }
     // The semantics themselves are untouched — only the ramp took a new step.
     expect(sourceOf('--el-priority-highest')).toBe('--color-destructive');
     expect(sourceOf('--el-priority-high')).toBe('--color-warning');
+  });
+
+  it('is the ramp the automation priority picker paints its direction icon from', () => {
+    // The consumer that makes the glyph floor above mean something (MOTIR-2107).
+    // Before this card `PRIORITY_ICON_EL` rode the SEMANTIC tokens instead —
+    // which left the ΔE 10 bar guarding a ramp no undiluted surface rendered,
+    // and (worse) painted `medium` and `lowest` with ONE token, so the picker
+    // could not tell the ramp's two quiet steps apart at all. Read from the
+    // component so the two cannot drift apart again.
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        'app/(authed)/settings/project/automation/_components/AutomationParts.tsx',
+      ),
+      'utf8',
+    );
+    const routed = Object.fromEntries(
+      [...source.matchAll(/^\s{2}(\w+): 'text-\(--el-([\w-]+)\)',$/gm)].map((m) => [m[1], m[2]]),
+    );
+    expect(routed).toEqual(
+      Object.fromEntries(PRIORITY_STEPS.map((step) => [step, `priority-${step}`])),
+    );
+  });
+});
+
+describe('the priority CHIP — measured on what the shipped Pill renders', () => {
+  it('derives the wash recipe from the Pill component itself', () => {
+    // Guards the guard: the whole card turns on this parse being real. A recipe
+    // that silently came back as "0% over --el-surface" would make every chip
+    // identical to the surface and every assertion below vacuous.
+    expect(CHIP.percent).toBeGreaterThan(0);
+    expect(CHIP.percent).toBeLessThan(100);
+    expect(CHIP.base).toMatch(/^--el-/);
+    expect(hueOf({ palette: DEFAULT_PALETTE_ID, theme: 'light' }, CHIP.base)).toMatch(/^#/);
+    // What it is TODAY, so a change to the shipped wash shows up as a diff here
+    // (and re-runs the numbers in every docstring above) rather than passing
+    // unremarked.
+    expect(CHIP).toEqual({ percent: 14, base: '--el-surface' });
+  });
+
+  it('dilutes the ramp — the source ΔE is NOT the ΔE a user sees', () => {
+    // The defect in one assertion. Every escalation pair renders CLOSER than its
+    // source hues measure, which is why the source bar cannot speak for the chip:
+    // graphite passed at 10.02 while painting 4.64.
+    const notDiluted: string[] = [];
+    for (const ctx of CONTEXTS) {
+      const source = deltaE2000(
+        hueOf(ctx, '--el-priority-highest'),
+        hueOf(ctx, '--el-priority-high'),
+      );
+      const rendered = deltaE2000(chipOf(ctx, 'highest'), chipOf(ctx, 'high'));
+      if (rendered >= source) notDiluted.push(`${ctx.palette}/${ctx.theme}`);
+    }
+    expect(notDiluted).toEqual([]);
+  });
+
+  it('separates every rendered chip pair by the floor that pair s cues need', () => {
+    const tooClose: string[] = [];
+    for (const ctx of CONTEXTS) {
+      for (const [a, b] of PRIORITY_PAIRS) {
+        const distance = deltaE2000(chipOf(ctx, a), chipOf(ctx, b));
+        const floor = chipFloorFor(a, b);
+        if (distance < floor) {
+          tooClose.push(
+            `${ctx.palette}/${ctx.theme} chip ${a} vs ${b} — ΔE ${distance.toFixed(1)} (floor ${floor})`,
+          );
+        }
+      }
+    }
+    expect(tooClose.sort()).toEqual([...KNOWN_CHIP_TOO_CLOSE].sort());
+  });
+
+  it('carves out exactly ONE deliberately-alike pair, and records what it measures', () => {
+    // The accepted exception, asserted rather than described (MOTIR-2107). If a
+    // future palette re-points `medium` or `lowest` at a hue, `isNeutralStep`
+    // stops matching and that pair falls back under the full chip floor — so the
+    // carve-out cannot quietly widen.
+    const neutralPairs = PRIORITY_PAIRS.filter(
+      ([a, b]) => chipFloorFor(a, b) === MIN_DELTA_E_CHIP_NEUTRAL,
+    );
+    expect(neutralPairs).toEqual([['medium', 'lowest']]);
+    expect(MIN_DELTA_E_CHIP_NEUTRAL).toBeLessThan(MIN_DELTA_E_CHIP);
+    expect(MIN_DELTA_E_CHIP).toBeLessThan(MIN_DELTA_E_CHIP_ESCALATION);
+
+    const measured = CONTEXTS.map((ctx) =>
+      deltaE2000(chipOf(ctx, 'medium'), chipOf(ctx, 'lowest')),
+    );
+    // It is load-bearing: the pair really does render under the general floor in
+    // some palettes, so "accepted" is a decision and not a formality.
+    expect(Math.min(...measured)).toBeLessThan(MIN_DELTA_E_CHIP);
+    // And it is bounded: the range the docstring records, kept honest.
+    expect(Math.min(...measured)).toBeGreaterThan(MIN_DELTA_E_CHIP_NEUTRAL);
+    expect(Math.max(...measured)).toBeLessThan(MIN_DELTA_E_CHIP_ESCALATION);
   });
 });
 

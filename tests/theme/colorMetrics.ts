@@ -20,6 +20,23 @@ export function channels(hex: string): [number, number, number] {
   return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
 }
 
+/**
+ * CSS `color-mix(in srgb, a p%, b)` — MOTIR-2107.
+ *
+ * The `srgb` colour space is the GAMMA-ENCODED one (`srgb-linear` is the other),
+ * so the mix is a straight per-channel interpolation of the two hex values. Both
+ * inputs are opaque, which is what lets this skip alpha premultiplication.
+ */
+export function mixSrgb(a: string, percent: number, b: string): string {
+  const [ca, cb] = [channels(a), channels(b)];
+  const p = percent / 100;
+  const hex = (index: number) =>
+    Math.round(ca[index]! * p + cb[index]! * (1 - p))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(0)}${hex(1)}${hex(2)}`;
+}
+
 const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
 /** WCAG relative luminance. */

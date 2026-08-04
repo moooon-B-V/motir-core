@@ -108,6 +108,14 @@ dark canvas, where it was never measured.
 `tests/theme/familyHueSeparation.test.ts` enforces both the floor and the
 pairing.
 
+> **The floors moved after this card (MOTIR-2107).** The ΔE 10 quoted above is
+> the bar for an UNDILUTED priority glyph, which is now the automation picker's
+> direction icon. The `Pill` chip dilutes the same hue to a 14% wash and is
+> measured separately on what it renders — where this pair was ΔE 4.6 before the
+> amber step and 9.8 after, i.e. the 10.02 that read as "fine" here was really a
+> 4.6 on screen. A palette tuning its priority ramp has to clear both; see
+> `docs/palettes/spectrum.md` for the worked example.
+
 The block overrides **only colour tokens** (`--color-*` / `--el-*`) — never a
 shape/feel token (`--radius-*` / `--spacing-*` / `--shadow-*` / `--height-*` /
 `--transition-*`). That disjointness — colour here, shape on the `data-style`
