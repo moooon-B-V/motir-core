@@ -3304,6 +3304,20 @@
   /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
      palette overrides it directly — one shade darker than the cool surface. */
   --el-sidebar-item-bg-hover: #ece8f8;
+
+  /* Priority ramp — highest vs high, the third instance of the Cobalt
+     (MOTIR-2085) / Graphite (MOTIR-2094) collision, found once the floor was
+     measured on the CHIP rather than the source (MOTIR-2107).
+     `--el-priority-highest` rides --color-destructive (#d92e2b) and
+     `--el-priority-high` rides --color-warning (#ea580c); Spectrum's warning is
+     a red-leaning orange, so the two source hues land ΔE2000 14.5 apart — over
+     the glyph bar, while the 14% chip `Pill` paints rendered only ΔE 4.2, under
+     cobalt's own pre-fix 3.8 in feel. Neither semantic moves; the PRIORITY ramp
+     takes its own step of a hue Spectrum already owns — Radix Amber 11, one of
+     the palette's documented Radix sources. Source separation from highest
+     ΔE 24.3, rendered chip ΔE 8.6; contrast 4.6:1 card / 4.2:1 surface, past
+     the 3:1 icon/UI bar. */
+  --el-priority-high: #ab6400; /* Radix Amber 11 — the ramp's own amber step */
 }
 
 /* Spectrum — dark companion. A deep cool-violet canvas (not the base
@@ -3360,6 +3374,15 @@
 
   /* sidebar hover — one shade lighter than the dark cool surface */
   --el-sidebar-item-bg-hover: #261f3d;
+
+  /* Priority ramp — the dark half of the light block's amber step (MOTIR-2107).
+     UNLIKE cobalt and graphite (whose dark hues were already far enough apart to
+     re-assert the source here), Spectrum's dark destructive #f0555f and warning
+     #fb8b4c render a chip only ΔE 4.8 apart, so dark carries its own amber too:
+     the brighter #fbab4c the other dark palettes already use, which reads as an
+     icon on the violet canvas. Source separation from highest ΔE 33.9, rendered
+     chip ΔE 8.1; contrast 9.8:1 card / 9.0:1 surface. */
+  --el-priority-high: #fbab4c; /* on-dark amber — the ramp's own step */
 }
 
 /* ── Palette: Amber (data-palette="amber") — Subtask 8.8.34 (MOTIR-1252) ─────

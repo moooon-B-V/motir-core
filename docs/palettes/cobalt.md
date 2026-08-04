@@ -91,6 +91,13 @@ Dark needs no change (its `#d83847` / `#f08a4b` are already ΔE 25.8 apart) but
 override above. `tests/theme/familyHueSeparation.test.ts` enforces both the floor
 and the pairing.
 
+> **The floors moved after this card (MOTIR-2107).** The ΔE 10 quoted above is
+> the bar for an UNDILUTED priority glyph, which is now the automation picker's
+> direction icon. The `Pill` chip dilutes the same hue to a 14% wash and is
+> measured separately on what it renders — where this pair was ΔE 3.8 before the
+> amber step and 9.8 after. A palette tuning its priority ramp has to clear
+> both; see `docs/palettes/spectrum.md` for the worked example.
+
 ## Accessibility
 
 Every text-on-surface, white-on-fill, link, and chip-tint pairing clears **WCAG

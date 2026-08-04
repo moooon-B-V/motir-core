@@ -123,13 +123,22 @@ export function memberOptions(members: WorkspaceMemberDTO[]): ComboboxOption<str
   }));
 }
 
-/** The priority direction-icon colour (finding #54 — hue, not flat grey). */
+/** The priority direction-icon colour (finding #54 — hue, not flat grey).
+ *
+ * Routed through the dedicated `--el-priority-*` ramp (MOTIR-2107), not the raw
+ * semantics it used to borrow. Two reasons: the semantics gave `medium` and
+ * `lowest` ONE token (`--el-text-muted`), so this picker could not tell the
+ * ramp's two quiet steps apart at all — the collapse MOTIR-1273 fixed for the
+ * chip and missed here; and this icon is the ramp's only UNDILUTED consumer, so
+ * routing it here is what gives `familyHueSeparation.test.ts`'s ΔE 10 glyph
+ * floor a surface to speak for. A palette that tunes its priority ramp now moves
+ * this picker with it. */
 const PRIORITY_ICON_EL: Record<WorkItemPriorityDto, string> = {
-  highest: 'text-(--el-danger)',
-  high: 'text-(--el-warning)',
-  medium: 'text-(--el-text-muted)',
-  low: 'text-(--el-info)',
-  lowest: 'text-(--el-text-muted)',
+  highest: 'text-(--el-priority-highest)',
+  high: 'text-(--el-priority-high)',
+  medium: 'text-(--el-priority-medium)',
+  low: 'text-(--el-priority-low)',
+  lowest: 'text-(--el-priority-lowest)',
 };
 
 /** Priority Combobox options (direction icon in its hue). `label` resolves via
