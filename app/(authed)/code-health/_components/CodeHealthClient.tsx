@@ -72,6 +72,10 @@ export function CodeHealthClient({
   const [conventions, setConventions] = useState<ConventionSurfaceDTO[]>(initialConventions);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reauditing, setReauditing] = useState(false);
+  // The FIRST-audit poll ran out while the job kept going (MOTIR-2080). Held apart
+  // from `error` on purpose: it is a resting state the audit tab draws, not a
+  // failure, and the rose strip would tell the user their audit broke.
+  const [pollExhausted, setPollExhausted] = useState(false);
   const [error, setError] = useState<string | null>(
     loadError ? `${t('errorLoad')} — ${loadError}` : null,
   );
@@ -123,6 +127,7 @@ export function CodeHealthClient({
     const prevAuditId = audit?.audit?.id ?? null;
     setReauditing(true);
     setError(null);
+    setPollExhausted(false);
     try {
       const res = await fetch(REFRESH_URL, { method: 'POST' });
       if (!res.ok) throw new Error('refresh failed');
@@ -138,7 +143,12 @@ export function CodeHealthClient({
           return;
         }
       }
-      setError(t('deepen.reauditPending'));
+      // The 60s window (3s × 20) is a UI wait, not a job timeout — the audit keeps
+      // running either way. Where that gets SAID differs by what is on screen: a
+      // FIRST audit has an empty screen to rest in (State D, MOTIR-2080), while a
+      // re-audit still shows the previous report, so it keeps today's strip.
+      if (prevAuditId === null) setPollExhausted(true);
+      else setError(t('deepen.reauditPending'));
     } catch {
       setError(t('errorReaudit'));
     } finally {
@@ -181,6 +191,16 @@ export function CodeHealthClient({
           scanner={audit?.scanner ?? null}
           reauditing={reauditing}
           onReaudit={() => void reaudit()}
+          pollExhausted={pollExhausted}
+          // "Check again" re-READS; it must never re-POST /refresh, which would
+          // queue a second code_audit + propose_convention pair for work already
+          // in flight. `reload()` setAudit()s the island's own state — the
+          // page-state contract's case 3, since a server re-read cannot reach a
+          // client island seeded from useState(initialProps).
+          onCheckAgain={() => {
+            setPollExhausted(false);
+            void reload();
+          }}
           deepenDismissed={deepenDismissed}
           onDeepenDismiss={() => writeDismissed(projectId, true)}
           onDeepenReopen={() => writeDismissed(projectId, false)}
