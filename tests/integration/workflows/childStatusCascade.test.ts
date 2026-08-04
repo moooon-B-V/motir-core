@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { UnknownStatusError } from '@/lib/workItems/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
@@ -285,5 +289,59 @@ describe('the two directions cannot loop', () => {
       outcome: 'no_open_children',
     });
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe('defensive error routing — the job must never fail behind a user transition', () => {
+  // The done key is resolved before the write, so a status deleted (or a
+  // permission revoked) in that window surfaces from `applyStatusTransition`.
+  // What is under test is the ROUTING — a typed no-op instead of a propagated
+  // error — not the race itself.
+
+  async function forceWriteError(err: Error) {
+    const fx = await makeWorkItemFixture();
+    const { story } = await doneStoryWithChildren(fx, ['todo']);
+    vi.spyOn(workItemsService, 'applyStatusTransition').mockRejectedValue(err);
+    const res = await childStatusCascadeService.cascadeToChildren(story.id);
+    vi.restoreAllMocks();
+    return res;
+  }
+
+  it('an UnknownStatusError reads as no_matching_status', async () => {
+    expect(await forceWriteError(new UnknownStatusError('ghost'))).toMatchObject({
+      outcome: 'no_matching_status',
+    });
+  });
+
+  it('a ProjectAccessDeniedError reads as access_denied', async () => {
+    expect(await forceWriteError(new ProjectAccessDeniedError('p1', 'edit'))).toMatchObject({
+      outcome: 'access_denied',
+    });
+  });
+
+  it('a ProjectNotFoundError reads as access_denied too', async () => {
+    expect(await forceWriteError(new ProjectNotFoundError('p1'))).toMatchObject({
+      outcome: 'access_denied',
+    });
+  });
+
+  it('an UNEXPECTED error still propagates — a real fault is not swallowed', async () => {
+    await expect(forceWriteError(new Error('disk on fire'))).rejects.toThrow('disk on fire');
+  });
+
+  it('a project with no done-category status at all is a logged no-op', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+    // The resolver finds nothing to cascade TO — a custom workflow that dropped
+    // its done statuses. Forced at the resolver rather than by deleting the
+    // statuses, which the workflow service protects.
+    vi.spyOn(workflowsService, 'resolveStatusKey').mockResolvedValue(null);
+
+    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toEqual({
+      outcome: 'no_matching_status',
+      itemId: story.id,
+    });
+    vi.restoreAllMocks();
+    expect(await statusOf(children[0]!.id)).toBe('todo');
   });
 });

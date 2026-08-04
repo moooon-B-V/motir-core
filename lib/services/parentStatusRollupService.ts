@@ -137,31 +137,58 @@ export const parentStatusRollupService = {
       if (!parent) return { outcome: { outcome: 'unresolvable' }, emit: null };
 
       const agg = await workItemRepository.aggregateChildrenStatus(parentId, reviewKey, tx);
-      const rung = pickRung(agg);
-      if (!rung) return { outcome: { outcome: 'no_rung', parentId }, emit: null };
+      const rungs = matchingRungs(agg);
+      if (rungs.length === 0) return { outcome: { outcome: 'no_rung', parentId }, emit: null };
 
-      const toStatusKey = await workflowsService.resolveStatusKey(
-        projectId,
-        workspaceId,
-        rung.target,
-      );
-      if (!toStatusKey) return { outcome: { outcome: 'no_matching_status', parentId }, emit: null };
-      if (parent.status === toStatusKey) {
+      // Resolve the matching rungs, highest first, and take the highest one that
+      // is BOTH forward and LEGAL in this project's workflow.
+      //
+      // The fallback matters (MOTIR-1623 surfaced it). Taking only the highest
+      // rung strands a parent whose workflow cannot make that particular jump:
+      // a `todo` parent whose single child goes straight to review matches the
+      // in-review rung, `todo → in_review` is not an edge, and the parent then
+      // sits in `todo` forever — no later event changes the aggregate, so it
+      // never gets another chance. Falling to the next rung keeps the derivation
+      // CONVERGENT while still only ever walking real workflow edges: the parent
+      // advances as far as the team's graph actually permits, rather than not at
+      // all.
+      const currentRank = await rankOfStatus(projectId, workspaceId, parent.status, reviewKey);
+      let attempted: string | null = null;
+      // The highest rung that RESOLVED to a real status — what the ladder wanted,
+      // reported in the outcome when no rung turns out to be legal so the log says
+      // which move the workflow refused rather than just "something".
+      let wanted: string | null = null;
+      for (const rung of rungs) {
+        const key = await workflowsService.resolveStatusKey(projectId, workspaceId, rung.target);
+        if (!key) continue;
+        wanted ??= key;
+        // Already in this rung's target: the parent is exactly where the ladder
+        // wants it, so stop — a LOWER rung would be a step backwards.
+        if (parent.status === key) {
+          return { outcome: { outcome: 'already_there', parentId, toStatus: key }, emit: null };
+        }
+        // Forward-only: rank the target on the same scale as the current status
+        // and refuse anything that is not strictly a step forward.
+        const targetRank = await rankOfStatus(projectId, workspaceId, key, reviewKey);
+        if (targetRank <= currentRank) {
+          return { outcome: { outcome: 'not_forward', parentId, toStatus: key }, emit: null };
+        }
+        attempted = key;
+        if (await workflowsService.canTransition(projectId, parent.status, key, workspaceId)) break;
+        attempted = null;
+      }
+      if (!attempted) {
+        // Either no rung resolved to a real status in this workflow, or none of
+        // the ones that did is legal from where the parent stands. Both are
+        // logged no-ops, never throws — see the catch below.
         return {
-          outcome: { outcome: 'already_there', parentId, toStatus: toStatusKey },
+          outcome: wanted
+            ? { outcome: 'illegal_transition', parentId, toStatus: wanted }
+            : { outcome: 'no_matching_status', parentId },
           emit: null,
         };
       }
-
-      // Forward-only: rank the parent's CURRENT status and the target on the same
-      // scale, and refuse anything that is not strictly a step forward.
-      const [currentRank, targetRank] = await Promise.all([
-        rankOfStatus(projectId, workspaceId, parent.status, reviewKey),
-        rankOfStatus(projectId, workspaceId, toStatusKey, reviewKey),
-      ]);
-      if (targetRank <= currentRank) {
-        return { outcome: { outcome: 'not_forward', parentId, toStatus: toStatusKey }, emit: null };
-      }
+      const toStatusKey = attempted;
 
       try {
         const { transition } = await workItemsService.applyStatusTransition(
@@ -224,24 +251,27 @@ export const parentStatusRollupService = {
 };
 
 /**
- * The ladder decision, from the children aggregate alone. Highest rung first, so
- * a fully-done set never stops at the in-review rung.
+ * EVERY rung the children aggregate matches, highest first. The caller takes the
+ * highest one that is both forward and legal, so a workflow that cannot make the
+ * top jump still advances the parent as far as its graph allows (see the
+ * fallback note at the call site) instead of stranding it.
  *
  * A parent with NO children matches nothing — "every child is done" must not be
  * vacuously true, or creating a story would instantly complete it.
  */
-function pickRung(agg: {
+function matchingRungs(agg: {
   total: number;
   todo: number;
   inProgress: number;
   inReview: number;
   done: number;
-}): (typeof LADDER)[number] | null {
-  if (agg.total === 0) return null;
-  if (agg.done === agg.total) return LADDER[0]!; // done
-  if (agg.inReview > 0 && agg.done + agg.inReview === agg.total) return LADDER[1]!; // in_review
-  if (agg.inProgress > 0 || agg.inReview > 0) return LADDER[2]!; // in_progress
-  return null;
+}): Array<(typeof LADDER)[number]> {
+  if (agg.total === 0) return [];
+  const out: Array<(typeof LADDER)[number]> = [];
+  if (agg.done === agg.total) out.push(LADDER[0]!); // done
+  if (agg.inReview > 0 && agg.done + agg.inReview === agg.total) out.push(LADDER[1]!); // in_review
+  if (agg.inProgress > 0 || agg.inReview > 0) out.push(LADDER[2]!); // in_progress
+  return out;
 }
 
 /**

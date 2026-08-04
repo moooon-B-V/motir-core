@@ -137,9 +137,17 @@ Notes that are decisions, not detail:
   derivation respects your workflow". This is why MOTIR-1625 adds the
   `in_progress → done` edge to the default workflow — without it, the commonest shape
   (a parent already `in_progress` whose children all finish) could never reach `done`.
-- **One rung per event.** The rollup transitions the parent **once**; if that moves it,
-  the re-emitted event re-evaluates, so a parent can climb several rungs across
-  successive events without any loop in the service.
+- **One rung per event, with a FALLBACK to the next legal one.** The rollup transitions
+  the parent **once**; if that moves it, the re-emitted event re-evaluates, so a parent
+  can climb several rungs across successive events without any loop in the service. When
+  more than one rung matches, it takes the highest that is both forward and **legal in
+  this project's workflow**, falling to the next one down if the top jump has no edge.
+  _(Amended after MOTIR-1623's integration test found the gap: taking only the top rung
+  STRANDS a parent whose graph cannot make that jump — a `todo` parent whose only child
+  goes straight to review matches the in-review rung, `todo → in_review` is not an edge,
+  and no later event changes that aggregate, so it would sit in `todo` forever. The
+  fallback keeps the derivation convergent while still only ever walking real edges. If NO
+  matching rung is legal, the outcome names the one it wanted and nothing moves.)_
 
 ### 4. The DOWNWARD cascade (parent → children)
 

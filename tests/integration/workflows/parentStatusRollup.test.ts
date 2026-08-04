@@ -2,6 +2,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
@@ -238,6 +241,44 @@ describe('gates and no-ops', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('falls to a LOWER rung when the highest one is not legal from here', async () => {
+    const fx = await makeWorkItemFixture();
+    // A todo parent whose only child jumps straight to review. The in-review rung
+    // matches, but `todo → in_review` is not an edge. Without the fallback the
+    // parent would sit in todo FOREVER — no later event changes this aggregate,
+    // so it never gets another chance. (MOTIR-1623 surfaced this.)
+    const { story, children } = await storyWithChildren(fx, ['in_review']);
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+
+    expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'in_progress' });
+    expect(await statusOf(story.id)).toBe('in_progress');
+  });
+
+  it('reports the rung it WANTED when no rung is legal from here', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    // A custom status with no outgoing edges — every rung is unreachable.
+    const frozen = await db.workflowStatus.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'frozen',
+        label: 'Frozen',
+        category: 'todo',
+        position: 'z1',
+      },
+    });
+    await setStatus(story.id, frozen.key);
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+
+    // Named, so the log says which move the workflow refused.
+    expect(res).toMatchObject({ outcome: 'illegal_transition', toStatus: 'done' });
+    expect(await statusOf(story.id)).toBe('frozen');
+    expect(sent).toHaveLength(0);
+  });
+
   it('a parent whose children are all still todo matches no rung', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['todo', 'blocked']);
@@ -310,5 +351,53 @@ describe('a RENAMED workflow still derives', () => {
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
     expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'doing' });
     expect(await statusOf(story.id)).toBe('doing');
+  });
+});
+
+describe('defensive error routing — the job must never fail behind a user transition', () => {
+  // These arms guard a RACE: the target status is resolved (and its legality
+  // checked) before `applyStatusTransition` runs, so a status deleted or a
+  // permission revoked in that window surfaces from the write. They are
+  // exercised by forcing the throw, because the point under test is the ROUTING
+  // — a typed no-op instead of a propagated error — not the race itself.
+
+  async function forceWriteError(err: Error) {
+    const fx = await makeWorkItemFixture();
+    const { children } = await storyWithChildren(fx, ['in_progress']);
+    vi.spyOn(workItemsService, 'applyStatusTransition').mockRejectedValue(err);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    vi.restoreAllMocks();
+    return res;
+  }
+
+  it('an UnknownStatusError from the write reads as no_matching_status', async () => {
+    expect(await forceWriteError(new UnknownStatusError('ghost'))).toMatchObject({
+      outcome: 'no_matching_status',
+    });
+  });
+
+  it('a ProjectAccessDeniedError reads as access_denied', async () => {
+    expect(await forceWriteError(new ProjectAccessDeniedError('p1', 'edit'))).toMatchObject({
+      outcome: 'access_denied',
+    });
+  });
+
+  it('a ProjectNotFoundError reads as access_denied too (no existence leak)', async () => {
+    expect(await forceWriteError(new ProjectNotFoundError('p1'))).toMatchObject({
+      outcome: 'access_denied',
+    });
+  });
+
+  it('an IllegalTransitionError from the write is still absorbed', async () => {
+    // Unreachable in practice — legality is pre-checked in the SAME transaction
+    // — but absorbed rather than thrown, so a future refactor that drops the
+    // pre-check degrades to a no-op instead of a red job.
+    expect(await forceWriteError(new IllegalTransitionError('todo', 'done'))).toMatchObject({
+      outcome: 'illegal_transition',
+    });
+  });
+
+  it('an UNEXPECTED error still propagates — a real fault is not swallowed', async () => {
+    await expect(forceWriteError(new Error('disk on fire'))).rejects.toThrow('disk on fire');
   });
 });
