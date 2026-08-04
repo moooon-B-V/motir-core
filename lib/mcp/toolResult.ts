@@ -115,6 +115,9 @@ const FILTER_DECODE_CODES: Record<Exclude<FilterDecodeResult, { ok: true }>['rea
   malformed: 'MALFORMED_FILTER',
   'unsupported-version': 'UNSUPPORTED_FILTER_VERSION',
   invalid: 'INVALID_FILTER',
+  // Split out of `invalid` by MOTIR-2042 so an over-cap filter reports the same
+  // code the registry's `FilterTooLargeError` maps to, on EVERY carrier.
+  'too-large': 'FILTER_TOO_LARGE',
 };
 
 /**

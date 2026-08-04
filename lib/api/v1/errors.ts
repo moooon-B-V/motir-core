@@ -120,6 +120,15 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // cross-tenant access, applied WITHIN a tenant. A caller who may not browse a
   // project must not be able to enumerate which project keys are real.
   PROJECT_ACCESS_DENIED: 404,
+
+  // 11.2.4 (MOTIR-2042) — the FilterAST the collection endpoint accepts. Every
+  // one is a malformed REQUEST the caller can fix, so every one is a 422 with a
+  // code specific enough to act on: which field, which operator, which value.
+  UNKNOWN_FILTER_FIELD: 422,
+  UNKNOWN_FILTER_OPERATOR: 422,
+  INVALID_FILTER_VALUE: 422,
+  FILTER_TOO_LARGE: 422,
+  MALFORMED_FILTER: 422,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */

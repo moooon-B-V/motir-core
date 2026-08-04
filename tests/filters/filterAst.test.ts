@@ -132,10 +132,14 @@ describe('decodeFilterParam — typed recoverable failures (never a throw)', () 
     if (!decoded.ok) expect(decoded.reason).toBe(reason);
   });
 
-  it('rejects an over-cap row set', () => {
+  it('rejects an over-cap row set with its OWN reason, not the generic one', () => {
     const rows = Array.from({ length: FILTER_ROW_CAP + 1 }, () => ['kind', 'is_any_of', ['bug']]);
     const decoded = decodeFilterParam(`v1:${btoa(JSON.stringify({ c: 'and', f: rows }))}`);
-    expect(decoded).toMatchObject({ ok: false, reason: 'invalid' });
+    // Split out of `invalid` by MOTIR-2042: "there is too much of it" is a
+    // different instruction to a caller than "it is broken", and every carrier
+    // now maps it to the same `FILTER_TOO_LARGE` code the registry uses.
+    expect(decoded).toMatchObject({ ok: false, reason: 'too-large' });
+    if (!decoded.ok) expect(decoded.detail).toContain(String(FILTER_ROW_CAP));
   });
 });
 

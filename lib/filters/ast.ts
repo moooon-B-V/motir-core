@@ -128,7 +128,23 @@ export const FILTER_PARAM_VERSION = 'v1';
 
 export type FilterDecodeResult =
   | { ok: true; ast: FilterAst }
-  | { ok: false; reason: 'malformed' | 'unsupported-version' | 'invalid'; detail: string };
+  | {
+      ok: false;
+      /**
+       * `too-large` is split out from `invalid` (Story 11.2 · Subtask 11.2.4 —
+       * MOTIR-2042) because it is the one structural rejection a caller can act
+       * on differently: "your filter is fine, there is just too much of it" is a
+       * different instruction from "your filter is broken". The public API maps
+       * it to its own stable `FILTER_TOO_LARGE` code, matching the registry's
+       * `FilterTooLargeError` for an AST that arrives by another path — so the
+       * same condition reports the same way whichever layer catches it first.
+       *
+       * ADDITIVE: every existing consumer branches on `!ok` and treats the
+       * reasons alike, so widening the union changes no behaviour.
+       */
+      reason: 'malformed' | 'unsupported-version' | 'invalid' | 'too-large';
+      detail: string;
+    };
 
 function toBase64Url(s: string): string {
   const bytes = new TextEncoder().encode(s);
@@ -184,7 +200,7 @@ function decodeCompactForm(parsed: unknown): FilterDecodeResult {
   if (c !== 'and' && c !== 'or') return { ok: false, reason: 'invalid', detail: 'bad combinator' };
   if (!Array.isArray(f)) return { ok: false, reason: 'invalid', detail: 'rows not an array' };
   if (f.length > FILTER_ROW_CAP) {
-    return { ok: false, reason: 'invalid', detail: `over the ${FILTER_ROW_CAP}-row cap` };
+    return { ok: false, reason: 'too-large', detail: `over the ${FILTER_ROW_CAP}-row cap` };
   }
 
   const conditions: FilterCondition[] = [];
