@@ -375,6 +375,78 @@ describe('motir run <key>', () => {
   });
 });
 
+// The PROSE-vs-GRAPH warning (MOTIR-2079). The load-bearing property is what it
+// does NOT change: `likely-missing-edge` is a severity, never a gate. A card
+// carrying one dispatches exactly like a card carrying none — same tool calls,
+// same stdout, status 0, no `--force` — and the only difference is a line of
+// diagnostics on stderr. If a future change makes any of these fail, it has
+// turned the advisory into a blocker, which would falsely stop the three shapes
+// MOTIR-1969 enumerates (a boundary-contract card naming both halves of a
+// two-PR split, an acceptance criterion naming a card for contrast, and a
+// sibling that will be done first).
+describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
+  const WITH_ADVISORY = dispatchPrompt({
+    advisories: [
+      {
+        item: 'PROD-7',
+        referenced: 'PROD-5',
+        referencedStatus: 'in_review',
+        severity: 'likely-missing-edge',
+      },
+    ],
+  });
+
+  it('motir run WARNS and still dispatches — exit code 0, no --force required', async () => {
+    setup({ prompt: WITH_ADVISORY });
+    await runCommand('PROD-7', { print: true });
+
+    expect(harness.stderr).toContain('PROD-5 (in_review)');
+    expect(harness.stderr).toContain('NOT a blocker');
+    // Byte-identical to the no-advisory run: same calls, same payload, same code.
+    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('motir next WARNS too — the same one site serves both commands', async () => {
+    setup({ prompt: WITH_ADVISORY });
+    await nextCommand({ print: true });
+
+    expect(harness.stderr).toContain('PROD-5 (in_review)');
+    expect(toolNames()).toEqual(['next_ready', 'transition_status', 'dispatch_prompt']);
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('the warning is DIAGNOSTICS — stdout stays the prompt alone, so the pipe is clean', async () => {
+    setup({ prompt: WITH_ADVISORY });
+    await nextCommand({ print: true });
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+    expect(harness.stdout).not.toContain('PROD-5');
+  });
+
+  it('warns in --agent mode too, before the agent is launched', async () => {
+    setup({ prompt: WITH_ADVISORY });
+    await nextCommand({ agent: 'claude' });
+    expect(harness.stderr).toContain('PROD-5 (in_review)');
+    expect(runAgentMock).toHaveBeenCalledOnce();
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('says nothing at all when the card carries none', async () => {
+    setup({ prompt: dispatchPrompt({ advisories: [] }) });
+    await runCommand('PROD-7', { print: true });
+    expect(harness.stderr).not.toContain('NOT a blocker');
+  });
+
+  it('says nothing when the SERVER omits the field — an older self-hosted Motir', async () => {
+    setup({ prompt: dispatchPrompt() });
+    await runCommand('PROD-7', { print: true });
+    expect(harness.stderr).not.toContain('NOT a blocker');
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+  });
+});
+
 describe('motir done', () => {
   it('flips a single item to done and clears its exclusion', async () => {
     setup();

@@ -155,6 +155,35 @@ export function workflowLabel(mode: DispatchWorkflowMode, sessionBranch: string 
     : 'one pull request of its own';
 }
 
+/**
+ * The PROSE-vs-GRAPH warning (MOTIR-2079), or `null` when there is nothing to
+ * say. Rendered from `dispatch_prompt`'s `advisories`: work items this card's
+ * ACCEPTANCE CRITERIA name while carrying no `blocked_by` edge to them.
+ *
+ * ⚠️ A WARNING, NOT A REFUSAL — and the difference is the whole point. A missing
+ * dependency EDGE is a fact, so `notReadyError` refuses and offers `--force`. A
+ * prose reference is a HINT: a boundary-contract card legitimately names both
+ * halves of a two-PR split, an acceptance criterion legitimately names a card
+ * for contrast, and a sibling may be merged before this item is started.
+ * Refusing those would teach authors to write vaguer acceptance criteria, which
+ * is worse than the miss it would catch. So the dispatch proceeds, the exit code
+ * is untouched, no `--force` is required — and the human sees the reference.
+ *
+ * Diagnostics, so it goes to STDERR with the summary: `motir next --print |
+ * pbcopy` must still pipe the prompt and nothing else.
+ */
+export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | null {
+  const advisories = dispatch.advisories ?? [];
+  if (advisories.length === 0) return null;
+  return [
+    `Advisory:   ${dispatch.key}'s acceptance criteria name work items it has no blocked_by edge to.`,
+    ...advisories.map((a) => `            - ${a.referenced} (${a.referencedStatus})`),
+    '            This is NOT a blocker — the dispatch proceeds. Before branching,',
+    '            check each one is already on origin/main; if it lives only on an open',
+    '            PR, add the blocked_by edge and stop instead of rebuilding its half.',
+  ].join('\n');
+}
+
 export interface DispatchSummaryInput {
   key: string;
   title: string | null;

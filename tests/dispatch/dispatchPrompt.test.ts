@@ -513,6 +513,7 @@ describe('dispatch_prompt tool — access + shape', () => {
     expect(text).toContain('Git workflow: one pull request of its own');
     const dto = struct(res);
     expect(Object.keys(dto).sort()).toEqual([
+      'advisories',
       'key',
       'prompt',
       'sessionBranch',
@@ -521,6 +522,9 @@ describe('dispatch_prompt tool — access + shape', () => {
       'targetRepoDefaultBranch',
       'workflowMode',
     ]);
+    // `advisories` is always PRESENT, `[]` when there is nothing to say — so a
+    // CLI reads one shape and never has to branch before reading it.
+    expect(dto.advisories).toEqual([]);
     // The routing coordinates (MOTIR-1783) ride the SAME payload as `next_ready`,
     // so a CLI reading either surface handles one shape.
     expect(dto.targetRepoCloneUrl).toBe('https://github.com/moooon/motir-core.git');

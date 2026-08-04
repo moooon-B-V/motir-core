@@ -310,3 +310,66 @@ describe('assembleDispatchPrompt — the Epic-9 injection extension point', () =
     expect(context.indexOf('CONVENTION BLOCK')).toBeLessThan(context.indexOf('LESSON BLOCK'));
   });
 });
+
+// The PROSE-vs-GRAPH advisory block (MOTIR-2079) — items the card's ACCEPTANCE
+// CRITERIA name while it carries no `blocked_by` edge to them, rendered into
+// CONTEXT so EVERY harness inherits the instruction. The CLI never assembles
+// prompt text, so a warning that lived only there would reach one harness; this
+// is the half that reaches all of them.
+describe('assembleDispatchPrompt — the prose-vs-graph advisory block (MOTIR-2079)', () => {
+  const advisory = (referenced: string, referencedStatus: string) => ({
+    item: 'PROD-7',
+    referenced,
+    referencedStatus,
+    severity: 'likely-missing-edge' as const,
+  });
+
+  it('renders each reference with its status, inside CONTEXT', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ advisories: [advisory('PROD-5', 'in_review')] }),
+    );
+    const context = prompt.slice(prompt.indexOf('CONTEXT'), prompt.indexOf('WHAT TO DO'));
+    expect(context).toContain('PROD-5 (in_review)');
+    expect(context).toContain('REFERENCED BUT NOT A DEPENDENCY');
+  });
+
+  it('instructs the agent to VERIFY against origin/main and to STOP rather than rebuild', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ advisories: [advisory('PROD-5', 'in_review')] }),
+    );
+    expect(prompt).toContain('origin/main');
+    expect(prompt).toContain('blocked_by');
+    // The specific failure it exists to prevent, named so the agent cannot read
+    // this as "go ahead and build the other half too".
+    expect(prompt).toContain('Do not rebuild the other half');
+  });
+
+  it('lists EVERY advisory, not just the first', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ advisories: [advisory('PROD-5', 'in_review'), advisory('PROD-9', 'todo')] }),
+    );
+    expect(prompt).toContain('PROD-5 (in_review)');
+    expect(prompt).toContain('PROD-9 (todo)');
+  });
+
+  it('renders NOTHING for an empty list — no heading, byte-identical to omitting it', () => {
+    const empty = assembleDispatchPrompt(source({ advisories: [] })).prompt;
+    expect(empty).toBe(assembleDispatchPrompt(source()).prompt);
+    expect(empty).not.toContain('REFERENCED BUT NOT A DEPENDENCY');
+  });
+
+  it('changes NOTHING but the CONTEXT text — same workflow mode, same branch, same sections', () => {
+    // The load-bearing invariant: an advisory is told, never acted on. If a
+    // future change lets one steer the GIT WORKFLOW variant, it has become a
+    // gate — which would falsely stop the three legitimate shapes MOTIR-1969
+    // enumerates (boundary-contract cards, contrast references, will-be-done-first).
+    const without = assembleDispatchPrompt(source());
+    const with_ = assembleDispatchPrompt(source({ advisories: [advisory('PROD-5', 'todo')] }));
+    expect(with_.workflowMode).toBe(without.workflowMode);
+    expect(with_.sessionBranch).toBe(without.sessionBranch);
+    for (const heading of SECTIONS) expect(with_.prompt).toContain(heading);
+    // …and the sections AFTER context are untouched, character for character.
+    const tail = (p: string) => p.slice(p.indexOf('WHAT TO DO'));
+    expect(tail(with_.prompt)).toBe(tail(without.prompt));
+  });
+});

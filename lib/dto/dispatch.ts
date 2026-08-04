@@ -8,6 +8,8 @@
 // agent harness (Claude Code / Codex / opencode / …), versionable with the
 // product, and the single place the Epic-9 enrichment injections will land.
 
+import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
+
 /**
  * WHICH git workflow the prompt's `GIT WORKFLOW` section instructs — chosen
  * SERVER-SIDE from the item's inherited session branch, never selectable by the
@@ -65,4 +67,24 @@ export interface DispatchPromptDto {
   workflowMode: DispatchWorkflowMode;
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: string | null;
+  /**
+   * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
+   * (MOTIR-2079) — each an item the card's ACCEPTANCE CRITERIA name but that it
+   * carries no `blocked_by` edge to. Always PRESENT, `[]` when there are none.
+   *
+   * The same content the `prompt` already renders in its CONTEXT section, handed
+   * over separately so the CLI can WARN the human before the agent starts. The
+   * prompt reaches the agent; this reaches the person watching.
+   *
+   * ⚠️ NEVER A GATE, and the whole design turns on that. `dispatch_prompt`
+   * returns the identical prompt, the identical `workflowMode`, and the caller's
+   * readiness is byte-identical whether this array is empty or not — an advisory
+   * changes what a caller is TOLD, never what it may do. Three legitimate shapes
+   * trip it (a boundary-contract card naming both halves of a two-PR split, an
+   * acceptance criterion naming a card for contrast, a sibling that will be done
+   * first), and blocking any of them would teach authors to write vaguer cards —
+   * the exact incentive the advisory exists to avoid. See
+   * `WorkItemProseAdvisoryDto` and `buildDispatchProseAdvisories`.
+   */
+  advisories: WorkItemProseAdvisoryDto[];
 }

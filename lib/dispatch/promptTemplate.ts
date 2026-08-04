@@ -4,6 +4,7 @@ import type {
   ExecutorDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
+  WorkItemProseAdvisoryDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import { splitPlanBody } from '@/lib/markdown/planBody';
@@ -87,6 +88,16 @@ export interface DispatchPromptSource {
   targetRepo: string | null;
   /** The inherited session branch, or null for the per-item-PR workflow. */
   sessionBranch: string | null;
+  /**
+   * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
+   * (MOTIR-2079) — items the card's ACCEPTANCE CRITERIA name but that it carries
+   * no `blocked_by` edge to. Omitted or empty renders NOTHING (no empty
+   * heading), which is the shape almost every card has.
+   *
+   * ⚠️ NOT a blocker and not a reason to refuse: it is told to the agent so the
+   * agent can VERIFY before it branches. See {@link advisorySection}.
+   */
+  advisories?: WorkItemProseAdvisoryDto[];
   /** The Epic-9 enrichment slots; defaults to {@link NO_INJECTIONS}. */
   injections?: DispatchPromptInjections;
 }
@@ -253,6 +264,44 @@ function section(heading: string, lines: string[]): string[] {
   return [RULE, heading, RULE, ...lines];
 }
 
+/**
+ * The PROSE-vs-GRAPH advisory block (MOTIR-2079) — the CONTEXT lines that tell
+ * the agent which items this card's acceptance criteria NAME but carry no
+ * `blocked_by` edge to, and what to do about each.
+ *
+ * Why the prompt and not just the CLI: the CLI never assembles prompt text, so a
+ * warning printed only there reaches one harness. Rendering it HERE means every
+ * harness — Claude Code, Codex, opencode, a human reading the printed prompt —
+ * inherits it, because none of them writes its own prompt.
+ *
+ * The instruction is VERIFY, never REFUSE. A `likely-missing-edge` is a strong
+ * hint and not a fact: a boundary-contract card legitimately names both halves
+ * of a two-PR split, an acceptance criterion legitimately names a card for
+ * contrast, and a sibling may simply be done before this item is dispatched. The
+ * agent is the one standing where the check is cheap (`git ls-tree origin/main`)
+ * and is told to make it — which is exactly the step that has been skipped.
+ *
+ * Empty in, nothing out: no heading, no blank line, no trace.
+ */
+function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
+  if (advisories.length === 0) return [];
+  return [
+    '',
+    'REFERENCED BUT NOT A DEPENDENCY — verify these before you branch:',
+    ...advisories.map(
+      (a) =>
+        `    - ${a.referenced} (${a.referencedStatus}) is named in this card's acceptance` +
+        ` criteria, but this item carries no blocked_by edge to it.`,
+    ),
+    '  For each one, confirm the substrate it provides is already on origin/main',
+    '  (git ls-tree / git grep origin/main for the file, symbol or test the criterion',
+    '  names). If it lives ONLY on an open pull request, this item is blocked in fact:',
+    '  wire the blocked_by edge and STOP. Do not rebuild the other half yourself and do',
+    '  not stack onto the unmerged branch — two green pull requests whose composition',
+    '  turns main red is the recurring failure this warning exists to prevent.',
+  ];
+}
+
 /** The CONTEXT section's fact lines + the card's narrative body. */
 function contextSection(
   src: DispatchPromptSource,
@@ -295,6 +344,10 @@ function contextSection(
   // The Epic-9 enrichment slots (empty in motir-core — see the module header).
   for (const block of injections.conventions) facts.push('', block);
   for (const block of injections.lessons) facts.push('', block);
+
+  // Sibling to the lessons slot, and for the same reason: something the agent
+  // must know BEFORE it starts, not something it would find in the card body.
+  facts.push(...advisorySection(src.advisories ?? []));
 
   facts.push('', 'CARD DESCRIPTION');
   facts.push('', narrative.length > 0 ? narrative : '(The card carries no description body.)');

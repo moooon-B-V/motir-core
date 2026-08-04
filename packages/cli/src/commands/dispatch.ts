@@ -16,6 +16,7 @@ import {
   checkBootstrapCheckout,
   renderAgentFailure,
   renderAgentSuccess,
+  renderDispatchAdvisories,
   renderDispatchSummary,
   renderSessionOutcomes,
   resolveDispatchTarget,
@@ -138,18 +139,27 @@ async function deliver(input: DeliverInput): Promise<void> {
     agent: agent ? { command: agent.parsed.command, source: agent.source } : null,
   });
 
+  // The PROSE-vs-GRAPH warning (MOTIR-2079). It is emitted HERE, in the shared
+  // `deliver`, precisely because `next` and `run` converge here — one site, and
+  // the two commands can never drift on whether the human is told. It is a
+  // WARNING: nothing below branches on it, no exit code changes, and no `--force`
+  // is involved (see `renderDispatchAdvisories` for why a refusal would be wrong).
+  const advisory = renderDispatchAdvisories(dispatch);
+
   if (!agent) {
     // PRINT mode: the prompt is the PAYLOAD (stdout, byte-identical), the
     // summary is DIAGNOSTICS (stderr). That split is what lets
     // `motir next --print | pbcopy` copy the prompt and nothing else, while the
     // user still sees the repo + resolved path on screen.
     info(summary);
+    if (advisory) info(advisory);
     info('');
     outVerbatim(dispatch.prompt);
     return;
   }
 
   info(summary);
+  if (advisory) info(advisory);
   info('');
   const result = await runAgent({
     command: agent.parsed,

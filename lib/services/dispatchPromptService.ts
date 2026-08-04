@@ -2,6 +2,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { assembleDispatchPrompt } from '@/lib/dispatch/promptTemplate';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -62,8 +63,9 @@ export const dispatchPromptService = {
    *
    * Reads, in parallel where they are independent: the item (access-gated), its
    * parent, its `is_blocked_by` dependencies, its READINESS (for the inherited
-   * session branch — the one thing that picks the GIT WORKFLOW variant), and the
-   * project's repo domain (for `targetRepo` + its coordinates). The repo resolves
+   * session branch — the one thing that picks the GIT WORKFLOW variant), its
+   * prose-vs-graph advisories (MOTIR-2079 — told to the agent, never acted on),
+   * and the project's repo domain (for `targetRepo` + its coordinates). The repo resolves
    * through the SAME `resolveItemDispatchRepo` the ready dispatch payload uses
    * (MOTIR-1804 · MOTIR-1783), so the two dispatch surfaces can never route
    * differently — including the project → workspace scope ladder.
@@ -85,11 +87,16 @@ export const dispatchPromptService = {
     }
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
-    const [parentRow, blockerKeys, readiness, dispatchRepo] = await Promise.all([
+    const [parentRow, blockerKeys, readiness, dispatchRepo, advisories] = await Promise.all([
       item.parentId ? workItemRepository.findById(item.parentId) : Promise.resolve(null),
       resolveBlockerKeys(item.id),
       workItemsService.getReadiness(item.id, ctx),
       resolveItemDispatchRepo(item.targetRepo, projectId, ctx),
+      // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads
+      // above, not a second pass, and deliberately independent of `readiness`:
+      // nothing below consults it when deciding the workflow variant, so the
+      // prompt an item gets is the same prompt whether or not it has one.
+      buildDispatchProseAdvisories(item, ctx),
     ]);
 
     const targetRepo = dispatchRepo?.name ?? null;
@@ -104,6 +111,7 @@ export const dispatchPromptService = {
       estimateMinutes: item.estimateMinutes,
       descriptionMd: item.descriptionMd,
       blockerKeys,
+      advisories,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
       projectKey: project.identifier,
@@ -131,6 +139,10 @@ export const dispatchPromptService = {
       targetRepoDefaultBranch: dispatchRepo?.defaultBranch ?? null,
       workflowMode: assembled.workflowMode,
       sessionBranch: assembled.sessionBranch,
+      // Handed over SEPARATELY as well as rendered into the prompt: the prompt
+      // reaches the agent, this reaches the human watching the CLI. Always an
+      // array, never omitted.
+      advisories,
     };
   },
 };

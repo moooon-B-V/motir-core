@@ -164,6 +164,25 @@ export interface DispatchItem {
  * (`DispatchWorkflowMode`, lib/dto/dispatch.ts). */
 export type DispatchWorkflowMode = 'per_item_pr' | 'session_lineage';
 
+/**
+ * One PROSE-vs-GRAPH advisory (`WorkItemProseAdvisoryDto`) — a work item the
+ * dispatched card's ACCEPTANCE CRITERIA name while carrying no `blocked_by` edge
+ * to it. The server sends only the `likely-missing-edge` tier here.
+ *
+ * ⚠️ NEVER a reason to refuse a dispatch. It is printed, and the human decides —
+ * the same disposition `notReadyError` documents for a real blocker, one notch
+ * softer because this one is a hint rather than a fact.
+ */
+export interface DispatchAdvisory {
+  /** The dispatched card's key — the item whose body names the reference. */
+  item: string;
+  /** The referenced item's key. */
+  referenced: string;
+  /** The referenced item's raw workflow status key (e.g. `in_review`). */
+  referencedStatus: string;
+  severity: string;
+}
+
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt
  * text plus the facts the CLI routes on before it runs the agent. */
 export interface DispatchPrompt {
@@ -172,6 +191,13 @@ export interface DispatchPrompt {
   targetRepo: string | null;
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
+  /**
+   * OPTIONAL on the wire, deliberately: the CLI is published separately from the
+   * server and is routinely pointed at a self-hosted Motir older than itself. A
+   * server predating MOTIR-2079 sends no such key, which must read as "nothing to
+   * warn about" rather than a crash — so every consumer treats absent as `[]`.
+   */
+  advisories?: DispatchAdvisory[];
 }
 
 /**
