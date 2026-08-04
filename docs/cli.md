@@ -973,12 +973,18 @@ there too. Mounting a host credential still works and is still read-only:
 
 An env credential outranks a mounted one and is never written to disk.
 
+The images are **public** — no `docker login`, no token, no GitHub account. That
+is asserted on every release by a job that holds no credential at all, so "pull
+and go" stays a fact rather than an intention; you can run the same check
+yourself with `node packages/cli/sandbox/smoke/assert-public.mjs --ref
+ghcr.io/moooon-b-v/motir-sandbox:claude`.
+
 There is one tag per agent profile (`claude`, `codex`, `opencode`, `kimi`,
 `antigravity`, `cursor`, `aider`, `goose`) plus an agent-less `base`, built for
-linux/amd64 + linux/arm64. `:<profile>` moves with each release;
-`:<profile>-<version>` is immutable. **Pin the digest for anything you need to
-reproduce** — the digest table is filled in from each `cli-v*` release run, and
-the registry is always the authority:
+linux/amd64 + linux/arm64 — all tags of the one `motir-sandbox` package.
+`:<profile>` moves with each release; `:<profile>-<version>` is immutable. **Pin
+the digest for anything you need to reproduce** — the digest table is filled in
+from each `cli-v*` release run, and the registry is always the authority:
 
 ```sh
 docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude

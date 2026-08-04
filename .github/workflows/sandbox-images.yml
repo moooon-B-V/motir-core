@@ -241,9 +241,17 @@ jobs:
           retention-days: 7
 
   # ── Post-deploy verification: pull what was actually published ─────────────
-  # "The push step exited 0" is not the same claim as "a user can pull this and
-  # run it". This job makes the second claim, by digest — the only reference that
-  # names the exact bytes a moving `:claude` tag pointed at a minute ago.
+  # "The push step exited 0" is not the same claim as "the bytes are in the
+  # registry and they run". This job makes the second claim, by digest — the only
+  # reference that names the exact bytes a moving `:claude` tag pointed at a
+  # minute ago.
+  #
+  # ⚠️ It does NOT establish that a USER can pull them: it logs in first, so it
+  # asks the question as the publisher, for whom the answer is yes whatever the
+  # package's visibility. That gap shipped `cli-v0.1.0`'s nine images green and
+  # private (MOTIR-2010). `sandbox-public` below asks the consumer's question,
+  # and the two are separate jobs precisely so a credential cannot leak from this
+  # one into that one.
   sandbox-published:
     name: Verify the published images
     if: ${{ inputs.publish }}
@@ -291,3 +299,54 @@ jobs:
             echo
             echo "Paste the table above into \`packages/cli/sandbox/README.md\` → **Published images**."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── The consumer's question: can a STRANGER pull this? (MOTIR-2010) ────────
+  # `docs/cli.md` § The sandbox says "Pull and go — no checkout, no build" over a
+  # bare `docker run`. That is a claim about access control, and until this job
+  # existed nothing tested it: `cli-v0.1.0` published nine images, recorded nine
+  # digests, went green, and the package was PRIVATE — so the first command in
+  # the documentation returned `unauthorized` for everyone outside the org.
+  #
+  # Anonymity is STRUCTURAL here, in three independent ways, because an ambient
+  # credential would turn this job back into `sandbox-published`:
+  #   1. no `docker/login-action` step, so `~/.docker/config.json` stays empty;
+  #   2. `permissions:` grants no `packages:` scope, so the job's GITHUB_TOKEN
+  #      cannot authenticate to GHCR even if something tried;
+  #   3. `assert-public.mjs` sets no `Authorization` header and reads no docker
+  #      config, so it gives the same verdict from a logged-in developer shell.
+  # It probes a known-public control first and reports INDETERMINATE if that
+  # fails — a broken probe answers "private" to everything, and "private" is the
+  # answer being hunted, so it would otherwise be believed.
+  sandbox-public:
+    name: Verify the published images pull ANONYMOUSLY
+    if: ${{ inputs.publish }}
+    needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
+    runs-on: ubuntu-latest
+    # `contents: read` and nothing else. A called workflow can only ever REDUCE
+    # what its caller granted, so this is spelled as a subset of
+    # `release-sandbox.yml`'s `contents: read` + `packages: write` — asking for a
+    # scope the caller withheld (`actions: read`, say) fails the run outright
+    # rather than downgrading. Same-run artifact downloads need no extra scope,
+    # which is why `sandbox-published` works today with the caller's grant alone.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download the published digests
+        uses: actions/download-artifact@v7
+        with:
+          pattern: sandbox-digest-*
+          merge-multiple: true
+          path: digests
+      - name: Probe every published digest with NO credential
+        run: node packages/cli/sandbox/smoke/assert-public.mjs --image "$IMAGE" --digests digests
+      # The manifest probe above proves the registry serves the bytes to a
+      # nobody. This proves the documented COMMAND works: the same `docker run`
+      # docs/cli.md opens with, on the profile it names, in a job that never
+      # logged in. Pinned to the digest rather than `:claude` so it cannot pass
+      # on an older public tag while the new push is unreachable.
+      - name: Run the DOCUMENTED command anonymously (`:claude`, by digest)
+        run: |
+          set -euo pipefail
+          digest=$(cat digests/claude)
+          docker run --rm "${IMAGE}@${digest}" motir --version

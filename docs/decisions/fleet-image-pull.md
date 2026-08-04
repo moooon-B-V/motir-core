@@ -345,6 +345,35 @@ into the current subtask's scope), and §1's rule already answers it: the sandbo
 from `packages/cli/sandbox/` in the **public** `motir-core` repo, so it is a publish, not a
 mirror.
 
+### §9.1 — What MOTIR-2010 established (2026-08-04)
+
+**It is ONE package, not nine — measured, because the size of the fix depended on
+it.** Every profile is a TAG in a single OCI repository: an anonymous manifest
+`GET` for `:claude`, `:codex` and `:base` each returns the _same_ challenge,
+`scope="repository:moooon-b-v/motir-sandbox:pull"`, and `sandbox-images.yml`
+pushes all of them under one `IMAGE: ghcr.io/moooon-b-v/motir-sandbox`. GHCR
+visibility is per-package, so **one flip covers all eighteen tags** (nine moving,
+nine versioned). ⚠️ A bearer challenge is issued for repositories that do not
+exist either — `moooon-b-v/motir-sandbox-claude` is challenged just as readily —
+so a challenge proves the registry will discuss a name, never that a package is
+there. The positive evidence is the shared scope across tags that demonstrably
+exist.
+
+**The visibility flip is carried by its own `manual` card** (mirroring MOTIR-2009
+for the runner), because it is a console action with no REST endpoint and it
+cannot be undone.
+
+**What MOTIR-2010 itself shipped is the missing ASSERTION**, which is the durable
+half: `packages/cli/sandbox/smoke/assert-public.mjs`, run by a new
+`sandbox-public` job that holds no registry login and no `packages:` scope. The
+existing verify job authenticated first, so it asked the question as the
+publisher — for whom a private package pulls fine — which is how nine
+unobtainable images passed a green release. A positive control runs first and
+downgrades the run to INDETERMINATE if it fails, since a broken probe reports
+"private" about everything and "private" is the answer being hunted. §12.1's
+control observation is now enforced on every release rather than performed by
+hand once.
+
 ## §10 — What this binds
 
 | Card                   | What it must now do                                                            |

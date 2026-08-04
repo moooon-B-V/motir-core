@@ -428,15 +428,70 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
   });
 
   it('verifies the published images by PULLING them back, by digest', () => {
-    // "The push exited 0" and "a user can pull this and run it" are different
-    // claims. The digest is the only reference that names the exact bytes the
-    // moving tag pointed at.
+    // "The push exited 0" and "the bytes are in the registry and they run" are
+    // different claims. The digest is the only reference that names the exact
+    // bytes the moving tag pointed at.
     expect(images).toContain('sandbox-published:');
     expect(images).toContain('docker run --rm "${IMAGE}@${digest}" motir --version');
     expect(images).toContain('needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]');
     // A profile whose leg was dropped uploads no digest — that must fail the
     // release rather than pass as a smaller one.
     expect(images).toContain('No digest was published for');
+  });
+
+  // ── The consumer's question (MOTIR-2010) ─────────────────────────────────
+  // `sandbox-published` above pulls as the PUBLISHER, for whom a private package
+  // is pullable — which is how `cli-v0.1.0` shipped nine images that no user
+  // could obtain, green. These assertions guard the job that asks the question
+  // as a stranger, and above all guard the property that makes its answer worth
+  // anything: that it holds no credential.
+  describe('and then asks whether a STRANGER can pull them', () => {
+    /** The `sandbox-public:` job window — its own key to the next top-level job
+     *  key (or EOF), comments stripped. Same cut as `sandboxJob` above, and for
+     *  the same reason: "this job contains no login" is a claim about THIS job,
+     *  and a slice-to-EOF would quietly start including whatever lands next. */
+    const publicJob = (() => {
+      const lines = images.split('\n').filter((line) => !line.trim().startsWith('#'));
+      const start = lines.findIndex((line) => line === '  sandbox-public:');
+      if (start === -1) {
+        throw new Error('sandbox-images.yml has no `sandbox-public:` job — MOTIR-2010 regressed');
+      }
+      const after = lines.slice(start + 1);
+      const end = after.findIndex((line) => /^ {2}[A-Za-z0-9_-]+:$/.test(line));
+      return [lines[start], ...(end === -1 ? after : after.slice(0, end))].join('\n');
+    })();
+
+    it('runs on the release lane only, after everything has been published', () => {
+      expect(publicJob).toContain('if: ${{ inputs.publish }}');
+      expect(publicJob).toContain(
+        'needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]',
+      );
+    });
+
+    it('holds NO credential — no login, and no `packages:` scope to log in with', () => {
+      // The load-bearing assertion of this whole card. A `docker/login-action`
+      // step, or a `packages:` grant, would turn the check back into the one
+      // that already existed and already passed while the images were private.
+      expect(publicJob).not.toContain('docker/login-action');
+      expect(publicJob).not.toContain('packages:');
+      expect(publicJob).toMatch(/permissions:\n\s+contents: read\n/);
+    });
+
+    it('probes every published DIGEST, not the moving tags', () => {
+      expect(publicJob).toContain(
+        'node packages/cli/sandbox/smoke/assert-public.mjs --image "$IMAGE" --digests digests',
+      );
+      expect(publicJob).toContain('pattern: sandbox-digest-*');
+    });
+
+    it('then runs the command docs/cli.md actually prints, on the profile it names', () => {
+      // A readable manifest and a working `docker run` are not the same claim
+      // either — and the documented onboarding path is the second one.
+      expect(publicJob).toContain('digest=$(cat digests/claude)');
+      expect(publicJob).toContain('docker run --rm "${IMAGE}@${digest}" motir --version');
+      const documented = read(join(CLI_DIR, '..', '..', 'docs', 'cli.md'));
+      expect(documented).toContain('ghcr.io/moooon-b-v/motir-sandbox:claude');
+    });
   });
 });
 
