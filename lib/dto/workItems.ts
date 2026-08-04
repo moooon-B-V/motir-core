@@ -688,6 +688,25 @@ export interface PagedIssueListDto {
 }
 
 /**
+ * A row of the KEYSET-paged project read (Story 11.2 · Subtask 11.2.3) — the
+ * flat List row plus the two halves of its keyset POSITION.
+ *
+ * `id` and `createdAt` are here because the caller has to mint the cursor for
+ * the next page from the last row it received, and that cursor is
+ * `{ createdAt, id }`. They are the page ADDRESSING, which is exactly what the
+ * ADR's Amendment 1 carve-out permits — `WorkItemListItemDto` itself is
+ * untouched, so the `/items` view's wire shape is unchanged.
+ *
+ * `createdAt` is a `Date` rather than an ISO string: it is a sort key the caller
+ * encodes, not a field it renders, and round-tripping it through a string would
+ * lose sub-millisecond precision that the tuple comparison depends on.
+ */
+export interface WorkItemKeysetItemDto extends WorkItemListItemDto {
+  id: string;
+  createdAt: Date;
+}
+
+/**
  * The actor who archived a work item (Subtask 2.9.2), resolved from the latest
  * `'archived'` revision — Avatar · name, the same shape the activity feed and
  * comment author use. `name` / `image` are nullable so a deleted-but-restricted

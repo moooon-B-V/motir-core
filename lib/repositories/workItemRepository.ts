@@ -121,6 +121,18 @@ export interface WorkItemListRow {
 }
 
 /**
+ * A row of `findProjectIssuesKeyset` (Story 11.2 · Subtask 11.2.3) — the flat
+ * List row PLUS `createdAt`, which is half the keyset position the v1 cursor
+ * encodes. It is carried because the ROUTE has to mint the next cursor from the
+ * last row it returned; it is part of the page addressing, not a new field on an
+ * existing read (`WorkItemListRow` is untouched, so the `/items` view's shape is
+ * exactly as it was).
+ */
+export interface WorkItemKeysetRow extends WorkItemListRow {
+  createdAt: Date;
+}
+
+/**
  * One row of a LAZY tree level (Subtask 2.5.13): a single parent's direct
  * children OR the project's roots — paged + sorted. Same render fields as
  * `WorkItemListRow`, plus `parentId` (so the client can place it) and
@@ -2147,7 +2159,6 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemListRow[]> {
     const client = tx ?? db;
-    const matched = buildIssueFilterSql(filter, 'w');
     const orderCol = ISSUE_SORT_SQL[sort.column];
     const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
     // Server-side window (Subtask 2.5.12): the List is LIMIT/OFFSET-paged so it
@@ -2175,13 +2186,73 @@ export const workItemRepository = {
         LEFT JOIN "user" ru ON ru."id" = w."reporterId"
         LEFT JOIN "workflow_status" ws
                ON ws."project_id" = w."projectId" AND ws."key" = w."status"
-        WHERE w."projectId" = ${projectId}
-          AND w."workspaceId" = ${workspaceId}
-          AND w."archivedAt" IS NULL
-          AND ${notInTriageSql('w')}
-          AND (${matched})
+        WHERE ${projectIssuesScopeSql(projectId, workspaceId, filter)}
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         ${limitSql}`;
+  },
+
+  /**
+   * The same project List set, KEYSET-paged (Story 11.2 · Subtask 11.2.3 —
+   * MOTIR-2041) — the read `GET /api/v1/projects/{projectKey}/work-items` serves.
+   *
+   * Authorised by the ADR's Amendment 1 as a bounded carve-out: a new page
+   * ADDRESSING over an unchanged predicate. It adds NO filter axis, NO access
+   * gate, NO field and NO migration, and it leaves `findProjectIssuesFlat` and
+   * every existing caller untouched, so the `/items` view and `search_work_items`
+   * are unaffected.
+   *
+   * ⚠️ ORDER IS `(createdAt ASC, id ASC)`, and that is DELIBERATELY NOT the List
+   * view's `IssueSort`. The v1 cursor encodes `{ createdAt, id }`
+   * (`lib/api/v1/pagination.ts`), and it is the RESULT SET that must match the
+   * web app, not the row order — a client walking a collection to exhaustion
+   * cares that it sees every row exactly once, not what sequence they arrive in.
+   * `(createdAt, id)` is a TOTAL order, so a position is unambiguous even when
+   * timestamps collide, which is what makes the no-skip/no-duplicate guarantee
+   * hold across a concurrent write. Do NOT "fix" this toward `DEFAULT_SORT`:
+   * `updatedAt` and `priority` are MUTABLE, and a keyset cursor over a mutable
+   * column skips and duplicates rows exactly as offset paging does.
+   *
+   * Fetches `limit + 1` rows to learn whether a next page exists. There is no
+   * `COUNT`: a total is the offset pager's denominator and has no purpose here,
+   * and it would double the cost of every page.
+   */
+  async findProjectIssuesKeyset(
+    projectId: string,
+    workspaceId: string,
+    filter: RepoIssueFilter = {},
+    page: { after?: { createdAt: Date; id: string }; limit: number },
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemKeysetRow[]> {
+    const client = tx ?? db;
+    // "Strictly after this position" in `(createdAt, id)` order — the standard
+    // tuple comparison, spelled out rather than using the row-constructor form
+    // so both halves bind as PARAMETERS.
+    const afterSql = page.after
+      ? Prisma.sql`AND (w."createdAt" > ${page.after.createdAt}
+          OR (w."createdAt" = ${page.after.createdAt} AND w."id" > ${page.after.id}))`
+      : Prisma.empty;
+
+    return client.$queryRaw<WorkItemKeysetRow[]>`
+      SELECT w."id",
+             w."kind"::text       AS "kind",
+             w."type"::text       AS "type",
+             w."key",
+             w."identifier",
+             w."title",
+             w."status",
+             w."priority"::text   AS "priority",
+             w."assigneeId",
+             w."reporterId",
+             w."dueDate",
+             w."estimateMinutes",
+             w."storyPoints",
+             w."createdAt",
+             w."updatedAt"
+        FROM "work_item" w
+        WHERE ${projectIssuesScopeSql(projectId, workspaceId, filter)}
+          ${afterSql}
+        ORDER BY w."createdAt" ASC, w."id" ASC
+        LIMIT ${page.limit + 1}`;
   },
 
   /**
@@ -4317,6 +4388,36 @@ function notExcludedSql(
  * a blank `text` is ignored by callers before this point. No axis → `TRUE`
  * (match all).
  */
+/**
+ * The COMPLETE predicate of a project's flat List read: the tenant gate, the
+ * pervasive row exclusions, and the caller's filter.
+ *
+ * ⚠️ Extracted (Story 11.2 · Subtask 11.2.3 — MOTIR-2041) so the OFFSET-paged
+ * read (`findProjectIssuesFlat`) and the KEYSET-paged read
+ * (`findProjectIssuesKeyset`) compile ONE predicate rather than two copies of
+ * it. That is the whole basis of the ADR's Amendment 1 carve-out: the v1 read is
+ * a new page ADDRESSING over an unchanged predicate, and the result SET is
+ * byte-for-byte what the `/items` view returns for the same filter. Two
+ * predicates for one filter is how the API and the web app start disagreeing
+ * about what a filter MEANS — which is exactly what the parity criterion exists
+ * to catch, and it cannot drift if there is only one of them.
+ *
+ * (`countProjectIssues` deliberately keeps its own WHERE: it carries an extra
+ * `excludeIds` clause the row reads do not. Folding it in here would silently
+ * change the List's denominator, which is not this card's to change.)
+ */
+function projectIssuesScopeSql(
+  projectId: string,
+  workspaceId: string,
+  filter: RepoIssueFilter,
+): Prisma.Sql {
+  return Prisma.sql`w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND (${buildIssueFilterSql(filter, 'w')})`;
+}
+
 function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.Sql {
   const t = Prisma.raw(alias);
   const predicates: Prisma.Sql[] = [];

@@ -104,6 +104,9 @@ import type {
   ReadyLayerRow,
 } from '@/lib/repositories/workItemRepository';
 import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
+// The PUBLIC API's page ceiling (ADR §5), imported rather than re-declared so the
+// number a client is promised and the number the service enforces cannot drift.
+import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import type { IssueSort } from '@/lib/issues/issueListView';
 import type { ExpansionNudge, ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
 import {
@@ -138,6 +141,7 @@ import type {
   WorkItemKindDto,
   WorkItemTypeDto,
   PagedIssueListDto,
+  WorkItemKeysetItemDto,
   PagedArchivedWorkItemsDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
@@ -470,6 +474,22 @@ export async function loadFilterReferents(
         .map((c) => c.id),
     ),
   };
+}
+
+/**
+ * Clamp a requested v1 page size to `[1, MAX_PAGE_LIMIT]` (Story 11.2 ·
+ * Subtask 11.2.3).
+ *
+ * Deliberately SEPARATE from {@link clampIssuePageSize}: the List's 50-row cap is
+ * a Cloud performance bound on the offset pager and stays where it is, while the
+ * public API's ceiling is 100 and is documented as such (ADR §5). The constant is
+ * IMPORTED from the v1 pagination module rather than re-declared, because two
+ * numbers that must agree are two numbers that eventually will not — and the one
+ * a client is promised is the one in `parsePageRequest`.
+ */
+function clampV1PageLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit) || limit < 1) return MAX_PAGE_LIMIT;
+  return Math.min(Math.floor(limit), MAX_PAGE_LIMIT);
 }
 
 /**
@@ -2638,6 +2658,66 @@ export const workItemsService = {
     );
 
     return { items: rows.map(toWorkItemListItemDto), total, page, pageSize };
+  },
+
+  /**
+   * The same project List set, KEYSET-paged (Story 11.2 · Subtask 11.2.3 —
+   * MOTIR-2041) — what `GET /api/v1/projects/{projectKey}/work-items` reads.
+   *
+   * The GATES and the FILTER RESOLUTION are {@link getProjectIssuesList}'s,
+   * unchanged and deliberately re-run here rather than assumed by the caller: a
+   * cross-tenant `projectId` is a `ProjectNotFoundError` (no existence leak),
+   * then `assertCanBrowse`. This method carries its own gates because a route is
+   * a thin adapter — it must not be the thing that remembers to check.
+   *
+   * ⚠️ `limit` clamps to the v1 ceiling ({@link MAX_PAGE_LIMIT} = 100), NOT to
+   * `ISSUE_LIST_PAGE_SIZE` (50). The List's 50-row cap is a Cloud performance
+   * bound on the OFFSET pager and is left exactly where it is — this card raises
+   * no existing cap and changes no existing method. The two ceilings are
+   * independent because the two reads are.
+   *
+   * Cursor ENCODING stays in the v1 layer: a cursor is an HTTP concept, and a
+   * service that learned one would be answering to a transport. This returns the
+   * rows plus whether more remain; the route names the position.
+   */
+  async listProjectWorkItemsPage(
+    projectId: string,
+    params: { filter?: ProjectTreeFilter; after?: { createdAt: Date; id: string }; limit?: number },
+    ctx: ServiceContext,
+  ): Promise<{ items: WorkItemKeysetItemDto[]; hasMore: boolean }> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    // The SAME referent resolution + filter build the List does, so a label /
+    // component / custom-field condition resolves identically — and a STALE
+    // referent still compiles to match-nothing rather than erroring.
+    const referents = params.filter?.ast
+      ? await loadFilterReferents(projectId, project.workspaceId, params.filter.ast)
+      : undefined;
+    const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
+
+    const limit = clampV1PageLimit(params.limit);
+    const rows = await workItemRepository.findProjectIssuesKeyset(
+      projectId,
+      project.workspaceId,
+      repoFilter,
+      { ...(params.after ? { after: params.after } : {}), limit },
+    );
+
+    // The repository fetched `limit + 1` — the extra row IS the "more remains"
+    // answer, and it never reaches the caller.
+    const hasMore = rows.length > limit;
+    return {
+      items: rows.slice(0, limit).map((row) => ({
+        ...toWorkItemListItemDto(row),
+        id: row.id,
+        createdAt: row.createdAt,
+      })),
+      hasMore,
+    };
   },
 
   /**
