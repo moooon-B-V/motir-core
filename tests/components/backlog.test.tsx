@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import type { ReactElement } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -257,7 +257,7 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     expect(await screen.findByText("Couldn't load sprints")).toBeTruthy();
   });
 
-  it('shows a loading skeleton before the sprint list resolves', () => {
+  it('shows a loading skeleton before the sprint list resolves', async () => {
     mockFetch({
       sprints: [],
       backlog: { items: [], nextCursor: null, totalCount: 0 },
@@ -267,6 +267,10 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
     // Synchronous first paint: the fetch hasn't resolved yet.
     expect(screen.getByTestId('backlog-skeleton')).toBeTruthy();
+
+    // The assertion above is the point of the test, but the fetch still
+    // resolves — flush it so that update lands inside the test.
+    await act(async () => {});
   });
 
   it('renders backlog rows as draggable sortable items (Subtask 4.2.4)', async () => {

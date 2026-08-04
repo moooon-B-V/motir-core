@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -137,7 +137,7 @@ function renderTable(rows: IssueRowData[], editable = true) {
 }
 
 describe('Inline row edits (Subtask 2.5.5)', () => {
-  it('STATUS cell opens the shared StatusPicker and commits via changeStatusAction', () => {
+  it('STATUS cell opens the shared StatusPicker and commits via changeStatusAction', async () => {
     statusSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
     renderTable([row({ identifier: 'PROD-1', id: 'wi_1', status: 'todo', statusLabel: 'To Do' })]);
 
@@ -150,9 +150,13 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
 
     expect(statusSpy).toHaveBeenCalledWith({ id: 'wi_1', toStatusKey: 'in_progress' });
     expect(updateSpy).not.toHaveBeenCalled();
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
-  it('ASSIGNEE cell opens the shared AssigneePicker and reassigns via updateIssueAction (with expectedUpdatedAt)', () => {
+  it('ASSIGNEE cell opens the shared AssigneePicker and reassigns via updateIssueAction (with expectedUpdatedAt)', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
     renderTable([row({ identifier: 'PROD-1', id: 'wi_1', updatedAt: '2026-06-01T00:00:00.000Z' })]);
 
@@ -165,9 +169,13 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
       assigneeId: 'u_ada',
     });
     expect(statusSpy).not.toHaveBeenCalled();
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
-  it('ASSIGNEE cell can unassign (null) via updateIssueAction', () => {
+  it('ASSIGNEE cell can unassign (null) via updateIssueAction', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
     renderTable([
       row({ identifier: 'PROD-1', id: 'wi_1', assigneeId: 'u_ada', assigneeName: 'Ada Lovelace' }),
@@ -179,9 +187,13 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wi_1', assigneeId: null }),
     );
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
-  it('PRIORITY cell opens the shared PriorityPicker and commits via updateIssueAction', () => {
+  it('PRIORITY cell opens the shared PriorityPicker and commits via updateIssueAction', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
     renderTable([row({ identifier: 'PROD-1', id: 'wi_1', priority: 'medium' })]);
 
@@ -194,9 +206,13 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
       priority: 'high',
     });
     expect(statusSpy).not.toHaveBeenCalled();
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
-  it('ESTIMATE cell commits a new value on blur via updateIssueAction', () => {
+  it('ESTIMATE cell commits a new value on blur via updateIssueAction', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-02T00:00:00.000Z' });
     renderTable([row({ identifier: 'PROD-1', id: 'wi_1', estimateMinutes: null })]);
 
@@ -209,6 +225,10 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wi_1', estimateMinutes: 120 }),
     );
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
   // (The "DUE cell opens the calendar picker" test was removed with the Due

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 
 // Component tests for the TreeTable primitive (Subtask 2.5.2) under happy-dom —
@@ -126,7 +126,11 @@ describe('TreeTable — keyboard (roving tabindex)', () => {
     expect(root.getAttribute('tabindex')).toBe('0');
     expect(story.getAttribute('tabindex')).toBe('-1');
 
-    root.focus();
+    // A raw `.focus()` is not act-wrapped the way `fireEvent` is, and the
+    // row's focus handler moves the roving tabindex.
+    act(() => {
+      root.focus();
+    });
     fireEvent.keyDown(root, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(story);
     expect(story.getAttribute('tabindex')).toBe('0');
@@ -135,7 +139,11 @@ describe('TreeTable — keyboard (roving tabindex)', () => {
   it('ArrowRight expands a collapsed parent; ArrowLeft collapses it', () => {
     renderTree({ defaultExpandedIds: ['A'] });
     const story = screen.getByTestId('row-B'); // collapsed parent
-    story.focus();
+    // A raw `.focus()` is not act-wrapped the way `fireEvent` is, and the
+    // row's focus handler moves the roving tabindex.
+    act(() => {
+      story.focus();
+    });
     expect(story.getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.keyDown(story, { key: 'ArrowRight' });
@@ -159,7 +167,11 @@ describe('TreeTable — keyboard (roving tabindex)', () => {
 
     const click = vi.fn((e: Event) => e.preventDefault());
     link.addEventListener('click', click);
-    root.focus();
+    // A raw `.focus()` is not act-wrapped the way `fireEvent` is, and the
+    // row's focus handler moves the roving tabindex.
+    act(() => {
+      root.focus();
+    });
     fireEvent.keyDown(root, { key: 'Enter' });
     expect(click).toHaveBeenCalledTimes(1);
   });
@@ -283,7 +295,11 @@ describe('TreeTable — virtualization', () => {
   it('arrowing past the window scrolls the landed row in, mounts it, and focuses it', () => {
     renderBig(500);
     const first = screen.getByTestId('row-r0');
-    first.focus();
+    // A raw `.focus()` is not act-wrapped the way `fireEvent` is, and the
+    // row's focus handler moves the roving tabindex.
+    act(() => {
+      first.focus();
+    });
     expect(document.activeElement).toBe(first);
 
     // Step well past the initial window; each ArrowDown re-targets the focused row.
@@ -302,7 +318,11 @@ describe('TreeTable — virtualization', () => {
   it('End jumps to and focuses the last row (honest aria-setsize across the window)', () => {
     renderBig(500);
     const first = screen.getByTestId('row-r0');
-    first.focus();
+    // A raw `.focus()` is not act-wrapped the way `fireEvent` is, and the
+    // row's focus handler moves the roving tabindex.
+    act(() => {
+      first.focus();
+    });
     fireEvent.keyDown(first, { key: 'End' });
 
     const last = screen.getByTestId('row-r499');

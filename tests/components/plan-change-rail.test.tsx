@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
@@ -299,11 +299,14 @@ describe('PlanChangeRail — error and out of credits are DIFFERENT states', () 
     expect(screen.getByRole('alert').textContent).toContain('already finished');
   });
 
-  it('shows the metered paywall — NOT an error banner — when credits run out', () => {
+  it('shows the metered paywall — NOT an error banner — when credits run out', async () => {
     renderRail({ session: session([turn(0, 'x')]), outOfCredits: true });
 
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText(/Planning is paused/)).toBeTruthy();
+
+    // AiPaywall settles its own async state after mount; flush it.
+    await act(async () => {});
   });
 });
 

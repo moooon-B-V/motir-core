@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -174,7 +174,7 @@ describe('CoreFieldsPanel (inline rail)', () => {
     expect(screen.queryByRole('button', { name: /Edit Reporter/i })).toBeNull();
   });
 
-  it('reveals + commits a priority change through updateIssueAction', () => {
+  it('reveals + commits a priority change through updateIssueAction', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
     renderPanel();
 
@@ -188,9 +188,13 @@ describe('CoreFieldsPanel (inline rail)', () => {
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'wi_1', priority: 'low' }),
     );
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
-  it('reveals + commits a type change (kind is editable) through updateIssueAction', () => {
+  it('reveals + commits a type change (kind is editable) through updateIssueAction', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
     renderPanel();
 
@@ -199,6 +203,10 @@ describe('CoreFieldsPanel (inline rail)', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Task' }));
 
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'wi_1', kind: 'task' }));
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
   it('KEEPS the optimistic value on success without a whole-tree refresh', async () => {
@@ -217,7 +225,7 @@ describe('CoreFieldsPanel (inline rail)', () => {
     expect(refreshSpy).not.toHaveBeenCalled();
   });
 
-  it('commits an estimate edit on blur (and not on every keystroke)', () => {
+  it('commits an estimate edit on blur (and not on every keystroke)', async () => {
     updateSpy.mockResolvedValue({ ok: true, updatedAt: '2026-06-03T10:00:00.000Z' });
     renderPanel();
 
@@ -227,6 +235,10 @@ describe('CoreFieldsPanel (inline rail)', () => {
     expect(updateSpy).not.toHaveBeenCalled(); // no per-keystroke patch
     fireEvent.blur(estimate);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ estimateMinutes: 120 }));
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 });
 
@@ -339,7 +351,7 @@ describe('CoreFieldsPanel — Sprint field (2.4.14)', () => {
     expect(screen.queryByRole('button', { name: 'Edit Sprint' })).toBeNull();
   });
 
-  it('commits a sprint pick through setWorkItemSprint (Backlog-first sentinel)', () => {
+  it('commits a sprint pick through setWorkItemSprint (Backlog-first sentinel)', async () => {
     setSprintSpy.mockResolvedValue({
       updatedAt: '2026-06-17T10:00:00.000Z',
       sprintId: 'sp_active',
@@ -353,9 +365,13 @@ describe('CoreFieldsPanel — Sprint field (2.4.14)', () => {
     fireEvent.click(screen.getByRole('option', { name: /Sprint 7/ }));
 
     expect(setSprintSpy).toHaveBeenCalledWith('wi_1', 'sp_active');
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
-  it('clearing to Backlog commits null', () => {
+  it('clearing to Backlog commits null', async () => {
     setSprintSpy.mockResolvedValue({ updatedAt: '2026-06-17T10:00:00.000Z', sprintId: null });
     renderWithSprints(makeItem({ sprintId: 'sp_active' }));
 
@@ -363,6 +379,10 @@ describe('CoreFieldsPanel — Sprint field (2.4.14)', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Backlog' }));
 
     expect(setSprintSpy).toHaveBeenCalledWith('wi_1', null);
+
+    // The action above resolves asynchronously; flush that pass so its
+    // state update lands inside the test rather than after it.
+    await act(async () => {});
   });
 
   it('picker sentinel reads "None" (not "Backlog") for a done item', () => {

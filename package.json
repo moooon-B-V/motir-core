@@ -28,7 +28,6 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:late-effects": "vitest run --config vitest.late-effects.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:billing": "playwright test --config playwright.billing.config.ts",

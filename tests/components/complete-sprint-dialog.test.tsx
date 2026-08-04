@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { CompleteSprintDialog } from '@/app/(authed)/backlog/_components/CompleteSprintDialog';
@@ -270,5 +270,8 @@ describe('CompleteSprintDialog (4.4.6)', () => {
     expect(onCompleted).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onCompleted).toHaveBeenCalledTimes(1);
+
+    // Closing the report kicks the refetch; flush it inside act.
+    await act(async () => {});
   });
 });

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import zhMessages from '@/messages/zh.json';
@@ -101,12 +101,15 @@ describe('ProjectSwitcher — "Plan a new project with AI" door', () => {
     ).toBeTruthy();
   });
 
-  it('submitting the AI door invokes startNewAiProjectAction (mints a new project → /onboarding)', () => {
+  it('submitting the AI door invokes startNewAiProjectAction (mints a new project → /onboarding)', async () => {
     renderSwitcher();
     fireEvent.click(screen.getByRole('button', { name: 'Switch project' }));
     const aiDoor = screen.getByRole('button', { name: /plan a new project with ai/i });
     fireEvent.submit(aiDoorForm(aiDoor));
     expect(startNewAiProjectAction).toHaveBeenCalledTimes(1);
+    // The action is async — flush its resolution so the pending-state update
+    // lands inside the test.
+    await act(async () => {});
   });
 });
 
