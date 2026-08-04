@@ -296,6 +296,24 @@ export interface WorkItemDependencyEdgesDto {
   blocks: WorkItemEdgeSummaryDto[];
 }
 
+/**
+ * One work item PLUS its ancestor chain — the LINEAGE read (MOTIR-2070). The
+ * thin sibling of {@link IssueDetailDto} for a caller that needs where an item
+ * SITS in the tree and nothing else: the planning workspace resolves its `?item=`
+ * anchor and has to seed the drill-down canvas at the anchor's own level, which
+ * needs each ancestor's `identifier` + `title` for the breadcrumb — data the bare
+ * `getWorkItemByIdentifier` read cannot supply and the full detail aggregate
+ * (thirteen parallel reads) is far too heavy to buy.
+ *
+ * `ancestors` is ordered root→self and EXCLUDES the item itself, so a top-level
+ * item carries `[]` — the same contract, and the same ordering, as
+ * `IssueDetailDto.ancestors`.
+ */
+export interface WorkItemLineageDto {
+  item: WorkItemDto;
+  ancestors: WorkItemSummaryDto[];
+}
+
 export interface IssueDetailDto {
   item: WorkItemDto;
   ancestors: WorkItemSummaryDto[];

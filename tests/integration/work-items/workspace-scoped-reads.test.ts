@@ -149,3 +149,92 @@ describe('getLink — workspace-scoped single link fetch', () => {
     );
   });
 });
+
+// ── getWorkItemWithAncestors — the LINEAGE read (MOTIR-2070) ────────────────
+//
+// The planning workspace opens its drill-down canvas ON the anchor's own level,
+// which needs the anchor's ANCESTORS with their `identifier` + `title` (the
+// breadcrumb labels) — data neither `getWorkItemByIdentifier` nor the roadmap
+// level read carries. These lock the read's two halves: the chain's ORDER and
+// exclusivity (a canvas trail is built by mapping it positionally, so root→parent
+// with self excluded is load-bearing, not cosmetic), and the same tenancy gate the
+// bare identifier read enforces.
+
+describe('getWorkItemWithAncestors — the lineage read', () => {
+  it('returns the ancestor chain root→parent, EXCLUDING the item itself', async () => {
+    const fx = await makeFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Epic 7' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'story',
+        title: '7.12 Contextual planning',
+        parentId: epic.id,
+      },
+      fx.ctx,
+    );
+    const subtask = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'Seed the canvas level',
+        parentId: story.id,
+      },
+      fx.ctx,
+    );
+
+    const lineage = await workItemsService.getWorkItemWithAncestors(
+      fx.projectId,
+      subtask.identifier,
+      fx.ctx,
+    );
+
+    expect(lineage.item.id).toBe(subtask.id);
+    // Root FIRST, immediate parent LAST — the order a breadcrumb reads in.
+    expect(lineage.ancestors.map((a) => a.id)).toEqual([epic.id, story.id]);
+    expect(lineage.ancestors.map((a) => a.identifier)).toEqual([epic.identifier, story.identifier]);
+    expect(lineage.ancestors.map((a) => a.title)).toEqual(['Epic 7', '7.12 Contextual planning']);
+    // The item is never in its own chain — otherwise a canvas seeded from the
+    // last entry would open on the anchor's CHILDREN, hiding the anchor.
+    expect(lineage.ancestors.some((a) => a.id === subtask.id)).toBe(false);
+  });
+
+  it('returns an EMPTY chain for a root-level item', async () => {
+    const fx = await makeFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Top level' },
+      fx.ctx,
+    );
+
+    const lineage = await workItemsService.getWorkItemWithAncestors(
+      fx.projectId,
+      epic.identifier,
+      fx.ctx,
+    );
+
+    expect(lineage.item.id).toBe(epic.id);
+    expect(lineage.ancestors).toEqual([]);
+  });
+
+  it('throws WorkItemNotFoundError for an unknown identifier', async () => {
+    const fx = await makeFixture();
+    await expect(
+      workItemsService.getWorkItemWithAncestors(fx.projectId, 'PROD-9999', fx.ctx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it("throws WorkItemNotFoundError for another workspace's item (no existence leak)", async () => {
+    const fxA = await makeFixture({ name: 'Acme A', identifier: 'AAA' });
+    const fxB = await makeFixture({ name: 'Acme B', identifier: 'BBB' });
+    const bItem = await workItemsService.createWorkItem(
+      { projectId: fxB.projectId, kind: 'epic', title: "B's secret" },
+      fxB.ctx,
+    );
+    await expect(
+      workItemsService.getWorkItemWithAncestors(fxB.projectId, bItem.identifier, fxA.ctx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+});

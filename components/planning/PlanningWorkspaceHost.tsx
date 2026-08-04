@@ -19,6 +19,7 @@ import {
   type PlanningTarget,
 } from '@/lib/planning/planningTargets';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
+import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 
 // The client island of the established-project planning HOST (Subtask
 // MOTIR-1729; design `plan-change-conversation.mock.html` panel 2). It COMPOSES
@@ -79,6 +80,17 @@ export interface PlanningWorkspaceHostProps {
    *  (MOTIR-1491): it is the PRE-FILLED initial target. Null for a project-scoped
    *  launch — or when the `?item=` key no longer resolves. */
   initialTarget?: PlanningTarget | null;
+  /**
+   * The canvas's ARRIVAL LEVEL (MOTIR-2070) — the anchor's ancestor chain
+   * (root→parent) as a breadcrumb trail, resolved server-side alongside the
+   * anchor itself. The anchor used to reach only the CONVERSATION: the canvas
+   * seeded itself at the project root, so a workspace summoned about a subtask
+   * three levels down opened on the epics and drew the item's target ring on a
+   * level the user was not on — invisible, and indistinguishable from no anchor
+   * at all. Empty for a project launch, for an unresolvable `?item=`, AND for a
+   * root-level anchor (an epic is already on the root level).
+   */
+  initialCanvasTrail?: readonly CanvasCrumb[];
 }
 
 export function PlanningWorkspaceHost({
@@ -88,6 +100,7 @@ export function PlanningWorkspaceHost({
   anchorId = null,
   backHref,
   initialTarget = null,
+  initialCanvasTrail,
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const router = useRouter();
@@ -186,6 +199,7 @@ export function PlanningWorkspaceHost({
               index={index}
               diffKey={diffKey}
               targetIds={targetIds}
+              initialTrail={initialCanvasTrail}
               ariaLabel={t('canvasAria', { project: projectName })}
               loadingFallback={<PlanningCanvasSkeleton />}
               emptyRoot={

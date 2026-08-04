@@ -8,6 +8,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { parsePlanningLaunch, planningLaunchBackHref } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
 
@@ -116,25 +117,36 @@ export default async function PlanningWorkspacePage({
   // The anchor lookup below is therefore the page's ONLY data read: nothing is
   // serial behind anything, and nothing sits between the click and the paint.
 
-  // The entrance's work item, resolved ONCE, server-side (MOTIR-910 + MOTIR-1491).
-  // It answers two needs with one read: the client host needs the item's database
-  // id to address the MOTIR-909 endpoints (the href carries only the human
-  // identifier), and the `@`-mention target set opens PRE-FILLED with that item.
-  // Resolved here because no client component may reach the service layer, and a
-  // Server Component reading through a service IS the 4-layer shape. The read is
-  // the same view-gated resolve the detail page uses, so an item in another tenant
-  // or one this actor cannot browse yields no anchor at all — the workspace then
-  // opens on the project conversation instead of erroring.
+  // The entrance's work item, resolved ONCE, server-side (MOTIR-910 + MOTIR-1491 +
+  // MOTIR-2070). It answers THREE needs with one read: the client host needs the
+  // item's database id to address the MOTIR-909 endpoints (the href carries only
+  // the human identifier), the `@`-mention target set opens PRE-FILLED with that
+  // item, and the CANVAS opens on the level that CONTAINS it — for which it needs
+  // the anchor's ancestor chain, hence the lineage read rather than the bare
+  // identifier resolve. Resolved here because no client component may reach the
+  // service layer, and a Server Component reading through a service IS the 4-layer
+  // shape. The read is the same view-gated resolve the detail page uses, so an item
+  // in another tenant or one this actor cannot browse yields no anchor at all — the
+  // workspace then opens on the project conversation, at the root level, instead of
+  // erroring.
   //
-  // It IS awaited — it seeds the host's initial target set, which both panes
-  // read from their first render — but it is a single indexed lookup, and it no
-  // longer queues behind a root read (MOTIR-2069). An item-anchored launch used
-  // to pay both round-trips end to end.
+  // It IS awaited — it seeds the host's initial target set AND the canvas's arrival
+  // level, both of which are read on the first render — but it is one indexed
+  // lookup plus a depth-capped ancestor CTE, and it no longer queues behind a root
+  // read (MOTIR-2069). An item-anchored launch used to pay both round-trips end to
+  // end.
   let anchorId: string | null = null;
   let initialTarget: PlanningTarget | null = null;
+  // The canvas's arrival trail: the anchor's ancestors, root→parent. The LAST crumb
+  // is the level the canvas loads, so this lands on the anchor's OWN level with its
+  // siblings and dependency edges around it — the context a plan-change conversation
+  // about that item needs (the alternative, opening on the anchor's CHILDREN, hides
+  // the item itself). A ROOT-level anchor (an epic) has no ancestors, so the trail is
+  // empty and the canvas opens at the root exactly as before.
+  let initialCanvasTrail: CanvasCrumb[] = [];
   if (launch.itemKey) {
     try {
-      const anchor = await workItemsService.getWorkItemByIdentifier(
+      const { item: anchor, ancestors } = await workItemsService.getWorkItemWithAncestors(
         ctx.projectId,
         launch.itemKey,
         wsCtx,
@@ -146,9 +158,14 @@ export default async function PlanningWorkspacePage({
         title: anchor.title,
         kind: anchor.kind,
       };
+      initialCanvasTrail = ancestors.map((a) => ({
+        id: a.id,
+        label: workItemCrumbLabel(a.identifier, a.title),
+      }));
     } catch {
       anchorId = null;
       initialTarget = null;
+      initialCanvasTrail = [];
     }
   }
 
@@ -160,6 +177,7 @@ export default async function PlanningWorkspacePage({
       anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
       initialTarget={initialTarget}
+      initialCanvasTrail={initialCanvasTrail}
     />
   );
 }

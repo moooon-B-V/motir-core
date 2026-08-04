@@ -11,6 +11,7 @@ import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { isProposedNodeId, type PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 
 // The CANVAS pane of the plan-change conversation (Subtask MOTIR-1730; design
@@ -44,6 +45,12 @@ export interface PlanChangeCanvasProps {
    *  CURRENT level take the target ring, so the user sees what the planner is
    *  pointed at. */
   targetIds?: readonly string[];
+  /** The level the canvas OPENS on, as a breadcrumb trail (MOTIR-2070) — the host
+   *  passes the `?item=` anchor's ancestor chain, so a workspace summoned FROM a
+   *  work item arrives on that item's own level instead of the project root, where
+   *  its target ring would be drawn on a level nobody is looking at. Empty /
+   *  omitted → the root, unchanged. */
+  initialTrail?: readonly CanvasCrumb[];
   ariaLabel?: string;
   /** What fills the canvas while the first level is still being read
    *  (MOTIR-2069) — the workspace passes its level-shaped skeleton. */
@@ -59,6 +66,7 @@ export function PlanChangeCanvas({
   index,
   diffKey,
   targetIds,
+  initialTrail,
   ariaLabel,
   loadingFallback,
   emptyRoot,
@@ -125,6 +133,10 @@ export function PlanChangeCanvas({
         // — changes, so the diff and the target ring appear (and disappear)
         // without a remount, drill / zoom / pan preserved.
         reloadKey={`plan-change:${diffKey}:${targetKey}`}
+        // The anchored arrival (MOTIR-2070). A seed, read once at mount — the
+        // reloads above re-run the CURRENT level, wherever the user has since
+        // navigated to, and never drag them back here.
+        initialTrail={initialTrail}
         onView={onView}
         searchable
         fullScreenable

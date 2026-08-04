@@ -28,6 +28,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     ariaLabel,
     diffKey,
     targetIds,
+    initialTrail,
     loadingFallback,
     emptyRoot,
   }: {
@@ -35,6 +36,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     ariaLabel?: string;
     diffKey: string | number;
     targetIds?: readonly string[];
+    initialTrail?: readonly { id: string; label: string }[];
     loadingFallback?: ReactNode;
     emptyRoot?: ReactNode;
   }) => (
@@ -43,6 +45,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       data-project={projectKey}
       data-diff-key={String(diffKey)}
       data-targets={(targetIds ?? []).join(',')}
+      data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
       aria-label={ariaLabel}
     >
       {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
@@ -121,10 +124,12 @@ function renderHost(
     state = IDLE,
     anchorId = null,
     initialTarget = null,
+    initialCanvasTrail,
   }: {
     state?: PlanChangeConversationState;
     anchorId?: string | null;
     initialTarget?: PlanningTarget | null;
+    initialCanvasTrail?: readonly { id: string; label: string }[];
   } = {},
 ) {
   const launch = parsePlanningLaunch(searchParams);
@@ -137,6 +142,7 @@ function renderHost(
       anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
       initialTarget={initialTarget}
+      initialCanvasTrail={initialCanvasTrail}
     />,
   );
 }
@@ -370,6 +376,37 @@ describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTI
 
     expect(screen.queryByTestId('planning-target-tray')).toBeNull();
     expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
+  });
+});
+
+describe('PlanningWorkspaceHost — the anchor reaches the CANVAS too (MOTIR-2070)', () => {
+  const TRAIL = [
+    { id: 'wi-464', label: 'MOTIR-464 · Epic 7: AI Planning Layer' },
+    { id: 'wi-812', label: 'MOTIR-812 · Contextual planning from each work item' },
+  ];
+
+  it('hands the anchor’s ancestor trail to the canvas, so it opens on the anchor’s level', () => {
+    renderHost(
+      { mode: 'contextual', from: 'work-item', item: 'MOTIR-909' },
+      { anchorId: 'wi-909', initialCanvasTrail: TRAIL },
+    );
+
+    // The whole bug in one assertion: before this, the anchor reached the
+    // conversation and NOTHING reached the canvas, which seeded itself at the root.
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-trail')).toBe('wi-464,wi-812');
+    expect(conversation.anchorId).toBe('wi-909');
+  });
+
+  it('leaves the canvas at the root when there is no trail — project launch, or an epic', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-trail')).toBe('');
+
+    cleanup();
+    renderHost(
+      { mode: 'replan', from: 'work-item', item: 'MOTIR-464' },
+      { anchorId: 'wi-464', initialCanvasTrail: [] },
+    );
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-trail')).toBe('');
   });
 });
 

@@ -24,6 +24,7 @@ import {
   NODE_W,
   deterministicLayout,
   searchMatches,
+  type CanvasCrumb,
   type ProjectCanvasDep,
   type ProjectCanvasNode,
 } from '@/lib/planning/projectCanvasModel';
@@ -42,6 +43,12 @@ import {
 // onboarding canvas (stations + roots) and the roadmap (work items) are the SAME
 // component. Drilling a node fetches its children; one level fills the screen, so
 // a chain stays legible at any tree size.
+//
+// It normally ARRIVES AT THE ROOT and drills from there. A consumer that already
+// knows where the user is headed passes `initialTrail` (MOTIR-2070) and the canvas
+// opens on that level with that breadcrumb — an ordinary drilled view, held in the
+// same state a manual drill sets, so Back / the crumbs / search / locate need no
+// special case.
 
 export interface RoadmapLevel {
   nodes: ProjectCanvasNode[];
@@ -131,6 +138,24 @@ export interface ProjectRoadmapCanvasProps {
    * a different statement ("this parent has no children").
    */
   emptyRoot?: ReactNode;
+  /**
+   * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
+   * root-ancestor first: the LAST crumb is the level it loads, and the whole array
+   * becomes the breadcrumb. `[]` (the default) is the shipped behaviour — open at
+   * the root — so every existing mount is untouched.
+   *
+   * The consumer supplies it because only the consumer knows the tree: the
+   * planning workspace resolves its `?item=` anchor server-side and hands over
+   * that anchor's ancestor chain, so the workspace opens on the level CONTAINING
+   * the item it was summoned about instead of the project root, where the target
+   * ring is drawn on a level nobody is looking at.
+   *
+   * Read ONCE, at mount — this is a seed, not a controlled level. Navigating the
+   * canvas afterwards (drill / Back / a crumb click) is the user's, and a later
+   * prop change must not yank them somewhere else. A caller that needs to re-seed
+   * remounts on a `key`.
+   */
+  initialTrail?: readonly CanvasCrumb[];
 }
 
 // The suppression ref (below) is keyed by LEVEL; the root level has no id.
@@ -164,6 +189,7 @@ export function ProjectRoadmapCanvas({
   autoDescendSingleParent = false,
   loadingFallback,
   emptyRoot,
+  initialTrail,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
@@ -176,8 +202,14 @@ export function ProjectRoadmapCanvas({
     label: t('legend.blockedElsewhere'),
     meaning: t('legend.blockedElsewhereMeaning'),
   };
-  const [focusId, setFocusId] = useState<string | null>(null);
-  const [crumbs, setCrumbs] = useState<Crumb[]>([]);
+  // The ARRIVAL level (MOTIR-2070). A seeded trail's LAST crumb is the level the
+  // canvas opens on; an absent / empty trail is the shipped root arrival. Both are
+  // lazy initial state — read once at mount, never re-synced from the prop, so the
+  // seed cannot fight the navigation the user does afterwards.
+  const [focusId, setFocusId] = useState<string | null>(
+    () => initialTrail?.[initialTrail.length - 1]?.id ?? null,
+  );
+  const [crumbs, setCrumbs] = useState<Crumb[]>(() => [...(initialTrail ?? [])]);
   const [level, setLevel] = useState<RoadmapLevel | null>(null);
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -210,7 +242,14 @@ export function ProjectRoadmapCanvas({
   // clears it (a deliberate drill RE-ARMS the behaviour, so a chain below still
   // compacts). A SCOPE switch re-arms by construction — `RoadmapView` remounts this
   // canvas on `key={scope}`, a fresh arrival with fresh refs.
-  const suppressedLevelRef = useRef<string | null>(null);
+  // A SEEDED arrival (`initialTrail`, MOTIR-2070) counts as that explicit ask: the
+  // consumer aimed the canvas at this level because the thing the user is here for
+  // lives ON it, so auto-descend must not immediately carry them past it.
+  const suppressedLevelRef = useRef<string | null>(
+    initialTrail && initialTrail.length > 0
+      ? levelKey(initialTrail[initialTrail.length - 1]?.id ?? null)
+      : null,
+  );
   // The ids already on the crumb stack — the auto-descend's CYCLE GUARD. `loadLevel`
   // is consumer-supplied I/O, so a level that (wrongly) resolves to a node already in
   // our own descent path would otherwise descend forever, hanging the canvas rather

@@ -139,6 +139,7 @@ import type {
   WorkItemDto,
   WorkItemEdgeSummaryDto,
   WorkItemKindDto,
+  WorkItemLineageDto,
   WorkItemTypeDto,
   PagedIssueListDto,
   WorkItemKeysetItemDto,
@@ -3300,6 +3301,32 @@ export const workItemsService = {
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
+  },
+
+  /**
+   * The LINEAGE read (MOTIR-2070) — `getWorkItemByIdentifier` plus the item's
+   * ancestor chain, for a caller that needs where the item SITS in the tree.
+   * The planning workspace's `?item=` anchor is the caller: to open its
+   * drill-down canvas ON the anchor's own level it needs the level's parent AND
+   * every ancestor's `identifier` + `title` for the breadcrumb — the bare
+   * identifier read carries neither, and `getIssueDetail` buys thirteen parallel
+   * reads to get them.
+   *
+   * Same gate as `getWorkItemByIdentifier` (tenant check then `assertCanBrowse`,
+   * cross-workspace / unknown → `WorkItemNotFoundError`, no existence leak), plus
+   * ONE workspace-scoped recursive CTE bounded by the 4-level tree cap. Ancestors
+   * come back root→self, item EXCLUDED — a top-level item yields `[]`.
+   */
+  async getWorkItemWithAncestors(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemLineageDto> {
+    const row = await workItemRepository.findByIdentifier(projectId, identifier);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    const ancestorRows = await workItemRepository.findAncestors(row.id, ctx.workspaceId);
+    return { item: toWorkItemDto(row), ancestors: ancestorRows.map(toWorkItemSummaryDto) };
   },
 
   /**
