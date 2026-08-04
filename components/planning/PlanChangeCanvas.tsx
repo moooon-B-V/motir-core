@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
@@ -45,6 +45,13 @@ export interface PlanChangeCanvasProps {
    *  pointed at. */
   targetIds?: readonly string[];
   ariaLabel?: string;
+  /** What fills the canvas while the first level is still being read
+   *  (MOTIR-2069) — the workspace passes its level-shaped skeleton. */
+  loadingFallback?: ReactNode;
+  /** The workspace's own "nothing to draw yet" statement for an established but
+   *  EMPTY project (MOTIR-2069). The canvas decides when to show it, off the
+   *  level it reads itself — the page no longer reads the roots to pre-decide. */
+  emptyRoot?: ReactNode;
 }
 
 export function PlanChangeCanvas({
@@ -53,6 +60,8 @@ export function PlanChangeCanvas({
   diffKey,
   targetIds,
   ariaLabel,
+  loadingFallback,
+  emptyRoot,
 }: PlanChangeCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const { registerItems, onView, quickView } = useWorkItemQuickView();
@@ -122,6 +131,8 @@ export function PlanChangeCanvas({
         locatable
         rootLabel={t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? t('ariaWorkItem')}
+        loadingFallback={loadingFallback}
+        emptyRoot={emptyRoot}
       />
       {quickView}
     </>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ChevronLeft,
@@ -112,6 +112,25 @@ export interface ProjectRoadmapCanvasProps {
    * position drawn side by side in `design/roadmap/auto-drill.*` panel C.
    */
   autoDescendSingleParent?: boolean;
+  /**
+   * Replace what fills the canvas while the FIRST level is still being read
+   * (MOTIR-2069). Defaults to the shipped centred spinner, which every other
+   * consumer keeps. The planning workspace passes a level-shaped SKELETON
+   * instead, because there the canvas is the surface the user is waiting on —
+   * a skeleton says "your plan is arriving", a spinner says "something is
+   * happening". Rendered in the same full-size box as the level it stands in
+   * for, so filling it shifts nothing.
+   */
+  loadingFallback?: ReactNode;
+  /**
+   * Replace the ROOT level's empty state (MOTIR-2069) — what shows when the
+   * project genuinely has nothing to draw. Defaults to the canvas's own copy.
+   * The planning workspace passes its own, so an established-but-emptied
+   * project gets the workspace's honest "nothing on the canvas yet" invitation
+   * rather than the bare panel. Does NOT affect a DRILLED empty level, which is
+   * a different statement ("this parent has no children").
+   */
+  emptyRoot?: ReactNode;
 }
 
 // The suppression ref (below) is keyed by LEVEL; the root level has no id.
@@ -143,6 +162,8 @@ export function ProjectRoadmapCanvas({
   ariaLabel,
   warningLegend,
   autoDescendSingleParent = false,
+  loadingFallback,
+  emptyRoot,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
@@ -823,19 +844,28 @@ export function ProjectRoadmapCanvas({
           aria-busy="true"
           className="flex h-full w-full items-center justify-center bg-(--el-canvas)"
         >
-          <Spinner aria-label={t('loading')} />
+          {loadingFallback ?? <Spinner aria-label={t('loading')} />}
         </div>
       ) : nodes.length === 0 ? (
-        <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
-          <div className="max-w-[24rem] text-center">
-            <p className="text-sm font-semibold text-(--el-text)">
-              {drilled ? t('emptyDrilled') : t('emptyRootTitle')}
-            </p>
-            <p className="mt-1 text-sm text-(--el-text-muted)">
-              {drilled ? t('emptyDrilledDescription') : t('emptyRootDescription')}
-            </p>
+        !drilled && emptyRoot ? (
+          // The consumer's own root-empty statement (MOTIR-2069), in the same
+          // full-size box — a DRILLED empty level keeps the canvas's copy, since
+          // "this parent has no children" is a different thing to say.
+          <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
+            {emptyRoot}
           </div>
-        </div>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
+            <div className="max-w-[24rem] text-center">
+              <p className="text-sm font-semibold text-(--el-text)">
+                {drilled ? t('emptyDrilled') : t('emptyRootTitle')}
+              </p>
+              <p className="mt-1 text-sm text-(--el-text-muted)">
+                {drilled ? t('emptyDrilledDescription') : t('emptyRootDescription')}
+              </p>
+            </div>
+          </div>
+        )
       ) : (
         <PlanningCanvas
           // Remount per drill level so the new level auto-fits to its own overview.

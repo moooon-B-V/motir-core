@@ -237,16 +237,27 @@ describe('seam · the launcher’s href is what the /planning HOST resolves', ()
     expect(element.props['backHref']).toBe('/code-health');
   });
 
-  it('reports whether the REAL project tree has anything for the canvas to draw', async () => {
+  it('opens the SAME workspace whether the REAL project tree is empty or populated (MOTIR-2069)', async () => {
+    // This seam used to assert the page read the tree and reported a `hasItems`
+    // boolean. That read is gone: it was a duplicate of the one the canvas makes
+    // itself, and awaiting it is what kept `/planning` from painting anything
+    // until the whole root level had come back. The canvas now decides empty vs
+    // populated off the level it reads, so the page's OUTPUT must no longer vary
+    // with the tree at all — which is exactly what makes the frame paintable
+    // before any of it resolves.
     await markOnboarded();
 
     const empty = await renderPlanningPage({ kind: 'project' });
-    expect(empty.props['hasItems']).toBe(false);
+    expect(empty.props).not.toHaveProperty('hasItems');
+    expect(empty.props['projectKey']).toBe(fx.project.identifier);
 
     await seedItem({ kind: 'epic', title: 'Billing' });
 
     const populated = await renderPlanningPage({ kind: 'project' });
-    expect(populated.props['hasItems']).toBe(true);
+    expect(populated.props).not.toHaveProperty('hasItems');
+    // Same props against a real tree with real rows in it — the page is blind to
+    // the tree, by construction.
+    expect(populated.props).toEqual(empty.props);
   });
 
   it('FORWARDS a never-onboarded project to /onboarding — the gate is not bypassed', async () => {

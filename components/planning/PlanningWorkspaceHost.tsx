@@ -8,6 +8,7 @@ import { Map, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
+import { PlanningCanvasSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
 import { PlanChangeConfirmBar } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
@@ -45,13 +46,21 @@ import type { PlanningLaunch } from '@/lib/planning/launcher';
 // explicit refetch trigger (`treeVersion`, folded into the canvas's diff key);
 // the server-rendered surfaces behind this overlay (counts, headers, the backlog
 // underneath) take the `router.refresh()`. Both, because both apply.
+//
+// OPENS BEFORE ITS DATA (Bug MOTIR-2069): the frame — back bar, project name,
+// the two-pane split, the whole conversation rail — waits on NOTHING. The host
+// used to take a `hasItems` boolean the page computed from a server root read,
+// and awaiting that read is what held the entire workspace shut: nothing painted
+// until the level had been fetched, so the surface loaded first and opened
+// second. That prop is gone. The canvas reads its own root level anyway (the
+// same level, over `fetchRoadmapLevel`), so it owns the loading and empty states
+// itself — one read instead of two, and none of them between the click and the
+// paint. `app/(planning)/loading.tsx` covers the navigation ahead of this.
 
 export interface PlanningWorkspaceHostProps {
   /** The project's `MOTIR`-style key — the canvas's per-level read source. */
   projectKey: string;
   projectName: string;
-  /** Whether the project's tree has anything to draw (the server root read). */
-  hasItems: boolean;
   /** The launcher's context, parsed off the query by the page. */
   launch: PlanningLaunch;
   /**
@@ -75,7 +84,6 @@ export interface PlanningWorkspaceHostProps {
 export function PlanningWorkspaceHost({
   projectKey,
   projectName,
-  hasItems,
   launch,
   anchorId = null,
   backHref,
@@ -166,24 +174,28 @@ export function PlanningWorkspaceHost({
             <span className="truncate text-sm font-semibold text-(--el-text)">{projectName}</span>
           </div>
 
+          {/* The canvas mounts UNCONDITIONALLY (MOTIR-2069). It reads its own
+              root level, so it — not the page — knows whether there is anything
+              to draw; it shows the workspace's skeleton while that read is in
+              flight and the workspace's own empty statement when it comes back
+              empty. Both fill the same flex-sized box as the drawn level, so
+              filling it shifts nothing. */}
           <div className="min-h-0 flex-1 overflow-hidden">
-            {hasItems ? (
-              <PlanChangeCanvas
-                projectKey={projectKey}
-                index={index}
-                diffKey={diffKey}
-                targetIds={targetIds}
-                ariaLabel={t('canvasAria', { project: projectName })}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center p-6">
+            <PlanChangeCanvas
+              projectKey={projectKey}
+              index={index}
+              diffKey={diffKey}
+              targetIds={targetIds}
+              ariaLabel={t('canvasAria', { project: projectName })}
+              loadingFallback={<PlanningCanvasSkeleton />}
+              emptyRoot={
                 <EmptyState
                   icon={<Map className="h-12 w-12" aria-hidden />}
                   title={t('emptyCanvasTitle')}
                   description={t('emptyCanvasDescription')}
                 />
-              </div>
-            )}
+              }
+            />
           </div>
 
           {/* The gate — visible only while a proposal is pending on the canvas. */}

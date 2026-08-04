@@ -47,6 +47,14 @@ function read(file: string): string {
   return readFileSync(file, 'utf8');
 }
 
+/** A repo-relative file with its comments stripped — for guards that assert the
+ *  ABSENCE of something the file legitimately still discusses in prose. */
+function codeOf(rel: string): string {
+  return read(join(ROOT, rel))
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/[^\n]*$/gm, '');
+}
+
 function isClientModule(text: string): boolean {
   // The directive must be the module's FIRST statement, so a mention further
   // down — inside a comment, a string, or this very file — is not one.
@@ -275,6 +283,79 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
         );
       }
     }
+  });
+});
+
+// ────── Guard 2b — the workspace OPENS before its data arrives (MOTIR-2069) ──────
+
+describe('the /planning shell is not hostage to the roadmap read', () => {
+  it('the segment has an instant-loading UI', () => {
+    // Without one, Next.js has no boundary to show and holds the navigation on
+    // the PREVIOUS route until the page's slowest await settles — the whole
+    // "loads first, then opens" defect. At the GROUP, so every planning route
+    // inherits it.
+    expect(existsSync(join(ROOT, 'app/(planning)/loading.tsx'))).toBe(true);
+    expect(read(join(ROOT, 'app/(planning)/loading.tsx'))).toMatch(/PlanningWorkspaceSkeleton/);
+  });
+
+  it('the page reads NO roadmap data — the blocking, duplicate read stays gone', () => {
+    // Both files keep a prose RECORD of the defect in their header comments, so
+    // these read CODE only — the same comment-stripping the delta guards use.
+    const page = codeOf('app/(planning)/planning/page.tsx');
+    // The exact shape that caused the bug: the root level awaited inline to
+    // pre-compute `hasItems`, on a route with no instant-loading UI. The canvas
+    // reads that same level itself, so the page must not read it at all.
+    expect(page).not.toMatch(/getProjectRoadmap/);
+    expect(page).not.toMatch(/hasItems/);
+  });
+
+  it('the canvas owns the loading and empty states the page used to pre-decide', () => {
+    const host = read(join(ROOT, 'components/planning/PlanningWorkspaceHost.tsx'));
+    // Mounted unconditionally — no `hasItems ? canvas : empty` branch to revive.
+    expect(host).toMatch(/loadingFallback=\{<PlanningCanvasSkeleton \/>\}/);
+    expect(host).toMatch(/emptyRoot=\{/);
+
+    // …and the canvas honours both, with the shipped behaviour as the default so
+    // the other four consumers of the reusable canvas are untouched.
+    const canvas = read(join(ROOT, 'components/planning/ProjectRoadmapCanvas.tsx'));
+    expect(canvas).toMatch(/loadingFallback \?\? <Spinner/);
+    expect(canvas).toMatch(/!drilled && emptyRoot/);
+    expect(read(join(ROOT, 'components/planning/PlanChangeCanvas.tsx'))).toMatch(
+      /loadingFallback=\{loadingFallback\}/,
+    );
+  });
+
+  it('the ACCESS gates still resolve BEFORE anything renders', () => {
+    // The other half of the invariant. Session and capabilities must stay
+    // awaited above the gate: a `no-access` actor must never be shown a
+    // workspace frame for a project they cannot browse, and a null-marker
+    // project must still redirect. Pushing either behind the boundary to get
+    // the shell out earlier is the over-correction this guards against.
+    const page = read(join(ROOT, 'app/(planning)/planning/page.tsx'));
+    const gateAt = page.indexOf('resolvePlanningHostGate({');
+    expect(gateAt).toBeGreaterThan(-1);
+    const beforeGate = page.slice(0, gateAt);
+    expect(beforeGate).toMatch(/await getSession\(\)/);
+    expect(beforeGate).toMatch(/await projectAccessService\.getCapabilities/);
+    // …and the redirect for a never-onboarded project is still on this path.
+    expect(page).toMatch(/redirect\('\/onboarding'\)/);
+  });
+
+  it('the host takes no roadmap data at all', () => {
+    // The prop whose await held the paint. Its absence is the invariant: a host
+    // that cannot be handed roadmap data cannot be blocked waiting for it.
+    expect(codeOf('components/planning/PlanningWorkspaceHost.tsx')).not.toMatch(/hasItems/);
+  });
+
+  it('the skeleton is presentational only — no strings to translate, no client JS', () => {
+    const skeleton = read(join(ROOT, 'components/planning/PlanningWorkspaceSkeleton.tsx'));
+    expect(isClientModule(skeleton)).toBe(false);
+    expect(skeleton).not.toMatch(/useTranslations|\bt\(/);
+    // It composes the REAL frame rather than redrawing one, so the two cannot
+    // drift apart.
+    expect(skeleton).toMatch(/from '@\/components\/planning\/PlanningWorkspace'/);
+    // Colour through --el-* fills only; no invented colour, no raw Tailwind palette.
+    expect(skeleton).not.toMatch(/bg-(gray|slate|zinc|neutral|stone)-\d/);
   });
 });
 
