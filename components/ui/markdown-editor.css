@@ -74,6 +74,37 @@
   max-width: 100%;
   border-radius: 6px;
 }
+
+/* GFM tables (MOTIR-2039). remark-gfm has always parsed them; nothing ever
+   styled them, so a table rendered as unruled floating text AND — because a
+   `<table>` is sized by its content and neither wraps nor clips — escaped the
+   description column across the right rail, its outer columns unreachable.
+   `lib/markdown/render.tsx` wraps every table in a `.motir-table-wrap` scroll
+   block (the same containment `pre` gets one line above; its overflow rides
+   inline there, since renderMarkdown also serves surfaces that never load this
+   stylesheet). The table inside stays a real `display: table`, so it keeps
+   auto-sizing its columns and simply scrolls when it is wider than the column.
+   What belongs here is the typography the table never had — rules + padding,
+   from --el-* colours and the element-semantic control spacing only. */
+.motir-prose table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+.motir-prose th,
+.motir-prose td {
+  padding: var(--spacing-control-y) var(--spacing-control-x);
+  border-bottom: 1px solid var(--el-border);
+  text-align: left;
+  vertical-align: top;
+}
+.motir-prose thead th {
+  border-bottom: 1px solid var(--el-border-strong);
+  font-weight: 600;
+  color: var(--el-text-strong);
+}
+.motir-prose tbody tr:last-child td {
+  border-bottom: 0;
+}
 .motir-prose ul[data-type='taskList'] {
   list-style: none;
   padding-left: 0.25rem;

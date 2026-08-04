@@ -96,6 +96,21 @@ describe('renderMarkdown', () => {
     expect(cells).toEqual(['tables', 'yes']);
   });
 
+  // MOTIR-2039: a table is sized by its content — with nothing containing it, a
+  // wide one painted across the issue-detail right rail and off the viewport,
+  // its outer columns unreachable. Every table now renders inside its own
+  // bounded scroll block. happy-dom reports all-zero geometry, so this asserts
+  // the STRUCTURE; the rendered geometry is measured in
+  // tests/e2e/issue-detail-flow.spec.ts.
+  it('wraps a GFM table in a bounded horizontal scroll block', () => {
+    const table = container.querySelector('table');
+    const wrap = table?.parentElement;
+    expect(wrap?.tagName).toBe('DIV');
+    expect(wrap?.className).toBe('motir-table-wrap');
+    expect(wrap?.style.overflowX).toBe('auto');
+    expect(wrap?.style.maxWidth).toBe('100%');
+  });
+
   it('renders a link with its href', () => {
     const a = container.querySelector('a');
     expect(a?.getAttribute('href')).toBe('https://example.com');

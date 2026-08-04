@@ -26,9 +26,9 @@ A **bold** idea, an _italic_ aside, and a [link](https://example.com).
 const answer = 42;
 \`\`\`
 
-| Col A | Col B |
-| ----- | ----- |
-| a     | b     |
+| Col A | Col B | A third column wide enough to overflow the specimen column |
+| ----- | ----- | --------------------------------------------------------- |
+| a     | b     | \`motir.code-graph.index.step.segment.segment.segment.end\`  |
 `;
 
 // Mention specimen (Subtask 5.1.4): the @-picker over static candidates + the
