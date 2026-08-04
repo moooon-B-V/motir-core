@@ -4117,6 +4117,15 @@ model MigrateOnboarding {
   /// True once an import completed on this project (a `succeeded` or
   /// `partially_failed` import RUN exists). The `import` step's completion exit.
   importCompleted      Boolean                 @default(false) @map("import_completed")
+  /// When the TERMINAL RECONCILIATION completed this run from the durable
+  /// `project.onboardingRanAt` marker instead of the wizard walking the final
+  /// `review → done` hop (MOTIR-2092). Null on a run that walked there itself —
+  /// which is what makes the two distinguishable after the fact.
+  reconciledAt         DateTime?               @map("reconciled_at")
+  /// The step the run was parked at when the reconciliation completed it. `step`
+  /// is overwritten with `done` by that write, so without this the only record
+  /// of how far the journey actually got is destroyed in place.
+  reconciledFromStep   MigrateOnboardingStep?  @map("reconciled_from_step")
   createdAt            DateTime                @default(now()) @map("created_at")
   updatedAt            DateTime                @updatedAt @map("updated_at")
 

@@ -329,10 +329,13 @@ export interface JobEventDataMap {
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;
   'system.ci-actions-gate-sweep': SystemScheduledData;
-  /** The migrate-onboarding INDEX sweep (MOTIR-2082) — re-evaluates the `index`
-   *  step's exit condition for runs whose wizard tab is closed. Cron triggered,
-   *  so it carries no payload beyond the scheduled envelope. */
-  'system.migrate-index-sweep': SystemScheduledData;
+  /** The migrate-onboarding SWEEP lane — every transition of that state machine
+   *  is observed only by an open browser tab, so this re-derives from durable
+   *  state for the runs nobody is watching: it completes runs whose project is
+   *  already established (MOTIR-2092) and advances runs wedged at `index` whose
+   *  code-graph index has since succeeded (MOTIR-2082). Cron triggered, so it
+   *  carries no payload beyond the scheduled envelope. */
+  'system.migrate-onboarding-sweep': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;

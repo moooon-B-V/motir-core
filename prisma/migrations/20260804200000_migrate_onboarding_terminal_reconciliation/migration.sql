@@ -1,0 +1,33 @@
+-- ===========================================================================
+-- migrate_onboarding — record that a run was TERMINATED by reconciliation
+-- rather than walked to `done` by the wizard (MOTIR-2092)
+-- ===========================================================================
+-- WHY THIS EXISTS. `migrate_onboarding` reaches `status = 'completed'` in
+-- exactly one place: the terminal `review → done` hop, whose only callers are
+-- the wizard client in a browser tab. "Onboarding is over" has a SECOND,
+-- independent and durable writer — `project.onboarding_ran_at`, stamped by
+-- `plansService.approvePlan` (in the same transaction as the plan approve), by
+-- the dogfood seed, and by the MOTIR-1799 operator stamp — that the run never
+-- reads. Close the tab between the approve and the last hop, or stamp the
+-- marker without a wizard at all, and the project is permanently established
+-- while its run sits `active` forever.
+--
+-- MOTIR-2092 fixes that by DERIVING the terminal state from the marker on a
+-- schedule, so no client hop is load-bearing. That write sets `step = 'done'`
+-- and `status = 'completed'` — the same terminal shape a walked run has, which
+-- keeps every existing reader correct with no new branch, and destroys two
+-- facts in the process: that the run did not walk there, and how far it got.
+-- These two columns keep them.
+--
+-- BOTH ARE NULL on a run the wizard completed itself, so `reconciled_at IS NOT
+-- NULL` is exactly "this run was terminated from the marker" — an operator
+-- question this table could not otherwise answer, and the abandonment signal
+-- (`reconciled_from_step`) for where migrate onboarding actually loses people.
+--
+-- Nullable, no default, no backfill: every existing row predates the mechanism,
+-- and NULL is the correct, truthful value for all of them. No index — the
+-- columns are read per-row on a run already located by id, never filtered on.
+-- ===========================================================================
+ALTER TABLE "migrate_onboarding"
+  ADD COLUMN "reconciled_at" TIMESTAMP(3),
+  ADD COLUMN "reconciled_from_step" "migrate_onboarding_step";

@@ -3,9 +3,9 @@ import type { MigrateOnboardingStep } from '@prisma/client';
 import { db } from '@/lib/db';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import {
-  migrateIndexSweep,
-  MIGRATE_INDEX_SWEEP_CRON,
-} from '@/lib/jobs/definitions/migrateIndexSweep';
+  migrateOnboardingSweep,
+  MIGRATE_ONBOARDING_SWEEP_CRON,
+} from '@/lib/jobs/definitions/migrateOnboardingSweep';
 import { jobFunctions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -319,22 +319,29 @@ describe('the sweep lane is mounted', () => {
     // translates `retryPolicy` into Inngest's `retries` before `createFunction`
     // ever sees it, so `retryPolicy` is not a key here and asserting it would
     // pass vacuously against `undefined`. `idempotent` = 5 attempts = 4 retries.
-    const config = (migrateIndexSweep as unknown as { opts: Record<string, unknown> }).opts as {
+    //
+    // The lane was RENAMED `system.migrate-index-sweep` →
+    // `system.migrate-onboarding-sweep` when MOTIR-2092 added the terminal
+    // reconciliation to it: the tick no longer only repairs the `index` step, and
+    // a lane whose ledger id names one of its two jobs misleads whoever reads the
+    // ledger to find out which one ran.
+    const config = (migrateOnboardingSweep as unknown as { opts: Record<string, unknown> })
+      .opts as {
       id: string;
       retries?: number;
       triggers?: Array<{ cron?: string }>;
     };
-    expect(config.id).toBe('system.migrate-index-sweep');
+    expect(config.id).toBe('system.migrate-onboarding-sweep');
     expect(config.retries).toBe(4);
-    expect(config.triggers?.[0]?.cron).toBe(MIGRATE_INDEX_SWEEP_CRON);
+    expect(config.triggers?.[0]?.cron).toBe(MIGRATE_ONBOARDING_SWEEP_CRON);
 
     // Registered on the schedule table, so the MOTIR-1970 schedule-health check
     // can see it go quiet, AND mounted on the serve route's list — a lane the
     // registry never exports is a lane that never runs.
     expect(jobSchedules()).toContainEqual({
-      functionId: 'system.migrate-index-sweep',
-      cron: MIGRATE_INDEX_SWEEP_CRON,
+      functionId: 'system.migrate-onboarding-sweep',
+      cron: MIGRATE_ONBOARDING_SWEEP_CRON,
     });
-    expect(jobFunctions).toContain(migrateIndexSweep);
+    expect(jobFunctions).toContain(migrateOnboardingSweep);
   });
 });
