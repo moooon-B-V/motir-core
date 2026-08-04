@@ -248,3 +248,102 @@ describe('WorkItemActionsMenu — Add to active sprint (Subtask 2.4.14)', () => 
     expect(screen.queryByRole('menuitem', { name: 'Add to active sprint' })).toBeNull();
   });
 });
+
+// bug MOTIR-2097 — the /items row ⋯ menu is the THIRD planning affordance, and
+// MOTIR-2084's blast-radius grep never saw it (it goes through PlanEditsTrigger,
+// not `planningWorkspaceHref`). It offered Re-plan on a DONE epic (no status
+// gate at all) and on a CHILDLESS one (no `hasChildren` gate). It now asks the
+// same shared rule the detail page and the peek do.
+describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () => {
+  function openPlanMenu(
+    planEdits: Partial<{
+      kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+      hasChildren: boolean;
+      hasDescription: boolean;
+      statusCategory: 'todo' | 'in_progress' | 'done' | null;
+    }> = {},
+    canEdit = true,
+  ) {
+    render(
+      <WorkItemActionsMenu
+        itemId="wi-1"
+        identifier="PROD-1"
+        title="An epic"
+        canEdit={canEdit}
+        canManage={false}
+        onDeleted={vi.fn()}
+        onArchived={vi.fn()}
+        planEdits={{
+          kind: 'epic',
+          hasChildren: true,
+          hasDescription: false,
+          statusCategory: 'todo',
+          onExpand: vi.fn(),
+          onReplan: vi.fn(),
+          ...planEdits,
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
+  }
+
+  const expand = () => screen.queryByRole('menuitem', { name: 'Expand' });
+  const replan = () => screen.queryByRole('menuitem', { name: 'Re-plan' });
+
+  it('rule 1 — a DONE epic offers neither door', () => {
+    openPlanMenu({ statusCategory: 'done' });
+    expect(replan()).toBeNull();
+    expect(expand()).toBeNull();
+  });
+
+  it('rule 1 — a CANCELLED item offers neither either (the gate is category-based)', () => {
+    openPlanMenu({ statusCategory: 'done', hasChildren: false });
+    expect(replan()).toBeNull();
+    expect(expand()).toBeNull();
+  });
+
+  it('rule 3 — a CHILDLESS epic offers Expand, NOT Re-plan', () => {
+    // The old gate was `kind === 'epic' || kind === 'story'` with no children
+    // check, so a childless epic showed BOTH.
+    openPlanMenu({ hasChildren: false });
+    expect(expand()).toBeTruthy();
+    expect(replan()).toBeNull();
+  });
+
+  it('rule 3 — an epic WITH children offers Re-plan, not Expand', () => {
+    openPlanMenu({ hasChildren: true });
+    expect(replan()).toBeTruthy();
+    expect(expand()).toBeNull();
+  });
+
+  it('exactly one door at a time, never both', () => {
+    for (const hasChildren of [true, false]) {
+      cleanup();
+      openPlanMenu({ hasChildren });
+      expect([expand(), replan()].filter(Boolean)).toHaveLength(1);
+    }
+  });
+
+  it('offers nothing to an actor who cannot edit', () => {
+    openPlanMenu({}, false);
+    expect(replan()).toBeNull();
+    expect(expand()).toBeNull();
+  });
+
+  it('offers nothing when the host opts out entirely (no planEdits)', () => {
+    render(
+      <WorkItemActionsMenu
+        itemId="wi-1"
+        identifier="PROD-1"
+        title="An epic"
+        canEdit
+        canManage={false}
+        onDeleted={vi.fn()}
+        onArchived={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
+    expect(replan()).toBeNull();
+    expect(expand()).toBeNull();
+  });
+});

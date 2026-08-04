@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { planEntranceFace } from '@/lib/planning/planEntranceVisibility';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { useToast } from '@/components/ui/Toast';
 import { DeleteWorkItemDialog } from './DeleteWorkItemDialog';
 import {
@@ -71,10 +74,7 @@ export function WorkItemActionsMenu({
   editHref,
   align = 'end',
   triggerClassName,
-  kind,
-  hasChildren,
-  onExpand,
-  onReplan,
+  planEdits,
 }: {
   itemId: string;
   /** The `PROD-N` key — used for the link, the menu label, and toasts. */
@@ -114,14 +114,31 @@ export function WorkItemActionsMenu({
   align?: 'start' | 'center' | 'end';
   /** Override the trigger button styling for a given surface's placement. */
   triggerClassName?: string;
-  /** The work item's kind — gate "Expand" and "Re-plan" menu items. */
-  kind?: string | null;
-  /** Whether this item has children — "Expand" only shows when false. */
-  hasChildren?: boolean;
-  /** Callback when the user triggers "Expand" from the menu. */
-  onExpand?: () => void;
-  /** Callback when the user triggers "Re-plan" from the menu. */
-  onReplan?: () => void;
+  /**
+   * The per-item plan-edits doors (Expand / Re-plan, MOTIR-903). Supply the
+   * WHOLE object or none of it: WHICH door shows — and whether either does — is
+   * decided by the shared Plan / Re-plan rule (`planEntranceFace`), so a host
+   * cannot offer these actions without stating the item's plannability.
+   *
+   * That bundling is the point (MOTIR-2097). These were four loose optional
+   * props gated inline on `canEdit && !archived && kind`, which is how this
+   * surface came to offer Re-plan on a DONE epic (no status gate at all) and on
+   * a CHILDLESS one (no `hasChildren` gate) while the detail page and the peek
+   * had already been fixed twice.
+   */
+  planEdits?: {
+    kind: WorkItemKindDto;
+    /** Does the item have children? The CONTAINER face (rule 3). */
+    hasChildren: boolean;
+    /** Does the item have a non-empty description? The LEAF face (rule 2). */
+    hasDescription: boolean;
+    /** The item's status CATEGORY — a `done`-category item offers neither door. */
+    statusCategory: StatusCategoryDto | null;
+    /** Triggered by "Expand" (the `plan` face). */
+    onExpand: () => void;
+    /** Triggered by "Re-plan" (the `replan` face). */
+    onReplan: () => void;
+  };
 }) {
   const t = useTranslations('workItemActions');
   const te = useTranslations('planEdits');
@@ -134,6 +151,20 @@ export function WorkItemActionsMenu({
 
   const href = editHref ?? `/items/${identifier}/edit`;
   const menuLabel = t('menuLabel', { key: identifier });
+
+  // WHICH plan-edits door this item gets — the SAME rule the detail page and the
+  // quick-view peek ask (MOTIR-2097), so the three surfaces cannot drift again.
+  // `null` (no capability, archived, or a done-category item) draws neither.
+  const planFace = planEdits
+    ? planEntranceFace({
+        canPlan: canEdit,
+        archived,
+        statusCategory: planEdits.statusCategory,
+        kind: planEdits.kind,
+        hasChildren: planEdits.hasChildren,
+        hasDescription: planEdits.hasDescription,
+      })
+    : null;
 
   async function copyLink() {
     setOpen(false);
@@ -248,15 +279,18 @@ export function WorkItemActionsMenu({
               </a>
             ) : null}
 
-            {/* Expand — MOTIR-903: generate children for a childless container. */}
-            {canEdit && !archived && hasChildren === false && onExpand ? (
+            {/* Expand — MOTIR-903: the `plan` face of the shared rule. Nothing
+                to re-plan yet (a childless container, or a leaf with no
+                description), so the door generates the plan rather than editing
+                one. */}
+            {planFace === 'plan' && planEdits ? (
               <button
                 type="button"
                 role="menuitem"
                 className={ITEM_CLASS}
                 onClick={() => {
                   setOpen(false);
-                  onExpand();
+                  planEdits.onExpand();
                 }}
               >
                 <Maximize2 className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
@@ -264,16 +298,17 @@ export function WorkItemActionsMenu({
               </button>
             ) : null}
 
-            {/* Re-plan — MOTIR-903: re-plan an epic or story, leaving completed
-                work untouched. */}
-            {canEdit && !archived && kind && (kind === 'epic' || kind === 'story') && onReplan ? (
+            {/* Re-plan — MOTIR-903: the `replan` face. There IS an existing plan
+                (a container's children, a leaf's description) to edit, and
+                completed work is left untouched. */}
+            {planFace === 'replan' && planEdits ? (
               <button
                 type="button"
                 role="menuitem"
                 className={ITEM_CLASS}
                 onClick={() => {
                   setOpen(false);
-                  onReplan();
+                  planEdits.onReplan();
                 }}
               >
                 <Repeat className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />

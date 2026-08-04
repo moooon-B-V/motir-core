@@ -523,3 +523,60 @@ describe('QuickViewCloseButton — clears ?peek', () => {
     expect(historyPush).not.toHaveBeenCalled();
   });
 });
+
+// bug MOTIR-2097 — the peek's face follows the same shared rule. The payload
+// already carries `kind` and `descriptionMd`, so rule 2 lands here with no DTO
+// change (unlike the /items row menu — see MOTIR-2098).
+describe('IssueQuickViewPanel — which Plan / Re-plan face the peek wears', () => {
+  const mode = () => screen.getByTestId('work-item-plan-entrance').getAttribute('data-mode');
+
+  it('rule 2 — a DESCRIBED leaf reads Re-plan, not Plan', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, kind: 'subtask', hasChildren: false, descriptionMd: 'Do the thing.' }}
+      />,
+    );
+    expect(mode()).toBe('replan');
+  });
+
+  it('rule 2 — a leaf with no description reads Plan', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, kind: 'subtask', hasChildren: false, descriptionMd: null }}
+      />,
+    );
+    expect(mode()).toBe('plan');
+  });
+
+  it('rule 2 — a whitespace-only description does not count as one', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, kind: 'bug', hasChildren: false, descriptionMd: '   \n  ' }}
+      />,
+    );
+    expect(mode()).toBe('plan');
+  });
+
+  it('rule 3 — a childless STORY reads Plan even with a description', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, kind: 'story', hasChildren: false, descriptionMd: 'A big story.' }}
+      />,
+    );
+    expect(mode()).toBe('plan');
+  });
+
+  it('rule 3 — a story WITH children reads Re-plan', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, kind: 'story', hasChildren: true, descriptionMd: null }}
+      />,
+    );
+    expect(mode()).toBe('replan');
+  });
+});

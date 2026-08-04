@@ -358,13 +358,17 @@ export default async function IssueDetailPage({
               {/* MOTIR-910: the per-item Plan / Re-plan door — FIRST in the
                 right cluster, before Watch / ⋯ (the plan-replan-entrance
                 mockup's panel-1 placement). Plan when the item has no children
-                yet, Re-plan when it does. WHETHER it renders is the entrance's
-                own call (`showsPlanEntrance`, MOTIR-2084) — this page just hands
-                over the item state: the actor's capability, the archived flag
-                (MOTIR-2050) and the terminal status category. */}
+                yet, Re-plan when it does. BOTH whether it renders and which face
+                it wears are the entrance's own call (`planEntranceFace`,
+                MOTIR-2084 + MOTIR-2097) — this page just hands over the item
+                state: the actor's capability, the archived flag (MOTIR-2050),
+                the terminal status category, and the kind + children/description
+                the face is picked from. */}
               <WorkItemPlanEntrance
                 itemKey={item.identifier}
                 hasChildren={detail.children.length > 0}
+                kind={item.kind}
+                hasDescription={(item.descriptionMd ?? '').trim().length > 0}
                 canPlan={canEdit}
                 archived={isArchived}
                 statusCategory={statusCategory}

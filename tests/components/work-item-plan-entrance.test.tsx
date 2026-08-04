@@ -14,7 +14,13 @@ afterEach(cleanup);
 
 // A live, plannable item — the state every "what the door looks like" case
 // assumes. The gate itself is exercised in its own describe below.
-const LIVE = { canPlan: true, archived: false, statusCategory: 'todo' } as const;
+const LIVE = {
+  canPlan: true,
+  archived: false,
+  statusCategory: 'todo',
+  kind: 'story',
+  hasDescription: false,
+} as const;
 
 function href(el: HTMLElement): URL {
   return new URL(el.getAttribute('href')!, 'https://motir.test');
@@ -111,6 +117,8 @@ describe('WorkItemPlanEntrance — when it does not render at all', () => {
         canPlan
         archived={false}
         statusCategory="done"
+        kind="story"
+        hasDescription={false}
       />,
     );
     expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
@@ -126,6 +134,8 @@ describe('WorkItemPlanEntrance — when it does not render at all', () => {
         canPlan
         archived={false}
         statusCategory="done"
+        kind="story"
+        hasDescription={false}
       />,
     );
     expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
@@ -139,6 +149,8 @@ describe('WorkItemPlanEntrance — when it does not render at all', () => {
         canPlan
         archived
         statusCategory="todo"
+        kind="story"
+        hasDescription={false}
       />,
     );
     expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
@@ -152,6 +164,8 @@ describe('WorkItemPlanEntrance — when it does not render at all', () => {
         canPlan={false}
         archived={false}
         statusCategory="todo"
+        kind="story"
+        hasDescription={false}
       />,
     );
     expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
@@ -165,8 +179,72 @@ describe('WorkItemPlanEntrance — when it does not render at all', () => {
         canPlan
         archived={false}
         statusCategory="in_progress"
+        kind="story"
+        hasDescription={false}
       />,
     );
     expect(screen.getByTestId('work-item-plan-entrance')).toBeTruthy();
+  });
+});
+
+// bug MOTIR-2097 — the face used to come from `hasChildren` alone, so a LEAF
+// (which can never have children) always read "Plan" however much description it
+// carried. The face now follows the shared rule: description for a leaf,
+// children for a container.
+describe('WorkItemPlanEntrance — which face it wears', () => {
+  function face(props: {
+    kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+    hasChildren: boolean;
+    hasDescription: boolean;
+  }) {
+    renderWithIntl(
+      <WorkItemPlanEntrance
+        itemKey="MOTIR-42"
+        canPlan
+        archived={false}
+        statusCategory="todo"
+        {...props}
+      />,
+    );
+    const el = screen.getByTestId('work-item-plan-entrance');
+    return { mode: el.getAttribute('data-mode'), text: el.textContent };
+  }
+
+  it('rule 2 — a DESCRIBED leaf reads Re-plan', () => {
+    const { mode, text } = face({ kind: 'subtask', hasChildren: false, hasDescription: true });
+    expect(mode).toBe('replan');
+    expect(text).toContain('Re-plan');
+  });
+
+  it('rule 2 — an UNDESCRIBED leaf reads Plan', () => {
+    const { mode, text } = face({ kind: 'subtask', hasChildren: false, hasDescription: false });
+    expect(mode).toBe('plan');
+    expect(text).not.toContain('Re-plan');
+  });
+
+  it('rule 3 — a childless container reads Plan even WITH a description', () => {
+    expect(face({ kind: 'epic', hasChildren: false, hasDescription: true }).mode).toBe('plan');
+  });
+
+  it('rule 3 — a container WITH children reads Re-plan', () => {
+    expect(face({ kind: 'epic', hasChildren: true, hasDescription: false }).mode).toBe('replan');
+  });
+
+  it('the workspace MODE follows the face, not hasChildren', () => {
+    // A described leaf opens the workspace in replan mode, which `hasPlan` drives.
+    renderWithIntl(
+      <WorkItemPlanEntrance
+        itemKey="MOTIR-42"
+        kind="task"
+        hasChildren={false}
+        hasDescription
+        canPlan
+        archived={false}
+        statusCategory="todo"
+      />,
+    );
+    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('mode')).toBe(
+      'replan',
+    );
   });
 });

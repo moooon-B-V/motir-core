@@ -284,13 +284,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           modal; a LOCAL-state host (the roadmap canvas peek, MOTIR-1352) also
           gets its own close called so its state doesn't outlive the handoff.
           The URL-driven peek passes no `onClose`, so its `?peek=` simply stays
-          on the history entry the user came from. WHETHER it renders is the
-          entrance's own call (`showsPlanEntrance`, MOTIR-2084) — this surface
-          just hands over the item state: the actor's capability, the archived
-          flag (MOTIR-2050) and the status CATEGORY, all already in the payload. */}
+          on the history entry the user came from. BOTH whether it renders and
+          which face it wears are the entrance's own call (`planEntranceFace`,
+          MOTIR-2084 + MOTIR-2097) — this surface just hands over the item state:
+          the actor's capability, the archived flag (MOTIR-2050), the status
+          CATEGORY, and the kind + children/description the face is picked from —
+          all already in the payload. */}
         <WorkItemPlanEntrance
           itemKey={data.identifier}
           hasChildren={data.hasChildren}
+          kind={data.kind}
+          hasDescription={(data.descriptionMd ?? '').trim().length > 0}
           canPlan={data.canPlan}
           archived={data.archived != null}
           statusCategory={data.statusCategory}

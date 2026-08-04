@@ -31,10 +31,22 @@ export function WorkItemRowActions({ row }: { row: IssueRowData }) {
           title={row.title}
           canEdit={canEdit}
           canManage={canManage}
-          kind={row.kind}
-          hasChildren={row.hasChildren}
-          onExpand={onExpand}
-          onReplan={onReplan}
+          planEdits={{
+            kind: row.kind,
+            hasChildren: row.hasChildren,
+            // ⚠️ DEGRADE (MOTIR-2098) — rule 2 ("a LEAF with a description shows
+            // Re-plan") cannot be evaluated here yet: the list row carries no
+            // description signal, and the tree read's forest CTE projects a fixed
+            // column set that excludes `descriptionMd`. So a described leaf reads
+            // as undescribed and gets the Plan/Expand face on THIS surface only —
+            // the detail page and the peek, which both hold the description, apply
+            // rule 2 correctly. MOTIR-2098 plumbs a boolean `hasDescription`
+            // through and deletes this comment.
+            hasDescription: false,
+            statusCategory: row.statusCategory,
+            onExpand,
+            onReplan,
+          }}
           onDeleted={notifyIssuesChanged}
           onArchived={notifyIssuesChanged}
         />
