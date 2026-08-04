@@ -8,6 +8,7 @@ import {
   InvalidAvatarError,
   InvalidIdentifierError,
   InvalidProjectNameError,
+  InvalidStatusAutomationSettingsError,
   NotProjectAdminError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
@@ -31,8 +32,14 @@ import {
 //       sprint length or a malformed planner-model override; the value semantics
 //       are wrong, so it is the same 422 family as InvalidScaleConfigError, not a
 //       400 malformed-body)
+//   InvalidStatusAutomationSettingsError                     → 422 (MOTIR-1618 —
+//       a non-boolean for one of the two status-derivation switches; same 422
+//       family, same `field` payload)
 export function projectErrorResponse(err: unknown): NextResponse | null {
-  if (err instanceof InvalidAiSettingsError) {
+  if (
+    err instanceof InvalidAiSettingsError ||
+    err instanceof InvalidStatusAutomationSettingsError
+  ) {
     return NextResponse.json(
       { error: err.message, code: err.code, field: err.field },
       { status: 422 },

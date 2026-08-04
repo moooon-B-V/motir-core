@@ -687,6 +687,54 @@ export const projectRepository = {
     });
   },
 
+  // The project-scoped STATUS-AUTOMATION configuration (Story MOTIR-1615 ·
+  // MOTIR-1618) — `autoRollupParentStatus` / `autoCompleteChildrenOnParentDone`,
+  // the two on/off switches for bidirectional parent↔child status derivation
+  // (`docs/decisions/status-derivation.md`). Same shape as the AI-settings pair
+  // above: ordinary project columns, a narrow read projection with an optional
+  // `tx`, and a required-`tx` update.
+
+  /**
+   * Read just a project's status-automation columns. Two consumers, which is why
+   * this is a projection rather than a whole-row read: the settings surface
+   * (MOTIR-1622) and — on EVERY status transition — the derivation job
+   * (MOTIR-1621), whose two services each check their own switch before doing any
+   * work. Returns null when the project doesn't exist; the caller owns the tenant
+   * gate + the not-found error. Read-only path → `db` singleton unless a `tx` is
+   * supplied (needed under the non-bypass `prodect_app` role, where the project
+   * RLS policy keys on the per-transaction workspace GUC — same contract as
+   * `findById`).
+   */
+  async findStatusAutomation(
+    id: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    autoRollupParentStatus: boolean;
+    autoCompleteChildrenOnParentDone: boolean;
+  } | null> {
+    const client = tx ?? db;
+    return client.project.findUnique({
+      where: { id },
+      select: { autoRollupParentStatus: true, autoCompleteChildrenOnParentDone: true },
+    });
+  },
+
+  /**
+   * Patch a project's status-automation columns. Partial by contract — only the
+   * supplied switches are written, so saving one toggle never clobbers the other.
+   * Write → `tx` REQUIRED.
+   */
+  async updateStatusAutomation(
+    id: string,
+    data: {
+      autoRollupParentStatus?: boolean;
+      autoCompleteChildrenOnParentDone?: boolean;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data });
+  },
+
   /**
    * The CROSS-WORKSPACE scan behind the auto-plan cadence tick (MOTIR-916):
    * every non-archived project that opted into auto-planning, keyset-paginated

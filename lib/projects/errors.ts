@@ -156,6 +156,22 @@ export class InvalidAiSettingsError extends Error {
   }
 }
 
+/**
+ * A status-automation patch (Story MOTIR-1615 · MOTIR-1618) carried a non-boolean
+ * for one of the two switches. They are plain on/off flags, so there is nothing
+ * to coerce — a `"true"` string or a `1` is a caller bug, and silently truthy-ing
+ * it would turn a typo into a project-wide behaviour change. → 422, alongside
+ * `InvalidAiSettingsError`. Carries `field` so the panel can slot the message
+ * under the offending control.
+ */
+export class InvalidStatusAutomationSettingsError extends Error {
+  readonly code = 'INVALID_STATUS_AUTOMATION_SETTINGS' as const;
+  constructor(readonly field: 'autoRollupParentStatus' | 'autoCompleteChildrenOnParentDone') {
+    super(`"${field}" must be true or false.`);
+    this.name = 'InvalidStatusAutomationSettingsError';
+  }
+}
+
 export class ProjectNotFoundError extends Error {
   readonly code = 'PROJECT_NOT_FOUND' as const;
   constructor(projectId: string) {
