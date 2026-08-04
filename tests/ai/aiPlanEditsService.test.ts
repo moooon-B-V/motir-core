@@ -24,7 +24,16 @@ const ctx = {
   userId: 'user_1',
   workspaceId: 'ws_1',
   projectId: 'pj_1',
-  project: { id: 'pj_1', identifier: 'MOTIR', name: 'Motir' },
+  // `aiGenerateExplanations` is a non-null boolean column defaulting to false —
+  // the OFF project, so the submits assert the flag is SENT as `false` rather
+  // than omitted (MOTIR-2110).
+  project: { id: 'pj_1', identifier: 'MOTIR', name: 'Motir', aiGenerateExplanations: false },
+} as ProjectContext;
+
+/** The same actor on a project that has opted INTO AI-drafted explanations. */
+const ctxWithExplanations = {
+  ...ctx,
+  project: { ...ctx.project, aiGenerateExplanations: true },
 } as ProjectContext;
 
 const mockOrg = { organizationId: 'org_1', isMeta: false };
@@ -293,6 +302,93 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
       }),
       { userId: 'user_1' },
     );
+  });
+});
+
+// ─── The AI-drafted-explanations opt-in on the wire (MOTIR-2110) ─────────────
+// The producer half of a two-repo contract: motir-ai reads the flag ONLY from
+// `context.generateExplanations` (never from motir-core config), so a submit
+// that omits it silently disables the project's setting on that path — which is
+// what a re-plan did, leaving the toggle working on first generation alone.
+// Asserted on EVERY plan-edit submit, not just `submitReplan`: a contextual turn
+// submits as `augment` and motir-ai's scoping module can resolve it INTO a
+// re-plan, so a replan-only fix would leave the same hole one path over.
+describe('aiPlanEditsService — the generateExplanations opt-in rides every plan-edit envelope', () => {
+  const CASES: Array<{
+    name: string;
+    kind: string;
+    run: (c: ProjectContext) => Promise<{ jobId: string; planId: string }>;
+  }> = [
+    {
+      name: 'submitAugment',
+      kind: 'augment',
+      run: (c) => aiPlanEditsService.submitAugment('add a login flow', c),
+    },
+    {
+      name: 'submitContextual',
+      kind: 'augment',
+      run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
+    },
+    {
+      name: 'submitExpand',
+      kind: 'expand_item',
+      run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
+    },
+    {
+      name: 'submitReplan',
+      kind: 'replan',
+      run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
+    },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  for (const c of CASES) {
+    it(`${c.name} sends generateExplanations: true for an opted-in project`, async () => {
+      mockSubmitJob();
+
+      await c.run(ctxWithExplanations);
+
+      const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
+      expect(kind).toBe(c.kind);
+      expect((context as JobContextBag).generateExplanations).toBe(true);
+    });
+
+    it(`${c.name} sends generateExplanations: false — PRESENT, not omitted — when off`, async () => {
+      mockSubmitJob();
+
+      await c.run(ctx);
+
+      const context = vi.mocked(submitJob).mock.calls[0]![2] as JobContextBag;
+      // Strictly `false`, and the KEY is there: an omission reads as "unset" on
+      // the far side, which is exactly the state this bug shipped. Same
+      // discipline the `generate_tree` submit already uses for the OFF case.
+      expect(context.generateExplanations).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(context, 'generateExplanations')).toBe(true);
+    });
+  }
+
+  it('reads the flag from the project, never from a caller-supplied context', async () => {
+    mockSubmitJob();
+
+    // The submit's own context (`rootItemKey`) is preserved alongside the flag —
+    // the field is added to the envelope, it does not replace what the caller
+    // built (the `code` hole included).
+    vi.mocked(resolveCodeContext).mockResolvedValue({
+      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main' }],
+    });
+    await aiPlanEditsService.submitReplan('MOTIR-100', ctxWithExplanations);
+
+    const context = vi.mocked(submitJob).mock.calls[0]![2] as JobContextBag;
+    expect(context).toMatchObject({
+      rootItemKey: 'MOTIR-100',
+      generateExplanations: true,
+      code: expect.any(Object),
+    });
   });
 });
 
