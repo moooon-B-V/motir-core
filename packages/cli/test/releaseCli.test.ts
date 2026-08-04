@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CLI_VERSION } from '../src/version.js';
 
 // Drift guards for the npm RELEASE lane of `@motir/cli` (8.7.9 / MOTIR-669):
 // the publish metadata in package.json, and the `release-cli.yml` workflow that
@@ -99,6 +100,20 @@ const runBlockOf = (workflow: string, stepName: string): string => {
 };
 
 describe('the @motir/cli publish metadata', () => {
+  it('carries the SAME version in src/version.ts — nothing else keeps them together', () => {
+    // Two hand-maintained copies of one number, and until MOTIR-2131 nothing
+    // compared them. `src/version.ts` says "kept in sync with package.json"
+    // in a comment; a comment is not a check.
+    //
+    // What the divergence would have shipped is the exact defect that card is
+    // about, one level down: the release lane reads package.json to TAG the
+    // images (`:claude-0.1.1`) while `motir --version` inside them prints
+    // CLI_VERSION. Bump one and you publish an image whose own version string
+    // contradicts its tag — and the tag-vs-package guard below would pass,
+    // because it never looks at this file.
+    expect(CLI_VERSION).toBe(pkg.version);
+  });
+
   it('points repository / homepage / bugs at the RENAMED repo', () => {
     // The 0.0.1 name-claim on npm still advertises `moooon-B-V/prodect-core`,
     // which 404s since the MOTIR-668 rename. The registry is not evidence these

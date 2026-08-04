@@ -113,7 +113,24 @@ docker run --rm -it \
   motir auto --agent "claude --dangerously-skip-permissions"
 ```
 
-**Release `cli-v0.1.0`** ([run 30547054641](https://github.com/moooon-B-V/motir-core/actions/runs/30547054641)).
+Every release keeps its own table below, newest first, and older ones are never
+edited: a moving `:claude` is a pointer, but `:claude-0.1.0` and the digest
+beside it are a promise about specific bytes, and [Public, and asserted to
+be](#public-and-asserted-to-be-motir-2010) tells a story that reads on the
+`cli-v0.1.0` rows in particular. Overwriting a release's digests in place would
+quietly change what an earlier paragraph is talking about.
+
+The digests are filled in from the release run's job summary at each `cli-v*`
+tag (see [Publishing](#publishing)) — these tables are the record, but they are
+a transcription, so the registry is always the authority:
+
+```sh
+docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
+```
+
+### Release `cli-v0.1.0`
+
+([run 30547054641](https://github.com/moooon-B-V/motir-core/actions/runs/30547054641)).
 Each row's immutable twin — `:<profile>-0.1.0` — points at the same manifest.
 
 | Tag                                            | Digest                                                                    |
@@ -127,14 +144,6 @@ Each row's immutable twin — `:<profile>-0.1.0` — points at the same manifest
 | `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:0955c69d320cc26af0882cc93205f2d38ac82770b963cec5076d714666d17b3c` |
 | `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:dfbb31dd911a27b48d910a273a93980c5ff510c197b1c98de8130d6845265c9c` |
 | `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:57d6e0e0024f3e8f57490d7e782e3745e7e399f5f1f1bd5f5af0a26fc49f38ac` |
-
-The digests are filled in from the release run's job summary at each `cli-v*`
-tag (see [Publishing](#publishing)) — this table is the record, but it is a
-transcription, so the registry is always the authority:
-
-```sh
-docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
-```
 
 ### Public, and asserted to be (MOTIR-2010)
 
@@ -175,6 +184,41 @@ one either way:
 node packages/cli/sandbox/smoke/assert-public.mjs \
   --ref ghcr.io/moooon-b-v/motir-sandbox:claude
 ```
+
+### Current, and asserted to be (MOTIR-2131)
+
+Obtainable is not the same claim as **up to date**, and the second one failed
+next. Five days after `cli-v0.1.0` was cut, `:claude` was eleven commits behind
+`main`: it greeted every new user with a credential banner naming _one_ of the
+[three tiers](#three-ways-to-give-it-a-motir-credential) above and telling them
+to log in on the host — the exact thing [`docs/cli.md`](../../../docs/cli.md)
+§ The sandbox promises you do not have to do. `motir login` was not in the image
+at all. Nothing noticed, and nothing could have: CI was green, the docs were
+accurate about `main`, and `motir auto` in a normal console worked. None of
+those consume the artifact.
+
+Drift itself is expected here — [Publishing](#publishing) has no push-to-`main`
+trigger on purpose, because a `:latest` that moves on every merge is not a
+sandbox you can reproduce a run in. What was missing is a **tripwire on how
+long the drift has sat**, so the gap surfaces before a user does:
+
+```sh
+node packages/cli/sandbox/smoke/assert-current.mjs
+```
+
+No Docker, no network, no credential — it compares the newest `cli-v*` tag
+against your checkout and tells you what is unreleased, and for how long.
+`.github/workflows/sandbox-staleness.yml` runs it daily and fails once the
+oldest unreleased commit passes the window (three days by default —
+`--max-age-days` moves it). It reports the drift even while it passes, so the
+number is visible before it is fatal, and it distinguishes _drifted_ from
+_bumped but never tagged_, which need opposite fixes.
+
+⚠️ **The obvious version-only check would not have caught this.** Comparing
+`packages/cli/package.json` to the newest tag is a real check — it catches a
+release prepared and never cut — but on 2026-08-04 the version was `0.1.0` and
+the tag was `cli-v0.1.0`, a perfect match, for the entire time the images were
+wrong. Nobody forgot to tag a bump. Nobody bumped.
 
 ## What it confines — and what it does not
 
@@ -669,7 +713,18 @@ block, granted on the release lane only. **No repository secret, no registry
 account, nothing provisioned out of band** — and the pull-request lane, which has
 no such block, cannot push even if it tried.
 
-Four things worth knowing before your first release:
+Five things worth knowing before your first release:
+
+- **Something will tell you when the next one is overdue.** Because this lane
+  fires only on a tag, `main` and the published image drift apart between
+  releases by design — and drifted five days and eleven commits without anyone
+  noticing once already (MOTIR-2131). `sandbox-staleness.yml` runs
+  [`assert-current.mjs`](smoke/assert-current.mjs) daily and goes red when the
+  oldest unreleased commit passes its window; see [Current, and asserted to
+  be](#current-and-asserted-to-be-motir-2131). Run it yourself any time with
+  `node packages/cli/sandbox/smoke/assert-current.mjs` — it needs nothing but a
+  checkout with tags, and after a bump merges it will keep failing until the tag
+  is pushed, naming the exact command.
 
 - **Package visibility.** A GHCR package starts **private**. After the first
   successful release, make it public once at
@@ -721,11 +776,14 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 | `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                                                                                                                                                      |
 | `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                                                                                                                                                |
 | `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                                                                             |
+| `smoke/assert-public.mjs`        | Asks whether a STRANGER can pull what the release just pushed — a manifest probe that sends no `Authorization` header and checks a known-public control first. Three-valued: public / private-or-absent / could not tell.                                                                                                    |
+| `smoke/assert-current.mjs`       | Asks whether the published image is still what `main` says it is — compares the newest `cli-v*` tag against a checkout and fails once unreleased work has SAT past its window. Needs no Docker, network or credential.                                                                                                       |
 | `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                                                                                                                                                          |
 
-Two workflow files sit outside this directory: the build/smoke/publish matrix
-itself, `.github/workflows/sandbox-images.yml`, and the tagged release lane that
-calls it with publishing on, `.github/workflows/release-sandbox.yml`.
+Three workflow files sit outside this directory: the build/smoke/publish matrix
+itself, `.github/workflows/sandbox-images.yml`; the tagged release lane that
+calls it with publishing on, `.github/workflows/release-sandbox.yml`; and the
+daily drift tripwire, `.github/workflows/sandbox-staleness.yml`.
 
 The image sources' invariants (the read-only PAT mount, the absence of a docker
 socket, the Node floor, the seam covering every agent profile, the codegraph
