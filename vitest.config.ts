@@ -577,6 +577,25 @@ export default defineConfig({
         'lib/api/v1/rateLimit.ts',
         'app/api/v1/me/route.ts',
         'app/api/v1/workspaces/route.ts',
+        // Story 11.3 (the planning resources) · Subtask 11.3.10 — MOTIR-2067.
+        // The story's own gate measures its merged surface; these are the files
+        // it added, each gated independently so a regression in one fails the
+        // run rather than being averaged away by the others.
+        'lib/api/v1/projects/schema.ts',
+        'lib/api/v1/sprints/schema.ts',
+        'lib/api/v1/sprints/membership.ts',
+        'lib/api/v1/ready/schema.ts',
+        'lib/api/v1/rankedCollections.ts',
+        'app/api/v1/projects/route.ts',
+        'app/api/v1/projects/[projectKey]/route.ts',
+        'app/api/v1/projects/[projectKey]/sprints/route.ts',
+        'app/api/v1/projects/[projectKey]/backlog/route.ts',
+        'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts',
+        'app/api/v1/projects/[projectKey]/ready/route.ts',
+        'app/api/v1/sprints/[sprintId]/route.ts',
+        'app/api/v1/sprints/[sprintId]/start/route.ts',
+        'app/api/v1/sprints/[sprintId]/complete/route.ts',
+        'app/api/v1/sprints/[sprintId]/work-items/route.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -591,6 +610,46 @@ export default defineConfig({
         'lib/api/v1/rateLimit.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/me/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/workspaces/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.3 · Subtask 11.3.10 — the planning resources.
+        'lib/api/v1/projects/schema.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/sprints/schema.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/sprints/membership.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/ready/schema.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/rankedCollections.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/projects/[projectKey]/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/projects/[projectKey]/sprints/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/projects/[projectKey]/backlog/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/projects/[projectKey]/ready/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/sprints/[sprintId]/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/sprints/[sprintId]/start/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/sprints/[sprintId]/complete/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/sprints/[sprintId]/work-items/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story MOTIR-1775 · MOTIR-1896 — the CI-minutes meter.
         'lib/ciMetering/runnerRates.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciMetering/normalize.ts': { branches: 90, functions: 90, lines: 90 },
