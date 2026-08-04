@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bot, ChevronDown, Key, Server, Terminal, User } from 'lucide-react';
+import { Bot, ChevronDown, Key, Plug, Server, Terminal, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import type {
@@ -35,6 +35,10 @@ type SourceMeta = { icon: LucideIcon; labelKey: string; tintClass: string; neutr
 const NEUTRAL_CHIP =
   'border border-(--el-border-soft) bg-(--el-surface) text-(--el-text-secondary)';
 
+// ⚠️ A `Record` over the DTO union, NOT a lookup with a runtime fallback: adding
+// a member to `WorkItemPlanningSourceDto` must be a COMPILE error here, so a new
+// planning source can never render as a blank chip. (`api` arrived that way —
+// Subtask 11.2.5, MOTIR-2044.)
 const PLANNING_SOURCE_META: Record<WorkItemPlanningSourceDto, SourceMeta> = {
   native: { icon: Bot, labelKey: 'provenanceSourceNative', tintClass: 'bg-(--el-tint-lavender)' },
   mcp: { icon: Terminal, labelKey: 'provenanceSourceMcp', tintClass: 'bg-(--el-tint-sky)' },
@@ -44,6 +48,10 @@ const PLANNING_SOURCE_META: Record<WorkItemPlanningSourceDto, SourceMeta> = {
     tintClass: NEUTRAL_CHIP,
     neutral: true,
   },
+  // Created by an external client over the public `/api/v1` REST surface — a
+  // distinct origin from `mcp` (the agent tool surface), which is exactly why it
+  // is its own enum member rather than a reused one.
+  api: { icon: Plug, labelKey: 'provenanceSourceApi', tintClass: 'bg-(--el-tint-yellow)' },
 };
 
 const IMPLEMENTATION_SOURCE_META: Record<WorkItemImplementationSourceDto, SourceMeta> = {

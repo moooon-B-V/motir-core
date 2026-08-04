@@ -13,7 +13,8 @@ import {
   readRouteSource,
   v1RouteFiles,
 } from '../../helpers/v1RouteAudit';
-import { createV1Caller } from '../../fixtures/apiV1Fixtures';
+import { createV1Caller, createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The Story 11.1 vitest GATE (Subtask 11.1.5 — MOTIR-1861).
@@ -260,9 +261,12 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
   it('finds the route tree at all (a guard over zero files proves nothing)', () => {
     const files = v1RouteFiles(REPO_ROOT);
 
-    expect(files.length).toBeGreaterThanOrEqual(2);
+    expect(files.length).toBeGreaterThanOrEqual(3);
     expect(files).toContain('app/api/v1/me/route.ts');
     expect(files).toContain('app/api/v1/workspaces/route.ts');
+    // Story 11.2's work-item resource. Named EXPLICITLY so a deleted route is a
+    // failing test rather than a silently smaller sweep.
+    expect(files).toContain('app/api/v1/work-items/[key]/route.ts');
   });
 
   it('EVERY v1 route is clean: no Prisma, no transaction, through the wrapper, scope declared', () => {
@@ -386,22 +390,56 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
   afterEach(restoreEnv);
 
   // Enumerated from the tree rather than listed, so an endpoint added later is
-  // covered by construction. (Parameterised routes arrive with 11.2 and will
-  // extend this with their params; every route in this story is static.)
+  // covered by construction.
+  //
+  // Story 11.2 brought the first PARAMETERISED routes, which this sweep now
+  // fills in: a `[key]` segment gets a work item the caller really owns, so the
+  // route reaches its service and the assertion is about ISOLATION rather than
+  // about a 404 it would have returned anyway. A route whose params this map
+  // cannot fill FAILS LOUDLY — a silently skipped route is a hole in a guard
+  // that reads as coverage.
   it('no v1 route returns ANY identifier belonging to another tenant', async () => {
-    const mine = await createV1Caller({ workspaceName: 'Mine' });
-    const theirs = await createV1Caller({ workspaceName: 'Theirs' });
+    const mine = await createV1ProjectCaller({ workspaceName: 'Mine' });
+    const theirs = await createV1ProjectCaller({ workspaceName: 'Theirs', identifier: 'OTHR' });
 
-    const foreign = [theirs.workspace.id, theirs.user.id, theirs.user.email];
+    const myItem = await createTestWorkItem(mine.fixture, { kind: 'task', title: 'Mine' });
+    const theirItem = await createTestWorkItem(theirs.fixture, { kind: 'task', title: 'Theirs' });
+
+    const foreign = [
+      theirs.workspace.id,
+      theirs.user.id,
+      theirs.user.email,
+      theirItem.id,
+      theirItem.identifier,
+      theirs.fixture.projectId,
+    ];
+
+    /** Fill one `[slug]` segment with a value the CALLER legitimately owns. */
+    const paramValue = (slug: string): string => {
+      if (slug === 'key') return myItem.identifier;
+      if (slug === 'projectKey') return mine.projectKey;
+      throw new Error(
+        `the cross-tenant sweep has no value for the dynamic segment [${slug}] — ` +
+          'add one rather than letting the route be skipped',
+      );
+    };
 
     const modules = await loadV1RouteModules();
-    expect(modules.size, 'the tree really was discovered').toBeGreaterThanOrEqual(2);
+    expect(modules.size, 'the tree really was discovered').toBeGreaterThanOrEqual(3);
 
     for (const [pathname, mod] of modules) {
       if (!mod.GET) continue;
 
+      const params: Record<string, string> = {};
+      const url = pathname.replace(/\[(\w+)\]/g, (_match, slug: string) => {
+        const value = paramValue(slug);
+        params[slug] = value;
+        return encodeURIComponent(value);
+      });
+
       const res = await mod.GET(
-        new Request(`http://localhost:3000${pathname}?limit=100`, { headers: mine.headers }),
+        new Request(`http://localhost:3000${url}?limit=100`, { headers: mine.headers }),
+        { params: Promise.resolve(params) },
       );
       expect(res.status, `${pathname} answers the owning tenant`).toBe(200);
 

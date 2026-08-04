@@ -1739,13 +1739,23 @@ enum WorkItemExplanationSource {
 /// docs/decisions/work-item-provenance.md). A closed set — the AUTHOR CATEGORY,
 /// mirroring `WorkItemExplanationSource`: `native` (materialized from a
 /// motir-ai-generated plan), `mcp` (created through the Motir MCP agent tool
-/// surface), `manual` (created by a human in the UI). The accompanying
-/// `harness`/`model` are open free-text columns, not this enum. Extensible only
-/// by an explicit enum addition + migration.
+/// surface), `manual` (created by a human in the UI), `api` (created by an
+/// external client over the public `/api/v1` REST surface — Story 11.2,
+/// Subtask 11.2.5). The accompanying `harness`/`model` are open free-text
+/// columns, not this enum. Extensible only by an explicit enum addition +
+/// migration.
+///
+/// ⚠️ `api` is a PREREQUISITE of the v1 create endpoint, not a follow-up. Every
+/// write surface stamps which surface made the row, and a row's origin cannot be
+/// reconstructed after the fact: an API-created row left NULL would later be
+/// CLASSIFIED by `lib/workItems/provenanceBackfill.ts` as `mcp` (its
+/// post-seed-burst rule), permanently mislabelling it. Claiming `mcp` outright
+/// would be the same lie told sooner.
 enum WorkItemPlanningSource {
   native
   mcp
   manual
+  api
 
   @@map("work_item_planning_source")
 }

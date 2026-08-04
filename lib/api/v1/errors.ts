@@ -106,6 +106,78 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // tenant's data. 403 answers "your token may not do this KIND of thing";
   // 404 answers "there is no such resource *for you*". (ADR §4.)
   NOT_A_MEMBER: 404,
+
+  // ── Story 11.2, the work-item resource ────────────────────────────────────
+  // Each row is added deliberately and each is exercised by a test that drives
+  // the REAL error through the wrapper — an unproven row is indistinguishable
+  // from a missing one, and a missing one is a silent 500.
+
+  // 11.2.2 (MOTIR-2040) — the single-item read.
+  WORK_ITEM_NOT_FOUND: 404,
+  PROJECT_NOT_FOUND: 404,
+  // ⚠️ 404, NOT 403. A 403 on a project the caller cannot browse confirms that
+  // the project EXISTS — the same existence-oracle argument ADR §4 makes for
+  // cross-tenant access, applied WITHIN a tenant. A caller who may not browse a
+  // project must not be able to enumerate which project keys are real.
+  PROJECT_ACCESS_DENIED: 404,
+
+  // 11.2.6 (MOTIR-2046) — the write pair. Every one is a request the caller can
+  // fix, proven by a test that drives the REAL service error through the wrapper.
+  ILLEGAL_PARENT_TYPE: 422,
+  CROSS_PROJECT_PARENT: 422,
+  PARENT_CYCLE: 422,
+  DEPTH_LIMIT_EXCEEDED: 422,
+  TYPE_NOT_ALLOWED_ON_KIND: 422,
+  ASSIGNEE_NOT_IN_WORKSPACE: 422,
+  REPORTER_NOT_IN_WORKSPACE: 422,
+  UNKNOWN_TARGET_REPO: 422,
+  ARCHIVED_TARGET_REPO: 422,
+  INVALID_ESTIMATE: 422,
+  // ⚠️ 412, a status ADR §4's table does not yet list. A new CONDITION getting a
+  // status is additive under §8 (unlike an existing condition changing one), so
+  // the row is appended to the ADR rather than emitted undocumented.
+  STALE_WORK_ITEM: 412,
+
+  // 11.2.7 (MOTIR-2048) — the transitions sub-resource. Two DISTINCT codes:
+  // collapsing them would make a typo (a status the workflow does not define)
+  // and a workflow rule (a real status not reachable from here) indistinguishable,
+  // and a client can fix only one of those.
+  ILLEGAL_TRANSITION: 422,
+  UNKNOWN_STATUS: 422,
+
+  // 11.2.9 (MOTIR-2051) — the link edges.
+  SELF_LINK: 422,
+  WORK_ITEM_LINK_CYCLE: 422,
+  // ⚠️ 409, a status ADR §4's table does not list either — appended with its
+  // condition, as a NEW condition rather than a changed one. A duplicate link is
+  // a conflict with existing STATE, not a malformed request: the caller's body
+  // is perfectly valid, the edge simply already exists.
+  DUPLICATE_LINK: 409,
+  // 404 on the TARGET key, not 403: confirming that the other item exists in
+  // another tenant is precisely the existence oracle ADR §4 forbids.
+  CROSS_WORKSPACE_LINK: 404,
+  WORKSPACE_MISMATCH_LINK: 404,
+  WORK_ITEM_LINK_NOT_FOUND: 404,
+
+  // 11.2.8 (MOTIR-2049) — comments.
+  COMMENT_NOT_FOUND: 404,
+  EMPTY_COMMENT_BODY: 422,
+  INVALID_PARENT_COMMENT: 422,
+  REPLY_DEPTH_EXCEEDED: 422,
+  // ⚠️ 403, NOT 404 — the one place in this story the existence-oracle rule does
+  // NOT apply. The item's own visibility is settled BEFORE the comment gate
+  // runs, so the caller can already see the item; this is a genuine "you may not
+  // do this KIND of thing" refusal, which is exactly what ADR §4 says 403 means.
+  COMMENT_FORBIDDEN: 403,
+
+  // 11.2.4 (MOTIR-2042) — the FilterAST the collection endpoint accepts. Every
+  // one is a malformed REQUEST the caller can fix, so every one is a 422 with a
+  // code specific enough to act on: which field, which operator, which value.
+  UNKNOWN_FILTER_FIELD: 422,
+  UNKNOWN_FILTER_OPERATOR: 422,
+  INVALID_FILTER_VALUE: 422,
+  FILTER_TOO_LARGE: 422,
+  MALFORMED_FILTER: 422,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */

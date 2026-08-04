@@ -14,6 +14,9 @@ import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+// The PUBLIC API's page ceiling (ADR §5) — imported, never re-declared, so the
+// number a client is promised and the number enforced here cannot drift.
+import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import {
   extractReferencedAttachmentIds,
   extractReferencedAttachmentIdsFromBodies,
@@ -62,11 +65,37 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 /** Jira-faithful page size — the newest window the Activity section renders. */
 export const COMMENT_PAGE_SIZE = 20;
 
+/**
+ * Clamp a requested comment page size to `[1, MAX_PAGE_LIMIT]`, defaulting to
+ * the shipped {@link COMMENT_PAGE_SIZE} (Subtask 11.2.8).
+ *
+ * The ceiling is the PUBLIC API's, imported rather than re-declared so the
+ * number a client is promised and the number enforced here cannot drift. An
+ * omitted / non-finite / non-positive value falls back to the shipped default,
+ * which is what keeps every pre-existing caller byte-for-byte unchanged.
+ */
+function clampCommentPageSize(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit) || limit < 1) return COMMENT_PAGE_SIZE;
+  return Math.min(Math.floor(limit), MAX_PAGE_LIMIT);
+}
+
 export interface ListCommentsOptions {
   /** Resume strictly after this root-comment id (the previous page's last). */
   cursor?: string;
   /** Page-walk direction. Default oldest-first (the Jira default sort). */
   order?: 'asc' | 'desc';
+  /**
+   * How many ROOT comments to return. Defaults to {@link COMMENT_PAGE_SIZE} —
+   * the shipped, Jira-faithful page size — so every existing caller is
+   * unaffected by its addition.
+   *
+   * ⚠️ Added by Story 11.2 · Subtask 11.2.8 (MOTIR-2049) under the ADR's
+   * Amendment 1 read-addressing carve-out: a page-SIZE parameter over an
+   * UNCHANGED predicate. It adds no filter axis, no gate and no field. The
+   * public API documents a `limit` a client may set, and a `?limit=` that
+   * silently did nothing would be worse than not offering one at all.
+   */
+  limit?: number;
 }
 
 interface CommentGate {
@@ -477,15 +506,16 @@ export const commentsService = {
   ): Promise<CommentsPageDTO> {
     const gate = await resolveGatedWorkItem(workItemId, ctx);
     const order = options.order ?? 'asc';
+    const pageSize = clampCommentPageSize(options.limit);
 
     // take+1 probes for a next page without a second count read.
     const window = await commentRepository.listThreadsByWorkItem(workItemId, {
-      take: COMMENT_PAGE_SIZE + 1,
+      take: pageSize + 1,
       cursor: options.cursor,
       order,
     });
-    const roots = window.slice(0, COMMENT_PAGE_SIZE);
-    const hasMore = window.length > COMMENT_PAGE_SIZE;
+    const roots = window.slice(0, pageSize);
+    const hasMore = window.length > pageSize;
 
     const pageComments = roots.flatMap((root) => [root, ...root.replies]);
     const [mentionRows, authors, totalCount] = await Promise.all([

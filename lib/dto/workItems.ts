@@ -25,7 +25,7 @@ export type WorkItemExplanationSourceDto = 'user_authored' | 'ai_draft' | 'user_
  * docs/decisions/work-item-provenance.md) — the closed AUTHOR-CATEGORY sets. The
  * accompanying `harness`/`model` are open free-text strings, not enums.
  */
-export type WorkItemPlanningSourceDto = 'native' | 'mcp' | 'manual';
+export type WorkItemPlanningSourceDto = 'native' | 'mcp' | 'manual' | 'api';
 export type WorkItemImplementationSourceDto = 'hosted' | 'byok' | 'manual';
 /**
  * The work-item TYPE — the NATURE of executable work (Story 2.7). A FIXED
@@ -685,6 +685,25 @@ export interface PagedIssueListDto {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/**
+ * A row of the KEYSET-paged project read (Story 11.2 · Subtask 11.2.3) — the
+ * flat List row plus the two halves of its keyset POSITION.
+ *
+ * `id` and `createdAt` are here because the caller has to mint the cursor for
+ * the next page from the last row it received, and that cursor is
+ * `{ createdAt, id }`. They are the page ADDRESSING, which is exactly what the
+ * ADR's Amendment 1 carve-out permits — `WorkItemListItemDto` itself is
+ * untouched, so the `/items` view's wire shape is unchanged.
+ *
+ * `createdAt` is a `Date` rather than an ISO string: it is a sort key the caller
+ * encodes, not a field it renders, and round-tripping it through a string would
+ * lose sub-millisecond precision that the tuple comparison depends on.
+ */
+export interface WorkItemKeysetItemDto extends WorkItemListItemDto {
+  id: string;
+  createdAt: Date;
 }
 
 /**

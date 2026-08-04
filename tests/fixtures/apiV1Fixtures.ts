@@ -2,6 +2,7 @@ import type { User, Workspace } from '@prisma/client';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import type { TokenScope } from '@/lib/mcp/scopes';
 import { createTestWorkspace } from './workspaceFixtures';
+import { makeWorkItemFixture, type WorkItemFixture } from './workItemFixtures';
 
 // Shared fixtures for the `/api/v1` suites (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858), reused by the pagination, rate-limit, story-gate and
@@ -57,4 +58,48 @@ export async function withTokenFor(
 /** The `Authorization` header for a plaintext PAT. */
 export function bearer(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}` };
+}
+
+/** A caller whose token is bound to a workspace that CONTAINS a project. */
+export interface V1ProjectCaller extends V1Caller {
+  fixture: WorkItemFixture;
+  /** The project key every resource path is scoped by (`PROD`). */
+  projectKey: string;
+  /** The owner's `ServiceContext`, for seeding rows through the real services. */
+  ctx: WorkItemFixture['ctx'];
+}
+
+/**
+ * The substrate every Story 11.2 suite starts from (MOTIR-2040): a user +
+ * workspace + project, plus a REAL PAT bound to THAT workspace.
+ *
+ * `createV1Caller` alone is not enough for a resource endpoint — it mints a
+ * token against a workspace with nothing in it, so every read would answer 404
+ * for the honest reason and prove nothing. Building the two separately is worse:
+ * a token bound to workspace A reading a project in workspace B is the
+ * cross-tenant case, not the happy path, and getting that wrong silently turns a
+ * whole suite green against 404s.
+ */
+export async function createV1ProjectCaller(
+  opts: {
+    scopes?: TokenScope[];
+    /** Workspace name — pass a second one to build an independent tenant. */
+    workspaceName?: string;
+    /** Project key prefix (default `PROD` → items read as `PROD-1`). */
+    identifier?: string;
+  } = {},
+): Promise<V1ProjectCaller> {
+  const fixture = await makeWorkItemFixture({
+    ...(opts.workspaceName ? { name: opts.workspaceName } : {}),
+    ...(opts.identifier ? { identifier: opts.identifier } : {}),
+  });
+  const caller = await withTokenFor(fixture.owner, fixture.workspace, {
+    ...(opts.scopes ? { scopes: opts.scopes } : {}),
+  });
+  return {
+    ...caller,
+    fixture,
+    projectKey: fixture.projectIdentifier,
+    ctx: fixture.ctx,
+  };
 }

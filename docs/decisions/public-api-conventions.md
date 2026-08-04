@@ -1,6 +1,8 @@
 # ADR: The public `/api/v1` contract — versioning, auth, errors, pagination, rate limits, naming, stability
 
-- **Status:** Accepted (2026-08-03)
+- **Status:** Accepted (2026-08-03) · **Amended 2026-08-03** (see
+  [Amendments](#amendments) — Subtask 11.2.1, MOTIR-2038). §5 and §9 must be read
+  together with Amendment 1; response shaping with Amendment 2.
 - **Story / Subtask:** 11.1 (`/api/v1` foundation) · Subtask 11.1.1 (MOTIR-1857)
 - **Gates:** MOTIR-1858 (the shared route wrapper), MOTIR-1859 (pagination),
   MOTIR-1860 (rate limiting), and every endpoint in 11.2 / 11.3. Later cards
@@ -176,14 +178,16 @@ second error shape into the same codebase.
 
 The status table — each row is the condition that produces it:
 
-| Status  | Condition                                                                                                |
-| ------- | -------------------------------------------------------------------------------------------------------- |
-| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**  |
-| **403** | A valid token whose granted scopes do not include the required one                                       |
-| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer       |
-| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation |
-| **429** | The token's rate-limit budget is exhausted (§6)                                                          |
-| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                            |
+| Status  | Condition                                                                                                                                                                                                              |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**                                                                                                                |
+| **403** | A valid token whose granted scopes do not include the required one                                                                                                                                                     |
+| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer                                                                                                                     |
+| **409** | A conflict with existing STATE, not a malformed request — e.g. creating a link that already exists (added 2026-08-03 by Subtask 11.2.9; likewise a new condition, permitted by §8)                                     |
+| **412** | An `If-Match` precondition failed — the resource moved since the validator was issued (added 2026-08-03 by Subtask 11.2.6; a NEW condition getting a status, which §8 permits, not an existing condition changing one) |
+| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation                                                                                                               |
+| **429** | The token's rate-limit budget is exhausted (§6)                                                                                                                                                                        |
+| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                                                                                                                                          |
 
 Three of those rows are decisions, not defaults:
 
@@ -208,6 +212,12 @@ Three of those rows are decisions, not defaults:
 developer can quote one identifier in a support conversation.
 
 ### 5. Pagination — opaque cursor, `?cursor=&limit=`, never offset
+
+> **⚠️ Amended 2026-08-03 — see [Amendment 1](#amendment-1-2026-08-03--a-bounded-read-addressing-carve-out-to-9).**
+> This clause stands unchanged, but satisfying it for a work-item collection
+> requires a **keyset read that does not exist** in the services §9 says v1 may
+> only re-present. The amendment records the bounded carve-out that resolves the
+> conflict. Do not act on §5 or §9 alone.
 
 Every collection returns the **same envelope**: the page's `items` plus the
 cursor for the next page (absent on the last page). `limit` **defaults to 50**
@@ -327,6 +337,13 @@ property that makes an API integrable rather than merely callable.
 
 ### 9. Architecture — a v1 route is a thin adapter
 
+> **⚠️ Amended 2026-08-03 — see [Amendment 1](#amendment-1-2026-08-03--a-bounded-read-addressing-carve-out-to-9)
+> and [Amendment 2](#amendment-2-2026-08-03--a-v1-response-is-a-schema-output-and-each-resource-story-owns-its-schemas).**
+> Amendment 1 carves out a **bounded** exception to the corollary below (a new
+> page ADDRESSING over an unchanged predicate is not new behaviour). Amendment 2
+> settles where the response shapes live. The thin-adapter rule itself, and the
+> no-`db.*` / no-`$transaction` rule, are unchanged.
+
 A `/api/v1` route parses the request, calls the shared wrapper, calls **ONE**
 service method, and returns. **No `db.*`, no `$transaction`, no business logic in
 a route** — the 4-layer contract from `CLAUDE.md`, and MOTIR-1861 asserts it
@@ -370,3 +387,156 @@ epic — not something v1 invents at the edge.
 - **The rate limiter's per-process store is a known, recorded gap** (§6), not an
   omission: correct in a single-instance deployment, weakened proportionally to
   instance count, and swappable without touching a route.
+
+---
+
+## Amendments
+
+Amendments live here rather than rewriting the clauses above, so a reader can
+still see what was originally decided and why it changed. Each is dated, carries
+its own evidence, and records what it rejected — the shape the original uses.
+Per the Consequences above, **a convention found wrong is an amendment card, never
+a per-endpoint deviation**; these are that card (Subtask 11.2.1 — MOTIR-2038).
+
+### Amendment 1 (2026-08-03) — a bounded read-addressing carve-out to §9
+
+**Amends:** §9's corollary ("v1 is a new PRESENTATION of existing capability").
+**Leaves unchanged:** §5 in full, and §9's thin-adapter and no-`db.*` rules.
+
+#### The conflict
+
+§5 mandates keyset cursors and explicitly rejects offset pagination ("simpler to
+implement and impossible to make correct"). §9's corollary says a v1 endpoint
+that appears to need a new service or repository is a card in the owning feature's
+epic. For `GET /api/v1/projects/{projectKey}/work-items` — the flagship read of
+Story 11.2 — **both cannot hold**. Verified on `origin/main` @ `c4ec51b1`, each
+claim cited to the file it was read in:
+
+- **The shipped project read is offset-paged.** `workItemsService.getProjectIssuesList`
+  (`lib/services/workItemsService.ts:2603`) takes `{ sort, filter, page, pageSize }`
+  and passes `{ limit, offset }` into `workItemRepository.findProjectIssuesFlat`
+  (`lib/repositories/workItemRepository.ts:2141`), whose window is a literal
+  `LIMIT … OFFSET …`. Its own comment calls the List "LIMIT/OFFSET-paged".
+- **It clamps below v1's documented ceiling.** `clampIssuePageSize`
+  (`lib/services/workItemsService.ts:476-486`) clamps to
+  `ISSUE_LIST_PAGE_SIZE = 50` (`lib/issues/issueListView.ts:103`), while §5 pins a
+  100 ceiling and `parsePageRequest` (`lib/api/v1/pagination.ts`) tells a caller
+  its `limit` is honoured up to 100. A v1 client asking for 100 would silently
+  receive 50 — the API breaking its own documented promise.
+- **The shipped v1 pager cannot stand in.** `paginateKeyset`
+  (`lib/api/v1/pagination.ts:170`) slices a **fully-read** array. That is correct
+  for `GET /api/v1/workspaces` (a user's own memberships, bounded by how many
+  workspaces a person joins); over a project's work items it is an unbounded read.
+  The Motir project alone holds 1800+ items.
+- **No keyset read serves this collection.** `lib/repositories/workItemRepository.ts`
+  does contain seek-after cursor reads over `work_item` — `findReadyCandidates`
+  (`:809`, a `(priority, kind, key)` cursor) and `findTriageQueue` (`:1038`, a
+  `(voteCount, triagedAt, id)` cursor) — so the claim is **not** that the
+  repository has never seen a cursor. It is narrower and it is what matters: each
+  pages a _different collection_ under a _different order_, and **none pages the
+  project List predicate**, which has only the offset read above.
+
+#### The decision
+
+**§9's bar on a new service or repository is a bar on new BEHAVIOUR.** New
+behaviour is a new filter axis, a new access gate, a new response field, a new
+write. A **page ADDRESSING** over an unchanged predicate is none of those: the
+result SET is byte-for-byte the set the `/items` view already returns for the same
+filter, and only the way a position _within_ that set is named changes.
+
+So a v1-added read **may** reuse an existing predicate with a different page
+addressing — including an optional page-SIZE parameter where the shipped read has
+a fixed one — **and may do nothing else.** The bounds, stated so this cannot be
+read as licence for v1 to grow behaviour at the edge:
+
+| Permitted under the carve-out                                    | NOT permitted — still a card in the owning epic |
+| ---------------------------------------------------------------- | ----------------------------------------------- |
+| A keyset window over the **same compiled predicate**             | A new filter axis or facet                      |
+| A different ORDER BY, where the ordering is the page addressing  | A new or relaxed access gate                    |
+| An optional `limit` where the shipped read has a fixed page size | A new field on the returned row                 |
+| Fetching `limit + 1` instead of a `COUNT` denominator            | Any migration                                   |
+|                                                                  | Any write path                                  |
+|                                                                  | Raising an EXISTING cap on an existing method   |
+
+Two consequences that are part of the decision, not commentary:
+
+- **The predicate must be SHARED at the source level**, not re-expressed. Two
+  predicates for one filter is how the API and the web app begin disagreeing about
+  what a filter means — which is the failure §5's parity criterion exists to catch.
+- **No existing cap moves.** `ISSUE_LIST_PAGE_SIZE = 50` is a Cloud performance
+  bound on the offset pager and stays exactly where it is; the new read clamps to
+  `MAX_PAGE_LIMIT = 100` independently.
+
+The carve-out is used twice in Story 11.2 and both uses are enumerated here, so a
+third is a visible extension rather than a precedent quietly accreting: the keyset
+project work-item read (11.2.3 — MOTIR-2041) and an optional `limit` on
+`commentsService.listComments`, whose page size is today the fixed
+`COMMENT_PAGE_SIZE = 20` (11.2.8 — MOTIR-2049).
+
+#### Rejected alternatives
+
+| Rejected                                                                         | Why                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wrap the offset page in an opaque cursor** (as `lib/mcp/searchCursor.ts` does) | That cursor wraps a page NUMBER — legitimate there, because `search_work_items` must page IDENTICALLY to the offset-paged `/items` view it claims parity with. v1 has no such constraint, and adopting it would reintroduce exactly the skip/duplicate defect §5 rejects, on the busiest, most-written collection in the product, while making "cursor" mean two different things inside one API. |
+| **Read every row, then `paginateKeyset` in memory**                              | The unbounded read Story 11.2's own completeness criterion forbids, over a collection already past 1800 rows in Motir's own tenant. It would page _correctly_ and fall over under exactly the scale the API exists to serve.                                                                                                                                                                      |
+| **Raise `ISSUE_LIST_PAGE_SIZE` to 100 and reuse the offset read**                | Changes the web app's shipped performance envelope to suit the API — a v1 concern reaching into a product surface — and still leaves the offset skip/duplicate defect §5 rejects.                                                                                                                                                                                                                 |
+| **Let v1 lower its ceiling to 50 for this endpoint**                             | §5's 100 is documented and already enforced by `parsePageRequest`. A single endpoint silently capping lower is the per-endpoint deviation the Consequences section forbids, and it is invisible to the client.                                                                                                                                                                                    |
+
+### Amendment 2 (2026-08-03) — a v1 response is a schema output, and each resource story owns its schemas
+
+**Amends:** the schema-ownership split between Story 11.2 / 11.3 and Story 11.4.
+**Leaves unchanged:** §7 (identifiers on the wire) and §8 (additive-only stability).
+
+#### The problem
+
+The two shipped routes shape their rows **inline**, and for the right reason:
+`app/api/v1/me/route.ts` records that "the response is shaped explicitly rather
+than spread, because `verify` returns the raw Prisma `User` row and a public API
+must never leak one". `app/api/v1/workspaces/route.ts` does the same for its rows.
+That instinct is correct and must survive.
+
+The inline FORM does not. Story 11.2 has ten endpoints returning one work-item
+shape — list, detail, create, update, transition, archive — and ten inline
+literals for one resource is ten places for the contract to drift.
+
+Story 11.4 had claimed "one schema module per resource" as its own deliverable.
+**That direction is backwards and is corrected here:** it would have 11.2 and 11.3
+ship routes with ad-hoc inline shapes and then retrofit every one of them —
+precisely the drift 11.4 exists to prevent, performed deliberately.
+
+#### The decision
+
+**Each resource story ships the `zod` RESPONSE schemas next to its own routes;
+Story 11.4 ASSEMBLES.** One sentence each:
+
+- **11.2** owns the work-item resource schemas — the summary row, the detail
+  aggregate, the link groups, the comment shape — in `lib/api/v1/workItems/`.
+- **11.3** owns the project, sprint, backlog and ready-set schemas, in its own
+  per-resource modules, on the same pattern.
+- **11.4** owns the SHARED envelope, error and pagination schemas, the OpenAPI 3.1
+  emission, the route↔spec CI guard, the published reference and the stability
+  policy — and authors **no** per-resource shape.
+
+**Rung 1:** this is how every schema-first HTTP stack works — `zod-to-openapi`,
+FastAPI, NestJS. The schema is declared _with_ the operation; the document is
+_assembled from_ the operations. Nothing else keeps a spec honest, because a spec
+authored apart from its routes is a second artifact that can be wrong.
+
+**The corollary is the load-bearing half: a v1 response is a v1 schema's output,
+never a service DTO passed through.** A service DTO (`IssueDetailDto`,
+`WorkItemListItemDto`) is internal and changes freely whenever a page needs it to.
+§8's additive-only promise cannot ride something nobody promised to keep still: a
+column added by a later migration would become public API the moment it reached a
+DTO, and a DTO field renamed for the web app's convenience would be a silent
+breaking change. The mapper is the seam where that stops, which is why it shapes
+**field by field and never spreads** — the generalisation of what
+`app/api/v1/me/route.ts` already does one layer down.
+
+#### Rejected alternatives
+
+| Rejected                                                      | Why                                                                                                                                                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **11.4 authors every per-resource schema** (as first planned) | Means 11.2 and 11.3 ship inline shapes first and retrofit later — shipping the exact drift 11.4 exists to prevent, on purpose, and paying for it twice.                                                                      |
+| **Return the service DTO directly**                           | Makes an internal shape a public promise. A later migration's column becomes contract by accident; a DTO rename becomes a silent breaking change. §8 cannot be honoured on a shape nobody owns.                              |
+| **Keep shaping inline, per route**                            | Ten literals for one resource. The list row and the detail row would drift apart with nothing failing, and there is nothing for 11.4 to emit a spec from.                                                                    |
+| **Hand-write the OpenAPI document alongside the routes**      | A second artifact that can silently disagree with the code. Deriving the document from the schemas the routes actually use is the only form where "the spec is wrong" is a test failure rather than a discovery by a client. |

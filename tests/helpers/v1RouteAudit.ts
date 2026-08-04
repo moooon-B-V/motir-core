@@ -22,7 +22,15 @@ export interface RouteViolation {
   /** Repo-relative path of the offending file. */
   file: string;
   /** A stable identifier for the rule that was broken. */
-  rule: 'prisma-in-route' | 'transaction-in-route' | 'bypasses-wrapper' | 'no-scope-declared';
+  rule:
+    | 'prisma-in-route'
+    | 'transaction-in-route'
+    | 'bypasses-wrapper'
+    | 'no-scope-declared'
+    // ── Added by Story 11.2 · Subtask 11.2.11 (MOTIR-2053) ──────────────────
+    | 'imports-mcp-tools'
+    | 'reaches-cascade-delete'
+    | 'declares-delete-scope';
   detail: string;
 }
 
@@ -91,6 +99,38 @@ export function auditV1RouteSource(file: string, source: string): RouteViolation
     }
   }
 
+  // ── The two surfaces align through SCHEMAS, never through IMPORTS ────────
+  // A public route reaching into `lib/mcp/tools/**` couples a STABLE contract to
+  // a deliberately fluid one, and it is the direction the epic explicitly
+  // rejects: MCP tools are not re-pointed at HTTP, and HTTP does not reach into
+  // MCP. (Story 11.6 pins the alignment through the response schemas instead.)
+  if (/from\s+['"]@\/lib\/mcp\/tools\//.test(source)) {
+    violations.push({
+      file,
+      rule: 'imports-mcp-tools',
+      detail: 'a v1 route imports from lib/mcp/tools — the two surfaces align through schemas',
+    });
+  }
+
+  // ── The irreversible cascade delete stays UNREACHABLE ────────────────────
+  // ADR §3 leaves it out of v1's first cut, and its own condition for doing so
+  // is that the omission be asserted — otherwise it can be undone by a single
+  // later edit that nobody reads as a contract change.
+  if (/\bdeleteWorkItem\s*\(/.test(code)) {
+    violations.push({
+      file,
+      rule: 'reaches-cascade-delete',
+      detail: 'a v1 route reaches deleteWorkItem — the irreversible subtree delete is not exposed',
+    });
+  }
+  if (/scope\s*:\s*['"]work_items:delete['"]/.test(source)) {
+    violations.push({
+      file,
+      rule: 'declares-delete-scope',
+      detail: 'a v1 route declares work_items:delete, a scope v1 does not expose',
+    });
+  }
+
   // ── Every route DECLARES its required scope ──────────────────────────────
   const wrapperCalls = code.match(/withV1Route\s*[<(]/g)?.length ?? 0;
   const scopeDeclarations = source.match(/scope\s*:\s*['"][a-z_:]+['"]/g)?.length ?? 0;
@@ -112,18 +152,58 @@ export function declaredScopes(source: string): string[] {
   );
 }
 
+/**
+ * The scope each exported VERB declares, keyed by method (Subtask 11.2.11).
+ *
+ * Per-verb rather than per-file, because the ADR's §3 map is per OPERATION: one
+ * module legitimately exports a `read` GET beside a `work_items:write` POST, and
+ * a file-level check cannot tell a correct pairing from a wrong one.
+ *
+ * A verb whose scope cannot be read maps to `undefined` rather than being
+ * dropped, so the caller can FAIL on it — silently skipping an unparseable route
+ * is a hole in a guard that still reads as coverage.
+ */
+export function declaredScopeByMethod(source: string): Map<string, string | undefined> {
+  const found = new Map<string, string | undefined>();
+  for (const method of HTTP_METHODS) {
+    const declaration = new RegExp(
+      `export\\s+const\\s+${method}\\s*=\\s*withV1Route\\s*(?:<[^>]*>)?\\s*\\(\\s*\\{[^}]*?scope\\s*:\\s*['"]([a-z_:]+)['"]`,
+    ).exec(source);
+    if (declaration) {
+      found.set(method, declaration[1]);
+      continue;
+    }
+    // Exported but unreadable — record it as present-with-unknown-scope.
+    if (new RegExp(`export\\s+const\\s+${method}\\s*=`).test(source)) {
+      found.set(method, undefined);
+    }
+  }
+  return found;
+}
+
 /** Read a route file's source, repo-relative. */
 export function readRouteSource(repoRoot: string, file: string): string {
   return readFileSync(join(repoRoot, file), 'utf8');
 }
 
+/**
+ * A route handler as Next.js calls it: the request, plus the resolved dynamic
+ * params for a parameterised segment. The second argument is OPTIONAL because a
+ * static route ignores it — but it must be in the TYPE, or a sweep over the tree
+ * cannot drive `app/api/v1/work-items/[key]/route.ts` at all (Story 11.2).
+ */
+export type V1RouteHandler = (
+  req: Request,
+  args?: { params: Promise<Record<string, string>> },
+) => Promise<Response>;
+
 /** The App-Router handler exports a route module can carry. */
 export interface V1RouteModule {
-  GET?: (req: Request) => Promise<Response>;
-  POST?: (req: Request) => Promise<Response>;
-  PUT?: (req: Request) => Promise<Response>;
-  PATCH?: (req: Request) => Promise<Response>;
-  DELETE?: (req: Request) => Promise<Response>;
+  GET?: V1RouteHandler;
+  POST?: V1RouteHandler;
+  PUT?: V1RouteHandler;
+  PATCH?: V1RouteHandler;
+  DELETE?: V1RouteHandler;
 }
 
 /**

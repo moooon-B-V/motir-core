@@ -873,6 +873,7 @@
     "provenanceSourceNative": "Native",
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "Manual",
+    "provenanceSourceApi": "API",
     "provenanceSourceHosted": "Hosted",
     "provenanceSourceByok": "BYOK",
     "changedElsewhereRefreshing": "This work item changed elsewhere — refreshing.",
