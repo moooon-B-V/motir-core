@@ -129,30 +129,39 @@ export interface PageRequest {
  */
 export function parsePageRequest(req: Request): PageRequest {
   const params = new URL(req.url).searchParams;
-
-  const rawLimit = params.get('limit');
-  let limit = DEFAULT_PAGE_LIMIT;
-  if (rawLimit !== null && rawLimit !== '') {
-    if (!/^\d+$/.test(rawLimit)) {
-      throw new InvalidRequestError(
-        'INVALID_LIMIT',
-        'The `limit` parameter must be a positive integer.',
-      );
-    }
-    const parsed = Number(rawLimit);
-    if (parsed < 1) {
-      throw new InvalidRequestError(
-        'INVALID_LIMIT',
-        'The `limit` parameter must be a positive integer.',
-      );
-    }
-    limit = Math.min(parsed, MAX_PAGE_LIMIT);
-  }
+  const limit = parseLimitParam(params);
 
   const rawCursor = params.get('cursor');
   const cursor = rawCursor !== null && rawCursor !== '' ? decodePageCursor(rawCursor) : undefined;
 
   return { limit, cursor };
+}
+
+/**
+ * The `?limit=` half of {@link parsePageRequest}, on its own.
+ *
+ * Extracted so the collection-scoped parser below applies the IDENTICAL rules
+ * rather than a second copy of them — v1's ceiling is a promise in the ADR (§5),
+ * and two implementations of one promise is how one of them drifts.
+ */
+function parseLimitParam(params: URLSearchParams): number {
+  const rawLimit = params.get('limit');
+  if (rawLimit === null || rawLimit === '') return DEFAULT_PAGE_LIMIT;
+
+  if (!/^\d+$/.test(rawLimit)) {
+    throw new InvalidRequestError(
+      'INVALID_LIMIT',
+      'The `limit` parameter must be a positive integer.',
+    );
+  }
+  const parsed = Number(rawLimit);
+  if (parsed < 1) {
+    throw new InvalidRequestError(
+      'INVALID_LIMIT',
+      'The `limit` parameter must be a positive integer.',
+    );
+  }
+  return Math.min(parsed, MAX_PAGE_LIMIT);
 }
 
 /**
@@ -205,4 +214,202 @@ function isAfter(row: Keyed, cursor: PageCursor): boolean {
   const cursorTime = Date.parse(cursor.createdAt);
   if (rowTime !== cursorTime) return rowTime > cursorTime;
   return row.id.localeCompare(cursor.id) > 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The COLLECTION-SCOPED cursor over a SERVICE-OWNED position
+// (Story 11.3 · Subtask 11.3.2 — MOTIR-2059)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Everything above encodes ONE order: `(createdAt, id)`. That is the right order
+// for 11.1's and 11.2's collections and the WRONG one for every collection in
+// Story 11.3 — the backlog and a sprint's members are ordered by `backlogRank`,
+// the ready set by the `(type asc, priority desc, key asc)` DISPATCH rank, a
+// project's sprints by `sequence`. Two of the DTOs involved cannot even satisfy
+// `Keyed`: `SprintDto` has no `createdAt`, and `ProjectDTO.createdAt` is optional
+// and deliberately unloaded on the list path.
+//
+// So the cursor below wraps a position the SERVICE owns — the token the
+// underlying read already speaks — instead of one v1 invented. ADR Amendment 3
+// (Q1) is the contract; the three properties §5 gives the cursor are unchanged
+// and are the reason this is safe:
+//
+//   • KEYSET — the payload is a seek-after POSITION in the collection's own
+//     order, never a page number or a row offset.
+//   • OPAQUE — the SAME HMAC construction and the SAME `BETTER_AUTH_SECRET`-
+//     derived key as `encodePageCursor`. This is exactly what licenses the
+//     generalization: the wrapped position may be any service token precisely
+//     because nobody outside the server can read or forge one.
+//   • A BAD CURSOR IS A 422, NEVER A SILENT RESET — including the new case
+//     below.
+//
+// ⚠️ COLLECTION-SCOPED, and that is the load-bearing addition. The backlog's
+// position and a sprint member's position are BOTH a bare row id: structurally
+// identical, so without a scope one would decode cleanly into the other and
+// return a page positioned by a row that is not in that collection at all — a
+// silently wrong page, which is worse than the refusal §5 already prescribes for
+// a foreign cursor. The narrower `(createdAt, id)` shape never had this problem
+// because every collection shared one order.
+
+/** The collections that issue a service-positioned cursor. */
+export const V1_COLLECTIONS = [
+  'projects',
+  'sprints',
+  'backlog',
+  'sprintWorkItems',
+  'ready',
+] as const;
+
+/** The name a cursor carries so it can only be replayed at its own collection. */
+export type V1Collection = (typeof V1_COLLECTIONS)[number];
+
+/**
+ * The list envelope PLUS the total behind it — the one documented variant
+ * (ADR Amendment 3, Q2).
+ *
+ * Returned ONLY by collections whose shipped read already computes the count as
+ * a bounded aggregate: the backlog and a sprint's members, both of which get it
+ * from `RankedIssuePageDto`. Every other collection returns {@link ListEnvelope}
+ * and omits the field entirely — absent, never `null` and never `0`, because a
+ * `null` a client cannot distinguish from a real answer is a shape that lies.
+ *
+ * Declared HERE, beside `ListEnvelope`, so Story 11.4 emits two named envelope
+ * schemas from one place rather than rediscovering the split per endpoint.
+ */
+export interface RankedListEnvelope<T> extends ListEnvelope<T> {
+  totalCount: number;
+}
+
+/** The signed payload: which collection issued this, and the position it names. */
+interface CollectionCursorPayload {
+  /** The issuing collection. */
+  c: string;
+  /** The service-owned position, whatever shape that service speaks. */
+  p: unknown;
+}
+
+function invalidCursor(): InvalidRequestError {
+  // The SAME code a tampered token gets. A client cannot fix either by
+  // inspecting the cursor (it is opaque by construction), so distinguishing
+  // "forged" from "presented to the wrong collection" would only tell an
+  // attacker which half of the check they failed.
+  return new InvalidRequestError(
+    'INVALID_CURSOR',
+    'The `cursor` parameter is not a valid page cursor.',
+  );
+}
+
+/**
+ * Issue an opaque cursor naming `position` within `collection`.
+ *
+ * `position` is whatever the underlying read takes back — a row id for the
+ * rank-ordered collections, a `(kind, priority, key)` tuple for the ready set, a
+ * `sequence` for sprints. It is JSON-serialised, so it must be JSON-safe; a
+ * `Date` is a caller error, exactly as it is for {@link encodePageCursor}.
+ */
+export function encodeCollectionCursor(collection: V1Collection, position: unknown): string {
+  const payload = Buffer.from(
+    JSON.stringify({ c: collection, p: position } satisfies CollectionCursorPayload),
+    'utf8',
+  ).toString('base64url');
+  return `${payload}.${sign(payload)}`;
+}
+
+/**
+ * Read a cursor back, or raise the v1 422.
+ *
+ * Three checks, in this order, because each is meaningless without the one
+ * before it:
+ *
+ *   1. The SIGNATURE verifies — so the payload is one we issued and has not been
+ *      edited. A cursor from another deployment fails here, because the signing
+ *      key is derived from that deployment's own secret.
+ *   2. The COLLECTION matches — so a cursor cannot be replayed against a
+ *      different collection whose positions happen to have the same shape.
+ *   3. `readPosition` accepts the payload — so a cursor whose signature is
+ *      genuine but whose position is not one this collection can use (an older
+ *      release's shape, a hand-rolled test fixture) is refused rather than fed
+ *      to a read that would do something undefined with it.
+ *
+ * Every failure is the same 422 and NEVER a fall back to "start from the top":
+ * a silent reset is the failure mode that makes a client loop forever over the
+ * first page.
+ */
+export function decodeCollectionCursor<T>(
+  raw: string,
+  collection: V1Collection,
+  readPosition: (position: unknown) => T | undefined,
+): T {
+  const dot = raw.lastIndexOf('.');
+  if (dot <= 0 || dot === raw.length - 1) throw invalidCursor();
+
+  const payload = raw.slice(0, dot);
+  const presented = Buffer.from(raw.slice(dot + 1), 'base64url');
+  const expected = Buffer.from(sign(payload), 'base64url');
+  if (presented.length !== expected.length || !timingSafeEqual(presented, expected)) {
+    throw invalidCursor();
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    throw invalidCursor();
+  }
+  if (typeof parsed !== 'object' || parsed === null) throw invalidCursor();
+
+  const { c, p } = parsed as CollectionCursorPayload;
+  if (c !== collection) throw invalidCursor();
+
+  const position = readPosition(p);
+  if (position === undefined) throw invalidCursor();
+  return position;
+}
+
+/** A validated `?cursor=&limit=` pair for a service-positioned collection. */
+export interface CollectionPageRequest<T> {
+  limit: number;
+  cursor: T | undefined;
+}
+
+/**
+ * Parse `?cursor=&limit=` for a service-positioned collection.
+ *
+ * The `limit` rules are {@link parsePageRequest}'s, unchanged and shared rather
+ * than re-implemented: default 50, clamp DOWN to {@link MAX_PAGE_LIMIT}, and
+ * 422 on `0`, a negative, a fractional or a non-numeric value.
+ *
+ * ⚠️ The clamp is v1's OWN ceiling and is applied BEFORE the service sees the
+ * number, so an underlying read that permits more does not raise it — the ready
+ * set's `clampReadyLimit` allows 200, and a v1 caller asking for 200 gets 100.
+ * ADR §5 documents 100 and Amendment 1 already forbids v1 raising an existing
+ * cap; this is the mirror obligation.
+ */
+export function parseCollectionPageRequest<T>(
+  req: Request,
+  collection: V1Collection,
+  readPosition: (position: unknown) => T | undefined,
+): CollectionPageRequest<T> {
+  const params = new URL(req.url).searchParams;
+  const limit = parseLimitParam(params);
+
+  const rawCursor = params.get('cursor');
+  const cursor =
+    rawCursor !== null && rawCursor !== ''
+      ? decodeCollectionCursor(rawCursor, collection, readPosition)
+      : undefined;
+
+  return { limit, cursor };
+}
+
+/**
+ * The position reader for a collection whose cursor is an opaque ROW ID — the
+ * backlog and a sprint's members, both of which hand `backlogService` the last
+ * id of the previous page.
+ *
+ * Shared so the two collections cannot disagree about what a valid id looks
+ * like; the collection SCOPE, not the shape, is what keeps their cursors apart.
+ */
+export function readRowIdPosition(position: unknown): string | undefined {
+  return typeof position === 'string' && position.length > 0 ? position : undefined;
 }
