@@ -47,6 +47,7 @@ axis — is what makes "style × palette" a product of two independent choices, 
 | Links               | cleaner sky-blue, distinct from primary — `#0d63b8` → `#6fb3ff`                                                       |
 | Semantic            | danger `#d3322f`/`#d83847` · success `#18874c`/`#34c578` · warning `#c2410c`/`#f08a4b` · info `#0d63b8`               |
 | Status ramp         | `--el-status-in-review` set directly — Radix Indigo 12 `#1f2d5c` (light) / rides `--color-primary` (dark) — see below |
+| Priority ramp       | `--el-priority-high` set directly — Radix Amber 11 `#ab6400` (light) / rides `--color-warning` (dark) — see below     |
 | Pastel tints        | cooled feature washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}` (sky/lavender lead the cool set)            |
 | Work-item type hues | re-skin automatically via the `--color-*` they map to — code/research read cobalt, design/epic read cyan              |
 
@@ -68,6 +69,27 @@ Dark needs no change (its two blues are already ΔE 10.4 apart) but **re-asserts
 `[data-theme='dark']` block tie on specificity, and the palette block comes later
 in the sheet — so an unpaired light override would leak onto the dark canvas.
 `tests/theme/statusHueSeparation.test.ts` enforces the pairing.
+
+### The priority ramp — why `high` is set directly
+
+The same shape one family over (MOTIR-2085). `--el-priority-highest` rides
+`--color-destructive` (`#d3322f`) and `--el-priority-high` rides
+`--color-warning` (`#c2410c`) — but Cobalt's warning is a **red-leaning burnt
+orange**, so in light the two land ΔE2000 **9.9** apart: under the ΔE 10 bar a
+coloured priority GLYPH needs (the bar calibrated for the status dot in
+MOTIR-2073, and the reason a glyph family is held to a different floor than a
+pale tint background).
+
+Neither semantic moves — danger stays danger, warning stays warning. Instead the
+**priority ramp takes its own step of a hue Cobalt already owns**: **Radix Amber
+11** `#ab6400`, from the palette's documented Radix source set. Separation from
+`highest` **ΔE 24.3**; contrast **4.6:1** on `--el-card` and **4.1:1** on
+`--el-surface`, past the 3:1 icon/UI bar.
+
+Dark needs no change (its `#d83847` / `#f08a4b` are already ΔE 25.8 apart) but
+**re-asserts `var(--color-warning)`** for the same cascade reason as the status
+override above. `tests/theme/familyHueSeparation.test.ts` enforces both the floor
+and the pairing.
 
 ## Accessibility
 

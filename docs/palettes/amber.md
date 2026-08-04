@@ -52,8 +52,21 @@ axis's job, enforced by `tests/theme/paletteRegistry.test.ts`.
 | Borders             | cool graphite hairlines — `#e6e8eb` → `#2b3139`                                                            |
 | Links               | clear blue, distinct from the gold — `#1366c4` → `#6fb3ff`                                                 |
 | Semantic            | Binance buy-green `#0ECB81` + sell-red `#F6465D` (darkened for light AA) · warning amber · info blue       |
-| Pastel tints        | gold-leaning warm washes + cool feature hues — `--el-tint-{peach,rose,mint,lavender,sky,yellow}`           |
+| Pastel tints        | gold-leaning warm washes + cool feature hues; `tint-peach` leans orange, not gold — see below              |
 | Work-item type hues | re-skin via the `--color-*` they map to — story reads buy-green, bug reads sell-red, code/task read cool   |
+
+### The pastel tints — why `peach` leans orange
+
+Gilding every warm tint toward the Binance gold had collapsed **`tint-peach`
+onto `tint-yellow`**: ΔE2000 **1.7** in dark and **4.3** in light, the two
+most-used washes reading as one chip (MOTIR-2085). The ramp is the six
+label-chip hues AND the six project-avatar hues (one ramp, two consumers), so a
+duplicate means two different labels render identically.
+
+`tint-yellow` keeps the gold — it is the palette's signature wash. `tint-peach`
+moves to a clearly ORANGE warm wash instead: `#fbdfc0` light / `#331f10` dark.
+Separation from `yellow` is now **ΔE 8.8** light / **11.2** dark. Binance ink on
+the new wash stays **≥10:1**.
 
 ## Accessibility
 

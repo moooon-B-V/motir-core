@@ -40,18 +40,18 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 
 ## Colour roles (the `--el-*` element-token layer)
 
-| Role group          | Sienna / Mistral (light → dark)                                                                                                |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Text scale          | Mistral warm-charcoal ink — `#1f1f1f` → `#f5efe2`; secondary `#4a4a4a` → `#b3a892`                                             |
-| Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#c4400a` → `#ff8a4c` text         |
-| Surfaces            | Mediterranean Warm-Ivory `#fffaeb` over cream `#fbf1d3` → warm-black `#15120d` / `#1f1d17`                                     |
-| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#f5e9cb` → `#100d08`                                            |
-| Borders             | warm beige hairlines — `#ece0c4` → `#322c1d`                                                                                   |
-| Links               | the brand orange (darkened flame) — `#c4400a` → `#ff9a5c`                                                                      |
-| Semantic            | added warm-consistent (Mistral ships none) — success/warning/danger/info, AA-safe in both themes                               |
-| Status ramp         | `--el-status-blocked` set directly — the palette's amber accent `#b5660a` (light) / rides `--color-warning` (dark) — see below |
-| Pastel tints        | Mistral's golden washes (`tint-yellow` = Block Gold `#ffe295`) + warm feature hues                                             |
-| Work-item type hues | re-skin via the `--color-*` they map to — review/warning read warm amber; the rest stay distinguishable                        |
+| Role group          | Sienna / Mistral (light → dark)                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Text scale          | Mistral warm-charcoal ink — `#1f1f1f` → `#f5efe2`; secondary `#4a4a4a` → `#b3a892`                                                   |
+| Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#c4400a` → `#ff8a4c` text               |
+| Surfaces            | Mediterranean Warm-Ivory `#fffaeb` over cream `#fbf1d3` → warm-black `#15120d` / `#1f1d17`                                           |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#f5e9cb` → `#100d08`                                                  |
+| Borders             | warm beige hairlines — `#ece0c4` → `#322c1d`                                                                                         |
+| Links               | the brand orange (darkened flame) — `#c4400a` → `#ff9a5c`                                                                            |
+| Semantic            | added warm-consistent (Mistral ships none) — success/warning/danger/info, AA-safe in both themes                                     |
+| Status ramp         | `--el-status-blocked` set directly — the palette's amber accent `#b5660a` (light) / rides `--color-warning` (dark) — see below       |
+| Pastel tints        | Mistral's golden washes (`tint-yellow` = Block Gold `#ffe295`) + warm feature hues; `tint-sky` is the palette's own teal — see below |
+| Work-item type hues | re-skin via the `--color-*` they map to — review/warning read warm amber; the rest stay distinguishable                              |
 
 ### The status ramp — why `blocked` is set directly
 
@@ -70,6 +70,22 @@ Dark needs no change (its amber and flame are already ΔE 11.9 apart) but
 `[data-theme='dark']` block tie on specificity, and the palette block comes later
 in the sheet, so an unpaired light override would leak onto the dark canvas.
 `tests/theme/statusHueSeparation.test.ts` enforces the pairing.
+
+### The pastel tints — why `sky` is a teal, not another olive
+
+Warming every cool tint is the right instinct for a Mediterranean palette, but
+taken to six washes it had walked **two of them onto one colour**: `tint-sky`
+and `tint-mint` measured ΔE2000 **1.3** in dark and **3.4** in light — the same
+olive doing two jobs (MOTIR-2085). That ramp is not decoration: it is the six
+label-chip hues AND the six project-avatar hues (one ramp, two consumers), so a
+duplicate means two different labels render as the same chip.
+
+`tint-sky` is now a muted wash of the palette's **own teal accent**
+(`--color-accent-teal` `#0e8f86`) rather than a third olive — `#d9e8e4` light /
+`#1b2622` dark. Still Mediterranean, just the sea rather than the hillside.
+Separation from `mint` is now **ΔE 8.8** light / **5.9** dark, and the
+selected-row vs drop-target pair (which draws from `sky` and `lavender`) improves
+to **9.5** / **9.3**. Charcoal on the new wash stays **≥11:1**.
 
 ## Accessibility
 
