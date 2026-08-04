@@ -115,18 +115,21 @@ afterEach(() => {
 });
 
 describe('CreateIssueModal — entry points', () => {
-  it('the top-nav "+" button opens the modal', () => {
+  it('the top-nav "+" button opens the modal', async () => {
     render(<Shell />);
     expect(modalHeading()).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Create work item' }));
     expect(modalHeading()).not.toBeNull();
+    // Opening mounts ParentPicker, which loads its candidates in an effect.
+    await act(async () => {});
   });
 
-  it('the global "C" shortcut opens the modal', () => {
+  it('the global "C" shortcut opens the modal', async () => {
     render(<Shell />);
     expect(modalHeading()).toBeNull();
     fireEvent.keyDown(window, { key: 'c' });
     expect(modalHeading()).not.toBeNull();
+    await act(async () => {});
   });
 
   it('the ⌘K palette "Create issue" command opens the modal', async () => {
@@ -153,7 +156,7 @@ describe('CreateIssueModal — validation + submit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create work item' }));
   }
 
-  it('Create is disabled until a non-empty title is entered', () => {
+  it('Create is disabled until a non-empty title is entered', async () => {
     openModal();
     const submit = screen.getByRole('button', { name: 'Create' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
@@ -162,6 +165,7 @@ describe('CreateIssueModal — validation + submit', () => {
     // Whitespace-only is still empty.
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: '   ' } });
     expect(submit.disabled).toBe(true);
+    await act(async () => {});
   });
 
   it('submit calls createIssueAction with the form values, toasts, and closes', async () => {
@@ -222,7 +226,7 @@ describe('CreateIssueModal — validation + submit', () => {
   // (the disclosure toggle header AND the editor's own visible label). The editor
   // label is now hidden (the toggle supplies the visible label), so exactly one
   // visible "Explanation" renders, while the editor keeps its accessible name.
-  it('renders the "Explanation" label only once when the section is expanded', () => {
+  it('renders the "Explanation" label only once when the section is expanded', async () => {
     openModal();
     fireEvent.click(screen.getByRole('button', { name: 'Explanation' }));
 
@@ -230,6 +234,7 @@ describe('CreateIssueModal — validation + submit', () => {
     expect(screen.getAllByText('Explanation')).toHaveLength(1);
     // The explanation editor is still reachable by its accessible name.
     expect(screen.getByLabelText('Explanation')).toBeTruthy();
+    await act(async () => {});
   });
 
   it('threads a chosen Due date through as a UTC ISO string; a plain create omits it', async () => {

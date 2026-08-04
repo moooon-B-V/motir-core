@@ -613,19 +613,28 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
   nothing server-side, so re-dragging is safe.
 - **Fixed `waitForTimeout` is a smell** — it's a guess, not a signal. Wait on
   the response, a DOM/role state, or `expect.poll` of an authoritative read.
-- **The same rule holds one altitude down, in a Vitest + RTL COMPONENT test.**
-  A callback fired from a `useEffect` is NOT covered by an awaited `findBy*`.
-  React flushes passive effects on a scheduler callback AFTER commit, and RTL
-  deliberately turns the act environment OFF for the async queries, draining
-  with a bare zero-delay timer. So a rendered node proves the RENDER landed,
-  never that the effect ran — and a plain, non-retrying `expect(mock)` right
-  after it reads zero calls whenever that drain wins the race, which is exactly
-  what a loaded CI runner makes happen. Assert an **effect-driven** mock inside
-  a retrying `waitFor`, and flush the effect pass with an awaited empty async
-  `act` before a **negative** assertion, which would otherwise pass vacuously.
-  An **event-handler** callback is invoked synchronously inside the dispatched
-  handler, so it needs no wait. (MOTIR-1736: the `ProjectRoadmapCanvas`
-  auto-reset assertion flaked two PRs this way, on diffs that never touched it.)
+- **One altitude down, in a Vitest + RTL COMPONENT test, the act environment
+  now enforces this for you.** `tests/helpers/actEnvironment.ts` (a setupFile,
+  self-scoped to the happy-dom files) sets `IS_REACT_ACT_ENVIRONMENT = true`, so
+  React flushes passive effects SYNCHRONOUSLY at the end of every act scope —
+  and RTL wraps `render` and each `fireEvent` / `userEvent` in one. An assertion
+  after an awaited interaction therefore sees the effects that interaction
+  queued; the "the render landed, the effect did not" race cannot form.
+  (MOTIR-1736 / MOTIR-1737 were three instances of it; MOTIR-1738 removed the
+  class.) What the flag asks of you in return: **a state update that lands
+  outside an act scope now logs a "not wrapped in act(...)" warning, and that
+  warning is a REAL finding** — the test asserted against a render the component
+  had not finished. The three shapes that produce one, and their fixes:
+  - **An async action / fetch resolving after the last assertion** → `await act(async () => {})`
+    to flush it, or await the authoritative signal it produces (`findBy*`).
+  - **A raw `dispatchEvent`, or `vi.advanceTimersByTime`** — neither is
+    act-wrapped the way `fireEvent` is → wrap the call in `act(() => { … })`.
+  - **A bare `await Promise.resolve()` / `await new Promise(r => setTimeout(r, 0))`
+    used to yield** → replace it with `await act(async () => { … })`, which
+    yields AND wraps the resulting updates.
+
+  Never "fix" one by sleeping. An **event-handler** callback is invoked
+  synchronously inside the dispatched handler, so it needs no wait.
 
 ### The app side (so tests CAN be deterministic)
 
@@ -652,27 +661,28 @@ shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
 - ❌ `await page.waitForTimeout(500)` as a synchronisation mechanism.
 - ❌ Merging a spec that passes only intermittently — it taxes every open PR via merge-with-main CI.
 
-### The component-test audit lane — `pnpm test:late-effects` (MOTIR-1737)
+### The act environment is ON for component tests (MOTIR-1738)
 
-The component-test half of this rule is **machine-checkable**, because the race
-is an ORDERING bug, not a speed bug. `tests/helpers/lateEffects.ts` defers
-React's passive-effect flush behind the zero-delay timer RTL drains on, which
-makes the latent "the assertion resolved before the effect landed" failure
-DETERMINISTIC — and because it only re-orders two already-queued callbacks, it
-adds no delay and so cannot manufacture a false "too slow" failure.
+The component-test half of this rule is **structurally prevented**, not merely
+detected. `tests/helpers/actEnvironment.ts` — a `setupFiles` entry in
+`vitest.config.ts`, self-scoped to the happy-dom files via a `window` guard —
+sets `IS_REACT_ACT_ENVIRONMENT = true`, so React flushes passive effects
+synchronously at the end of every act scope, and RTL opens one around `render`
+and each `fireEvent` / `userEvent`. The "assertion resolved before the effect
+landed" race has no window left to form in.
 
-- **Run it before merging a component-heavy PR:** `pnpm test:late-effects`
-  (config: `vitest.late-effects.config.ts`; scope: the happy-dom files).
-- **It also runs nightly on `main`** — `.github/workflows/component-effect-audit.yml`
-  — deliberately NOT on every PR: the shim re-orders the scheduler globally, so
-  a failure it surfaces is usually in a file the PR never touched, and gating on
-  it would red-light innocent diffs.
-- **A failure there is a REAL bug in the test**, never a reason to sleep: await
-  the authoritative signal, or `await act(async () => {})` before a negative
-  assertion.
-- **Known instrument artifact:** a file calling `vi.useFakeTimers()` replaces
-  `setTimeout`, so the shim's deferral never fires and the file stalls. Such
-  files are listed in the config's `exclude` — verify them by hand.
+- **Nothing extra to run.** It is wired into the default `vitest.config.ts`, so
+  the ordinary `pnpm test` (and PR CI) carries it. There is no separate lane and
+  no nightly job. (It REPLACED the `pnpm test:late-effects` audit lane, which
+  detected this class rather than removing it — that lane, its config, its shim,
+  and its nightly workflow were retired with this change.)
+- **A "not wrapped in act(...)" warning is a REAL finding**, never noise and
+  never a reason to sleep: the test asserted against a render the component had
+  not finished. The three shapes that produce one — and their fixes — are listed
+  in the component bullet above.
+- **Cost of the migration, for calibration:** turning the flag on failed ZERO of
+  the 174 happy-dom files and produced 81 warnings across 15 of them, each fixed
+  by awaiting the right signal. It is far cheaper than the class it retires.
 
 ---
 

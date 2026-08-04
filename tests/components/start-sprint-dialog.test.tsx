@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -117,18 +117,26 @@ describe('StartSprintDialog (4.4.5)', () => {
     expect(await screen.findByText(/8 work items · — committed at start/)).toBeTruthy();
   });
 
-  it('derives the window from the chosen duration', () => {
+  it('derives the window from the chosen duration', async () => {
     renderDialog();
     fireEvent.click(screen.getByRole('button', { name: '1 week' }));
     expect(screen.getByText(/ends in 6 days/)).toBeTruthy();
+
+    // The dialog settles async state after this interaction; flush it so the
+    // update lands inside the test.
+    await act(async () => {});
   });
 
-  it('reveals explicit start/end date pickers when Custom is chosen', () => {
+  it('reveals explicit start/end date pickers when Custom is chosen', async () => {
     renderDialog();
     expect(screen.queryByLabelText('End date')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Custom' }));
     expect(screen.getByLabelText('Start date')).toBeTruthy();
     expect(screen.getByLabelText('End date')).toBeTruthy();
+
+    // The dialog settles async state after this interaction; flush it so the
+    // update lands inside the test.
+    await act(async () => {});
   });
 
   it('starts the sprint and navigates to /boards ("board opens")', async () => {
@@ -195,7 +203,7 @@ describe('StartSprintDialog (4.4.5)', () => {
     expect(JSON.parse((startCall![1] as RequestInit).body as string).goal).toBeNull();
   });
 
-  it('proactively blocks + names the active sprint when the project already has one', () => {
+  it('proactively blocks + names the active sprint when the project already has one', async () => {
     renderDialog({ activeSprint: sprint({ id: 'sp6', name: 'Sprint 6', state: 'active' }) });
     // The blocked alert (mock panel 3) shows up front, naming the active sprint…
     expect(screen.getByText(/motir already has an active sprint \(Sprint 6\)/)).toBeTruthy();
@@ -204,6 +212,10 @@ describe('StartSprintDialog (4.4.5)', () => {
     fireEvent.click(getStartButton());
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/start'))).toBe(false);
     expect(push).not.toHaveBeenCalled();
+
+    // The dialog settles async state after this interaction; flush it so the
+    // update lands inside the test.
+    await act(async () => {});
   });
 
   it('surfaces a 409 race (another sprint activated after load) and does not navigate', async () => {
@@ -229,10 +241,14 @@ describe('StartSprintDialog (4.4.5)', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it('disables Start when the name is empty', () => {
+  it('disables Start when the name is empty', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Sprint name'), { target: { value: '   ' } });
     expect(getStartButton().disabled).toBe(true);
+
+    // The dialog settles async state after this interaction; flush it so the
+    // update lands inside the test.
+    await act(async () => {});
   });
 });
 

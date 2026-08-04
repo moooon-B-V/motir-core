@@ -63,7 +63,16 @@ export default defineConfig({
     // stubs inngest.send to a no-op so the unconditional `work-item/created` +
     // `work-item/field.changed` emits (Subtask 6.6.2) don't throw on the
     // keyless test client. Event-asserting tests re-spy.
-    setupFiles: ['./tests/helpers/perWorkerDb.ts', './tests/helpers/inngestSetup.ts'],
+    // `actEnvironment` turns React's act environment ON for the happy-dom files
+    // (it self-scopes on `window`, so the Node files are untouched). That makes
+    // React flush passive effects synchronously inside RTL's act scopes, which
+    // REMOVES the effect-ordering race class MOTIR-1736/1737 hit — see that file
+    // for the mechanism and the contract it imposes on component tests.
+    setupFiles: [
+      './tests/helpers/perWorkerDb.ts',
+      './tests/helpers/inngestSetup.ts',
+      './tests/helpers/actEnvironment.ts',
+    ],
     // Cross-FILE parallelism is now safe (each worker has its own DB, above).
     // `sequence.concurrent` stays false so test()s WITHIN a file still run
     // sequentially against that worker's single connection. `maxWorkers` is

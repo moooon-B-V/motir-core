@@ -103,7 +103,7 @@ afterEach(() => {
 });
 
 describe('EditIssueForm', () => {
-  it('renders the editable fields, including an editable Type picker', () => {
+  it('renders the editable fields, including an editable Type picker', async () => {
     render(
       <ToastProvider>
         <EditIssueForm issue={issue} workflow={workflow} members={[]} />
@@ -115,6 +115,10 @@ describe('EditIssueForm', () => {
     expect(screen.getByRole('combobox', { name: 'Assignee' })).toBeTruthy();
     // Type is now editable (kind is mutable; a change re-validates parent/children).
     expect(screen.getByRole('combobox', { name: 'Type' })).toBeTruthy();
+
+    // ParentPicker loads its candidates in an effect; flush that pass so its
+    // resolution lands inside the test rather than after it.
+    await act(async () => {});
   });
 
   it('changing the Type submits the new kind via updateWorkItem', async () => {

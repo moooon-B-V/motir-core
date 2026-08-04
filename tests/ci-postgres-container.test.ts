@@ -65,7 +65,6 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       'ci.yml:build',
       'ci.yml:e2e',
       'ci.yml:test',
-      'component-effect-audit.yml:audit',
     ]);
   });
 

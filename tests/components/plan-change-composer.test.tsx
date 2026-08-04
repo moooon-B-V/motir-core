@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planningTargets';
@@ -255,7 +255,11 @@ describe('the picker is drivable from the keyboard alone', () => {
     await screen.findAllByRole('option', {}, { timeout: 3000 });
 
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
-    input.dispatchEvent(escape);
+    // A raw `dispatchEvent` is not act-wrapped the way `fireEvent` is, so the
+    // close it triggers has to be dispatched inside an act scope.
+    act(() => {
+      input.dispatchEvent(escape);
+    });
 
     expect(escape.defaultPrevented).toBe(true);
     await waitFor(() => expect(screen.queryByTestId('target-search-popup')).toBeNull());

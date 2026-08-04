@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
 import { aiCalloutActions } from '@/lib/planning/aiCallout';
 import { planningWorkspaceHref, type PlanningLaunchContext } from '@/lib/planning/launcher';
@@ -58,7 +58,12 @@ function openCallout(): HTMLElement {
  * product. Yield one macrotask so the layer is actually armed.
  */
 async function armDismissLayer(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The yield runs inside `act` because arming the layer also settles Radix's
+  // own presence/popper/focus-scope effects; outside an act scope those updates
+  // land after the assertions that follow.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
 function rows(panel: HTMLElement): HTMLAnchorElement[] {

@@ -77,6 +77,11 @@ describe('ReadyList copy command verb', () => {
 
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText).toHaveBeenCalledWith(`motir ${verb} ${key}`);
+
+    // The clipboard write is async and its resolution raises the confirmation
+    // toast. Await that authoritative signal so the toast's state update lands
+    // INSIDE the test rather than after it.
+    await screen.findByText(`Paste motir ${verb} ${key} into your terminal.`);
   });
 
   it('shows the actual copied command in the confirmation toast (plan branch)', async () => {

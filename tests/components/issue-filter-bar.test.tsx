@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
@@ -330,7 +330,11 @@ describe('IssueFilterBar — text quick-filter (debounced)', () => {
         target: { value: 'oauth' },
       });
       expect(push).not.toHaveBeenCalled(); // debounced, not yet
-      vi.advanceTimersByTime(300);
+      // Firing the debounce timer flushes the state update it schedules, so it
+      // has to happen inside an act scope.
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
       expect(push).toHaveBeenCalledWith('/items?q=oauth');
     } finally {
       vi.useRealTimers();

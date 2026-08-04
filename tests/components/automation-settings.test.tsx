@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
@@ -173,7 +173,9 @@ describe('AutomationSettings — list mutations call the 6.6.1 routes', () => {
   it('toggling a rule PUTs the /enabled route', async () => {
     renderSettings([rule()]);
     fireEvent.click(screen.getByRole('switch', { name: /Enabled — Bug verification handoff/ }));
-    await Promise.resolve();
+    // Flush the fetch resolution INSIDE act, so the state updates it
+    // triggers land in the test rather than after it.
+    await act(async () => {});
     const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/enabled'));
     expect(call).toBeTruthy();
     expect(call![1].method).toBe('PUT');
@@ -185,7 +187,9 @@ describe('AutomationSettings — list mutations call the 6.6.1 routes', () => {
     fireEvent.click(screen.getByRole('button', { name: /Actions for Bug verification handoff/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete rule' }));
-    await Promise.resolve();
+    // Flush the fetch resolution INSIDE act, so the state updates it
+    // triggers land in the test rather than after it.
+    await act(async () => {});
     const call = fetchMock.mock.calls.find(([, init]) => (init?.method ?? 'GET') === 'DELETE');
     expect(call).toBeTruthy();
     expect(String(call![0])).toContain('/automation-rules/r1');
@@ -273,7 +277,9 @@ describe('AutomationRuleEditor — registry-driven when/if/then', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'Target status' }));
     fireEvent.click(screen.getByRole('option', { name: 'In Review' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save rule' }));
-    await Promise.resolve();
+    // Flush the fetch resolution INSIDE act, so the state updates it
+    // triggers land in the test rather than after it.
+    await act(async () => {});
     const call = fetchMock.mock.calls.find(([, init]) => (init?.method ?? 'GET') === 'POST');
     expect(call).toBeTruthy();
     const body = JSON.parse(call![1].body) as Record<string, unknown>;
