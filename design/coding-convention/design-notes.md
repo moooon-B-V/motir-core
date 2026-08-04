@@ -25,6 +25,16 @@ the code-health UI), which is `blocked_by` this card.
 > **MOTIR-1591** (the structured `noExternalScanner` state + best-fit suggestion exposed over the 7.1
 > read-back contract). It is the design reference the code subtask **MOTIR-1592** is `blocked_by`.
 
+> **Amendment (MOTIR-2087, 2026-08-04):** adds **Panel 4b — the audit tab's PRE-AUDIT states**.
+> The audit tab had exactly ONE drawn empty state (Panel 4's start-fresh, establish-only case) and
+> `AuditPanel.tsx` renders it for every `!audit` — including a project with connected, indexed repos,
+> which is what the live `MOTIR` project hits today. Panel 4b draws the two undrawn states — **repos
+> connected but never audited**, and **a first audit deriving** — placing the repo-backed state
+> BESIDE the fresh one so the difference is a deliberate contrast. It is the design reference for
+> **MOTIR-2081** (which state renders) and **MOTIR-2080** (the action that runs the first audit).
+> It does NOT touch the connect aside or the per-repo freshness list — those are **MOTIR-1764**'s
+> element on the same page (two designs, two elements, no overlap).
+
 Built from the real design system: the mock inlines the token layer from
 `packages/design-system/theme.css` (the `@theme` Tier-0 `--color-*`/shape scale, the Tier-3
 `--el-*` element layer, the `[data-theme='dark']` overrides) and composes the SHIPPED
@@ -78,9 +88,9 @@ conventionRuleRef? }]`, cursor-paginated), `codeGraphRef`, **`conventionId` / `c
 
 ## Multi-panel board — review EACH panel (mistake #31)
 
-The `.mock.html` is a five-panel board (amended from six — the edit/approve panel removed per
-MOTIR-1660); do not review only the first. Each panel is a `.panel-label` mono caption + a centred
-`.panel` wrapper (the `design/ready` convention).
+The `.mock.html` is a six-panel board (labelled 1 · 2 · 4 · 4b · 5 · 6 — the edit/approve panel was
+removed per MOTIR-1660 and Panel 4b added per MOTIR-2087); do not review only the first. Each panel
+is a `.panel-label` mono caption + a centred `.panel` wrapper (the `design/ready` convention).
 
 1. **Panel 1 — THE FULL SCREEN, in the real app shell (Audit tab).** The complete Code health page
    as it renders: the full-width **TopNav**, the **persistent left `SidebarNav`** (Code health
@@ -100,6 +110,13 @@ MOTIR-1660); do not review only the first. Each panel is a `.panel-label` mono c
 3. **Panel 3 — Content region · Fresh (establish-only) + version states.** The no-codebase
    `EmptyState`, the stack-derived proposal, the version-history affordance, the "Re-run audit"
    action. Updated per MOTIR-1660: the stack-derived proposal is also derived + auto-used.
+   _(Numbering note: this panel is labelled **"Panel 4"** in the mock — the old Panel 3
+   edit/approve panel was removed by MOTIR-1660 and the remaining labels were not renumbered. The
+   mock's labels are 1 · 2 · 4 · 4b · 5 · 6; where the two disagree, the mock's label wins.)_
+   3b. **Panel 4b — the audit tab BEFORE a first audit exists (MOTIR-2087).** Four states from the one
+   `!audit` branch: **A** start-fresh/no repos (shipped, unchanged) · **B** repo-backed but never
+   audited · **C** a first audit deriving · **D** the poll's 60-second cut-off. A and B are drawn
+   side by side — the contrast IS the point.
 4. **Panel 4 — The fresh-project door.** The onboarding wizard step (the steady-state door is the
    persistent sidebar entry, drawn in Panel 1's shell).
 5. **Panel 5 — The "Deepen this audit" affordance, state by state** (§10.3; MOTIR-1590 + MOTIR-1591).
@@ -233,6 +250,96 @@ subtask 7.14.5 wires both.
   list: **v3** "Latest re-audit" (Review), **v2** "Active" (current, View), **v1** "First standard ·
   superseded" (Restore).
 
+### Panel 4b — the audit tab's PRE-AUDIT states (MOTIR-2087)
+
+**The problem this fixes.** `AuditPanel.tsx:55` returns ONE `EmptyState` for `!audit`. Its copy —
+"No codebase to analyze yet / Your convention is established from your chosen stack…" — is correct
+for a start-fresh project and **false twice over** for a repo-backed one: there IS a codebase, and
+its convention would be derived from the code graph, not from a chosen stack. **The "chosen stack"
+sentence must never appear on a project with connected repos.** That single line is what makes the
+shipped state wrong, and it is the reason the two states are drawn side by side rather than as two
+independently-written screens.
+
+**One branch becomes four.** All four compose the shipped `EmptyState`
+(`packages/design-system/src/components/ui/EmptyState.tsx` — `icon` / `title` / `description` /
+`action`). No new primitive, no new pattern.
+
+| State                              | Condition                      | Icon (lucide)               | Action                              | Built by                                                                |
+| ---------------------------------- | ------------------------------ | --------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| **A** · start-fresh                | `!audit && repos.length === 0` | `file-search`               | secondary **View chosen stack**     | shipped (copy unchanged) — the branch that selects it is **MOTIR-2081** |
+| **B** · repo-backed, never audited | `!audit && repos.length > 0`   | `folder-git-2`              | **primary** **Run the first audit** | copy + branch **MOTIR-2081**; the action **MOTIR-2080**                 |
+| **C** · deriving                   | `!audit && reauditing`         | the `.spin` ring (no glyph) | **none — removed**                  | **MOTIR-2080**                                                          |
+| **D** · poll exhausted             | `!audit && pollExhausted`      | `clock`                     | secondary **Check again**           | **MOTIR-2080**                                                          |
+
+**Exact copy — verbatim, ready to become `en.json` keys** (every key needs its `zh.json` twin; the
+consuming card owns the catalogue-parity gate):
+
+| Key (under `codeHealth.audit`)      | Copy                                                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `emptyTitle` _(A, unchanged)_       | No codebase to analyze yet                                                                                                                                                           |
+| `emptyDescription` _(A, unchanged)_ | Your convention is established from your chosen stack — the code-health audit runs later, once there's code to read.                                                                 |
+| `noAuditTitle` _(B)_                | No audit for this code yet                                                                                                                                                           |
+| `noAuditDescription` _(B)_          | Motir has indexed your connected repos but has never measured them against a convention. Run the first audit to derive the convention from your code and score what's already there. |
+| `runFirstAudit` _(B, action)_       | Run the first audit                                                                                                                                                                  |
+| `derivingTitle` _(C)_               | Deriving your first audit…                                                                                                                                                           |
+| `derivingDescription` _(C)_         | Motir is reading the code graph for these repos, deriving a convention from what it finds, and scoring your code against it.                                                         |
+| `derivingDuration` _(C)_            | This usually takes a few minutes. You can leave this page — the audit keeps running.                                                                                                 |
+| `stillRunningTitle` _(D)_           | Still working on your first audit                                                                                                                                                    |
+| `stillRunningDescription` _(D)_     | The audit is taking longer than this page waits. It keeps running in the background — check again in a few minutes.                                                                  |
+| `checkAgain` _(D, action)_          | Check again                                                                                                                                                                          |
+
+**Which slot each element occupies.** `title` takes the headline. **The repo list rides in
+`description`** — `EmptyState.description` is typed `ReactNode` precisely so copy can carry inline
+nodes, so the description is a sentence followed by a row of `--el-code-*` repo chips (the shipped
+code-chip grammar, one per `resolveCodeContext().repos[].repoRef`). It is NOT a fifth slot and NOT a
+new prop. **The repo list stays visible in B, C and D** — it is the constant that says "this screen
+is about your code"; only the headline, the icon and the action change beneath it. State C's
+duration line also rides in `description`, below the chips.
+
+**Why B's action is primary and A's is secondary.** A's action is _navigational_ — there is nothing
+to run, so it points at the stack the convention came from. B's action is _generative_, and it is
+the only thing to do on the screen. The weight difference is the design carrying the semantic one.
+
+**What replaces the action once fired (State C).** The action is **removed**, not disabled and not
+left in a `loading` state. The job runs for minutes; a pending button implies a request the page is
+blocked on and invites a second click. The spinner moves to the **icon** slot (the shipped `.spin`
+ring — `--el-border-strong` track, `--el-accent-on-surface` head) and the duration line takes the
+action's place. **The deriving state is signalled by the ring, never by a border-style change** — no
+dashed border, which would collide with borders that carry data elsewhere in the system.
+
+**State D is a routine outcome, not an edge case.** `REAUDIT_POLL_MS` (3000) ×
+`REAUDIT_POLL_TRIES` (20) = **exactly 60 seconds**. A first audit across five repos does not finish
+in one minute, so **most first runs land in D** — it must be designed as a normal resting state, not
+an error. Three consequences the consuming card must honour:
+
+1. **It renders INSIDE the empty state**, not in the rose `Card tint="rose"` error strip at the top
+   of `CodeHealthClient` where `setError(t('deepen.reauditPending'))` puts it today. A job that is
+   still running is not a failure; colouring it as one teaches the user their audit broke.
+2. **"Check again" re-READS the audit** (the island's `reload()`). It must NOT re-`POST`
+   `/api/ai/coding-convention/refresh`, which would queue a second `code_audit` +
+   `propose_convention` pair for work already in flight.
+3. The 60-second window is a **UI** wait, not a job timeout — the copy says the audit keeps running
+   because it does.
+
+**Page-state after the mutation (the contract).** The trigger fires from **inside the client island**
+(`CodeHealthClient`), and the surface that must update is that same island's own state — contract
+case 3. It resolves through the island's **own refetch**: `reaudit()` already polls `AUDIT_URL` and
+calls `reload()`, which `setAudit(...)`. **No `router.refresh()`, no `revalidatePath()`** — the
+island is seeded from `useState(initialProps)` and a server re-read cannot reach it. There is no
+second surface to route: **verified against `SidebarNav.tsx:294–297`, the Code health nav row carries
+label + href only — no grade badge** (the badge in Panel 5's access-path drawing is design intent
+that was never built), so no Server-Component surface changes when the first audit lands.
+
+**A prop the page already has and throws away.** `page.tsx:58` resolves `repos` via
+`resolveCodeContext` and uses it only to decide whether to fetch. Distinguishing A from B needs that
+repo set — and the chips need `repoRef` — so it must be threaded `page.tsx → CodeHealthClient →
+AuditPanel`. That is a prop addition, not a new data path.
+
+**One divergence between this asset and shipped code, recorded so the consumer decides deliberately:**
+Panel 4 (and State A here) draws a secondary **"View chosen stack"** action, but the shipped
+`AuditPanel` passes `EmptyState` no `action` at all. The design keeps it; MOTIR-2081 either wires it
+or drops it explicitly — it should not stay an undocumented gap.
+
 ### Panel 5 — access path (the door)
 
 - **Sidebar rail** (`Sidebar` / `SidebarNav` grammar): a `.rail-head` project stand-in ("acme/web ·
@@ -285,39 +392,43 @@ Colour flows through Tier-3 `--el-*` ONLY — no Tier-0 `--color-*`, no invented
 `motir-core/CLAUDE.md` colour rule; mistake #54). Every coloured chip puts the hue in the TINT
 background with `--el-text-strong` ink, AA-safe in both themes (finding #35).
 
-| Element                                                           | Token(s)                                                                                                                                                                                         | Note                                                                                        |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Page / card body ink                                              | `--el-text`, `--el-text-strong` (headings/emphasis), `--el-text-secondary` (copy), `--el-text-muted` / `--el-text-faint` (captions/eyebrows)                                                     | via the shipped text-role scale                                                             |
-| Card surface + edge                                               | `--el-card` bg, `--el-border` (1px), `--shadow-subtle` on finding rows                                                                                                                           | `Card` primitive                                                                            |
-| **Severity — Critical**                                           | `Pill severity="danger"` → `--el-tint-rose` bg + `--el-text-strong`                                                                                                                              | worst                                                                                       |
-| **Severity — High**                                               | `Pill severity="warning"` → `--el-tint-peach` bg + `--el-text-strong`                                                                                                                            |                                                                                             |
-| **Severity — Medium**                                             | `Pill severity="info"` → `--el-tint-sky` bg + `--el-text-strong`                                                                                                                                 |                                                                                             |
-| **Severity — Low**                                                | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              | a quiet chip, not a hue                                                                     |
-| **Provenance — Adopted**                                          | `Pill severity="success"` → `--el-tint-mint` bg + `--el-text-strong`                                                                                                                             | green = confirmed from your code                                                            |
-| **Provenance — Proposed**                                         | `Pill status="planned"` → `--el-tint-lavender` bg + `--el-text-strong`                                                                                                                           | brand-lavender = a proposal to review                                                       |
-| **Banner — DERIVED FROM YOUR CODE · auto-used**                   | `--el-success-surface` (mint) fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                 | settled / active                                                                            |
-| Health grade tile                                                 | `--el-success-surface` bg + `--el-text-strong`                                                                                                                                                   | a good (B) grade; a poor grade would fall to `--el-warning-surface` / `--el-danger-surface` |
-| Category dots                                                     | `--el-success` (ok) · `--el-warning` (watch) · `--el-danger` (gap)                                                                                                                               | redundant text label beside each (not colour-alone)                                         |
-| File / symbol refs                                                | `.coderef` → `--el-text-identifier` on `--el-code-bg`                                                                                                                                            | mono, matches shipped code-chip                                                             |
-| Convention-rule ref (finding cites convention)                    | `.conv-ref` → `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                | lavender = the convention identity (matches the Proposed provenance tone)                   |
-| Clean-code-baseline ref (convention silent)                       | `.base-ref` → `--el-text-secondary` on `--el-chip-bg` + `--el-chip-border`                                                                                                                       | a quiet neutral tag; the general-health "too"                                               |
-| Count / meta chips                                                | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              |                                                                                             |
-| Secondary CTA ("Refine with Motir", "Re-run audit", "View stack") | `Button variant="secondary"` → `--el-button-border` + `--el-text`                                                                                                                                |                                                                                             |
-| Ghost CTA ("Cancel", "Save draft", row actions)                   | `Button variant="ghost"` → `--el-text`                                                                                                                                                           |                                                                                             |
-| EmptyState icon                                                   | `--el-icon-muted`                                                                                                                                                                                | `EmptyState` primitive                                                                      |
-| EmptyState description                                            | `--el-text-subtitle`                                                                                                                                                                             | the shipped lead-paragraph role                                                             |
-| Current-version highlight                                         | border `--el-accent-on-surface`, bg `--el-surface-soft`                                                                                                                                          | the active standard row                                                                     |
-| Sidebar rail (Panel 1 shell)                                      | `--el-sidebar-bg` + `--el-sidebar-border`; active row `--el-sidebar-item-bg-active` + `--el-accent-on-surface` glyph; wizard current-step `--el-accent-on-surface`                               | the persistent nav                                                                          |
-| Top bar (TopNav) + tabs (Segmented)                               | bar `--el-page-bg` + `--el-border` bottom hairline; Plan-with-AI `--el-accent`; tabs track `--el-tabnav-track`, active tab `--el-page-bg` + `--shadow-subtle`, active glyph `--el-tabnav-active` | the shell chrome + in-page view switch                                                      |
-| **Deepen card** (`.deepen`, secondary aside)                      | bg `--el-surface-soft` (quiet, NOT `--el-card`) + `--el-border`; lead glyph `--el-accent-on-surface`; dismiss × `--el-text-muted`                                                                | reads as an optional aside inside the report, not a report card                             |
-| Tool option row (`.tool`)                                         | bg `--el-page-bg` + `--el-border`; icon `--el-text-secondary`                                                                                                                                    | the SonarQube branch                                                                        |
-| **Recommended** tool (`.tool-rec`, best-fit)                      | border `--el-accent-on-surface` + bg `--el-surface-soft`; icon `--el-accent-on-surface` (reuses the current-version-highlight pattern)                                                           | the GH-native CodeQL default                                                                |
-| "Recommended" tag (`.tag-rec`)                                    | `--el-callout-text` on `--el-callout-bg` (lavender = the brand/recommendation identity)                                                                                                          | matches the convention-identity tone                                                        |
-| Copy-paste setup block (`.setup-code`)                            | `--el-code-text` on `--el-code-bg` + `--el-border`, `--radius-input` editor surface                                                                                                              | the `codeql.yml` guidance                                                                   |
-| Tier-2 ingested chip (`.tier2-chip`)                              | `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                              | on the audit sub-line, connected/auto-detected                                              |
-| Connected banner (`.deepen-done`)                                 | `--el-success-surface` fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                        | settled/deepened (State C); the re-auditing variant uses `--el-surface-soft` + a `.spin`    |
-| Re-open link (`.deepen-link`, dismissed)                          | `--el-link`                                                                                                                                                                                      | the quiet one-line re-open (State D)                                                        |
-| Re-audit spinner (`.spin`)                                        | ring `--el-border-strong`, head `--el-accent-on-surface`                                                                                                                                         | the re-auditing affordance (State B)                                                        |
+| Element                                                           | Token(s)                                                                                                                                                                                         | Note                                                                                          |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Page / card body ink                                              | `--el-text`, `--el-text-strong` (headings/emphasis), `--el-text-secondary` (copy), `--el-text-muted` / `--el-text-faint` (captions/eyebrows)                                                     | via the shipped text-role scale                                                               |
+| Card surface + edge                                               | `--el-card` bg, `--el-border` (1px), `--shadow-subtle` on finding rows                                                                                                                           | `Card` primitive                                                                              |
+| **Severity — Critical**                                           | `Pill severity="danger"` → `--el-tint-rose` bg + `--el-text-strong`                                                                                                                              | worst                                                                                         |
+| **Severity — High**                                               | `Pill severity="warning"` → `--el-tint-peach` bg + `--el-text-strong`                                                                                                                            |                                                                                               |
+| **Severity — Medium**                                             | `Pill severity="info"` → `--el-tint-sky` bg + `--el-text-strong`                                                                                                                                 |                                                                                               |
+| **Severity — Low**                                                | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              | a quiet chip, not a hue                                                                       |
+| **Provenance — Adopted**                                          | `Pill severity="success"` → `--el-tint-mint` bg + `--el-text-strong`                                                                                                                             | green = confirmed from your code                                                              |
+| **Provenance — Proposed**                                         | `Pill status="planned"` → `--el-tint-lavender` bg + `--el-text-strong`                                                                                                                           | brand-lavender = a proposal to review                                                         |
+| **Banner — DERIVED FROM YOUR CODE · auto-used**                   | `--el-success-surface` (mint) fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                 | settled / active                                                                              |
+| Health grade tile                                                 | `--el-success-surface` bg + `--el-text-strong`                                                                                                                                                   | a good (B) grade; a poor grade would fall to `--el-warning-surface` / `--el-danger-surface`   |
+| Category dots                                                     | `--el-success` (ok) · `--el-warning` (watch) · `--el-danger` (gap)                                                                                                                               | redundant text label beside each (not colour-alone)                                           |
+| File / symbol refs                                                | `.coderef` → `--el-text-identifier` on `--el-code-bg`                                                                                                                                            | mono, matches shipped code-chip                                                               |
+| Convention-rule ref (finding cites convention)                    | `.conv-ref` → `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                | lavender = the convention identity (matches the Proposed provenance tone)                     |
+| Clean-code-baseline ref (convention silent)                       | `.base-ref` → `--el-text-secondary` on `--el-chip-bg` + `--el-chip-border`                                                                                                                       | a quiet neutral tag; the general-health "too"                                                 |
+| Count / meta chips                                                | `Pill tone="neutral"` → `--el-chip-bg` + `--el-text-secondary` + `--el-chip-border`                                                                                                              |                                                                                               |
+| Secondary CTA ("Refine with Motir", "Re-run audit", "View stack") | `Button variant="secondary"` → `--el-button-border` + `--el-text`                                                                                                                                |                                                                                               |
+| Ghost CTA ("Cancel", "Save draft", row actions)                   | `Button variant="ghost"` → `--el-text`                                                                                                                                                           |                                                                                               |
+| EmptyState icon                                                   | `--el-icon-muted`                                                                                                                                                                                | `EmptyState` primitive                                                                        |
+| EmptyState description                                            | `--el-text-subtitle`                                                                                                                                                                             | the shipped lead-paragraph role                                                               |
+| Current-version highlight                                         | border `--el-accent-on-surface`, bg `--el-surface-soft`                                                                                                                                          | the active standard row                                                                       |
+| Sidebar rail (Panel 1 shell)                                      | `--el-sidebar-bg` + `--el-sidebar-border`; active row `--el-sidebar-item-bg-active` + `--el-accent-on-surface` glyph; wizard current-step `--el-accent-on-surface`                               | the persistent nav                                                                            |
+| Top bar (TopNav) + tabs (Segmented)                               | bar `--el-page-bg` + `--el-border` bottom hairline; Plan-with-AI `--el-accent`; tabs track `--el-tabnav-track`, active tab `--el-page-bg` + `--shadow-subtle`, active glyph `--el-tabnav-active` | the shell chrome + in-page view switch                                                        |
+| **Deepen card** (`.deepen`, secondary aside)                      | bg `--el-surface-soft` (quiet, NOT `--el-card`) + `--el-border`; lead glyph `--el-accent-on-surface`; dismiss × `--el-text-muted`                                                                | reads as an optional aside inside the report, not a report card                               |
+| Tool option row (`.tool`)                                         | bg `--el-page-bg` + `--el-border`; icon `--el-text-secondary`                                                                                                                                    | the SonarQube branch                                                                          |
+| **Recommended** tool (`.tool-rec`, best-fit)                      | border `--el-accent-on-surface` + bg `--el-surface-soft`; icon `--el-accent-on-surface` (reuses the current-version-highlight pattern)                                                           | the GH-native CodeQL default                                                                  |
+| "Recommended" tag (`.tag-rec`)                                    | `--el-callout-text` on `--el-callout-bg` (lavender = the brand/recommendation identity)                                                                                                          | matches the convention-identity tone                                                          |
+| Copy-paste setup block (`.setup-code`)                            | `--el-code-text` on `--el-code-bg` + `--el-border`, `--radius-input` editor surface                                                                                                              | the `codeql.yml` guidance                                                                     |
+| Tier-2 ingested chip (`.tier2-chip`)                              | `--el-callout-text` on `--el-callout-bg` (lavender)                                                                                                                                              | on the audit sub-line, connected/auto-detected                                                |
+| Connected banner (`.deepen-done`)                                 | `--el-success-surface` fill, glyph `--el-success`, ink `--el-text-strong`                                                                                                                        | settled/deepened (State C); the re-auditing variant uses `--el-surface-soft` + a `.spin`      |
+| Re-open link (`.deepen-link`, dismissed)                          | `--el-link`                                                                                                                                                                                      | the quiet one-line re-open (State D)                                                          |
+| Re-audit spinner (`.spin`)                                        | ring `--el-border-strong`, head `--el-accent-on-surface`                                                                                                                                         | the re-auditing affordance (State B)                                                          |
+| **Pre-audit repo chips** (`.repo-chips code`, Panel 4b B/C/D)     | `--el-text-identifier` on `--el-code-bg`, `--radius-control`                                                                                                                                     | the shipped `.coderef` code-chip grammar reused — one chip per connected repo                 |
+| **First-audit ring** (`.es-spin`, Panel 4b C)                     | track `--el-border-strong`, head `--el-accent-on-surface`, `--radius-badge`                                                                                                                      | the `.spin` grammar at icon-slot size; the ONLY deriving signal — never a border-style change |
+| **Duration line** (`p.dur`, Panel 4b C)                           | `--el-text-muted`                                                                                                                                                                                | quieter than the `--el-text-subtitle` description above it                                    |
+| **"Run the first audit"** (Panel 4b B, primary)                   | `Button variant="primary"` → `--el-accent` bg + `--el-accent-text` ink                                                                                                                           | the one generative action on the screen; State A's stays secondary                            |
 
 **Shape** flows through element-semantic shape tokens ONLY (no raw `rounded-*`/`p-*`/`h-*`; the
 `motir-core/CLAUDE.md` shape rule): cards `--radius-card` + `--spacing-card-padding`; buttons
@@ -346,7 +457,10 @@ invented in this Story — if one were needed, that is a NEW `design/` subtask, 
       custom tone invented — all are shipped `Pill` variants.
 - [x] **Button** (`components/ui/Button.tsx`) — secondary (Refine with Motir / Re-run audit /
       View stack), ghost (Cancel / row actions); sizes md + sm.
-- [x] **EmptyState** (`components/ui/EmptyState.tsx`) — the fresh / no-codebase state (Panel 3).
+- [x] **EmptyState** (`components/ui/EmptyState.tsx`) — the fresh / no-codebase state (Panel 3), and
+      all four pre-audit states in Panel 4b (A/B/C/D), which differ ONLY in their `icon` / `title` /
+      `description` / `action` props. The repo chips ride inside `description` (typed `ReactNode`);
+      no fifth slot and no new prop are invented.
 - [x] **AppLayout shell** (`components/ui/AppLayout.tsx`) — the full-screen composition (Panel 1):
       the 56px full-width **TopNav** above the `[240px rail | scrolling main]` grid, reproduced so the
       surface is drawn as the REAL screen (persistent nav + top bar), not floating cards.

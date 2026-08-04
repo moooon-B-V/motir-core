@@ -1126,6 +1126,35 @@
         grid-template-columns: 1fr 1fr;
         gap: 12px;
       }
+      /* ── MOTIR-2087 · the audit tab's PRE-AUDIT states ────────────────────
+         State cells for the Panel 4b contrast gallery. Colour stays on --el-*,
+         shape on the element-semantic scale; the deriving state is signalled by
+         the shipped .spin ring grammar, never a border-style change. */
+      .state-cell > .eyebrow {
+        margin: 0 0 8px;
+      }
+      .empty .repo-chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 12px;
+      }
+      .empty .es-spin {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-badge);
+        border: 3px solid var(--el-border-strong);
+        border-top-color: var(--el-accent-on-surface);
+        margin-bottom: 16px;
+        flex: none;
+      }
+      .empty p.dur {
+        color: var(--el-text-muted);
+        font-size: 13px;
+        margin: 12px 0 0;
+        max-width: 44ch;
+      }
       @media (max-width: 720px) {
         .cols {
           grid-template-columns: 1fr;
@@ -2558,6 +2587,268 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 4b — THE AUDIT TAB'S PRE-AUDIT STATES (MOTIR-2087)
+         Panel 4 draws ONE empty state — the start-fresh, establish-only case.
+         AuditPanel.tsx renders it for every `!audit`, including a project with
+         connected, indexed repos. This extends Panel 4's gallery with the two
+         undrawn states, the repo-backed one placed BESIDE the fresh one so the
+         difference is a deliberate contrast, not two independent screens.
+         Consumers: MOTIR-2081 (which state renders) · MOTIR-2080 (the action).
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4b · Content region · the audit tab BEFORE a first audit exists — four states from one
+      `!audit` branch (MOTIR-2087)
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </svg>
+        Code health <span class="sep">›</span> <span class="here">Audit tab (no audit yet)</span>
+      </span>
+      <span>— the same screen as Panel 1, before any audit exists to render.</span>
+    </div>
+    <div class="panel">
+      <p class="subtle" style="margin: 0 0 14px">
+        <code class="coderef">AuditPanel.tsx</code> returns ONE empty state for
+        <code class="coderef">!audit</code> — the start-fresh copy in Panel 4. A project with
+        connected, indexed repos gets that same &ldquo;no codebase&rdquo; screen, which is false
+        twice over: there IS code, and its convention comes from the code graph, not from a chosen
+        stack. <strong>The branch becomes four states</strong>, selected by the repo set and the
+        run's progress. All four compose the shipped
+        <code class="coderef">EmptyState</code> primitive (<code class="coderef">icon</code> ·
+        <code class="coderef">title</code> · <code class="coderef">description</code> ·
+        <code class="coderef">action</code>) — no new pattern.
+      </p>
+
+      <!-- ── The contrast: which empty state a project actually gets ── -->
+      <div class="eyebrow" style="margin: 4px 0 10px">
+        The contrast · no repos vs. repos-but-never-audited — the two states side by side
+      </div>
+      <div class="cols">
+        <!-- State A — start-fresh, no repos (SHIPPED, unchanged) -->
+        <div class="state-cell">
+          <div class="eyebrow">
+            State A · start-fresh · <code class="coderef">repos.length === 0</code> — SHIPPED,
+            unchanged
+          </div>
+          <div class="card empty">
+            <div class="es-icon">
+              <!-- lucide: file-search (there is no code) -->
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6" />
+                <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                <circle cx="11.5" cy="14.5" r="2.5" />
+                <path d="M13.3 16.3 15 18" />
+              </svg>
+            </div>
+            <h2>No codebase to analyze yet</h2>
+            <p>
+              Your convention is established from your chosen stack — the code-health audit runs
+              later, once there’s code to read.
+            </p>
+            <div class="es-action">
+              <button class="btn btn-secondary btn-sm">View chosen stack</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- State B — repos connected + indexed, never audited (NEW) -->
+        <div class="state-cell">
+          <div class="eyebrow">
+            State B · repo-backed, never audited ·
+            <code class="coderef">repos.length &gt; 0</code> — NEW
+          </div>
+          <div class="card empty">
+            <div class="es-icon">
+              <!-- lucide: folder-git-2 (the code exists — it just hasn't been read) -->
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+            </div>
+            <h2>No audit for this code yet</h2>
+            <p>
+              Motir has indexed your connected repos but has never measured them against a
+              convention. Run the first audit to derive the convention from your code and score
+              what’s already there.
+            </p>
+            <div class="repo-chips">
+              <code class="coderef">motir-core</code>
+              <code class="coderef">motir-ai</code>
+              <code class="coderef">motir-gateway</code>
+              <code class="coderef">motir-meta</code>
+              <code class="coderef">nextjs-prisma-vercel-starter</code>
+            </div>
+            <div class="es-action">
+              <button class="btn btn-primary btn-sm">
+                <!-- lucide: play -->
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="6 3 20 12 6 21 6 3" />
+                </svg>
+                Run the first audit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="setup-hint" style="margin: 10px 0 22px">
+        <strong>The difference is deliberate.</strong> State A’s action is <em>navigational</em> — a
+        secondary <code class="coderef">Button</code> to the stack the convention came from; there
+        is nothing to run. State B’s action is <em>generative</em> and is the only thing to do on
+        the screen, so it is <strong>primary</strong>. The &ldquo;chosen stack&rdquo; sentence NEVER
+        appears on a repo-backed project — it is the one line that makes the shipped state wrong for
+        it.
+      </p>
+
+      <!-- ── Once fired: deriving, and the poll's cut-off ── -->
+      <div class="eyebrow" style="margin: 4px 0 10px">
+        After the action fires · the first audit deriving, and what shows when the page stops
+        waiting
+      </div>
+      <div class="cols">
+        <!-- State C — deriving (NEW) -->
+        <div class="state-cell">
+          <div class="eyebrow">
+            State C · deriving · <code class="coderef">reauditing === true</code> — NEW
+          </div>
+          <div class="card empty">
+            <div class="es-spin"></div>
+            <h2>Deriving your first audit…</h2>
+            <p>
+              Motir is reading the code graph for these repos, deriving a convention from what it
+              finds, and scoring your code against it.
+            </p>
+            <div class="repo-chips">
+              <code class="coderef">motir-core</code>
+              <code class="coderef">motir-ai</code>
+              <code class="coderef">motir-gateway</code>
+              <code class="coderef">motir-meta</code>
+              <code class="coderef">nextjs-prisma-vercel-starter</code>
+            </div>
+            <p class="dur">
+              This usually takes a few minutes. You can leave this page — the audit keeps running.
+            </p>
+          </div>
+        </div>
+
+        <!-- State D — the poll gave up; the job did not (NEW) -->
+        <div class="state-cell">
+          <div class="eyebrow">
+            State D · the page stopped waiting at 60s · <code class="coderef">poll exhausted</code>
+            — NEW
+          </div>
+          <div class="card empty">
+            <div class="es-icon">
+              <!-- lucide: clock (waiting, not broken) -->
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <h2>Still working on your first audit</h2>
+            <p>
+              The audit is taking longer than this page waits. It keeps running in the background —
+              check again in a few minutes.
+            </p>
+            <div class="repo-chips">
+              <code class="coderef">motir-core</code>
+              <code class="coderef">motir-ai</code>
+              <code class="coderef">motir-gateway</code>
+              <code class="coderef">motir-meta</code>
+              <code class="coderef">nextjs-prisma-vercel-starter</code>
+            </div>
+            <div class="es-action">
+              <button class="btn btn-secondary btn-sm">
+                <!-- lucide: refresh-cw -->
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                  <path d="M3 21v-5h5" />
+                </svg>
+                Check again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="setup-hint" style="margin: 10px 0 0">
+        <strong>State D is a routine outcome, not an edge case.</strong> The poll is
+        <code class="coderef">REAUDIT_POLL_MS</code> (3000) ×
+        <code class="coderef">REAUDIT_POLL_TRIES</code> (20) = <strong>exactly 60 seconds</strong>,
+        and a first audit over five repos does not finish in one minute — so most first runs land
+        here. Three consequences the consuming card must honour: <strong>(1)</strong> it renders
+        INSIDE this empty state, NOT in the rose
+        <code class="coderef">Card tint=&quot;rose&quot;</code> error strip where
+        <code class="coderef">deepen.reauditPending</code> goes today — a job that is still running
+        is not an error, and colouring it as one teaches the user their audit failed.
+        <strong>(2)</strong> &ldquo;Check again&rdquo; re-READS the audit (<code class="coderef"
+          >reload()</code
+        >); it must NOT re-<code class="coderef">POST</code> <code class="coderef">/refresh</code>,
+        which would queue a second <code class="coderef">code_audit</code> +
+        <code class="coderef">propose_convention</code> pair for work already in flight.
+        <strong>(3)</strong> The action in State C is <em>removed</em>, not disabled or left
+        spinning: a minutes-long job behind a pending button reads as a request the page is blocked
+        on. The spinner moves to the icon slot and the duration line takes the action's place — the
+        state is signalled by the shipped <code class="coderef">.spin</code> ring, never by a
+        border-style change.
+      </p>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════════
