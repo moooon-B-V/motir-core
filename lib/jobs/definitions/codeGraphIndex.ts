@@ -44,7 +44,10 @@ import type { CodeGraphIndexData } from '../types';
 //      and tenant-blind, so one workspace's five repos occupy the lane while
 //      another workspace's first index queues behind all of it — the measured
 //      behaviour §7 records. A per-tenant limit HERE would need a KEYED
-//      concurrency, which `defineJob` discards entirely (MOTIR-1982).
+//      concurrency. `defineJob` CAN express one since MOTIR-1982 — but that
+//      does not make it right here, because reason 1 still applies to a keyed
+//      limit exactly as it does to an unkeyed one: any Inngest-level cap on a
+//      job that supervises containers caps SUPERVISORS, not containers.
 //   3. ITS ORIGINAL REASON IS GONE. `2` existed for a scale-to-zero motir-ai
 //      whose cold start took 23.3s on 2026-08-02, when five runs each fetched a
 //      tarball and uploaded it from this process. The bytes moved to the

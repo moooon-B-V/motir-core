@@ -86,7 +86,7 @@ export const sendInvoice = defineJob(
 | `id`          | —             | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.      |
 | `retryPolicy` | `'transient'` | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`. |
 | `retries`     | —             | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                               |
-| `concurrency` | —             | Max simultaneous runs (forwarded as `{ limit }`).                                                                                |
+| `concurrency` | —             | Concurrency constraint(s): a bare limit, or Inngest's `{ limit, key?, scope? }`, or an array of them. See **Concurrency** below. |
 | `idempotency` | —             | Event-payload-keyed dedup template (Inngest event-level dedup).                                                                  |
 | `cron`        | —             | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                   |
 
@@ -256,6 +256,70 @@ Passing both `retryPolicy` and a raw `retries` throws (ambiguous intent). When a
 job specifies neither, it gets `transient`. On the **final** failed attempt the
 run dead-letters (below); `none` therefore dead-letters on the very first
 failure.
+
+## Concurrency — a bare limit is a GLOBAL lane every tenant queues in
+
+`concurrency` accepts three shapes, all of them Inngest's own:
+
+```ts
+concurrency: 4                                        // a bare limit
+concurrency: { limit: 1, key: 'event.data.workspaceId' }  // one sub-queue per tenant
+concurrency: [                                        // both at once
+  { limit: 1, key: 'event.data.workspaceId' },        // no tenant monopolizes
+  { limit: 4 },                                       // total capacity
+]
+```
+
+`key` is a CEL expression evaluated against the triggering event; each distinct
+value gets its own sub-queue. `scope` (`'fn'` | `'env'` | `'account'`) widens
+the limit beyond this one function; the default `'fn'` is almost always what a
+job wants. An ARRAY means every constraint must admit a run before it starts.
+
+**Reach for the keyed form whenever the job is triggered by a multi-tenant event
+stream.** A bare number is a single lane for the whole environment, so one
+workspace's backlog delays every other workspace's first run — the shape that
+made a stranger's five-repo index queue land on someone else's onboarding
+spinner (MOTIR-1982; before that card, `defineJob` typed the option as `number`
+and emitted `{ limit: n }`, so no job in this repo could express anything else).
+
+### The fairness claim is MEASURED, not assumed
+
+The two-constraint idiom only buys fairness if the scheduler **skips over** a
+key-blocked run to a runnable one instead of head-of-line blocking behind it.
+That is a property of Inngest's scheduler, not of our config, so it was measured
+rather than reasoned about — `scripts/experiments/inngest-concurrency-fairness.mjs`
+saturates one tenant and times how long an unrelated tenant waits.
+
+Workload: 20 events for tenant A, then 1 for tenant B; handler holds 500 ms;
+`inngest-cli` 1.27.0 dev server, SDK 4.5.0. Time is measured from enqueue.
+
+| Constraint                                  | Tenant B's wait (3 trials) | A's backlog drains |
+| ------------------------------------------- | -------------------------- | ------------------ |
+| `{ limit: 2 }` (today's bare number)        | 2.0 s / 3.0 s / 5.0 s      | ~6.1 s             |
+| `[{ limit: 1, key: tenant }, { limit: 2 }]` | 0.27 s / 0.35 s / 0.71 s   | ~11.7 s            |
+
+**The scheduler interleaves.** With the keyed constraint B started in the first
+wave every time, while A — correctly — took nearly twice as long to drain,
+because its own key holds it to one slot. The bystander's wait stopped scaling
+with the flooder's backlog, which is the entire point. Without a key, B waited
+through a third to five-sixths of a queue it had nothing to do with.
+
+Two things the numbers do NOT say, so don't read them in:
+
+- **This was the dev server, not Inngest Cloud.** The cloud scheduler is a
+  different implementation and was not measured. The keyed config is
+  unambiguously correct either way (it is Inngest's documented contract); what
+  remains unverified is only the exact interleaving latency in production.
+- **Order within a key is not FIFO.** The dev server started tenant A's events
+  out of order (A5, A4, A2, A3, A1). A job that needs per-key ORDERING must get
+  it from somewhere else — a concurrency key bounds parallelism, it does not
+  sequence.
+
+To re-run it: start `pnpm inngest-cli dev -u http://localhost:3987/api/inngest
+--no-discovery --port 8388` (any free ports — a sibling dev server on 8288 will
+silently take the default and the harness will talk to the wrong one), then
+`LAB_MODE=keyed|global INNGEST_DEV=1 INNGEST_BASE_URL=http://localhost:8388 node
+scripts/experiments/inngest-concurrency-fairness.mjs`.
 
 ## Wall clock — the step is the unit, and every I/O call needs a deadline
 

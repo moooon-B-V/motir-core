@@ -75,6 +75,20 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // Experiment harnesses (`scripts/experiments/**`) MAY import the Inngest SDK
+  // directly. They exist to MEASURE third-party behaviour — the fairness probe
+  // in `docs/jobs.md` builds its own standalone client and serve handler on
+  // throwaway ports precisely so it is not the app's job substrate — and going
+  // through `defineJob`/`sendEvent` would test our wrapper instead of the thing
+  // under measurement. Nothing here ships in the app; the email boundary still
+  // applies, same as for lib/jobs.
+  {
+    files: ['scripts/experiments/**/*.{ts,mjs,js}'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: [EMAIL_RESTRICTION] }],
+    },
+  },
+
   // emailService is the ONE file allowed to import @/lib/email — but it must
   // not reach for the Inngest SDK. So we drop the email path, keep the inngest
   // pattern.

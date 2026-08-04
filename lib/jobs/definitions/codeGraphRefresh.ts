@@ -72,8 +72,9 @@ import type { CodeGraphRefreshData } from '../types';
 //   2. AN UNKEYED LIMIT IS THE STARVATION IT WAS MEANT TO PREVENT — and THIS job
 //      is where that was measured: one repo's retries ahead of every other
 //      repo's refresh is the production failure MOTIR-2057 fixed. A per-tenant
-//      limit here would need a KEYED concurrency, which `defineJob` discards
-//      entirely (MOTIR-1982).
+//      limit here would need a KEYED concurrency. `defineJob` CAN express one
+//      since MOTIR-1982 — but reason 1 rules it out here anyway: a cap on a
+//      container supervisor caps SUPERVISORS, not containers, keyed or not.
 //   3. ITS ORIGINAL REASON IS GONE. The bytes moved to the containers; what
 //      remains in-process is one short credential mint.
 //

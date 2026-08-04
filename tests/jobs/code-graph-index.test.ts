@@ -701,8 +701,10 @@ describe('the job definition carries NO concurrency number', () => {
   //     configured cap of six means two, whatever an operator sets.
   //   • It is UNKEYED, which is the starvation it was meant to prevent — one
   //     tenant's five repos ahead of another's first index. A per-tenant limit
-  //     here would need a KEYED concurrency, which `defineJob` discards entirely
-  //     (MOTIR-1982) — the bug this card deliberately does not wait on.
+  //     here would need a KEYED concurrency; `defineJob` can express one since
+  //     MOTIR-1982, and it STILL does not belong here, because the first reason
+  //     applies to a keyed cap just as much — it would cap supervisors, not
+  //     containers. Fairness for this job lives in admission control.
   it('leaves concurrency to the orchestrator’s admission cap, and keeps the retry policy', () => {
     // Read off the SHIPPED function object — the config Inngest was actually
     // constructed with — rather than re-invoking `defineJob` with the options a
