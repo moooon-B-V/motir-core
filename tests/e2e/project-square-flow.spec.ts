@@ -133,6 +133,22 @@ function cards(page: Page) {
   return page.getByRole('link', { name: /— public project$/ });
 }
 
+/** ONE gallery card, by project name — the `<a aria-label="<name> — public
+ *  project">` that OWNS every per-card fact (`ProjectSquareCard` renders the org
+ *  name and the upvote/activity stats INSIDE this link).
+ *
+ *  Assert per-card content THROUGH this locator, never page-wide: `/explore` has
+ *  its own `loading.tsx` Suspense boundary, and under the prod-build harness
+ *  (`E2E_PROD_HARNESS`) the route streams fast enough that a page-level
+ *  `getByText('<org>')` can catch a transient second copy of the card's own
+ *  subtree and lose strict mode — a coin flip on render timing, not a product
+ *  defect (MOTIR-2033, twice; same class as the `board-scrum.spec.ts`
+ *  `getByText('Completed')` case the same harness change surfaced). Scoping is
+ *  also STRICTLY stronger: it asserts the org sits on the card that owns it. */
+function card(page: Page, name: string) {
+  return page.getByRole('link', { name: `${name} — public project` });
+}
+
 test('@smoke the project square: a logged-out visitor browses the cross-org gallery, sorts by trending, searches + filters by topic (all in the URL), and clicks through to a public read-only view', async ({
   page,
   browser,
@@ -190,13 +206,18 @@ test('@smoke the project square: a logged-out visitor browses the cross-org gall
   expect(ld, 'JSON-LD lists a seeded public project').toContain('Trendy Tracker');
 
   // The cross-org gallery: all THREE public projects render, naming their orgs.
-  await expect(page.getByRole('link', { name: 'Trendy Tracker — public project' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Steady Ledger — public project' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Design Studio — public project' })).toBeVisible();
-  await expect(page.getByText('Northwind Labs')).toBeVisible();
-  await expect(page.getByText('Globex Systems')).toBeVisible();
+  // Each org name is read INSIDE the card that owns it (see `card()`) — the org
+  // <span> lives in the card's own `<a>`, so a page-level `getByText` would be a
+  // strict-mode coin flip on the streamed render AND would not prove the org
+  // landed on the right card.
+  await expect(card(page, 'Trendy Tracker')).toBeVisible();
+  await expect(card(page, 'Steady Ledger')).toBeVisible();
+  await expect(card(page, 'Design Studio')).toBeVisible();
+  await expect(card(page, 'Trendy Tracker').getByText('Northwind Labs')).toBeVisible();
+  await expect(card(page, 'Steady Ledger').getByText('Globex Systems')).toBeVisible();
   // A card shows the public demand stat (upvotes) — the public-projection signal.
-  await expect(page.getByLabel('5 upvotes')).toBeVisible();
+  // Scoped for the same reason: the stat's aria-label is per-card content too.
+  await expect(card(page, 'Trendy Tracker').getByLabel('5 upvotes')).toBeVisible();
 
   // The NON-public project is absent (the public-only directory filter), and no
   // card carries a "Public" pill (every project here is public by definition).
@@ -297,6 +318,6 @@ test('@smoke the project square: a logged-out visitor browses the cross-org gall
   const anon = await anonCtx.newPage();
   const anonRes = await anon.goto('/explore');
   expect(anonRes?.status(), '/explore is 200 from a cookieless context').toBe(200);
-  await expect(anon.getByRole('link', { name: 'Trendy Tracker — public project' })).toBeVisible();
+  await expect(card(anon, 'Trendy Tracker')).toBeVisible();
   await anonCtx.close();
 });
