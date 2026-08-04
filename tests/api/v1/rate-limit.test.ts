@@ -18,8 +18,9 @@ import { truncateAuthTables } from '../../helpers/db';
 //
 // The budget is shrunk through the SAME environment variables a deployment
 // uses, so these tests exercise the shipped configuration path rather than a
-// test-only back door — and so the window-reset case takes milliseconds
-// instead of a minute.
+// test-only back door — and so the window-reset case takes a couple of seconds
+// instead of a minute. (How short that window may safely be is bounded — see
+// the note above `ROLLOVER_WINDOW_MS`.)
 
 const ME = 'http://localhost:3000/api/v1/me';
 
@@ -150,16 +151,55 @@ describe('rate limiting — the wrapper', () => {
     expect((await GET(req(second.headers))).status).toBe(200);
   });
 
+  // ── Why this window is SECONDS, and why the pair starts on a boundary ──────
+  // MOTIR-2101. This test used `budget(1, 120)` and flaked in CI three times in
+  // one day (`expected 200 to be 429`), on three PRs that touched no API, route
+  // or limiter file. The limiter's window is a FIXED GRID aligned to the epoch
+  // — `windowStart = Math.floor(now / windowMs) * windowMs` — NOT a window that
+  // opens at the first request. So the pair below is refused only if no grid
+  // boundary falls BETWEEN the two calls, and the odds of one falling there are
+  // roughly (gap between the calls / windowMs). Each call runs the real route
+  // handler against real Postgres, so that gap is milliseconds even when
+  // nothing is wrong: at 120 ms a mere 8 ms gap refuses nothing whenever the
+  // pair happens to start in the last 8 ms of a cell. The failure never needed
+  // a 120 ms stall — only unlucky phase, which is why re-running "fixed" it.
+  //
+  // Widening the window alone only makes the flake rarer, never impossible, so
+  // this does BOTH:
+  //   1. waits for a grid boundary before the pair, handing it the WHOLE window
+  //      instead of whatever was left of a randomly-phased one, and
+  //   2. sizes that window in seconds, past any plausible round-trip.
+  // Both requests would now have to be ~2 s apart to cross a boundary.
+  //
+  // ⚠️ Do NOT "optimise" this back down to milliseconds — that is the exact
+  // change that produced the flake. The added wall clock is ~2 s: the rollover
+  // wait below is derived from the advertised reset, so it sleeps only as long
+  // as the window actually has left, and the boundary wait replaces time the
+  // window was going to consume anyway.
+  const ROLLOVER_WINDOW_MS = 2_000;
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** Sleep to just past the next fixed-window boundary of `windowMs`. */
+  const waitForWindowBoundary = (windowMs: number) => sleep(windowMs - (Date.now() % windowMs) + 5);
+
   it('resets the budget when the window rolls over', async () => {
-    budget(1, 120);
+    budget(1, ROLLOVER_WINDOW_MS);
     const caller = await createV1Caller();
 
+    // Fixture setup is done; start the pair at the top of a window so the whole
+    // window is available to it (see the note above).
+    await waitForWindowBoundary(ROLLOVER_WINDOW_MS);
+
     expect((await GET(req(caller.headers))).status).toBe(200);
-    expect((await GET(req(caller.headers))).status).toBe(429);
+    const refused = await GET(req(caller.headers));
+    expect(refused.status).toBe(429);
 
     // Wait past the reset the response itself advertised — a real window
-    // rollover, not a mocked clock.
-    await new Promise((resolve) => setTimeout(resolve, 260));
+    // rollover, not a mocked clock. Reading the header rather than sleeping a
+    // hardcoded span is what keeps the wait correct if the window ever changes.
+    const resetAtMs = Number(refused.headers.get('x-ratelimit-reset')) * 1000;
+    await sleep(Math.max(0, resetAtMs - Date.now()) + 100);
 
     expect((await GET(req(caller.headers))).status).toBe(200);
   });
