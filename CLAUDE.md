@@ -768,6 +768,24 @@ appeared until the widget also bumped a tick the inbox refetches on.)
   from 2.3.7 was raw-SQL-only; it is now modelled as `Attachment.uploader` ↔
   `User.uploadedAttachments`, so `migrate dev` reports "No difference detected"
   with no spurious drop.)
+- **Migrations — a hand-written PARTIAL index must not reuse the column list of
+  an `@@index` on the same model.** Prisma's differ pairs a database index to a
+  datamodel index BY COLUMN LIST, and it ignores a database index it cannot
+  express (a `WHERE` clause is inexpressible) only for as long as no `@@index`
+  claims those columns. When one does, the two get paired, the sole remaining
+  difference is the NAME, and `migrate diff` reports a permanent spurious
+  **RENAME** — which the next `migrate dev` writes into a migration, renaming one
+  index over the other and destroying it. Renaming the index does NOT fix this
+  (the differ re-reports against the new name); giving it a column list of its
+  own does. Pick that extra column from what the index's own query filters or
+  orders on, so it earns its place — `project_repository_ci_actions_pending_idx`
+  is `(workspace_id, state)`, not `(workspace_id)`, because the sweep filters on
+  both. (Fixed by MOTIR-1960; the same shape as the FK rule above — a
+  schema-invisible DB object put the datamodel and the migration-built DB in
+  permanent disagreement. **The `build` job now gates this**: it runs
+  `prisma migrate diff --from-schema … --to-config-datasource --exit-code`
+  against its from-empty replay, so drift of ANY kind fails CI rather than
+  ambushing the next `migrate dev`.)
 - **Out-of-scope findings** go to
   `/Users/yuezhu/projects/prodect/prodect_plan/PRODECT_FINDINGS.md`,
   not into a CLAUDE.md or MOTIR.md update. The planner promotes

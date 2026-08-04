@@ -4494,6 +4494,22 @@ model ProjectRepo {
   /// additionally rejects a CASE-VARIANT collision (git-host names are
   /// case-insensitive), for which this exact-match index is the backstop.
   @@unique([projectId, name])
+  /// Serves every read of this table, not just an explicit `where workspaceId`:
+  /// RLS policy `project_repository_active_workspace` predicates all of them on
+  /// `workspace_id = current_setting('app.workspace_id')`.
+  ///
+  /// ⚠️ A hand-written PARTIAL index on this table must NOT use `(workspace_id)`
+  /// as its whole column list (MOTIR-1960). Prisma's differ pairs a database
+  /// index to a datamodel index BY COLUMN LIST, and ignores one it cannot
+  /// express — a `WHERE` clause is inexpressible — only while no `@@index`
+  /// claims those columns. When one does, the two get paired, the sole remaining
+  /// difference is the name, and `migrate diff` reports a permanent spurious
+  /// RENAME that the next `migrate dev` writes into a migration, destroying one
+  /// of the two indexes. Give the partial index a column list of its own, chosen
+  /// from what its query actually filters on — as
+  /// `project_repository_ci_actions_pending_idx` (`workspace_id, state`) and
+  /// `project_repository_takeover_in_flight_idx` (`workspace_id,
+  /// takeover_state`) both do.
   @@index([workspaceId])
   @@index([projectId])
   @@map("project_repository")

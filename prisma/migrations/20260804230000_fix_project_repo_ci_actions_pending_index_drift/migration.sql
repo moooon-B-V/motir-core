@@ -1,0 +1,82 @@
+-- MOTIR-1960 — end the PERMANENT schema drift on `project_repository`.
+--
+-- THE DEFECT. `20260731190000_add_project_repo_ci_actions_intent` (MOTIR-1907)
+-- hand-wrote a PARTIAL index on ("workspace_id"), and `schema.prisma` also
+-- declares a plain `@@index([workspaceId])` on the same model. Against a scratch
+-- database built by replaying every migration from empty, Prisma reported — on
+-- `origin/main`, with no local changes:
+--
+--   [*] Changed the `project_repository` table
+--     [*] Renamed index `project_repository_workspace_id_idx`
+--         to `project_repository_ci_actions_pending_idx`
+--
+-- So the next `prisma migrate dev` proposed an `ALTER INDEX … RENAME` at the top
+-- of whatever migration came next; committing it verbatim would either rename
+-- the plain index OVER the partial one — destroying it, and silently regressing
+-- MOTIR-1907's sweep to a full-table scan per workspace — or leave a duplicate.
+--
+-- THE MECHANISM (measured, not inferred). Prisma's differ pairs a database index
+-- with a datamodel index BY COLUMN LIST, and it IGNORES a database index it
+-- cannot express in the datamodel — a partial index, say — *as long as no
+-- datamodel index claims the same column list*. When one does, the two are
+-- paired and the only difference left between them is the NAME, so the diff
+-- comes out as a rename. Four experiments on a replayed scratch DB:
+--
+--   1. Baseline, untouched replay ............................. drift (rename)
+--   2. Partial index RENAMED, columns unchanged ............... drift (rename)
+--   3. Plain @@index([workspaceId]) dropped from schema AND DB . clean
+--   4. Partial index moved to ("workspace_id", "state") ....... clean
+--
+-- (2) is what proves the name is not the problem: the differ re-reported the
+-- rename against the new name. And the table already carries the counter-example
+-- that shows the rule holds in the other direction —
+-- `project_repository_takeover_in_flight_idx` (MOTIR-711) is ALSO a hand-written
+-- partial index on this table, ALSO led by "workspace_id", and has never
+-- drifted, because its column list ("workspace_id", "takeover_state") collides
+-- with no `@@index`.
+--
+-- WHICH INDEX SURVIVES: BOTH. They are not redundant. Experiment (3) shows that
+-- dropping the plain `@@index([workspaceId])` also silences the differ, but it
+-- pays for that by deleting a load-bearing index: RLS policy
+-- `project_repository_active_workspace` predicates every read of this table on
+-- `workspace_id = current_setting('app.workspace_id')`, so the plain index
+-- serves EVERY query here, while the partial one — by construction — holds only
+-- the unconverged rows (400 of 40,000 in the measurement) and can serve nothing
+-- else. Silencing a differ is not worth an index every read uses.
+--
+-- So (4): keep both, and give the partial index a column list of its own.
+--
+-- WHY "state" IS THE SECOND COLUMN, and not padding. It is the other equality
+-- the sweep filters on (`projectRepoRepository.listCiActionsPendingByWorkspace`
+-- — `state = 'created'`), so putting it in the index MOVES it out of the heap
+-- filter and into the index condition. Measured on 40,000 seeded rows:
+--
+--   before  Index Cond: (workspace_id = $1)
+--           Filter:     ((github_repo_id IS NOT NULL) AND (state = 'created'))
+--   after   Index Cond: ((workspace_id = $1) AND (state = 'created'))
+--           Filter:     (github_repo_id IS NOT NULL)
+--
+-- ("position" was tried first, to serve the sweep's `ORDER BY position`, and
+-- REJECTED: the row set is small enough that Postgres picks a bitmap heap scan,
+-- which returns nothing in index order, so the sort survived and the column
+-- bought nothing. A second column has to earn its place on the query, or the
+-- next reader is owed an explanation nobody can give.)
+--
+-- THE PREDICATE IS UNCHANGED. This migration moves the column list and nothing
+-- else: the partial index still holds exactly MOTIR-1907's convergence
+-- predicate, so the settled rows stay out of the index entirely and a
+-- fully-converged tenant still costs an empty scan. That property is the reason
+-- the index exists and is not being traded away for a clean diff.
+--
+-- NOT AN `IF EXISTS` REPAIR. Unlike a drift repair, this runs against databases
+-- that provably HAVE the index — `20260731190000` created it unconditionally,
+-- and every environment replays the same ordered history — so a plain DROP is
+-- honest and a missing index should fail loudly rather than be papered over.
+
+DROP INDEX "project_repository_ci_actions_pending_idx";
+
+CREATE INDEX "project_repository_ci_actions_pending_idx"
+  ON "project_repository" ("workspace_id", "state")
+  WHERE "ci_actions_intent_at" IS NOT NULL
+    AND ("ci_actions_applied_at" IS NULL
+         OR "ci_actions_applied_at" < "ci_actions_intent_at");
