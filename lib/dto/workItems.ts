@@ -25,7 +25,7 @@ export type WorkItemExplanationSourceDto = 'user_authored' | 'ai_draft' | 'user_
  * docs/decisions/work-item-provenance.md) — the closed AUTHOR-CATEGORY sets. The
  * accompanying `harness`/`model` are open free-text strings, not enums.
  */
-export type WorkItemPlanningSourceDto = 'native' | 'mcp' | 'manual';
+export type WorkItemPlanningSourceDto = 'native' | 'mcp' | 'manual' | 'api';
 export type WorkItemImplementationSourceDto = 'hosted' | 'byok' | 'manual';
 /**
  * The work-item TYPE — the NATURE of executable work (Story 2.7). A FIXED

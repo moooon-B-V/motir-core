@@ -197,6 +197,16 @@ describe('classifyProvenance (both halves together)', () => {
     ).toEqual({ planningSource: 'mcp', implementationSource: null });
   });
 
+  it('a row already stamped `api` is left alone, even though its shape says `mcp`', () => {
+    // The MOTIR-2044 case at the rule level: an API-created row is post-seed, so
+    // the `mcp` rule would claim it if the already-stamped guard were not the
+    // FIRST thing `classifyPlanningSource` checks. The DB-backed twin lives in
+    // tests/integration/work-items/provenance-backfill.test.ts.
+    expect(
+      classifyPlanningSource(row({ createdAt: AFTER_BURST, planningSource: 'api' }), OPTS),
+    ).toBeNull();
+  });
+
   it('a fully-stamped row yields nothing to write on either half', () => {
     expect(
       classifyProvenance(

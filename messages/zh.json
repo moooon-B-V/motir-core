@@ -873,6 +873,7 @@
     "provenanceSourceNative": "原生",
     "provenanceSourceMcp": "MCP",
     "provenanceSourceManual": "手动",
+    "provenanceSourceApi": "API",
     "provenanceSourceHosted": "托管",
     "provenanceSourceByok": "自带密钥",
     "changedElsewhereRefreshing": "此工作项已在别处发生变更——正在刷新。",

@@ -218,17 +218,31 @@ describe('the reachable output set, swept exhaustively', () => {
     expect(unreachable).toEqual(['hosted']);
   });
 
-  it('`native` is UNREACHABLE on the planning half, for the same reason', () => {
+  it('`native` and `api` are UNREACHABLE on the planning half, for the same reason', () => {
     // Its twin: `native` means "materialized from a motir-ai-generated plan",
     // which only `plansService.materialize` can know. If the sweep ever reaches
     // it, the backfill has started inventing planning attribution.
+    //
+    // `api` (Subtask 11.2.5 — MOTIR-2044) joins it, and the reason is sharper:
+    // the backfill's post-seed-burst rule stamps `mcp`, so a row created over
+    // `/api/v1` and left NULL would be RE-LABELLED as MCP-authored — a false
+    // attribution that cannot be undone, because nothing in a row's shape
+    // reveals which write surface made it. That is precisely why the v1 create
+    // endpoint stamps `api` itself at write time and why this enum value is a
+    // PREREQUISITE of that endpoint rather than a follow-up.
+    //
+    // ⚠️ THIS ASSERTION IS THE TOTALITY GATE. It is derived from the sweep over
+    // `Object.values($Enums.WorkItemPlanningSource)`, so adding an enum member
+    // without deciding what the backfill does with it FAILS HERE — which is what
+    // caught `api` when it landed. Do not relax it to a `.includes` check.
     expect(planningReached.has('native')).toBe(false);
+    expect(planningReached.has('api')).toBe(false);
     expect([...planningReached].sort()).toEqual(['manual', 'mcp']);
 
     const unreachable = Object.values($Enums.WorkItemPlanningSource).filter(
       (value) => !planningReached.has(value),
     );
-    expect(unreachable).toEqual(['native']);
+    expect(unreachable.sort()).toEqual(['api', 'native']);
   });
 
   it('never overwrites a row that already carries a source', () => {

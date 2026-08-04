@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import type { WorkItemImplementationSource, WorkItemPlanningSource } from '@prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { MOTIR_SEED_BURST_END } from '@/lib/workItems/provenanceBackfill';
@@ -46,8 +47,12 @@ async function seedRow(
     status?: string;
     executor?: 'coding_agent' | 'human';
     type?: 'code' | 'manual';
-    planningSource?: 'native' | 'mcp' | 'manual';
-    implementationSource?: 'hosted' | 'byok' | 'manual';
+    // Derived from the GENERATED enums, never re-typed by hand: a value added
+    // to `schema.prisma` (as `api` was — MOTIR-2044) must be seedable here
+    // without editing this fixture, or the tests that prove the new value is
+    // handled cannot be written in the first place.
+    planningSource?: WorkItemPlanningSource;
+    implementationSource?: WorkItemImplementationSource;
     sessionBranch?: string;
     archived?: boolean;
   },
@@ -240,6 +245,33 @@ describe('backfillProvenanceForProject — the decision pass over real rows', ()
     // Fully-stamped rows are not even candidates.
     expect(report.candidates).toBe(0);
     expect(await read(stamped.id)).toEqual(before);
+  });
+
+  // ⚠️ The specific row MOTIR-2044 exists to protect. A work item created over
+  // `/api/v1` sits AFTER the seed burst, which is exactly the shape the planning
+  // rule stamps `mcp` — so if the backfill ever stopped honouring an existing
+  // value, every API-created item would be silently re-attributed to the agent
+  // tool surface, permanently and unrecoverably (nothing in a row reveals which
+  // surface wrote it). Asserted against real Postgres rather than the pure rule,
+  // because the write-level null-guard is the half that actually runs in
+  // production.
+  it('leaves a row stamped `api` untouched — it is never re-classified as `mcp`', async () => {
+    const fx = await makeWorkItemFixture();
+    const apiRow = await seedRow(fx, {
+      title: 'created by an external integration over /api/v1',
+      createdAt: AFTER_BURST, // the shape the `mcp` rule would otherwise claim
+      status: 'todo',
+      planningSource: 'api',
+    });
+    const before = await read(apiRow.id);
+
+    const report = await workItemsService.backfillProvenanceForProject(fx.projectId, fx.ownerId);
+
+    expect(await read(apiRow.id)).toMatchObject({ planningSource: 'api' });
+    // And the planning half wrote nothing at all on this row.
+    expect(report.planning.mcp.sample).not.toContain(apiRow.identifier);
+    expect(report.planning.manual.sample).not.toContain(apiRow.identifier);
+    expect((await read(apiRow.id)).planningSource).toBe(before.planningSource);
   });
 
   it('fills only the MISSING half of a half-stamped row', async () => {
