@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Sparkles, FileSearch } from 'lucide-react';
 import { renderMarkdown } from '@/lib/markdown/render';
 import { Card } from '@/components/ui/Card';
@@ -41,9 +41,9 @@ export function ConventionPanel({ conventions }: { conventions: ConventionSurfac
 
 function RepoConventionCard({ convention: c }: { convention: ConventionSurfaceDTO }) {
   const t = useTranslations('codeHealth');
-  // The derived convention is auto-used — the standard IS the one injected.
-  // If neither proposed nor standard exists, the repo hasn't been audited yet.
-  const current = c.standard ?? c.proposed;
+  // The latest derived convention IS the one injected — derived = auto-used, no
+  // approve gate (MOTIR-1660). Null means the repo hasn't been audited yet.
+  const current = c.convention;
 
   return (
     <Card
@@ -53,13 +53,9 @@ function RepoConventionCard({ convention: c }: { convention: ConventionSurfaceDT
             <span className="text-sm font-medium text-(--el-text-strong)">
               {c.repoKey ?? t('convention.defaultRepo')}
             </span>
-            {c.standard ? (
-              <Pill severity="success">
-                {t('convention.versionStandard', { version: c.standard.version })}
-              </Pill>
-            ) : c.proposed ? (
+            {current ? (
               <Pill status="planned">
-                {t('convention.versionDerived', { version: c.proposed.version })}
+                {t('convention.versionDerived', { version: current.version })}
               </Pill>
             ) : null}
           </div>
@@ -89,7 +85,9 @@ function RepoConventionCard({ convention: c }: { convention: ConventionSurfaceDT
       ) : (
         <p className="text-sm text-(--el-text-muted)">{t('convention.noRules')}</p>
       )}
-      {c.versions.length > 1 ? <VersionHistory versions={c.versions} /> : null}
+      {c.versions.length > 1 ? (
+        <VersionHistory versions={c.versions} currentId={current?.id ?? null} />
+      ) : null}
     </Card>
   );
 }
@@ -140,8 +138,19 @@ function ConventionDocument({ contentMd }: { contentMd: string }) {
   );
 }
 
-function VersionHistory({ versions }: { versions: ConventionSurfaceDTO['versions'] }) {
+// The design's `.version` list (design/coding-convention, Panel 4): a mono version
+// id, the CURRENT marker, and when the version was derived. It switches on
+// identity, never on a lifecycle `status` — MOTIR-1660/1662 deleted that
+// lifecycle and motir-ai does not send one (MOTIR-2127).
+function VersionHistory({
+  versions,
+  currentId,
+}: {
+  versions: ConventionSurfaceDTO['versions'];
+  currentId: string | null;
+}) {
   const t = useTranslations('codeHealth');
+  const format = useFormatter();
   if (versions.length === 0) return null;
   return (
     <Card
@@ -154,23 +163,18 @@ function VersionHistory({ versions }: { versions: ConventionSurfaceDTO['versions
       <ul className="flex flex-col gap-2">
         {versions.map((v) => (
           <li key={v.id} className="flex flex-wrap items-center gap-2 text-sm">
-            <Pill tone="neutral">v{v.version}</Pill>
-            <StatusLabel status={v.status} />
+            <span className="font-mono text-xs font-semibold text-(--el-text-secondary)">
+              v{v.version}
+            </span>
+            {v.id === currentId ? (
+              <Pill status="planned">{t('convention.historyCurrent')}</Pill>
+            ) : null}
+            <span className="text-xs text-(--el-text-muted)">
+              {format.relativeTime(new Date(v.createdAt))}
+            </span>
           </li>
         ))}
       </ul>
     </Card>
   );
-}
-
-function StatusLabel({ status }: { status: 'proposed' | 'standard' | 'superseded' }) {
-  const t = useTranslations('codeHealth');
-  switch (status) {
-    case 'standard':
-      return <Pill severity="success">{t('convention.status.standard')}</Pill>;
-    case 'proposed':
-      return <Pill status="planned">{t('convention.status.derived')}</Pill>;
-    default:
-      return <Pill tone="archived">{t('convention.status.superseded')}</Pill>;
-  }
 }

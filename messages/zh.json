@@ -5120,7 +5120,6 @@
       "defaultRepo": "代码",
       "noRules": "此仓库尚未提取出编码规范。",
       "versionDerived": "v{version} · 已提取",
-      "versionStandard": "v{version} · 标准",
       "bannerDerivedTitle": "从你的代码中提取——自动启用",
       "bannerDerivedBody": "此规范提取自你的代码库，并注入到所有新代码的提示词中。如需改进，请点击上方的「与 Motir 一起完善」打开 AI 对话。",
       "provenanceTitle": "规则来源",
@@ -5130,11 +5129,7 @@
         "proposed": "建议"
       },
       "historyTitle": "版本历史",
-      "status": {
-        "standard": "标准",
-        "derived": "已提取",
-        "superseded": "已被取代"
-      }
+      "historyCurrent": "当前"
     },
     "deepen": {
       "eyebrow": "可选 · 非阻塞",

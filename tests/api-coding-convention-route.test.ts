@@ -52,20 +52,18 @@ async function signInAtProject() {
   return { workspace, owner, project };
 }
 
+// ⚠️ motir-ai's REAL `GET /v1/convention` body (`ConventionSurface` /
+// `CodingConventionDto`), not motir-core's own boundary type — see the fixture
+// note in tests/aiConventionService.test.ts (MOTIR-2127).
 function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
   return {
     id: 'conv_1',
     aiProjectId: 'ai_1',
-    status: 'proposed',
+    repoKey: 'acme/web',
     version: 2,
     contentMd: '# rules',
     provenance: [],
     sourceAuditId: null,
-    approvedByUserId: null,
-    approvedAt: null,
-    supersededByVersion: null,
-    editedByUserId: null,
-    editedAt: null,
     createdAt: '2026-07-04T00:00:00.000Z',
     updatedAt: '2026-07-04T00:00:00.000Z',
     ...over,
@@ -74,9 +72,7 @@ function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
 
 function rawConventionSurface(over: Partial<RawConventionSurface> = {}): RawConventionSurface {
   return {
-    repoKey: 'acme/web',
-    proposed: rawConvention(),
-    standard: null,
+    convention: rawConvention(),
     versions: [rawConvention()],
     nextCursor: null,
     ...over,
@@ -189,18 +185,39 @@ describe('GET /api/ai/coding-convention/convention', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.repoKey).toBe('acme/web');
-    expect(body.proposed.id).toBe('conv_1');
+    expect(body.convention.id).toBe('conv_1');
+    expect(body.convention.contentMd).toBe('# rules');
     expect(body.versions).toHaveLength(1);
   });
 
-  it('passes repoKey query param to the service', async () => {
+  it('passes repoKey query param to the service and labels the surface with it', async () => {
     await signInAtProject();
-    getConventionMock.mockResolvedValue(rawConventionSurface({ repoKey: 'acme/api' }));
+    getConventionMock.mockResolvedValue(
+      rawConventionSurface({
+        convention: rawConvention({ repoKey: 'acme/api' }),
+        versions: [rawConvention({ repoKey: 'acme/api' })],
+      }),
+    );
 
     const res = await conventionGET(new Request(`${BASE}/convention?repoKey=acme%2Fapi`));
     expect(res.status).toBe(200);
     expect(getConventionMock).toHaveBeenCalledWith(
       expect.objectContaining({ repoKey: 'acme/api' }),
     );
+    expect((await res.json()).repoKey).toBe('acme/api');
+  });
+
+  it('serializes the EMPTY surface a project with no derived convention gets', async () => {
+    await signInAtProject();
+    getConventionMock.mockResolvedValue({ convention: null, versions: [], nextCursor: null });
+
+    const res = await conventionGET(new Request(`${BASE}/convention?repoKey=acme%2Fweb`));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      repoKey: 'acme/web',
+      convention: null,
+      versions: [],
+      nextCursor: null,
+    });
   });
 });

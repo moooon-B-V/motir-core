@@ -435,27 +435,30 @@ export interface RawConventionProvenance {
   confidence?: number;
 }
 
+// The EXACT mirror of motir-ai's `CodingConventionDto`
+// (`src/services/codingConventionService.ts`). It carries NO lifecycle fields —
+// MOTIR-1660/1662 deleted the `proposed → standard` approve gate, so there is no
+// `status`, `approvedBy*`, `editedBy*` or `supersededByVersion` to mirror. Keep
+// this type keyed to the producer's DTO, never to what a consumer wishes for
+// (MOTIR-2127: the fictional shape made every read map to null).
 export interface RawConvention {
   id: string;
   aiProjectId: string;
-  status: 'proposed' | 'standard' | 'superseded';
+  repoKey: string;
   version: number;
   contentMd: string;
   provenance: RawConventionProvenance[];
   sourceAuditId: string | null;
-  approvedByUserId: string | null;
-  approvedAt: string | null;
-  supersededByVersion: number | null;
-  editedByUserId: string | null;
-  editedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+// The EXACT mirror of motir-ai's `ConventionSurface` — the body `GET /v1/convention`
+// returns. `convention` is the LATEST derived convention for the requested
+// (project, repoKey), or null when none exists; the surface does NOT echo the
+// requested `repoKey` (each row carries its own).
 export interface RawConventionSurface {
-  repoKey: string | null;
-  proposed: RawConvention | null;
-  standard: RawConvention | null;
+  convention: RawConvention | null;
   versions: RawConvention[];
   nextCursor: string | null;
 }

@@ -65,9 +65,9 @@ export default async function CodeHealthPage() {
         aiConventionService.getConvention(ctx.projectId, svcCtx, { repoKey }),
       ]);
       initialAudit = auditResult;
-      initialConventions = [conventionResult].filter(
-        (c) => c.proposed !== null || c.standard !== null,
-      );
+      // Skip a repo with nothing derived yet — the tab's own empty state covers
+      // it. Reads the field motir-ai actually populates (MOTIR-2127).
+      initialConventions = [conventionResult].filter((c) => c.convention !== null);
     } catch (err) {
       if (err instanceof NotProjectAdminError || err instanceof ProjectNotFoundError) {
         return (
