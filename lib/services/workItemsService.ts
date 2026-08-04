@@ -3244,6 +3244,53 @@ export const workItemsService = {
    * keyed by identifier. Cross-workspace (or missing) → WorkItemNotFoundError so
    * the route renders 404 without leaking another tenant's existence.
    */
+  /**
+   * Resolve MANY `MOTIR-<n>` identifiers to their work-item ids, in ONE round
+   * trip (Story 11.3 · Subtask 11.3.7 — MOTIR-2064).
+   *
+   * ⚠️ WHY THIS EXISTS rather than a loop over `getWorkItemByIdentifier`. The
+   * `/api/v1` ADR's Amendment 3 (Q4) pins the bounded-call rule: a route may
+   * make a CONSTANT number of service calls that resolve or project one
+   * response, and never one per row. A batch membership move takes up to 100
+   * keys, so resolving them one at a time would be exactly the N+1 that rule
+   * forbids — and would do it in the route, where it is least visible.
+   *
+   * A batched re-presentation of the shipped `workItemRepository.findByIdentifiers`
+   * (5.8.3's mention resolver already uses it): same predicate, same
+   * project scope, no new field, no new gate, no filter axis — the carve-out
+   * Amendment 3 (Q3) records.
+   *
+   * ⚠️ An UNRESOLVED key THROWS rather than being dropped. The repository read
+   * silently omits a miss, which is right for mention-scanning and wrong here:
+   * a caller moving five items must not have four of them move because the fifth
+   * key was a typo. Raising `WorkItemNotFoundError` before any write is what
+   * makes the batch atomic, and it names the FIRST offending key so the caller
+   * can fix it.
+   *
+   * `projectId` must already be workspace-resolved by the caller (every v1 route
+   * reaches it through `projectsService.getByKey`, which is workspace-gated), so
+   * an identifier from another tenant simply does not exist in this project and
+   * raises the same not-found error — no existence leak.
+   *
+   * Returns the ids in the SAME ORDER as `identifiers`, because the membership
+   * move ranks items in request order and a reordered batch would silently
+   * shuffle the sprint.
+   */
+  async resolveIdentifiersToIds(
+    projectId: string,
+    identifiers: string[],
+    _ctx: ServiceContext,
+  ): Promise<string[]> {
+    if (identifiers.length === 0) return [];
+    const rows = await workItemRepository.findByIdentifiers(projectId, identifiers);
+    const idByIdentifier = new Map(rows.map((row) => [row.identifier, row.id]));
+    return identifiers.map((identifier) => {
+      const id = idByIdentifier.get(identifier);
+      if (id === undefined) throw new WorkItemNotFoundError(identifier);
+      return id;
+    });
+  },
+
   async getWorkItemByIdentifier(
     projectId: string,
     identifier: string,

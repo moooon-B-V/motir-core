@@ -1,0 +1,212 @@
+import { z } from 'zod';
+import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { InvalidRequestError } from '@/lib/api/v1/errors';
+import { workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import type { ReadyItemDto } from '@/lib/dto/ready';
+import type {
+  ExecutorDto,
+  WorkItemDependencyEdgesDto,
+  WorkItemKindDto,
+  WorkItemPriorityDto,
+  WorkItemTypeDto,
+} from '@/lib/dto/workItems';
+import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
+
+// The v1 READY-SET row (Story 11.3 · Subtask 11.3.9 — MOTIR-2066) — the shape
+// an external agent loop reads to answer "what can I pick up right now, and what
+// does finishing it unblock?".
+//
+// ── The ORDER is part of the contract ───────────────────────────────────────
+// Rows arrive in the DISPATCH rank `(type asc, priority desc, key asc)` —
+// leaf-most kinds first, priority breaking the type tie, `key` breaking the
+// final tie — so `items[0]` is what an agent should take next. Nothing here
+// re-sorts, filters or post-processes the service's result: the endpoint's whole
+// value is that an agent loop and the product's own /ready page can never
+// disagree about what is ready.
+//
+// ── What is deliberately NOT on the row ─────────────────────────────────────
+//   • `descriptionMd` — populated ONLY for manual rows (the shipped 7.0.3
+//     payload-size split: a 50-row page must not ship 50 Markdown bodies). A
+//     field that is null for most rows for a reason no client can see is worse
+//     than an absent one; `descriptionExcerpt` carries what a list needs, and a
+//     client wanting the body reads the item through 11.2's detail endpoint.
+//   • `id` — the internal cuid. §7; `key` is the item's public name.
+//   • `assignee.avatarUrl` / `name` — a public API must not acquire a second,
+//     accidental user resource. The id is what a client can act on (it is what
+//     11.2's PATCH takes back); the display fields are the web app's.
+//   • `runCommand` / `contextRefs` / `sessionBranch` / `targetRepo` — those live
+//     on `ReadyItemDispatchDto`, the payload for Motir's OWN CLI dispatch path.
+//     They encode assumptions about a local checkout that a third-party
+//     integration does not share, and `runCommand` in particular would freeze
+//     the CLI's invocation string as public API.
+
+/** `true` only when `Union` is fully covered by `Covered`; otherwise `never`. */
+type AssertTotal<Union, Covered> = [Exclude<Union, Covered>] extends [never] ? true : never;
+
+const READY_KINDS = [
+  'epic',
+  'story',
+  'task',
+  'subtask',
+  'bug',
+] as const satisfies readonly WorkItemKindDto[];
+const _kindsTotal: AssertTotal<WorkItemKindDto, (typeof READY_KINDS)[number]> = true;
+
+const READY_PRIORITIES = [
+  'lowest',
+  'low',
+  'medium',
+  'high',
+  'highest',
+] as const satisfies readonly WorkItemPriorityDto[];
+const _prioritiesTotal: AssertTotal<WorkItemPriorityDto, (typeof READY_PRIORITIES)[number]> = true;
+
+const READY_TYPES = [
+  'code',
+  'design',
+  'test',
+  'content',
+  'research',
+  'review',
+  'decision',
+  'deploy',
+  'manual',
+  'chore',
+] as const satisfies readonly WorkItemTypeDto[];
+const _typesTotal: AssertTotal<WorkItemTypeDto, (typeof READY_TYPES)[number]> = true;
+
+const READY_EXECUTORS = ['coding_agent', 'human'] as const satisfies readonly ExecutorDto[];
+const _executorsTotal: AssertTotal<ExecutorDto, (typeof READY_EXECUTORS)[number]> = true;
+
+void [_kindsTotal, _prioritiesTotal, _typesTotal, _executorsTotal];
+
+/** One end of a dependency edge — the far item, named by its key. */
+const edgeSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  /** The far end's raw workflow status key. */
+  status: z.string(),
+});
+
+/**
+ * A row's dependency edges.
+ *
+ * TOTAL by construction: a row with no edges gets two EMPTY arrays, never a
+ * missing key, so a typed client never branches on presence. For a ready row
+ * `blockedBy` is terminal by definition — that is what makes it ready — and
+ * `blocks` is the payload that matters: what finishing this item unblocks, i.e.
+ * why it is worth doing first.
+ */
+const dependencyEdgesSchema = z.object({
+  blockedBy: z.array(edgeSchema),
+  blocks: z.array(edgeSchema),
+});
+
+/** The v1 ready row. */
+export const readyItemSchema = z.object({
+  key: workItemKeySchema,
+  kind: z.enum(READY_KINDS),
+  title: z.string(),
+  priority: z.enum(READY_PRIORITIES),
+  status: z.object({ key: z.string(), category: z.string() }),
+  type: z.enum(READY_TYPES).nullable(),
+  executor: z.enum(READY_EXECUTORS).nullable(),
+  assigneeId: z.string().nullable(),
+  /** ~200 chars of the description, Markdown stripped to plain text. */
+  descriptionExcerpt: z.string().nullable(),
+  dependencies: dependencyEdgesSchema,
+});
+export type V1ReadyItem = z.infer<typeof readyItemSchema>;
+
+/**
+ * Map one ready row plus its edges to the wire — field by field, never a spread.
+ *
+ * `edges` comes from the page's BATCHED projection, and is defaulted here only
+ * because `noUncheckedIndexedAccess` demands it: `getDependencyEdgesForItems`
+ * pre-seeds every requested id, so a miss is unreachable.
+ */
+export function presentReadyItem(
+  item: ReadyItemDto,
+  edges: WorkItemDependencyEdgesDto | undefined,
+): V1ReadyItem {
+  return {
+    key: item.key,
+    kind: item.kind,
+    title: item.title,
+    priority: item.priority,
+    status: { key: item.status.key, category: item.status.category },
+    type: item.type,
+    executor: item.executor,
+    assigneeId: item.assignee?.id ?? null,
+    descriptionExcerpt: item.descriptionExcerpt,
+    dependencies: {
+      blockedBy: (edges?.blockedBy ?? []).map((edge) => ({
+        key: edge.key,
+        title: edge.title,
+        status: edge.status,
+      })),
+      blocks: (edges?.blocks ?? []).map((edge) => ({
+        key: edge.key,
+        title: edge.title,
+        status: edge.status,
+      })),
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The query filters
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The three shipped ready facets, exposed as repeatable query parameters rather
+// than a FilterAST: this is not the work-item collection, and `ReadyListFilter`
+// is a fixed three-axis shape, not the registry's open field set. Bending the
+// AST onto it would promise fields (`lbl`, `cmp`, `text`, dates) the ready read
+// cannot narrow by.
+
+const KIND_VALUES = new Set<string>(Object.values(WorkItemKind));
+const PRIORITY_VALUES = new Set<string>(Object.values(WorkItemPriority));
+
+/** The literal a caller sends to mean "the UNASSIGNED bucket". */
+export const UNASSIGNED = 'none';
+
+/**
+ * Read `?kind=&priority=&assigneeId=` into the shipped `ReadyListFilter`.
+ *
+ * `assigneeId` is TRI-STATE and the wire form has to preserve all three:
+ * ABSENT means any assignee, the literal `none` means the unassigned bucket, and
+ * a user id means that user's items. Without the explicit literal a client could
+ * not ask for unassigned work at all — an empty `?assigneeId=` is
+ * indistinguishable from omitting it.
+ *
+ * An unknown kind or priority is a 422 rather than being silently dropped: a
+ * filter that quietly matches everything is how a client ends up dispatching
+ * work it meant to exclude.
+ */
+export function parseReadyFilters(req: Request): ReadyListFilter {
+  const params = new URL(req.url).searchParams;
+
+  const kinds = params.getAll('kind');
+  for (const kind of kinds) {
+    if (!KIND_VALUES.has(kind)) {
+      throw new InvalidRequestError('INVALID_READY_FILTER', `Unknown \`kind\`: ${kind}.`);
+    }
+  }
+
+  const priorities = params.getAll('priority');
+  for (const priority of priorities) {
+    if (!PRIORITY_VALUES.has(priority)) {
+      throw new InvalidRequestError('INVALID_READY_FILTER', `Unknown \`priority\`: ${priority}.`);
+    }
+  }
+
+  const rawAssignee = params.get('assigneeId');
+
+  return {
+    ...(kinds.length > 0 ? { kinds: kinds as WorkItemKind[] } : {}),
+    ...(priorities.length > 0 ? { priority: priorities as WorkItemPriority[] } : {}),
+    ...(rawAssignee !== null && rawAssignee !== ''
+      ? { assigneeId: rawAssignee === UNASSIGNED ? null : rawAssignee }
+      : {}),
+  };
+}

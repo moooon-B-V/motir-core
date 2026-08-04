@@ -1,8 +1,9 @@
 # ADR: The public `/api/v1` contract — versioning, auth, errors, pagination, rate limits, naming, stability
 
-- **Status:** Accepted (2026-08-03) · **Amended 2026-08-03** (see
-  [Amendments](#amendments) — Subtask 11.2.1, MOTIR-2038). §5 and §9 must be read
-  together with Amendment 1; response shaping with Amendment 2.
+- **Status:** Accepted (2026-08-03) · **Amended 2026-08-03** (Subtask 11.2.1,
+  MOTIR-2038) · **Amended 2026-08-04** (Subtask 11.3.1, MOTIR-2058). See
+  [Amendments](#amendments). §5 and §9 must be read together with Amendments 1
+  and 3; response shaping with Amendment 2.
 - **Story / Subtask:** 11.1 (`/api/v1` foundation) · Subtask 11.1.1 (MOTIR-1857)
 - **Gates:** MOTIR-1858 (the shared route wrapper), MOTIR-1859 (pagination),
   MOTIR-1860 (rate limiting), and every endpoint in 11.2 / 11.3. Later cards
@@ -218,6 +219,13 @@ developer can quote one identifier in a support conversation.
 > requires a **keyset read that does not exist** in the services §9 says v1 may
 > only re-present. The amendment records the bounded carve-out that resolves the
 > conflict. Do not act on §5 or §9 alone.
+>
+> **⚠️ Amended 2026-08-04 — see [Amendment 3](#amendment-3-2026-08-04--the-cursor-is-collection-scoped-over-a-service-owned-position-the-ranked-list-envelope-and-the-bounded-call-rule).**
+> The three properties below are unchanged and remain the point of the decision.
+> What Amendment 3 settles is what the cursor encodes a position **in**: the
+> shipped codec hardwired `(createdAt, id)`, which is not the order any of Story
+> 11.3's collections is sorted by. It also adds the **ranked list envelope** —
+> the one documented variant that carries `totalCount`.
 
 Every collection returns the **same envelope**: the page's `items` plus the
 cursor for the next page (absent on the last page). `limit` **defaults to 50**
@@ -338,11 +346,15 @@ property that makes an API integrable rather than merely callable.
 ### 9. Architecture — a v1 route is a thin adapter
 
 > **⚠️ Amended 2026-08-03 — see [Amendment 1](#amendment-1-2026-08-03--a-bounded-read-addressing-carve-out-to-9)
-> and [Amendment 2](#amendment-2-2026-08-03--a-v1-response-is-a-schema-output-and-each-resource-story-owns-its-schemas).**
+> and [Amendment 2](#amendment-2-2026-08-03--a-v1-response-is-a-schema-output-and-each-resource-story-owns-its-schemas);
+> amended 2026-08-04 — see [Amendment 3](#amendment-3-2026-08-04--the-cursor-is-collection-scoped-over-a-service-owned-position-the-ranked-list-envelope-and-the-bounded-call-rule).**
 > Amendment 1 carves out a **bounded** exception to the corollary below (a new
-> page ADDRESSING over an unchanged predicate is not new behaviour). Amendment 2
-> settles where the response shapes live. The thin-adapter rule itself, and the
-> no-`db.*` / no-`$transaction` rule, are unchanged.
+> page ADDRESSING over an unchanged predicate is not new behaviour) and
+> Amendment 3 extends its table with by-id re-presentation. Amendment 2 settles
+> where the response shapes live. Amendment 3 also replaces the literal **ONE**
+> below with the **bounded-call rule**: a constant number of RESOLVE / PROJECT
+> calls, never one whose result the route branches on. The thin-adapter rule
+> itself, and the no-`db.*` / no-`$transaction` rule, are unchanged.
 
 A `/api/v1` route parses the request, calls the shared wrapper, calls **ONE**
 service method, and returns. **No `db.*`, no `$transaction`, no business logic in
@@ -449,14 +461,18 @@ addressing — including an optional page-SIZE parameter where the shipped read 
 a fixed one — **and may do nothing else.** The bounds, stated so this cannot be
 read as licence for v1 to grow behaviour at the edge:
 
-| Permitted under the carve-out                                    | NOT permitted — still a card in the owning epic |
-| ---------------------------------------------------------------- | ----------------------------------------------- |
-| A keyset window over the **same compiled predicate**             | A new filter axis or facet                      |
-| A different ORDER BY, where the ordering is the page addressing  | A new or relaxed access gate                    |
-| An optional `limit` where the shipped read has a fixed page size | A new field on the returned row                 |
-| Fetching `limit + 1` instead of a `COUNT` denominator            | Any migration                                   |
-|                                                                  | Any write path                                  |
-|                                                                  | Raising an EXISTING cap on an existing method   |
+> **⚠️ Extended 2026-08-04 — the table below gains a permitted row (by-id
+> re-presentation); see [Amendment 3](#amendment-3-2026-08-04--the-cursor-is-collection-scoped-over-a-service-owned-position-the-ranked-list-envelope-and-the-bounded-call-rule).**
+
+| Permitted under the carve-out                                                                                             | NOT permitted — still a card in the owning epic |
+| ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| A keyset window over the **same compiled predicate**                                                                      | A new filter axis or facet                      |
+| A different ORDER BY, where the ordering is the page addressing                                                           | A new or relaxed access gate                    |
+| An optional `limit` where the shipped read has a fixed page size                                                          | A new field on the returned row                 |
+| Fetching `limit + 1` instead of a `COUNT` denominator                                                                     | Any migration                                   |
+| **A by-id read that re-presents an already-shipped repository read through the already-shipped mapper** (Amendment 3, Q3) | Any write path                                  |
+|                                                                                                                           | Raising an EXISTING cap on an existing method   |
+|                                                                                                                           | Anything that changes what the row CONTAINS     |
 
 Two consequences that are part of the decision, not commentary:
 
@@ -540,3 +556,263 @@ breaking change. The mapper is the seam where that stops, which is why it shapes
 | **Return the service DTO directly**                           | Makes an internal shape a public promise. A later migration's column becomes contract by accident; a DTO rename becomes a silent breaking change. §8 cannot be honoured on a shape nobody owns.                              |
 | **Keep shaping inline, per route**                            | Ten literals for one resource. The list row and the detail row would drift apart with nothing failing, and there is nothing for 11.4 to emit a spec from.                                                                    |
 | **Hand-write the OpenAPI document alongside the routes**      | A second artifact that can silently disagree with the code. Deriving the document from the schemas the routes actually use is the only form where "the spec is wrong" is a test failure rather than a discovery by a client. |
+
+### Amendment 3 (2026-08-04) — the cursor is collection-scoped over a SERVICE-OWNED position, the ranked list envelope, and the bounded-call rule
+
+**Amends:** §5 (what the cursor encodes a position _in_, and the list envelope),
+§9 (the literal "**ONE** service method"), and Amendment 1's permitted/forbidden
+table.
+**Leaves unchanged:** §5's three properties (keyset, opaque, 422-never-reset) and
+its 100 ceiling; §9's thin-adapter and no-`db.*` / no-`$transaction` rules; §7
+and §8 in full.
+
+Four questions Story 11.3's resources force, settled here rather than eight
+times at eight endpoints. All rung-2 evidence was read on `origin/main` @
+`94a65035` and is cited by path.
+
+#### Q1 — a cursor over a sort order v1 does not own
+
+##### The conflict
+
+§5 pins that the cursor encodes "a **position in the sort order**, not a page
+number" and never says WHICH order. `lib/api/v1/pagination.ts` then hardwired
+one: `PageCursor` is `{ createdAt, id }`, `paginateKeyset` requires
+`Keyed { id: string; createdAt: Date }`, and `compareKeys` sorts `(createdAt,
+id)` ascending. That was right for 11.1's and 11.2's collections. It is wrong
+for all four of Story 11.3's, none of which is sorted that way:
+
+| collection                                   | shipped sort order                                       | shipped cursor                     |
+| -------------------------------------------- | -------------------------------------------------------- | ---------------------------------- |
+| backlog (`backlogService.getBacklog`)        | `backlogRank`                                            | the last row's `id`                |
+| sprint members (`getSprintIssues`)           | `backlogRank`                                            | the last row's `id`                |
+| the ready set (`workItemsService.listReady`) | `(type asc, priority desc, key asc)` — the DISPATCH rank | `base64url([kind, priority, key])` |
+| a project's sprints (`listByProject`)        | `sequence`                                               | none — unpaginated                 |
+
+Two of the DTOs cannot satisfy `Keyed` at all: `SprintDto` (`lib/dto/sprints.ts`)
+has **no `createdAt` field**, and `ProjectDTO.createdAt` (`lib/dto/projects.ts`)
+is **optional and deliberately not loaded** on the list path — its own doc
+comment records that omission as the "the DTO is not a raw Prisma row" decision a
+shape test enforces. And re-sorting the ready set by `createdAt` would discard
+the dispatch rank, which is the entire product value of that endpoint.
+
+##### The decision
+
+**Generalize the codec; do not widen the DTOs.** The v1 cursor becomes a signed,
+opaque envelope around a **service-owned position** — the token the underlying
+read already speaks — rather than a `(createdAt, id)` tuple v1 invented.
+
+§5's three properties are unchanged and remain the reason the cursor exists:
+
+- **Keyset, not offset.** The envelope wraps a seek-after POSITION in the
+  collection's own order; it never becomes a page number or a row offset. The
+  skip/duplicate defect §5 rejects stays rejected, because the underlying reads
+  are themselves seek-after (`findBacklogPage` / `findSprintIssues` take a
+  cursor id; `listReady` seeks after a `(kind, priority, key)` tuple).
+- **Opaque.** Still HMAC-signed with the same derived key, so a client cannot
+  construct one and `backlogRank` / the dispatch tuple never become public API.
+  This is what makes generalizing the payload safe: the wrapped position may be
+  any service token precisely because nobody outside the server can read it.
+- **A bad cursor is a 422, never a silent reset.** Unchanged, and now covering
+  one more case — see the collection scope below.
+
+Two consequences are part of the decision, not commentary, so the endpoint cards
+inherit them rather than re-deciding:
+
+- **The cursor is COLLECTION-SCOPED.** The signed payload names the collection
+  that issued it, and a cursor presented to a different collection is the same
+  422 as a tampered one. Without this the generalization would be a new defect:
+  a backlog cursor (a row id) and a sprint-member cursor (also a row id) are
+  structurally identical, so one would decode cleanly into the other and silently
+  return a page positioned by a row that is not in that collection at all. The
+  narrower `(createdAt, id)` shape hid this because every collection shared one
+  order; a service-owned position must carry its own provenance.
+- **v1's 100 ceiling holds, and is never RAISED by an underlying read.** `MAX_PAGE_LIMIT
+= 100` (§5) is the documented promise. `clampReadyLimit` allows 200
+  (`READY_MAX_LIMIT`, `lib/workItems/readyFilter.ts`) and the ranked reads allow
+  `MAX_BACKLOG_PAGE_SIZE`; v1 clamps DOWN to its own ceiling before the service
+  ever sees the number. Amendment 1 already forbids raising an existing cap on an
+  existing method; this is the mirror obligation — v1 does not inherit a larger
+  one either. (Clamping down is not the "silently capping lower" that amendment's
+  rejected-alternatives table forbids: 100 is the documented value a client is
+  told it gets, and it gets it.)
+
+**Rung 1.** Plane and GitLab both expose keyset cursors as opaque tokens whose
+payload the client is never told — GitLab's `X-NEXT-CURSOR` is explicitly
+documented as opaque, which is exactly what licenses the server to change what it
+wraps. The property a client depends on is "pass it back", not "what is in it".
+
+##### Rejected alternatives
+
+| Rejected                                                      | Why                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Add `createdAt` to `SprintDto` / `ProjectDTO`**             | A v1 concern reaching into product DTOs to make an unrelated sort work — the exact direction §9's corollary forbids. `ProjectDTO`'s omission is a recorded decision with a shape test behind it, not an oversight. And for the ready set it would still be the WRONG order.  |
+| **Re-sort each collection by `(createdAt, id)` at the route** | Correct paging over an answer nobody asked for. The backlog would come back in creation order rather than rank order, and the ready set would stop being ranked — the endpoint's whole value. Paging a collection correctly is worthless if the collection is the wrong one. |
+| **Carry the service's raw cursor through unsigned**           | Drops the opacity property §5 gives its own paragraph, and makes `backlogRank` and the dispatch tuple public API — freezing an internal ordering as contract, which is the specific harm §5 cites.                                                                           |
+| **One cursor namespace, no collection scope**                 | Two collections whose positions are both bare row ids would accept each other's cursors and answer 200 with a wrong page. A silently wrong page is worse than the 422 §5 already prescribes for a foreign cursor.                                                            |
+
+#### Q2 — `totalCount`, which the shipped ranked reads already return
+
+##### The conflict
+
+`RankedIssuePageDto` (`lib/dto/backlog.ts`) is `{ items, nextCursor, totalCount }`
+— the count is a bounded `COUNT` the read has already paid for
+(`countBacklog` / `countSprintIssues`). The v1 list envelope
+(`ListEnvelope<T>` in `lib/api/v1/pagination.ts`) is `{ items, nextCursor }`. So
+the backlog and sprint-member endpoints either drop a number that is already in
+hand, or the shared envelope grows a field two endpoints out of six can fill.
+
+The asymmetry is real and is why this is not simply "add the field": the ready
+set and the project list have no equivalent cheap count. Counting the ready set
+means running the readiness predicate over every candidate — `READY_COUNT_CAP` /
+`READY_COUNT_MAX_PAGES` (`lib/workItems/readyFilter.ts`) exist precisely because
+an exact ready count is expensive enough to need two bounds and a visible `99+`.
+§5's promise of a cheap page is what would pay for it, and it cannot.
+
+##### The decision
+
+**Ship it, as ONE documented variant: the RANKED list envelope.**
+
+```
+ListEnvelope<T>        = { items: T[], nextCursor: string | null }
+RankedListEnvelope<T>  = { items: T[], nextCursor: string | null, totalCount: number }
+```
+
+`RankedListEnvelope` is declared once, beside `ListEnvelope`, and is returned by
+exactly those collections whose shipped read already computes the count as a
+bounded aggregate. In v1's first cut that is the backlog and a sprint's members.
+Every other collection returns `ListEnvelope`, and `totalCount` is **absent**
+from its body — not `null`, not `0`.
+
+Three reasons, in the order they decided it:
+
+- **An absent field is honest; a null one is not.** A `totalCount: number | null`
+  on the shared envelope would make `null` mean "we did not count", which a
+  client cannot distinguish from a real answer without knowing which endpoint it
+  called — so it would have to hard-code that knowledge anyway. Two named
+  schemas put the same knowledge in the contract, where 11.4 can emit it.
+- **It does not make the cheap endpoints pay.** The ready set would have to
+  choose between an expensive exact count and a capped one presented as exact.
+  Neither belongs in a first cut, and §5's cheap-page promise is the reason.
+- **Growth is additive under §8.** If a further collection later gains a cheap
+  count, it moves from `ListEnvelope` to `RankedListEnvelope` — which is "a new
+  field on a response object", explicitly on §8's allowed list. The reverse
+  (retracting a `totalCount` that turned out to be expensive) is forbidden, which
+  is the asymmetry that argues for starting narrow.
+
+**Rung 1.** Both mirrors do exactly this rather than promising a count
+everywhere: Plane returns `total_count` on its paginated list responses while its
+cursor contract stands on its own, and GitLab documents that on keyset-paged
+endpoints the total-count headers are **omitted** — the count is a property of
+the collection, not of pagination.
+
+**11.4's obligation, stated here so it is not a question later:** the OpenAPI
+assembly emits **two** named envelope schemas, and each operation references the
+one its route returns.
+
+##### Rejected alternatives
+
+| Rejected                                             | Why                                                                                                                                                                                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Drop `totalCount` entirely**                       | Throws away a number the read already computed, and a client rendering "N issues" would have to walk the whole collection to recover it — turning a bounded aggregate into an unbounded scan on the client side.              |
+| **`totalCount: number \| null` on the ONE envelope** | Makes `null` mean "not counted", indistinguishable from a real value without out-of-band knowledge of which endpoint you called. One schema that lies in four places out of six is not simpler than two that are each true.   |
+| **Count everywhere, including the ready set**        | An exact ready count runs the readiness predicate over every candidate; the shipped surface caps it at 99 for that reason. Paying it on every page would break §5's cheap-page promise on the endpoint agent loops poll most. |
+| **A separate `GET …/count` endpoint**                | A second round trip for a number one of the two reads already has, and a new endpoint whose answer can disagree with the page it accompanies.                                                                                 |
+
+#### Q3 — a by-id read that no service exposes
+
+##### The conflict
+
+`GET /api/v1/sprints/{sprintId}` needs one sprint as a `SprintDto`.
+`sprintsService` (`lib/services/sprintsService.ts`) exposes `createSprint` /
+`getActiveSprint` / `validateSprint` / `updateSprint` / `deleteSprint` /
+`listByProject` / `startSprint` / `completeSprint` / `getSprintReport` — and **no
+by-id DTO read**. Only `sprintRepository.findById` exists, a Prisma row §9
+forbids a route to touch. `getActiveSprint` cannot stand in either: it returns
+`toSprintDto(row, 0)`, so `issueCount` is **hard-coded 0** and an endpoint built
+on it would report every active sprint as empty.
+
+Amendment 1 carved out "a new page ADDRESSING over an unchanged predicate". A
+by-id re-presentation is the same class — same tenancy gate, same mapper, same
+fields, no new predicate, no write — but it is not literally on that amendment's
+permitted list, and the permitted/forbidden table is what a reviewer reads.
+
+##### The decision
+
+**Extend Amendment 1's table explicitly rather than arguing by analogy at review
+time.** Permitted: **a by-id read that re-presents an already-shipped repository
+read through the already-shipped mapper, adding no field, no gate and no filter
+axis.** Forbidden, and added to the same table's right-hand column: **anything
+that changes what the row CONTAINS.**
+
+The line is what the row says, not how it is addressed. `getSprintById` may read
+`sprintRepository.findById`, apply the same `workspaceId` tenancy gate every
+sibling read applies, compute `issueCount` the way `listByProject` already does
+(`workItemRepository.countSprintIssues`), and return `toSprintDto` — because
+every one of those already exists and the resulting DTO is byte-for-byte a row
+`listByProject` would have returned. It may not add a field, relax the gate, or
+compute a number no shipped read computes.
+
+**Why this is a carve-out and not simply "write a service method":** §9's
+corollary says an endpoint that appears to need a new service method is a card in
+the owning epic. Read literally that would send a one-line re-presentation into
+Epic 4's backlog and block a read that changes nothing. Read loosely it would
+license any service method v1 wanted. The table is the line.
+
+##### Rejected alternatives
+
+| Rejected                                                           | Why                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Call `sprintRepository.findById` from the route**                | Violates §9's no-repository rule and the 4-layer contract, and MOTIR-1861's shipped guard would fail it. It also puts the `workspaceId` tenancy gate in a route, which is where a tenancy bug goes unnoticed.                       |
+| **Reuse `getActiveSprint`**                                        | Its `issueCount` is hard-coded `0` (`toSprintDto(row, 0)`), so it answers a different question wrongly. It also only ever finds the ACTIVE sprint — a planned or complete sprint would 404 for no reason a client could understand. |
+| **Derive the sprint from `listByProject` and filter in the route** | Reads every sprint to return one, and the route would have to know the sprint's project before it has read the sprint. Business logic in a route, dressed as a read.                                                                |
+| **File it as a card in Epic 4**                                    | A one-line re-presentation that changes no behaviour would block a read endpoint on an unrelated epic's queue. Amendment 1 exists because that reading of §9 is too literal to be useful; this is the same case.                    |
+
+#### Q4 — a page projection is a SECOND service call
+
+##### The conflict
+
+§9 says a v1 route "calls **ONE** service method, and returns". The ready
+endpoint calls `workItemsService.listReady` for the page and
+`workItemsService.getDependencyEdgesForItems` for that page's edges — which is
+exactly what the shipped MCP transport does (`lib/mcp/tools/listReady.ts`), and
+deliberately: the edge block is attached at the TRANSPORT and is not on
+`ReadyItemDto`, because widening the DTO would ship an edge payload to the
+`/ready` page that does not consume it.
+
+The literal rule is also already not what the codebase does. Every shipped
+project-scoped v1 route resolves the project key and then reads — two calls
+(`app/api/v1/projects/[projectKey]/work-items/route.ts`).
+
+##### The decision
+
+**Replace the literal call count with the BOUNDED-CALL RULE.** A v1 route may
+make a **bounded, constant** number of service calls that RESOLVE or PROJECT the
+same response:
+
+- **Resolve** — turning a path segment into what the services address
+  (`projectsService.getByKey`, `resolveWorkItemKey`).
+- **Project** — a batched enrichment over the ids the first call returned
+  (`getDependencyEdgesForItems`, `getCommentCountsForItems`).
+
+It may **not** make a call whose result it **branches on, loops over, or combines
+into a derived answer**. That is the test, and it is what separates a projection
+from business logic: a projection's result is attached to rows the route already
+has; business logic's result changes what the route does next.
+
+**The ceiling is CONSTANT, never per-row.** A fixed number of calls for a page of
+any size is a projection. One call per row is an N+1, and it is forbidden however
+thin each call is — the shipped batched reads (two queries for a whole page,
+whatever the page size) are the bar, and the reason `getDependencyEdgesForItems`
+takes an id array rather than an id.
+
+The no-`db.*` / no-`$transaction` rule is untouched: a route still never opens a
+transaction, and a projection that would need one is not a projection.
+
+##### Rejected alternatives
+
+| Rejected                                               | Why                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hold the literal "ONE call" rule**                   | Already false of every shipped project-scoped route (key resolution is a call), so enforcing it literally would fail code that is correct — and a rule the codebase visibly breaks stops being read at all.                                           |
+| **Widen `ReadyItemDto` with the edges**                | Ships an edge payload to the `/ready` page that does not consume it, for the benefit of one API endpoint — a v1 concern reaching into a product DTO, the same direction Q1 rejected. The transport is where the shipped code already draws this line. |
+| **Add a new service method that returns page + edges** | A new service method to satisfy a presentation need, which §9's corollary forbids and which would exist for exactly one caller. The batched projection already exists and is already the pattern.                                                     |
+| **"A route may make any number of read calls"**        | Removes the rule instead of stating it. The thing worth forbidding — a route that reads, branches, reads again and assembles an answer — is business logic in a route, and this wording would permit it.                                              |

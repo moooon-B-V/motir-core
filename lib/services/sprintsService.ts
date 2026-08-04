@@ -151,6 +151,38 @@ export const sprintsService = {
   },
 
   /**
+   * ONE sprint by id, as a `SprintDto` (Story 11.3 · Subtask 11.3.4 —
+   * MOTIR-2061). A pure read, `workspaceId`-gated: a sprint in another
+   * workspace is indistinguishable from one that does not exist
+   * (`SprintNotFoundError` → 404, finding #26), and no admin gate — the owner
+   * gate guards sprint MANAGEMENT writes, not reads, exactly as
+   * `listByProject` / `getActiveSprint` / `getSprintReport` are open to any
+   * member.
+   *
+   * ⚠️ NOT `getActiveSprint`, and the difference is a live trap rather than a
+   * style preference: that method returns `toSprintDto(row, 0)`, so its
+   * `issueCount` is HARD-CODED to zero. An endpoint built on it would report
+   * every sprint as empty and nothing would fail — the field is present,
+   * well-typed and wrong. This computes the count the way `listByProject` does
+   * (`workItemRepository.countSprintIssues`), so a sprint read one at a time
+   * and the same sprint read in the list agree.
+   *
+   * Added under the by-id RE-PRESENTATION carve-out the `/api/v1` ADR's
+   * Amendment 3 (Q3) records: the shipped repository read, the shipped mapper,
+   * the shipped tenancy gate, the shipped count — no new field, no new gate, no
+   * new filter axis, no write. Anything that would change what the row CONTAINS
+   * is outside that carve-out.
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
+   */
+  async getById(id: string, ctx: ServiceContext): Promise<SprintDto> {
+    const row = await sprintRepository.findById(id, ctx.workspaceId);
+    if (!row) throw new SprintNotFoundError(id);
+    const issueCount = await workItemRepository.countSprintIssues(id, ctx.workspaceId);
+    return toSprintDto(row, issueCount);
+  },
+
+  /**
    * Is a sprint FINISHABLE? (Subtask 7.8.15) — the productized form of the
    * *re-validate-the-active-sprint* rule (`motir-meta` `plan-rules.md` #94). A
    * sprint is VALID ⟺ for EVERY in-sprint, NOT-done item, BOTH (a) its ENTIRE
@@ -365,13 +397,21 @@ export const sprintsService = {
       );
     }
 
-    const result = await withWorkspaceContext(
+    const activate = withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
-        // Authoritative one-active guard: lock the project's active sprint row
-        // FOR UPDATE so two concurrent starts serialize; a winner that committed
-        // between the pre-check and here is caught (the partial-unique index is
-        // the final backstop).
+        // One-active guard for the RE-activation case: lock the project's active
+        // sprint row FOR UPDATE so two concurrent starts serialize; a winner that
+        // committed between the pre-check and here is caught.
+        //
+        // ⚠️ This lock CANNOT guard the FIRST activation, and that is not a
+        // subtlety — it is the common case. `SELECT … FOR UPDATE` over a project
+        // with no active sprint matches ZERO ROWS, so it locks nothing: two
+        // concurrent starts both see `locked === null`, both fall through, and
+        // both UPDATE. What actually stops the second is the
+        // `sprint_one_active_per_project` partial-unique index, which raises a
+        // unique violation at COMMIT — handled below, because an untranslated one
+        // reaches the caller as a raw Prisma error (MOTIR-2071).
         const locked = await sprintRepository.findActiveByProjectForUpdate(
           existing.projectId,
           ctx.workspaceId,
@@ -409,6 +449,24 @@ export const sprintsService = {
         return { row, committedIssueCount };
       },
     );
+
+    // Translate the index's refusal into the SAME typed error the in-transaction
+    // lock raises, so a caller sees one outcome for one condition however the
+    // race was actually lost. Without this the loser of a first-activation race
+    // gets a raw `PrismaClientKnownRequestError` — which every transport then
+    // renders as an unexplained 500 (the `/api/v1` map recognises domain codes,
+    // not driver codes).
+    //
+    // The winner's id is re-read rather than assumed: by the time we are here it
+    // has committed, so the error can name the sprint that actually won.
+    const result = await activate.catch(async (err: unknown) => {
+      if (!isUniqueViolation(err)) throw err;
+      const winner = await sprintRepository.findActiveByProject(
+        existing.projectId,
+        ctx.workspaceId,
+      );
+      throw new SprintAlreadyActiveError(existing.projectId, winner?.id ?? id);
+    });
     return toSprintDto(result.row, result.committedIssueCount);
   },
 
@@ -926,6 +984,18 @@ async function computeSprintValidity(
  * existence leak), then requires the actor to be the workspace owner. Mirrors
  * `boardsService.assertBoardConfigAdmin`.
  */
+/**
+ * A Postgres unique-constraint violation, surfaced by Prisma as `P2002`.
+ *
+ * Used by `startSprint` to recognise the `sprint_one_active_per_project` index
+ * refusing a second activation — the guard that actually fires when a project
+ * has no active sprint to lock yet. Mirrors the helper `organizationsService`
+ * already uses for the same job.
+ */
+function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequestError {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
 async function assertSprintAdmin(
   userId: string,
   projectId: string,

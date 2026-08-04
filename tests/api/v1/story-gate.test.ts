@@ -15,6 +15,7 @@ import {
 } from '../../helpers/v1RouteAudit';
 import { createV1Caller, createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { createTestWorkItem } from '../../fixtures';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The Story 11.1 vitest GATE (Subtask 11.1.5 — MOTIR-1861).
@@ -405,6 +406,19 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
     const myItem = await createTestWorkItem(mine.fixture, { kind: 'task', title: 'Mine' });
     const theirItem = await createTestWorkItem(theirs.fixture, { kind: 'task', title: 'Theirs' });
 
+    // Story 11.3's sprint-scoped routes need a `[sprintId]` the caller owns, and
+    // a foreign sprint whose id must never appear in any of their bodies.
+    const mySprint = await sprintsService.createSprint(
+      mine.fixture.projectId,
+      { name: 'Mine' },
+      mine.ctx,
+    );
+    const theirSprint = await sprintsService.createSprint(
+      theirs.fixture.projectId,
+      { name: 'Theirs' },
+      theirs.ctx,
+    );
+
     const foreign = [
       theirs.workspace.id,
       theirs.user.id,
@@ -412,12 +426,14 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirItem.id,
       theirItem.identifier,
       theirs.fixture.projectId,
+      theirSprint.id,
     ];
 
     /** Fill one `[slug]` segment with a value the CALLER legitimately owns. */
     const paramValue = (slug: string): string => {
       if (slug === 'key') return myItem.identifier;
       if (slug === 'projectKey') return mine.projectKey;
+      if (slug === 'sprintId') return mySprint.id;
       throw new Error(
         `the cross-tenant sweep has no value for the dynamic segment [${slug}] — ` +
           'add one rather than letting the route be skipped',

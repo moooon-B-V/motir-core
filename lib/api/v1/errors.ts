@@ -178,6 +178,60 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   INVALID_FILTER_VALUE: 422,
   FILTER_TOO_LARGE: 422,
   MALFORMED_FILTER: 422,
+
+  // ── Story 11.3, the planning resources ────────────────────────────────────
+  // Same discipline as 11.2's rows: each is added by the card whose endpoint can
+  // raise it, and each is exercised by a test that drives the REAL error through
+  // the wrapper. An unlisted code is a bare 500, which is exactly why a row is
+  // never added speculatively.
+
+  // 11.3.4 (MOTIR-2061) — the sprint reads. 404, not 403: `getById` is
+  // workspace-gated, so a sprint in another tenant and one that never existed
+  // are the same answer (ADR §4's existence-oracle rule).
+  SPRINT_NOT_FOUND: 404,
+
+  // 11.3.5 (MOTIR-2062) — the sprint write pair.
+  //
+  // ⚠️ 403, and DELIBERATELY a different `code` from `INSUFFICIENT_SCOPE`. Every
+  // sprint write calls `assertSprintAdmin`, so a token that DOES carry
+  // `sprints:write` is still refused when its OWNER is an ordinary project
+  // member — a scope narrows the owner's role and never widens it (ADR §3).
+  // "My token has the scope and I still get 403" is the single most confusing
+  // thing this endpoint can do to an integrator, and a shared code would leave
+  // them re-issuing tokens forever against a problem no token can fix.
+  NOT_SPRINT_ADMIN: 403,
+  INVALID_SPRINT_NAME: 422,
+  SPRINT_WINDOW_INVALID: 422,
+  // A conflict with existing STATE, not a malformed request: the body is fine,
+  // the sprint is simply frozen.
+  CANNOT_MODIFY_COMPLETED_SPRINT: 409,
+
+  // 11.3.6 (MOTIR-2063) — the lifecycle moves, the only read-derived writes in
+  // this story.
+  //
+  // ⚠️ 409, not 422. Losing the race to activate is a conflict with STATE the
+  // caller could not have known about: the request was valid when it was sent and
+  // another one committed first. A 422 would tell a client to fix its body, which
+  // is exactly the wrong instruction — the right one is to re-read and retry.
+  // This is what the shipped `FOR UPDATE` guard turns a lost race INTO, so a
+  // concurrent start can never surface as a raw unique-violation 500.
+  SPRINT_ALREADY_ACTIVE: 409,
+  // 422: the sprint is in the wrong STATE for the move and the caller can see
+  // that from a read — starting a non-planned sprint, completing a non-active one.
+  SPRINT_NOT_STARTABLE: 422,
+  SPRINT_NOT_COMPLETABLE: 422,
+  INVALID_CARRY_OVER_TARGET: 422,
+
+  // 11.3.7 (MOTIR-2064) — the membership moves.
+  //
+  // 422: the batch is too large for one atomic move. The service's message names
+  // the cap, so a caller can split the batch rather than guess at it. NOT
+  // silently truncated — a partial move is exactly what the atomicity of these
+  // endpoints exists to prevent.
+  BULK_BATCH_TOO_LARGE: 422,
+  // 422: the item and the sprint belong to different projects. A request the
+  // caller can fix, and one that rejects the WHOLE batch before any write.
+  CROSS_PROJECT_SPRINT_ASSIGNMENT: 422,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */
