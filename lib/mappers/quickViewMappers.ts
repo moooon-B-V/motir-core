@@ -63,6 +63,13 @@ export function toQuickViewData(
     customFields: detail.customFields,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    // MOTIR-2050: the archived state — WHEN from `item.archivedAt`, WHO from
+    // `detail.archivedBy` (the latest `'archived'` revision the detail read
+    // already resolves for the detail page's banner). Both ride this aggregate,
+    // so the peek's archived signal costs no extra read.
+    archived: item.archivedAt
+      ? { atLabel: formatDate(item.archivedAt, locale), byName: detail.archivedBy?.name ?? null }
+      : null,
     parent: parent
       ? { identifier: parent.identifier, title: parent.title, kind: parent.kind }
       : null,

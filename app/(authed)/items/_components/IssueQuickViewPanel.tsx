@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
+  Archive,
   ArrowRight,
   Bot,
   Calendar,
@@ -16,16 +17,19 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { ArchivedNotice } from '@/components/issues/ArchivedNotice';
 import { DevelopmentSection } from '@/components/github/DevelopmentSection';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
+import { Pill } from '@/components/ui/Pill';
 import { ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
 import { WORK_ITEM_TYPE_META } from '@/lib/issues/workItemTypeMeta';
 import { isTypeableKind } from '@/lib/issues/executorDefaults';
+import { showsReadiness } from '@/lib/issues/readinessVisibility';
 import { labelTint } from '@/lib/labels/labelTint';
 import { formatDate } from '@/lib/utils/datetime';
 import type { ExecutorDto } from '@/lib/dto/workItems';
@@ -262,6 +266,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           {data.identifier}
         </Link>
         <StatusValue category={data.statusCategory} label={data.statusLabel} />
+        {/* MOTIR-2050: the "Archived" chip, mirroring the detail page's eyebrow
+          chip (2.9.6) — the archived state stays legible after the main column
+          (which scrolls independently) is scrolled past the notice below. Neutral
+          register, NOT a coloured Pill tone: archived is calm and factual. */}
+        {data.archived ? (
+          <Pill className="shrink-0 border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)">
+            <Archive className="size-3 text-(--el-text-muted)" aria-hidden />
+            {t('archivedEntry')}
+          </Pill>
+        ) : null}
         <span className="flex-1" />
         {/* MOTIR-910: the same per-item Plan / Re-plan door the detail page
           carries, here between the status pill and "Open full page" (the
@@ -270,8 +284,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           modal; a LOCAL-state host (the roadmap canvas peek, MOTIR-1352) also
           gets its own close called so its state doesn't outlive the handoff.
           The URL-driven peek passes no `onClose`, so its `?peek=` simply stays
-          on the history entry the user came from. */}
-        {data.canPlan ? (
+          on the history entry the user came from. Hidden on an ARCHIVED item
+          (MOTIR-2050), which is not work to plan — the same gate the detail page
+          already applies (`canEdit && !isArchived`), reachable here only now that
+          the payload carries the archived state. */}
+        {data.canPlan && !data.archived ? (
           <WorkItemPlanEntrance
             itemKey={data.identifier}
             hasChildren={data.hasChildren}
@@ -292,14 +309,36 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               workItemRefs={data.workItemRefs}
             />
           </h2>
+          {/* MOTIR-2050: the archived notice — the SAME banner the detail page
+              renders (the shared ArchivedNotice), first in the main column under
+              the title, where the detail page puts it relative to its own header.
+              The peek is READ-ONLY, so it carries no Restore: the notice states
+              the fact and "Open full page →" is the existing door to the action
+              (which needs a server refresh the client-fetched peek has no path
+              for). Hence no restore tail either — the peek never promises an
+              action it doesn't offer. */}
+          {data.archived ? (
+            <ArchivedNotice
+              archivedByName={data.archived.byName}
+              archivedAtLabel={data.archived.atLabel}
+              testId="quick-view-archived-banner"
+              className="mt-4"
+            />
+          ) : null}
           {/* Readiness banner (2.5.21) — the shipped ReadinessBadge, top of the
               main column under the title, per quick-view.mock.html (2.5.20). Shown
               only for a TODO-category item that has blockers: no banner without
               blockers, and none once the item is in-progress / done ("can I start
-              this?" is moot past todo). Each named blocker opens its DETAIL page in
+              this?" is moot past todo) — and none on an ARCHIVED item, which is not
+              startable work at all (MOTIR-2050; the shared `showsReadiness` gate the
+              detail page's RelationshipsPanel uses). Each named blocker opens its DETAIL page in
               a NEW TAB (8.8.32 — overrides the 2.5.20 peek-swap), matching the
               new-tab treatment the other quick-view detail links got in 8.8.31. */}
-          {data.readiness && data.statusCategory === 'todo' ? (
+          {data.readiness &&
+          showsReadiness({
+            statusCategory: data.statusCategory,
+            archived: data.archived != null,
+          }) ? (
             <ReadinessBadge
               ready={data.readiness.ready}
               blockers={data.readiness.blockers.map((identifier) => ({

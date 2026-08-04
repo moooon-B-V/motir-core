@@ -76,6 +76,19 @@ export interface QuickViewData {
   /** Read-only audit instants (ISO-8601) — the quiet line at the foot of the rail. */
   createdAt: string;
   updatedAt: string;
+  /**
+   * The ARCHIVED state (bug MOTIR-2050) — `null` for a live item, which is also
+   * the predicate the panel gates on (`archived != null`). An archived item is
+   * reachable in the peek (an archived `motir:` reference chip opens one, and the
+   * detail read doesn't filter `archivedAt`), but the payload carried no archived
+   * field at all: the peek showed an archived item as an ordinary — even "Ready to
+   * start" — one. Both facts ride the SAME detail aggregate the mapper already
+   * receives (`item.archivedAt` + `detail.archivedBy`, the pair the detail page's
+   * banner reads), so this costs no extra read. `atLabel` is formatted server-side
+   * (locale-aware, like `dueLabel`); `byName` is `null` when no `'archived'`
+   * revision resolved an actor, and the notice then names a former member.
+   */
+  archived: { atLabel: string; byName: string | null } | null;
   parent: { identifier: string; title: string; kind: WorkItemKindDto } | null;
   /**
    * The ready/blocked readiness signal (Subtask 2.5.21), shaped for the shipped
