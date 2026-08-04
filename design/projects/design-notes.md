@@ -1560,3 +1560,121 @@ When a string / structure here disagrees with the shipped `CreateProjectModal` /
 mock composes them and must track them. The "already has AI plan" resume target and the exact routing
 (`/onboarding` seeded state) are the fork-router (MOTIR-1462) + resume (MOTIR-1488) contracts; 1486
 wires to those, it does not invent them.
+
+---
+
+# Status automation — the parent↔child derivation switches (Story MOTIR-1615) — Subtask MOTIR-1617 output
+
+Two on/off switches that govern **bidirectional status derivation**: the upward rollup (a parent
+follows its children) and the downward cascade (a done parent completes its children). Both **ON by
+default** — two-way sync is Motir's opinion, and each switch turns its own direction off.
+
+The behaviour, and every semantic this copy describes, is decided in
+**`docs/decisions/status-derivation.md`**. Where this asset and that ADR disagree, the ADR wins.
+
+## Files
+
+- `design/projects/status-automation.mock.html` — the source of truth (4 panels).
+- `design/projects/status-automation.png` — the full-page export (chromium, light, `dSF: 2`, 1200w).
+- This section.
+
+## §1 · Placement — a card on the SHIPPED Workflow page, NOT a new settings page
+
+The access path, verified against `lib/settings/projectSettingsNav.ts` and the shipped
+`app/(authed)/settings/project/workflow/page.tsx`:
+
+> **Settings → Work → Workflow** (`/settings/project/workflow`), or ⌘K → "Workflow".
+> The **Status automation** card sits at the TOP of that page, above the shipped
+> "Transition enforcement" section and the status + transition editor.
+
+**A new registry entry was considered and rejected.** These switches configure how a status move
+PROPAGATES along the project's workflow, and the workflow page is already where `workflowPolicyMode`
+— the other "how do status moves behave here" switch — lives. A separate page would split one
+concern across two doors and spend a rail row on two booleans. Consequences: **no registry change,
+no new route, and the route↔registry totality test (`tests/settings/projectSettingsNav.test.ts`)
+stays untouched.** Panel 0 draws the door: the rail with **Work › Workflow** active, and the card in
+its real neighbourhood.
+
+## §2 · Composition — no new primitive
+
+| Element                   | Composed from (shipped)                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| The card shell            | `SettingsCard` (`AiPlanningSettingsEditor.tsx:446`) — head divider, `--el-surface-soft` footer |
+| Each toggle row           | `SwitchRow` (`AiPlanningSettingsEditor.tsx:486`) — Switch + label + hint                       |
+| The switch itself         | `Switch` (`packages/design-system/src/components/ui/Switch.tsx`)                               |
+| The admin footer / banner | The same Cancel + Save band and non-admin lock banner the ai-planning pane ships               |
+| The ladder read-out       | A plain `<dl>` — **not** a new component (see §4)                                              |
+
+Reuse `SwitchRow` and `SettingsCard` by EXTRACTING them from `AiPlanningSettingsEditor` into a shared
+module rather than copying them; they are already the second consumer's worth of the same grammar.
+
+## §3 · Copy (verbatim for MOTIR-1622; i18n under `settings.statusAutomation`)
+
+| Key                        | String                                                                                                                                                                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`                    | Status automation                                                                                                                                                                                                                         |
+| `subtitle`                 | Keep a parent and its children in step. Motir derives status in both directions by default; each switch turns its own direction off.                                                                                                      |
+| `rollup.label`             | Roll up parent status from children                                                                                                                                                                                                       |
+| `rollup.hint`              | A parent follows its children's progress. It only ever moves a parent forward, along moves your workflow already allows — reopening a child never moves a parent back.                                                                    |
+| `rollup.ladder.inProgress` | **In Progress** — as soon as any child starts                                                                                                                                                                                             |
+| `rollup.ladder.inReview`   | **In Review** — when the last open child reaches review                                                                                                                                                                                   |
+| `rollup.ladder.done`       | **Done** — when every child is finished or cancelled                                                                                                                                                                                      |
+| `cascade.label`            | Complete children when a parent is done                                                                                                                                                                                                   |
+| `cascade.hint`             | When a parent reaches Done — including automatically, when its pull request merges — its unfinished children are completed too. **This includes children nobody has started yet.** Turn it off if your team tracks child work separately. |
+| `cascade.hintOff`          | Off — closing a parent leaves its children where they are, for your team to close themselves.                                                                                                                                             |
+| `lock`                     | Only a project admin can change status automation.                                                                                                                                                                                        |
+
+**The cascade's consequence sentence is load-bearing, not decoration.** "This includes children
+nobody has started yet" is the one fact that makes the switch's risk legible, and it carries `<strong>`
+emphasis for exactly that reason. Do not soften or drop it.
+
+## §4 · Why the ladder read-out exists
+
+"Rolls up parent status" does not tell an admin WHEN each rung fires, which is the only thing they
+need to predict the behaviour on their own board. So the rollup row carries a three-line definition
+list — status name, then the condition — inside a `--el-border` left rule. It is a `<dl>`, not a new
+component: a table would over-structure three pairs, and a new primitive for one read-out is exactly
+the complexity the design system asks us not to add.
+
+## §5 · States (every panel of the mock)
+
+| Panel | State       | What it shows                                                                             |
+| ----- | ----------- | ----------------------------------------------------------------------------------------- |
+| 0     | Access path | The rail with Work › Workflow active; the card above the shipped enforcement section      |
+| 1     | Default     | Both ON — what every project starts at, and what existing projects backfill to            |
+| 2     | Upward-only | The cascade off. An off row KEEPS its layout and drops only its text to `--el-text-faint` |
+| 3     | Non-admin   | Switches disabled (not hidden), footer replaced by the lock banner                        |
+
+Panel 2 is the argument against one combined toggle, drawn: a team can keep the rollup and decline
+the auto-close. Panel 3 follows the shipped read-only rule — **disabled, never hidden**, so a member
+sees the same setting an admin does and learns why their items move on their own.
+
+## §6 · Attribution — how a derived move reads in the activity feed
+
+Per the ADR, an auto-transition in either direction runs under a system context and is attributed to
+the **workspace owner**. It writes the ordinary `updated` revision with a `status: {from, to}` diff,
+so the feed renders it through the SHIPPED status-change row — **no new revision kind, no new
+renderer, no new component.** It reads as an ordinary status change by that user, which is what it
+is. There is no badge distinguishing derived from manual moves: adding one would be its own design
+and its own card, and the ADR did not decide it.
+
+## §7 · Tokens
+
+Every colour is an `--el-*` token (`--el-text` / `-muted` / `-helper` / `-faint`, `--el-card`,
+`--el-surface-soft`, `--el-border` / `-soft` / `-strong`, `--el-muted`, `--el-accent` /
+`--el-accent-text`, `--el-switch-on` / `--el-switch-knob`, `--el-icon-heading`); no Tier-0
+`--color-*` reaches a component, and **no invented hue appears anywhere** — the single raw value in
+the mock is the non-semantic board backdrop, which is annotation scaffold, not product UI. Every
+shaped box takes an element-semantic shape token (`--radius-card` / `-btn` / `-control`,
+`--spacing-card-padding`, `--spacing-control-x/y`, `--shadow-card` / `-subtle`), so a `data-style`
+swap re-shapes the whole card. `rounded-full` appears only on the switch track and knob — the
+sanctioned genuinely-circular carve-out.
+
+The switch's accessible name comes BY REFERENCE (`aria-labelledby` → the visible label id), so it
+cannot drift from the text on screen — the same rule `SwitchRow` already follows.
+
+## Source of truth
+
+When a string or structure here disagrees with the shipped `AiPlanningSettingsEditor` /
+`WorkflowEditor` / `Switch`, **the shipped code wins** — this mock composes them. When it disagrees
+with `docs/decisions/status-derivation.md` about BEHAVIOUR, the ADR wins.

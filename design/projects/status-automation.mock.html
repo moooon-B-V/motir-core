@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Status automation (Story MOTIR-1615 · MOTIR-1617)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — the STATUS AUTOMATION section of the project
+      WORKFLOW settings page. Story MOTIR-1615 (bidirectional status derivation) ·
+      subtask MOTIR-1617. Layout source of truth for MOTIR-1622, which implements
+      it verbatim.
+
+      ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
+      Every surface below was read from origin/main (HEAD 3d7a9831) before it was
+      drawn, NOT imagined:
+        · app/(authed)/settings/project/workflow/page.tsx — the page shell this
+          section joins: `mx-auto flex max-w-[48rem] flex-col gap-6`, a serif
+          `text-3xl` title + a muted `text-sm` sub, then the editor. NOTE the
+          48rem width — WIDER than the 42rem the ai-planning mock drew, because
+          the workflow page carries a transition MATRIX. This mock uses 48rem.
+        · WorkflowEditor.tsx:144 — the shipped "enforcement mode" section on that
+          same page: `border-(--el-border) bg-(--el-card) flex flex-col gap-2
+          rounded-(--radius-card) border p-4`. The new section sits BESIDE it.
+        · AiPlanningSettingsEditor.tsx:446 (SettingsCard) + :486 (SwitchRow) — the
+          settings-card grammar and the switch-row markup, copied 1:1: a
+          full-bleed head divider, `--el-icon-heading` glyph, `text-sm
+          font-semibold` title, `max-w-[58ch]` muted sub; then rows of
+          Switch + `text-sm font-medium` label + `--el-text-helper` `text-xs`
+          hint at `max-w-[54ch]`, and an `--el-surface-soft` admin footer band.
+        · packages/design-system/src/components/ui/Switch.tsx — the primitive's
+          real markup: `h-5 w-9 rounded-full border`, track
+          `--el-switch-on` when checked / `--el-border-strong` + `--el-muted`
+          when not, knob `size-3.5 rounded-full bg-(--el-switch-knob)
+          shadow-(--shadow-subtle)` translated 18px / 2px.
+        · lib/settings/projectSettingsNav.ts — the registry-driven rail (groups
+          General · Access · Work · Automation) panel 0 draws. Workflow is the
+          `Workflow` glyph in the Work group.
+        · packages/design-system/theme.css — every --el-* / --color-* / shape
+          token value in the <style> block below is COPIED from the current
+          Tier-0 + Tier-3 blocks, not invented.
+        · docs/decisions/status-derivation.md — the behaviour the copy describes
+          (the three-rung ladder, the cascade, both default ON, forward-only,
+          the workspace-owner attribution).
+
+      ── PLACEMENT (and why it is NOT a new settings page) ──
+      A new registry entry was considered and REJECTED. These two switches
+      configure how a status move propagates along the project's workflow — the
+      workflow page is literally where `workflowPolicyMode` (the other
+      "how do status moves behave here" switch) already lives, and it is
+      registry-entry `workflow` in the Work group. A separate page would split one
+      concern across two doors and add a rail row for two booleans. So: a SECOND
+      card on the SHIPPED /settings/project/workflow page, above the status +
+      transition editor. No registry change, no route change, and the
+      route↔registry totality test stays untouched.
+
+      ── MIRROR (verified) ──
+      Jira has no first-class toggle for either direction — both are automation
+      rules you assemble. So there is no mirror layout to copy; the shape borrowed
+      here is Motir's OWN shipped settings-card + switch-row grammar (ai-planning),
+      which is the right precedent: an opinionated behaviour with an off switch.
+
+      ── PANELS (multi-panel board — review EVERY panel) ──
+        0  ACCESS PATH — the settings rail with Work › Workflow highlighted (the
+           door), and where the card lands on that page.
+        1  DEFAULT — both switches ON, which is what every project starts at and
+           what existing projects backfill to.
+        2  UPWARD-ONLY — the cascade switched off. The preference the two-switch
+           model exists to express, and the reason this is not one combined
+           toggle.
+        3  NON-ADMIN — the read-only state: switches disabled, footer replaced by
+           the shipped lock banner.
+    -->
+    <style>
+      /* ── Tier 0 · raw palette (copied from packages/design-system/theme.css) ── */
+      :root {
+        --color-background: #ffffff;
+        --color-border: #e5e3df;
+        --color-charcoal: #37352f;
+        --color-foreground: #1a1a1a;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-link: #0070d2;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-sky: #dcecfa;
+
+        /* ── Tier 3 · the element tokens components consume ── */
+        --el-accent: var(--color-primary-fill);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-card: var(--color-background);
+        --el-icon-heading: var(--color-charcoal);
+        --el-link: var(--color-link);
+        --el-muted: var(--color-muted);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-switch-knob: var(--color-surface);
+        --el-switch-on: var(--color-primary-fill);
+        --el-text: var(--color-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-secondary: var(--color-slate);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-tertiary: var(--color-steel);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-sky: var(--color-tint-sky);
+
+        /* ── Shape tokens (the swappable second axis) ── */
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 2px;
+        --radius-btn: 2px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 14px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 14px;
+        --spacing-chip-y: 2px;
+        --height-control: 40px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans:
+          ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        /* Non-semantic canvas backdrop — the one raw value a mock may carry
+           (it never encodes state; see the colour rule). */
+        background: #efeeec;
+        font-family: var(--font-sans);
+        color: var(--el-text);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .board {
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+        padding: 36px 28px 48px;
+      }
+      .panel-label {
+        font-family: var(--font-serif);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-tertiary);
+        margin: 0 0 10px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+        max-width: 76ch;
+        margin: 0 0 14px;
+      }
+
+      /* ── The settings AREA shell (rail + content), from the shipped layout ── */
+      .area {
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        gap: 28px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .rail {
+        background: var(--el-surface-soft);
+        border-right: 1px solid var(--el-border-soft);
+        padding: 20px 12px;
+      }
+      .rail-group {
+        margin-bottom: 18px;
+      }
+      .rail-group-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x) 6px;
+        margin: 0;
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row.is-active {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .page {
+        padding: 24px 28px 28px 0;
+        max-width: 48rem;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .page-title {
+        font-family: var(--font-serif);
+        font-size: 30px;
+        line-height: 1.15;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-sub {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        margin: 4px 0 0;
+      }
+
+      /* ── The settings CARD grammar (SettingsCard, ai-planning) ── */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head svg {
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        flex: none;
+        color: var(--el-icon-heading);
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .card-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-sub {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        max-width: 58ch;
+        margin: 2px 0 0;
+      }
+      .card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding: 20px var(--spacing-card-padding);
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        background: var(--el-surface-soft);
+        border-top: 1px solid var(--el-border-soft);
+        padding: 12px var(--spacing-card-padding);
+      }
+
+      /* ── SwitchRow (ai-planning :486) ── */
+      .switch-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        margin-top: 2px;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+      }
+      .switch.is-on {
+        border-color: var(--el-switch-on);
+        background: var(--el-switch-on);
+      }
+      .switch .knob {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-switch-knob);
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+      }
+      .switch.is-on .knob {
+        transform: translateX(18px);
+      }
+      .switch.is-disabled {
+        opacity: 0.5;
+      }
+      .switch-label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .switch-hint {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-helper);
+        max-width: 54ch;
+        margin: 3px 0 0;
+      }
+      .is-off .switch-label,
+      .is-off .switch-hint {
+        color: var(--el-text-faint);
+      }
+
+      /* The ladder read-out — a plain definition list, not a new component. */
+      .ladder {
+        margin: 10px 0 0;
+        padding: 10px 12px;
+        border-left: 2px solid var(--el-border);
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 10px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .ladder dt {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .ladder dd {
+        margin: 0;
+        color: var(--el-text-helper);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        color: var(--el-text-secondary);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      .lock {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        background: var(--el-surface-soft);
+        border-top: 1px solid var(--el-border-soft);
+        padding: 12px var(--spacing-card-padding);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .lock svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* The shipped enforcement-mode section, drawn so panel 0 shows the new card
+         in its real neighbourhood rather than floating alone. */
+      .existing {
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        border-radius: var(--radius-card);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .existing h3 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .existing p {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 0;
+        line-height: 1.5;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        overflow: hidden;
+        width: fit-content;
+        margin-top: 2px;
+      }
+      .seg span {
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .seg span.on {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        font-size: 12px;
+        color: var(--el-text-faint);
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <!-- ══ PANEL 0 · ACCESS PATH ══════════════════════════════════════════ -->
+      <section>
+        <p class="panel-label">Panel 0 · Access path — Settings › Work › Workflow</p>
+        <p class="panel-note">
+          The door. The two switches are NOT a new settings page: they land as a second card on the
+          SHIPPED
+          <code>/settings/project/workflow</code>
+          route (registry entry <code>workflow</code>, Work group), above the status + transition
+          editor and beside the enforcement-mode section that already answers "how do status moves
+          behave in this project". Reached from the settings rail, or by ⌘K → "Workflow".
+        </p>
+        <div class="area">
+          <nav class="rail" aria-label="Project settings">
+            <div class="rail-group">
+              <p class="rail-group-label">General</p>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                  <circle cx="9" cy="6" r="2" />
+                  <circle cx="15" cy="12" r="2" />
+                  <circle cx="8" cy="18" r="2" />
+                </svg>
+                Details
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+                  />
+                </svg>
+                Repositories
+              </div>
+            </div>
+            <div class="rail-group">
+              <p class="rail-group-label">Access</p>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="9" cy="8" r="3" />
+                  <path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0 0-6M18 20a5 5 0 0 0-3-4.6" />
+                </svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="8" cy="12" r="3.5" />
+                  <path d="M11.5 12H21l-2 2M17 12v3" />
+                </svg>
+                Code access
+              </div>
+            </div>
+            <div class="rail-group">
+              <p class="rail-group-label">Work</p>
+              <div class="rail-row is-active">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="7" height="6" rx="1.5" />
+                  <rect x="14" y="14" width="7" height="6" rx="1.5" />
+                  <path d="M10 7h4a3 3 0 0 1 3 3v4" />
+                </svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="5" width="5" height="14" rx="1.5" />
+                  <rect x="10" y="5" width="5" height="14" rx="1.5" />
+                  <rect x="17" y="5" width="4" height="14" rx="1.5" />
+                </svg>
+                Board
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 20a8 8 0 1 1 8-8" />
+                  <path d="M12 12l4-3" />
+                </svg>
+                Estimation
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 11V5a1 1 0 0 1 1-1h6l9 9-7 7-9-9z" />
+                  <circle cx="8" cy="8" r="1.2" />
+                </svg>
+                Fields
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+                  <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
+                </svg>
+                Components
+              </div>
+            </div>
+            <div class="rail-group">
+              <p class="rail-group-label">Automation</p>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 3l1.6 4.2L18 8.8l-4.4 1.6L12 15l-1.6-4.6L6 8.8l4.4-1.6z" />
+                  <path d="M17.5 15l.8 2.1 2.2.8-2.2.8-.8 2.1-.8-2.1-2.2-.8 2.2-.8z" />
+                </svg>
+                AI planning
+              </div>
+              <div class="rail-row">
+                <svg viewBox="0 0 24 24">
+                  <rect x="4" y="8" width="16" height="11" rx="2.5" />
+                  <path d="M12 4v4M9 13h.01M15 13h.01" />
+                </svg>
+                Rules
+              </div>
+            </div>
+          </nav>
+
+          <div class="page">
+            <div>
+              <h1 class="page-title">Workflow</h1>
+              <p class="page-sub">
+                The statuses work moves through in <strong>Motir</strong>, and the moves that are
+                allowed between them. Changes apply to every item in the project.
+              </p>
+            </div>
+
+            <!-- The NEW card, in its real neighbourhood. -->
+            <section class="card">
+              <div class="card-head">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 4v6M12 14v6" />
+                  <path d="M9 7l3-3 3 3M9 17l3 3 3-3" />
+                </svg>
+                <div>
+                  <h2 class="card-title">Status automation</h2>
+                  <p class="card-sub">
+                    Keep a parent and its children in step. Motir derives status in both directions
+                    by default; each switch turns its own direction off.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="switch-row">
+                  <span class="switch is-on"><span class="knob"></span></span>
+                  <span>
+                    <span class="switch-label">Roll up parent status from children</span>
+                    <p class="switch-hint">
+                      A parent follows its children's progress: In Progress once work starts on any
+                      child, In Review once the last open child reaches review, and Done once every
+                      child is finished. It only ever moves a parent forward, along moves your
+                      workflow already allows.
+                    </p>
+                  </span>
+                </div>
+                <div class="switch-row">
+                  <span class="switch is-on"><span class="knob"></span></span>
+                  <span>
+                    <span class="switch-label">Complete children when a parent is done</span>
+                    <p class="switch-hint">
+                      When a parent reaches Done — including automatically, when its pull request
+                      merges — its unfinished children are completed too. This includes children
+                      nobody has started yet, so turn it off if your team tracks child work
+                      separately.
+                    </p>
+                  </span>
+                </div>
+              </div>
+              <div class="card-foot">
+                <span class="btn">Cancel</span>
+                <span class="btn btn-primary">Save changes</span>
+              </div>
+            </section>
+
+            <!-- The SHIPPED section this sits beside (WorkflowEditor.tsx:144). -->
+            <div class="existing">
+              <h3>Transition enforcement</h3>
+              <p>
+                Restricted — only the moves drawn below are allowed. Switch to Open to let any
+                status move to any other.
+              </p>
+              <div class="seg"><span class="on">Restricted</span><span>Open</span></div>
+            </div>
+            <div class="ghost">Statuses and the transition matrix (shipped, unchanged) ↓</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PANEL 1 · DEFAULT ══════════════════════════════════════════════ -->
+      <section>
+        <p class="panel-label">Panel 1 · Default — both directions on</p>
+        <p class="panel-note">
+          What every project starts at, and what existing projects backfill to. The ladder read-out
+          under the first switch is a plain definition list, not a new component — it exists because
+          "rolls up" alone does not tell an admin WHEN each rung fires, and that is the one thing
+          they need to predict the behaviour.
+        </p>
+        <section class="card" style="max-width: 48rem">
+          <div class="card-head">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 4v6M12 14v6" />
+              <path d="M9 7l3-3 3 3M9 17l3 3 3-3" />
+            </svg>
+            <div>
+              <h2 class="card-title">Status automation</h2>
+              <p class="card-sub">
+                Keep a parent and its children in step. Motir derives status in both directions by
+                default; each switch turns its own direction off.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="switch-row">
+              <span class="switch is-on"><span class="knob"></span></span>
+              <span>
+                <span class="switch-label">Roll up parent status from children</span>
+                <p class="switch-hint">
+                  A parent follows its children's progress. It only ever moves a parent forward,
+                  along moves your workflow already allows — reopening a child never moves a parent
+                  back.
+                </p>
+                <dl class="ladder">
+                  <dt>In Progress</dt>
+                  <dd>as soon as any child starts</dd>
+                  <dt>In Review</dt>
+                  <dd>when the last open child reaches review</dd>
+                  <dt>Done</dt>
+                  <dd>when every child is finished or cancelled</dd>
+                </dl>
+              </span>
+            </div>
+            <div class="switch-row">
+              <span class="switch is-on"><span class="knob"></span></span>
+              <span>
+                <span class="switch-label">Complete children when a parent is done</span>
+                <p class="switch-hint">
+                  When a parent reaches Done — including automatically, when its pull request merges
+                  — its unfinished children are completed too.
+                  <strong>This includes children nobody has started yet.</strong>
+                  Turn it off if your team tracks child work separately.
+                </p>
+              </span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span class="btn">Cancel</span>
+            <span class="btn btn-primary">Save changes</span>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ PANEL 2 · UPWARD-ONLY ══════════════════════════════════════════ -->
+      <section>
+        <p class="panel-label">Panel 2 · Upward-only — the cascade switched off</p>
+        <p class="panel-note">
+          The preference the two-switch model exists to express, and the whole argument against one
+          combined toggle: a team that wants the rollup but not the auto-close can have exactly
+          that. An off row keeps its layout and drops only its text tokens to
+          <code>--el-text-faint</code>, so it stays readable rather than disappearing.
+        </p>
+        <section class="card" style="max-width: 48rem">
+          <div class="card-head">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 4v6M12 14v6" />
+              <path d="M9 7l3-3 3 3M9 17l3 3 3-3" />
+            </svg>
+            <div>
+              <h2 class="card-title">Status automation</h2>
+              <p class="card-sub">
+                Keep a parent and its children in step. Motir derives status in both directions by
+                default; each switch turns its own direction off.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="switch-row">
+              <span class="switch is-on"><span class="knob"></span></span>
+              <span>
+                <span class="switch-label">Roll up parent status from children</span>
+                <p class="switch-hint">
+                  A parent follows its children's progress. It only ever moves a parent forward,
+                  along moves your workflow already allows.
+                </p>
+              </span>
+            </div>
+            <div class="switch-row is-off">
+              <span class="switch"><span class="knob"></span></span>
+              <span>
+                <span class="switch-label">Complete children when a parent is done</span>
+                <p class="switch-hint">
+                  Off — closing a parent leaves its children where they are, for your team to close
+                  themselves.
+                </p>
+              </span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span class="btn">Cancel</span>
+            <span class="btn btn-primary">Save changes</span>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ PANEL 3 · NON-ADMIN ════════════════════════════════════════════ -->
+      <section>
+        <p class="panel-label">Panel 3 · Non-admin — visible, not editable</p>
+        <p class="panel-note">
+          A member SEES the configuration (the browse-gated read every settings pane uses), with the
+          switches disabled and the save footer replaced by the shipped lock banner. Disabled, never
+          hidden: a reader sees the same setting a sighted admin does, and learns why their items
+          move on their own.
+        </p>
+        <section class="card" style="max-width: 48rem">
+          <div class="card-head">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 4v6M12 14v6" />
+              <path d="M9 7l3-3 3 3M9 17l3 3 3-3" />
+            </svg>
+            <div>
+              <h2 class="card-title">Status automation</h2>
+              <p class="card-sub">
+                Keep a parent and its children in step. Motir derives status in both directions by
+                default; each switch turns its own direction off.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="switch-row is-off">
+              <span class="switch is-on is-disabled"><span class="knob"></span></span>
+              <span>
+                <span class="switch-label">Roll up parent status from children</span>
+                <p class="switch-hint">
+                  A parent follows its children's progress. It only ever moves a parent forward,
+                  along moves your workflow already allows.
+                </p>
+              </span>
+            </div>
+            <div class="switch-row is-off">
+              <span class="switch is-on is-disabled"><span class="knob"></span></span>
+              <span>
+                <span class="switch-label">Complete children when a parent is done</span>
+                <p class="switch-hint">
+                  When a parent reaches Done, its unfinished children are completed too — including
+                  ones nobody has started.
+                </p>
+              </span>
+            </div>
+          </div>
+          <div class="lock">
+            <svg viewBox="0 0 24 24">
+              <rect x="5" y="10" width="14" height="10" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+            Only a project admin can change status automation.
+          </div>
+        </section>
+      </section>
+    </div>
+  </body>
+</html>
