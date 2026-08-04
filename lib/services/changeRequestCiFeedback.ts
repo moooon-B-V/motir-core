@@ -1,6 +1,7 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
+import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -254,12 +255,6 @@ function deriveCiState(conclusions: string[]): 'passing' | 'failing' | null {
   if (conclusions.some((c) => c === 'failure')) return 'failing';
   if (conclusions.some((c) => c === 'success')) return 'passing';
   return null;
-}
-
-/** The host's noun for a change request — a GitHub `pull request`, a GitLab `merge
- *  request` — so the feedback comment reads naturally on either host. */
-function changeRequestNoun(provider: GitProviderId): string {
-  return provider === 'gitlab' ? 'merge request' : 'pull request';
 }
 
 /** The passing-note body — a linked change request's checks succeeded (verified). */

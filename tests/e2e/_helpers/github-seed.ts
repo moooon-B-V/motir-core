@@ -73,7 +73,9 @@ export async function postSignedWebhook(
 
 /** A minimal `pull_request` delivery carrying every field the provider seam's
  *  `parseChangeRequestEvent` + the webhook service read (installation id, repo
- *  id, PR number/state/merged/head-ref/title, author id). */
+ *  id, PR number/state/merged/head-ref/BASE-ref/title, author id). `baseRef`
+ *  defaults to the seeded repo's default branch — a merge onto anything else is
+ *  held at In Review by the trunk gate (MOTIR-1873). */
 export function pullRequestPayload(args: {
   action: 'opened' | 'reopened' | 'closed';
   number: number;
@@ -81,6 +83,7 @@ export function pullRequestPayload(args: {
   headRef: string;
   state: 'open' | 'closed';
   merged: boolean;
+  baseRef?: string;
 }): Record<string, unknown> {
   return {
     action: args.action,
@@ -92,6 +95,7 @@ export function pullRequestPayload(args: {
       merged: args.merged,
       title: args.title,
       head: { ref: args.headRef },
+      base: { ref: args.baseRef ?? E2E_REPO.defaultBranch },
       user: { id: E2E_GITHUB_USER.id },
     },
   };

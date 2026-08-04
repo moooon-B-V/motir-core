@@ -101,6 +101,7 @@ function mrPayload(opts: {
       state: opts.state ?? 'opened',
       title: `Some change (${opts.identifier})`,
       source_branch: `subtask/${opts.identifier}-a-change`,
+      target_branch: 'main',
     },
   };
 }

@@ -106,7 +106,9 @@ export function postGitlabWebhook(
 
 /** A minimal GitLab `merge_request` delivery carrying every field the provider
  *  seam's `parseChangeRequestEvent` + the shared sync read (project id, MR iid /
- *  state / action, source branch, title). `action` is the MR action; `state` is the
+ *  state / action, source branch, TARGET branch, title). `action` is the MR action;
+ *  `targetBranch` defaults to the seeded project's default branch — a merge onto
+ *  anything else is held at In Review by the trunk gate (MOTIR-1873). `state` is the
  *  resulting MR state (GitLab's `merged` is its own state, not a boolean). */
 export function mergeRequestPayload(args: {
   action: 'open' | 'reopen' | 'close' | 'merge' | 'update';
@@ -115,6 +117,7 @@ export function mergeRequestPayload(args: {
   sourceBranch: string;
   state: 'opened' | 'closed' | 'merged' | 'locked';
   projectId?: string;
+  targetBranch?: string;
 }): Record<string, unknown> {
   return {
     object_kind: 'merge_request',
@@ -125,6 +128,7 @@ export function mergeRequestPayload(args: {
       state: args.state,
       title: args.title,
       source_branch: args.sourceBranch,
+      target_branch: args.targetBranch ?? E2E_GITLAB_PROJECT.defaultBranch,
     },
   };
 }

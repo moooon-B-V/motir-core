@@ -136,6 +136,12 @@ export interface GitProvider {
   /**
    * Map a normalized change request to the canonical workflow-lifecycle signal
    * the status sync (MOTIR-892) applies to the linked work item. PURE.
+   *
+   * ⚠️ `done` here means "the host reports this merged", NOT "the deliverable
+   * shipped". The two diverge whenever `baseRef` is not the repository's default
+   * branch (MOTIR-1873), and only the consumer can tell — the mirrored default
+   * branch is a DB read this pure seam deliberately cannot make. So a provider
+   * must never try to gate completion here.
    */
   changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle;
 

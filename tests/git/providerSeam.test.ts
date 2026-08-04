@@ -41,6 +41,7 @@ function prEvent(over: Record<string, unknown> = {}): unknown {
       merged: false,
       title: 'feat: a thing',
       head: { ref: 'subtask/MOTIR-891-github-app' },
+      base: { ref: 'main' },
       ...over,
     },
   };
@@ -54,6 +55,7 @@ describe('github.parseChangeRequestEvent', () => {
       state: 'open',
       merged: false,
       headRef: 'subtask/MOTIR-891-github-app',
+      baseRef: 'main',
       title: 'feat: a thing',
     });
   });
@@ -73,11 +75,20 @@ describe('github.parseChangeRequestEvent', () => {
     expect(github.parseChangeRequestEvent(null)).toBeNull();
     // A PR payload missing the head ref is unusable → null.
     expect(github.parseChangeRequestEvent(prEvent({ head: {} }))).toBeNull();
+    // Nor is one missing the BASE ref (MOTIR-1873) — a merge whose destination is
+    // unknown cannot be judged against the trunk, so it does not normalize either.
+    expect(github.parseChangeRequestEvent(prEvent({ base: {} }))).toBeNull();
   });
 });
 
 describe('github.changeRequestLifecycle', () => {
-  const base = { providerRepoId: '1', number: 1, headRef: 'b', title: null } as const;
+  const base = {
+    providerRepoId: '1',
+    number: 1,
+    headRef: 'b',
+    baseRef: 'main',
+    title: null,
+  } as const;
 
   it('maps open → in_review, merged → done, closed-unmerged → todo', () => {
     expect(github.changeRequestLifecycle({ ...base, state: 'open', merged: false })).toBe(

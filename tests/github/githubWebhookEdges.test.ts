@@ -71,6 +71,8 @@ function prPayload(opts: {
   user?: { id: number } | null;
   installationId?: string | null;
   repoId?: number;
+  /** The base the PR merges INTO — the trunk gate reads it (MOTIR-1873). */
+  baseRef?: string;
 }) {
   return {
     action: opts.action,
@@ -89,6 +91,7 @@ function prPayload(opts: {
       merged: opts.merged ?? false,
       title: opts.title ?? `Some change (${opts.identifier ?? 'ACME-1'})`,
       head: { ref: opts.headRef ?? `feat/${opts.identifier ?? 'ACME-1'}-a-change` },
+      base: { ref: opts.baseRef ?? 'main' },
       ...(opts.user === null ? {} : { user: opts.user ?? { id: 4242 } }),
     },
   };

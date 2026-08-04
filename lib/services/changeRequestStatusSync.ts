@@ -1,10 +1,16 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
-import type { ChangeRequestLifecycle, NormalizedChangeRequest } from '@/lib/git/types';
+import type {
+  ChangeRequestLifecycle,
+  GitProviderId,
+  NormalizedChangeRequest,
+} from '@/lib/git/types';
+import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { commentsService } from './commentsService';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -29,6 +35,18 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 // author when they are a bound workspace member, else the workspace owner (the
 // automation-engine precedent). The transition itself runs AFTER the resolve tx,
 // in its own transaction, exactly as the GitHub path always did.
+//
+// ⚠️ COMPLETION IS GATED TWICE, and both gates say "a merge event is not proof the
+// deliverable shipped" (they are the same lesson at two different scopes):
+//   * MOTIR-1604 — the merge must be the item's LAST open linked change request,
+//     else a cross-repo two-PR card completes on half its work.
+//   * MOTIR-1873 — the merge must have landed on the repository's DEFAULT branch,
+//     else a change request STACKED on a sibling's branch completes while its code
+//     sits on a dead branch with no path to the trunk. GitHub reports MERGED for
+//     that merge, truthfully; the trunk is the only witness that matters.
+// Both HOLD the item at In Review rather than transitioning, and both report a
+// distinct outcome — never a silent no-op, because invisibility was the whole cost
+// of MOTIR-1873's incident.
 
 /** The concrete workflow target a canonical change-request lifecycle maps to.
  *  `key` is the CANONICAL status key we prefer; `category` is the fallback bucket
@@ -57,6 +75,7 @@ export type ChangeRequestSyncResult = {
     | 'transitioned'
     | 'noop'
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
+    | 'deferred_non_default_base' // a merge into a NON-default base — the work never reached the trunk, item stays In Review (MOTIR-1873)
     | 'no_work_item'
     | 'no_matching_status'
     | 'illegal_transition'
@@ -173,14 +192,22 @@ export async function syncChangeRequestStatus(
 
     if (!workItem) return { kind: 'no_work_item' as const };
 
+    // MOTIR-1873 — a merge only COMPLETES the item when it landed on the trunk.
+    // Compare the change request's base against the MIRRORED default branch, never
+    // a hard-coded `'main'`: a self-hoster's repo defaults to `master` / `trunk`
+    // and must behave identically. Only a `done` delivery can complete, so this is
+    // meaningless for any other lifecycle.
+    const mergedIntoNonDefaultBase = lifecycle === 'done' && cr.baseRef !== repo.defaultBranch;
+
     // MOTIR-1604 — a merge only COMPLETES the item when it is the item's LAST open
     // linked change request. A cross-repo (two-PR) card has >1 linked PR/MR; the
     // first merge must NOT flip Done while a sibling is still open. This row was
     // just upserted (closed, on a merge), so we count the item's OTHER open linked
     // change requests — non-zero means DEFER. Only a `done` delivery can complete,
-    // so skip the read for any other lifecycle.
+    // and a stranded merge is already held by the gate above, so skip the read for
+    // either.
     const hasOtherOpenLinkedPr =
-      lifecycle === 'done'
+      lifecycle === 'done' && !mergedIntoNonDefaultBase
         ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
         : false;
 
@@ -191,6 +218,14 @@ export async function syncChangeRequestStatus(
       projectId: workItem.projectId,
       workItemId: workItem.id,
       currentStatus: workItem.status,
+      provider: installation.provider as GitProviderId,
+      defaultBranch: repo.defaultBranch,
+      mergedIntoNonDefaultBase,
+      // Whether the row ALREADY recorded this merge before this delivery — read
+      // under the row lock taken above, so concurrent redeliveries serialize on it.
+      // It is what keeps the stranded-merge note POSTED ONCE: the note describes a
+      // merge event, and GitHub redelivers events freely.
+      mergeAlreadyRecorded: existingPr?.state === 'closed' && existingPr.merged === true,
       hasOtherOpenLinkedPr,
       actorUserId: authorBoundUserId ?? owner?.userId ?? null,
       ownerUserId: owner?.userId ?? null,
@@ -201,6 +236,54 @@ export async function syncChangeRequestStatus(
     return { event: 'pull_request', outcome: 'unknown_installation' };
   if (resolved.kind === 'unknown_repo') return { event: 'pull_request', outcome: 'unknown_repo' };
   if (resolved.kind === 'no_work_item') return { event: 'pull_request', outcome: 'no_work_item' };
+
+  // A merge that did NOT land on the default branch leaves the item where it is —
+  // In Review, from its own PR-opened delivery (MOTIR-1873). The work merged
+  // SOMEWHERE, so it is neither abandoned (which would be `todo`) nor complete;
+  // the umbrella change request that eventually reaches the trunk fires its own
+  // delivery and completes the item then.
+  //
+  // Checked BEFORE the actor gate and BEFORE MOTIR-1604's, on purpose. Before the
+  // actor gate because holding the item must not depend on there being someone to
+  // author a note — the note is the diagnosis, the hold is the correctness. Before
+  // 1604's because this is the stronger statement: a merge with no path to the
+  // trunk is not partial completion, it is none.
+  if (resolved.mergedIntoNonDefaultBase) {
+    // Never a silent no-op — invisibility is what made the incident expensive. Say
+    // WHICH base swallowed the merge, on the item itself, where the next person to
+    // read the card (or the next `motir run` that treats it as a prerequisite) will
+    // see it. Posted once per merge, and best-effort: a failed note must not turn a
+    // correct hold into a 500 the host retries forever.
+    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
+      try {
+        await commentsService.addComment(
+          resolved.workItemId,
+          {
+            bodyMd: strandedMergeCommentBody({
+              noun: changeRequestNoun(resolved.provider),
+              number: cr.number,
+              baseRef: cr.baseRef,
+              defaultBranch: resolved.defaultBranch,
+            }),
+          },
+          { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+        );
+      } catch (err) {
+        console.error('[changeRequestStatusSync] stranded-merge note failed; item still held', {
+          workItemId: resolved.workItemId,
+          number: cr.number,
+          baseRef: cr.baseRef,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
+    return {
+      event: 'pull_request',
+      outcome: 'deferred_non_default_base',
+      workItemId: resolved.workItemId,
+    };
+  }
+
   if (!resolved.actorUserId)
     // No workspace owner and no bound author — nothing can author the move.
     return { event: 'pull_request', outcome: 'access_denied', workItemId: resolved.workItemId };
@@ -276,6 +359,31 @@ export async function syncChangeRequestStatus(
     workItemId: resolved.workItemId,
     toStatus: targetKey,
   };
+}
+
+/** The stranded-merge note (MOTIR-1873) — posted on the linked item when a merge
+ *  landed on a base other than the repository's default branch. It names the base
+ *  that swallowed the merge, because that single fact is what turns "why isn't this
+ *  Done?" into a one-minute answer, and states the condition that WILL complete the
+ *  item so the hold never reads as a stuck integration.
+ *
+ *  It describes what did NOT happen rather than asserting a status: the sync leaves
+ *  the item exactly where it was, and where that is depends on which of this change
+ *  request's earlier deliveries were seen. */
+function strandedMergeCommentBody(args: {
+  noun: string;
+  number: number;
+  baseRef: string;
+  defaultBranch: string;
+}): string {
+  return (
+    `⚠️ **Merged, but not onto \`${args.defaultBranch}\`** — ${args.noun} #${args.number} ` +
+    `merged into \`${args.baseRef}\`, which is not this repository's default branch. ` +
+    `The code has not reached the trunk, so this merge does **not** move the item to ` +
+    `**Done** — its status is left unchanged. It completes when a ${args.noun} carrying ` +
+    `this work merges into \`${args.defaultBranch}\`; if \`${args.baseRef}\` has itself ` +
+    `already been merged and deleted, the work is stranded and needs re-landing.`
+  );
 }
 
 /** Resolve the change request's linked work item from its head ref + title (the

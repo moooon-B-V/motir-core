@@ -60,6 +60,24 @@ export interface NormalizedChangeRequest {
   state: ChangeRequestState;
   merged: boolean;
   headRef: string;
+  /**
+   * The branch the change request merges INTO — GitHub's `base.ref`, GitLab's
+   * `target_branch` (MOTIR-1873).
+   *
+   * ⚠️ LOAD-BEARING for completion, and the reason `merged` alone never is:
+   * `merged: true` answers "did a merge event occur?", not "did this work reach
+   * the trunk?". They diverge whenever the base is not the repository's default
+   * branch — a STACKED change request whose base gets merged first is the
+   * ordinary way that happens, and the merge then lands on a dead branch with no
+   * path to the trunk while the host still reports MERGED. So the completion
+   * decision reads this field against the mirrored default branch; only the
+   * trunk witnesses a shipped deliverable.
+   *
+   * Required, exactly like `headRef`: a change request has a destination as
+   * surely as it has a source, and a payload carrying neither does not
+   * normalize (the parser returns null) rather than defaulting to a guess.
+   */
+  baseRef: string;
   title: string | null;
 }
 
