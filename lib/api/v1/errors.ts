@@ -189,6 +189,22 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // workspace-gated, so a sprint in another tenant and one that never existed
   // are the same answer (ADR §4's existence-oracle rule).
   SPRINT_NOT_FOUND: 404,
+
+  // 11.3.5 (MOTIR-2062) — the sprint write pair.
+  //
+  // ⚠️ 403, and DELIBERATELY a different `code` from `INSUFFICIENT_SCOPE`. Every
+  // sprint write calls `assertSprintAdmin`, so a token that DOES carry
+  // `sprints:write` is still refused when its OWNER is an ordinary project
+  // member — a scope narrows the owner's role and never widens it (ADR §3).
+  // "My token has the scope and I still get 403" is the single most confusing
+  // thing this endpoint can do to an integrator, and a shared code would leave
+  // them re-issuing tokens forever against a problem no token can fix.
+  NOT_SPRINT_ADMIN: 403,
+  INVALID_SPRINT_NAME: 422,
+  SPRINT_WINDOW_INVALID: 422,
+  // A conflict with existing STATE, not a malformed request: the body is fine,
+  // the sprint is simply frozen.
+  CANNOT_MODIFY_COMPLETED_SPRINT: 409,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */

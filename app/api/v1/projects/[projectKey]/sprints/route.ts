@@ -5,7 +5,8 @@ import {
   parseCollectionPageRequest,
   readRowIdPosition,
 } from '@/lib/api/v1/pagination';
-import { presentSprint } from '@/lib/api/v1/sprints/schema';
+import { createSprintBodySchema, presentSprint } from '@/lib/api/v1/sprints/schema';
+import { parseV1Body } from '@/lib/api/v1/workItems/schema';
 import { projectsService } from '@/lib/services/projectsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 
@@ -52,3 +53,54 @@ export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async 
     paginateAtPosition(ordered, page, 'sprints', (sprint) => sprint.id, presentSprint),
   );
 });
+
+// POST /api/v1/projects/{projectKey}/sprints (Story 11.3 · Subtask 11.3.5 —
+// MOTIR-2062) — create a PLANNED sprint. The first `sprints:write` operation.
+//
+// A SECOND export in this module, reusing the GET's project resolution rather
+// than re-deriving it, and declaring its OWN scope — the ADR's §3 map is per
+// OPERATION, not per resource, and the shipped guard catches a POST that
+// bypasses the wrapper even when a sibling GET does not.
+//
+// ── TWO gates, and the second is the surprising one ─────────────────────────
+// `sprints:write` is the SCOPE. `createSprint` additionally calls
+// `assertSprintAdmin` and raises `NotSprintAdminError` → 403 with the DISTINCT
+// `NOT_SPRINT_ADMIN` code, because a token carrying the scope is still refused
+// when its OWNER is an ordinary project member: a scope narrows the owner's role
+// and never widens it (ADR §3). Sharing `INSUFFICIENT_SCOPE` would leave an
+// integrator re-issuing tokens forever against a problem no token can fix.
+//
+// ── The service owns date validation ────────────────────────────────────────
+// `parseNullableDate` + `assertWindow` decide whether a date parses and whether
+// `endDate` ≥ `startDate`. The route forwards the strings. Re-checking here
+// would be a second implementation of one rule — the first place the API and the
+// product start disagreeing about what a valid sprint window is.
+export const POST = withV1Route<{ projectKey: string }>({ scope: 'sprints:write' }, async (ctx) => {
+  const body = await parseV1Body(ctx.req, createSprintBodySchema);
+  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+
+  const created = await sprintsService.createSprint(
+    project.id,
+    // Only the keys the caller actually SUPPLIED: `exactOptionalPropertyTypes`
+    // makes `{ goal: undefined }` and `{}` different types, and the service
+    // distinguishes absent from null, so a wholesale spread would turn every
+    // omitted field into an explicit `undefined`.
+    pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
+    ctx.service,
+  );
+
+  ctx.responseHeaders.set('Location', `/api/v1/sprints/${created.id}`);
+  return NextResponse.json(presentSprint(created), { status: 201 });
+});
+
+/** Copy only the keys a caller actually supplied — see the POST's note. */
+function pickSupplied<T extends object, K extends keyof T>(
+  source: T,
+  keys: readonly K[],
+): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of keys) {
+    if (key in source && source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}

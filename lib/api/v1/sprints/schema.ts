@@ -105,3 +105,56 @@ export function presentSprint(sprint: SprintDto): V1Sprint {
     committedIssueCount: sprint.committedIssueCount,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REQUEST schemas (Story 11.3 · Subtask 11.3.5 — MOTIR-2062)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Beside the response schema deliberately: Story 11.4 emits the OpenAPI
+// operations from this module, and an operation is a request shape AND a
+// response shape. Splitting them puts half an operation in each of two places.
+//
+// ⚠️ ABSENT vs NULL is the whole of the PATCH contract, so it is spelled out
+// rather than left to zod's defaults. `sprintsService.updateSprint` reads
+// `patch.goal !== undefined` to decide whether to touch the column at all, so:
+// an ABSENT key leaves the field unchanged, an explicit `null` CLEARS it, a
+// value sets it. `.optional()` models the first and `.nullable()` the second,
+// and the pairing is what keeps them distinguishable.
+//
+// ⚠️ Dates are validated by the SERVICE, not here. `parseNullableDate` +
+// `assertWindow` own "does it parse" and "is `endDate` ≥ `startDate`", and
+// re-checking either at the route would be a second implementation of a rule
+// that already has one — the first place the API and the product start
+// disagreeing about what a valid sprint window is. The schema only asserts the
+// wire TYPE (a string, or null).
+
+/** `POST /api/v1/projects/{projectKey}/sprints`. Every field is optional. */
+export const createSprintBodySchema = z
+  .object({
+    // Omitted → the service names it `"Sprint <n>"` from the project's max
+    // sequence. NOT defaulted here: the ordinal is derived inside the write, and
+    // a route guessing at it would race every concurrent create.
+    name: z.string().optional(),
+    goal: z.string().nullish(),
+    startDate: z.string().nullish(),
+    endDate: z.string().nullish(),
+  })
+  .strict();
+export type CreateSprintBody = z.infer<typeof createSprintBodySchema>;
+
+/**
+ * `PATCH /api/v1/sprints/{sprintId}` — rename, edit the goal, adjust the window.
+ *
+ * `.strict()`: an unknown property is a 422, not a silent no-op. A client that
+ * misspells a field name has a bug, and telling them beats pretending the write
+ * succeeded.
+ */
+export const updateSprintBodySchema = z
+  .object({
+    name: z.string().optional(),
+    goal: z.string().nullish(),
+    startDate: z.string().nullish(),
+    endDate: z.string().nullish(),
+  })
+  .strict();
+export type UpdateSprintBody = z.infer<typeof updateSprintBodySchema>;

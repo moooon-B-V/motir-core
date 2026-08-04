@@ -98,6 +98,12 @@ describe('gate — the work-item route surface exists and is clean', () => {
     const expectedScope = (file: string, method: string): string => {
       if (method === 'GET') return 'read';
       if (/\/(archive|restore)\//.test(file)) return 'work_items:archive';
+      // Story 11.3's planning writes. The ADR §3 row is "create / update /
+      // start / complete a sprint; move an item into or out of a sprint" —
+      // keyed on the SPRINT, so every write under a `sprints` segment takes
+      // `sprints:write`, including the membership move that happens to end in
+      // `/work-items`.
+      if (/\bsprints\b/.test(file)) return 'sprints:write';
       return 'work_items:write';
     };
 
