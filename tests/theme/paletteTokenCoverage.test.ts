@@ -65,17 +65,10 @@ const KNOWN_PALETTE_INVARIANT = [
   // sits UNDER the dialog and carries no palette identity. theme.css documents
   // it as the lone concrete-value token, with a dark companion, not a hue.
   '--el-overlay-scrim',
-  // BUG — MOTIR-2072. The recessed planning-canvas board. `--color-canvas` is
-  // the one Tier-0 source no palette block overrides, so every palette paints
-  // its canvas in Motir's warm house grey. Remove this entry when 2072 lands.
-  '--el-canvas',
 ];
 
 /** Tier-0 sources an `--el-*` rides that NOT ONE non-base palette declares. */
-const TIER0_SOURCES_NO_PALETTE_SETS = [
-  // BUG — MOTIR-2072, the same defect seen from the Tier-0 side.
-  '--color-canvas',
-];
+const TIER0_SOURCES_NO_PALETTE_SETS: string[] = [];
 
 describe('swap layer — every element token resolves to a concrete colour', () => {
   it('leaves no dangling var() in any palette x theme context', () => {
@@ -164,6 +157,62 @@ describe('palette coverage — every element token is actually re-skinned', () =
       }
     }
     expect(gaps).toEqual([]);
+  });
+});
+
+// ── MOTIR-2072: the recessed board must still READ as recessed ──────────────
+//
+// Declaring `--color-canvas` in every palette block is only half the fix. The
+// board is what raised cards SIT ON — `--el-card` is `var(--color-background)`
+// — so a palette that re-tints the canvas to something at or above the page
+// inverts the recess and the cards lose their edge. The base ramp puts the
+// canvas below BOTH the page and the section surface, in light and in dark
+// (motir light `#ecebe7` < `#f6f5f4` < `#ffffff`; dark `#0e0e0e` < `#0f0f0f` <
+// `#1a1a1a`), and that ordering is the property every palette has to preserve.
+
+/** WCAG relative luminance of a `#rrggbb` value. */
+function luminance(hex: string): number {
+  const rgb = /^#([0-9a-f]{6})$/.exec(hex.trim().toLowerCase());
+  if (!rgb) throw new Error(`not a 6-digit hex colour: ${hex}`);
+  const channels = [0, 2, 4].map((offset) => {
+    const value = parseInt(rgb[1]!.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+}
+
+describe('recessed canvas — the planning board reads as a recess in every palette', () => {
+  it('keeps the canvas strictly below the page and the section surface', () => {
+    const inverted: string[] = [];
+    for (const palette of PALETTE_IDS) {
+      for (const theme of THEMES) {
+        const resolved = at(palette, theme);
+        const canvas = resolved['--el-canvas']!;
+        for (const above of ['--el-page-bg', '--el-surface'] as const) {
+          if (luminance(canvas) >= luminance(resolved[above]!)) {
+            inverted.push(`${palette}/${theme}: ${canvas} not below ${above} ${resolved[above]}`);
+          }
+        }
+      }
+    }
+    expect(inverted).toEqual([]);
+  });
+
+  it("tunes the canvas to each palette's own ramp, never re-using the Motir grey", () => {
+    // The defect 2072 fixed: every palette painted its canvas in Motir's warm
+    // house grey because no block overrode the Tier-0 source. Asserted per
+    // palette AND per theme — the invariant check above only needs ONE context
+    // to differ, which a light-only override would satisfy while dark still
+    // leaked the base value.
+    const reused: string[] = [];
+    for (const palette of NON_BASE_PALETTES) {
+      for (const theme of THEMES) {
+        if (at(palette, theme)['--el-canvas'] === at(DEFAULT_PALETTE_ID, theme)['--el-canvas']) {
+          reused.push(`${palette}/${theme}`);
+        }
+      }
+    }
+    expect(reused).toEqual([]);
   });
 });
 

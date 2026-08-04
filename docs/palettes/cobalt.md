@@ -42,6 +42,7 @@ axis — is what makes "style × palette" a product of two independent choices, 
 | Text scale          | cool-slate ink hierarchy — navy ink `#0f1b2e` → `#e7edf6`; secondary `#46556b` → `#a0b1c6`                  |
 | Accent (CTA)        | confident cobalt — on-surface `#3a57cf` → `#7e98f2`; fill `#3650c2` → `#4a63cf`; cool-cyan `--el-highlight` |
 | Surfaces            | white canvas over cool-slate sections — `#eef2f8` / `#f7f9fc` → navy `#0b111d` / `#131d2c` / `#0f1825`      |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e3e9f2` → `#070c16`                         |
 | Borders             | cool slate hairlines — `#d8e0ea` → `#243245`                                                                |
 | Links               | cleaner sky-blue, distinct from primary — `#0d63b8` → `#6fb3ff`                                             |
 | Semantic            | danger `#d3322f`/`#d83847` · success `#18874c`/`#34c578` · warning `#c2410c`/`#f08a4b` · info `#0d63b8`     |

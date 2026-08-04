@@ -2669,6 +2669,7 @@
   --color-foreground: #0f1b2e; /* cool navy ink */
   --color-surface: #eef2f8; /* cool slate section background */
   --color-surface-soft: #f7f9fc; /* quieter cool division */
+  --color-canvas: #e3e9f2; /* recessed planning board — a cool-slate step under --color-surface */
 
   /* text scale — cool slate hierarchy */
   --color-ink: #0f1b2e;
@@ -2724,6 +2725,7 @@
   --color-foreground: #e7edf6;
   --color-surface: #131d2c;
   --color-surface-soft: #0f1825;
+  --color-canvas: #070c16; /* recessed planning board — a step under the navy page */
 
   --color-ink: #e7edf6;
   --color-charcoal: #d3deec;
@@ -2815,6 +2817,7 @@
   --color-foreground: #16191d; /* cool near-black ink */
   --color-surface: #eef0f3; /* cool slate section background */
   --color-surface-soft: #f8f9fa; /* quieter cool division */
+  --color-canvas: #e6e8ed; /* recessed planning board — a cool-slate step under --color-surface */
 
   /* text scale — cool slate hierarchy (Radix Slate 11→9 below body) */
   --color-ink: #16191d;
@@ -2872,6 +2875,7 @@
   --color-foreground: #edeef0;
   --color-surface: #18191c; /* cool slate section */
   --color-surface-soft: #141517; /* quieter cool division */
+  --color-canvas: #08090b; /* recessed planning board — a step under the near-black page */
 
   --color-ink: #edeef0;
   --color-charcoal: #d7d9dd; /* emphasis / AA-safe on tints */
@@ -2949,6 +2953,7 @@
   --color-foreground: #14201b;
   --color-surface: #eef3f0;
   --color-surface-soft: #f6faf8;
+  --color-canvas: #e4ebe7; /* recessed planning board — a green-grey step under --color-surface */
 
   /* Text scale — cooled forest-charcoal ink hierarchy */
   --color-ink: #14201b;
@@ -3012,6 +3017,7 @@
   --color-foreground: #e8efe9;
   --color-surface: #141d18;
   --color-surface-soft: #101713;
+  --color-canvas: #080d0a; /* recessed planning board — a step under the deep-forest page */
 
   --color-ink: #e8efe9;
   --color-charcoal: #d6e0d9;
@@ -3128,6 +3134,7 @@
   --color-foreground: #1a1626; /* cool near-black ink with a faint violet cast */
   --color-surface: #f4f2fb; /* cool violet-tinted section background */
   --color-surface-soft: #faf9fe; /* quieter cool division */
+  --color-canvas: #ece8f7; /* recessed planning board — a violet-tinted step under --color-surface */
 
   /* text scale — cool violet-neutral hierarchy */
   --color-ink: #1a1626;
@@ -3185,6 +3192,7 @@
   --color-foreground: #ece9f6;
   --color-surface: #1d1830;
   --color-surface-soft: #181426;
+  --color-canvas: #0f0c18; /* recessed planning board — a step under the cool-violet page */
 
   --color-ink: #ece9f6;
   --color-charcoal: #ddd8ee;
@@ -3267,6 +3275,7 @@
   --color-foreground: #181a20; /* Binance near-black ink */
   --color-surface: #f4f5f7; /* cool graphite section background */
   --color-surface-soft: #fafbfc; /* quieter cool division */
+  --color-canvas: #eaecf0; /* recessed planning board — a graphite step under --color-surface */
 
   /* text scale — Binance cool-grey hierarchy */
   --color-ink: #181a20;
@@ -3322,6 +3331,7 @@
   --color-foreground: #eaecef;
   --color-surface: #1e2329; /* Binance "Shark" card surface */
   --color-surface-soft: #181a20; /* Binance app background — quieter division */
+  --color-canvas: #07090c; /* recessed planning board — a step under the trading-floor black */
 
   --color-ink: #eaecef;
   --color-charcoal: #d1d6dd;
@@ -3399,6 +3409,7 @@
   --color-foreground: #1f1f1f; /* Mistral Black ink */
   --color-surface: #fbf1d3; /* warm cream section background (Mistral cream ramp) */
   --color-surface-soft: #fdf6e0; /* quieter warm cream division */
+  --color-canvas: #f5e9cb; /* recessed planning board — a warm-cream step under --color-surface */
 
   /* text scale — Mistral warm-charcoal hierarchy */
   --color-ink: #1f1f1f;
@@ -3453,6 +3464,7 @@
   --color-foreground: #f5efe2;
   --color-surface: #1f1d17;
   --color-surface-soft: #1a1712;
+  --color-canvas: #100d08; /* recessed planning board — a step under the warm near-black page */
 
   --color-ink: #f5efe2;
   --color-charcoal: #e6ddcb;
@@ -3523,6 +3535,7 @@
   --color-foreground: #111111; /* Pinterest "Cod Gray" ink */
   --color-surface: #efefef; /* Pinterest light-gray section background */
   --color-surface-soft: #f7f7f7; /* quieter neutral division */
+  --color-canvas: #e7e7e7; /* recessed planning board — a neutral step under --color-surface */
 
   /* text scale — Pinterest neutral-grey hierarchy */
   --color-ink: #111111;
@@ -3577,6 +3590,7 @@
   --color-foreground: #efefef;
   --color-surface: #1a1a1a;
   --color-surface-soft: #161616;
+  --color-canvas: #090909; /* recessed planning board — a step under the Cod-Gray page */
 
   --color-ink: #efefef;
   --color-charcoal: #e0e0e0;
@@ -3657,6 +3671,7 @@
   --color-foreground: #050038; /* Miro Stratos navy ink */
   --color-surface: #f3f4f6; /* Mirotone gray-100 section background */
   --color-surface-soft: #f6f7f9; /* Mirotone gray-50 — quieter division */
+  --color-canvas: #ebecf0; /* recessed planning board — Mirotone gray-150, a step under gray-100 */
 
   /* text scale — Mirotone gray ramp */
   --color-ink: #050038;
@@ -3713,6 +3728,7 @@
   --color-foreground: #f6f7f9; /* gray-50 */
   --color-surface: #1a1b1e; /* gray-900 */
   --color-surface-soft: #18191c; /* gray-950 */
+  --color-canvas: #040404; /* recessed planning board — a step under Miro black */
 
   --color-ink: #f6f7f9;
   --color-charcoal: #ebecf0; /* gray-150 */
@@ -3790,6 +3806,7 @@
   --color-foreground: #211f26; /* Radix Mauve-12 ink */
   --color-surface: #fee9f5; /* Radix Pink-3 — candy-pink section */
   --color-surface-soft: #fef7fb; /* Radix Pink-2 — quieter candy wash */
+  --color-canvas: #fbdcef; /* recessed planning board — Radix Pink-4, a step under the Pink-3 surface */
 
   /* text scale — Radix Mauve neutral + a Pink-12 berry emphasis */
   --color-ink: #211f26;
@@ -3845,6 +3862,7 @@
   --color-foreground: #eeeef0; /* Mauve dark-12 */
   --color-surface: #37172f; /* Pink dark-3 — candy-plum section */
   --color-surface-soft: #21121d; /* Pink dark-2 — quieter division */
+  --color-canvas: #120c11; /* recessed planning board — a step under the Pink dark-1 page */
 
   --color-ink: #eeeef0;
   --color-charcoal: #fdd1ea; /* Pink dark-12 — pink emphasis / AA on dark tints */

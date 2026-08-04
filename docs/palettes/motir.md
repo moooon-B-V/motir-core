@@ -26,6 +26,7 @@ the layer every component consumes. Motir's roles (light base; the Tier-1
 | Text scale          | charcoal/slate ink hierarchy — `--el-text`, `-strong`, `-secondary`, `-muted`, `-tertiary`, `-faint` |
 | Accent (CTA)        | Notion purple — `--el-accent` fill + `--el-accent-on-surface`; brand-pink `--el-highlight`           |
 | Surfaces            | cream over a white canvas — `--el-surface`, `--el-surface-soft`, `--el-muted`                        |
+| Recessed canvas     | planning board — `--el-canvas`, recessed below `--el-page-bg` and `--el-surface`                     |
 | Borders             | warm hairlines — `--el-border`, `-soft`, `-strong`                                                   |
 | Links               | `--el-link` / `--el-link-pressed`                                                                    |
 | Semantic            | `--el-danger` / `--el-success` / `--el-warning` / `--el-info` (+ danger text)                        |

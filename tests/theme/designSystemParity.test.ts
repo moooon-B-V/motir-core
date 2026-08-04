@@ -163,7 +163,9 @@ describe('consumed registries match the app-facing contract (no divergence after
     const BASE_LIGHT = '@theme';
     const BASE_DARK = "[data-theme='dark']";
     // Resolve a --color-* for a palette+theme: most-specific palette block first,
-    // then the theme base. (`--color-canvas` lives only in the base blocks.)
+    // then the theme base. (Until MOTIR-2072 `--color-canvas` lived only in the
+    // base blocks, so the canvas side of this check had to be read off the base
+    // palette; every palette declares it now, so it resolves like any other.)
     function resolveColor(colorVar: string, palette: string, theme: 'light' | 'dark'): string {
       const chain =
         palette === DEFAULT_PALETTE_ID
@@ -217,7 +219,7 @@ describe('consumed registries match the app-facing contract (no divergence after
         for (const palette of PALETTE_IDS) {
           for (const theme of ['light', 'dark'] as const) {
             const edge = resolveColor(colorVar, palette, theme);
-            const canvas = resolveColor('--color-canvas', DEFAULT_PALETTE_ID, theme);
+            const canvas = resolveColor('--color-canvas', palette, theme);
             const cr = contrast(edge, canvas);
             expect(
               cr,

@@ -62,6 +62,7 @@ axis — is what makes "style × palette" a product of two independent choices, 
 | Text scale          | cool-slate ink hierarchy — ink `#16191d` → `#edeef0`; secondary `#565c64` → `#a9adb5`                              |
 | Accent (CTA)        | INK fill `#1a1d21` → `#edeef0` (the monochrome statement); on-surface/link cool blue `#155bc4` → `#7db1ff`         |
 | Surfaces            | stark white canvas over cool-slate sections — `#eef0f3` / `#f8f9fa` → near-black `#0c0d0f` / `#18191c` / `#141517` |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e6e8ed` → `#08090b`                                |
 | Borders             | cool slate hairlines — `#e2e4e9` → `#282a2e`                                                                       |
 | Links               | the accent cool blue — `#155bc4` → `#7db1ff`                                                                       |
 | Semantic            | danger `#c92a2a`/`#d83847` · success `#18804a`/`#34b86e` · warning `#c2410c`/`#f08a4b` · info `#155bc4` (= accent) |

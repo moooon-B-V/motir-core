@@ -51,6 +51,7 @@ axis — is what makes "style × palette" a product of two independent choices, 
 | Text scale          | cool violet-neutral ink hierarchy — ink `#1a1626` → `#ece9f6`; secondary `#524d66` → `#aaa3c2`                       |
 | Accent (CTA)        | bright violet — on-surface `#6440d6` → `#a78bfa`; fill `#5a37c9` → `#6d4fd6`; candy magenta-pink `--el-highlight`    |
 | Surfaces            | crisp cool-white over violet-tinted sections — `#f4f2fb` / `#faf9fe` → violet-navy `#14111f` / `#1d1830` / `#181426` |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#ece8f7` → `#0f0c18`                                  |
 | Borders             | cool violet hairlines — `#e6e2f3` → `#2b2440`                                                                        |
 | Links               | clean vivid blue, distinct from the violet primary — `#2563eb` → `#8fb8ff`                                           |
 | Semantic            | danger `#d92e2b`/`#f0555f` · success `#16a34a`/`#36c977` · warning `#ea580c`/`#fb8b4c` · info `#2563eb`              |
