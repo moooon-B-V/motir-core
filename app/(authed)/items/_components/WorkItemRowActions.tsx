@@ -34,15 +34,11 @@ export function WorkItemRowActions({ row }: { row: IssueRowData }) {
           planEdits={{
             kind: row.kind,
             hasChildren: row.hasChildren,
-            // ⚠️ DEGRADE (MOTIR-2098) — rule 2 ("a LEAF with a description shows
-            // Re-plan") cannot be evaluated here yet: the list row carries no
-            // description signal, and the tree read's forest CTE projects a fixed
-            // column set that excludes `descriptionMd`. So a described leaf reads
-            // as undescribed and gets the Plan/Expand face on THIS surface only —
-            // the detail page and the peek, which both hold the description, apply
-            // rule 2 correctly. MOTIR-2098 plumbs a boolean `hasDescription`
-            // through and deletes this comment.
-            hasDescription: false,
+            // Rule 2's input (MOTIR-2098): the list/tree reads project a BOOLEAN
+            // `hasDescription` — never the Markdown body — so this surface asks
+            // the shared rule with the same state the detail page and the peek
+            // hand it. No degrade left here.
+            hasDescription: row.hasDescription,
             statusCategory: row.statusCategory,
             onExpand,
             onReplan,

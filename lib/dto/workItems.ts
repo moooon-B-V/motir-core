@@ -499,6 +499,11 @@ export interface WorkItemTreeNodeDto {
   /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` an inline edit
    *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`. */
   updatedAt: string;
+  /** Does the node carry a non-empty description (MOTIR-2098)? The LEAF face of
+   *  the shared Plan / Re-plan rule — see {@link WorkItemListItemDto}. Carried
+   *  here too because the FILTERED tree renders from these nodes, not from
+   *  `WorkItemTreeRowDto`, and both views share one row shaper. */
+  hasDescription: boolean;
   depth: number;
   hasChildren: boolean;
   matched: boolean;
@@ -689,6 +694,19 @@ export interface WorkItemListItemDto {
    *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`.
    *  `WorkItemTreeRowDto` inherits it for the lazy Tree's inline edits. */
   updatedAt: string;
+  /**
+   * Does the item carry a non-empty description (MOTIR-2098)? A BOOLEAN, never
+   * the body — the list/tree reads project `descriptionMd IS NOT NULL AND <> ''`
+   * so a row costs one byte, not a Markdown blob.
+   *
+   * It exists for the shared Plan / Re-plan rule's LEAF face (`planEntranceFace`
+   * rule 2 — a leaf WITH a description offers Re-plan, without one Plan), which
+   * the `/items` row ⋯ menu had to degrade past while no list row carried a
+   * description signal. An empty string counts as NO description (what an
+   * emptied editor writes). `WorkItemTreeRowDto` / `ArchivedWorkItemDto` /
+   * `WorkItemKeysetItemDto` inherit it.
+   */
+  hasDescription: boolean;
 }
 
 /**

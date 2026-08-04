@@ -89,6 +89,7 @@ function node(over: Partial<WorkItemTreeRowDto> & { id: string; key: number }): 
     estimateMinutes: null,
     storyPoints: null,
     updatedAt: '2026-06-01T00:00:00.000Z',
+    hasDescription: false,
     hasChildren: false,
     ...over,
   };
