@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
@@ -27,11 +28,15 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     ariaLabel,
     diffKey,
     targetIds,
+    loadingFallback,
+    emptyRoot,
   }: {
     projectKey: string;
     ariaLabel?: string;
     diffKey: string | number;
     targetIds?: readonly string[];
+    loadingFallback?: ReactNode;
+    emptyRoot?: ReactNode;
   }) => (
     <div
       data-testid="canvas-stub"
@@ -39,7 +44,13 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       data-diff-key={String(diffKey)}
       data-targets={(targetIds ?? []).join(',')}
       aria-label={ariaLabel}
-    />
+    >
+      {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
+          canvas picks between them off the level it reads itself; the stub
+          renders both so the host's side of that contract is assertable. */}
+      <div data-testid="canvas-loading-slot">{loadingFallback}</div>
+      <div data-testid="canvas-empty-slot">{emptyRoot}</div>
+    </div>
   ),
 }));
 
@@ -102,16 +113,15 @@ afterEach(() => {
   conversation.send.mockReset();
 });
 
-/** Render the host exactly as the page does — parse the query, derive the href. */
+/** Render the host exactly as the page does — parse the query, derive the href.
+ *  Note what is NOT passed: the host takes no roadmap data at all (MOTIR-2069). */
 function renderHost(
   searchParams: Record<string, string | string[] | undefined>,
   {
-    hasItems = true,
     state = IDLE,
     anchorId = null,
     initialTarget = null,
   }: {
-    hasItems?: boolean;
     state?: PlanChangeConversationState;
     anchorId?: string | null;
     initialTarget?: PlanningTarget | null;
@@ -123,7 +133,6 @@ function renderHost(
     <PlanningWorkspaceHost
       projectKey="ACME"
       projectName="Acme"
-      hasItems={hasItems}
       launch={launch}
       anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
@@ -186,11 +195,61 @@ describe('PlanningWorkspaceHost — the launcher context reaches the surface', (
     );
   });
 
-  it('shows an empty canvas state when the project has nothing to draw', () => {
-    renderHost({ mode: 'replan', from: 'project' }, { hasItems: false });
+  it('gives the canvas the workspace’s own empty-canvas statement to show', () => {
+    // The honest empty canvas for an established-but-emptied project survived
+    // the move (MOTIR-2069): the host no longer DECIDES it — the canvas does,
+    // off the level it reads itself — but the copy is still the workspace's,
+    // not the raw canvas's bare "nothing here" panel.
+    renderHost({ mode: 'replan', from: 'project' });
 
-    expect(screen.queryByTestId('canvas-stub')).toBeNull();
-    expect(screen.getByText('Nothing on the canvas yet')).toBeTruthy();
+    const empty = screen.getByTestId('canvas-empty-slot');
+    expect(empty.textContent).toContain('Nothing on the canvas yet');
+    expect(empty.textContent).toContain('This project has no work items to draw');
+  });
+});
+
+describe('PlanningWorkspaceHost — the frame opens BEFORE any canvas data (MOTIR-2069)', () => {
+  // The bug: `/planning` painted nothing at all until the root roadmap read had
+  // resolved. The page awaited that read to compute a `hasItems` boolean before
+  // returning a single element, on a segment with no instant-loading UI — so the
+  // user sat on the PREVIOUS surface and the whole workspace then appeared at
+  // once, already populated. The read was also a duplicate of the one the canvas
+  // performs itself. These lock in that the host waits on nothing.
+
+  it('takes NO roadmap data — the frame cannot be held hostage by a read', () => {
+    // Rendered with no data prop of any kind, the entire frame is there: exit
+    // chrome, project name, mode, and a live conversation. This is the assertion
+    // the old shape could not make — the host could not render at all without
+    // the page having already awaited the roots.
+    renderHost({ mode: 'replan', from: 'project' });
+
+    expect(screen.getByRole('link', { name: /Back to roadmap/ })).toBeTruthy();
+    expect(screen.getByText('Acme')).toBeTruthy();
+    expect(screen.getByTestId('planning-mode-chip').textContent).toBe('plan change');
+    // The conversation is live immediately — it depends on no roadmap data, so a
+    // user can start typing before the canvas has drawn a single node.
+    expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe(
+      'Reply, or refine further…',
+    );
+  });
+
+  it('hands the canvas a SKELETON for its pending level, in the same box the level fills', () => {
+    const { container } = renderHost({ mode: 'replan', from: 'project' });
+
+    // The canvas is the only child of the flex-sized slot whether it is loading,
+    // empty or drawn — so nothing around it moves when the level arrives (the
+    // no-layout-shift requirement).
+    const slot = container.querySelector('.min-h-0.flex-1.overflow-hidden')!;
+    expect(slot).toBeTruthy();
+    expect(slot.childElementCount).toBe(1);
+    expect(slot.firstElementChild!.getAttribute('data-testid')).toBe('canvas-stub');
+
+    // …and what it shows while the level is in flight is a skeleton, not a
+    // blank pane and not a bare spinner.
+    const loading = screen.getByTestId('canvas-loading-slot');
+    expect(loading.firstElementChild).toBeTruthy();
+    expect(loading.firstElementChild!.getAttribute('aria-hidden')).toBe('true');
+    expect(loading.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
   });
 });
 
@@ -286,7 +345,6 @@ describe('PlanningWorkspaceHost — the TARGET set is shared by both panes (MOTI
         initialTarget: TARGET,
       },
     );
-
     fireEvent.click(screen.getByRole('button', { name: 'Remove MOTIR-812' }));
 
     expect(screen.queryByTestId('planning-target-chip')).toBeNull();

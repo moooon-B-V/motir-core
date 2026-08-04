@@ -30,6 +30,16 @@ import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHo
 // which mounts the shipped `PlanningWorkspace` + `WorkItemRoadmap`. No client
 // component touches the service layer.
 //
+// ⚠️ THE GATES RUN AHEAD OF THE PAINT; CANVAS DATA DOES NOT (Bug MOTIR-2069).
+// Everything above `resolvePlanningHostGate` — session, capabilities, the
+// onboarding marker — is awaited BEFORE anything renders, because a `no-access`
+// actor must never see a workspace frame for a project they cannot browse and a
+// never-onboarded project must still redirect. Canvas data is the opposite: the
+// page reads NONE of it (see below), so the workspace opens immediately and the
+// canvas fills itself in behind a skeleton, with `app/(planning)/loading.tsx`
+// covering the navigation ahead of that. Do not reintroduce a roadmap read here
+// — that await is precisely the defect this page was fixed for.
+//
 // ⚠️ The onboarding gates are NOT weakened. A project whose `onboardingRanAt` is
 // null is FORWARDED to `/onboarding`, which keeps owning the first-run fork, the
 // MOTIR-1259 existing-item router and the MOTIR-1725 migrate hand-off; the
@@ -90,10 +100,21 @@ export default async function PlanningWorkspacePage({
   // start-fresh entrance and the migrate wizard). The host never makes that call.
   if (gate === 'onboarding') redirect('/onboarding');
 
-  // The cheap ROOT-level read (never the forest) — enough to know whether the
-  // canvas has anything to draw, so an established-but-emptied project gets an
-  // honest empty canvas instead of the canvas's bare "nothing here" panel.
-  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
+  // ── THE ROOT-LEVEL READ IS GONE (Bug MOTIR-2069). It used to sit here,
+  // awaited, purely to compute a `hasItems` boolean — and awaiting it is what
+  // held the whole workspace shut: on a segment with no instant-loading UI,
+  // Next.js parks the navigation on the PREVIOUS surface until the slowest
+  // await settles, so the workspace loaded first and opened second.
+  //
+  // It was also REDUNDANT. `PlanChangeCanvas` reads that very same root level
+  // itself moments later (`fetchRoadmapLevel(projectKey, null, …)`), so the page
+  // was paying a second read of the same rows to pre-answer a question the
+  // canvas answers anyway. The empty-canvas decision is not lost — it MOVED to
+  // the canvas, which now renders the workspace's own `emptyRoot` when its root
+  // level comes back empty, and the workspace's skeleton while it is in flight.
+  //
+  // The anchor lookup below is therefore the page's ONLY data read: nothing is
+  // serial behind anything, and nothing sits between the click and the paint.
 
   // The entrance's work item, resolved ONCE, server-side (MOTIR-910 + MOTIR-1491).
   // It answers two needs with one read: the client host needs the item's database
@@ -104,6 +125,11 @@ export default async function PlanningWorkspacePage({
   // the same view-gated resolve the detail page uses, so an item in another tenant
   // or one this actor cannot browse yields no anchor at all — the workspace then
   // opens on the project conversation instead of erroring.
+  //
+  // It IS awaited — it seeds the host's initial target set, which both panes
+  // read from their first render — but it is a single indexed lookup, and it no
+  // longer queues behind a root read (MOTIR-2069). An item-anchored launch used
+  // to pay both round-trips end to end.
   let anchorId: string | null = null;
   let initialTarget: PlanningTarget | null = null;
   if (launch.itemKey) {
@@ -130,7 +156,6 @@ export default async function PlanningWorkspacePage({
     <PlanningWorkspaceHost
       projectKey={ctx.project.identifier}
       projectName={ctx.project.name}
-      hasItems={roots.nodes.length > 0}
       launch={launch}
       anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
