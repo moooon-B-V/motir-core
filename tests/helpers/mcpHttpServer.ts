@@ -42,9 +42,75 @@ const MCP_PATHNAME = '/api/mcp';
 
 /** One route module, as the App Router exports it. */
 interface RouteModule {
-  GET?: (req: Request) => Promise<Response>;
-  POST?: (req: Request) => Promise<Response>;
-  DELETE?: (req: Request) => Promise<Response>;
+  GET?: RouteHandler;
+  POST?: RouteHandler;
+  PATCH?: RouteHandler;
+  DELETE?: RouteHandler;
+}
+
+/**
+ * A handler as Next.js calls it: the request, plus the resolved dynamic params.
+ * The second argument became load-bearing with Story 11.2, whose routes are all
+ * parameterised (`/work-items/[key]`).
+ */
+// Deliberately loose in its ARGS: a static route is typed
+// `NextRouteArgs<Record<string, never>>` and a parameterised one
+// `NextRouteArgs<{ key: string }>`, and the harness must accept both. It is the
+// dispatcher's job to hand each the params it declares.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteHandler = (req: Request, args?: any) => Promise<Response>;
+
+/** The HTTP verbs this harness dispatches. */
+const SERVED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE'] as const;
+type ServedMethod = (typeof SERVED_METHODS)[number];
+
+/**
+ * Match a request pathname against the registered route pathnames, resolving
+ * Next.js DYNAMIC SEGMENTS (`/api/v1/work-items/[key]`).
+ *
+ * ⚠️ Added by Story 11.2 · Subtask 11.2.12 (MOTIR-2054). Story 11.1's endpoints
+ * were all static, so an exact `Map.get` sufficed; every endpoint in 11.2 is
+ * parameterised, and without this the conformance suite would 404 on the whole
+ * resource surface — i.e. it would silently test nothing.
+ *
+ * A LITERAL segment beats a dynamic one at the same position, which is what
+ * keeps `/work-items/[key]/archive` from swallowing a key called "archive" and
+ * matches Next.js's own precedence.
+ */
+function matchRoute(
+  routes: Map<string, RouteModule>,
+  pathname: string,
+): { mod: RouteModule; params: Record<string, string> } | undefined {
+  const exact = routes.get(pathname);
+  if (exact) return { mod: exact, params: {} };
+
+  const wanted = pathname.split('/').filter(Boolean);
+  let best: { mod: RouteModule; params: Record<string, string>; literals: number } | undefined;
+
+  for (const [registered, mod] of routes) {
+    const parts = registered.split('/').filter(Boolean);
+    if (parts.length !== wanted.length) continue;
+
+    const params: Record<string, string> = {};
+    let literals = 0;
+    let ok = true;
+    for (const [i, part] of parts.entries()) {
+      const segment = wanted[i] as string;
+      const dynamic = /^\[(\w+)\]$/.exec(part);
+      if (dynamic) {
+        params[dynamic[1] as string] = decodeURIComponent(segment);
+      } else if (part === segment) {
+        literals += 1;
+      } else {
+        ok = false;
+        break;
+      }
+    }
+    if (ok && (best === undefined || literals > best.literals)) {
+      best = { mod, params, literals };
+    }
+  }
+  return best ? { mod: best.mod, params: best.params } : undefined;
 }
 
 export interface McpTestServerOptions {
@@ -167,8 +233,8 @@ export async function startMcpHttpServer(
         pathname: url.pathname,
         authorization: req.headers.authorization ?? null,
       });
-      const mod = routes.get(url.pathname);
-      if (!mod) {
+      const matched = matchRoute(routes, url.pathname);
+      if (!matched) {
         res.writeHead(404, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ code: 'NOT_FOUND' }));
         return;
@@ -182,14 +248,20 @@ export async function startMcpHttpServer(
           // not include Node's Buffer type.
           ...(body && body.length > 0 ? { body: new Uint8Array(body) } : {}),
         });
-        const method = req.method === 'GET' ? 'GET' : req.method === 'DELETE' ? 'DELETE' : 'POST';
-        const handler = method === 'GET' ? mod.GET : method === 'DELETE' ? mod.DELETE : mod.POST;
+        const verb = (req.method ?? 'GET').toUpperCase();
+        const method: ServedMethod = (SERVED_METHODS as readonly string[]).includes(verb)
+          ? (verb as ServedMethod)
+          : 'POST';
+        const handler = matched.mod[method];
         if (!handler) {
           res.writeHead(405, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ code: 'METHOD_NOT_ALLOWED' }));
           return;
         }
-        await writeResponse(await handler(request as never), res);
+        await writeResponse(
+          await handler(request as never, { params: Promise.resolve(matched.params) }),
+          res,
+        );
       } catch (err) {
         // A handler crash must surface as a 500 the CLI reports, never as an
         // unhandled rejection that takes the whole worker down mid-suite.
