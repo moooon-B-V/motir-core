@@ -14,7 +14,7 @@ import { truncateAuthTables } from '../helpers/db';
 // status sync (the one enumerated 7.7.4 case no per-subtask test covers): a
 // project whose workflow has NO status in the lifecycle's target CATEGORY must
 // resolve to a logged `no_matching_status` no-op — never a crash, never a raw
-// status write (githubWebhookService.resolveTargetStatusKey → null).
+// status write (workflowsService.resolveStatusKey → null).
 //
 // The admin surface can't produce this workflow: DEFAULT_STATUS_KEYS are
 // protected (2.2.10 — deleteStatus throws DefaultStatusProtectedError), so a

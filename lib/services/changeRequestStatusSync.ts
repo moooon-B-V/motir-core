@@ -214,10 +214,10 @@ export async function syncChangeRequestStatus(
 
   // Phase 2 — the status transition through the SHIPPED authority. Resolve the
   // concrete target status key by category against the project's live workflow.
-  const targetKey = await resolveTargetStatusKey(
+  const targetKey = await workflowsService.resolveStatusKey(
     resolved.projectId,
     resolved.workspaceId,
-    lifecycle,
+    LIFECYCLE_TARGET[lifecycle],
   );
   if (!targetKey)
     // A custom workflow with no status in the target category — a logged no-op,
@@ -300,23 +300,6 @@ async function resolveWorkItem(
       return { id: workItem.id, projectId: workItem.projectId, status: workItem.status };
   }
   return null;
-}
-
-/** Resolve the canonical lifecycle to a concrete status key in the project's live
- *  workflow — the preferred key if present, else the first status of the target
- *  CATEGORY (never a hard-coded id), else null (a custom workflow with no match →
- *  the caller logs a no-op). */
-async function resolveTargetStatusKey(
-  projectId: string,
-  workspaceId: string,
-  lifecycle: ChangeRequestLifecycle,
-): Promise<string | null> {
-  const target = LIFECYCLE_TARGET[lifecycle];
-  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
-  const byKey = statuses.find((s) => s.key === target.key);
-  if (byKey) return byKey.key;
-  const byCategory = statuses.find((s) => s.category === target.category);
-  return byCategory?.key ?? null;
 }
 
 /** The status write — through the shipped authority, never a raw update. */
