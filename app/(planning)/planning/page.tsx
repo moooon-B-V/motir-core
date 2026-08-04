@@ -171,6 +171,28 @@ export default async function PlanningWorkspacePage({
 
   return (
     <PlanningWorkspaceHost
+      // A DIFFERENT ANCHOR IS A DIFFERENT WORKSPACE — so remount on it.
+      //
+      // The host seeds three things from its props ONCE, in `useState`
+      // initializers: the canvas's arrival level (MOTIR-2070), the pre-filled
+      // `@`-mention target set (MOTIR-1491), and the conversation the anchor
+      // scopes. That is right for every entrance that MOUNTS the host — the
+      // item detail door, the `?peek=` quick view on `/items`, the nav, a
+      // pasted URL — because each of those is a navigation INTO the route.
+      //
+      // But the workspace contains a door back into itself: the canvas's own
+      // quick-view peek carries the same per-item Plan / Re-plan entrance
+      // (MOTIR-910), so `/planning?item=A` → `/planning?item=B` is a SAME-ROUTE
+      // navigation. React reconciles this element in place, the initializers
+      // never re-run, and the result is a workspace whose chrome says one item
+      // (back bar, "opened in the context of …") while its canvas sits on the
+      // level it happened to be on and its target set is empty. The keyed
+      // remount re-seeds all three from the anchor the user actually asked for.
+      //
+      // Keyed on the anchor ALONE, deliberately: the seeds derive from nothing
+      // else, so a `router.refresh()` after an approve — same anchor — must NOT
+      // remount and throw away the conversation and the canvas's drill state.
+      key={launch.itemKey ?? 'project'}
       projectKey={ctx.project.identifier}
       projectName={ctx.project.name}
       launch={launch}
