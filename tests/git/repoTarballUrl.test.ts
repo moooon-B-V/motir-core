@@ -2,7 +2,9 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getGitProvider,
+  registeredGitProviderIds,
   requireRepoTarballUrlResolver,
+  providerSupportsRepoTarballUrl,
   RepoTarballUrlMissingLocationError,
   RepoTarballUrlNotRedirectedError,
   RepoTarballUrlTimeoutError,
@@ -253,16 +255,52 @@ describe('requireRepoTarballUrlResolver (the LOUD refusal)', () => {
   });
 });
 
-describe('fetchRepoTarball is UNTOUCHED by this card', () => {
-  it('still exists as a required method on both shipped providers', () => {
-    // MOTIR-1989 ADDED the URL-resolving sibling; it deprecated nothing, and a
-    // future edit that removes the byte-returning method has to come past this
-    // assertion. Its last in-app caller went with MOTIR-2057 (both code-graph
-    // jobs dispatch containers now), so what the method still backs is the
-    // PROVIDER CONTRACT — including `gitlabProvider`, which implements it and
-    // NOT `resolveRepoTarballUrl`, and so cannot be indexed on the fleet at all.
-    // Removing it is a decision about that gap, not a cleanup to do in passing.
-    expect(typeof github.fetchRepoTarball).toBe('function');
-    expect(typeof getGitProvider('gitlab').fetchRepoTarball).toBe('function');
+describe('fetchRepoTarball is GONE — the decision this tripwire was waiting for (MOTIR-2124)', () => {
+  // The assertion this replaces said the byte-returning method "still exists as a
+  // required method on both shipped providers", and closed with: "Removing it is a
+  // decision about that gap, not a cleanup to do in passing." MOTIR-2124 IS that
+  // decision. The gap it named — `gitlabProvider` implementing the byte method and
+  // NOT `resolveRepoTarballUrl`, so a GitLab repo could never be indexed on the
+  // fleet — turned out to be unfixable on GitLab's side: its archive endpoint
+  // serves 200 + bytes and never redirects to a self-authorizing URL. So the
+  // capability is refused honestly instead, and the method that disguised the gap
+  // is removed.
+
+  it('is absent from BOTH shipped providers, so nothing can fall back to buffering a repo', () => {
+    // ⚠️ THE POINT IS STRUCTURAL, NOT COSMETIC. While the method existed, the
+    // lenient fix for an unresolvable URL was one property access away, and that
+    // fallback is the OOM (§2: `motir-core`, 5/5 attempts) the container fleet
+    // exists to remove. Absent, it is not reachable by any caller, in any file.
+    expect((github as unknown as Record<string, unknown>)['fetchRepoTarball']).toBeUndefined();
+    expect(
+      (getGitProvider('gitlab') as unknown as Record<string, unknown>)['fetchRepoTarball'],
+    ).toBeUndefined();
+  });
+
+  it('leaves GitHub able to index and GitLab not — the capability, asked without dispatching', () => {
+    // `providerSupportsRepoTarballUrl` is the gate `resolveIndexTarget` reads
+    // before it dispatches a container. It MUST agree with the throwing form, or a
+    // repo gets waved through to a boot that cannot work (the MOTIR-2124 defect) —
+    // or, worse, refused when it would have succeeded.
+    expect(providerSupportsRepoTarballUrl(github)).toBe(true);
+    expect(providerSupportsRepoTarballUrl(getGitProvider('gitlab'))).toBe(false);
+  });
+
+  it('AGREES with requireRepoTarballUrlResolver for every registered provider', () => {
+    // The invariant, over the real registry rather than a hand-listed pair: the
+    // predicate returns true exactly when the require-helper does not throw. A
+    // future provider is covered the day it registers — including one that ships
+    // WITHOUT the capability, which is the case that regressed here.
+    for (const id of registeredGitProviderIds()) {
+      const provider = getGitProvider(id);
+      let threw = false;
+      try {
+        requireRepoTarballUrlResolver(provider);
+      } catch (err) {
+        threw = true;
+        expect(err).toBeInstanceOf(RepoTarballUrlUnsupportedError);
+      }
+      expect(providerSupportsRepoTarballUrl(provider)).toBe(!threw);
+    }
   });
 });

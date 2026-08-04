@@ -1,4 +1,5 @@
 import { withSystemContext } from '@/lib/workspaces/context';
+import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
 import type { GitProviderId, NormalizedRepo } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -69,9 +70,31 @@ export interface IndexRepoInput {
   defaultBranch: string;
 }
 
+/**
+ * Why a run indexed nothing. Three of the four are "the tenant went away or has
+ * nowhere to put a graph"; `provider_cannot_index` is different in KIND and is
+ * called out here so a reader never mistakes it for one of those (MOTIR-2124).
+ *
+ * ⚠️ `provider_cannot_index` MEANS "THIS REPO WILL NEVER BE INDEXED", NOT
+ * "NOT THIS TIME". The other three are transient by nature — re-connect the
+ * installation, re-create the workspace, add a project, and the next run indexes.
+ * This one is a property of the HOST (it cannot hand a token-less container a
+ * self-authorizing archive URL — see `providerSupportsRepoTarballUrl`), so no
+ * retry, re-push or re-connect will ever change it. It is recorded as a clean
+ * terminal verdict rather than thrown for exactly that reason: a throw would buy
+ * five identical retries and a dead-letter row per push, which is the defect this
+ * value exists to remove — but a verdict is only honest if it is not silent, so
+ * the refusal ALSO logs, and the connect surface tells the user up front.
+ */
+export type IndexSkipReason =
+  | 'installation_missing'
+  | 'workspace_missing'
+  | 'no_projects'
+  | 'provider_cannot_index';
+
 /** A small JSON-serializable summary persisted on the job_run ledger row. */
 export type IndexRepoResult =
-  | { indexed: false; reason: 'installation_missing' | 'workspace_missing' | 'no_projects' }
+  | { indexed: false; reason: IndexSkipReason }
   | { indexed: true; repoRef: string; projectsIndexed: number };
 
 /**
@@ -81,7 +104,7 @@ export type IndexRepoResult =
  * and is replayed from Inngest's memo on every later invocation (MOTIR-1974).
  */
 export type IndexTarget =
-  | { indexed: false; reason: 'installation_missing' | 'workspace_missing' | 'no_projects' }
+  | { indexed: false; reason: IndexSkipReason }
   | {
       indexed: true;
       repoRef: string;
@@ -155,6 +178,66 @@ export const codeGraphIndexService = {
     if (resolved.kind === 'workspace_missing')
       return { indexed: false, reason: 'workspace_missing' };
     if (resolved.projectIds.length === 0) return { indexed: false, reason: 'no_projects' };
+
+    // ⚠️ THE CAPABILITY GATE, AND IT BELONGS HERE — NOT AT THE ENQUEUE (MOTIR-2124).
+    //
+    // The fleet hands a container a PRE-SIGNED URL and no host credential, so a
+    // provider that cannot resolve one cannot be indexed at all. Until this gate
+    // existed, that fact was discovered at `bootIndexContainer`, which THROWS
+    // (`requireRepoTarballUrlResolver`) — correct in isolation, catastrophic as a
+    // steady state: an unindexable host burned all five Inngest attempts and
+    // dead-lettered on every first index and every push, and the only record was a
+    // `job_run_dlq` row nobody reads. 35 of them accumulated over 48 h once
+    // (MOTIR-2105) before anyone noticed.
+    //
+    // Refusing HERE — one checkpointed, DB-only step, before the fleet-config gate
+    // and before a single container is billed — turns that into ONE clean terminal
+    // verdict per trigger, carrying the reason, on the ledger row the run already
+    // writes.
+    //
+    // WHY NOT "at the enqueue", which is where the bug report asked for it: the
+    // enqueue helpers are provider-blind by construction (`CodeGraphIndexData`
+    // carries `installationId`, not a provider), so gating there means a GitLab
+    // check in `gitlabConnectionService` and another in `gitlabWebhookService` —
+    // two per-provider copies of a rule, in the two files a third provider would
+    // have to remember to edit. That is the same class of miss that produced this
+    // bug: MOTIR-1981 swept the JOBS and not the PROVIDER INTERFACE they depend on
+    // (`notes.html` #215). This is the ONE place every path to a container passes
+    // through, and it reads the capability itself rather than a provider name, so
+    // a future provider is covered the day it registers — without editing this
+    // line.
+    //
+    // It sits AFTER the three tenant verdicts deliberately: "the workspace is
+    // gone" is a truer description of that run than "the host cannot index", and
+    // the vanished-tenant contract predates this.
+    //
+    // `getGitProvider` THROWS on an id no provider registered, so it is resolved
+    // inside the same guard rather than beside it: this step's shipped contract is
+    // that it never throws (the vanished-tenant verdicts have to reach the ledger),
+    // and an unregistered provider is in any case the strongest possible instance
+    // of "this cannot be indexed" — it collapses into the same verdict rather than
+    // into a crash.
+    let canIndex: boolean;
+    try {
+      canIndex = providerSupportsRepoTarballUrl(getGitProvider(resolved.providerId));
+    } catch {
+      canIndex = false;
+    }
+    if (!canIndex) {
+      // The verdict alone would be honest but quiet — a ledger value is legible to
+      // whoever already went looking. Log it too, so the fact reaches an operator
+      // reading logs, and the user-facing half is the connect surface's own copy
+      // (`gitlab.projects.foot`). Arguments, never interpolated: `repoOwner` is
+      // webhook-derived on the push path (`js/tainted-format-string`, CodeQL high).
+      console.warn(
+        '[codeGraphIndexService] skipping the code-graph index: this Git provider cannot ' +
+          'resolve a pre-signed tarball URL, so a fleet container could never fetch the repo. ' +
+          'No retry will change this. provider / repo:',
+        resolved.providerId,
+        repoRefOf({ owner: input.repoOwner, name: input.repoName }),
+      );
+      return { indexed: false, reason: 'provider_cannot_index' };
+    }
 
     return {
       indexed: true,

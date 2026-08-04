@@ -26,16 +26,14 @@ import type {
 // backs.
 
 /**
- * Deadline for a repo-tarball fetch or URL resolve, in ms (MOTIR-1974). Since
- * both code-graph jobs dispatch containers (MOTIR-2027 / MOTIR-2057) what it
- * bounds in-function is the `redirect: 'manual'` RESOLVE, not a byte download;
- * `gitlabProvider.fetchRepoTarball` is its remaining buffering caller. It must
- * stay under the serve route's `maxDuration`, so a stalled host surfaces as a
- * typed error inside the invocation budget instead of as a
- * `FUNCTION_INVOCATION_TIMEOUT` with no step output. Bounds
- * time-to-response-headers (which is where a dead host hangs);
- * the body download that follows is the host streaming bytes it already
- * committed to.
+ * Deadline for a repo-tarball URL resolve, in ms (MOTIR-1974). Since both
+ * code-graph jobs dispatch containers (MOTIR-2027 / MOTIR-2057) what it bounds
+ * is the `redirect: 'manual'` RESOLVE, and since MOTIR-2124 that is the ONLY
+ * thing it bounds — the byte-returning sibling it also covered is gone (see
+ * {@link resolveRepoTarballUrl}). It must stay under the serve route's
+ * `maxDuration`, so a stalled host surfaces as a typed error inside the
+ * invocation budget instead of as a `FUNCTION_INVOCATION_TIMEOUT` with no step
+ * output. Bounds time-to-response-headers, which is where a dead host hangs.
  */
 export const REPO_TARBALL_TIMEOUT_MS = 60_000;
 
@@ -57,25 +55,17 @@ export interface GitProvider {
    */
   fetchInstallationRepos(installationId: string): Promise<NormalizedRepo[]>;
 
-  /**
-   * Fetch a repository's source as the host's raw gzipped-tarball bytes, at the
-   * given `ref` (a branch / tag / commit — the repo's default branch for the
-   * MOTIR-1500 code-graph index). Uses a freshly-minted (or cached) installation
-   * token; the credential + fetch stay in motir-core (the open-core invariant —
-   * the raw BYTES cross the motir-ai boundary, never a host token). GitHub returns
-   * exactly what its `/tarball` endpoint yields.
-   *
-   * Implementations MUST bound the request with {@link REPO_TARBALL_TIMEOUT_MS}:
-   * this call runs inside a background-job invocation whose platform budget is
-   * finite, and a host that never answers must fail as a typed, retryable error
-   * rather than by having the invocation killed (MOTIR-1974).
-   */
-  fetchRepoTarball(
-    installationId: string,
-    owner: string,
-    name: string,
-    ref: string,
-  ): Promise<ArrayBuffer>;
+  // ⚠️ `fetchRepoTarball` IS GONE (MOTIR-2124), AND MUST NOT COME BACK. It
+  // returned a repo's gzipped-tarball BYTES for the MOTIR-1500 in-process index.
+  // MOTIR-2027 / MOTIR-2057 moved BOTH code-graph jobs onto containers that fetch
+  // for themselves, which left it with zero production callers — and a required
+  // interface method nothing calls is not neutral: it is what made
+  // `gitlabProvider` LOOK like a complete provider while the capability the
+  // shipped path actually requires ({@link resolveRepoTarballUrl}) was missing,
+  // so every GitLab index dead-lettered five times and nothing said why. Removing
+  // it makes a provider declare exactly what it can do. Re-adding it would
+  // re-create both the disguise and the buffering OOM
+  // (`docs/decisions/code-graph-index-fleet.md` §2) in one edit.
 
   /**
    * Resolve the host's PRE-SIGNED archive URL for a repo at `ref` — **without
@@ -86,10 +76,24 @@ export interface GitProvider {
    * back is DECLARED, never mandated. GitHub 302-redirects
    * `/repos/{owner}/{name}/tarball/{ref}` to a `codeload.github.com` URL whose
    * SIGNED QUERY STRING is the whole authorization, so the resolved URL is
-   * self-authorizing and single-repo. GitLab's archive endpoint streams the bytes
-   * against a `PRIVATE-TOKEN` header instead — there is no self-authorizing URL to
-   * hand out, so it does not implement this, and a stub would model a capability
-   * its host does not have.
+   * self-authorizing and single-repo.
+   *
+   * ⚠️ GITLAB CANNOT BACK THIS, AND THAT WAS MEASURED, NOT ASSUMED (MOTIR-2124).
+   * `GET /api/v4/projects/:id/repository/archive` answers **200 with the bytes**
+   * (`content-type: application/octet-stream`, `content-disposition: attachment`,
+   * NO `location` header) where GitHub answers **302 →
+   * `codeload.github.com/…`** — both observed against the live hosts on
+   * 2026-08-04. GitLab does accept a token in the QUERY STRING
+   * (`?private_token=` / `?access_token=`), so a URL-shaped credential is
+   * technically constructible — and it is exactly what this contract forbids
+   * below: the token Motir holds is the connection's OAuth token with the **full
+   * `api` scope** (`lib/gitlab/gitlabOAuth.ts`, ~2 h), which reaches EVERY project
+   * that user can see. Handing that to a container would be strictly MORE
+   * privilege than the installation token §10 already refuses to hand over, not
+   * less. So GitLab does not implement this, and a stub would model a capability
+   * its host does not have. What DOES happen for a GitLab repo is the honest
+   * refusal in `codeGraphIndexService.resolveIndexTarget`, which never dispatches
+   * a container it knows cannot boot.
    *
    * ⚠️ WHAT THIS IS FOR, so the contract is not weakened by accident. The resolved
    * URL is handed to a fleet CONTAINER that holds no GitHub credential at all
@@ -108,7 +112,9 @@ export interface GitProvider {
    *
    * Resolve it through {@link requireRepoTarballUrlResolver}, never by reading this
    * property directly — that helper is what turns "this host cannot" into a loud
-   * refusal instead of a silent fallback to {@link GitProvider.fetchRepoTarball}.
+   * refusal. To ASK whether a host can, without committing to dispatch, use
+   * {@link providerSupportsRepoTarballUrl}: it is the same predicate, so a caller
+   * that gates on it can never disagree with the boot that throws.
    */
   resolveRepoTarballUrl?(
     installationId: string,
@@ -253,6 +259,30 @@ export type RepoTarballUrlResolver = (
  */
 export function requireRepoTarballUrlResolver(provider: GitProvider): RepoTarballUrlResolver {
   const resolve = provider.resolveRepoTarballUrl;
-  if (!resolve) throw new RepoTarballUrlUnsupportedError(provider.id);
+  if (!providerSupportsRepoTarballUrl(provider) || !resolve)
+    throw new RepoTarballUrlUnsupportedError(provider.id);
   return resolve.bind(provider);
+}
+
+/**
+ * Can this host hand a token-less container a self-authorizing archive URL — i.e.
+ * can a repo on it be indexed on the fleet at all? (MOTIR-2124)
+ *
+ * ⚠️ THIS IS THE ASKING FORM OF {@link requireRepoTarballUrlResolver}, AND THEY
+ * READ THE SAME PROPERTY ON PURPOSE. The refusal that matters is the one at
+ * `bootIndexContainer`, which throws; but a throw there is a JOB FAILURE, and a
+ * job failure for a host that structurally cannot succeed is five retries, five
+ * dead-letters and no explanation — the MOTIR-2124 defect. A caller that wants to
+ * decide BEFORE dispatching needs to ask the question without committing to the
+ * answer, and the one thing that must never happen is a gate that says "yes"
+ * where the boot says "no" (or vice versa). Deriving both from this single
+ * predicate makes that disagreement unrepresentable rather than merely unlikely.
+ *
+ * It is deliberately NOT a `providerId` allow-list: an allow-list is a second
+ * copy of the capability that drifts the moment a provider gains or loses the
+ * method — which is precisely how the shipped code came to have a fleet path
+ * requiring a capability one registered provider never implemented.
+ */
+export function providerSupportsRepoTarballUrl(provider: GitProvider): boolean {
+  return typeof provider.resolveRepoTarballUrl === 'function';
 }

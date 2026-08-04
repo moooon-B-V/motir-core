@@ -1,7 +1,7 @@
 import { registerGitProvider } from '../registry';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
-import { REPO_TARBALL_TIMEOUT_MS, type GitProvider } from '../provider';
+import { type GitProvider } from '../provider';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -109,41 +109,24 @@ export const gitlabProvider: GitProvider = {
     return list.map(normalizeProject).filter((repo): repo is NormalizedRepo => repo !== null);
   },
 
-  async fetchRepoTarball(
-    installationId: string,
-    owner: string,
-    name: string,
-    ref: string,
-  ): Promise<ArrayBuffer> {
-    const { token } = await gitlabConnectionService.getAccessToken(installationId);
-    // GitLab addresses a project by its URL-encoded `<owner>/<name>` path; the
-    // archive endpoint streams a gzipped tarball at `?sha=<ref>`.
-    const projectPath = encodeURIComponent(`${owner}/${name}`);
-    let res: Response;
-    // Deadline, for the same reason GitHub's carries one (MOTIR-1974): this runs
-    // inside a job invocation with a finite platform budget.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
-    try {
-      res = await fetch(
-        `${gitlabBaseUrl()}/api/v4/projects/${projectPath}/repository/archive?sha=${encodeURIComponent(ref)}`,
-        {
-          headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
-          signal: controller.signal,
-        },
-      );
-    } catch (err) {
-      throw new Error(
-        controller.signal.aborted
-          ? `GitLab archive endpoint timed out after ${REPO_TARBALL_TIMEOUT_MS}ms`
-          : `GitLab archive endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!res.ok) throw new Error(`GitLab archive endpoint returned ${res.status}`);
-    return res.arrayBuffer();
-  },
+  // ⚠️ NO `resolveRepoTarballUrl`, AND NO BYTE-FETCHING SIBLING EITHER — THIS IS
+  // THE HONEST SHAPE, NOT AN OMISSION (MOTIR-2124). GitLab's
+  // `/projects/:id/repository/archive` answers **200 with the tarball bytes**; it
+  // does not redirect to a pre-signed URL the way GitHub's `/tarball` does
+  // (measured against both live hosts, 2026-08-04). A token in the query string
+  // would make a fetchable URL, but the only token Motir holds here is the
+  // connection's `api`-scoped OAuth token, which reaches every project that user
+  // can see — more privilege than `docs/decisions/code-graph-index-fleet.md` §4/§10
+  // permit a container to hold, not less.
+  //
+  // This provider USED to implement `fetchRepoTarball`, and that method is what
+  // made the gap invisible: it satisfied a required interface method, so GitLab
+  // looked like a complete provider while the capability the shipped fleet path
+  // actually needs was absent — and every GitLab index dead-lettered five times
+  // saying nothing. The gap is now DECLARED (this comment + the absent method) and
+  // ENFORCED (`codeGraphIndexService.resolveIndexTarget` refuses before dispatch,
+  // and the connect surface tells the user). Do not "fix" it by adding bytes back:
+  // that is the 180 s-bounded in-process shape MOTIR-2057 deleted.
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {
     // GitLab has no App-installation read; the connection's account is the
