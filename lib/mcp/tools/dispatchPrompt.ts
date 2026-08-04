@@ -63,6 +63,16 @@ function summarize(dto: DispatchPromptDto): string {
     `Dispatch prompt for ${dto.key}`,
     `Repo: ${dto.targetRepo ?? 'not pinned (Motir cannot say)'}`,
     `Git workflow: ${workflow}`,
+    // The advisory is inside the prompt already; naming it up here is what makes
+    // a caller that skims the summary see it (MOTIR-2079 — the whole incident was
+    // a signal that was emitted correctly and read by nobody).
+    ...(dto.advisories.length > 0
+      ? [
+          `Advisory (NOT a blocker — ${dto.key} still dispatches): its acceptance criteria ` +
+            `name ${dto.advisories.map((a) => `${a.referenced} (${a.referencedStatus})`).join(', ')} ` +
+            'with no blocked_by edge. Verify each is on origin/main before branching.',
+        ]
+      : []),
     '',
     dto.prompt,
   ].join('\n');

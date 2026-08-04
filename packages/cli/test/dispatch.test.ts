@@ -4,6 +4,7 @@ import {
   cwdReasonLabel,
   renderAgentFailure,
   renderAgentSuccess,
+  renderDispatchAdvisories,
   renderDispatchSummary,
   renderSessionOutcomes,
   resolveDispatchTarget,
@@ -11,7 +12,7 @@ import {
 } from '../src/dispatch.js';
 import { resolveAgent, notReadyError } from '../src/commands/dispatch.js';
 import type { LinkConfig } from '../src/config/linkConfig.js';
-import type { DispatchPrompt } from '../src/mcpClient.js';
+import type { DispatchAdvisory, DispatchPrompt } from '../src/mcpClient.js';
 
 // The PURE dispatch engine: repo routing, the bootstrap post-condition, agent
 // resolution, and the human-facing text. No MCP, no spawn, no filesystem —
@@ -178,6 +179,54 @@ describe('notReadyError', () => {
       blockedByAncestor: { identifier: 'PROD-1' },
     });
     expect(err.message).toContain('ancestor PROD-1');
+  });
+});
+
+describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)', () => {
+  const advisory = (over: Partial<DispatchAdvisory> = {}): DispatchAdvisory => ({
+    item: 'PROD-7',
+    referenced: 'PROD-5',
+    referencedStatus: 'in_review',
+    severity: 'likely-missing-edge',
+    ...over,
+  });
+
+  it('names each reference and its status, and says what to do about it', () => {
+    const text = renderDispatchAdvisories(prompt({ advisories: [advisory()] })) as string;
+    expect(text).toContain('PROD-5 (in_review)');
+    expect(text).toContain('origin/main');
+    expect(text).toContain('blocked_by');
+  });
+
+  it('is a WARNING, not a refusal — it says so, and returns a string rather than throwing', () => {
+    const text = renderDispatchAdvisories(prompt({ advisories: [advisory()] })) as string;
+    expect(text).toContain('NOT a blocker');
+    // The contrast with `notReadyError`, which is the shape this deliberately is
+    // not: that one is a thrown CliError offering `--force`.
+    expect(text).not.toContain('--force');
+  });
+
+  it('lists EVERY reference, not just the first', () => {
+    const text = renderDispatchAdvisories(
+      prompt({
+        advisories: [
+          advisory({ referenced: 'PROD-5', referencedStatus: 'in_review' }),
+          advisory({ referenced: 'PROD-9', referencedStatus: 'todo' }),
+        ],
+      }),
+    ) as string;
+    expect(text).toContain('PROD-5 (in_review)');
+    expect(text).toContain('PROD-9 (todo)');
+  });
+
+  it('renders NOTHING when there is nothing to say — no empty heading', () => {
+    expect(renderDispatchAdvisories(prompt({ advisories: [] }))).toBeNull();
+  });
+
+  it('treats an ABSENT field as nothing to say — an older server sends no key', () => {
+    // Version skew is the normal case for a separately-published CLI: absent
+    // must read as "no advisories", never as a crash.
+    expect(renderDispatchAdvisories(prompt())).toBeNull();
   });
 });
 

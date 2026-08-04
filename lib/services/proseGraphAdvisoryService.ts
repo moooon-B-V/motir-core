@@ -1,4 +1,5 @@
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -145,4 +146,52 @@ export async function buildProseVsGraphAdvisories(
     (a, b) => a.item.localeCompare(b.item) || a.referenced.localeCompare(b.referenced),
   );
   return advisories;
+}
+
+/**
+ * The DISPATCH-time advisories for ONE card (MOTIR-2079) — what the dispatch
+ * prompt renders, what `motir run` / `motir next` warn about, and what
+ * `claim_next_ready` returns.
+ *
+ * `validate_work_item` (MOTIR-1969) answers "is this SUBTREE finishable?" and
+ * scans every not-done member. Dispatch asks a narrower question — "is the card
+ * I am about to hand an agent consuming something that is not on `origin/main`
+ * yet?" — so the subject is the single dispatched card, with the same exempt
+ * rule its subtree twin uses: itself, its ANCESTORS (naming your own parent
+ * Story or Epic is not a missing dependency), and everything already in its
+ * `blocked_by` set.
+ *
+ * ⚠️ `likely-missing-edge` ONLY, and that filter lives HERE so all three
+ * dispatch consumers agree by construction. The plain `advisory` tier fires on
+ * any not-done item named ANYWHERE in a body — an out-of-scope note, a
+ * superseded-by pointer, a sibling record card — which is a useful signal when a
+ * human is reading a card and pure noise in front of an agent about to branch.
+ * `likely-missing-edge` means the reference sits in the card's own ACCEPTANCE
+ * CRITERIA, i.e. the card is closed against it. `validate_work_item` remains the
+ * surface that reports BOTH tiers; nothing is lost, only scoped.
+ *
+ * ⚠️ NEVER A GATE — see {@link WorkItemProseAdvisoryDto}. The callers add this to
+ * a field of their own; not one of them consults it when computing readiness.
+ */
+export async function buildDispatchProseAdvisories(
+  item: { id: string; identifier: string; descriptionMd: string | null },
+  ctx: ServiceContext,
+): Promise<WorkItemProseAdvisoryDto[]> {
+  // Cheap short-circuit on the common shape: a body naming nothing needs neither
+  // the ancestor walk nor the edge read. `bodyReferenceSeverities` is pure.
+  if (bodyReferenceSeverities(item.descriptionMd).size === 0) return [];
+
+  const [ancestors, blockerLinks] = await Promise.all([
+    workItemRepository.findAncestors(item.id, ctx.workspaceId),
+    workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
+  ]);
+  const exemptIds = new Set<string>([item.id]);
+  for (const a of ancestors) exemptIds.add(a.id);
+  for (const l of blockerLinks) exemptIds.add(l.toId);
+
+  const advisories = await buildProseVsGraphAdvisories(
+    [{ item: item.identifier, descriptionMd: item.descriptionMd, exemptIds }],
+    ctx,
+  );
+  return advisories.filter((a) => a.severity === 'likely-missing-edge');
 }

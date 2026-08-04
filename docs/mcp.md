@@ -261,6 +261,47 @@ item they return:
 - It is an MCP projection, not a web DTO field: `ReadyItemDto`,
   `WorkItemListItemDto` and `IssueDetailDto` are unchanged.
 
+##### The dispatch advisories
+
+**Both dispatch surfaces** — `dispatch_prompt` and `claim_next_ready` — return an
+`advisories` array beside their payload:
+
+```jsonc
+"advisories": [
+  { "item": "PROD-7", "referenced": "PROD-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" }
+]
+```
+
+Each entry names a work item the dispatched card's **acceptance criteria**
+reference while the card carries **no `blocked_by` edge to it**. An acceptance
+criterion is what the card is closed against, so naming a not-done item there is
+consuming it — and the graph, which is the only part a ready set can read, does
+not say so.
+
+- **Always present, `[]` when there are none** — so a client reads one shape.
+- **The `likely-missing-edge` tier only.** The prose-vs-graph check also emits a
+  plain `advisory` tier for a reference named anywhere ELSE in a body (an
+  incident record, a superseded-by note, an out-of-scope aside). That is useful
+  while browsing a card and noise in front of an agent about to branch, so the
+  dispatch surfaces carry the acceptance-criteria tier alone.
+  [`validate_work_item`](#validate_work_item) still reports both.
+- **⚠️ NEVER a gate.** Readiness, `openBlockers`, the claim, and the selection
+  order are **identical** whether the array is empty or not — an advisory changes
+  what a caller is TOLD, never what it may do. Three legitimate shapes trip it: a
+  boundary-contract card whose criteria name both halves of a two-PR split, a
+  criterion naming a card for contrast, and a sibling that will be done before
+  this item starts. Blocking any of them would teach authors to write vaguer
+  acceptance criteria, which is worse than the miss it would catch.
+- **What to do with one** — before branching, check that the substrate the
+  referenced item provides is already on `origin/main` (`git ls-tree` /
+  `git grep` for the file, symbol or test the criterion names). If it lives only
+  on an open pull request, the card is blocked in fact: wire the `blocked_by`
+  edge and stop, rather than rebuilding the other half or stacking onto the
+  unmerged branch.
+- `dispatch_prompt` **also renders them into the prompt's CONTEXT section**, so
+  every agent harness inherits the instruction — no harness writes its own
+  prompt. The array is the same content, handed over for the human watching.
+
 The human-readable text block carries it in the same compact form the
 `dependencies` marker uses, and renders **nothing at zero**: `PROD-7
 [task/high] Wire the dispatch — unassigned · blocks PROD-9 · 3 comments`.
@@ -342,7 +383,8 @@ id is passed.
 | ------------ | ------ | -------- | ------------ |
 | `projectKey` | string | yes      | Project key. |
 
-**Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null, reason? }`.
+**Output** — `structuredContent`:
+`{ item: ReadyItemDispatchDto | null, advisories: [...], reason? }`.
 On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
 `status` now in the `in_progress` category) — including `targetRepo` and its
 `targetRepoCloneUrl` / `targetRepoDefaultBranch` coordinates and its
@@ -352,6 +394,9 @@ semantics). When nothing could be claimed,
 `item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
 claimed the last one — or check there is unblocked work to start). Scope token:
 `work_items:write` (it flips status).
+
+**`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
+Always present, `[]` when there are none, on BOTH arms.
 
 #### `dispatch_prompt`
 
@@ -371,8 +416,12 @@ not only a ready one — so re-printing an in-progress item's prompt is safe.
 | `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
 
 **Output** — `structuredContent`:
-`{ key, prompt, targetRepo, targetRepoCloneUrl, targetRepoDefaultBranch, workflowMode, sessionBranch }`.
+`{ key, prompt, targetRepo, targetRepoCloneUrl, targetRepoDefaultBranch, workflowMode, sessionBranch, advisories }`.
 
+- **`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
+  Always present, `[]` when there are none. The same content the `prompt` already
+  renders in its CONTEXT section, handed over separately so a client can warn the
+  HUMAN before the agent starts.
 - **`prompt`** — the full text, in four sections: **CONTEXT** (project, item,
   sizing, repo, parent, satisfied dependencies, the context refs and the card
   body), **WHAT TO DO**, **ACCEPTANCE CRITERIA**, **GIT WORKFLOW**. The card's
