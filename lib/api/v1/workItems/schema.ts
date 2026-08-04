@@ -674,3 +674,65 @@ export function presentTransitionTargets(
     category: s.category as TransitionTarget['category'],
   }));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The COMMENTS sub-resource (Story 11.2 · Subtask 11.2.8 — MOTIR-2049)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠️ A comment's cuid IS its identifier on the wire, and that is a DECISION, not
+// a leak. ADR §7's key-only rule governs WORK-ITEM references: a work item has a
+// `MOTIR-<n>` key, so naming it by cuid would freeze the primary key as contract
+// when a stable public name already exists. A comment has no such key — there is
+// nothing else to call it, and a client that cannot name a comment cannot reply
+// to one. The same reasoning covers a user id and a sprint id.
+
+const commentSchema = z.object({
+  id: z.string(),
+  parentCommentId: z.string().nullable(),
+  authorId: z.string(),
+  bodyMd: z.string(),
+  createdAt: isoDateTimeSchema,
+  editedAt: isoDateTimeSchema.nullable(),
+  mentionedUserIds: z.array(z.string()),
+});
+export type V1Comment = z.infer<typeof commentSchema>;
+
+/** A root comment with its single-level thread, as the service returns it. */
+export const commentThreadSchema = commentSchema.extend({
+  replies: z.array(commentSchema),
+});
+export type V1CommentThread = z.infer<typeof commentThreadSchema>;
+
+/** What {@link presentComment} reads — the shipped `CommentDTO` fields it maps. */
+export interface CommentSource {
+  id: string;
+  parentCommentId: string | null;
+  author: { id: string };
+  bodyMd: string;
+  createdAt: string;
+  editedAt: string | null;
+  mentionedUserIds: string[];
+}
+
+/** Map one comment to the wire, field by field — never a spread. */
+export function presentComment(source: CommentSource): V1Comment {
+  return {
+    id: source.id,
+    parentCommentId: source.parentCommentId,
+    // The AUTHOR's id only: `CommentAuthorDTO` also carries the display name and
+    // avatar the web app renders, and a public API must not acquire a second,
+    // accidental user resource. 11.3 owns users if they are ever exposed.
+    authorId: source.author.id,
+    bodyMd: source.bodyMd,
+    createdAt: source.createdAt,
+    editedAt: source.editedAt,
+    mentionedUserIds: source.mentionedUserIds,
+  };
+}
+
+/** Map a root comment and its replies. */
+export function presentCommentThread(
+  source: CommentSource & { replies: CommentSource[] },
+): V1CommentThread {
+  return { ...presentComment(source), replies: source.replies.map(presentComment) };
+}

@@ -159,6 +159,17 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   WORKSPACE_MISMATCH_LINK: 404,
   WORK_ITEM_LINK_NOT_FOUND: 404,
 
+  // 11.2.8 (MOTIR-2049) — comments.
+  COMMENT_NOT_FOUND: 404,
+  EMPTY_COMMENT_BODY: 422,
+  INVALID_PARENT_COMMENT: 422,
+  REPLY_DEPTH_EXCEEDED: 422,
+  // ⚠️ 403, NOT 404 — the one place in this story the existence-oracle rule does
+  // NOT apply. The item's own visibility is settled BEFORE the comment gate
+  // runs, so the caller can already see the item; this is a genuine "you may not
+  // do this KIND of thing" refusal, which is exactly what ADR §4 says 403 means.
+  COMMENT_FORBIDDEN: 403,
+
   // 11.2.4 (MOTIR-2042) — the FilterAST the collection endpoint accepts. Every
   // one is a malformed REQUEST the caller can fix, so every one is a 422 with a
   // code specific enough to act on: which field, which operator, which value.
