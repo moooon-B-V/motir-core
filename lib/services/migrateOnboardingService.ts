@@ -11,6 +11,7 @@ import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardin
 import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ExistingWorkItemRef } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -328,7 +329,13 @@ const GENERATE: StepWiring = {
 };
 
 /** review → done. No kick — the user approves the plan via the standard plan
- *  review/approve surface; this step gates on that approval, then completes. */
+ *  review/approve surface; this step gates on that approval, then completes.
+ *
+ *  NOT the only path to `completed` any more (MOTIR-2092). This hop is the one
+ *  the WIZARD walks, and it only happens if the tab is still open when the plan
+ *  is approved — `plansService.approvePlan` stamps `project.onboardingRanAt` in
+ *  the approve's own transaction, and the client is then expected to come back
+ *  for this. `runTerminalReconciliation` completes the runs where it never did. */
 const REVIEW: StepWiring = {
   from: 'review',
   to: 'done',
@@ -340,13 +347,14 @@ const REVIEW: StepWiring = {
 };
 
 /**
- * THE COMMIT SHAPE — the one place a step advance is written, shared by BOTH
- * callers that can perform one: the user-driven `advance()` below and the
- * system-driven index sweep (MOTIR-2082). Runs inside a transaction the caller
- * opens, because the two arrive with different tenancy: `advance()` has an
- * acting user (`withWorkspaceContext`), the sweep has none
+ * THE COMMIT SHAPE — the one place a step advance is written, shared by ALL
+ * THREE callers that can perform one: the user-driven `advance()` below, the
+ * system-driven index sweep (MOTIR-2082) and the terminal reconciliation
+ * (MOTIR-2092). Runs inside a transaction the caller opens, because they arrive
+ * with different tenancy: `advance()` has an acting user
+ * (`withWorkspaceContext`), the two sweeps have none
  * (`withWorkspaceServiceContext`). Everything AFTER the context — lock, re-read,
- * re-assert, update — is identical by construction rather than by two
+ * re-assert, update — is identical by construction rather than by three
  * similar-looking implementations drifting apart.
  *
  * Take the row lock, re-read the CURRENT row under it, re-assert the
@@ -366,7 +374,10 @@ async function commitAdvance(
   args: {
     id: string;
     workspaceId: string;
-    wiring: StepWiring;
+    /** Only the HOP is needed here — `Pick` rather than a full `StepWiring` so
+     *  the reconciliation can hand in a synthesized `{ from: <wherever the run
+     *  is>, to: 'done' }` hop, which has no exit poll of its own. */
+    wiring: Pick<StepWiring, 'from' | 'to'>;
     patch?: Prisma.MigrateOnboardingUncheckedUpdateInput;
     /** Also re-assert `status` under the lock (the sweep: a run marked `failed`
      *  between the scan and the commit must not be advanced). */
@@ -471,7 +482,167 @@ export interface MigrateIndexSweepSummary {
   failed: number;
 }
 
+/** Page size for the terminal reconciliation's cross-workspace scan — bounded
+ *  (finding #57). Injectable for tests; production omits it. */
+export const MIGRATE_RECONCILE_PAGE_SIZE = 200;
+
+/** What one reconciliation tick did, for the job ledger. `failed` is reported
+ *  rather than swallowed for the same reason the index sweep reports it: a
+ *  summary that hid it would make a broken lane look idle. */
+export interface MigrateTerminalReconcileSummary {
+  /** Active runs found on an already-established project this tick. */
+  scanned: number;
+  /** Runs completed from the marker (`step → done`, `status → completed`). */
+  terminated: number;
+  /** Runs whose commit threw — isolated, logged, retried next tick. */
+  failed: number;
+}
+
 export const migrateOnboardingService = {
+  /**
+   * THE TERMINAL RECONCILIATION (MOTIR-2092) — complete every `active` run whose
+   * project is already ESTABLISHED, deriving the terminal state from the durable
+   * marker instead of a browser tab.
+   *
+   * ── THE SHAPE DECISION, and why it is (a) ──────────────────────────────────
+   *
+   * This is the THIRD defect on this state machine (MOTIR-2082, MOTIR-2090,
+   * MOTIR-2092), so `notes.html` #198's repeat-defect trigger fires: the root
+   * SHAPE has to be named before another patch lands on it. It is this —
+   *
+   *   every transition of this machine is observed only by an OPEN BROWSER TAB,
+   *   and "onboarding is over" has a second, independent, durable writer
+   *   (`project.onboardingRanAt`) that the run never reads.
+   *
+   * The alternative was (b): a fourth per-step sweep, cheaper today and the
+   * third instance of the same patch. It is rejected because the population it
+   * would fix is the population that has been REPORTED, not the population that
+   * exists — the run has seven steps and any of them can be abandoned. This
+   * mechanism reads the signal that actually MEANS "over", so it covers every
+   * step and both producers at once:
+   *
+   *   1. THE APPROVE RACE — `plansService.approvePlan` stamps the marker in the
+   *      same transaction as the approve, and only THEN is the wizard client
+   *      expected to come back and land `review → done`. A tab closed in between
+   *      leaves a permanently established project with a permanently `active`
+   *      run. No operator involved; any project.
+   *   2. THE MARKER'S OTHER WRITERS — `scripts/plan-seed/dogfoodProject.ts` and
+   *      `scripts/stampOnboardingRan.ts` (MOTIR-1799) stamp it with no wizard
+   *      interaction at all, so their runs are orphaned wherever they happened
+   *      to be. This is the live `MOTIR` row: marker stamped 2026-08-04T16:33Z,
+   *      run `active` at `index` since 2026-07-25.
+   *
+   * WHY NOT AT THE MARKER'S WRITER. Terminating the run inside `approvePlan`
+   * would close producer 1 at its source, but it is the CLIENT-HOP shape again
+   * one layer down: it only ever runs when that specific writer runs, so it
+   * cannot heal the runs already orphaned (the entire motivating population),
+   * cannot cover producer 2 without a third copy in each script, and adds a
+   * cross-aggregate write to a transaction that is already the longest in the
+   * codebase. One mechanism, reading durable state, on a schedule.
+   *
+   * WHERE THE RUN LANDS, and why the write is not silent. It lands at
+   * `step: 'done'`, `status: 'completed'` — the SAME terminal shape a walked run
+   * has, so every existing reader (the wizard page's completed-run redirect,
+   * `advanceNext`'s `done` case, the index sweep's `active` filter) stays
+   * correct with no new branch. But a run terminated at `review` is NOT the same
+   * as one that walked there, and overwriting `step` destroys the difference in
+   * place — so the write also stamps `reconciledAt` (this did not walk) and
+   * `reconciledFromStep` (how far it actually got). Neither is exposed on the
+   * DTO: they answer an operator/abandonment question, and no client surface
+   * asks it.
+   *
+   * ORDER MATTERS AGAINST THE INDEX SWEEP. This runs FIRST in the lane, so an
+   * orphaned run parked at `index` is completed rather than first advanced to
+   * `import` by the sweep and then completed from there — which would record a
+   * `reconciledFromStep` the user never reached. Once completed it is no longer
+   * `active`, so the index sweep's own filter skips it.
+   *
+   * TENANCY is the MOTIR-2082 shape exactly: phase 1 is the one read with no
+   * workspace to bind, under `withSystemContext`; phase 2 commits each run
+   * inside THAT run's workspace under `withWorkspaceServiceContext`. The
+   * cross-tenant reach is one bounded, read-only scan.
+   *
+   * A run whose project marker is NULL is untouched at every step — that is the
+   * in-flight journey, and it is the regression risk here exactly as it was in
+   * MOTIR-2090. The marker is the whole gate.
+   */
+  async runTerminalReconciliation(
+    opts: { pageSize?: number } = {},
+  ): Promise<MigrateTerminalReconcileSummary> {
+    const pageSize = opts.pageSize ?? MIGRATE_RECONCILE_PAGE_SIZE;
+    let after: string | undefined;
+    let scanned = 0;
+    let terminated = 0;
+    let failed = 0;
+
+    for (;;) {
+      // Phase 1 — the cross-workspace discovery scan, in its OWN system-context
+      // transaction (the GUC is transaction-scoped). A page is read fully before
+      // any run is acted on, so no commit runs inside the scanning transaction.
+      const page = await withSystemContext((tx) =>
+        migrateOnboardingRepository.listActiveOnEstablishedProject(
+          { take: pageSize, ...(after ? { after } : {}) },
+          tx,
+        ),
+      );
+      if (page.length === 0) break;
+      scanned += page.length;
+
+      for (const run of page) {
+        try {
+          // Phase 2 — the commit, in this run's OWN workspace context, through
+          // the shared lock → re-read → re-assert → update shape.
+          const row = await withWorkspaceServiceContext(run.workspaceId, async (tx) => {
+            // Take the run's lock BEFORE re-reading the marker, so the signal
+            // and the commit that acts on it observe one serialized moment.
+            // `commitAdvance` re-takes this same lock below; a second `FOR
+            // UPDATE` on a row this transaction already holds is a no-op.
+            const locked = await migrateOnboardingRepository.lockById(run.id, tx);
+            if (!locked) return null; // deleted between scan and commit
+            // Re-assert the DURABLE SIGNAL itself. `markOnboardingRan` is a
+            // null-guarded write and the marker's only writer, so it is
+            // monotonic today and this re-read cannot change the answer — it is
+            // here so that a future writer which CLEARS the marker (an
+            // "un-onboard" admin action) makes this lane stop, rather than
+            // silently completing runs against a signal that no longer holds.
+            const project = await projectRepository.findById(run.projectId, tx);
+            if (!project?.onboardingRanAt) return null;
+            return commitAdvance(
+              {
+                id: run.id,
+                workspaceId: run.workspaceId,
+                // The hop is synthesized from where the run actually sits: the
+                // re-assert under the lock then fails for exactly the run a live
+                // wizard advanced in the meantime, so the race produces ONE
+                // transition and this lane no-ops (the next tick catches it).
+                wiring: { from: run.step, to: 'done' },
+                patch: { reconciledAt: new Date(), reconciledFromStep: run.step },
+                requireActive: true,
+                onPreconditionMiss: 'skip',
+              },
+              tx,
+            );
+          });
+          if (row) terminated += 1;
+        } catch (err) {
+          // Failure isolation: one run's commit blowing up must not stop the
+          // reconciliation for any other run. The scan is re-runnable, so the
+          // next tick retries this run from durable state.
+          failed += 1;
+          console.error(
+            `migrate-onboarding terminal reconciliation: run ${run.id} failed to complete:`,
+            err,
+          );
+        }
+      }
+
+      if (page.length < pageSize) break;
+      after = page[page.length - 1]!.id;
+    }
+
+    return { scanned, terminated, failed };
+  },
+
   /**
    * THE INDEX SWEEP (MOTIR-2082) — re-evaluate the `index` step's exit condition
    * for every run parked there, from durable state, on a schedule.

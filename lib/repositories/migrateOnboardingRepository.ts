@@ -91,6 +91,41 @@ export const migrateOnboardingRepository = {
     });
   },
 
+  /**
+   * The TERMINAL RECONCILIATION's cross-workspace discovery scan (MOTIR-2092):
+   * every `active` run whose PROJECT is already established — its
+   * `onboardingRanAt` marker stamped — in ANY workspace, ordered by id for
+   * cursor paging. Like `listActiveAtStep` this is a read with no workspace to
+   * bind (it is the query that FINDS them), so it REQUIRES a `withSystemContext`
+   * tx; the `project` relation filter resolves through that table's own
+   * system-admin READ branch (20260727225458).
+   *
+   * NO STEP FILTER, deliberately. The marker means the journey is OVER, and it
+   * is stamped by writers that never look at the run at all (the dogfood seed,
+   * the MOTIR-1799 operator stamp) — so a run can be orphaned at ANY step, not
+   * only at `review` where the approve race leaves it. The live `MOTIR` row is
+   * the proof: marker stamped 2026-08-04, run `active` at `index`.
+   *
+   * KEYSET paging (`id > after`) for the same reason `listActiveAtStep` uses it:
+   * the caller MUTATES the set it is paging over (a reconciled run leaves
+   * `status: 'active'`), and Prisma's `cursor` has to locate the cursor row
+   * inside the filtered set — the one row that just left it.
+   */
+  async listActiveOnEstablishedProject(
+    params: { take: number; after?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<MigrateOnboarding[]> {
+    return tx.migrateOnboarding.findMany({
+      where: {
+        status: 'active',
+        project: { onboardingRanAt: { not: null } },
+        ...(params.after ? { id: { gt: params.after } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: params.take,
+    });
+  },
+
   async update(
     id: string,
     data: Prisma.MigrateOnboardingUncheckedUpdateInput,
