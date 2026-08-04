@@ -72,6 +72,25 @@ describe('listRootIssues', () => {
     expect(level.rows.find((r) => r.id === E.id)?.type).toBeNull(); // epic — no work type
   });
 
+  // MOTIR-2098 — the LAZY level is the /items tree's normal path (the forest CTE
+  // only runs under an active filter), so a row shaped on the CLIENT from these
+  // levels needs the same description signal or the ⋯ menu's leaf face is wrong
+  // on the default view.
+  it('projects hasDescription on a lazily-read level, both roots and children (MOTIR-2098)', async () => {
+    const fx = await makeFixture();
+    const { E, X, A, A1 } = await buildForest(fx);
+    await db.workItem.update({ where: { id: X.id }, data: { descriptionMd: 'Described bug.' } });
+    await db.workItem.update({ where: { id: A1.id }, data: { descriptionMd: 'Described task.' } });
+    await db.workItem.update({ where: { id: E.id }, data: { descriptionMd: '' } });
+
+    const roots = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
+    const children = await workItemsService.listChildIssues(A.id, { sort: sort() }, fx.ctx);
+
+    expect(roots.rows.find((r) => r.id === X.id)?.hasDescription).toBe(true);
+    expect(roots.rows.find((r) => r.id === E.id)?.hasDescription).toBe(false); // '' is none
+    expect(children.rows.find((r) => r.id === A1.id)?.hasDescription).toBe(true);
+  });
+
   it('pages with take/offset and reports hasMore', async () => {
     const fx = await makeFixture();
     const { E, X } = await buildForest(fx);

@@ -78,6 +78,14 @@ export interface IssueRowData {
    * `.trow` form has the expand chevron).
    */
   hasChildren: boolean;
+  /**
+   * Does the row's item carry a non-empty description (MOTIR-2098)? The LEAF
+   * face of the shared Plan / Re-plan rule (`planEntranceFace` rule 2), which
+   * the row ⋯ menu asks so a described task/bug/subtask offers **Re-plan** and
+   * an undescribed one **Expand**. A boolean the reads project — the row never
+   * carries the description body.
+   */
+  hasDescription: boolean;
 }
 
 /**
@@ -138,6 +146,7 @@ function shapeRowData(
     storyPoints: item.storyPoints,
     storyPointsLabel: item.storyPoints != null ? formatStoryPoints(item.storyPoints) : null,
     hasChildren: item.hasChildren ?? false,
+    hasDescription: item.hasDescription,
   };
 }
 

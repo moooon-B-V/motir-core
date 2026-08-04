@@ -45,6 +45,9 @@ async function setAssignee(id: string, assigneeId: string | null): Promise<void>
 async function setType(id: string, type: Prisma.WorkItemUpdateInput['type']): Promise<void> {
   await db.workItem.update({ where: { id }, data: { type } });
 }
+async function setDescription(id: string, descriptionMd: string | null): Promise<void> {
+  await db.workItem.update({ where: { id }, data: { descriptionMd } });
+}
 
 /**
  * Build the canonical test forest in one fixture's project:
@@ -141,6 +144,41 @@ describe('workItemsService.getProjectTree — nesting (no filter)', () => {
     expect(findNode(tree, 'PROD-4')!.type).toBe('design'); // subtask A1a
     expect(findNode(tree, 'PROD-7')!.type).toBe('code'); // bug X
     expect(findNode(tree, 'PROD-1')!.type).toBeNull(); // epic E — no work type
+  });
+
+  // MOTIR-2098 — the description SIGNAL (a boolean, never the body) the row ⋯
+  // menu asks rule 2 of the shared Plan / Re-plan rule with. It is projected in
+  // BOTH arms of the recursive CTE, so the deep-descendant case is the one that
+  // matters: a column added only to the anchor arm would leave every non-root
+  // row `undefined` and every described leaf reading as undescribed.
+  it('projects hasDescription through BOTH arms of the forest CTE (MOTIR-2098)', async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    // A ROOT (depth 1, the anchor arm) and the DEEPEST node (depth 4, reached
+    // only through the recursive arm) both carry a description.
+    await setDescription(t.X.id, 'A described bug.');
+    await setDescription(t.A1a.id, '## Why\n\nA described subtask.');
+
+    const tree = await workItemsService.getProjectTree(fx.projectId, {}, fx.ctx);
+
+    expect(findNode(tree, 'PROD-7')!.hasDescription).toBe(true); // root, anchor arm
+    expect(findNode(tree, 'PROD-4')!.hasDescription).toBe(true); // depth 4, recursive arm
+    expect(findNode(tree, 'PROD-3')!.hasDescription).toBe(false); // depth 3, no description
+    expect(findNode(tree, 'PROD-1')!.hasDescription).toBe(false); // root, no description
+  });
+
+  it('an EMPTY-STRING description counts as no description (MOTIR-2098)', async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    // What an emptied editor writes — the shared rule's contract says this is
+    // the same as never having had one.
+    await setDescription(t.A1.id, '');
+    await setDescription(t.B1.id, null);
+
+    const tree = await workItemsService.getProjectTree(fx.projectId, {}, fx.ctx);
+
+    expect(findNode(tree, 'PROD-3')!.hasDescription).toBe(false); // ''
+    expect(findNode(tree, 'PROD-6')!.hasDescription).toBe(false); // NULL
   });
 
   it('excludes archived items (and their descendants drop out of the forest)', async () => {

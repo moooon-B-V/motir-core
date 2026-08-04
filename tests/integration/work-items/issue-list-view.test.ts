@@ -68,6 +68,36 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     expect(byId.get(epic.id)?.type).toBeNull(); // container — no work type
   });
 
+  // MOTIR-2098 — the flat List read carries the same description SIGNAL the
+  // forest does, so a row renders the same face in either view. A boolean, never
+  // the body: the List pages 50 rows at a time and the Markdown blob has no
+  // reader here.
+  it('projects hasDescription as a BOOLEAN, empty string counting as none (MOTIR-2098)', async () => {
+    const fx = await makeFixture();
+    const described = await createWorkItem(fx, { kind: 'task', title: 'Described' });
+    const emptied = await createWorkItem(fx, { kind: 'task', title: 'Emptied' });
+    const never = await createWorkItem(fx, { kind: 'task', title: 'Never' });
+    await db.workItem.update({
+      where: { id: described.id },
+      data: { descriptionMd: 'Some prose.' },
+    });
+    await db.workItem.update({ where: { id: emptied.id }, data: { descriptionMd: '' } });
+
+    const { items: rows } = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT },
+      fx.ctx,
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+
+    expect(byId.get(described.id)?.hasDescription).toBe(true);
+    expect(byId.get(emptied.id)?.hasDescription).toBe(false);
+    expect(byId.get(never.id)?.hasDescription).toBe(false);
+    // The BODY never rides the list row — that is the whole reason the signal is
+    // a boolean.
+    expect(byId.get(described.id)).not.toHaveProperty('descriptionMd');
+  });
+
   it('sorts by key descending', async () => {
     const fx = await makeFixture();
     await createWorkItem(fx, { kind: 'task', title: 'A' });
@@ -262,5 +292,29 @@ describe('toIssueListRows (flat shaping over the live reads)', () => {
       statusCategory: 'todo',
       assigneeName: null,
     });
+  });
+
+  // MOTIR-2098 — the shaper is the last hop before the row ⋯ menu asks the
+  // shared Plan / Re-plan rule, so the boolean has to survive it.
+  it('carries hasDescription onto the shaped row (MOTIR-2098)', async () => {
+    const fx = await makeFixture();
+    const described = await createWorkItem(fx, { kind: 'task', title: 'Described' });
+    await createWorkItem(fx, { kind: 'task', title: 'Bare' });
+    await db.workItem.update({
+      where: { id: described.id },
+      data: { descriptionMd: 'Some prose.' },
+    });
+
+    const [items, workflow, members] = await Promise.all([
+      workItemsService.getProjectIssuesList(fx.projectId, { sort: DEFAULT_SORT }, fx.ctx),
+      workflowsService.getWorkflow(fx.projectId, fx.workspaceId),
+      workspacesService.listMembers(fx.workspaceId, fx.ownerId),
+    ]);
+    const rows = toIssueListRows(items.items, workflow, members);
+
+    expect(rows.map((r) => [r.identifier, r.hasDescription])).toEqual([
+      ['PROD-1', true],
+      ['PROD-2', false],
+    ]);
   });
 });

@@ -125,6 +125,7 @@ function toRow(
     assigneeId: dto.assigneeId,
     assigneeName: member ? member.name || member.email : null,
     updatedAt: dto.updatedAt,
+    hasDescription: (dto.descriptionMd ?? '').trim().length > 0,
     priority: dto.priority,
     reporterName: 'Owner',
     dueDate: dto.dueDate,

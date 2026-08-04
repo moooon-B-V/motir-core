@@ -91,6 +91,8 @@ export interface WorkItemForestRow {
   estimateMinutes: number | null;
   storyPoints: Prisma.Decimal | null;
   updatedAt: Date;
+  /** Does the item carry a non-empty description? See {@link WorkItemListRow}. */
+  hasDescription: boolean;
   depth: number;
   matched: boolean;
 }
@@ -118,6 +120,18 @@ export interface WorkItemListRow {
   estimateMinutes: number | null;
   storyPoints: Prisma.Decimal | null;
   updatedAt: Date;
+  /**
+   * Does the item carry a non-empty description (MOTIR-2098)? A projected
+   * BOOLEAN — `descriptionMd IS NOT NULL AND <> ''` — never the body itself:
+   * the list/tree reads fan out over every row of a project and the Markdown
+   * blob is large, which is exactly why the forest CTE's fixed projection
+   * excludes `descriptionMd`. It is the LEAF face of the shared Plan / Re-plan
+   * rule (`planEntranceFace` rule 2), which the `/items` row ⋯ menu could not
+   * evaluate until this column existed. Every read producing this row shape
+   * projects it — `$queryRaw` is an UNCHECKED cast, so an omission would
+   * surface as `undefined` at runtime rather than a compile error.
+   */
+  hasDescription: boolean;
 }
 
 /**
@@ -2093,7 +2107,8 @@ export const workItemRepository = {
       WITH RECURSIVE forest AS (
         SELECT w."id", w."parentId", w."kind", w."type", w."key", w."identifier",
                w."title", w."status", w."priority", w."assigneeId", w."reporterId",
-               w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt", 1 AS depth
+               w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt",
+               ${hasDescriptionSql('w')} AS "hasDescription", 1 AS depth
           FROM "work_item" w
           WHERE w."projectId" = ${projectId}
             AND w."workspaceId" = ${workspaceId}
@@ -2103,7 +2118,8 @@ export const workItemRepository = {
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
                c."title", c."status", c."priority", c."assigneeId", c."reporterId",
-               c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt", p.depth + 1
+               c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt",
+               ${hasDescriptionSql('c')} AS "hasDescription", p.depth + 1
           FROM "work_item" c
           JOIN forest p ON c."parentId" = p."id"
           WHERE c."projectId" = ${projectId}
@@ -2126,6 +2142,7 @@ export const workItemRepository = {
              f."estimateMinutes",
              f."storyPoints",
              f."updatedAt",
+             f."hasDescription",
              f.depth::int         AS "depth",
              (${matched})         AS "matched"
         FROM forest f
@@ -2180,7 +2197,8 @@ export const workItemRepository = {
              w."dueDate",
              w."estimateMinutes",
              w."storyPoints",
-             w."updatedAt"
+             w."updatedAt",
+             ${hasDescriptionSql('w')} AS "hasDescription"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
         LEFT JOIN "user" ru ON ru."id" = w."reporterId"
@@ -2247,7 +2265,8 @@ export const workItemRepository = {
              w."estimateMinutes",
              w."storyPoints",
              w."createdAt",
-             w."updatedAt"
+             w."updatedAt",
+             ${hasDescriptionSql('w')} AS "hasDescription"
         FROM "work_item" w
         WHERE ${projectIssuesScopeSql(projectId, workspaceId, filter)}
           ${afterSql}
@@ -2321,6 +2340,7 @@ export const workItemRepository = {
              w."estimateMinutes",
              w."storyPoints",
              w."updatedAt",
+             ${hasDescriptionSql('w')} AS "hasDescription",
              w."archivedAt",
              ar."changedById"     AS "archivedById",
              abu."name"           AS "archivedByName",
@@ -2676,6 +2696,7 @@ export const workItemRepository = {
              w."storyPoints",
              w."updatedAt",
              w."sprintId",
+             ${hasDescriptionSql('w')} AS "hasDescription",
              EXISTS (
                SELECT 1 FROM "work_item" ch
                 WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
@@ -4366,6 +4387,31 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  */
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
+}
+
+/**
+ * "Does this item have a description?" as a projected BOOLEAN (MOTIR-2098) —
+ * the LEAF face of the shared Plan / Re-plan rule (`planEntranceFace` rule 2:
+ * a leaf WITH a description offers Re-plan, without one Plan).
+ *
+ * It is the ONE description signal the list/tree reads carry, and deliberately
+ * not the body: `descriptionMd` is a Markdown blob and these reads fan out over
+ * every row of a project (the forest CTE re-projects each row through the
+ * recursion), which is precisely why that projection excludes it. A boolean
+ * costs one byte per row and answers the only question the row needs to.
+ *
+ * An EMPTY STRING counts as NO description — that is what an emptied editor
+ * writes, and the shared rule's contract says so. NULL and `''` therefore reach
+ * the same verdict. Never NULL itself: `IS NOT NULL` and `<> ''` are both
+ * total, so the projected column is a real boolean the DTO can carry (the same
+ * care the forest's `matched` column takes with its COALESCE).
+ *
+ * The `alias` is a fixed internal literal (never user input), as in
+ * {@link notInTriageSql} — the forest CTE passes both of its arms' aliases.
+ */
+function hasDescriptionSql(alias: string): Prisma.Sql {
+  const a = Prisma.raw(alias);
+  return Prisma.sql`(${a}."descriptionMd" IS NOT NULL AND ${a}."descriptionMd" <> '')`;
 }
 
 /**

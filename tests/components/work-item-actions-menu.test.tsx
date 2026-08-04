@@ -316,6 +316,28 @@ describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () =
     expect(expand()).toBeNull();
   });
 
+  // MOTIR-2098 — rule 2 on THIS surface. Until the list row carried a
+  // description signal the menu was handed a hardcoded `hasDescription: false`,
+  // so a described leaf read as undescribed here while the detail page and the
+  // peek got it right.
+  it('rule 2 — a LEAF WITH a description offers Re-plan, not Expand', () => {
+    openPlanMenu({ kind: 'task', hasChildren: false, hasDescription: true });
+    expect(replan()).toBeTruthy();
+    expect(expand()).toBeNull();
+  });
+
+  it('rule 2 — a LEAF WITHOUT a description offers Expand, not Re-plan', () => {
+    openPlanMenu({ kind: 'task', hasChildren: false, hasDescription: false });
+    expect(expand()).toBeTruthy();
+    expect(replan()).toBeNull();
+  });
+
+  it('rules 2 vs 3 disagree — a described CONTAINER with no children is still Expand', () => {
+    openPlanMenu({ kind: 'epic', hasChildren: false, hasDescription: true });
+    expect(expand()).toBeTruthy();
+    expect(replan()).toBeNull();
+  });
+
   it('exactly one door at a time, never both', () => {
     for (const hasChildren of [true, false]) {
       cleanup();

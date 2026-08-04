@@ -188,6 +188,7 @@ export function toWorkItemTreeNodeDto(
     estimateMinutes: row.estimateMinutes,
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     updatedAt: row.updatedAt.toISOString(),
+    hasDescription: row.hasDescription,
     depth: row.depth,
     hasChildren: children.length > 0,
     matched: row.matched,
@@ -255,6 +256,7 @@ export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto
     estimateMinutes: row.estimateMinutes,
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     updatedAt: row.updatedAt.toISOString(),
+    hasDescription: row.hasDescription,
   };
 }
 
