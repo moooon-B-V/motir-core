@@ -238,15 +238,17 @@ const FAMILIES: Record<string, string[]> = {
   selection: SELECTION_TOKENS,
 };
 
-/** Families whose members collapse onto one hue under a given palette. */
-const KNOWN_FAMILY_COLLISIONS: Record<string, string[]> = {
-  // BUG — MOTIR-2073. Graphite is monochrome-with-one-accent and sets
-  // `--color-info` = `--color-primary`, which re-collapses `in_review` onto
-  // `in_progress` — the exact un-collapse 1266.2 delivered. Remove when 2073
-  // lands. (The Tier-0 indirection is not collision-proof: two tokens that must
-  // differ converge whenever a palette unifies their sources.)
-  graphite: ['status'],
-};
+/**
+ * Families whose members collapse onto one hue under a given palette.
+ *
+ * EMPTY, and that is the contract: the last entry (Graphite's status family)
+ * was fixed by MOTIR-2073, which gave the status ramp its own second step of
+ * the accent instead of letting `--color-info` = `--color-primary` re-collapse
+ * `in_review` onto `in_progress`. The assertion below is an exact `toEqual`, so
+ * this cannot rot back into a floor — a new collision fails here rather than
+ * hiding behind an old exception.
+ */
+const KNOWN_FAMILY_COLLISIONS: Record<string, string[]> = {};
 
 describe('rendered specimen — the differentiating hues still differentiate', () => {
   it('binds each family to the component that actually renders it', () => {
