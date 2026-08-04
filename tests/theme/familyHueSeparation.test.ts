@@ -48,13 +48,13 @@ const CONTEXTS: ThemeContext[] = PALETTE_IDS.flatMap((palette) =>
  * The floor for a family whose colour IS the whole signal — the same ΔE2000 10
  * `statusHueSeparation.test.ts` holds the status dot to, for the same reason.
  *
- * Tightest surviving pair after MOTIR-2085: graphite/light `highest` vs `high`
- * at **10.02**. That is real but near-zero headroom — graphite's warning is a
- * red-leaning burnt orange sitting next to its danger red, the same shape as the
- * cobalt 9.9 this card fixed, and it clears the bar only by rounding. It is left
- * alone deliberately: it is not a violation, and re-tuning a shipping palette
- * that passes is a design change no acceptance criterion asked for. Logged as
- * MOTIR-2094 so the next palette tweak does not discover it as a surprise red.
+ * Tightest surviving pair after MOTIR-2094: garnet/light `highest` vs `high` at
+ * **12.40**, then cobalt/dark `medium` vs `low` at **12.44** — real headroom
+ * over the bar rather than the 0.02 graphite used to clear it by. MOTIR-2085
+ * left graphite/light at 10.02 (it passed, so it was not that card's to change);
+ * MOTIR-2094 gave that ramp its own amber step for the same reason cobalt got
+ * one, since a pair sitting AT the perceptual minimum is one palette nudge away
+ * from a surprise red. Both fixes are pinned by name below.
  */
 const MIN_DELTA_E_GLYPH = 10;
 
@@ -285,21 +285,40 @@ describe('the priority ramp is a GLYPH ramp', () => {
       }
     }
     expect(failures).toEqual([]);
-    // Guards the guard: cobalt's `high`, in both themes (MOTIR-2085).
-    expect(checked).toBeGreaterThanOrEqual(2);
+    // Guards the guard: cobalt's + graphite's `high`, each in both themes
+    // (MOTIR-2085, MOTIR-2094).
+    expect(checked).toBeGreaterThanOrEqual(4);
   });
 
-  it('keeps highest and high apart under Cobalt, in BOTH themes (MOTIR-2085)', () => {
-    // The specific collision this card fixed, pinned by name so a regression
-    // reads as itself rather than as one line in the sweep above. Cobalt's
-    // warning is a red-leaning burnt orange next to its danger red, so the
-    // PRIORITY ramp takes its own amber step instead of moving either semantic.
-    for (const theme of THEMES) {
-      const ctx: ThemeContext = { palette: 'cobalt', theme };
-      const highest = hueOf(ctx, '--el-priority-highest');
-      const high = hueOf(ctx, '--el-priority-high');
-      expect(high, `cobalt/${theme} must not collapse high onto highest`).not.toBe(highest);
-      expect(deltaE2000(highest, high)).toBeGreaterThan(MIN_DELTA_E_GLYPH);
+  it('keeps highest and high APART, with headroom, in every palette that took an amber step', () => {
+    // The two specific collisions, pinned by name so a regression reads as
+    // itself rather than as one line in the sweep above. Both palettes ship a
+    // red-leaning burnt orange warning next to a danger red, and both answer it
+    // the same way: the PRIORITY ramp takes its own amber step instead of moving
+    // either semantic.
+    //
+    // Asserted against 2x the floor, NOT the floor — because clearing the floor
+    // is exactly what graphite did at ΔE 10.02, a distance no eye can tell from
+    // the cobalt 9.92 that counted as a defect (MOTIR-2094). A documented step
+    // exists to buy real margin, so the test asks for margin; a "fix" that lands
+    // at 10.1 is not one.
+    const HEADROOM = MIN_DELTA_E_GLYPH * 2;
+    for (const palette of ['cobalt', 'graphite'] as const) {
+      for (const theme of THEMES) {
+        const ctx: ThemeContext = { palette, theme };
+        const highest = hueOf(ctx, '--el-priority-highest');
+        const high = hueOf(ctx, '--el-priority-high');
+        expect(high, `${palette}/${theme} must not collapse high onto highest`).not.toBe(highest);
+        expect(
+          deltaE2000(highest, high),
+          `${palette}/${theme} highest vs high needs real headroom, not a rounding pass`,
+        ).toBeGreaterThan(HEADROOM);
+      }
+      // The step is declared in the LIGHT block only — dark re-asserts the
+      // warning source for the cascade pairing (asserted generally below), so
+      // pin which theme actually carries the amber.
+      expect(paletteBlock(palette, 'light')['--el-priority-high']).toMatch(/^#/);
+      expect(paletteBlock(palette, 'dark')['--el-priority-high']).toBe('var(--color-warning)');
     }
     // The semantics themselves are untouched — only the ramp took a new step.
     expect(sourceOf('--el-priority-highest')).toBe('--color-destructive');
