@@ -5086,6 +5086,8 @@
     "audit": {
       "emptyTitle": "No codebase to analyze yet",
       "emptyDescription": "Your convention is established from your chosen stack — the code-health audit runs later, once there’s code to read.",
+      "noAuditTitle": "No audit for this code yet",
+      "noAuditDescription": "Motir has indexed your connected repos but has never measured them against a convention. Run the first audit to derive the convention from your code and score what’s already there.",
       "measuredAgainst": "Measured against your convention — the standard for new code",
       "conventionVersion": "§ Convention v{version}",
       "percentConform": "{pct}% conform",

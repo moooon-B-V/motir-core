@@ -90,6 +90,7 @@ export default async function CodeHealthPage() {
       <Header title={t('title')} subtitle={t('subtitle')} />
       <CodeHealthClient
         projectId={ctx.projectId}
+        repoRefs={repos.map((repo) => repo.repoRef)}
         initialAudit={initialAudit}
         initialConventions={initialConventions}
         loadError={loadError}

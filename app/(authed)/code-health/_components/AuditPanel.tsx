@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { FileSearch, GitCompare } from 'lucide-react';
+import { FileSearch, FolderGit2, GitCompare } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +25,7 @@ const ROW_GAP_PX = 8;
 // more findings stream in by offset as the list scrolls (the scale rule).
 export function AuditPanel({
   audit,
+  repoRefs,
   findings,
   total,
   hasMore,
@@ -38,6 +39,9 @@ export function AuditPanel({
   onDeepenReopen,
 }: {
   audit: CodeAuditSurfaceDTO['audit'];
+  /** The connected repos this page would audit (`owner/name`). Selects WHICH
+   * pre-audit empty state renders — see the `!audit` branch below. */
+  repoRefs: string[];
   findings: CodeAuditFindingDTO[];
   total: number;
   hasMore: boolean;
@@ -52,12 +56,45 @@ export function AuditPanel({
 }) {
   const t = useTranslations('codeHealth');
 
+  // Panel 4b (MOTIR-2087): "no audit" is not one state. A project with connected,
+  // indexed repos HAS a codebase, and its convention is derived from the code graph
+  // — so the start-fresh copy ("no codebase" / "from your chosen stack") is false
+  // twice over there. The repo set is what tells the two apart, which is why it is
+  // threaded down from the page rather than re-derived here.
   if (!audit) {
-    return (
+    return repoRefs.length === 0 ? (
+      // State A · start-fresh — copy unchanged. The design's secondary "View chosen
+      // stack" action is deliberately NOT wired: no such surface exists anywhere in
+      // the app (the phrase occurs only in this string), and inventing a
+      // destination is not this card's work. Recorded on MOTIR-2081.
       <EmptyState
         icon={<FileSearch aria-hidden />}
         title={t('audit.emptyTitle')}
         description={t('audit.emptyDescription')}
+      />
+    ) : (
+      // State B · repo-backed but never audited. The repo chips ride INSIDE
+      // `description` (typed ReactNode) — they are the constant that says "this
+      // screen is about your code", not a fifth EmptyState slot. The primary
+      // "Run the first audit" action belongs to MOTIR-2080, which owns the trigger.
+      <EmptyState
+        icon={<FolderGit2 aria-hidden />}
+        title={t('audit.noAuditTitle')}
+        description={
+          <>
+            {t('audit.noAuditDescription')}
+            <span className="mt-(--spacing-sm) flex flex-wrap justify-center gap-1">
+              {repoRefs.map((repoRef) => (
+                <code
+                  key={repoRef}
+                  className="bg-(--el-code-bg) px-1.5 py-0.5 text-xs text-(--el-text-identifier) rounded-(--radius-control)"
+                >
+                  {repoRef}
+                </code>
+              ))}
+            </span>
+          </>
+        }
       />
     );
   }
