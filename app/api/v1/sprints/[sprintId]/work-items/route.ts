@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
+import { parseCollectionPageRequest, readRowIdPosition } from '@/lib/api/v1/pagination';
+import { parseRankedFilterParam, presentRankedPage } from '@/lib/api/v1/rankedCollections';
 import { parseV1Body } from '@/lib/api/v1/workItems/schema';
 import { projectKeyOfWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
 import { membershipMoveBodySchema, presentMembershipMove } from '@/lib/api/v1/sprints/membership';
@@ -60,4 +62,31 @@ export const POST = withV1Route<{ sprintId: string }>({ scope: 'sprints:write' }
 
   const moved = await backlogService.bulkAssignToSprint(itemIds, sprint.id, ctx.service);
   return NextResponse.json(presentMembershipMove(moved));
+});
+
+// GET /api/v1/sprints/{sprintId}/work-items (Story 11.3 · Subtask 11.3.8 —
+// MOTIR-2065) — a sprint's committed work, in `backlogRank` order.
+//
+// The read half of this path, beside the membership POST above: the same
+// resource, two operations, each declaring its own scope (`read` here,
+// `sprints:write` there) because the ADR's §3 map is per OPERATION.
+//
+// ⚠️ A sprint's members are NOT filtered by status — a DONE issue stays part of
+// the sprint's scope, which is what makes the sprint a historical record after
+// it completes. The backlog sibling DOES exclude done issues. Both are correct;
+// `lib/api/v1/rankedCollections.ts` records why.
+//
+// `getSprintIssues` tenant-gates the sprint itself (`SprintNotFoundError` → 404),
+// so no separate resolution is needed here.
+export const GET = withV1Route<{ sprintId: string }>({ scope: 'read' }, async (ctx) => {
+  const page = parseCollectionPageRequest(ctx.req, 'sprintWorkItems', readRowIdPosition);
+  const filter = parseRankedFilterParam(ctx.req);
+
+  const result = await backlogService.getSprintIssues(
+    ctx.params.sprintId,
+    { limit: page.limit, ...(page.cursor !== undefined ? { cursor: page.cursor } : {}), ...filter },
+    ctx.service,
+  );
+
+  return NextResponse.json(presentRankedPage(result, 'sprintWorkItems'));
 });
