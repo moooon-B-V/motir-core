@@ -25,6 +25,7 @@ function mrEvent(overAttrs: Record<string, unknown> = {}): unknown {
       merged: false,
       title: 'feat: a thing',
       source_branch: 'subtask/MOTIR-1474-gitlab',
+      target_branch: 'main',
       ...overAttrs,
     },
   };
@@ -38,6 +39,7 @@ describe('gitlab.parseChangeRequestEvent', () => {
       state: 'open',
       merged: false,
       headRef: 'subtask/MOTIR-1474-gitlab',
+      baseRef: 'main',
       title: 'feat: a thing',
     });
   });
@@ -62,11 +64,19 @@ describe('gitlab.parseChangeRequestEvent', () => {
     expect(gitlab.parseChangeRequestEvent({ object_kind: 'push', project: { id: 1 } })).toBeNull();
     expect(gitlab.parseChangeRequestEvent(null)).toBeNull();
     expect(gitlab.parseChangeRequestEvent(mrEvent({ source_branch: undefined }))).toBeNull();
+    // …or the TARGET branch (MOTIR-1873) — the trunk gate has nothing to compare.
+    expect(gitlab.parseChangeRequestEvent(mrEvent({ target_branch: undefined }))).toBeNull();
   });
 });
 
 describe('gitlab.changeRequestLifecycle', () => {
-  const base = { providerRepoId: '1', number: 1, headRef: 'b', title: null } as const;
+  const base = {
+    providerRepoId: '1',
+    number: 1,
+    headRef: 'b',
+    baseRef: 'main',
+    title: null,
+  } as const;
 
   it('maps open → in_review, merged → done, closed-unmerged → todo', () => {
     expect(gitlab.changeRequestLifecycle({ ...base, state: 'open', merged: false })).toBe(

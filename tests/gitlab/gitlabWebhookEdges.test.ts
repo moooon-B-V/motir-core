@@ -80,6 +80,7 @@ function mrPayload(opts: {
   iid?: number;
   projectId?: string;
   sourceBranch?: string;
+  targetBranch?: string;
   state?: 'opened' | 'closed' | 'merged' | 'locked';
 }) {
   return {
@@ -91,6 +92,7 @@ function mrPayload(opts: {
       state: opts.state ?? 'opened',
       title: `Some change (${opts.identifier})`,
       source_branch: opts.sourceBranch ?? `subtask/${opts.identifier}-a-change`,
+      target_branch: opts.targetBranch ?? 'main',
     },
   };
 }

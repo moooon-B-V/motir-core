@@ -86,6 +86,8 @@ function mrPayload(opts: {
   iid?: number;
   projectId?: string;
   sourceBranch?: string;
+  /** The branch the MR merges INTO — the trunk gate reads it (MOTIR-1873). */
+  targetBranch?: string;
   title?: string;
 }) {
   return {
@@ -97,6 +99,7 @@ function mrPayload(opts: {
       state: opts.state ?? 'opened',
       title: opts.title ?? `Some change (${opts.identifier})`,
       source_branch: opts.sourceBranch ?? `subtask/${opts.identifier}-a-change`,
+      target_branch: opts.targetBranch ?? 'main',
     },
   };
 }
@@ -266,6 +269,41 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     );
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'ignored_action' });
     expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
+  });
+
+  it('an MR merged into a NON-default target_branch is HELD at In Review, with the target on the item (MOTIR-1873)', async () => {
+    // The GitLab half of the trunk gate. It is not a second implementation — both
+    // hosts normalize through the same seam into the same shared sync, so GitLab
+    // inherits the gate and this test is what proves the wiring (a provider-shaped
+    // fix would have missed it, which is the sweep the card asked for).
+    const s = await makeScenario('gitlab-stacked@example.com');
+    await gitlabWebhookService.handleEvent(
+      'Merge Request Hook',
+      mrPayload({ action: 'open', identifier: s.item.identifier }),
+    );
+    expect(await statusOf(s.item.id)).toBe('in_review');
+
+    const merged = await gitlabWebhookService.handleEvent(
+      'Merge Request Hook',
+      mrPayload({
+        action: 'merge',
+        identifier: s.item.identifier,
+        state: 'merged',
+        targetBranch: 'subtask/ACME-9-sibling-work',
+      }),
+    );
+
+    expect(merged).toMatchObject({
+      event: 'pull_request',
+      outcome: 'deferred_non_default_base',
+      workItemId: s.item.id,
+    });
+    expect(await statusOf(s.item.id)).toBe('in_review');
+    const comments = await commentsOn(s.item.id);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.bodyMd).toContain('subtask/ACME-9-sibling-work');
+    // GitLab's own noun, not GitHub's.
+    expect(comments[0]!.bodyMd).toContain('merge request');
   });
 
   it('a malformed merge_request payload is a clean malformed no-op', async () => {

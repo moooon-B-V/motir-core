@@ -80,6 +80,8 @@ function prPayload(opts: {
   authorGithubUserId?: number;
   installationId?: string;
   repoId?: number;
+  /** The base the PR merges INTO — the trunk gate reads it (MOTIR-1873). */
+  baseRef?: string;
 }) {
   return {
     action: opts.action,
@@ -94,6 +96,7 @@ function prPayload(opts: {
       merged: opts.merged ?? false,
       title: `Some change (${opts.identifier})`,
       head: { ref: `feat/${opts.identifier}-a-change` },
+      base: { ref: opts.baseRef ?? 'main' },
       user: { id: opts.authorGithubUserId ?? 4242 },
     },
   };
@@ -261,6 +264,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
         merged: false,
         title: 'no key here',
         head: { ref: 'feat/misc' },
+        base: { ref: 'main' },
         user: { id: 4242 },
       },
     });

@@ -71,6 +71,7 @@ function prEvent(opts: {
       merged: opts.merged ?? false,
       title: opts.title,
       head: { ref: opts.headBranch },
+      base: { ref: 'main' },
       user: { id: 4242 },
     },
   };

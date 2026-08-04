@@ -176,8 +176,12 @@ export const gitlabProvider: GitProvider = {
     const providerRepoId = idToString(project['id']);
     const number = typeof attrs['iid'] === 'number' ? attrs['iid'] : null;
     const headRef = typeof attrs['source_branch'] === 'string' ? attrs['source_branch'] : null;
+    // GitLab's name for the base (MOTIR-1873) — read as strictly as the source,
+    // for the same reason: a merge with no known destination cannot be judged
+    // against the trunk.
+    const baseRef = typeof attrs['target_branch'] === 'string' ? attrs['target_branch'] : null;
     const state = typeof attrs['state'] === 'string' ? attrs['state'] : null;
-    if (!providerRepoId || number === null || !headRef || !state) return null;
+    if (!providerRepoId || number === null || !headRef || !baseRef || !state) return null;
 
     // GitLab MR states: opened | closed | merged | locked. `merged` is its own
     // state (not a boolean), so collapse it into our orthogonal state/merged pair.
@@ -187,10 +191,14 @@ export const gitlabProvider: GitProvider = {
       state: state === 'opened' || state === 'locked' ? 'open' : 'closed',
       merged: state === 'merged',
       headRef,
+      baseRef,
       title: typeof attrs['title'] === 'string' ? attrs['title'] : null,
     };
   },
 
+  // PURE and payload-only, exactly as GitHub's is: the trunk check that turns
+  // `done` into an actual completion lives in the shared consumer, which holds the
+  // mirrored default branch (MOTIR-1873).
   changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle {
     if (cr.merged) return 'done';
     if (cr.state === 'closed') return 'todo'; // closed WITHOUT merging — not done

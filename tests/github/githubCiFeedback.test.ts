@@ -74,6 +74,7 @@ async function openPr(identifier: string | null, number: number) {
       merged: false,
       title: identifier ?? 'Unrelated change',
       head: { ref: headBranch },
+      base: { ref: 'main' },
       user: { id: 4242 },
     },
   });

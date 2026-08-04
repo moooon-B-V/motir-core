@@ -97,6 +97,7 @@ function prPayload(opts: {
       merged: opts.merged ?? false,
       title: `Some change (${opts.identifier})`,
       head: { ref: `feat/${opts.identifier}-a-change` },
+      base: { ref: 'main' },
       user: { id: 4242 },
     },
   };

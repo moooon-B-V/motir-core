@@ -245,7 +245,12 @@ export const githubProvider: GitProvider = {
     const number = typeof pr['number'] === 'number' ? pr['number'] : null;
     const head = asRecord(pr['head']);
     const headRef = typeof head?.['ref'] === 'string' ? head['ref'] : null;
-    if (!providerRepoId || number === null || !headRef) return null;
+    // The DESTINATION, read as strictly as the source (MOTIR-1873): a merge that
+    // does not name a base cannot be judged against the trunk, so it does not
+    // normalize at all rather than normalizing into an assumed `main`.
+    const base = asRecord(pr['base']);
+    const baseRef = typeof base?.['ref'] === 'string' ? base['ref'] : null;
+    if (!providerRepoId || number === null || !headRef || !baseRef) return null;
 
     return {
       providerRepoId,
@@ -253,10 +258,16 @@ export const githubProvider: GitProvider = {
       state: pr['state'] === 'closed' ? 'closed' : 'open',
       merged: pr['merged'] === true,
       headRef,
+      baseRef,
       title: typeof pr['title'] === 'string' ? pr['title'] : null,
     };
   },
 
+  // PURE, and deliberately payload-only: `merged → done` is the CANONICAL
+  // lifecycle signal, not the completion decision. Whether that merge reached the
+  // repository's default branch is settled by the consumer
+  // (`changeRequestStatusSync`), which is the only layer holding the mirrored
+  // `GithubRepo.defaultBranch` this seam cannot read (MOTIR-1873).
   changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle {
     if (cr.merged) return 'done';
     if (cr.state === 'closed') return 'todo'; // closed WITHOUT merging — not done
