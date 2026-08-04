@@ -151,6 +151,38 @@ export const sprintsService = {
   },
 
   /**
+   * ONE sprint by id, as a `SprintDto` (Story 11.3 · Subtask 11.3.4 —
+   * MOTIR-2061). A pure read, `workspaceId`-gated: a sprint in another
+   * workspace is indistinguishable from one that does not exist
+   * (`SprintNotFoundError` → 404, finding #26), and no admin gate — the owner
+   * gate guards sprint MANAGEMENT writes, not reads, exactly as
+   * `listByProject` / `getActiveSprint` / `getSprintReport` are open to any
+   * member.
+   *
+   * ⚠️ NOT `getActiveSprint`, and the difference is a live trap rather than a
+   * style preference: that method returns `toSprintDto(row, 0)`, so its
+   * `issueCount` is HARD-CODED to zero. An endpoint built on it would report
+   * every sprint as empty and nothing would fail — the field is present,
+   * well-typed and wrong. This computes the count the way `listByProject` does
+   * (`workItemRepository.countSprintIssues`), so a sprint read one at a time
+   * and the same sprint read in the list agree.
+   *
+   * Added under the by-id RE-PRESENTATION carve-out the `/api/v1` ADR's
+   * Amendment 3 (Q3) records: the shipped repository read, the shipped mapper,
+   * the shipped tenancy gate, the shipped count — no new field, no new gate, no
+   * new filter axis, no write. Anything that would change what the row CONTAINS
+   * is outside that carve-out.
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
+   */
+  async getById(id: string, ctx: ServiceContext): Promise<SprintDto> {
+    const row = await sprintRepository.findById(id, ctx.workspaceId);
+    if (!row) throw new SprintNotFoundError(id);
+    const issueCount = await workItemRepository.countSprintIssues(id, ctx.workspaceId);
+    return toSprintDto(row, issueCount);
+  },
+
+  /**
    * Is a sprint FINISHABLE? (Subtask 7.8.15) — the productized form of the
    * *re-validate-the-active-sprint* rule (`motir-meta` `plan-rules.md` #94). A
    * sprint is VALID ⟺ for EVERY in-sprint, NOT-done item, BOTH (a) its ENTIRE

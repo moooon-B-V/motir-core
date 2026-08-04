@@ -178,6 +178,17 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   INVALID_FILTER_VALUE: 422,
   FILTER_TOO_LARGE: 422,
   MALFORMED_FILTER: 422,
+
+  // ── Story 11.3, the planning resources ────────────────────────────────────
+  // Same discipline as 11.2's rows: each is added by the card whose endpoint can
+  // raise it, and each is exercised by a test that drives the REAL error through
+  // the wrapper. An unlisted code is a bare 500, which is exactly why a row is
+  // never added speculatively.
+
+  // 11.3.4 (MOTIR-2061) — the sprint reads. 404, not 403: `getById` is
+  // workspace-gated, so a sprint in another tenant and one that never existed
+  // are the same answer (ADR §4's existence-oracle rule).
+  SPRINT_NOT_FOUND: 404,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */
