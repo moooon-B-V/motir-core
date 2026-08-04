@@ -607,3 +607,70 @@ export async function parseV1Body<T>(req: Request, schema: z.ZodType<T>): Promis
   }
   return parsed.data;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The TRANSITIONS sub-resource (Story 11.2 · Subtask 11.2.7 — MOTIR-2048)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One status a work item may move to from where it is now. */
+export const transitionTargetSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  category: z.enum(['todo', 'in_progress', 'done']),
+});
+export type TransitionTarget = z.infer<typeof transitionTargetSchema>;
+
+/** The `GET …/transitions` body. */
+export const transitionListSchema = z.object({ transitions: z.array(transitionTargetSchema) });
+
+/**
+ * The refusal body for an illegal move: the pinned `{ code, error }` PLUS an
+ * additive `allowedTransitions` array.
+ *
+ * ⚠️ The allowed targets are DATA, not prose. `transition_status` appends them to
+ * its human message because an agent reads English; a machine client must not be
+ * reduced to parsing a sentence. A new field on a response object is explicitly
+ * allowed under ADR §8, and declaring its shape HERE is what lets `GET …/transitions`
+ * and this refusal be proven to agree.
+ */
+export const illegalTransitionSchema = z.object({
+  code: z.literal('ILLEGAL_TRANSITION'),
+  error: z.string(),
+  allowedTransitions: z.array(transitionTargetSchema),
+});
+
+/**
+ * The statuses legal FROM `fromStatusKey`, presented from a project's workflow.
+ *
+ * ONE function, used by BOTH the `GET` and the refusal path, so the two surfaces
+ * cannot disagree about what is legal — the property 11.2.11's seam test asserts
+ * end to end.
+ */
+export function presentTransitionTargets(
+  workflow: {
+    statuses: ReadonlyArray<{ id: string; key: string; label: string; category: string }>;
+    transitions: ReadonlyArray<{ fromStatusId: string; toStatusId: string }>;
+    policyMode: string;
+  },
+  fromStatusKey: string,
+): TransitionTarget[] {
+  const byId = new Map(workflow.statuses.map((s) => [s.id, s]));
+  const from = workflow.statuses.find((s) => s.key === fromStatusKey);
+
+  // An `open` policy project permits ANY move, so every other status is a legal
+  // target — read off the policy rather than off the edge list, which is empty
+  // in that mode and would otherwise report "nowhere to go".
+  const targets =
+    workflow.policyMode === 'open'
+      ? workflow.statuses.filter((s) => s.key !== fromStatusKey)
+      : workflow.transitions
+          .filter((t) => from !== undefined && t.fromStatusId === from.id)
+          .map((t) => byId.get(t.toStatusId))
+          .filter((s): s is NonNullable<typeof s> => s !== undefined);
+
+  return targets.map((s) => ({
+    key: s.key,
+    label: s.label,
+    category: s.category as TransitionTarget['category'],
+  }));
+}

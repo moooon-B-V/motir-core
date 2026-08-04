@@ -138,6 +138,27 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // the row is appended to the ADR rather than emitted undocumented.
   STALE_WORK_ITEM: 412,
 
+  // 11.2.7 (MOTIR-2048) — the transitions sub-resource. Two DISTINCT codes:
+  // collapsing them would make a typo (a status the workflow does not define)
+  // and a workflow rule (a real status not reachable from here) indistinguishable,
+  // and a client can fix only one of those.
+  ILLEGAL_TRANSITION: 422,
+  UNKNOWN_STATUS: 422,
+
+  // 11.2.9 (MOTIR-2051) — the link edges.
+  SELF_LINK: 422,
+  WORK_ITEM_LINK_CYCLE: 422,
+  // ⚠️ 409, a status ADR §4's table does not list either — appended with its
+  // condition, as a NEW condition rather than a changed one. A duplicate link is
+  // a conflict with existing STATE, not a malformed request: the caller's body
+  // is perfectly valid, the edge simply already exists.
+  DUPLICATE_LINK: 409,
+  // 404 on the TARGET key, not 403: confirming that the other item exists in
+  // another tenant is precisely the existence oracle ADR §4 forbids.
+  CROSS_WORKSPACE_LINK: 404,
+  WORKSPACE_MISMATCH_LINK: 404,
+  WORK_ITEM_LINK_NOT_FOUND: 404,
+
   // 11.2.4 (MOTIR-2042) — the FilterAST the collection endpoint accepts. Every
   // one is a malformed REQUEST the caller can fix, so every one is a 422 with a
   // code specific enough to act on: which field, which operator, which value.
