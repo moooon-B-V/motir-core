@@ -39,6 +39,27 @@ export class AcceptanceEvidenceNotAStoryError extends AcceptanceEvidenceError {
 }
 
 /**
+ * `approve` was called on a story that is not awaiting review. Acceptance is the
+ * IN-REVIEW gate (Principle #18): a story is approved out of review, never out of
+ * `todo` or mid-implementation.
+ *
+ * This used to be enforced INCIDENTALLY — the default workflow had no
+ * `in_progress → done` edge, so the `updateStatus` inside `decide` threw
+ * `IllegalTransitionError` for us. MOTIR-1625 adds that edge (review is now
+ * optional for ordinary work), which would have silently deleted the gate. So the
+ * rule is now stated where it belongs, in the service, and no longer depends on
+ * the shape of the transition graph. → 422.
+ */
+export class AcceptanceEvidenceNotInReviewError extends AcceptanceEvidenceError {
+  readonly code = 'ACCEPTANCE_EVIDENCE_NOT_IN_REVIEW' as const;
+  readonly status = 422;
+  constructor(status: string) {
+    super(`A story is approved out of review, not out of "${status}".`);
+    this.name = 'AcceptanceEvidenceNotInReviewError';
+  }
+}
+
+/**
  * A register-mode publish (MOTIR-1681) reported a blob pathname OUTSIDE this
  * story's `acceptance/<workspaceId>/<storyId>/` prefix — a caller trying to
  * register an arbitrary / cross-tenant blob. Rejected before any DB write. → 400.

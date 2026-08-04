@@ -54,14 +54,21 @@ test('restricted mode enforces transitions; open mode allows any', async () => {
   // An unknown status key → 422 (not a transition issue — it doesn't exist).
   expect((await transition(owner.ctx, item.id, 'nope')).status()).toBe(422);
 
-  // Flip policy to open → in_progress→done (no edge) now succeeds.
+  // The open-mode probe needs a pair the default graph genuinely lacks.
+  // `in_progress → done` used to be one, but MOTIR-1625 made it an edge (review
+  // is optional), so this walks to done — now legal — and probes `done →
+  // in_review`, which has no transition row in either direction of the graph.
+  expect((await transition(owner.ctx, item.id, 'done')).status()).toBe(200);
+  expect((await transition(owner.ctx, item.id, 'in_review')).status()).toBe(422);
+
+  // Flip policy to open → the same edgeless move now succeeds.
   await db.project.update({
     where: { id: project.id },
     data: { workflowPolicyMode: 'open' },
   });
-  const open = await transition(owner.ctx, item.id, 'done');
+  const open = await transition(owner.ctx, item.id, 'in_review');
   expect(open.status()).toBe(200);
-  expect((await open.json()).status).toBe('done');
+  expect((await open.json()).status).toBe('in_review');
 });
 
 test('readiness uses the per-project terminal set — a cancelled blocker resolves (finding #21)', async () => {

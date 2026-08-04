@@ -69,12 +69,23 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // active state — bringing the total to SIXTEEN. (The matching backfill
 // migration adds this one edge to every EXISTING default-workflow project; the
 // rest of the `in_review` graph already shipped in this constant from 2.2.2, so
-// only this edge needs backfilling.)
+// only this edge needs backfilling.) MOTIR-1625 adds the SEVENTEENTH —
+// `in_progress → done` (see its comment on the forward path below), again with
+// a matching backfill migration for existing default-workflow projects.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
   ['in_progress', 'in_review'],
   ['in_review', 'done'],
+  // Review is OPTIONAL, not mandatory (MOTIR-1625). Both
+  // `in_progress → in_review → done` and `in_progress → done` are legal, for two
+  // reasons: (1) a project with no review gate should be able to finish work
+  // without parking it in a review column it doesn't use (the Epic-9 configurable
+  // review step); (2) the MOTIR-1615 upward rollup moves a parent to `done` once
+  // every child is done — and that parent is usually `in_progress`, never
+  // `in_review`, so without this edge the done rung would be an illegal move and
+  // the rollup would log a no-op and strand the parent.
+  ['in_progress', 'done'],
   // Block / unblock (block from any active state; unblock to either). `in_review`
   // can be blocked too (7.8.11) — review can stall on an external dependency.
   ['todo', 'blocked'],

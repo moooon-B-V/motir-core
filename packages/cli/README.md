@@ -200,9 +200,11 @@ the item in the session exclude list so the next `motir next` moves past it;
 > `in_progress` status, so if the store cannot be written the CLI warns once and
 > the run continues rather than aborting.
 
-**Closing out.** After you merge, `motir done <key>`. The default workflow has
-no direct `in_progress → done` edge, so an item dispatched with `--print` (which
-never observed an agent finish) needs `motir done --via in_review <key>`; an
+**Closing out.** After you merge, `motir done <key>`. Since MOTIR-1625 the
+default workflow carries a direct `in_progress → done` edge, so this is one legal
+hop whether or not the item ever reached In Review. `motir done --via in_review
+<key>` still walks it through review explicitly — useful on a custom workflow
+that has no direct edge, or when you want the review hop on the record. An
 illegal flip surfaces the server's own allowed-targets error verbatim. A merged
 **session** PR closes out in bulk with `motir done --session <branch>`.
 

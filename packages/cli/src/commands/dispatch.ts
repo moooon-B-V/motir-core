@@ -172,8 +172,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   // Exit 0 means the agent completed the prompt's GIT WORKFLOW section, whose
   // last step is opening the PR / integrating the branch. Both modes therefore
   // land the item at In Review — the "PR created" step of the documented status
-  // lifecycle — which is also what makes the subsequent `motir done` a legal
-  // single hop (there is no direct in_progress → done edge).
+  // lifecycle.
   if (dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch) {
     await client.markIntegrated({
       key,
@@ -314,10 +313,11 @@ export interface DoneOptions {
   session?: string;
   /**
    * `--via <status>` — walk to done through this status first. The default
-   * workflow has no direct `in_progress → done` edge, so an item whose PR was
-   * merged without the CLI ever seeing the agent finish (the `--print` /
-   * copy-paste path) needs the In Review hop. Opt-in, never inferred: the CLI
-   * does not silently move an item through a status the user did not name.
+   * workflow gained a direct `in_progress → done` edge in MOTIR-1625, so this is
+   * no longer needed to close out an item dispatched with `--print`; it remains
+   * for a CUSTOM workflow with no direct edge, and for a team that wants the
+   * In Review hop on the record. Opt-in, never inferred: the CLI does not
+   * silently move an item through a status the user did not name.
    */
   via?: string;
 }

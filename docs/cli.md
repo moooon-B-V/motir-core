@@ -858,18 +858,22 @@ motir done MOTIR-42                    # per-item pull request (next / run / bat
 motir done --session <branch>          # a merged session pull request (auto)
 ```
 
-The default workflow has **no direct `in_progress → done` edge**. An item the
-CLI dispatched and watched finish is already In Review, so `motir done` is a
-single legal hop. An item dispatched with `--print` — where Motir never observed
-an agent finish — is still In Progress, and needs the hop named explicitly:
+Since MOTIR-1625 the default workflow carries a **direct `in_progress → done`
+edge** — review is optional, not mandatory. So `motir done` is a single legal hop
+both for an item the CLI watched finish (already In Review) and for one
+dispatched with `--print`, where Motir never observed an agent finish and the
+item is still In Progress.
+
+`--via` walks the item through a named status first:
 
 ```sh
 motir done --via in_review MOTIR-42
 ```
 
-`--via` is opt-in and never inferred: the CLI does not walk an item through a
-status you did not ask for. An illegal flip surfaces the server's own
-allowed-targets error verbatim, plus that hint.
+Reach for it on a custom workflow with no direct edge, or when you want the
+review hop recorded. It is opt-in and never inferred: the CLI does not walk an
+item through a status you did not ask for. An illegal flip surfaces the server's
+own allowed-targets error verbatim, plus that hint.
 
 ---
 
