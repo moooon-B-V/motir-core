@@ -1,4 +1,4 @@
-import { Prisma, type MigrateOnboarding } from '@prisma/client';
+import { Prisma, type MigrateOnboarding, type MigrateOnboardingStep } from '@prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `migrate_onboarding` table (Story 7.15 ·
@@ -52,6 +52,43 @@ export const migrateOnboardingRepository = {
       SELECT "id" FROM "migrate_onboarding" WHERE "id" = ${id} FOR UPDATE
     `;
     return rows[0] ?? null;
+  },
+
+  /**
+   * The SWEEP's cross-workspace discovery scan (MOTIR-2082): every `active` run
+   * parked at `step`, in ANY workspace, ordered by id so the caller can page with
+   * a cursor. This is the one migrate-onboarding read with no workspace to bind —
+   * it is the query that FINDS the workspaces — so it REQUIRES a
+   * `withSystemContext` tx (the policy's system-admin branch, added in
+   * 20260804180000). Under a tenant context the GUC is unset and this returns
+   * that workspace's rows only, which is correct but not what the sweep wants.
+   *
+   * Bounded by `take` (finding #57 — no unbounded cross-tenant scan). `status`
+   * is filtered HERE rather than by the caller so a `completed` / `failed` run
+   * never even enters the sweep's working set.
+   *
+   * KEYSET paging (`id > after`), deliberately NOT Prisma's `cursor`. The caller
+   * MUTATES the very set it is paging over: a swept run moves to `import` and so
+   * leaves `step: 'index'`. Prisma's `cursor` has to LOCATE the cursor row within
+   * the filtered result set, and that row is exactly the one that just left it —
+   * so page 2 comes back empty and every run after the first page is silently
+   * skipped. A plain `id > after` predicate needs no such lookup and is immune to
+   * rows leaving the set mid-sweep.
+   */
+  async listActiveAtStep(
+    step: MigrateOnboardingStep,
+    params: { take: number; after?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<MigrateOnboarding[]> {
+    return tx.migrateOnboarding.findMany({
+      where: {
+        step,
+        status: 'active',
+        ...(params.after ? { id: { gt: params.after } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: params.take,
+    });
   },
 
   async update(
