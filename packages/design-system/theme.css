@@ -290,7 +290,24 @@
    (<html>) is dark — the symmetric counterpart to [data-theme='dark'], mirroring
    how [data-palette]/[data-style]/[data-type] already re-skin a subtree. The
    onboarding design step (MOTIR-1040) uses it to preview the user's project in
-   light regardless of Motir's own theme. Values mirror the @theme light base. */
+   light regardless of Motir's own theme. Values mirror the @theme light base.
+
+   ⚠️ On a NESTED element this block is only HALF the mechanism (MOTIR-2077).
+   `--el-*` are declared `--el-x: var(--color-y)` and var() substitutes where the
+   property is DECLARED, so re-asserting Tier-0 here cannot retroactively change
+   the `--el-*` a component reads — those resolved at :root and merely inherit
+   down. Pair this with `data-appearance-scope` on the same element (below), which
+   re-emits the Tier-3 layer locally so its var()s see these overrides. That
+   attribute is axis-agnostic — a nested [data-palette]/[data-style] needs it too
+   — which is why light has no duplicated `--el-*` companion block the way dark
+   does; dark's exists only for its two concrete-hex tokens, not to scope a
+   subtree.
+
+   ⚠️ KEEP AT PARITY with [data-theme='dark'] above. A Tier-0 token dark declares
+   and this block omits keeps its DARK value in a forced-light subtree no matter
+   what scopes it: with nothing local to shadow it, the inherited value stands.
+   That was MOTIR-2077's defect (`--color-canvas`, added below).
+   tests/theme/forcedThemeSubtree.test.ts asserts the parity both ways. */
 [data-theme='light'] {
   color-scheme: light;
 
@@ -298,6 +315,7 @@
   --color-foreground: #1a1a1a;
   --color-surface: #f6f5f4;
   --color-surface-soft: #fafaf9;
+  --color-canvas: #ecebe7; /* recessed board behind raised cards (planning canvas) */
 
   --color-ink: #1a1a1a;
   --color-charcoal: #37352f;

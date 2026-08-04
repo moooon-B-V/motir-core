@@ -217,3 +217,97 @@ export function resolveToken(
   if (declared === undefined) return { value: '', unresolved: [token] };
   return resolveValue(declared, declarations);
 }
+
+// ── Nested subtrees (MOTIR-2077) ────────────────────────────────────────────
+// The context model above resolves ONE element — the root — so it cannot express
+// the case `[data-theme='light']`, `[data-palette]` and `[data-appearance-scope]`
+// exist for: a NESTED element that re-skins its own subtree while <html> keeps a
+// different theme. That needs the part of CSS the root model can skip:
+// INHERITANCE. A custom property not declared on the element inherits its
+// already-COMPUTED value from the parent, and `var()` substitutes at the element
+// where the property is declared — which is exactly why re-declaring Tier-0
+// `--color-*` on a nested element moves nothing on its own, and why
+// `[data-appearance-scope]` (which re-emits the whole Tier-3 `--el-*` layer onto
+// that element) is what makes a scoped subtree work.
+
+/**
+ * The `data-*` attributes literally present on ONE element. A valueless
+ * attribute (`data-appearance-scope`) is spelled with an empty string.
+ *
+ * Note this is LITERAL, unlike `ThemeContext`: on the root, light means no
+ * `data-theme` key at all, but on a nested scope `data-theme='light'` is really
+ * there — that asymmetry is the whole point of the light re-assertion block.
+ */
+export type ElementAttributes = Record<string, string>;
+
+/** Root-first chain of elements, `[<html>, …, the element being resolved]`. */
+export type ScopeChain = ElementAttributes[];
+
+const ROOT_ONLY = /:root|(?:^|\])html/;
+
+/** Does this single (non-list) selector match an element with `attributes`? */
+function matchesElement(selector: string, attributes: ElementAttributes, isRoot: boolean): boolean {
+  const trimmed = selector.trim();
+  if (!ROOT_SIMPLE.test(trimmed)) return false; // combinator / class → component-scoped
+  if (ROOT_ONLY.test(trimmed) && !isRoot) return false;
+  for (const [, attribute, value] of trimmed.matchAll(ATTR_CONDITION)) {
+    if (attribute === undefined) return false;
+    const present = attributes[attribute];
+    if (present === undefined) return false; // `[attr]` and `[attr='v']` both need it
+    if (value !== undefined && present !== value) return false;
+  }
+  return true;
+}
+
+/** The declarations one element in the chain carries, in cascade order. */
+function declarationsAtLevel(rules: Rule[], chain: ScopeChain, level: number) {
+  const attributes = chain[level] ?? {};
+  const applicable = rules
+    .flatMap((rule) =>
+      rule.selectors
+        .filter((selector) => matchesElement(selector, attributes, level === 0))
+        .map((selector) => ({ rule, specificity: specificity(selector) })),
+    )
+    .sort((a, b) => {
+      if (a.specificity[0] !== b.specificity[0]) return a.specificity[0] - b.specificity[0];
+      if (a.specificity[1] !== b.specificity[1]) return a.specificity[1] - b.specificity[1];
+      return a.rule.order - b.rule.order;
+    });
+  const out: Record<string, string> = {};
+  for (const { rule } of applicable) Object.assign(out, rule.declarations);
+  return out;
+}
+
+/**
+ * Fully-resolved value of one custom property on the LAST element of `chain`,
+ * with real inheritance: a property the element declares resolves its `var()`s
+ * against the values computed AT THAT ELEMENT; one it does not declare inherits
+ * the parent's already-computed value.
+ */
+export function resolveTokenInScope(
+  rules: Rule[],
+  chain: ScopeChain,
+  token: string,
+): { value: string; unresolved: string[] } {
+  const declarations = chain.map((_, level) => declarationsAtLevel(rules, chain, level));
+  const unresolved: string[] = [];
+
+  const computed = (level: number, name: string, depth: number): string | undefined => {
+    if (level < 0 || depth > 16) return undefined;
+    const raw = declarations[level]?.[name];
+    if (raw === undefined) return computed(level - 1, name, depth);
+    return raw
+      .replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*))?\)/g, (_m, referenced, fallback) => {
+        const value = computed(level, referenced, depth + 1);
+        if (value !== undefined) return value;
+        if (fallback !== undefined) return fallback.trim();
+        unresolved.push(referenced);
+        return '';
+      })
+      .trim();
+  };
+
+  const value = computed(chain.length - 1, token, 0);
+  if (value === undefined) return { value: '', unresolved: [token] };
+  return { value: value.trim().replace(/\s+/g, ' '), unresolved };
+}
