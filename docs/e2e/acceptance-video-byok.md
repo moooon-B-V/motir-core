@@ -113,6 +113,32 @@ including a non-zero exit for an unpaced clip. The gate **fails closed**: an emp
 unset `changed-specs` owns nothing, and so does a recording whose sidecar carries no
 `specFile`.
 
+### The per-file size cap — `max-artifact-bytes` (MOTIR-1911)
+
+Every artifact a recording publishes — the video AND the trace — is uploaded against
+the workspace's **per-file entitlement** (`resolvePerFileLimitBytes`: **10 MB**
+baseline, **100 MB** on a cloud `scaled` org), bound into the client upload token as
+`maximumSizeInBytes`. This is Motir's own cap, **not** a Vercel Blob platform limit,
+even though the failure reads like one ("File is too large, the file length cannot be
+greater than 104857600 bytes").
+
+The uploader measures both artifacts **before authenticating**, beside the
+watchability verdict, and reports through the same annotation + job-summary channels.
+The policy differs per artifact, because they are not equally important:
+
+- an over-cap **trace** is **DROPPED** — the video publishes without it, with a
+  `::warning::`, and the step stays green. The trace is a debugging aid; refusing to
+  publish the receipt over it is what cost MOTIR-813 its evidence (a 113 MB trace
+  beside a 6 MB clip);
+- an over-cap **video** is **NOT published** — a `::error::` annotation, and the step
+  exits non-zero. The video is the receipt; there is nothing to fall back to.
+
+`max-artifact-bytes` defaults to **100 MB**. **Set it to `10485760` if your workspace
+is on the 10 MB baseline** (self-hosted, or cloud `free`) — otherwise the up-front gate
+waves through artifacts your own store will reject, and you get the failure at `put`
+time instead. The mint also returns its real `maxBytes`, so that late failure at least
+names the file, its size and the cap.
+
 ### How the target story is resolved (MOTIR-1684)
 
 The publish is **not** pinned to a hardcoded story. `resolveStoryKey` picks the

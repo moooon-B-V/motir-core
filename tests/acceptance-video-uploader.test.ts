@@ -12,11 +12,14 @@ vi.mock('@vercel/blob/client', () => ({
 // The BYOK uploader (Subtask MOTIR-1632; direct-to-Blob MOTIR-1681) — pure
 // logic, no DB. Tests the no-op (red-run) path + the mint/upload/register flow.
 import {
+  assessArtifactSizes,
   assessWatchability,
+  DEFAULT_MAX_ARTIFACT_BYTES,
   findRecordings,
   main,
   parseWorkItemKey,
   isOwnedRecording,
+  resolveMaxArtifactBytes,
   resolveOwnedSpecs,
   resolveStoryKey,
   uploadAcceptanceVideo,
@@ -315,6 +318,108 @@ describe('resolveStoryKey (MOTIR-1684 precedence)', () => {
   });
 });
 
+// MOTIR-1911 — the artifact-size boundary. Measured on run 30579274284: the
+// cadence recording's trace.zip was 118,924,401 B against a 104,857,600 B cap
+// while its video.webm was 6,340,169 B, so MOTIR-813 lost its receipt to an
+// artifact that is a debugging aid rather than the receipt.
+describe('assessArtifactSizes (MOTIR-1911)', () => {
+  /** Write a file of exactly `bytes` bytes. */
+  function sized(dir: string, name: string, bytes: number): string {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, Buffer.alloc(bytes));
+    return file;
+  }
+
+  it('passes both artifacts when they are under the cap', () => {
+    const dir = tmpDir();
+    const result = assessArtifactSizes({
+      video: sized(dir, 'v.webm', 10),
+      trace: sized(dir, 't.zip', 20),
+      maxBytes: 100,
+    });
+    expect(result).toMatchObject({
+      videoBytes: 10,
+      traceBytes: 20,
+      publishable: true,
+      reason: null,
+      dropTrace: false,
+      dropReason: null,
+    });
+  });
+
+  it('DROPS an over-cap trace but keeps the recording publishable — the receipt is the video', () => {
+    const dir = tmpDir();
+    const result = assessArtifactSizes({
+      video: sized(dir, 'v.webm', 10),
+      trace: sized(dir, 't.zip', 300),
+      maxBytes: 100,
+    });
+    expect(result.publishable).toBe(true);
+    expect(result.dropTrace).toBe(true);
+    expect(result.dropReason).toContain('the trace is');
+  });
+
+  it('REJECTS an over-cap video — the receipt itself cannot be dropped', () => {
+    const dir = tmpDir();
+    const result = assessArtifactSizes({
+      video: sized(dir, 'v.webm', 300),
+      trace: sized(dir, 't.zip', 10),
+      maxBytes: 100,
+    });
+    expect(result.publishable).toBe(false);
+    expect(result.reason).toContain('the video is');
+    expect(result.dropTrace).toBe(false);
+  });
+
+  it('a recording with no trace measures the video alone', () => {
+    const dir = tmpDir();
+    const result = assessArtifactSizes({
+      video: sized(dir, 'v.webm', 10),
+      trace: null,
+      maxBytes: 100,
+    });
+    expect(result).toMatchObject({ traceBytes: null, dropTrace: false, publishable: true });
+  });
+
+  it('an artifact exactly AT the cap is fine — the limit is inclusive, as Blob’s is', () => {
+    const dir = tmpDir();
+    const result = assessArtifactSizes({
+      video: sized(dir, 'v.webm', 100),
+      trace: sized(dir, 't.zip', 100),
+      maxBytes: 100,
+    });
+    expect(result).toMatchObject({ publishable: true, dropTrace: false });
+  });
+
+  it('abstains on an unreadable file rather than guessing a size', () => {
+    const result = assessArtifactSizes({
+      video: path.join(os.tmpdir(), 'no-such-video-xyz.webm'),
+      trace: null,
+      maxBytes: 1,
+    });
+    expect(result).toMatchObject({ videoBytes: null, publishable: true });
+  });
+});
+
+describe('resolveMaxArtifactBytes (MOTIR-1911)', () => {
+  it('defaults to the cloud `scaled` tier per-file cap', () => {
+    expect(resolveMaxArtifactBytes({})).toBe(DEFAULT_MAX_ARTIFACT_BYTES);
+    expect(DEFAULT_MAX_ARTIFACT_BYTES).toBe(104857600);
+  });
+
+  it('honours an explicit override — a deployment on the 10 MB baseline sets it', () => {
+    expect(resolveMaxArtifactBytes({ ACCEPTANCE_MAX_ARTIFACT_BYTES: '10485760' })).toBe(10485760);
+  });
+
+  it('IGNORES a junk / non-positive override rather than disabling the gate', () => {
+    for (const raw of ['', '   ', 'lots', '0', '-5', 'NaN']) {
+      expect(resolveMaxArtifactBytes({ ACCEPTANCE_MAX_ARTIFACT_BYTES: raw })).toBe(
+        DEFAULT_MAX_ARTIFACT_BYTES,
+      );
+    }
+  });
+});
+
 describe('uploadAcceptanceVideo', () => {
   interface FetchInit {
     method?: string;
@@ -473,6 +578,51 @@ describe('uploadAcceptanceVideo', () => {
     ).rejects.toThrow(/400/);
   });
 
+  // MOTIR-1911 — the mint reports the cap it bound into the token, so an over-cap
+  // artifact fails by NAME here instead of as @vercel/blob's opaque "File is too
+  // large, the file length cannot be greater than 104857600 bytes" from inside `put`.
+  it('refuses an artifact over the MINTED cap, by name, before it reaches `put`', async () => {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    fs.writeFileSync(video, Buffer.alloc(50));
+    stubPublishFetch('ev-cap', {
+      video: {
+        pathname: 'acceptance/v.webm',
+        token: 'ct',
+        contentType: 'video/webm',
+        maxBytes: 10,
+      },
+      trace: null,
+    });
+
+    await expect(
+      uploadAcceptanceVideo({
+        baseUrl: 'https://app.motir.co',
+        token: 'motir_pat_abc',
+        storyKey: 'MOTIR-813',
+        artifacts: { video, trace: null, chapters: null },
+      }),
+    ).rejects.toThrow(/the video is .* over the publish target's .* per-file limit/);
+    expect(putBlobMock).not.toHaveBeenCalled();
+  });
+
+  it('abstains when the mint reports no cap (an older server) — the flow is unchanged', async () => {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    fs.writeFileSync(video, Buffer.alloc(50));
+    stubPublishFetch('ev-nocap'); // the default stub carries no `maxBytes`
+
+    await expect(
+      uploadAcceptanceVideo({
+        baseUrl: 'https://app.motir.co',
+        token: 'motir_pat_abc',
+        storyKey: 'MOTIR-813',
+        artifacts: { video, trace: null, chapters: null },
+      }),
+    ).resolves.toEqual({ evidence: { id: 'ev-nocap' } });
+    expect(putBlobMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws when the token mint returns a non-2xx response (before any upload)', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
@@ -516,6 +666,9 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // MOTIR-1937 — the spec-ownership gate. In ENV_KEYS so each test starts from
     // a known owned-set rather than inheriting the ambient one.
     'ACCEPTANCE_CHANGED_SPECS',
+    // MOTIR-1911 — the per-file cap. The size cases set a tiny one so a fixture
+    // is "over the limit" at a handful of bytes rather than 100 MB on disk.
+    'ACCEPTANCE_MAX_ARTIFACT_BYTES',
   ] as const;
   const saved: Record<string, string | undefined> = {};
 
@@ -550,8 +703,17 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       .map((url) => /work-items\/([^/]+)\/acceptance-evidence/.exec(url)?.[1] ?? '');
   }
 
+  /** The JSON body of the FIRST register call (the mint calls carry a different
+   *  shape) — how a test inspects what was actually registered. */
+  function registeredBody(fetchMock: {
+    mock: { calls: Array<[string, { body?: string }?]> };
+  }): Record<string, unknown> {
+    const call = fetchMock.mock.calls.find(([url]) => !url.endsWith('/upload-token'));
+    return JSON.parse(call?.[1]?.body ?? '{}') as Record<string, unknown>;
+  }
+
   function stubFetch(onRegister?: (storyKey: string) => { ok: boolean; status?: number }) {
-    const fetchMock = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string, _init?: { body?: string }) => {
       if (url.endsWith('/upload-token')) {
         return {
           ok: true,
@@ -652,6 +814,76 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // The `::error::` workflow command is the channel `continue-on-error` does
     // NOT rewrite — the step's own conclusion is reported as `success`.
     expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/^::error::.*MOTIR-811/));
+  });
+
+  // ── The artifact-size gate, end to end (MOTIR-1911) ────────────────────────
+  //
+  // The reproduction: MOTIR-813's recording carried a 113 MB trace beside a 6 MB
+  // video, and the whole publish died inside `put` — so the story with a
+  // perfectly good clip was the one story of eight with no receipt.
+
+  it('DROPS an over-limit trace and still publishes the video — MOTIR-813’s case', async () => {
+    const dir = tmpDir();
+    const recording = writeRecording(dir, 'acceptance-cadence-chromium', {
+      storyKey: 'MOTIR-813',
+      totalSeconds: 96,
+    });
+    // A trace over the cap; the video (5 bytes of 'clip') stays well under it.
+    fs.writeFileSync(path.join(recording, 'trace.zip'), Buffer.alloc(40));
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    process.env['ACCEPTANCE_MAX_ARTIFACT_BYTES'] = '20';
+    process.env['GITHUB_ACTIONS'] = 'true';
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const fetchMock = stubFetch();
+
+    await main();
+
+    // The receipt published, and the register call carries NO trace pathname.
+    expect(publishedStories(fetchMock)).toEqual(['MOTIR-813']);
+    expect(registeredBody(fetchMock).tracePathname).toBeNull();
+    // Only the VIDEO reached the Blob store — the trace was never uploaded.
+    expect(putBlobMock).toHaveBeenCalledTimes(1);
+    // Reported as a WARNING, not a failure: the receipt is there, so the run is
+    // not broken.
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('DROPPED'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/^::warning::.*MOTIR-813/));
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it('the trace is NOT dropped when the mint reports no cap and the file fits', async () => {
+    const dir = tmpDir();
+    writeRecording(dir, 'acceptance-cadence-chromium', { storyKey: 'MOTIR-813' });
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    const fetchMock = stubFetch();
+
+    await main();
+
+    expect(putBlobMock).toHaveBeenCalledTimes(2); // video + trace
+    expect(registeredBody(fetchMock).tracePathname).toBe('acceptance/t.zip');
+  });
+
+  it('REFUSES an over-limit VIDEO up front — annotated, never uploaded, siblings unaffected', async () => {
+    const dir = tmpDir();
+    const fat = writeRecording(dir, 'acceptance-fat-chromium', { storyKey: 'MOTIR-811' });
+    fs.writeFileSync(path.join(fat, 'video.webm'), Buffer.alloc(40));
+    writeRecording(dir, 'acceptance-good-chromium', { storyKey: 'MOTIR-1627' });
+    process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+    process.env['ACCEPTANCE_MAX_ARTIFACT_BYTES'] = '20';
+    process.env['GITHUB_ACTIONS'] = 'true';
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const fetchMock = stubFetch();
+
+    await main();
+
+    // The over-limit recording never reached a token mint; its sibling published.
+    expect(publishedStories(fetchMock)).toEqual(['MOTIR-1627']);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/^::error::.*MOTIR-811/));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('TOO LARGE'));
+    // Same shape as the watchability verdict: reported, and the step fails.
+    expect(exit).toHaveBeenCalledWith(1);
   });
 
   it('still publishes a legacy recording with no meta sidecar (the guard abstains)', async () => {

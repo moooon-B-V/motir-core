@@ -53,6 +53,17 @@ export interface AcceptanceUploadTargetDTO {
   pathname: string;
   token: string;
   contentType: string;
+  /**
+   * The per-file byte cap this grant was minted with — the org's tier-derived
+   * `resolvePerFileLimitBytes` (10 MB baseline, 100 MB on cloud `scaled`), the
+   * same number bound into `token` as `maximumSizeInBytes`.
+   *
+   * REPORTED so the uploader can refuse an over-cap artifact by name instead of
+   * discovering it as @vercel/blob's opaque "File is too large, the file length
+   * cannot be greater than 104857600 bytes" thrown from inside `put`
+   * (MOTIR-1911). The cap was invisible to the only caller that has to respect it.
+   */
+  maxBytes: number;
 }
 
 /** The mint-token response: a target for the video and (optionally) the trace. */
