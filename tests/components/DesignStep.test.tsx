@@ -72,6 +72,22 @@ describe('DesignStep (MOTIR-1040)', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });
 
+  it('carries data-appearance-scope alongside the axes, so the picks reach the --el-* layer', () => {
+    // MOTIR-2077. Scoping the axes to this section is only half the job: `--el-*`
+    // resolve their `var(--color-*)` at the element that DECLARES them, so
+    // without `data-appearance-scope` re-emitting the Tier-3 layer here, every
+    // token this preview renders would still be Motir's, whatever the picks say.
+    // The two attributes are one mechanism — asserted together so neither can be
+    // dropped alone. (theme.css's `[data-theme='light']` block documents the
+    // pairing; tests/theme/forcedThemeSubtree.test.ts proves the resolution.)
+    const { page } = renderStep();
+    expect(page().hasAttribute('data-appearance-scope')).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Light' }));
+    expect(page().getAttribute('data-theme')).toBe('light');
+    expect(page().hasAttribute('data-appearance-scope')).toBe(true);
+  });
+
   it('Reset returns the project design to its defaults', () => {
     const { page } = renderStep();
     fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
