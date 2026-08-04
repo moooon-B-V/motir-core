@@ -51,11 +51,16 @@ function writeDismissed(projectId: string, value: boolean): void {
 // DTOs; findings paginate through the API routes.
 export function CodeHealthClient({
   projectId,
+  repoRefs,
   initialAudit,
   initialConventions,
   loadError,
 }: {
   projectId: string;
+  /** The connected repos this page would audit (`owner/name`), resolved by the
+   * server page. REQUIRED: the audit tab's pre-audit copy is false unless it
+   * knows whether there is any code at all (MOTIR-2081). */
+  repoRefs: string[];
   initialAudit: CodeAuditSurfaceDTO | null;
   initialConventions: ConventionSurfaceDTO[];
   loadError: string | false;
@@ -167,6 +172,7 @@ export function CodeHealthClient({
       {tab === 'audit' ? (
         <AuditPanel
           audit={audit?.audit ?? null}
+          repoRefs={repoRefs}
           findings={audit?.findings ?? []}
           total={audit?.total ?? 0}
           hasMore={(audit?.nextOffset ?? null) !== null}
