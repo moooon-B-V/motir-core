@@ -173,6 +173,17 @@ describe('WorkItemRoadmap', () => {
     expect(el('__planning_origin__')).toBeNull();
   });
 
+  // The cluster is the WHOLE-PROJECT road's origin: it says where the project's
+  // tree came from. The sprint slice (MOTIR-1382) is a window onto the sprint's
+  // committed work, so the project's planning journey does not belong on it —
+  // even for an onboarded project whose caller passes `showPlanningOrigin`.
+  it('omits the planning-origin cluster in SPRINT scope even when showPlanningOrigin is set', async () => {
+    render(<WorkItemRoadmap projectKey="MOTIR" scope="sprint" showPlanningOrigin />);
+    await screen.findByText('Epic one');
+    expect(screen.queryByTestId('planning-origin')).toBeNull();
+    expect(el('__planning_origin__')).toBeNull();
+  });
+
   it('renders the cross-story signal: a ghost anchor + a flagged node for an off-level blocker', async () => {
     // A level where T1 is blocked_by X, and X is NOT in the level → off-level.
     const crossLevel = {

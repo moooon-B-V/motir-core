@@ -41,7 +41,8 @@ export interface WorkItemRoadmapProps {
    * (Subtask 7.4 / MOTIR-1264). Only a project that actually onboarded shows it;
    * a never-onboarded project (existing tree, no materialized plan) omits it.
    * Defaults to false so a consumer that hasn't resolved the marker never asserts
-   * a planning journey that didn't happen.
+   * a planning journey that didn't happen. Ignored in SPRINT scope — see the
+   * `includeOrigin` note in `loadLevel`.
    */
   showPlanningOrigin?: boolean;
   positions?: Record<string, { x: number; y: number }>;
@@ -113,12 +114,17 @@ export function WorkItemRoadmap({
         // The persistent roadmap marks the in-progress frontier "you are here" at
         // every level, and pins the collapsed planning-origin cluster at the ROOT
         // (the road's start) — Subtask 7.20.6 / MOTIR-1013 — but ONLY for a project
-        // that actually onboarded (Subtask 7.4 / MOTIR-1264; `showPlanningOrigin`).
+        // that actually onboarded (Subtask 7.4 / MOTIR-1264; `showPlanningOrigin`)
+        // AND only in the WHOLE-PROJECT scope. The cluster says where the PROJECT's
+        // tree came from ("Idea → Discover · Shape · Validate → Plan"); the sprint
+        // slice (MOTIR-1382) is a window onto the sprint's committed work, whose
+        // road did not start at onboarding — so pinning the project's origin there
+        // is noise beside the sprint's own cards.
         // `scope` flips the off-level dependency signal from cross-story (project) to
         // the sprint-validity "not in sprint" signal (MOTIR-1379).
         return buildWorkItemLevel(wi, {
           markActive: true,
-          includeOrigin: parentId === null && showPlanningOrigin,
+          includeOrigin: parentId === null && showPlanningOrigin && scope !== 'sprint',
           scope,
         });
       } finally {

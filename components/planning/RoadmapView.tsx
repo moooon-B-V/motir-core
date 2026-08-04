@@ -47,7 +47,8 @@ export interface RoadmapViewProps {
   sprintName: string | null;
   sprintGoal: string | null;
   /** Pin the planning-origin cluster at the root (MOTIR-1013) — gated on the
-   *  project's onboarding-ran marker (MOTIR-1264); forwarded to the canvas. */
+   *  project's onboarding-ran marker (MOTIR-1264); forwarded to the canvas, which
+   *  draws it in the WHOLE-PROJECT scope only (it is the project road's origin). */
   showPlanningOrigin: boolean;
 }
 
