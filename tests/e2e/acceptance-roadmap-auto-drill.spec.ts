@@ -21,11 +21,13 @@
 // Plus a MULTI-ROOT negative control, so the feature can never become "always
 // drill into the first thing".
 //
-// The fixture's project is ONBOARDED (MOTIR-1824), so every root level it renders
-// also carries the pinned planning-origin cluster. That is deliberate: while the
-// descent counted a level's whole node array, the cluster made the sprint root two
-// nodes and this feature did nothing at all for an onboarded project — the shape
-// this spec could not cover until the count became "the level's WORK".
+// The fixture's project is ONBOARDED (MOTIR-1824), so the WHOLE-PROJECT root level
+// it renders also carries the pinned planning-origin cluster. That is deliberate:
+// while the descent counted a level's whole node array, the cluster made an
+// onboarded project's root two nodes and this feature did nothing at all for it —
+// the shape this spec could not cover until the count became "the level's WORK".
+// The SPRINT scope omits the cluster entirely (it is the project road's origin, not
+// the sprint slice's), so the sprint levels below assert its ABSENCE.
 //
 // AUTHORITATIVE SIGNALS ONLY — no fixed-duration sleep anywhere in this file.
 // Each level is a roadmap GET, and the auto-descend adds a SECOND fetch (the
@@ -153,11 +155,9 @@ test('roadmap auto-drill — a single-story sprint opens on its subtasks, and th
     for (const title of seed.subtaskTitles) {
       await expect(page.getByText(title, { exact: true })).toBeVisible();
     }
-    // The seeded project is ONBOARDED (MOTIR-1824), so the level we descended
-    // FROM held the pinned planning-origin cluster beside the lone story. That
-    // second node is what used to make this level "not single" and stop the
-    // descent dead; landing here at all is the browser-level proof it no longer
-    // counts. (It belongs to the root level only, so it is gone from this one.)
+    // No planning-origin cluster anywhere in sprint scope: it is the WHOLE-PROJECT
+    // road's origin (and belongs to a root level only), so neither the level we
+    // descended from nor this one draws it.
     await expect(page.getByTestId('planning-origin')).toHaveCount(0);
     // …and the skipped story is NOT rendered as a card; it is in the breadcrumb.
     // Asserting node count alone would pass on any unrelated level, so this
@@ -207,11 +207,12 @@ test('roadmap auto-drill — a single-story sprint opens on its subtasks, and th
     await breadcrumb(page).getByRole('button', { name: 'Roadmap', exact: true }).click();
 
     // (a) The single-parent level: the lone story card, no subtasks, no breadcrumb
-    // — and, pinned beside it, the planning-origin cluster this onboarded project
-    // draws (MOTIR-1824). Seeing BOTH here is the level whose two nodes used to
-    // suppress the descent, now rendered only because the user asked for it.
+    // — the level the descent skipped, now rendered only because the user asked
+    // for it. In sprint scope it is the story ALONE: the planning-origin cluster
+    // belongs to the whole-project road, so the sprint root never pins it (the
+    // project-scope leg in step 4 is where that cluster is asserted).
     await expect(page.getByText(seed.storyTitle, { exact: true })).toBeVisible();
-    await expect(page.getByTestId('planning-origin')).toBeVisible();
+    await expect(page.getByTestId('planning-origin')).toHaveCount(0);
     await expect(page.getByText(seed.subtaskTitles[0], { exact: true })).toHaveCount(0);
     await expect(breadcrumb(page)).toHaveCount(0);
     await beat();
@@ -239,6 +240,11 @@ test('roadmap auto-drill — a single-story sprint opens on its subtasks, and th
     await expect(page.getByText(seed.epicTitle, { exact: true })).toBeVisible();
     await expect(page.getByText(seed.otherEpicTitle, { exact: true })).toBeVisible();
     await expect(breadcrumb(page)).toHaveCount(0);
+    // The planning-origin cluster IS back: this onboarded project pins it at the
+    // whole-project road's start (MOTIR-1013 / MOTIR-1264). Together with its
+    // absence throughout the sprint legs above, this proves the cluster is SCOPE-
+    // GATED — not gone.
+    await expect(page.getByTestId('planning-origin')).toBeVisible();
   });
 
   // (c) Nothing tried to descend again at any point after the climb.
