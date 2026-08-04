@@ -132,7 +132,8 @@ export const ciRunnerBoot = defineJob(
     // So the RUN spans the hour and no STEP does. Each step below is a fixed,
     // small piece of work; the waiting happens in `ctx.step.sleep`, which holds
     // no invocation at all. This is Inngest's canonical shape for long external
-    // work and `lib/jobs/codeGraphSteps.ts` is the same move (MOTIR-1974).
+    // work; `lib/jobs/indexFleetSteps.ts` is the same move for the index fleet
+    // (MOTIR-2027, and MOTIR-2057 for the refresh caller).
     //
     // ⚠️ AND IT RETIRES MOTIR-2002's MEMO. With every phase inside a step,
     // Inngest's memoization gives once-per-RUN semantics for free: the boot (and

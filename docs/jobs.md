@@ -310,8 +310,11 @@ against an undeclared `maxDuration`, with no deadline on either call. All five
 production repos exhausted all five attempts on `FUNCTION_INVOCATION_TIMEOUT`
 and dead-lettered — including a repo small enough that size cannot explain it.
 The first fix (MOTIR-1974) split it into one `resolve-target` step plus one
-`index-project:<id>` step per project — the shape `system.code-graph-refresh`
-still runs (`lib/jobs/codeGraphSteps.ts`). MOTIR-2027 then took the INDEX job off
+`index-project:<id>` step per project — a shape `system.code-graph-refresh` kept
+running until MOTIR-2057 (`lib/jobs/codeGraphSteps.ts`, now deleted; refresh
+drives the container shape below, keeping only its per-repo debounce, after the
+step-per-project shape left it failing ~68% of `motir-core`'s refreshes on the
+180 s motir-ai deadline). MOTIR-2027 took the INDEX job off
 the bytes path entirely: it dispatches one container per (repo × project) and
 supervises it as `index-boot:<id>` → `ctx.step.sleep` → `index-poll:<id>:<n>` →
 `index-settle:<id>` (`lib/jobs/indexFleetSteps.ts`), so the run spans minutes and

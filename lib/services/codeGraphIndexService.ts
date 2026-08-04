@@ -1,5 +1,4 @@
 import { withSystemContext } from '@/lib/workspaces/context';
-import { getGitProvider } from '@/lib/git';
 import type { GitProviderId, NormalizedRepo } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -11,35 +10,31 @@ import {
   enqueueReposMissingFirstIndex,
   repoRefOf,
 } from '@/lib/github/indexEnqueue';
-import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 
 // codeGraphIndexService (Story 7.5 · MOTIR-1500, the motir-core producer half) —
-// the business logic behind the `system.code-graph-index` background job. When a
-// GitHub App installation adds a repo, motir-core fetches that repo's source at
-// its default branch using the INSTALLATION token, then hands the raw
-// gzipped-tarball BYTES to motir-ai to build a code graph. The credential + fetch
-// stay in motir-core; motir-ai receives bytes, never a host token (the open-core
-// invariant, docs/ai-boundary.md).
+// the business logic behind the code-graph jobs' READ half. When a repo is
+// connected (or pushed to), this resolves WHICH tenant and WHICH projects a
+// graph must be built for; the building itself happens in a fleet container
+// (`docs/decisions/code-graph-index-fleet.md` §2), so no repo bytes and no host
+// token ever pass through this file — the open-core invariant, docs/ai-boundary.md.
 //
 // 4-layer (CLAUDE.md): the job handler is the "service caller" for a background
-// trigger, so ALL the work lives here, not in the definition file, exactly as
+// trigger, so the work lives here, not in the definition file, exactly as
 // `billingSeatSync` delegates to `billingService`. This service owns the
-// repository reads (through the leaves), the RLS context, and the boundary
-// calls. Since MOTIR-1974 it exposes the work as TWO methods rather than one —
-// `resolveIndexTarget` (reads) and `indexRepoIntoProject` (one project's network
-// side effects) — because each must be its own durable checkpoint. What the
-// definition file adds is only the step SHAPE (which call is a `step.run`, and
-// that phase 2 runs once per resolved project); that is Inngest's concern and
-// belongs with the job, not in here.
+// repository reads (through the leaves), the RLS context, and the enqueue
+// gating. `resolveIndexTarget` is the checkpointed read the step shape drives;
+// what the definition file adds is only the SHAPE (which call is a `step.run`),
+// which is Inngest's concern and belongs with the job, not in here.
 //
 // TENANCY (the RESOLVED current-stage fan-out): a repo belongs to a WORKSPACE
 // (`GithubRepo.workspaceId` since MOTIR-1931 — NOT the installation's, which is
 // NULL for Motir's shared provisioning installation), but motir-ai's code-graph
 // tenant is PROJECT-scoped (the planner resolves `aiProjectId` from a planning
 // job's `projectId`). So this slice takes the repo's workspace off the job
-// payload, resolves its `organizationId` → ALL its projects, and calls motir-ai
-// ONCE PER PROJECT with the SAME tarball bytes. A repo connected or created for a
-// workspace is therefore indexed into each of that workspace's projects' stores.
+// payload, resolves its `organizationId` → ALL its projects, and the fan-out
+// dispatches ONE container PER PROJECT for the same repo. A repo connected or
+// created for a workspace is therefore indexed into each of that workspace's
+// projects' stores.
 //
 // The precise repo↔project association this fan-out wanted NOW EXISTS
 // (MOTIR-1780): `project_repository` is a project's repository SET, one row per
@@ -52,10 +47,10 @@ import { indexCodeGraph } from '@/lib/ai/motirAiClient';
 // paragraph as an invitation to fix it in passing.
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
-// transaction (RLS-safe under the trusted-writer escape, like the webhook); the
-// tarball fetch and the motir-ai upload are network side effects done AFTER that
-// transaction closes — in a different method entirely since MOTIR-1974 — so a
-// transaction is never held open across a GitHub / motir-ai round-trip.
+// transaction (RLS-safe under the trusted-writer escape, like the webhook); every
+// network side effect — the container dispatch, the enqueues — happens AFTER that
+// transaction closes, so a transaction is never held open across a GitHub,
+// motir-ai or orchestrator round-trip.
 
 export interface IndexRepoInput {
   /** GitHub's numeric installation id (as a string) — the token-minting key. */
@@ -96,21 +91,6 @@ export type IndexTarget =
        *  (see the TENANCY note above); one index step lands per entry. */
       projectIds: string[];
     };
-
-/** Everything one project's index step needs — the resolved tuple, flattened. */
-export interface IndexProjectInput extends IndexRepoInput {
-  providerId: GitProviderId;
-  organizationId: string;
-  repoRef: string;
-  projectId: string;
-}
-
-/** A small JSON-serializable summary of ONE project's index step. */
-export interface IndexProjectResult {
-  projectId: string;
-  repoRef: string;
-  filesIndexed: number;
-}
 
 /** One repo the first-index sweep found without a code graph. */
 export interface MissingFirstIndexRepo {
@@ -188,60 +168,17 @@ export const codeGraphIndexService = {
     };
   },
 
-  /**
-   * PHASE 2 (one checkpointed step PER PROJECT) — fetch the repo's tarball and
-   * hand those bytes to motir-ai for ONE project. Network side effects only, and
-   * no transaction is open across them.
-   *
-   * ⚠️ WHY ONE PROJECT PER CALL (MOTIR-1974). This used to be a single call that
-   * fetched once and then uploaded N times in a loop — and because Inngest can
-   * only checkpoint BETWEEN steps, the whole fetch + N uploads had to fit in ONE
-   * platform invocation. It never did: all five production repos 504'd on
-   * `FUNCTION_INVOCATION_TIMEOUT` and dead-lettered, the tiny starter repo
-   * exactly like `motir-core`. Splitting the fan-out into a step per project
-   * gives each upload its OWN invocation budget, and a failure resumes from the
-   * project it died on instead of restarting the repo.
-   *
-   * ⚠️ WHY THE TARBALL IS RE-FETCHED PER PROJECT. A `step.run` result must be
-   * JSON-serializable, so the bytes cannot cross a checkpoint — the fetch has to
-   * live INSIDE whichever step uses them. Re-fetching is the price of the
-   * checkpoint, and it is the cheap half: GitHub serves a pre-signed codeload
-   * URL in seconds, while the upload waits on motir-ai building the graph. Note
-   * that it costs nothing per invocation — replayed steps return from Inngest's
-   * memo without executing, so each invocation still performs exactly ONE fetch
-   * and ONE upload.
-   *
-   * ⚠️ WHY THE SAME BYTES ARE UPLOADED PER PROJECT AT ALL. motir-ai's code-graph
-   * store is PROJECT-scoped (`aiProjectId`), so a workspace's N projects need N
-   * stores; one upload cannot serve the workspace. Narrowing the fan-out to the
-   * repo's actual projects via `project_repository` (MOTIR-1780) is real, is
-   * unadopted here on purpose, and belongs to MOTIR-1754 — see the TENANCY note
-   * above. Do not read this as an invitation to change it in passing.
-   */
-  async indexRepoIntoProject(input: IndexProjectInput): Promise<IndexProjectResult> {
-    // The provider seam, dispatched by the discriminator phase 1 resolved.
-    const provider = getGitProvider(input.providerId);
-    const bytes = await provider.fetchRepoTarball(
-      input.installationId,
-      input.repoOwner,
-      input.repoName,
-      input.defaultBranch,
-    );
-
-    const result = await indexCodeGraph({
-      coreOrganizationId: input.organizationId,
-      coreWorkspaceId: input.workspaceId,
-      coreProjectId: input.projectId,
-      repoRef: input.repoRef,
-      bytes,
-    });
-
-    return {
-      projectId: input.projectId,
-      repoRef: input.repoRef,
-      filesIndexed: result.filesIndexed,
-    };
-  },
+  // ⚠️ PHASE 2 IS NOT HERE ANY MORE, AND MUST NOT COME BACK (MOTIR-2057). This
+  // service used to own `indexRepoIntoProject` — fetch the repo's tarball into
+  // this process, POST the bytes to motir-ai under
+  // `MOTIR_AI_INDEX_TIMEOUT_MS` — and MOTIR-2027 left it in place for
+  // `system.code-graph-refresh` after moving first-index to the container fleet.
+  // Production then ran the abandoned path for weeks at a ~68% failure rate:
+  // `motir-core`'s whole-tree parse does not fit in 180 s, and its retries
+  // starved every other repo's refresh. Both jobs now build on the fleet
+  // (`lib/jobs/indexFleetSteps.ts` → `codeGraphIndexDispatchService`), so this
+  // file is READS ONLY — the tenant/fan-out resolve above, and the two enqueue
+  // paths below. Anything that wants a graph built dispatches a container.
 
   /**
    * The repo-add paths' index trigger (MOTIR-1500, re-gated by MOTIR-1961) —

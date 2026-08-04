@@ -255,10 +255,13 @@ describe('requireRepoTarballUrlResolver (the LOUD refusal)', () => {
 
 describe('fetchRepoTarball is UNTOUCHED by this card', () => {
   it('still exists as a required method on both shipped providers', () => {
-    // §11: `system.code-graph-refresh` and motir-ai's hydrate-on-read path still
-    // use the byte-returning method. This card ADDS a sibling; it does not
-    // migrate or deprecate anything, and a future edit that removes the old
-    // method has to come past this assertion.
+    // MOTIR-1989 ADDED the URL-resolving sibling; it deprecated nothing, and a
+    // future edit that removes the byte-returning method has to come past this
+    // assertion. Its last in-app caller went with MOTIR-2057 (both code-graph
+    // jobs dispatch containers now), so what the method still backs is the
+    // PROVIDER CONTRACT — including `gitlabProvider`, which implements it and
+    // NOT `resolveRepoTarballUrl`, and so cannot be indexed on the fleet at all.
+    // Removing it is a decision about that gap, not a cleanup to do in passing.
     expect(typeof github.fetchRepoTarball).toBe('function');
     expect(typeof getGitProvider('gitlab').fetchRepoTarball).toBe('function');
   });
