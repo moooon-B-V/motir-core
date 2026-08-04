@@ -123,7 +123,7 @@ function searchParamsFrom(context: PlanningLaunchContext): Record<string, string
 async function renderPlanningPage(context: PlanningLaunchContext) {
   const element = (await PlanningWorkspacePage({
     searchParams: Promise.resolve(searchParamsFrom(context)),
-  })) as { type: unknown; props: Record<string, unknown> };
+  })) as { type: unknown; key: string | null; props: Record<string, unknown> };
   return element;
 }
 
@@ -354,6 +354,31 @@ describe('seam · a work-item launch opens the canvas ON the anchor’s level', 
     // conversation at the root, it does not swallow the host (MOTIR-2069 left
     // the canvas to decide what to draw, so this is the whole surface).
     expect(element.props['projectKey']).toBe(fx.project.identifier);
+  });
+
+  it('KEYS the host on the anchor, so re-entering about another item re-seeds it', async () => {
+    // The workspace's own canvas peek carries the per-item Plan door, so that
+    // launch is a SAME-ROUTE navigation: React reconciles the host in place and
+    // every `useState` seed (the canvas level, the pre-filled target set) keeps
+    // the PREVIOUS item's value while the chrome switches to the new one
+    // (MOTIR-2076). The key is what makes a different anchor a different
+    // workspace — asserted here because no in-place re-render can be observed
+    // from a single render, and the E2E that drives the real door is the only
+    // other place it shows.
+    await markOnboarded();
+    const epic = await seedItem({ kind: 'epic', title: 'Billing' });
+
+    const anchored = await renderPlanningPage({ kind: 'work-item', itemKey: epic.identifier });
+    expect(anchored.key).toBe(epic.identifier);
+
+    // …and it must be keyed on the ANCHOR ALONE: a same-anchor re-render (the
+    // `router.refresh()` an approve fires) must NOT remount and discard the
+    // conversation and the canvas's drill state.
+    const again = await renderPlanningPage({ kind: 'work-item', itemKey: epic.identifier });
+    expect((again as { key: string | null }).key).toBe((anchored as { key: string | null }).key);
+
+    const project = await renderPlanningPage({ kind: 'project', hasPlan: true });
+    expect(project.key).toBe('project');
   });
 
   it('leaves the project-scoped launch untouched — no anchor, no trail', async () => {

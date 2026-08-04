@@ -121,3 +121,51 @@ test('an UNRESOLVABLE ?item= opens the workspace at the root, never an error', a
   await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
   await expect(page.getByTestId('planning-target-node')).toHaveCount(0);
 });
+
+// The workspace contains a door back INTO itself: the canvas's own quick-view
+// peek carries the same per-item Plan / Re-plan entrance (MOTIR-910), so that
+// launch is a SAME-ROUTE navigation (`/planning?item=A` → `?item=B`) rather than
+// a navigation into the route. The host is reconciled in place, so nothing it
+// seeds in a `useState` initializer re-runs — the canvas stayed on whatever level
+// it was on and the target set came up empty, while the chrome switched to the
+// new item (MOTIR-2076). The other entrances could never catch this, and neither
+// could a `page.goto`: only clicking the in-app door reproduces it.
+test('re-entering from the canvas’s OWN peek re-seeds the level and the target', async ({
+  page,
+}) => {
+  const seed = await seedPlanningAnchorTree('planning-anchor-reentry@example.com');
+  await signIn(page, seed.email, seed.password);
+
+  // Open project-scoped (root level) and drill to the story, so a deep item is on
+  // screen to peek at — and so the canvas has a level it would WRONGLY keep.
+  await page.goto('/planning?mode=replan&from=project');
+  await expect(canvasNode(page, seed.epicTitle)).toBeVisible();
+  await canvasNode(page, seed.epicTitle).click();
+  await page.getByTestId('drill-button').click();
+  await expect(canvasNode(page, seed.storyTitle)).toBeVisible();
+
+  // …then drill once more, so the peeked item's own level is NOT the level the
+  // canvas is currently on. Without the remount the canvas simply stays here.
+  await canvasNode(page, seed.storyTitle).click();
+  await page.getByTestId('drill-button').click();
+  await expect(canvasNode(page, seed.subtaskTitle)).toBeVisible();
+
+  // Peek the SUBTASK from inside the workspace and take its Plan door.
+  await canvasNode(page, seed.subtaskTitle).click();
+  await page.getByTestId('view-button').click();
+  const entrance = page.getByTestId('work-item-plan-entrance');
+  await expect(entrance).toBeVisible();
+  await entrance.click();
+
+  await page.waitForURL(`**/planning**item=${seed.subtaskKey}`);
+
+  // The canvas re-seeded on the new anchor: its level, its ring…
+  const target = page.getByTestId('planning-target-node');
+  await expect(target).toBeVisible();
+  await expect(target).toContainText(seed.subtaskTitle);
+  await expect(canvasNode(page, seed.siblingTitle)).toBeVisible();
+  const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb).toContainText(`${seed.storyKey} · ${seed.storyTitle}`);
+  // …and the chat's target tray, which the same stale-seed bug left empty.
+  await expect(page.getByTestId('planning-target-chip')).toContainText(seed.subtaskKey);
+});
