@@ -1,3 +1,5 @@
+import { replaceInProse } from '@/lib/markdown/proseRanges';
+
 // Work-item reference parsing (Story 5.8 · Subtask 5.8.2). A reference to
 // ANOTHER work item serializes into stored Markdown as a durable token —
 // `[<KEY>](motir:<workItemId>)` — exactly parallel to the user-mention token
@@ -97,9 +99,17 @@ export function parseWorkItemKeys(text: string, projectIdentifier: string): stri
  * it to the canonical token closes that gap (bug MOTIR-1440): a bare key then
  * BOTH relates AND chips. Idempotent + non-destructive:
  *
- *  - An already-explicit `[label](motir:<id>)` token is left verbatim — the
- *    bare-key scan steps over the text INSIDE a token — so re-normalising a
- *    stored body is a no-op (and the in-app editor's round-trip stays stable).
+ *  - Only PROSE is rewritten. The scan is Markdown-structure-aware (bug
+ *    MOTIR-2043): a key inside an inline code span, a fenced or indented code
+ *    block, a raw HTML block, a link/image DESTINATION, or a link LABEL is the
+ *    author's literal text — documentation or a path — and is left verbatim.
+ *    `replaceInProse` (lib/markdown/proseRanges.ts) owns that judgement; before
+ *    it, a single blind `String.replace` spliced tokens into all of them and
+ *    PERSISTED the corruption.
+ *  - An already-explicit `[label](motir:<id>)` token is left verbatim — its key
+ *    sits in a link LABEL, which the prose rule already excludes — so
+ *    re-normalising a stored body is a no-op (and the in-app editor's round-trip
+ *    stays stable).
  *  - A bare key absent from `resolve` (unknown / unresolved / cross-project)
  *    stays plain text — never invent a token for a key that doesn't resolve.
  *  - Only THIS project's prefix is a candidate (the parser's same-project rule).
@@ -114,19 +124,16 @@ export function normalizeWorkItemRefs(
 ): string {
   if (resolve.size === 0) return text;
   const prefix = projectIdentifier.toUpperCase();
-  // ONE pass alternating between a whole `motir:` token (group 1 — left
-  // verbatim) and a bare key (group 2 = its number). Matching the token form
-  // FIRST means a key sitting inside a token's label is consumed by the token
-  // branch and never re-wrapped — that is what makes the rewrite idempotent.
-  const tokenSrc = '\\[[^\\]]*\\]\\(motir:[A-Za-z0-9_-]+\\)';
-  const keySrc = `\\b${escapeRe(projectIdentifier)}-(\\d+)\\b`;
-  const re = new RegExp(`(${tokenSrc})|${keySrc}`, 'gi');
-  return text.replace(re, (match, tokenMatch, keyNum) => {
-    if (tokenMatch !== undefined) return match; // an existing token — untouched
-    const key = `${prefix}-${keyNum as string}`;
-    const id = resolve.get(key);
-    return id ? `[${key}](motir:${id})` : match; // unresolved key stays plain
-  });
+  // One `/gi` matcher, reused across prose runs: `String.replace` resets a
+  // global regex's lastIndex, so no state leaks from run to run.
+  const re = buildWorkItemKeyRe(projectIdentifier);
+  return replaceInProse(text, (prose) =>
+    prose.replace(re, (match, keyNum: string) => {
+      const key = `${prefix}-${keyNum}`;
+      const id = resolve.get(key);
+      return id ? `[${key}](motir:${id})` : match; // unresolved key stays plain
+    }),
+  );
 }
 
 /** The referenced ids (from `motir:` tokens) and bare keys found in a body. */

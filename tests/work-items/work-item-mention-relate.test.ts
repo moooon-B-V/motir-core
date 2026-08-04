@@ -365,6 +365,44 @@ describe('normalize bare refs on write (bug MOTIR-1440)', () => {
     const row = await db.workItem.findUnique({ where: { id: dto.id } });
     expect(row?.explanationMd).toBe(`Implements ${token(target)}.`);
   });
+
+  // Bug MOTIR-2043 — the write path must not splice a token into a key the
+  // author deliberately put in code or in a path. Asserted HERE, at the seam,
+  // because the corruption was PERSISTED: the unit test proves the string rule,
+  // this proves the row that lands in the DB.
+  it('CREATE leaves a key in code / a link destination literal, yet still wires the edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const body = [
+      `Documented as \`${target.identifier}\`, linked at [it](/items/${target.identifier}),`,
+      '',
+      '```',
+      `const key = "${target.identifier}";`,
+      '```',
+      '',
+      `and blocked by ${target.identifier} in prose.`,
+    ].join('\n');
+
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', { descriptionMd: body });
+
+    // Only the PROSE key became a chip token; code, span and path are verbatim.
+    expect(await storedDescription(dto.id)).toBe(
+      body.replace(`blocked by ${target.identifier}`, `blocked by ${token(target)}`),
+    );
+    // The reference still counts: the relates_to edge (5.8.3) is unaffected.
+    expect(await linkBetween(dto.id, target.id)).not.toBeNull();
+  });
+
+  it('UPDATE of a body whose ONLY key sits in code stores it byte-identical', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source');
+    const body = `Write \`${target.identifier}\` to reference it.`;
+
+    await workItemsService.updateWorkItem(dto.id, { descriptionMd: body }, fx.ctx);
+
+    expect(await storedDescription(dto.id)).toBe(body);
+  });
 });
 
 describe('auto-relate concurrency', () => {

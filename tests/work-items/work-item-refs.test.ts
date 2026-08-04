@@ -190,3 +190,85 @@ describe('intra-plan item-link tokens (MOTIR-1418)', () => {
     expect(INTRA_PLAN_REF_TOKEN_RE.lastIndex).toBe(0);
   });
 });
+
+describe('normalizeWorkItemRefs is Markdown-structure-aware (bug MOTIR-2043)', () => {
+  const resolve = new Map([
+    ['MOTIR-11', 'idEleven'],
+    ['MOTIR-12', 'idTwelve'],
+  ]);
+  const same = (body: string) => expect(normalizeWorkItemRefs(body, 'MOTIR', resolve)).toBe(body);
+
+  it('leaves a key inside an inline code span literal', () => {
+    same('Write `MOTIR-11` to reference it.');
+  });
+
+  it('leaves a key inside a multi-backtick code span literal', () => {
+    same('A span holding a backtick: ``MOTIR-11 ` still code``.');
+  });
+
+  it('leaves a key inside a fenced code block literal', () => {
+    same('Before.\n\n```\nconst key = "MOTIR-11";\n```\n\nAfter.');
+  });
+
+  it('leaves a key inside an indented code block literal', () => {
+    same('Sample:\n\n    grep MOTIR-11 .\n\nDone.');
+  });
+
+  it('leaves a key inside a link destination literal', () => {
+    same('Open [the item](/items/MOTIR-11) now.');
+  });
+
+  it('leaves a key inside a link LABEL literal (never nests a link in a link)', () => {
+    same('Open [see MOTIR-11](https://example.test/x) now.');
+  });
+
+  it('leaves a key inside a reference-style link label literal', () => {
+    same('Open [MOTIR-11][ref] now.\n\n[ref]: https://example.test/x\n');
+  });
+
+  it('leaves a key inside an image destination literal', () => {
+    same('![a diagram](/img/MOTIR-11.png)');
+  });
+
+  it('leaves a key inside a GFM autolink literal URL', () => {
+    same('See https://app.motir.test/items/MOTIR-11 for detail.');
+  });
+
+  it('leaves a key inside a raw HTML block literal', () => {
+    same('<div>\nMOTIR-11\n</div>');
+  });
+
+  it('still rewrites a prose key in the SAME body as a protected one', () => {
+    expect(
+      normalizeWorkItemRefs('Blocks MOTIR-11; the token is `MOTIR-12`.', 'MOTIR', resolve),
+    ).toBe('Blocks [MOTIR-11](motir:idEleven); the token is `MOTIR-12`.');
+  });
+
+  it('still rewrites a prose key in a heading, list item, quote and table cell', () => {
+    expect(
+      normalizeWorkItemRefs(
+        '# MOTIR-11\n\n- MOTIR-11\n\n> MOTIR-11\n\n| h |\n| --- |\n| MOTIR-11 |\n',
+        'MOTIR',
+        resolve,
+      ),
+    ).toBe(
+      '# [MOTIR-11](motir:idEleven)\n\n- [MOTIR-11](motir:idEleven)\n\n> [MOTIR-11](motir:idEleven)\n\n| h |\n| --- |\n| [MOTIR-11](motir:idEleven) |\n',
+    );
+  });
+
+  it('stays idempotent over a body mixing prose, code and links', () => {
+    const body =
+      'Blocks MOTIR-11, documents `MOTIR-12`, links [x](/items/MOTIR-11) and cites [MOTIR-12](motir:idTwelve).';
+    const once = normalizeWorkItemRefs(body, 'MOTIR', resolve);
+    expect(once).toBe(
+      'Blocks [MOTIR-11](motir:idEleven), documents `MOTIR-12`, links [x](/items/MOTIR-11) and cites [MOTIR-12](motir:idTwelve).',
+    );
+    expect(normalizeWorkItemRefs(once, 'MOTIR', resolve)).toBe(once);
+  });
+
+  it('reproduces the MOTIR-2043 report: a backticked key survives the round-trip', () => {
+    // The card's own description: a key deliberately backticked as documentation.
+    const body = 'I wrapped it as `MOTIR-11` precisely so it would stay literal text.';
+    same(body);
+  });
+});
