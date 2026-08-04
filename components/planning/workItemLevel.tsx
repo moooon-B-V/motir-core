@@ -4,7 +4,11 @@ import {
   ORIGIN_W,
 } from '@/components/planning/PlanningOriginCluster';
 import { GhostAnchor, WorkItemNode } from '@/components/planning/WorkItemNode';
-import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
+import {
+  workItemCrumbLabel,
+  type ProjectCanvasDep,
+  type ProjectCanvasNode,
+} from '@/lib/planning/projectCanvasModel';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 
 // Turn one fetched roadmap LEVEL (items + blocked_by edges + off-level blocker
@@ -138,8 +142,9 @@ export function buildWorkItemLevel(
       // clicked. On an AUTO-DESCENDED ARRIVAL nobody clicked (MOTIR-1807), and the
       // breadcrumb is the ONLY thing carrying the skipped level, so a bare key would
       // reference it without naming it. Applied to manual and auto crumbs identically,
-      // so no special mode is introduced.
-      crumbLabel: `${item.identifier} · ${item.title}`,
+      // so no special mode is introduced. Shared with the trail the planning host
+      // SEEDS the canvas with (MOTIR-2070) via one helper, so the two can't drift.
+      crumbLabel: workItemCrumbLabel(item.identifier, item.title),
       drillable: item.hasChildren,
       // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
       // anchors below are off-level blocker STUBS — they are ALSO viewable now

@@ -26,13 +26,13 @@ const {
   getActiveProject,
   getCapabilities,
   getProjectRoadmap,
-  getWorkItemByIdentifier,
+  getWorkItemWithAncestors,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   getActiveProject: vi.fn(),
   getCapabilities: vi.fn(),
   getProjectRoadmap: vi.fn(),
-  getWorkItemByIdentifier: vi.fn(),
+  getWorkItemWithAncestors: vi.fn(),
 }));
 
 const { redirect } = vi.hoisted(() => ({
@@ -51,7 +51,7 @@ vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { getCapabilities },
 }));
 vi.mock('@/lib/services/workItemsService', () => ({
-  workItemsService: { getProjectRoadmap, getWorkItemByIdentifier },
+  workItemsService: { getProjectRoadmap, getWorkItemWithAncestors },
 }));
 
 import PlanningWorkspacePage from '@/app/(planning)/planning/page';
@@ -85,11 +85,12 @@ beforeEach(() => {
   getActiveProject.mockResolvedValue(PROJECT);
   getCapabilities.mockResolvedValue({ canBrowse: true });
   getProjectRoadmap.mockResolvedValue({ nodes: [{ id: 'wi1' }] });
-  getWorkItemByIdentifier.mockResolvedValue({
-    id: 'wi_9',
-    identifier: 'ACME-9',
-    title: 'Billing',
-    kind: 'story',
+  // The LINEAGE read (MOTIR-2070) replaced the bare identifier resolve: the
+  // canvas's arrival level needs the anchor's ancestors, so the page asks for
+  // both in the one gated read rather than adding a second.
+  getWorkItemWithAncestors.mockResolvedValue({
+    item: { id: 'wi_9', identifier: 'ACME-9', title: 'Billing', kind: 'story' },
+    ancestors: [{ id: 'wi_1', identifier: 'ACME-1', title: 'Platform' }],
   });
 });
 
@@ -127,20 +128,25 @@ describe('the workspace opens BEFORE any canvas data (MOTIR-2069)', () => {
     const element = await render({ item: 'ACME-9', from: 'work-item', mode: 'contextual' });
 
     // One read, not two queued end to end (an item-anchored launch used to pay
-    // the roadmap round-trip first and the anchor round-trip after it).
-    expect(getWorkItemByIdentifier).toHaveBeenCalledTimes(1);
+    // the roadmap round-trip first and the anchor round-trip after it). It stays
+    // ONE even though MOTIR-2070 now needs the ancestor chain as well — the
+    // lineage read carries both, rather than a second lookup joining the queue.
+    expect(getWorkItemWithAncestors).toHaveBeenCalledTimes(1);
     expect(getProjectRoadmap).not.toHaveBeenCalled();
     expect(element.props.anchorId).toBe('wi_9');
     expect(element.props.initialTarget).toMatchObject({ identifier: 'ACME-9' });
+    expect(element.props.initialCanvasTrail).toEqual([{ id: 'wi_1', label: 'ACME-1 · Platform' }]);
   });
 
   it('an unresolvable ?item= still opens the workspace on the project conversation', async () => {
-    getWorkItemByIdentifier.mockRejectedValue(new Error('not found'));
+    getWorkItemWithAncestors.mockRejectedValue(new Error('not found'));
 
     const element = await render({ item: 'GONE-9', from: 'work-item', mode: 'contextual' });
 
     expect(element.props.anchorId).toBeNull();
     expect(element.props.initialTarget).toBeNull();
+    // …and the canvas falls back to the root level, not a half-built trail.
+    expect(element.props.initialCanvasTrail).toEqual([]);
   });
 });
 

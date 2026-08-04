@@ -286,6 +286,88 @@ describe('seam · the launcher’s href is what the /planning HOST resolves', ()
   });
 });
 
+// ───────────── Seam 1b — the anchor → the CANVAS's arrival level ─────────────
+//
+// The `?item=` anchor used to reach only the CONVERSATION: the page resolved it,
+// spent it on the chat's target set, and mounted the canvas with no level at all,
+// so a workspace summoned about a subtask three levels down opened on the project's
+// epics and drew that subtask's target ring on a level the user was not on
+// (MOTIR-2070). What no unit can see is whether the page ACTUALLY derives the trail
+// from the real tree — a unit test would assert against its own fixture of the
+// ancestor chain. So this drives the real page over a real, really-nested project.
+
+describe('seam · a work-item launch opens the canvas ON the anchor’s level', () => {
+  it('derives the trail from the REAL ancestor chain, root→parent, anchor excluded', async () => {
+    await markOnboarded();
+    const epic = await seedItem({ kind: 'epic', title: 'Epic 7: AI Planning Layer' });
+    const story = await seedItem({
+      kind: 'story',
+      title: 'Contextual planning from each work item',
+      parentId: epic.id,
+    });
+    const subtask = await seedItem({
+      kind: 'subtask',
+      title: 'Seed the canvas at the anchor',
+      parentId: story.id,
+    });
+
+    const element = await renderPlanningPage({ kind: 'work-item', itemKey: subtask.identifier });
+
+    // The canvas opens on the level CONTAINING the anchor: the last crumb is the
+    // anchor's PARENT, so the anchor itself is one of the nodes drawn — with its
+    // siblings and dependency edges, the context a plan-change turn about it needs.
+    expect(element.props['initialCanvasTrail']).toEqual([
+      { id: epic.id, label: `${epic.identifier} · Epic 7: AI Planning Layer` },
+      { id: story.id, label: `${story.identifier} · Contextual planning from each work item` },
+    ]);
+    // …and the anchor still reaches the conversation + the target set, unchanged.
+    expect(element.props['anchorId']).toBe(subtask.id);
+    expect(element.props['initialTarget']).toMatchObject({
+      id: subtask.id,
+      identifier: subtask.identifier,
+    });
+  });
+
+  it('leaves a ROOT-level anchor (an epic) at the root — it is already on that level', async () => {
+    await markOnboarded();
+    const epic = await seedItem({ kind: 'epic', title: 'Billing' });
+
+    const element = await renderPlanningPage({ kind: 'work-item', itemKey: epic.identifier });
+
+    expect(element.props['initialCanvasTrail']).toEqual([]);
+    expect(element.props['anchorId']).toBe(epic.id);
+  });
+
+  it('falls back to the ROOT level for an unresolvable ?item=, with no error state', async () => {
+    await markOnboarded();
+    await seedItem({ kind: 'epic', title: 'Billing' });
+
+    // A hand-edited / another tenant's / deleted key: the resolve throws and the
+    // page swallows it. The workspace must still open — on the project conversation
+    // at the root level, exactly as before this fix.
+    const element = await renderPlanningPage({ kind: 'work-item', itemKey: 'PROD-9999' });
+
+    expect(element.props['initialCanvasTrail']).toEqual([]);
+    expect(element.props['anchorId']).toBeNull();
+    expect(element.props['initialTarget']).toBeNull();
+    // The workspace still OPENS — the failed resolve degrades to the project
+    // conversation at the root, it does not swallow the host (MOTIR-2069 left
+    // the canvas to decide what to draw, so this is the whole surface).
+    expect(element.props['projectKey']).toBe(fx.project.identifier);
+  });
+
+  it('leaves the project-scoped launch untouched — no anchor, no trail', async () => {
+    await markOnboarded();
+    await seedItem({ kind: 'epic', title: 'Billing' });
+
+    const element = await renderPlanningPage({ kind: 'project', hasPlan: true });
+
+    expect(element.props['initialCanvasTrail']).toEqual([]);
+    expect(element.props['anchorId']).toBeNull();
+    expect(element.props['initialTarget']).toBeNull();
+  });
+});
+
 // ─────────────────── Seam 2 — the thread → what the job gets ───────────────────
 
 describe('seam · the ACCUMULATED thread is what the plan-edit job receives', () => {

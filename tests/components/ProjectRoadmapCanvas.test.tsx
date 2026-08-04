@@ -761,4 +761,123 @@ describe('ProjectRoadmapCanvas', () => {
       expect(crumbLabels()).toEqual(['Roadmap', 'P']);
     });
   });
+  // ── ARRIVE ALREADY DRILLED (MOTIR-2070) ───────────────────────────────────
+  //
+  // The canvas normally arrives at the root. A consumer that knows where the user
+  // is headed — the planning workspace, summoned ABOUT a work item — passes the
+  // anchor's ancestor trail so the workspace opens on the level that CONTAINS the
+  // item instead of the project's epics, where its target ring would be drawn on a
+  // level nobody is looking at. The seed must be indistinguishable from a manual
+  // drill (design `auto-drill` panel C's rule, applied to an arrival): same
+  // breadcrumb, Back climbs the same way, and it is a SEED, not a controlled level.
+  describe('the seeded arrival level (initialTrail)', () => {
+    // root → [P] → [C] → [L1, L2]
+    const deep: Record<string, RoadmapLevel> = {
+      __root__: { nodes: [node('P', 'Parent story', true)], deps: [] },
+      P: { nodes: [node('C', 'Child story', true)], deps: [] },
+      C: { nodes: [node('L1', 'Leaf one'), node('L2', 'Leaf two')], deps: [] },
+    };
+    const serveDeep = (parentId: string | null) =>
+      Promise.resolve(deep[parentId ?? '__root__'] ?? { nodes: [], deps: [] });
+
+    const crumbNav = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
+    const crumbLabels = () =>
+      within(crumbNav())
+        .getAllByRole('listitem')
+        .map((li) => li.textContent);
+
+    it('opens on the trail’s LAST level, with the whole trail as the breadcrumb', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serveDeep}
+          rootLabel="Roadmap"
+          initialTrail={[
+            { id: 'P', label: 'MOTIR-1 · Parent story' },
+            { id: 'C', label: 'MOTIR-2 · Child story' },
+          ]}
+        />,
+      );
+
+      // The anchor's LEVEL — not the root, and not the anchor's own children.
+      expect(await screen.findByText('Leaf one')).toBeTruthy();
+      expect(el('L2')).toBeTruthy();
+      expect(el('P')).toBeNull();
+      expect(crumbLabels()).toEqual(['Roadmap', 'MOTIR-1 · Parent story', 'MOTIR-2 · Child story']);
+    });
+
+    it('is an ordinary drilled view — Back climbs one level, the root crumb returns', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serveDeep}
+          rootLabel="Roadmap"
+          initialTrail={[
+            { id: 'P', label: 'MOTIR-1 · Parent story' },
+            { id: 'C', label: 'MOTIR-2 · Child story' },
+          ]}
+        />,
+      );
+      await screen.findByText('Leaf one');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(await screen.findByText('Child story')).toBeTruthy();
+      expect(crumbLabels()).toEqual(['Roadmap', 'MOTIR-1 · Parent story']);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Roadmap' }));
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+    });
+
+    it('opens at the ROOT for an EMPTY trail — the shipped, unanchored arrival', async () => {
+      render(<ProjectRoadmapCanvas loadLevel={serveDeep} rootLabel="Roadmap" initialTrail={[]} />);
+
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      expect(el('L1')).toBeNull();
+      expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+    });
+
+    it('is a SEED, not a controlled level — a later prop change never yanks the user', async () => {
+      const { rerender } = render(
+        <ProjectRoadmapCanvas
+          loadLevel={serveDeep}
+          rootLabel="Roadmap"
+          reloadKey="1"
+          initialTrail={[{ id: 'P', label: 'MOTIR-1 · Parent story' }]}
+        />,
+      );
+      await screen.findByText('Child story');
+
+      // The user climbs out; the host then re-renders (a new proposal bumps the
+      // reload key) still passing the mount-time trail. The canvas must stay put.
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+
+      rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={serveDeep}
+          rootLabel="Roadmap"
+          reloadKey="2"
+          initialTrail={[{ id: 'P', label: 'MOTIR-1 · Parent story' }]}
+        />,
+      );
+      expect(await screen.findByText('Parent story')).toBeTruthy();
+      expect(el('C')).toBeNull();
+    });
+
+    it('does NOT auto-descend out of the level it was aimed at', async () => {
+      // The seeded level holds exactly one drillable node, which auto-descend would
+      // normally walk past — but the consumer aimed the canvas HERE on purpose.
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={serveDeep}
+          rootLabel="Roadmap"
+          autoDescendSingleParent
+          initialTrail={[{ id: 'P', label: 'MOTIR-1 · Parent story' }]}
+        />,
+      );
+
+      expect(await screen.findByText('Child story')).toBeTruthy();
+      expect(el('L1')).toBeNull();
+      expect(crumbLabels()).toEqual(['Roadmap', 'MOTIR-1 · Parent story']);
+    });
+  });
 });

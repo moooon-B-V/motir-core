@@ -106,6 +106,19 @@ export interface CanvasCrumb {
   label: string;
 }
 
+/**
+ * A work item's BREADCRUMB label — `identifier · title` (MOTIR-1805 design
+ * DECISION 2). Lives here, in the pure model, because two independent producers
+ * write it and they must not drift: `buildWorkItemLevel` stamps it on every node
+ * the canvas may drill INTO, and the planning host stamps it on the ancestor
+ * trail it SEEDS the canvas with (MOTIR-2070). A seeded crumb has to read
+ * identically to a hand-drilled one, or the breadcrumb tells the user they got
+ * somewhere two different ways.
+ */
+export function workItemCrumbLabel(identifier: string, title: string): string {
+  return `${identifier} · ${title}`;
+}
+
 // ── layout constants (exported so the canvas can hint node sizes for edge
 //    anchoring + measure the deterministic grid). A node card is ~280×124 — a
 //    COMPACT card (tight padding, a small top-left status chip, a two-line title)
