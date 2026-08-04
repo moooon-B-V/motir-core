@@ -1388,6 +1388,36 @@
         "genericError": "出了点问题"
       }
     },
+    "statusAutomation": {
+      "title": "状态联动",
+      "subtitle": "让父工作项与其子项保持同步。Motir 默认双向推导状态；每个开关分别关闭对应方向。",
+      "rollup": {
+        "label": "由子项汇总父工作项状态",
+        "hint": "父工作项跟随子项的进展。它只会向前推进，且只沿工作流已允许的流转移动——重新打开某个子项不会让父工作项回退。",
+        "ladder": {
+          "inProgressStatus": "进行中",
+          "inProgressWhen": "任一子项开始时",
+          "inReviewStatus": "评审中",
+          "inReviewWhen": "最后一个未完成的子项进入评审时",
+          "doneStatus": "已完成",
+          "doneWhen": "所有子项均已完成或已取消时"
+        }
+      },
+      "cascade": {
+        "label": "父工作项完成时一并完成其子项",
+        "hint": "当父工作项进入「已完成」——包括其合并请求合并后自动完成——其未完成的子项也会一并完成。<strong>这包括尚未开始的子项。</strong>如果团队单独跟踪子项工作，请关闭此项。",
+        "hintOff": "已关闭——完成父工作项不会改变其子项，由团队自行关闭。"
+      },
+      "footer": {
+        "dirtyHint": "有未保存的更改",
+        "save": "保存更改"
+      },
+      "lock": "仅项目管理员可以更改状态联动。",
+      "savedTitle": "状态联动已保存",
+      "savedDesc": "已更新 {project}。",
+      "errorTitle": "保存失败",
+      "saveError": "状态联动更改未能保存，请重试。"
+    },
     "board": {
       "title": "面板",
       "cardDescription": "面板的列，以及每列显示哪些状态。",

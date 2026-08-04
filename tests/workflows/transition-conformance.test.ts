@@ -118,12 +118,15 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the sixteen default transition edges (finding #45 + 7.8.11)', () => {
+  it('declares exactly the seventeen default transition edges (finding #45 + 7.8.11 + MOTIR-1625)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
         'in_progress>in_review',
         'in_review>done',
+        // MOTIR-1625: review is optional — an item can finish straight from
+        // in_progress (and the MOTIR-1615 rollup's done rung needs this edge).
+        'in_progress>done',
         'todo>blocked',
         'in_progress>blocked',
         // Subtask 7.8.11: an integrated-awaiting-review item can stall on a blocker.
@@ -140,18 +143,18 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'blocked>cancelled',
       ]),
     );
-    expect(EDGES).toHaveLength(16);
+    expect(EDGES).toHaveLength(17);
   });
 
-  it('partitions the 6×6 grid into 16 edges + 6 self-loops + 14 non-edges', () => {
+  it('partitions the 6×6 grid into 17 edges + 6 self-loops + 13 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(14);
+    expect(NON_EDGES).toHaveLength(13);
   });
 });
 
-describe('restricted mode — every default edge is accepted (the full 16-edge sweep)', () => {
+describe('restricted mode — every default edge is accepted (the full 17-edge sweep)', () => {
   it.each(EDGES)(
     '%s → %s transitions and records exactly one "updated" revision',
     async (from, to) => {

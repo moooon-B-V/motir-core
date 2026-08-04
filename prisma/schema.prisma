@@ -700,6 +700,26 @@ model Project {
   /// flip back to `restricted` restores the graph. Jira and Linear both ship
   /// this same "guarded vs anything-goes" project-level toggle.
   workflowPolicyMode      WorkflowPolicyMode    @default(restricted)
+  /// UPWARD status rollup switch (MOTIR-1615 · MOTIR-1618;
+  /// `docs/decisions/status-derivation.md` §2). When true, a child's status
+  /// transition rolls its PARENT up the derivation ladder — any child in progress
+  /// ⇒ parent in progress; the last open child reaching review ⇒ parent in review;
+  /// every child done ⇒ parent done. Default `true`: two-way status sync is
+  /// Motir's OPINION, not an opt-in feature, and the ADR's rollout decision
+  /// backfills existing projects to ON (pre-GA, uniform opinion) — so this needs
+  /// no data step, only the column default. The rollup only ever advances the
+  /// parent along the project's REAL workflow edges, so a team whose workflow
+  /// cannot take the move simply gets no derivation.
+  autoRollupParentStatus  Boolean               @default(true) @map("auto_rollup_parent_status")
+  /// DOWNWARD status cascade switch (MOTIR-1615 · MOTIR-1618; same ADR). When
+  /// true, an item transitioning INTO a done-category status completes every
+  /// not-done direct child (grandchildren follow by event re-emission). A SECOND,
+  /// independent column rather than one combined switch — the two directions have
+  /// different risk profiles (the cascade auto-completes UNSTARTED children,
+  /// which a team may legitimately not want), and one switch could not express
+  /// upward-only, the commonest preference. Default `true` for the same reason as
+  /// its sibling.
+  autoCompleteChildrenOnParentDone Boolean      @default(true) @map("auto_complete_children_on_parent_done")
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the

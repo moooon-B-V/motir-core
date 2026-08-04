@@ -185,6 +185,39 @@ export const workflowsService = {
   },
 
   /**
+   * Resolve an INTENT — "the status meaning X in this project" — to a concrete
+   * status key in the project's live workflow: the preferred key if it exists,
+   * else the first status of the target CATEGORY, else null.
+   *
+   * This is the "never hard-code a status key" rule, made shareable. It started
+   * as a module-private helper in the change-request status sync (Story 7.10 ·
+   * MOTIR-892) and was extracted here by MOTIR-1620 so all three consumers use
+   * ONE resolver rather than growing divergent copies:
+   *   * the change-request sync — maps a PR lifecycle to a status;
+   *   * the upward status rollup — resolves each ladder rung's target;
+   *   * the downward status cascade — resolves the project's `done` status.
+   *
+   * The `key`-then-`category` order matters and is not a fallback nicety: two
+   * default statuses share the `in_progress` category (`in_progress` and
+   * `in_review`), so category alone cannot name "review". Preferring the key
+   * picks the right one in the common case; the category fallback is what keeps a
+   * project that RENAMED its statuses working. `null` — a custom workflow with
+   * nothing in the target category — is a legitimate answer the callers turn into
+   * a logged no-op, never a crash.
+   */
+  async resolveStatusKey(
+    projectId: string,
+    workspaceId: string,
+    target: { key: string; category: StatusCategoryDto },
+  ): Promise<string | null> {
+    const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+    const byKey = statuses.find((s) => s.key === target.key);
+    if (byKey) return byKey.key;
+    const byCategory = statuses.find((s) => s.category === target.category);
+    return byCategory?.key ?? null;
+  },
+
+  /**
    * One status by its machine-stable `key` (the lookup `work_item.status`
    * resolves through), or null if no such status in this project/workspace.
    */
@@ -311,7 +344,8 @@ export const workflowsService = {
 
   /**
    * Seed a project's default workflow (Subtask 2.2.2) — the 6 statuses +
-   * 16 transitions from lib/workflows/defaultWorkflow (finding #45 + 7.8.11).
+   * 17 transitions from lib/workflows/defaultWorkflow (finding #45 + 7.8.11 +
+   * MOTIR-1625).
    * NEVER opens its own transaction: `tx` is REQUIRED and supplied by the
    * caller (createProject), so the project insert and its workflow are atomic —
    * a rollback of either rolls back both. Statuses are inserted first to

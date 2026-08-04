@@ -1388,6 +1388,36 @@
         "genericError": "Something went wrong"
       }
     },
+    "statusAutomation": {
+      "title": "Status automation",
+      "subtitle": "Keep a parent and its children in step. Motir derives status in both directions by default; each switch turns its own direction off.",
+      "rollup": {
+        "label": "Roll up parent status from children",
+        "hint": "A parent follows its children's progress. It only ever moves a parent forward, along moves your workflow already allows — reopening a child never moves a parent back.",
+        "ladder": {
+          "inProgressStatus": "In Progress",
+          "inProgressWhen": "as soon as any child starts",
+          "inReviewStatus": "In Review",
+          "inReviewWhen": "when the last open child reaches review",
+          "doneStatus": "Done",
+          "doneWhen": "when every child is finished or cancelled"
+        }
+      },
+      "cascade": {
+        "label": "Complete children when a parent is done",
+        "hint": "When a parent reaches Done — including automatically, when its pull request merges — its unfinished children are completed too. <strong>This includes children nobody has started yet.</strong> Turn it off if your team tracks child work separately.",
+        "hintOff": "Off — closing a parent leaves its children where they are, for your team to close themselves."
+      },
+      "footer": {
+        "dirtyHint": "Unsaved changes",
+        "save": "Save changes"
+      },
+      "lock": "Only a project admin can change status automation.",
+      "savedTitle": "Status automation saved",
+      "savedDesc": "Updated for {project}.",
+      "errorTitle": "Couldn't save",
+      "saveError": "Your status-automation changes weren't saved. Please try again."
+    },
     "board": {
       "title": "Board",
       "cardDescription": "Columns and which statuses each column shows.",

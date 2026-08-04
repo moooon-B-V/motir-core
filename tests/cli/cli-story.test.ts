@@ -1225,21 +1225,36 @@ describe('single dispatch — motir next / run / done', () => {
     expect((await stateOf(fx, blocked.id)).status).toBe('in_progress');
   });
 
-  it('`done` rejects an illegal hop with the allowed targets, and completes via --via', async () => {
+  it('`done` closes an in_progress item directly, and --via walks it through review', async () => {
     const { fx } = await linkedProject();
     const item = await leaf(fx, 'Close me out');
     await ws.run(['run', item.identifier, '--print']);
 
-    // in_progress → done is not an edge of the default workflow.
-    const illegal = await ws.run(['done', item.identifier]);
-    expect(illegal.exitCode).toBe(1);
-    expect(illegal.stderr).toContain('In Review');
-    expect(illegal.stderr).toContain('--via in_review');
-    expect((await stateOf(fx, item.id)).status).toBe('in_progress');
-
-    const done = await ws.run(['done', item.identifier, '--via', 'in_review']);
+    // Since MOTIR-1625, `in_progress → done` IS an edge of the default workflow
+    // (review is optional), so the bare hop succeeds.
+    const done = await ws.run(['done', item.identifier]);
     expect(done.exitCode).toBe(0);
     expect((await stateOf(fx, item.id)).status).toBe('done');
+
+    // --via still walks an explicitly-named intermediate status, for a workflow
+    // (or a team) that wants the review hop recorded.
+    const other = await leaf(fx, 'Close me out via review');
+    await ws.run(['run', other.identifier, '--print']);
+    const viaReview = await ws.run(['done', other.identifier, '--via', 'in_review']);
+    expect(viaReview.exitCode).toBe(0);
+    expect((await stateOf(fx, other.id)).status).toBe('done');
+  });
+
+  it('`done` rejects an illegal hop with the allowed targets', async () => {
+    const { fx } = await linkedProject();
+    const item = await leaf(fx, 'Not startable yet');
+
+    // A fresh item is `todo`, and `todo → done` is not an edge — the CLI surfaces
+    // the workflow's allowed targets rather than inventing a path.
+    const illegal = await ws.run(['done', item.identifier]);
+    expect(illegal.exitCode).toBe(1);
+    expect(illegal.stderr).toContain('In Progress');
+    expect((await stateOf(fx, item.id)).status).toBe('todo');
   });
 
   it('`done` refuses a key AND --session together, and needs one of them', async () => {

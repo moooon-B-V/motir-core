@@ -18,7 +18,8 @@
 //   3. Walk it through a multi-step status lifecycle via the status picker
 //      (todo → in_progress → in_review → done), confirming at each step that an
 //      illegal direct target is NOT offered under the restricted default policy
-//      (no direct todo → done, no direct in_progress → done).
+//      (no direct todo → done; `in_progress → done` IS an edge since MOTIR-1625,
+//      so the skip-ahead check there is To Do, which stays unreachable forwards).
 //   4. Verify reflection in BOTH read surfaces: the List shows the item with its
 //      final status, and the Tree shows it nested under its parent — closing the
 //      loop on Stories 2.4 (tree/detail) + 2.5 (list).
@@ -200,8 +201,10 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
 
   // From todo: in_progress is legal; Done + In Review are NOT (no skipping ahead).
   await walk('In Progress', ['Done', 'In Review'], 'in_progress');
-  // From in_progress: in_review is legal; Done is still NOT direct-reachable.
-  await walk('In Review', ['Done'], 'in_review');
+  // From in_progress: in_review is legal. Done is DIRECTLY reachable too since
+  // MOTIR-1625 (review is optional), so it is no longer an illegal-target probe
+  // here — this journey walks the full review path deliberately.
+  await walk('In Review', [], 'in_review');
   // From in_review: Done is now legal — close out the lifecycle.
   await page.getByRole('button', { name: 'Edit Status' }).click();
   await page.getByRole('combobox', { name: 'Status' }).click();

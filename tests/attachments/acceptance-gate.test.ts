@@ -2,11 +2,15 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { AcceptanceEvidenceNotInReviewError } from '@/lib/acceptanceEvidence/errors';
 
 // acceptanceEvidenceService.decide — the acceptance GATE (Story MOTIR-1627 ·
 // Subtask MOTIR-1634) against a REAL Postgres. Approve/Request-changes move BOTH
-// the story (via the workflow) and the evidence; the workflow enforces the legal
-// edge. Blob is the one mocked external.
+// the story (via the workflow) and the evidence. The IN-REVIEW precondition for
+// `approve` is enforced by the service itself since MOTIR-1625 (which made
+// `in_progress → done` legal, so the workflow no longer refuses it incidentally);
+// the workflow still gates the move it is asked to make. Blob is the one mocked
+// external.
 
 vi.mock('@/lib/blob/uploader', () => {
   let seq = 0;
@@ -89,11 +93,13 @@ describe('acceptanceEvidenceService.decide', () => {
     expect(await statusKeyOf(story.id)).toBe('in_progress');
   });
 
-  it('approve when the story is NOT in_review is rejected by the workflow — no stamp', async () => {
-    const story = await storyWithEvidence(fx, 'in_progress'); // in_progress has no → done edge
+  it('approve when the story is NOT in_review is rejected by the service gate — no stamp', async () => {
+    // MOTIR-1625 made `in_progress → done` a legal edge, so the workflow no
+    // longer refuses this move for us — the gate is now explicit in the service.
+    const story = await storyWithEvidence(fx, 'in_progress');
     await expect(
       acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
-    ).rejects.toBeTruthy();
+    ).rejects.toThrow(AcceptanceEvidenceNotInReviewError);
     // The evidence was NOT stamped and the story did NOT move.
     expect(await statusKeyOf(story.id)).toBe('in_progress');
     const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);

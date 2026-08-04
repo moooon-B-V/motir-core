@@ -19,7 +19,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Combobox } from '@/components/ui/Combobox';
-import { Switch } from '@/components/ui/Switch';
+import { SettingsCard } from '@/components/settings/SettingsCard';
+import { SwitchRow } from '@/components/settings/SwitchRow';
 import { useToast } from '@/components/ui/Toast';
 import {
   AI_AUTO_PLAN_THRESHOLD_MAX,
@@ -439,82 +440,6 @@ export function AiPlanningSettingsEditor({
           serverError={serverError?.field === 'aiPlannerModel' ? serverError.message : null}
         />
       </SettingsCard>
-    </div>
-  );
-}
-
-// ── Card shell — the shipped settings-card grammar (EstimationSettingsEditor) ──
-// A full-bleed head divider + an `--el-surface-soft` footer band, which the Card
-// primitive's uniform `--spacing-card-padding` box cannot express; every token
-// (radius, padding, border, shadow) is still the element-semantic one.
-
-function SettingsCard({
-  icon,
-  title,
-  subtitle,
-  footer,
-  children,
-}: {
-  icon: ReactNode;
-  title: string;
-  subtitle: string;
-  footer?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      data-surface="card"
-      className="bg-(--el-card) border-(--el-border) shadow-(--shadow-card) overflow-hidden rounded-(--radius-card) border"
-    >
-      <div className="border-(--el-border-soft) flex items-start gap-2.5 border-b px-(--spacing-card-padding) py-4">
-        <span className="text-(--el-icon-heading) mt-px shrink-0">{icon}</span>
-        <div>
-          <h2 className="text-sm font-semibold text-(--el-text)">{title}</h2>
-          <p className="text-(--el-text-muted) mt-0.5 max-w-[58ch] text-xs">{subtitle}</p>
-        </div>
-      </div>
-      <div className="flex flex-col gap-5 px-(--spacing-card-padding) py-5">{children}</div>
-      {footer}
-    </section>
-  );
-}
-
-// ── Switch row — the primitive + its visible label + hint ─────────────────────
-// The accessible name comes by REFERENCE (aria-labelledby → the visible label),
-// so it can never drift from the text on screen (§10).
-
-function SwitchRow({
-  checked,
-  onCheckedChange,
-  disabled,
-  label,
-  hint,
-}: {
-  checked: boolean;
-  onCheckedChange: (next: boolean) => void;
-  disabled: boolean;
-  label: string;
-  hint: string;
-}) {
-  const labelId = useId();
-  return (
-    <div className="flex items-start gap-3.5">
-      <span className="mt-0.5">
-        <Switch
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          disabled={disabled}
-          aria-labelledby={labelId}
-        />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span id={labelId} className="block text-sm font-medium text-(--el-text)">
-          {label}
-        </span>
-        <p className="text-(--el-text-helper) mt-0.5 max-w-[54ch] text-xs leading-relaxed">
-          {hint}
-        </p>
-      </span>
     </div>
   );
 }

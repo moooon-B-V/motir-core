@@ -14,6 +14,7 @@ import {
   AcceptanceEvidenceBlobMissingError,
   AcceptanceEvidenceNotAStoryError,
   AcceptanceEvidenceNotFoundError,
+  AcceptanceEvidenceNotInReviewError,
   AcceptanceEvidencePathnameError,
 } from '@/lib/acceptanceEvidence/errors';
 import { toAcceptanceEvidenceDto } from '@/lib/mappers/acceptanceEvidenceMappers';
@@ -25,6 +26,16 @@ import type {
   AcceptanceUploadTokensDTO,
 } from '@/lib/dto/acceptanceEvidence';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+
+/**
+ * The status a story must sit in to be approved (MOTIR-1625) — the canonical
+ * default-workflow key, matching how `workItemsService` names the same constant
+ * for the session tools. A project whose custom workflow renamed `in_review`
+ * simply cannot use the acceptance gate, which is the same honest outcome the
+ * session tools give: better a clear refusal than an approval out of a status
+ * nobody calls review.
+ */
+const IN_REVIEW_STATUS_KEY = 'in_review';
 
 /**
  * Story-acceptance evidence — business logic (Story MOTIR-1627 · Subtask
@@ -462,10 +473,17 @@ export const acceptanceEvidenceService = {
    * decision on the current evidence moves BOTH the story and the evidence:
    * **approve** → story `in_review → done` + evidence `approved` (stamped);
    * **request_changes** → story `in_review → in_progress` + evidence
-   * `changes_requested`. The story transition runs FIRST through
-   * `workItemsService.updateStatus`, so the workflow enforces the legal edge (a
-   * story that is not `in_review` has no `→ done` edge and is rejected there);
-   * the evidence is stamped only once the transition succeeds.
+   * `changes_requested`. The evidence is stamped only once the transition
+   * succeeds.
+   *
+   * **The in-review gate is enforced HERE, explicitly** (MOTIR-1625). It used to
+   * be an accident of the transition graph — the default workflow had no
+   * `in_progress → done` edge, so `updateStatus` threw for us. MOTIR-1625 adds
+   * that edge (review is optional for ordinary work), so the rule now lives in the
+   * service that means it: acceptance is the IN-REVIEW gate (Principle #18), and a
+   * story is approved out of review, never out of `todo` or mid-implementation.
+   * `request_changes` needs no such check — sending work back is only reachable
+   * from review anyway, and the workflow still gates the move.
    */
   async decide(
     input: { workItemId: string; decision: 'approve' | 'request_changes' },
@@ -477,9 +495,14 @@ export const acceptanceEvidenceService = {
     );
     if (!current) throw new AcceptanceEvidenceNotFoundError(input.workItemId);
 
+    if (input.decision === 'approve') {
+      const story = await workItemsService.getWorkItem(input.workItemId, ctx);
+      if (story.status !== IN_REVIEW_STATUS_KEY) {
+        throw new AcceptanceEvidenceNotInReviewError(story.status);
+      }
+    }
+
     const storyStatus = input.decision === 'approve' ? 'done' : 'in_progress';
-    // The gate: the workflow rejects an illegal edge (e.g. approve when the story
-    // is not in_review — there is no in_progress/todo → done edge).
     await workItemsService.updateStatus(input.workItemId, storyStatus, ctx);
 
     const evidence = await this.setStatus(
