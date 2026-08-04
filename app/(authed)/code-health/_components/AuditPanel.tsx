@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { FileSearch, FolderGit2, GitCompare } from 'lucide-react';
+import { Clock, FileSearch, FolderGit2, GitCompare, Loader2, Play, RefreshCw } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +34,8 @@ export function AuditPanel({
   scanner,
   reauditing,
   onReaudit,
+  pollExhausted,
+  onCheckAgain,
   deepenDismissed,
   onDeepenDismiss,
   onDeepenReopen,
@@ -50,51 +52,24 @@ export function AuditPanel({
   scanner: ExternalScannerStateDTO | null;
   reauditing: boolean;
   onReaudit: () => void;
+  /** The page stopped waiting on a FIRST audit while the job kept running
+   * (MOTIR-2080). Selects the pre-audit resting state, never an error. */
+  pollExhausted: boolean;
+  /** Re-READS the audit. Deliberately NOT a second `onReaudit`: the job is still
+   * in flight, so re-POSTing would queue a duplicate pair (MOTIR-2080). */
+  onCheckAgain: () => void;
   deepenDismissed: boolean;
   onDeepenDismiss: () => void;
   onDeepenReopen: () => void;
 }) {
-  const t = useTranslations('codeHealth');
-
-  // Panel 4b (MOTIR-2087): "no audit" is not one state. A project with connected,
-  // indexed repos HAS a codebase, and its convention is derived from the code graph
-  // — so the start-fresh copy ("no codebase" / "from your chosen stack") is false
-  // twice over there. The repo set is what tells the two apart, which is why it is
-  // threaded down from the page rather than re-derived here.
   if (!audit) {
-    return repoRefs.length === 0 ? (
-      // State A · start-fresh — copy unchanged. The design's secondary "View chosen
-      // stack" action is deliberately NOT wired: no such surface exists anywhere in
-      // the app (the phrase occurs only in this string), and inventing a
-      // destination is not this card's work. Recorded on MOTIR-2081.
-      <EmptyState
-        icon={<FileSearch aria-hidden />}
-        title={t('audit.emptyTitle')}
-        description={t('audit.emptyDescription')}
-      />
-    ) : (
-      // State B · repo-backed but never audited. The repo chips ride INSIDE
-      // `description` (typed ReactNode) — they are the constant that says "this
-      // screen is about your code", not a fifth EmptyState slot. The primary
-      // "Run the first audit" action belongs to MOTIR-2080, which owns the trigger.
-      <EmptyState
-        icon={<FolderGit2 aria-hidden />}
-        title={t('audit.noAuditTitle')}
-        description={
-          <>
-            {t('audit.noAuditDescription')}
-            <span className="mt-(--spacing-sm) flex flex-wrap justify-center gap-1">
-              {repoRefs.map((repoRef) => (
-                <code
-                  key={repoRef}
-                  className="bg-(--el-code-bg) px-1.5 py-0.5 text-xs text-(--el-text-identifier) rounded-(--radius-control)"
-                >
-                  {repoRef}
-                </code>
-              ))}
-            </span>
-          </>
-        }
+    return (
+      <PreAuditEmptyState
+        repoRefs={repoRefs}
+        reauditing={reauditing}
+        pollExhausted={pollExhausted}
+        onReaudit={onReaudit}
+        onCheckAgain={onCheckAgain}
       />
     );
   }
@@ -125,6 +100,137 @@ export function AuditPanel({
         onLoadMore={onLoadMore}
       />
     </div>
+  );
+}
+
+// Panel 4b (MOTIR-2087): "no audit" is not one state but FOUR, and the shipped
+// start-fresh copy is right for only the first of them. The repo set tells A from
+// the rest — a project with connected, indexed repos HAS a codebase, and its
+// convention is derived from the code graph, so "no codebase" / "from your chosen
+// stack" is false twice over there. Which of B / C / D shows is then the FIRST
+// audit's own progress. All four compose the shipped `EmptyState` (icon · title ·
+// description · action) — no new pattern, and the repo chips ride inside
+// `description` rather than becoming a fifth slot.
+function PreAuditEmptyState({
+  repoRefs,
+  reauditing,
+  pollExhausted,
+  onReaudit,
+  onCheckAgain,
+}: {
+  repoRefs: string[];
+  reauditing: boolean;
+  pollExhausted: boolean;
+  onReaudit: () => void;
+  onCheckAgain: () => void;
+}) {
+  const t = useTranslations('codeHealth');
+
+  // State A · start-fresh (no repos) — copy unchanged, and it short-circuits: with
+  // no code there is nothing to audit, so none of B / C / D can be reached. The
+  // design's secondary "View chosen stack" action stays unwired — no such surface
+  // exists anywhere in the app, and inventing a destination is not this card's
+  // work (recorded on MOTIR-2081).
+  if (repoRefs.length === 0) {
+    return (
+      <EmptyState
+        icon={<FileSearch aria-hidden />}
+        title={t('audit.emptyTitle')}
+        description={t('audit.emptyDescription')}
+      />
+    );
+  }
+
+  // The repo list is the CONSTANT across B / C / D — it is what says "this screen
+  // is about your code"; only the headline, the icon and the action change beneath it.
+  const repoChips = (
+    <span className="mt-(--spacing-sm) flex flex-wrap justify-center gap-1">
+      {repoRefs.map((repoRef) => (
+        <code
+          key={repoRef}
+          className="bg-(--el-code-bg) px-1.5 py-0.5 text-xs text-(--el-text-identifier) rounded-(--radius-control)"
+        >
+          {repoRef}
+        </code>
+      ))}
+    </span>
+  );
+
+  // State C · deriving. The action is REMOVED, not disabled and not left in a
+  // `loading` state: the job runs for minutes, and a pending button implies a
+  // request the page is blocked on and invites a second click. The spinner takes
+  // the ICON slot and the duration line takes the action's place — the deriving
+  // signal is the ring, never a border-style change.
+  //
+  // Sized `size-6` to match the SHIPPED siblings, not the mock's 40px ring:
+  // EmptyState centres a passed icon inside an h-12 w-12 box at lucide's default
+  // 24px, so States A / B / D all render 24px glyphs. A ring drawn to the mock's
+  // px would be the only oversized thing on a screen the user watches change.
+  if (reauditing) {
+    return (
+      <EmptyState
+        icon={<Loader2 className="size-6 animate-spin text-(--el-accent-on-surface)" aria-hidden />}
+        title={t('audit.derivingTitle')}
+        description={
+          <>
+            {t('audit.derivingDescription')}
+            {repoChips}
+            <span className="mt-(--spacing-sm) block text-(--el-text-muted)">
+              {t('audit.derivingDuration')}
+            </span>
+          </>
+        }
+      />
+    );
+  }
+
+  // State D · the page stopped waiting; the job did not. This is a ROUTINE outcome,
+  // not an edge case: the poll is 3s × 20 = exactly 60 seconds and a first audit
+  // across several repos does not finish in one minute, so most first runs land
+  // here. It renders as a resting state INSIDE the empty state — never in the rose
+  // error strip where the deepen path's pending message goes, because a job that is
+  // still running is not a failure and colouring it as one teaches the user their
+  // audit broke.
+  if (pollExhausted) {
+    return (
+      <EmptyState
+        icon={<Clock aria-hidden />}
+        title={t('audit.stillRunningTitle')}
+        description={
+          <>
+            {t('audit.stillRunningDescription')}
+            {repoChips}
+          </>
+        }
+        action={
+          <Button variant="secondary" size="sm" leftIcon={<RefreshCw />} onClick={onCheckAgain}>
+            {t('audit.checkAgain')}
+          </Button>
+        }
+      />
+    );
+  }
+
+  // State B · repo-backed but never audited. The action is PRIMARY where State A's
+  // is secondary, and the weight difference carries the semantic one: A's action is
+  // navigational (there is nothing to run), B's is generative and is the only thing
+  // to do on the screen. It fires the SAME trigger the "Re-audit now" button does.
+  return (
+    <EmptyState
+      icon={<FolderGit2 aria-hidden />}
+      title={t('audit.noAuditTitle')}
+      description={
+        <>
+          {t('audit.noAuditDescription')}
+          {repoChips}
+        </>
+      }
+      action={
+        <Button variant="primary" size="sm" leftIcon={<Play />} onClick={onReaudit}>
+          {t('audit.runFirstAudit')}
+        </Button>
+      }
+    />
   );
 }
 
