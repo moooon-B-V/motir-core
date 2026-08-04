@@ -1,6 +1,6 @@
 {
   "name": "@motir/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Motir CLI — terminal dispatch of the work loop (an MCP client of the Motir server).",
   "license": "GPL-3.0-only",
   "repository": {

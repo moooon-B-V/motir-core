@@ -1,0 +1,96 @@
+# Does the PUBLISHED sandbox image still match `main`? (MOTIR-2131)
+#
+# `release-sandbox.yml` deliberately has NO push-to-main trigger — a `:latest`
+# that moves on every merge is not a sandbox anyone can reproduce a run in. So
+# drift between `main` and the newest `cli-v*` release is EXPECTED by design,
+# and nothing anywhere noticed when it reached eleven commits and five days:
+# `ghcr.io/moooon-b-v/motir-sandbox:claude` was serving a `motir` that predated
+# `motir login` entirely, and greeted every new user with a credential banner
+# naming one of the three tiers the docs promise. Every internal signal stayed
+# green throughout, because none of them consume the artifact.
+#
+# This is the tripwire for that gap, and it is SCHEDULED rather than part of the
+# pull-request lane on purpose: the condition it reports is not caused by the PR
+# in front of it and cannot be fixed by that PR's author. A red X on someone
+# else's unrelated change is how a check gets muted, and a muted check is
+# indistinguishable from a passing one.
+#
+# The logic lives in `packages/cli/sandbox/smoke/assert-current.mjs` (unit-tested
+# in `packages/cli/test/sandboxCurrent.test.ts`, wiring guarded by
+# `sandboxCi.test.ts`) — same arrangement as `assert-public.mjs` and the
+# `sandbox-public` job: a zero-dependency script a human can run from any shell,
+# and a workflow that is a thin caller. Reproduce a red run locally with
+#
+#   node packages/cli/sandbox/smoke/assert-current.mjs
+#
+# which needs no Docker, no network and no registry credential.
+
+name: Sandbox staleness
+
+on:
+  schedule:
+    # Daily, 06:15 UTC. Daily rather than weekly because the unit the check
+    # reports in is days: a weekly cadence would round every verdict to the
+    # nearest week and make the grace window meaningless.
+    - cron: '15 6 * * *'
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: 'Days unreleased work may sit before it fails (default 7)'
+        type: string
+        required: false
+
+# Nothing to cancel and nothing to race — but two overlapping runs would file
+# two identical reports, so let one finish.
+concurrency:
+  group: sandbox-staleness
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  staleness:
+    name: Is the published image still what main says it is?
+    runs-on: ubuntu-latest
+    steps:
+      # ⚠️ fetch-depth: 0 is load-bearing TWICE over. The default shallow
+      # checkout fetches no tags, so there is nothing to compare against, and it
+      # cannot walk `<tag>..HEAD`, which would come back empty. The script
+      # refuses to answer in both cases rather than reporting "up to date" — but
+      # a check that can only ever say "could not tell" is not a check.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      # No install step: the script is dependency-free by design, for the same
+      # reason `assert-public.mjs` is — it has to be runnable from a bare shell
+      # by whoever is trying to work out whether a release is overdue.
+      - name: Compare the newest cli-v* release against main
+        # The dispatch input arrives as an ENV var rather than being
+        # interpolated into the script body: `${{ inputs.… }}` inside `run:` is
+        # substituted before bash ever sees it, so a crafted value would be
+        # executed, not passed. Same discipline the rest of the lanes use.
+        env:
+          MAX_AGE_DAYS: ${{ inputs.max_age_days }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          args=()
+          [ -n "${MAX_AGE_DAYS:-}" ] && args+=(--max-age-days "$MAX_AGE_DAYS")
+          report=$(node packages/cli/sandbox/smoke/assert-current.mjs "${args[@]}")
+          code=$?
+          echo "$report"
+          # The verdict belongs in the run summary, not only the log: whoever
+          # opens a red scheduled run wants "behind by what, since when" on the
+          # first screen, without expanding a step.
+          {
+            echo '### Sandbox staleness'
+            echo
+            echo '```'
+            echo "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"

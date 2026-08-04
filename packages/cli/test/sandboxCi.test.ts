@@ -495,6 +495,71 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
   });
 });
 
+// ── The tripwire for the gap BETWEEN releases (MOTIR-2131) ─────────────────
+// Everything above guards the release lane, and the release lane was working:
+// `cli-v0.1.0` built, smoke-tested, published and (after MOTIR-2129) served
+// nine images anyone could pull. It was simply five days and eleven commits
+// out of date, so the image greeted every new user with a credential banner
+// naming one of the three tiers `docs/cli.md` promises, and `motir login` was
+// not in it at all. No lane here fires between releases, by design — which is
+// exactly why the drift needed its own scheduled check.
+describe('the staleness tripwire that watches the gap between releases', () => {
+  const staleness = read(join(WORKFLOW_DIR, 'sandbox-staleness.yml'));
+
+  it('is SCHEDULED, and deliberately not part of the pull-request lane', () => {
+    // The trigger is the design decision. A PR job would go red for a condition
+    // its author did not cause and cannot fix, which is how a check gets muted
+    // — and a muted check is indistinguishable from a passing one.
+    expect(staleness).toMatch(/^on:\n\s+schedule:\n(\s+#.*\n)*\s+- cron:/m);
+    expect(staleness).toContain('workflow_dispatch:');
+    expect(ci).not.toContain('sandbox-staleness');
+  });
+
+  it('checks out with FULL history and tags — the whole check depends on it', () => {
+    // A shallow checkout has no tags to compare against and cannot walk
+    // `<tag>..HEAD`. The script refuses to answer in that case rather than
+    // reporting "up to date", so without this the job can only ever say
+    // "could not tell" — a check that never checks anything.
+    expect(staleness).toMatch(/uses: actions\/checkout@v6\n\s+with:\n\s+fetch-depth: 0/);
+  });
+
+  it('calls the script rather than reimplementing the comparison in YAML', () => {
+    // Same split as `sandbox-public` and `assert-public.mjs`: the logic is a
+    // zero-dependency script with unit tests and a human can run it from any
+    // shell; the workflow is a caller. Logic inlined into a `run:` block is
+    // testable only by pushing to main.
+    expect(staleness).toContain('node packages/cli/sandbox/smoke/assert-current.mjs');
+    expect(existsSync(join(SMOKE_DIR, 'assert-current.mjs'))).toBe(true);
+    expect(existsSync(join(SMOKE_DIR, 'assert-current.d.mts'))).toBe(true);
+  });
+
+  it('needs no registry credential, no Docker and no packages: scope', () => {
+    // It answers a question about git, not about a registry. Any credential
+    // here would be scope this job has no use for.
+    expect(staleness).toMatch(/permissions:\n\s+contents: read/);
+    expect(staleness).not.toContain('packages:');
+    expect(staleness).not.toContain('docker/login-action');
+    expect(staleness).not.toContain('secrets.');
+  });
+
+  it('passes the dispatch input through the environment, not into the shell', () => {
+    // `${{ inputs.… }}` inside a `run:` body is substituted before bash sees
+    // it, so a crafted value would be executed rather than passed.
+    expect(staleness).toContain('MAX_AGE_DAYS: ${{ inputs.max_age_days }}');
+    expect(staleness).toMatch(/args\+=\(--max-age-days "\$MAX_AGE_DAYS"\)/);
+    expect(staleness).not.toMatch(/assert-current\.mjs.*\$\{\{/);
+  });
+
+  it('watches the tag prefix both release lanes actually key on', () => {
+    // A bare `v*` would fire for the app too, which is why the lanes are
+    // package-scoped — and why a tripwire watching a different prefix would
+    // silently measure against nothing.
+    const script = read(join(SMOKE_DIR, 'assert-current.mjs'));
+    expect(script).toContain("export const TAG_PREFIX = 'cli-v'");
+    expect(release).toContain("- 'cli-v*'");
+  });
+});
+
 describe('the README, as the adoption path', () => {
   it('leads with `docker run` on the published image, not a git clone', () => {
     const run = readme.indexOf('## Run');
