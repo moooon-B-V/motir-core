@@ -59,8 +59,29 @@ function urlTransform(url: string): string {
 // `workItemRefs` summary map threaded in from the surface; a malformed one
 // degrades to the plain authored key. The components are built per-render so the
 // `a` handler can close over that map.
+//
+// A GFM `table` is wrapped in its OWN scroll block (MOTIR-2039). A `<table>` is
+// sized by its content: when its min-content width exceeds the column it does
+// not wrap, shrink or clip — it paints straight across the right rail and off
+// the viewport, and the escaped columns are unreachable. `min-w-0` on the issue
+// detail page's `1fr` track (bug-issue-detail-eyebrow-overflows-viewport) is
+// necessary but not sufficient — it only bounds children that scroll
+// THEMSELVES, which is why `.motir-prose pre` carries `overflow-x: auto`.
+// Wrapping (rather than `table { display: block; overflow-x: auto }`) keeps the
+// element a real `display: table`, so the column auto-sizing survives; the
+// wrapper is the bounded scroll container; its RULES + padding come from
+// markdown-editor.css, but the containment itself is an inline style for the
+// same reason the link underline above is one — `renderMarkdown` also serves
+// surfaces that never load that stylesheet (`ConventionPanel`,
+// `FeatureCatalogView`, `DirectionDocView`), and a table must not escape its
+// column on any of them.
 function buildComponents(workItemRefs?: WorkItemRefMap): Components {
   return {
+    table: ({ node: _node, children, ...props }) => (
+      <div className="motir-table-wrap" style={{ maxWidth: '100%', overflowX: 'auto' }}>
+        <table {...props}>{children}</table>
+      </div>
+    ),
     a: ({ node: _node, style, href, children, ...props }) => {
       if (typeof href === 'string' && href.startsWith('mention:')) {
         return MENTION_HREF_RE.test(href) ? (

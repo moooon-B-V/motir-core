@@ -265,6 +265,85 @@ test('@smoke long ancestor chain + wide content never overflow the viewport (bug
   expect(railBox!.x + railBox!.width).toBeLessThanOrEqual(root.clientWidth + 1);
 });
 
+// MOTIR-2039 — the table half of the same bug class, and the one the test above
+// could NOT catch: a `<table>` is sized by its content and neither wraps, clips
+// nor scrolls, so a wide one escaped the description column and painted across
+// the right rail WITHOUT ever widening the document (the root scrollWidth check
+// above stays green through it). The containment is per-element now: every
+// table renders inside its own bounded scroll block. Measured as rendered
+// geometry in a real browser — happy-dom reports all-zero boxes, so the
+// component test (tests/work-items/markdown-render.test.tsx) can only assert
+// the structure.
+test('@smoke a wide markdown table scrolls inside the description column instead of painting across the rail (MOTIR-2039)', async ({
+  page,
+}) => {
+  const email = 'e2e-detail-table@example.com';
+  await signUp(page, email);
+  const projectId = await seedActiveProject(email, 'TBL');
+
+  // Three columns whose cells hold long UNBREAKABLE tokens (inline code does not
+  // wrap mid-token), so the table's min-content width exceeds the 1fr column —
+  // the shape of the live description that surfaced the bug.
+  const wide = (n: number) => '`' + `motir.code-graph.index.step.${'segment.'.repeat(n)}end` + '`';
+  const item = await mk(page, projectId, {
+    title: 'A description carrying a wide GFM table',
+    descriptionMd: [
+      'Intro paragraph above the table.',
+      '',
+      '| symptom | measured | why |',
+      '| --- | --- | --- |',
+      `| ${wide(6)} | ${wide(6)} | ${wide(8)} |`,
+      `| ${wide(5)} | ${wide(7)} | ${wide(6)} |`,
+      '',
+    ].join('\n'),
+  });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/items/${item.identifier}`);
+
+  const prose = page.getByLabel('Work item description');
+  await expect(prose.locator('table')).toBeVisible();
+
+  const wrap = prose.locator('.motir-table-wrap');
+  const geometry = await wrap.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    const prose = el.closest('.motir-prose')!.getBoundingClientRect();
+    return {
+      right: rect.right,
+      proseRight: prose.right,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    };
+  });
+
+  // The repro is live: the table really is wider than the column it sits in...
+  expect(
+    geometry.scrollWidth,
+    `the fixture table must overflow its column (scrollWidth ${geometry.scrollWidth} > clientWidth ${geometry.clientWidth})`,
+  ).toBeGreaterThan(geometry.clientWidth);
+
+  // ...yet the block holding it never extends past the description column.
+  expect(
+    geometry.right,
+    `table block must stay inside the description column (right ${geometry.right} ≤ ${geometry.proseRight})`,
+  ).toBeLessThanOrEqual(geometry.proseRight + 1);
+
+  // The user-visible symptom: the table painted OVER the right rail's cards.
+  const railBox = await page.getByText('Reporter').first().boundingBox();
+  expect(railBox, 'core-fields rail rendered').not.toBeNull();
+  expect(geometry.right, 'table block must not reach the right rail').toBeLessThanOrEqual(
+    railBox!.x,
+  );
+
+  // And the overflow is REACHABLE — clipped-but-unscrollable would still lose
+  // the outer columns.
+  const scrolled = await wrap.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+    return el.scrollLeft;
+  });
+  expect(scrolled, 'the overflowing columns must be scrollable into view').toBeGreaterThan(0);
+});
+
 test('@smoke inline status: a legal transition persists; illegal targets are not offered', async ({
   page,
 }) => {
