@@ -2733,6 +2733,15 @@
   /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
      palette overrides it directly — one shade darker than the cool surface. */
   --el-sidebar-item-bg-hover: #e4e9f1;
+
+  /* Status ramp — in_review vs in_progress (MOTIR-2075, the MOTIR-2073 class).
+     `--el-status-in-progress` rides --color-info (Radix Blue 11 #0d63b8) and
+     `--el-status-in-review` rides --color-primary (the Indigo accent #3a57cf);
+     Cobalt is an institutional-BLUE palette, so its two blues sit ΔE2000 8.4
+     apart — different hexes, one dot. The ramp takes its own deeper step of the
+     SAME indigo instead of a new hue: Radix Indigo 12. Separation from
+     in_progress ΔE 20.9; contrast 11.8:1 surface / 13.2:1 card. */
+  --el-status-in-review: #1f2d5c; /* Radix Indigo 12 — deep accent step */
 }
 
 /* Cobalt — dark companion. A cool navy canvas (not the base near-black);
@@ -2788,6 +2797,13 @@
 
   /* sidebar hover — one shade lighter than the dark cool surface */
   --el-sidebar-item-bg-hover: #1c2840;
+
+  /* Dark keeps the indigo primary — the two blues are already ΔE 10.4 apart
+     here. Re-asserted (not omitted) because the light block above would
+     otherwise inherit onto this canvas: the palette block and
+     [data-theme='dark'] tie on specificity and the palette block wins by
+     source order. Pairing every status override is the rule, not the value. */
+  --el-status-in-review: var(--color-primary);
 }
 
 /* ── Palette: Graphite (data-palette="graphite") — Subtask 7.3.51 ───────────
@@ -3044,6 +3060,19 @@
   /* Concrete-hex --el token (does not resolve through --color-*) — cool hover
      lift one shade darker than the cooled light surface */
   --el-sidebar-item-bg-hover: #e4ebe7;
+
+  /* Status ramp — in_review vs done (MOTIR-2075). `--el-status-in-review` rides
+     --color-primary (emerald #0c7a52) and `--el-status-done` rides
+     --color-success (grass #127c3e): two greens ΔE2000 5.5 apart, and this
+     palette's own comment claimed they "read apart". They do not. The ramp takes
+     its own deeper step of the palette's JADE — Radix Jade 12 — so review reads
+     as a deep jade against the grass done. Separation ΔE 19.2; contrast 10.9:1
+     surface / 12.2:1 card. */
+  --el-status-in-review: #1d3b31; /* Radix Jade 12 — deep jade step */
+
+  /* cancelled is unchanged in light (ΔE 17.9 from todo); re-asserted to pair
+     the dark override below — see the cascade note in the dark block. */
+  --el-status-cancelled: var(--color-steel);
 }
 
 /* Evergreen — dark companion. Bright emerald on a deep-forest canvas
@@ -3098,6 +3127,18 @@
 
   /* hover lift one shade *lighter* than the dark surface (mirrors base recipe) */
   --el-sidebar-item-bg-hover: #1e2a23;
+
+  /* Status ramp (MOTIR-2075) — two collisions in this theme.
+     in_review vs done: emerald #3ddc97 against grass #34d27a, ΔE2000 4.7. Same
+     fix as light, inverted: Radix Jade 12's DARK step, pale rather than deep —
+     the light/dark inversion Graphite's accent step already uses. ΔE 17.2;
+     contrast 13.3:1 surface / 14.5:1 card.
+     todo vs cancelled: --color-stone #5a6b62 against --color-steel #6f8077,
+     ΔE 8.3 — this palette's neutral ramp is compressed against the base's
+     (which keeps the pair ~12 apart). cancelled takes the palette's own next
+     step up, --color-slate. ΔE 22.4; contrast 7.1:1 / 7.7:1. */
+  --el-status-in-review: #adf0d4; /* Radix Jade 12 dark — pale jade step */
+  --el-status-cancelled: #9aaaa1; /* Evergreen's own slate — the next neutral step */
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -3496,6 +3537,14 @@
 
   /* sidebar hover — one shade deeper than the cream surface */
   --el-sidebar-item-bg-hover: #f5e9c4;
+
+  /* Status ramp — blocked vs in_review (MOTIR-2075). Mistral ships NO semantic
+     colours, so this palette's warning was added warm-consistent (#b45309) —
+     which lands it next to the darkened Mistral flame --color-primary #c4400a:
+     ΔE2000 7.1, amber against flame. Rather than move the brand flame, blocked
+     takes the palette's own amber accent step, which reads as a warning without
+     being the primary. ΔE 14.2; contrast 3.8:1 surface / 4.1:1 card. */
+  --el-status-blocked: var(--color-accent);
 }
 
 /* Sienna — dark companion. Mistral is light-dominant (few dark tokens: Mistral
@@ -3550,6 +3599,10 @@
 
   /* sidebar hover — one shade lighter than the warm-dark surface */
   --el-sidebar-item-bg-hover: #292619;
+
+  /* Dark's amber and flame are already ΔE 11.9 apart. Re-asserted to pair the
+     light override above — see the cascade note in cobalt/dark. */
+  --el-status-blocked: var(--color-warning);
 }
 
 /* ── Palette: Garnet (data-palette="garnet") — Subtask 8.8.34 (MOTIR-1252) ───
@@ -3622,6 +3675,14 @@
 
   /* sidebar hover — one shade darker than the neutral surface */
   --el-sidebar-item-bg-hover: #e6e6e6;
+
+  /* Status ramp — todo vs cancelled (MOTIR-2075). Pinterest's neutrals are
+     true-neutral greys and its documented ramp puts --color-stone #767676 and
+     --color-steel #5f5f5f close together: ΔE2000 8.8, where the base keeps the
+     pair ~12 apart. cancelled drops to Pinterest's next documented grey,
+     #444444 (the palette's own --color-slate). ΔE 18.1; contrast 8.5:1 surface
+     / 9.7:1 card. */
+  --el-status-cancelled: #444444; /* Pinterest grey — one documented step deeper */
 }
 
 /* Garnet — dark companion. Pinterest's Cod-Gray near-black canvas; the red
@@ -3677,6 +3738,10 @@
 
   /* sidebar hover — one shade lighter than the dark surface */
   --el-sidebar-item-bg-hover: #232323;
+
+  /* Dark's greys are already ΔE 11.6 apart. Re-asserted to pair the light
+     override above — see the cascade note in cobalt/dark. */
+  --el-status-cancelled: var(--color-steel);
 }
 
 /* ── Palette: Citrine (data-palette="citrine") — Subtask 8.8.34 (MOTIR-1252) ──
@@ -3759,6 +3824,22 @@
 
   /* sidebar hover — Mirotone gray-150, one step off the surface */
   --el-sidebar-item-bg-hover: #ebecf0;
+
+  /* Status ramp (MOTIR-2075) — two collisions, both from Mirotone's ramps.
+     blocked vs in_review: --color-warning is yellow-650 #91771e and
+     --color-primary is yellow-700 #746019 — ADJACENT steps of one gold ramp,
+     ΔE2000 9.7. Miro is a 5-hue system with NO orange ramp (see the block
+     header), and the golds that clear AA on a light surface are exactly those
+     two, so the gold cannot separate itself. The status ramp therefore takes
+     Miro's OTHER brand hue at its own depth — the action blue, blue-650 — which
+     leaves blocked on the warning gold where its semantics belong. Note
+     in_progress rides blue-500 #3859ff: same family, two depths, ΔE 17.0 apart,
+     the Graphite idiom. Contrast 9.2:1 surface / 10.2:1 card.
+     todo vs cancelled: gray-450 #7f8497 vs gray-500 #656b81, ΔE 10.0 — one step
+     apart on Mirotone's gray ramp. cancelled drops to gray-600. ΔE 20.6;
+     contrast 7.5:1 / 8.3:1. */
+  --el-status-in-review: #243797; /* Mirotone blue-650 — deep action blue */
+  --el-status-cancelled: #4a4e5e; /* Mirotone gray-600 — one step deeper */
 }
 
 /* Citrine — dark companion. A Mirotone gray-ramp near-black canvas (black
@@ -3815,6 +3896,18 @@
 
   /* sidebar hover — Mirotone gray-800, one step lighter than the surface */
   --el-sidebar-item-bg-hover: #24262c;
+
+  /* Status ramp (MOTIR-2075) — the worst collision in the whole set:
+     blocked #ffd850 against in_review #ffd02f is ΔE2000 3.0. Two Sunglow golds
+     one hex apart; no one can tell them apart on a 10px dot. Same fix as light,
+     inverted — the action blue at its PALE step, Mirotone blue-200, rather than
+     the deep blue-650 (which sits at 1.7:1 on this near-black surface and would
+     fail the 3:1 icon bar). Separation from in_progress (blue-400 #7a90fe)
+     ΔE 18.4; contrast 13.1:1 surface / 15.1:1 card.
+     cancelled is unchanged here (ΔE 17.8 from todo) and re-asserted only to
+     pair the light block's override — see the cascade note in cobalt/dark. */
+  --el-status-in-review: #d9dffc; /* Mirotone blue-200 — pale action blue */
+  --el-status-cancelled: var(--color-steel);
 }
 
 /* ── Palette: Candy (data-palette="candy") — Subtask 8.8.34 (MOTIR-1252) ──────

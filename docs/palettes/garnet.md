@@ -38,17 +38,33 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 
 ## Colour roles (the `--el-*` element-token layer)
 
-| Role group          | Garnet / Pinterest (light → dark)                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Text scale          | Pinterest neutral-grey ink — Cod-Gray `#111111` → `#efefef`; secondary `#444444` → `#b5b5b5`; grey `#767676` |
-| Accent (CTA)        | deep Pushpin-red fill `#c30021` with **white labels** both themes; red `#c30021` → `#ff5a76` as text         |
-| Surfaces            | white over neutral grey `#efefef` → Cod-Gray near-black `#0e0e0e` / `#1a1a1a`                                |
-| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e7e7e7` → `#090909`                          |
-| Borders             | neutral hairlines — `#e0e0e0` → `#2e2e2e`                                                                    |
-| Links               | Gestalt "Skycicle" blue, distinct from the red — `#0a66c2` → `#5aa0ff`                                       |
-| Semantic            | danger held distinct (orange-red `#e0300f`/`#ff6b6b`) from the red brand · success/warning/info              |
-| Pastel tints        | a Pushpin-red rose wash (`tint-rose`) + clean feature hues                                                   |
-| Work-item type hues | re-skin via the `--color-*` they map to — bug/deploy read warm red; design/epic read magenta-plum            |
+| Role group          | Garnet / Pinterest (light → dark)                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Text scale          | Pinterest neutral-grey ink — Cod-Gray `#111111` → `#efefef`; secondary `#444444` → `#b5b5b5`; grey `#767676`       |
+| Accent (CTA)        | deep Pushpin-red fill `#c30021` with **white labels** both themes; red `#c30021` → `#ff5a76` as text               |
+| Surfaces            | white over neutral grey `#efefef` → Cod-Gray near-black `#0e0e0e` / `#1a1a1a`                                      |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e7e7e7` → `#090909`                                |
+| Borders             | neutral hairlines — `#e0e0e0` → `#2e2e2e`                                                                          |
+| Links               | Gestalt "Skycicle" blue, distinct from the red — `#0a66c2` → `#5aa0ff`                                             |
+| Semantic            | danger held distinct (orange-red `#e0300f`/`#ff6b6b`) from the red brand · success/warning/info                    |
+| Status ramp         | `--el-status-cancelled` set directly — Pinterest grey `#444444` (light) / rides `--color-steel` (dark) — see below |
+| Pastel tints        | a Pushpin-red rose wash (`tint-rose`) + clean feature hues                                                         |
+| Work-item type hues | re-skin via the `--color-*` they map to — bug/deploy read warm red; design/epic read magenta-plum                  |
+
+### The status ramp — why `cancelled` is set directly
+
+Pinterest's neutrals are true-neutral greys, and its documented ramp puts
+`--color-stone` `#767676` and `--color-steel` `#5f5f5f` close together: in light
+the `todo` / `cancelled` pair lands at **ΔE2000 8.8**, where the base keeps it
+~12 apart (MOTIR-2075). `cancelled` drops to Pinterest's next documented grey,
+**`#444444`** — the palette's own `--color-slate`. Separation **ΔE 18.1**;
+contrast **8.5:1** on `--el-surface`, **9.7:1** on `--el-card`.
+
+Dark needs no change (its greys are already ΔE 11.6 apart) but **re-asserts
+`var(--color-steel)`**: a palette's light block and the base
+`[data-theme='dark']` block tie on specificity, and the palette block comes later
+in the sheet, so an unpaired light override would leak onto the dark canvas.
+`tests/theme/statusHueSeparation.test.ts` enforces the pairing.
 
 ## Accessibility
 

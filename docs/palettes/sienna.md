@@ -40,17 +40,36 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 
 ## Colour roles (the `--el-*` element-token layer)
 
-| Role group          | Sienna / Mistral (light → dark)                                                                                        |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Text scale          | Mistral warm-charcoal ink — `#1f1f1f` → `#f5efe2`; secondary `#4a4a4a` → `#b3a892`                                     |
-| Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#c4400a` → `#ff8a4c` text |
-| Surfaces            | Mediterranean Warm-Ivory `#fffaeb` over cream `#fbf1d3` → warm-black `#15120d` / `#1f1d17`                             |
-| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#f5e9cb` → `#100d08`                                    |
-| Borders             | warm beige hairlines — `#ece0c4` → `#322c1d`                                                                           |
-| Links               | the brand orange (darkened flame) — `#c4400a` → `#ff9a5c`                                                              |
-| Semantic            | added warm-consistent (Mistral ships none) — success/warning/danger/info, AA-safe in both themes                       |
-| Pastel tints        | Mistral's golden washes (`tint-yellow` = Block Gold `#ffe295`) + warm feature hues                                     |
-| Work-item type hues | re-skin via the `--color-*` they map to — review/warning read warm amber; the rest stay distinguishable                |
+| Role group          | Sienna / Mistral (light → dark)                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Text scale          | Mistral warm-charcoal ink — `#1f1f1f` → `#f5efe2`; secondary `#4a4a4a` → `#b3a892`                                             |
+| Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#c4400a` → `#ff8a4c` text         |
+| Surfaces            | Mediterranean Warm-Ivory `#fffaeb` over cream `#fbf1d3` → warm-black `#15120d` / `#1f1d17`                                     |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#f5e9cb` → `#100d08`                                            |
+| Borders             | warm beige hairlines — `#ece0c4` → `#322c1d`                                                                                   |
+| Links               | the brand orange (darkened flame) — `#c4400a` → `#ff9a5c`                                                                      |
+| Semantic            | added warm-consistent (Mistral ships none) — success/warning/danger/info, AA-safe in both themes                               |
+| Status ramp         | `--el-status-blocked` set directly — the palette's amber accent `#b5660a` (light) / rides `--color-warning` (dark) — see below |
+| Pastel tints        | Mistral's golden washes (`tint-yellow` = Block Gold `#ffe295`) + warm feature hues                                             |
+| Work-item type hues | re-skin via the `--color-*` they map to — review/warning read warm amber; the rest stay distinguishable                        |
+
+### The status ramp — why `blocked` is set directly
+
+Mistral ships **no semantic colours**, so this palette's `--color-warning` was
+added warm-consistent (`#b45309`) — which lands it right next to the darkened
+Mistral flame `--color-primary` `#c4400a`: the `blocked` / `in_review` pair
+measures **ΔE2000 7.1** in light, amber against flame (MOTIR-2075).
+
+Rather than move the brand flame, **`blocked` takes the palette's own amber
+accent step** (`var(--color-accent)`, `#b5660a`) — it still reads as a warning
+without being the primary. Separation **ΔE 14.2**; contrast **3.8:1** on
+`--el-surface` and **4.1:1** on `--el-card`, past the 3:1 icon/UI bar.
+
+Dark needs no change (its amber and flame are already ΔE 11.9 apart) but
+**re-asserts `var(--color-warning)`**: a palette's light block and the base
+`[data-theme='dark']` block tie on specificity, and the palette block comes later
+in the sheet, so an unpaired light override would leak onto the dark canvas.
+`tests/theme/statusHueSeparation.test.ts` enforces the pairing.
 
 ## Accessibility
 
