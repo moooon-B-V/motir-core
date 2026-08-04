@@ -145,11 +145,19 @@ export interface JobContextBag {
   // like `discovery`); the motir-ai handler parses it into an ExplanationInput.
   explanation?: unknown;
   // The AI-drafted-explanations opt-in (Story 7.4 · MOTIR-850), read from
-  // `Project.aiGenerateExplanations` and set by `aiGenerationService` on a
-  // `generate_tree` submit. When true, motir-ai's generator drafts a "why this
-  // matters" `explanationMd` (`explanationSource = ai_draft`) per proposed item
-  // (MOTIR-1468). Absent/false ⇒ proposals carry no explanation. The flag rides
-  // the envelope so motir-ai never reads motir-core config directly.
+  // `Project.aiGenerateExplanations`. When true, motir-ai's generator drafts a
+  // "why this matters" `explanationMd` (`explanationSource = ai_draft`) per
+  // proposed item (MOTIR-1468). Absent/false ⇒ proposals carry no explanation.
+  // The flag rides the envelope so motir-ai never reads motir-core config
+  // directly — which is also why every producer must send it: a submit that
+  // omits it cannot be compensated for on the far side.
+  //
+  // Sent by BOTH planning producers: `aiGenerationService` on a `generate_tree`
+  // submit, and `aiPlanEditsService` on every plan EDIT — `augment` /
+  // `expand_item` / `replan`, contextual turns included (MOTIR-2110; the
+  // consumer half is the motir-ai re-plan handler). It was generation-only
+  // before, so the project setting read as global while applying to a plan's
+  // first pass alone. Always present (`false` when off), never omitted.
   generateExplanations?: boolean;
   // The project's existing work-item tree summary (MOTIR-1259) — the items the
   // user already has in the project, passed to motir-ai's discovery handler so

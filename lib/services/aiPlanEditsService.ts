@@ -114,6 +114,24 @@ async function submitPlanEditJob(
     tenant,
     {
       ...context,
+      // The AI-drafted-explanations opt-in (Story 7.4 · MOTIR-850), on the wire
+      // for plan EDITS too (MOTIR-2110). `startGeneration` has always sent it on
+      // `generate_tree`, and the contract is that motir-ai reads the flag ONLY
+      // from `context.generateExplanations` and never from motir-core config —
+      // so a submit that omits it cannot be compensated for on the far side, and
+      // the project setting silently stopped applying the moment the plan moved
+      // off its first generation. Re-plan is where a plan spends most of its
+      // life, so most nodes were being born without the WHY.
+      //
+      // Set HERE, on the one shared submit, rather than in `submitReplan` alone:
+      // the anchor set makes the submitted kind only a FALLBACK (see
+      // `submitContextual`) — motir-ai's scoping module classifies a contextual
+      // turn and can resolve an `augment` submit into a re-plan — so a
+      // replan-only site would still drop the flag on the contextual path. Same
+      // field name, same source (`Project.aiGenerateExplanations`, a non-null
+      // boolean column), no new config path; ALWAYS present, `false` when off,
+      // exactly as the `generate_tree` submit sends it.
+      generateExplanations: ctx.project.aiGenerateExplanations,
       ...(code ? { code } : {}),
     },
     { userId: ctx.userId },
