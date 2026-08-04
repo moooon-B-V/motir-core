@@ -2864,6 +2864,20 @@
   /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
      palette overrides it directly — one shade darker than the cool surface. */
   --el-sidebar-item-bg-hover: #e6e8ec;
+
+  /* Status ramp — the one place the mono identity COLLIDES with the Tier-0
+     indirection (MOTIR-2073). `--el-status-in-progress` rides --color-info and
+     `--el-status-in-review` rides --color-primary; every other palette keeps
+     those two sources apart, but Graphite deliberately unifies them (info =
+     the accent, above), which re-collapsed in_review onto in_progress — the
+     exact differentiation MOTIR-1273 delivered. The fix keeps BOTH deliberate
+     choices by giving the status ramp its own SECOND STEP of the same accent
+     ramp rather than a second hue: Radix Blue 12, one step deeper than the
+     accent (Blue 11-ish #155bc4). Still one chromatic accent, two depths —
+     the same light/dark inversion the ink CTA already uses. Separation from
+     in-progress: ΔE2000 16.9, contrast 2.0:1 — well clear of this palette's
+     tightest deliberate status pair (todo/cancelled, ΔE 11.8). */
+  --el-status-in-review: #113264; /* Radix Blue 12 — deep accent step */
 }
 
 /* Graphite — dark companion. A cool near-black slate canvas; the CTA fill
@@ -2921,6 +2935,16 @@
 
   /* sidebar hover — one shade lighter than the dark cool surface */
   --el-sidebar-item-bg-hover: #202226;
+
+  /* Status ramp — the dark companion of the light block's in_review step
+     (MOTIR-2073). Same idea, inverted like the CTA fill: on near-black the
+     "deeper" step is the PALER one, so in_review takes Radix Blue 12 dark —
+     one step lighter than the dark accent (Blue 11-ish #7db1ff). Separation
+     from in-progress: ΔE2000 15.3, contrast 1.67:1; on the dark canvas
+     14.9:1. Every palette block that sets a var must set it in BOTH themes —
+     a light-only override keeps its LIGHT value on the dark canvas (the
+     palette block outranks the base [data-theme='dark'] block). */
+  --el-status-in-review: #c2e6ff; /* Radix Blue 12 dark — pale accent step */
 }
 
 /* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────

@@ -45,9 +45,33 @@ Every Tier-3 `--el-*` element token references a Tier-0 `--color-*` source
 var. So — exactly like the `[data-theme='dark']` block — Graphite re-skins by
 overriding the **`--color-*` source**, and the whole `--el-*` layer (surfaces,
 ink, accent, links, semantic, pastel tints, work-item type hues, charts) follows
-coherently with no per-token churn. The only `--el-*` token overridden directly
-is `--el-sidebar-item-bg-hover` — a concrete hex in Tier 3, not a `--color-*`
-reference.
+coherently with no per-token churn. Two `--el-*` tokens are overridden directly:
+
+- `--el-sidebar-item-bg-hover` — a concrete hex in Tier 3, not a `--color-*`
+  reference, so there is no source to re-skin.
+- `--el-status-in-review` — the one place this palette's identity **collides**
+  with the indirection (MOTIR-2073). See _the status ramp_ below.
+
+### The status ramp — why `in_review` is set directly
+
+The Tier-0 indirection is not collision-proof: two `--el-*` tokens whose whole
+purpose is to differ converge whenever a palette unifies their sources.
+`--el-status-in-progress` rides `--color-info` and `--el-status-in-review` rides
+`--color-primary` (MOTIR-1273 gave each status its own source precisely so the
+two read apart). Graphite deliberately sets **`--color-info` = the accent blue**
+— correct for a monochrome palette with one chromatic accent — which re-collapsed
+`in_review` onto `in_progress` one layer down.
+
+Both choices are kept. `--color-info` still equals the accent, and the **status
+ramp gets its own second step of that same accent** rather than a second hue
+family: **Radix Blue 12**, one step deeper than the accent in light
+(`#113264`) and one step _paler_ in dark (`#c2e6ff`) — the same
+light/dark inversion the ink CTA already uses. One accent, two depths.
+
+Separation from `in_progress`: **ΔE2000 16.9** (light) / **15.3** (dark) —
+clear of this palette's tightest deliberate status pair (`todo` / `cancelled`
+at ΔE 11.8). `tests/theme/statusHueSeparation.test.ts` pins it, and the dot is
+never the sole carrier: every consumer renders it beside the status label.
 
 The block overrides **only colour tokens** (`--color-*` / `--el-*`) — never a
 shape/feel token (`--radius-*` / `--spacing-*` / `--shadow-*` / `--height-*` /
@@ -57,17 +81,18 @@ axis — is what makes "style × palette" a product of two independent choices, 
 
 ## Colour roles (the `--el-*` element-token layer)
 
-| Role group          | Graphite (light → dark)                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Text scale          | cool-slate ink hierarchy — ink `#16191d` → `#edeef0`; secondary `#565c64` → `#a9adb5`                              |
-| Accent (CTA)        | INK fill `#1a1d21` → `#edeef0` (the monochrome statement); on-surface/link cool blue `#155bc4` → `#7db1ff`         |
-| Surfaces            | stark white canvas over cool-slate sections — `#eef0f3` / `#f8f9fa` → near-black `#0c0d0f` / `#18191c` / `#141517` |
-| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e6e8ed` → `#08090b`                                |
-| Borders             | cool slate hairlines — `#e2e4e9` → `#282a2e`                                                                       |
-| Links               | the accent cool blue — `#155bc4` → `#7db1ff`                                                                       |
-| Semantic            | danger `#c92a2a`/`#d83847` · success `#18804a`/`#34b86e` · warning `#c2410c`/`#f08a4b` · info `#155bc4` (= accent) |
-| Pastel tints        | cooled feature washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}` (sky/lavender lead the cool set)         |
-| Work-item type hues | re-skin automatically via the `--color-*` they map to — cooled blue/green/red/teal/orange, kept distinguishable    |
+| Role group          | Graphite (light → dark)                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Text scale          | cool-slate ink hierarchy — ink `#16191d` → `#edeef0`; secondary `#565c64` → `#a9adb5`                                  |
+| Accent (CTA)        | INK fill `#1a1d21` → `#edeef0` (the monochrome statement); on-surface/link cool blue `#155bc4` → `#7db1ff`             |
+| Surfaces            | stark white canvas over cool-slate sections — `#eef0f3` / `#f8f9fa` → near-black `#0c0d0f` / `#18191c` / `#141517`     |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e6e8ed` → `#08090b`                                    |
+| Borders             | cool slate hairlines — `#e2e4e9` → `#282a2e`                                                                           |
+| Links               | the accent cool blue — `#155bc4` → `#7db1ff`                                                                           |
+| Semantic            | danger `#c92a2a`/`#d83847` · success `#18804a`/`#34b86e` · warning `#c2410c`/`#f08a4b` · info `#155bc4` (= accent)     |
+| Status ramp         | rides the semantic sources, EXCEPT `in_review` — its own deeper/paler accent step, Radix Blue 12 `#113264` → `#c2e6ff` |
+| Pastel tints        | cooled feature washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}` (sky/lavender lead the cool set)             |
+| Work-item type hues | re-skin automatically via the `--color-*` they map to — cooled blue/green/red/teal/orange, kept distinguishable        |
 
 ## Accessibility
 
@@ -87,6 +112,8 @@ design-mockup render checklist). Notable margins:
 - Link on the soft (hovered) surface — **6.0:1** / **8.4:1**.
 - White on the danger fill — **5.5:1** / **4.6:1**.
 - `--el-text-strong` on every pastel tint — **≥10.6:1** both themes.
+- The `in_review` status step on the surface — **11.1:1** / **13.4:1**; on the
+  card fill — **12.6:1** / **14.9:1** (well past the ≥3.0 icon/UI bar).
 
 Tertiary (`--el-text-tertiary`) and faint (`--el-text-faint`) labels are
 intentionally sub-AA decorative steps (≈5.0:1 / ≈3.3:1 light), mirroring the
