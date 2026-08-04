@@ -45,12 +45,15 @@ Every Tier-3 `--el-*` element token references a Tier-0 `--color-*` source
 var. So — exactly like the `[data-theme='dark']` block — Graphite re-skins by
 overriding the **`--color-*` source**, and the whole `--el-*` layer (surfaces,
 ink, accent, links, semantic, pastel tints, work-item type hues, charts) follows
-coherently with no per-token churn. Two `--el-*` tokens are overridden directly:
+coherently with no per-token churn. Three `--el-*` tokens are overridden
+directly:
 
 - `--el-sidebar-item-bg-hover` — a concrete hex in Tier 3, not a `--color-*`
   reference, so there is no source to re-skin.
 - `--el-status-in-review` — the one place this palette's identity **collides**
   with the indirection (MOTIR-2073). See _the status ramp_ below.
+- `--el-priority-high` — where two chromatic **semantics** land too close to
+  each other for a glyph to carry (MOTIR-2094). See _the priority ramp_ below.
 
 ### The status ramp — why `in_review` is set directly
 
@@ -73,6 +76,38 @@ clear of this palette's tightest deliberate status pair (`todo` / `cancelled`
 at ΔE 11.8). `tests/theme/statusHueSeparation.test.ts` pins it, and the dot is
 never the sole carrier: every consumer renders it beside the status label.
 
+### The priority ramp — why `high` is set directly
+
+The same shape one family over, and **not** a monochrome-identity choice
+(MOTIR-2094). `--el-priority-highest` rides `--color-destructive` (`#c92a2a`)
+and `--el-priority-high` rides `--color-warning` (`#c2410c`) — but Graphite's
+warning is a **red-leaning burnt orange** sitting beside its danger red, so in
+light the two land ΔE2000 **10.02** apart.
+
+That **passed** the ΔE 10 bar a coloured priority GLYPH needs (the bar
+calibrated for the status dot in MOTIR-2073). It passed by 0.02, which is
+rounding, not margin: the two marks sat at the perceptual minimum, and any
+later nudge to either semantic would have tipped them under the floor as a
+surprise red. It is the same collision Cobalt shipped at ΔE 9.9 — the only
+difference between the two numbers is which side of the bar they rounded to —
+so it takes the same fix rather than a note explaining it away.
+
+Neither semantic moves: danger stays danger, warning stays warning. The
+**priority ramp takes its own step of a hue Graphite already owns**: **Radix
+Amber 11** `#ab6400`, from the palette's documented Radix source set. Separation
+from `highest` **ΔE 24.7** (the nearest other step, `medium`, is ΔE 32.2);
+contrast **4.6:1** on `--el-card` and **4.0:1** on `--el-surface`, past the 3:1
+icon/UI bar. A warm amber against a greyscale chrome is the same licence the
+palette already takes for `warning` itself — the monochrome statement is the
+chrome and the ink CTA, never the semantic hues (the finding-#54 guard).
+
+Dark needs no change (its `#d83847` / `#f08a4b` are already ΔE **25.8** apart)
+but **re-asserts `var(--color-warning)`** for the same cascade reason as the
+status override above: a light-only override would keep its LIGHT value on the
+dark canvas, where it was never measured.
+`tests/theme/familyHueSeparation.test.ts` enforces both the floor and the
+pairing.
+
 The block overrides **only colour tokens** (`--color-*` / `--el-*`) — never a
 shape/feel token (`--radius-*` / `--spacing-*` / `--shadow-*` / `--height-*` /
 `--transition-*`). That disjointness — colour here, shape on the `data-style`
@@ -91,6 +126,7 @@ axis — is what makes "style × palette" a product of two independent choices, 
 | Links               | the accent cool blue — `#155bc4` → `#7db1ff`                                                                           |
 | Semantic            | danger `#c92a2a`/`#d83847` · success `#18804a`/`#34b86e` · warning `#c2410c`/`#f08a4b` · info `#155bc4` (= accent)     |
 | Status ramp         | rides the semantic sources, EXCEPT `in_review` — its own deeper/paler accent step, Radix Blue 12 `#113264` → `#c2e6ff` |
+| Priority ramp       | `--el-priority-high` set directly — Radix Amber 11 `#ab6400` (light) / rides `--color-warning` (dark) — see below      |
 | Pastel tints        | cooled feature washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}` (sky/lavender lead the cool set)             |
 | Work-item type hues | re-skin automatically via the `--color-*` they map to — cooled blue/green/red/teal/orange, kept distinguishable        |
 
@@ -114,6 +150,8 @@ design-mockup render checklist). Notable margins:
 - `--el-text-strong` on every pastel tint — **≥10.6:1** both themes.
 - The `in_review` status step on the surface — **11.1:1** / **13.4:1**; on the
   card fill — **12.6:1** / **14.9:1** (well past the ≥3.0 icon/UI bar).
+- The `high` priority step (light only) on the surface — **4.0:1**; on the card
+  fill — **4.6:1** (past the ≥3.0 icon/UI bar).
 
 Tertiary (`--el-text-tertiary`) and faint (`--el-text-faint`) labels are
 intentionally sub-AA decorative steps (≈5.0:1 / ≈3.3:1 light), mirroring the

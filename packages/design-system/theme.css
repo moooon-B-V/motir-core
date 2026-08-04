@@ -2928,6 +2928,23 @@
      in-progress: ΔE2000 16.9, contrast 2.0:1 — well clear of this palette's
      tightest deliberate status pair (todo/cancelled, ΔE 11.8). */
   --el-status-in-review: #113264; /* Radix Blue 12 — deep accent step */
+
+  /* Priority ramp — highest vs high (MOTIR-2094, the MOTIR-2085 shape in a
+     second palette). `--el-priority-highest` rides --color-destructive
+     (#c92a2a) and `--el-priority-high` rides --color-warning (#c2410c);
+     Graphite's warning is a RED-leaning burnt orange sitting beside its danger
+     red, so the two land ΔE2000 10.02 apart. That PASSES the ΔE 10 bar a
+     coloured priority GLYPH needs — by 0.02, which is rounding, not margin: the
+     two marks are at the perceptual minimum, and any future nudge to either
+     semantic tips the pair under the floor. Nothing about this is the monochrome
+     identity (the chrome is greyscale; semantic hues stay chromatic on purpose),
+     so it is a collision to fix, not a choice to document.
+     The fix is Cobalt's: neither semantic moves — danger stays danger, warning
+     stays warning — and the PRIORITY ramp takes its own step of a hue Graphite
+     already owns, Radix Amber 11, one of this palette's documented Radix
+     sources. Separation from highest ΔE 24.7 (nearest other step, medium, ΔE
+     32.2); contrast 4.6:1 card / 4.0:1 surface, past the 3:1 icon/UI bar. */
+  --el-priority-high: #ab6400; /* Radix Amber 11 — the ramp's own amber step */
 }
 
 /* Graphite — dark companion. A cool near-black slate canvas; the CTA fill
@@ -2995,6 +3012,12 @@
      a light-only override keeps its LIGHT value on the dark canvas (the
      palette block outranks the base [data-theme='dark'] block). */
   --el-status-in-review: #c2e6ff; /* Radix Blue 12 dark — pale accent step */
+
+  /* Dark keeps the brightened warning orange — highest/high are already ΔE 25.8
+     apart here, so only light needed the amber step. Re-asserted (not omitted)
+     for the same pairing reason as the status override above: an unpaired light
+     override leaks onto this canvas, where it was never measured (MOTIR-2094). */
+  --el-priority-high: var(--color-warning);
 }
 
 /* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
