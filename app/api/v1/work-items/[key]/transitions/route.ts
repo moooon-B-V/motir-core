@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withV1Route } from '@/lib/api/v1/route';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
 import {
+  commentCountFor,
   encodeWorkItemETag,
   parseV1Body,
   presentTransitionTargets,
@@ -78,5 +79,5 @@ export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, 
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  return NextResponse.json(presentWorkItemDetail(detail, counts[detail.item.id] ?? 0));
+  return NextResponse.json(presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id)));
 });

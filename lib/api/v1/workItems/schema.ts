@@ -736,3 +736,17 @@ export function presentCommentThread(
 ): V1CommentThread {
   return { ...presentComment(source), replies: source.replies.map(presentComment) };
 }
+
+/**
+ * The comment count for one item, from the batch a route already read.
+ *
+ * `commentsService.getCommentCountsForItems` SEEDS every requested id with `0`
+ * before it reads, so a miss here is unreachable — but `noUncheckedIndexedAccess`
+ * still demands a fallback, and a bare `!` would assert something the type system
+ * cannot see. Owned in ONE place so the five endpoints that present a detail do
+ * not each carry the same untestable branch.
+ */
+export function commentCountFor(counts: Record<string, number>, itemId: string): number {
+  /* v8 ignore next -- the service pre-seeds every requested id, so the fallback is unreachable */
+  return counts[itemId] ?? 0;
+}

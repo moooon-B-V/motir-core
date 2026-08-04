@@ -251,6 +251,18 @@ describe('PATCH /api/v1/work-items/{key}', () => {
     expect(cleared.estimateMinutes).toBeNull();
   });
 
+  it('CLEARS the parent on an explicit parentKey: null', async () => {
+    const epic = await createTestWorkItem(caller.fixture, { kind: 'epic', title: 'Epic' });
+    const item = await createTestWorkItem(caller.fixture, { kind: 'story', title: 'Child' });
+    await patch(caller, item.identifier, { parentKey: epic.identifier });
+
+    const cleared = await (await patch(caller, item.identifier, { parentKey: null })).json();
+
+    // The same absent-vs-null distinction the field patch draws, applied to the
+    // one field whose value is a KEY rather than a scalar.
+    expect(cleared.parentKey).toBeNull();
+  });
+
   it('re-files via parentKey and re-classifies via kind', async () => {
     const epic = await createTestWorkItem(caller.fixture, { kind: 'epic', title: 'Epic' });
     const item = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Movable' });

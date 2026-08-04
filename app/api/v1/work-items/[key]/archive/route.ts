@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
-import { encodeWorkItemETag, presentWorkItemDetail } from '@/lib/api/v1/workItems/schema';
+import {
+  commentCountFor,
+  encodeWorkItemETag,
+  presentWorkItemDetail,
+} from '@/lib/api/v1/workItems/schema';
 import { commentsService } from '@/lib/services/commentsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -31,5 +35,5 @@ export const POST = withV1Route<{ key: string }>({ scope: 'work_items:archive' }
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  return NextResponse.json(presentWorkItemDetail(detail, counts[detail.item.id] ?? 0));
+  return NextResponse.json(presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id)));
 });
