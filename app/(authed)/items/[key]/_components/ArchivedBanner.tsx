@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Archive, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ArchivedNotice } from '@/components/issues/ArchivedNotice';
 import { useToast } from '@/components/ui/Toast';
 import {
   unarchiveWorkItem,
@@ -33,6 +34,11 @@ import {
 // button (hidden, never shown-disabled — the WorkItemActionsMenu pattern,
 // mirroring the list view's dropped Restore column), and the meta line drops its
 // "Restore it to bring it back." tail (that viewer can't restore).
+//
+// MOTIR-2050: the banner's MARKUP + copy now live in the shared, presentational
+// `ArchivedNotice` (so the quick-view peek shows the same archived language, not
+// a second one). This file keeps what is detail-page-specific: the Restore
+// mutation, its toasts, and the server-refresh that clears the banner.
 
 export interface ArchivedBannerProps {
   /** The work-item id — the target of the `unarchiveWorkItem` restore call. */
@@ -85,40 +91,25 @@ export function ArchivedBanner({
   }, [itemId, identifier, router, toast, ta]);
 
   return (
-    <div
-      role="status"
-      data-testid="archived-banner"
-      className="flex items-start gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) px-3.5 py-3"
-    >
-      <Archive className="mt-0.5 h-[18px] w-[18px] shrink-0 text-(--el-text-muted)" aria-hidden />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="font-sans text-sm font-semibold text-(--el-text-strong)">
-          {t('archivedBannerHeadline')}
-        </span>
-        <span className="font-sans text-[13px] text-(--el-text-secondary)">
-          {t.rich('archivedBannerMeta', {
-            name: archivedByName ?? t('archivedByUnknownActor'),
-            date: archivedAtLabel,
-            strong: (chunks: ReactNode) => (
-              <span className="font-medium text-(--el-text-strong)">{chunks}</span>
-            ),
-          })}
-          {canEdit ? <> {t('archivedBannerRestoreTail')}</> : null}
-        </span>
-      </div>
-      {canEdit ? (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="shrink-0"
-          loading={restoring}
-          leftIcon={restoring ? undefined : <RotateCcw className="h-3.5 w-3.5" aria-hidden />}
-          aria-label={t('archivedRestoreAria', { key: identifier })}
-          onClick={() => void onRestore()}
-        >
-          {restoring ? t('archivedRestoring') : t('archivedRestore')}
-        </Button>
-      ) : null}
-    </div>
+    <ArchivedNotice
+      archivedByName={archivedByName}
+      archivedAtLabel={archivedAtLabel}
+      restorable={canEdit}
+      action={
+        canEdit ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            loading={restoring}
+            leftIcon={restoring ? undefined : <RotateCcw className="h-3.5 w-3.5" aria-hidden />}
+            aria-label={t('archivedRestoreAria', { key: identifier })}
+            onClick={() => void onRestore()}
+          >
+            {restoring ? t('archivedRestoring') : t('archivedRestore')}
+          </Button>
+        ) : null
+      }
+    />
   );
 }

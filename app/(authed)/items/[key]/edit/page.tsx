@@ -92,6 +92,9 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         clones={detail.clones}
         readiness={detail.readiness}
         currentStatus={detail.item.status}
+        // MOTIR-2050: same gate as the detail page — an archived item shows no
+        // readiness badge on any surface that renders this panel.
+        archived={detail.item.archivedAt != null}
         workflow={detail.workflow}
         editable
         currentItemId={detail.item.id}

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { QuickViewData } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 
@@ -62,6 +62,7 @@ const DATA: QuickViewData = {
   updatedAt: '2026-06-10T00:00:00.000Z',
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
   readiness: null,
+  archived: null,
   pullRequests: [],
   hasChildren: false,
   canPlan: true,
@@ -328,6 +329,84 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     );
     expect(screen.queryByText('Blocked')).toBeNull();
     expect(screen.queryByRole('link', { name: 'PROD-3' })).toBeNull();
+  });
+});
+
+describe('IssueQuickViewPanel — the ARCHIVED state (bug MOTIR-2050)', () => {
+  // An archived item IS reachable in the peek: an archived `motir:` reference
+  // chip opens one (WorkItemRefChip), and the detail read behind the payload
+  // doesn't filter `archivedAt`. Before this fix the payload carried no archived
+  // field at all, so the peek showed an archived item as an ordinary one — and,
+  // because archiving leaves `status` at `todo`, as a "Ready to start" one.
+  const ARCHIVED = {
+    ...DATA,
+    statusLabel: 'To Do',
+    statusCategory: 'todo' as const,
+    readiness: { ready: true, blockers: [], blockedByAncestor: null },
+    archived: { atLabel: 'Jun 15, 2026', byName: 'Alice Chen' },
+  };
+
+  it('renders NO readiness banner on an archived item, todo status notwithstanding', () => {
+    render(<IssueQuickViewPanel state="ready" data={ARCHIVED} />);
+    expect(screen.queryByText('Ready to start')).toBeNull();
+    expect(screen.queryByText('All blockers resolved')).toBeNull();
+  });
+
+  it('renders NO readiness banner on an archived + BLOCKED item either', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{
+          ...ARCHIVED,
+          readiness: { ready: false, blockers: ['PROD-3'], blockedByAncestor: null },
+        }}
+      />,
+    );
+    expect(screen.queryByText('Blocked')).toBeNull();
+    expect(screen.queryByText(/Waiting on/)).toBeNull();
+  });
+
+  it('states the archived fact — the same banner + copy the detail page uses, actor and date named', () => {
+    render(<IssueQuickViewPanel state="ready" data={ARCHIVED} />);
+    const banner = screen.getByTestId('quick-view-archived-banner');
+    expect(within(banner).getByText('This work item is archived')).toBeTruthy();
+    expect(banner.textContent).toContain('Alice Chen');
+    expect(banner.textContent).toContain('Jun 15, 2026');
+    // Read-only surface: no Restore, and so no "Restore it to bring it back."
+    // promise — "Open full page →" is the door to the action.
+    expect(banner.textContent).not.toContain('Restore it to bring it back');
+    expect(screen.queryByRole('button', { name: /Restore/ })).toBeNull();
+    expect(screen.getByTestId('quick-view-open-full')).toBeTruthy();
+  });
+
+  it('falls back to a former member when no archived actor resolved', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...ARCHIVED, archived: { atLabel: 'Jun 15, 2026', byName: null } }}
+      />,
+    );
+    expect(screen.getByTestId('quick-view-archived-banner').textContent).toContain(
+      'a former member',
+    );
+  });
+
+  it('marks the header with the neutral "Archived" chip, so the state survives scrolling', () => {
+    render(<IssueQuickViewPanel state="ready" data={ARCHIVED} />);
+    expect(screen.getByText('Archived')).toBeTruthy();
+  });
+
+  it('hides the Plan / Re-plan door on an archived item — it is not work to plan', () => {
+    // The same gate the detail page applies (`canEdit && !isArchived`), now
+    // reachable here because the payload carries the archived state.
+    render(<IssueQuickViewPanel state="ready" data={ARCHIVED} />);
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
+  });
+
+  it('a LIVE item shows no archived banner and no chip', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    expect(screen.queryByTestId('quick-view-archived-banner')).toBeNull();
+    expect(screen.queryByText('Archived')).toBeNull();
   });
 });
 

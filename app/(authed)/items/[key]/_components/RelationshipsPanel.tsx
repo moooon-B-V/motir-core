@@ -9,6 +9,7 @@ import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { showsReadiness } from '@/lib/issues/readinessVisibility';
 
 // The relationships panel on the issue detail page (Story 2.4 · Subtasks 2.4.5
 // + 2.4.9), per `design/work-items/relationships.mock.html` + `links.mock.html`:
@@ -36,6 +37,11 @@ export interface RelationshipsPanelProps {
    *  item is in the `todo` category (resolved via `workflow`); "can I start
    *  this?" is moot once it's in-progress or done (2.5.21). */
   currentStatus: string;
+  /** Is the item ARCHIVED (`archivedAt != null`)? An archived item is never
+   *  startable work — archiving leaves `status` untouched, so without this the
+   *  status-only gate showed "Ready to start" beside the page's own "Archived"
+   *  banner, promising work the ready set can never hand out (bug MOTIR-2050). */
+  archived?: boolean;
   /** The item's project workflow — classifies a linked status into a Pill tone. */
   workflow: WorkflowDto;
   /** When set, render the add control + per-row remove (the detail page). The
@@ -116,6 +122,7 @@ export function RelationshipsPanel({
   clones,
   readiness,
   currentStatus,
+  archived = false,
   workflow,
   editable,
   currentItemId,
@@ -146,14 +153,16 @@ export function RelationshipsPanel({
     { key: 'clones', label: tl('relationship.clones'), items: clones, blockerGroup: false },
   ];
   const nonEmpty = groups.filter((g) => g.items.length > 0);
-  // The readiness banner shows for any TODO-category item: "can I start this?"
-  // is moot once the item is in-progress or done (2.5.21, matching the
-  // quick-view peek). An item with NO blockers is the most ready it can be, so
-  // it shows the green "Ready to start" too — the badge renders off the
-  // `readiness` verdict (ready when no blockers OR all terminal), not the
-  // blocker count (bug-ready-banner-no-deps).
+  // The readiness banner shows for a TODO-category item that is NOT archived —
+  // the shared `showsReadiness` predicate the quick-view peek uses too
+  // (MOTIR-2050). "Can I start this?" is moot once the item is in-progress or
+  // done (2.5.21), and an archived item is not startable work at all (it is
+  // filtered out of every ready-set read). An item with NO blockers is the most
+  // ready it can be, so it shows the green "Ready to start" too — the badge
+  // renders off the `readiness` verdict (ready when no blockers OR all terminal),
+  // not the blocker count (bug-ready-banner-no-deps).
   const currentCategory = workflow.statuses.find((s) => s.key === currentStatus)?.category;
-  const showReadiness = currentCategory === 'todo';
+  const showReadiness = showsReadiness({ statusCategory: currentCategory, archived });
   const openBlockerIds = new Set(readiness.openBlockers.map((b) => b.id));
   const canEdit = Boolean(editable && currentItemId && identifier);
 

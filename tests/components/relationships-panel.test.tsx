@@ -280,6 +280,48 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
     screen.getByRole('link', { name: /Upstream/ });
   });
 
+  it('suppresses the readiness banner on an ARCHIVED item, todo status notwithstanding (MOTIR-2050)', () => {
+    // The bug: archiving is a pure soft-delete — it leaves `status` at `todo` —
+    // so the status-only gate lit the green "Ready to start" badge on the same
+    // page as the "Archived" banner, promising work the ready set can never hand
+    // out (every ready read filters `archivedAt IS NULL`).
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        readiness={READY}
+        currentStatus="todo"
+        archived
+        workflow={workflow}
+      />,
+    );
+    expect(screen.queryByText('Ready to start')).toBeNull();
+    expect(screen.queryByText('All blockers resolved')).toBeNull();
+    // The panel itself still renders — only the readiness banner is gated.
+    screen.getByText('Relationships');
+  });
+
+  it('suppresses the BLOCKED banner on an archived item too', () => {
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        blockedBy={[link({ id: 'b', identifier: 'PROD-3', title: 'Upstream', status: 'todo' })]}
+        readiness={{
+          ready: false,
+          openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })],
+          blockedByAncestor: null,
+        }}
+        currentStatus="todo"
+        archived
+        workflow={workflow}
+      />,
+    );
+    expect(screen.queryByText('Blocked')).toBeNull();
+    expect(screen.queryByText(/Waiting on/)).toBeNull();
+    // The dependency GROUP is unaffected — only the banner is gated.
+    screen.getByText('Blocked by');
+    screen.getByRole('link', { name: /Upstream/ });
+  });
+
   it('falls back to the raw status key for a cross-project status the workflow does not classify', () => {
     render(
       <RelationshipsPanel

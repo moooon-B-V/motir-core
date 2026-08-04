@@ -456,6 +456,10 @@ export default async function IssueDetailPage({
               clones={detail.clones}
               readiness={detail.readiness}
               currentStatus={item.status}
+              // MOTIR-2050: the page already knows the archived state (the banner
+              // above renders off it) — pass it down so the readiness badge is
+              // suppressed too, instead of contradicting the banner.
+              archived={isArchived}
               workflow={detail.workflow}
               editable={canEdit}
               currentItemId={item.id}
