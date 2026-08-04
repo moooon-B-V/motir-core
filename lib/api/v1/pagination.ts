@@ -413,3 +413,45 @@ export function parseCollectionPageRequest<T>(
 export function readRowIdPosition(position: unknown): string | undefined {
   return typeof position === 'string' && position.length > 0 ? position : undefined;
 }
+
+/**
+ * Take one page out of a bounded collection the service has already read and
+ * ordered, seeking after a scalar POSITION.
+ *
+ * For the collections whose whole list is small and already ordered by the
+ * service — a workspace's projects, a project's sprints — where re-deriving the
+ * order in the database would mean re-implementing the read. `paginateKeyset`
+ * cannot serve them: it imposes its OWN `(createdAt, id)` sort, which would
+ * discard the order the service returned.
+ *
+ * This is still a KEYSET seek, not an offset: the page is "everything strictly
+ * after the row at this position IN THE SERVICE'S ORDER", so a row inserted
+ * before the cursor between two fetches does not shift the page.
+ *
+ * A cursor naming a row that is no longer in the collection (it was archived or
+ * moved between pages) yields an EMPTY FINAL page — the same answer
+ * `paginateKeyset` gives for a cursor past the tail, and deliberately not a
+ * silent restart at the top, which is the failure mode ADR §5 rejects.
+ */
+export function paginateAtPosition<TRow, TPos, TItem>(
+  rows: readonly TRow[],
+  page: CollectionPageRequest<TPos>,
+  collection: V1Collection,
+  positionOf: (row: TRow) => TPos,
+  map: (row: TRow) => TItem,
+): ListEnvelope<TItem> {
+  const from =
+    page.cursor === undefined
+      ? 0
+      : rows.findIndex((row) => positionOf(row) === page.cursor) + 1 || rows.length;
+
+  const slice = rows.slice(from, from + page.limit);
+  const last = slice[slice.length - 1];
+  const hasMore = from + slice.length < rows.length;
+
+  return {
+    items: slice.map(map),
+    nextCursor:
+      hasMore && last !== undefined ? encodeCollectionCursor(collection, positionOf(last)) : null,
+  };
+}
