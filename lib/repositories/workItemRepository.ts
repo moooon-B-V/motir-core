@@ -2333,6 +2333,81 @@ export const workItemRepository = {
   },
 
   /**
+   * The DIRECT-children status aggregate behind the upward status rollup (Story
+   * MOTIR-1615 · Subtask MOTIR-1619; `docs/decisions/status-derivation.md` §3) —
+   * exactly the counts the ladder evaluates, in ONE round-trip, so a parent with
+   * hundreds of children costs one aggregate rather than a row load.
+   *
+   * DIRECT children only (`parentId = ?`), never the subtree — the rollup
+   * transitions one level and lets re-emission carry the next, so a subtree
+   * aggregate would answer the wrong question. Contrast `countRoadmapProgress`,
+   * which IS a subtree roll-up.
+   *
+   * Buckets come from the project's OWN `workflow_status.category`, joined on the
+   * status key, so a team that renamed or added statuses still aggregates
+   * correctly — no hardcoded key list. The one exception is `inReview`, which
+   * cannot be derived from the category (review shares the `in_progress`
+   * category): the CALLER resolves which status means "in review" for this project
+   * — through the same `workflowsService.resolveStatusKey` the rest of the
+   * derivation uses — and passes its key here. `inProgress` then EXCLUDES those
+   * children, so the two buckets partition the `in_progress` category. Pass `null`
+   * when the project's workflow has no review status: `inReview` is 0 and every
+   * in-progress child counts under `inProgress`, which is the correct degenerate
+   * reading (that project simply never reaches the in-review rung).
+   *
+   * Excludes archived + triage rows, the uniform child-read exclusion
+   * `findChildren` applies. Read-only → `db` singleton unless a `tx` is supplied
+   * (the rollup reads it inside the transaction that locked the parent).
+   *
+   * The category join is an INNER join, so a child whose `status` resolves to no
+   * `workflow_status` row is not counted at all — it would otherwise land in no
+   * bucket while still inflating `total`, and a bucket-less child can only make
+   * the ladder's "every child is done" test unanswerable. No live row can reach
+   * that state: every item is created in the workflow's initial status, and a
+   * status that is IN USE cannot be deleted (`workflowsService.deleteStatus`).
+   */
+  async aggregateChildrenStatus(
+    parentId: string,
+    reviewStatusKey: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{
+    total: number;
+    todo: number;
+    inProgress: number;
+    inReview: number;
+    done: number;
+  }> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<
+      Array<{ category: string; is_review: boolean; count: number }>
+    >`
+      SELECT ws."category"::text AS "category",
+             (${reviewStatusKey}::text IS NOT NULL AND w."status" = ${reviewStatusKey}::text)
+               AS "is_review",
+             COUNT(*)::int AS "count"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+          ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        WHERE w."parentId" = ${parentId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+        GROUP BY ws."category", "is_review"`;
+
+    const out = { total: 0, todo: 0, inProgress: 0, inReview: 0, done: 0 };
+    for (const r of rows) {
+      out.total += r.count;
+      // A review status is reported as `inReview` whatever category it sits in —
+      // it is the caller's declared review stage, and splitting it out is the
+      // entire reason this method takes the key.
+      if (r.is_review) out.inReview += r.count;
+      else if (r.category === 'todo') out.todo += r.count;
+      else if (r.category === 'in_progress') out.inProgress += r.count;
+      else if (r.category === 'done') out.done += r.count;
+    }
+    return out;
+  },
+
+  /**
    * Count a project's TRIAGE-queued items (Story 6.12 · Subtask 6.12.4) — the
    * Overview "Public requests" stat. Triage items are the submission inbox
    * (`triagedAt IS NOT NULL`), which 6.12.5's public submit feeds; today this is
