@@ -125,24 +125,13 @@ export function stubIndexFleet(): void {
   );
 }
 
-/** The REFRESH job's world — unchanged: it still fetches the bytes in-process. */
-export function stubGithubTarballBytes(bytes: Uint8Array<ArrayBuffer>): void {
-  stubAppCredentials();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string): Promise<Response> => {
-      const parsed = new URL(String(url));
-      if (parsed.pathname.endsWith('/access_tokens')) {
-        return json(200, {
-          token: 'ghs_x',
-          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-        });
-      }
-      if (parsed.pathname.includes('/tarball/')) return new Response(bytes, { status: 200 });
-      throw new Error(`unexpected fetch to ${parsed.href}`);
-    }),
-  );
-}
+// ⚠️ THERE IS NO BYTES-FETCHING WORLD TO STUB ANY MORE (MOTIR-2057). This file
+// used to export `stubGithubTarballBytes` — GitHub answering `/tarball/` with a
+// 200 and a body — as "the REFRESH job's world, unchanged". Refresh now drives
+// the same fleet path as the first index, so BOTH jobs run against
+// `stubIndexFleet()` above, whose `/tarball/` response is a 302 whose body is a
+// TRAP. That is deliberate: a regression that re-fetches bytes in-process has no
+// fixture that would let it pass.
 
 export interface SeededIndexWorkspace {
   workspaceId: string;
@@ -262,6 +251,32 @@ export function indexEventFor(args: {
       defaultBranch: 'main',
     },
   };
+}
+
+/**
+ * One `system.code-graph-refresh` event — a default-branch push.
+ *
+ * The payload is the index event's (`CodeGraphRefreshData = CodeGraphIndexData`),
+ * which is WHY the two jobs can share `runIndexFleetSteps` since MOTIR-2057. The
+ * event id is pinned for the reason above.
+ */
+export function refreshEventFor(args: {
+  installationId: string;
+  workspaceId: string;
+  repoOwner?: string;
+  repoName?: string;
+  eventId?: string;
+}) {
+  const indexEvent = indexEventFor(args);
+  return { ...indexEvent, name: 'system.code-graph-refresh' as const };
+}
+
+/** The `system.code-graph-refresh` ledger rows, newest last. */
+export async function refreshJobRuns() {
+  return db.jobRun.findMany({
+    where: { functionId: 'system.code-graph-refresh' },
+    orderBy: { startedAt: 'asc' },
+  });
 }
 
 /**

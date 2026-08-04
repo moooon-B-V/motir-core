@@ -694,10 +694,19 @@ export async function mintCodeGraphRunCredential(input: {
 // envelope), and the tenant tuple + repo ref ride as `x-core-*` / `x-repo-ref`
 // headers. The GitHub installation token + the tarball fetch stay in motir-core;
 // motir-ai receives BYTES, never a host credential (the open-core invariant). The
-// caller (the `system.code-graph-index` job) has already resolved the tenant and
-// minted the token. A transport failure / non-2xx (problem+json) maps to a typed
-// error the job's retry budget absorbs — as does a motir-ai that never answers,
-// under this call's own longer `MOTIR_AI_INDEX_TIMEOUT_MS` deadline (MOTIR-1974).
+// caller has already resolved the tenant and minted the token. A transport
+// failure / non-2xx (problem+json) maps to a typed error the caller's retry
+// budget absorbs — as does a motir-ai that never answers, under this call's own
+// longer `MOTIR_AI_INDEX_TIMEOUT_MS` deadline (MOTIR-1974).
+//
+// ⚠️ NOTHING IN THE APP CALLS THIS ANY MORE, AND ADOPTING IT IS A REGRESSION
+// (MOTIR-2057). Both code-graph jobs build on the container fleet now, so the
+// bytes never enter a Vercel function; this remains only because motir-ai's
+// ingest ROUTE remains — retiring it is a separate decision
+// (`docs/decisions/code-graph-index-fleet.md` §11) — and because it is the
+// boundary's only binary method, whose contract tests document that shape. A new
+// caller here re-creates the exact defect MOTIR-2057 fixed: a whole-tree parse
+// bounded by a 180 s client deadline that the largest repo cannot meet.
 export async function indexCodeGraph(input: {
   coreOrganizationId: string;
   coreWorkspaceId: string;

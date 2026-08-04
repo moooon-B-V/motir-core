@@ -26,12 +26,14 @@ import type {
 // backs.
 
 /**
- * Deadline for a repo-tarball fetch, in ms (MOTIR-1974). The fetch is the first
- * half of one `system.code-graph-index` step; the motir-ai upload is the second
- * (`MOTIR_AI_INDEX_TIMEOUT_MS`). Their SUM must stay under the serve route's
- * `maxDuration`, so a stalled host surfaces as a typed error inside the
- * invocation budget instead of as a `FUNCTION_INVOCATION_TIMEOUT` with no step
- * output. Bounds time-to-response-headers (which is where a dead host hangs);
+ * Deadline for a repo-tarball fetch or URL resolve, in ms (MOTIR-1974). Since
+ * both code-graph jobs dispatch containers (MOTIR-2027 / MOTIR-2057) what it
+ * bounds in-function is the `redirect: 'manual'` RESOLVE, not a byte download;
+ * `gitlabProvider.fetchRepoTarball` is its remaining buffering caller. It must
+ * stay under the serve route's `maxDuration`, so a stalled host surfaces as a
+ * typed error inside the invocation budget instead of as a
+ * `FUNCTION_INVOCATION_TIMEOUT` with no step output. Bounds
+ * time-to-response-headers (which is where a dead host hangs);
  * the body download that follows is the host streaming bytes it already
  * committed to.
  */

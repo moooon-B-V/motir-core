@@ -27,15 +27,16 @@ import {
   indexJobRuns,
   indexSleepSteps,
   indexStepIds,
+  refreshEventFor,
+  refreshJobRuns,
   resetTarballBodyTrap,
   seedIndexWorkspace,
-  stubGithubTarballBytes,
   stubIndexFleet,
   tarballBodyWasTouched,
 } from '../helpers/indexFleet';
 
-// system.code-graph-index — THE DURABLE STEP SHAPE (MOTIR-2027), and
-// system.code-graph-refresh — the shape it USED to share (MOTIR-1974).
+// system.code-graph-index — THE DURABLE STEP SHAPE (MOTIR-2027) — and
+// system.code-graph-refresh, which drives the SAME one since MOTIR-2057.
 //
 // Driven IN-PROCESS via @inngest/test against a REAL Postgres, on the `fake`
 // orchestrator, with only the two externals stubbed (GitHub's tarball redirect,
@@ -66,8 +67,6 @@ import {
 // as a test TIMEOUT, which reads like a slow test rather than a missing stub).
 // `sleepSteps()` pre-fulfils them; supply more than the loop can use.
 
-const TARBALL = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x11, 0x22]);
-
 // The world this suite drives is the SHARED index-fleet fixture
 // (`tests/helpers/indexFleet.ts`), so the seam suite that reads the ledger's
 // real consumers measures the same one. The aliases below keep this file's call
@@ -78,7 +77,6 @@ const seedWorkspace = seedIndexWorkspace;
 const stepIds = indexStepIds;
 const sleepSteps = indexSleepSteps;
 const indexRuns = indexJobRuns;
-const stubGithubTarball = () => stubGithubTarballBytes(TARBALL);
 const indexEvent = (installationId: string, workspaceId: string) =>
   indexEventFor({ installationId, workspaceId, eventId: `evt-${installationId}` });
 
@@ -740,45 +738,142 @@ describe('the job definition carries NO concurrency number', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REFRESH — untouched (§11: "Still building in-process, unchanged").
+// REFRESH — THE SAME FLEET PATH AS THE FIRST INDEX (MOTIR-2057).
+//
+// MOTIR-2027 left this job on the in-process shape (§11: "Still building
+// in-process, unchanged") and production then ran the abandoned path at a ~68%
+// failure rate for three days: `motir-core`'s whole-tree parse does not fit in
+// the 180 s `MOTIR_AI_INDEX_TIMEOUT_MS` client deadline, and its five idempotent
+// retries starved every other repo's refresh against motir-ai's one parse
+// permit. So what these cases pin is that a PUSH refresh dispatches containers,
+// that its per-repo debounce survived the move, and that the first-index path
+// did not change — not one of which is safe to read off the diff.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('system.code-graph-refresh — the shape it kept', () => {
-  it('checkpoints per project and still builds IN-PROCESS', async () => {
+describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
+  it('drives boot → poll → settle per project, and NEVER fetches bytes in-process', async () => {
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-refresh', 2);
-    stubGithubTarball();
-    const upload = vi.spyOn(motirAiClient, 'indexCodeGraph').mockResolvedValue({
-      status: 'ok',
-      repoRef: REPO_REF,
-      filesIndexed: 5,
-      nodesChanged: 1,
-      edgesChanged: 1,
-      commitSha: 'def',
+    stubIndexFleet();
+    containerExitsWith(0);
+    // The two ways bytes used to enter this process on a push: the buffering
+    // fetch, and the motir-ai upload that carried them under the 180 s deadline.
+    const fetchBytes = vi.spyOn(githubProvider, 'fetchRepoTarball');
+    const upload = vi.spyOn(motirAiClient, 'indexCodeGraph');
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { result, ctx } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps(projectIds),
     });
 
-    const engine = new InngestTestEngine({
-      function: codeGraphRefresh,
-      events: [
-        {
-          name: 'system.code-graph-refresh',
-          data: {
-            installationId,
-            workspaceId,
-            repoOwner: 'moooon',
-            repoName: 'motir-core',
-            defaultBranch: 'main',
-            archived: false,
-          },
-        },
-      ],
-    });
-    const { result, ctx } = await engine.execute();
-
+    // The ledger row a refresh writes is unchanged in SHAPE — one per repo, one
+    // repoRef — which is what makes this a path swap and not a contract change.
     expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
-    const ids = stepIds(ctx).filter((id) => id.startsWith('index-project:'));
-    expect(ids.sort()).toEqual(projectIds.map((id) => `index-project:${id}`).sort());
-    // Refresh keeps the bytes path — it uploads, and it boots no container.
-    expect(upload).toHaveBeenCalledTimes(2);
-    expect(fakeOrchestrator.provisioned).toEqual([]);
+
+    const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
+    expect(ids[0]).toBe('resolve-target');
+    expect(ids[1]).toBe('assert-fleet-configured');
+    for (const projectId of projectIds) {
+      const own = ids.filter((id) => id.endsWith(`:${projectId}`) || id.includes(`:${projectId}:`));
+      expect(own[0]).toBe(`index-admit:${projectId}:1`);
+      expect(own[1]).toBe(`index-boot:${projectId}`);
+      expect(own[2]).toBe(`index-poll:${projectId}:1`);
+      expect(own.at(-1)).toBe(`index-settle:${projectId}`);
+    }
+
+    // ⚠️ THE DEFECT, INVERTED. A push used to buffer `motir-core`'s whole tree
+    // into this function and POST it; one container per (repo × project) now
+    // fetches it from the pre-signed URL instead, and the body is never read here.
+    expect(tarballBodyWasTouched()).toBe(false);
+    expect(fetchBytes).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+    expect(fakeOrchestrator.provisioned).toHaveLength(2);
+    for (const spec of fakeOrchestrator.specs) {
+      expect(spec.env['MOTIR_INDEX_TARBALL_URL']).toBe(TARBALL_URL);
+    }
+  }, 30_000);
+
+  it('fails the run and claims nothing when a refresh container dies', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-refresh-x', 1);
+    stubIndexFleet();
+    containerExitsWith(30);
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { result, error } = (await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps(projectIds),
+    })) as { result?: unknown; error?: { message?: string } };
+
+    expect(result).toBeUndefined();
+    expect(error?.message).toContain('graph_unbuildable');
+    expect(error?.message).toContain(REPO_REF);
+    // A stale graph must never read as fresh: no `succeeded` row, no output, and
+    // the failure is what the DLQ and MOTIR-2105's staleness signal see.
+    const runs = await refreshJobRuns();
+    expect(runs.filter((run) => run.status === 'succeeded')).toEqual([]);
+    expect(runs.every((run) => run.output === null)).toBe(true);
+    // Teardown still happened — a failed refresh is not a billed leak.
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    expect(fakeOrchestrator.teardowns).toHaveLength(1);
+  }, 30_000);
+
+  it('keeps the per-repo DEBOUNCE, and carries no concurrency number', () => {
+    // Read off the SHIPPED function object — the config Inngest was actually
+    // constructed with. A debounce is executor-side (Inngest holds the run), so
+    // coalescing itself cannot be driven in-process; what a test CAN pin is that
+    // the config survived the move, which is exactly what a path swap risks
+    // dropping.
+    const config = (codeGraphRefresh as unknown as { opts: Record<string, unknown> }).opts as {
+      id?: string;
+      retries?: number;
+      concurrency?: { limit: number };
+      debounce?: { key: string; period: string; timeout?: string };
+    };
+
+    expect(config.id).toBe('system.code-graph-refresh');
+    // A push storm still coalesces: same key (installation + repo), same 2m
+    // window, same 15m cap on the total deferral.
+    expect(config.debounce).toEqual({
+      key: "event.data.installationId + '/' + event.data.repoOwner + '/' + event.data.repoName",
+      period: '2m',
+      timeout: '15m',
+    });
+    // `concurrency: 2` is GONE (MOTIR-2057), for MOTIR-1990's three reasons — a
+    // stepped supervisor holds its slot for the container's whole life, an
+    // unkeyed limit IS the starvation this job suffered, and its scale-to-zero
+    // premise moved to the containers. The cap lives in admission control now.
+    expect(config.concurrency).toBeUndefined();
+    expect(config.retries).toBe(4);
+  });
+
+  it('leaves the first index UNCHANGED — same step sequence, and no debounce on it', async () => {
+    // The healthy path is not collateral: refresh adopting this shape must not
+    // reshape it. Driving both jobs over ONE seeded world and comparing the step
+    // sequences is the direct form of "they share one path, and it is the index
+    // job's own" — a copied-and-edited shape fails here even when both are green
+    // in isolation.
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-parity', 2);
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const indexRun = await new InngestTestEngine({ function: codeGraphIndex }).execute({
+      events: [indexEventFor({ installationId, workspaceId, eventId: 'evt-parity-index' })],
+      steps: sleepSteps(projectIds),
+    });
+    const refreshRun = await new InngestTestEngine({ function: codeGraphRefresh }).execute({
+      events: [refreshEventFor({ installationId, workspaceId, eventId: 'evt-parity-refresh' })],
+      steps: sleepSteps(projectIds),
+    });
+
+    expect(indexRun.result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
+    expect(refreshRun.result).toEqual(indexRun.result);
+    const shapeOf = (ctx: Parameters<typeof stepIds>[0]) =>
+      stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
+    expect(shapeOf(refreshRun.ctx)).toEqual(shapeOf(indexRun.ctx));
+
+    // And the difference between them stays exactly one thing: the first index
+    // must run PROMPTLY on install, so it must never grow a debounce window.
+    const indexConfig = (codeGraphIndex as unknown as { opts: Record<string, unknown> }).opts;
+    expect(indexConfig['debounce']).toBeUndefined();
   }, 30_000);
 });

@@ -32,9 +32,11 @@ import { jobFunctions } from '@/lib/jobs/registry';
 //
 // 300s is the Pro plan's serverless maximum (Fluid compute allows more; we do
 // not rely on it). It must stay ABOVE the boundary deadlines the slowest step
-// can spend — `MOTIR_AI_INDEX_TIMEOUT_MS` (180s) + `GITHUB_TARBALL_TIMEOUT_MS`
-// (60s) — so a hung dependency surfaces as a typed, retryable error INSIDE the
-// budget instead of as an invocation kill. Change one, check the others.
+// can spend, so a hung dependency surfaces as a typed, retryable error INSIDE
+// the budget instead of as an invocation kill. Change one, check the others.
+// Neither code-graph job spends `MOTIR_AI_INDEX_TIMEOUT_MS` (180s) here any more
+// — both dispatch containers (MOTIR-2027 / MOTIR-2057) and their longest
+// in-function step is a URL resolve bounded by `REPO_TARBALL_TIMEOUT_MS` (60s).
 export const maxDuration = 300;
 
 export const { GET, POST, PUT } = serve({

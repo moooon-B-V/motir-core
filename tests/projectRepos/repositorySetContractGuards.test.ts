@@ -236,13 +236,14 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
   it('the index job is keyed by WORKSPACE — its input carries no project', async () => {
     const { codeGraphIndexService } = await import('@/lib/services/codeGraphIndexService');
     // MOTIR-1974 split the job's single method into `resolveIndexTarget` (reads)
-    // + `indexRepoIntoProject` (one project's network work) so each can be its own
-    // durable step. `resolveIndexTarget` is where the guarded property now lives:
-    // it takes the SAME workspace-keyed input (no project) and it is what decides
-    // the fan-out. The split is a checkpointing change, NOT a narrowing one — the
+    // + a per-project network half, so each could be its own durable step; the
+    // network half is now the fleet dispatch (MOTIR-2027 / MOTIR-2057) and no
+    // longer lives in this service. `resolveIndexTarget` is where the guarded
+    // property sits either way: it takes the SAME workspace-keyed input (no
+    // project) and it is what decides the fan-out. Neither move narrowed it — the
     // projectIds it returns are still every project of the workspace, and it still
-    // never reads `project_repository`. (`indexRepoIntoProject` does take a
-    // projectId, but only one this resolver handed out.)
+    // never reads `project_repository`. (The dispatch does take a projectId, but
+    // only one this resolver handed out.)
     //
     // Driving it with an installation that does not exist is the cheapest way to
     // prove the shape it accepts without a tarball fetch: the no-op it returns is

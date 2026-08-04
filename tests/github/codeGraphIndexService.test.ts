@@ -13,14 +13,15 @@ import { truncateAuthTables } from '../helpers/db';
 // Story 7.5 · MOTIR-1500 — the code-graph index service, the producer half. Real
 // Postgres (the motir-core convention): seed an installation + workspace + N
 // projects, stub the GitHub tarball fetch (global `fetch`), and spy the motir-ai
-// boundary. Asserts the tarball reaches motir-ai once per project with the right
-// tenant tuple (the workspace→projects fan-out).
+// boundary. Asserts the workspace→projects fan-out this service resolves.
 //
-// Since MOTIR-1974 the service exposes that work as TWO methods, because each
-// must be its own durable checkpoint: `resolveIndexTarget` (reads only) and
-// `indexRepoIntoProject` (ONE project's fetch + upload). The job wires them into
-// a step per project — `tests/jobs/code-graph-index.test.ts` covers that shape;
-// here we cover what each half does.
+// ⚠️ IT IS A READ-ONLY SERVICE NOW (MOTIR-2057). MOTIR-1974 split it into
+// `resolveIndexTarget` (reads) + `indexRepoIntoProject` (ONE project's fetch +
+// upload); the second half is DELETED, because both code-graph jobs build in a
+// fleet container and the in-function bytes path is exactly what failed ~68% of
+// `motir-core`'s refreshes. So the stubbed `fetch` and the motir-ai spy below are
+// kept as TRIPWIRES — they must record nothing — and the dispatch shape both jobs
+// now share lives in `tests/jobs/code-graph-index.test.ts`.
 
 const PASSWORD = 'hunter2hunter2';
 const TARBALL = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0xaa, 0xbb]);
@@ -140,30 +141,17 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
     expect(indexSpy).not.toHaveBeenCalled();
 
-    // Phase 2 — one call per project, each self-contained: its own tarball fetch
-    // plus its own upload, so the caller can put each in its own `step.run`.
-    if (!target.indexed) throw new Error('unreachable');
-    for (const projectId of target.projectIds) {
-      const res = await codeGraphIndexService.indexRepoIntoProject({
-        ...input,
-        providerId: target.providerId,
-        organizationId: target.organizationId,
-        repoRef: target.repoRef,
-        projectId,
-      });
-      expect(res).toEqual({ projectId, repoRef: 'moooon/acme', filesIndexed: 3 });
-    }
-
-    // One motir-ai call per project, each with the workspace's org + the bytes.
-    expect(indexSpy).toHaveBeenCalledTimes(2);
-    const projectIds = indexSpy.mock.calls.map(([arg]) => arg.coreProjectId).sort();
-    expect(projectIds).toEqual([projectA.id, projectB.id].sort());
-    for (const [arg] of indexSpy.mock.calls) {
-      expect(arg.coreOrganizationId).toBe(workspace.organizationId);
-      expect(arg.coreWorkspaceId).toBe(workspace.id);
-      expect(arg.repoRef).toBe('moooon/acme');
-      expect(new Uint8Array(arg.bytes as ArrayBuffer)).toEqual(TARBALL);
-    }
+    // ⚠️ AND THERE IS NO PHASE 2 IN THIS SERVICE ANY MORE (MOTIR-2057). It owned
+    // `indexRepoIntoProject` — one project's tarball fetch + bytes upload — which
+    // BOTH jobs used to drive and which only `system.code-graph-refresh` was
+    // still on after MOTIR-2027. That method is deleted, and this assertion is
+    // what keeps it deleted: a service that can pull a repo into the function is
+    // one import away from re-creating the 180 s-bounded path that failed ~68% of
+    // `motir-core`'s refreshes. Building now happens in a container, dispatched
+    // by `codeGraphIndexDispatchService` from `lib/jobs/indexFleetSteps.ts`.
+    expect('indexRepoIntoProject' in codeGraphIndexService).toBe(false);
+    expect(indexSpy).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
   });
 
   it('no-ops cleanly when the workspace has no projects', async () => {

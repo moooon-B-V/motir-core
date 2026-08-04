@@ -77,7 +77,7 @@ build inside a memory- and time-bounded function. Measured, not characterised:
 | **180 s motir-ai deadline**            | `MOTIR_AI_INDEX_TIMEOUT_MS = 180_000` (`lib/ai/motirAiClient.ts:94`); **3 repos dead-lettered** on `MotirAiUnavailableError … within 180000ms`                                                                                 | the expensive parse leaves the synchronous call             |
 | **`maxDuration = 300`**                | `app/api/inngest/route.ts:38`; MOTIR-1974's checkpointing exists only to fit under it                                                                                                                                          | the work is not on Vercel                                   |
 | **200 MB ingress ceiling**             | `CODE_GRAPH_MAX_BODY_BYTES`, `motir-ai/src/app.ts` — recorded in `docs/decisions/code-access-for-planning.md:51`. Never reached, but structurally next                                                                         | the upload becomes an ~8–80 MB graph, not a ~350 MB tarball |
-| **tarball re-fetched PER PROJECT**     | bytes cannot cross an Inngest step boundary — see the MOTIR-1974 note in `lib/jobs/codeGraphSteps.ts`                                                                                                                          | one container fetches once and builds once                  |
+| **tarball re-fetched PER PROJECT**     | bytes cannot cross an Inngest step boundary — the MOTIR-1974 note, in `lib/jobs/codeGraphSteps.ts` until MOTIR-2057 deleted it                                                                                                 | one container fetches once and builds once                  |
 | **motir-ai is the throughput ceiling** | `indexParseGate = new Semaphore(1)` (`motir-ai/src/codegraph/indexConcurrency.ts:102`); ~**924 MB** peak RSS per index (MOTIR-1515); `fly.toml` scales on `soft_limit = 20` **requests**, which long index requests never trip | the build leaves motir-ai; capacity becomes container count |
 
 The port already exists and already has a consumer: `ContainerOrchestrator`
@@ -410,9 +410,36 @@ read-only connection. It would also gate a user's code graph behind their **CI c
 `ci_credits_exhausted` would silently mean "your planner is code-blind." Two unrelated products
 would share one refusal.
 
-**Still building in-process, unchanged:** `system.code-graph-refresh` and motir-ai's
+**Still building in-process, unchanged:** ~~`system.code-graph-refresh`~~ and motir-ai's
 **hydrate-on-read** path both keep running behind `indexParseGate`. **Retiring motir-ai's
 tarball ingest route is a later decision**, not this one — the route stays.
+
+> **AMENDED 2026-08-04 (MOTIR-2057): the refresh half of that sentence was wrong, and
+> production paid for it.** Leaving one caller on an abandoned path is not a neutral
+> "unchanged" — `system.code-graph-refresh` does architecturally the same work (fetch a
+> repo's bytes, parse a whole tree) and kept doing it inside a Vercel function under the
+> 180 s `MOTIR_AI_INDEX_TIMEOUT_MS` client deadline. `motir-core`'s own graph does not
+> parse in 180 s, so its refresh failed deterministically, and its five idempotent retries
+> then queued against motir-ai's single 1-permit `indexParseGate` and starved every other
+> repo's refresh: a measured **~68% failure rate over three days** (Aug 2 7/18, Aug 3 7/16,
+> Aug 4 8/17), presenting as intermittent motir-ai unavailability. `system.code-graph-refresh`
+> now drives the SAME `runIndexFleetSteps` shape as the first index, keeping only its
+> per-repo debounce, and the in-process module (`lib/jobs/codeGraphSteps.ts`) plus
+> `codeGraphIndexService.indexRepoIntoProject` are DELETED so no third caller can adopt
+> them. motir-ai's hydrate-on-read path and its ingest route are untouched, as above.
+>
+> Two facts worth carrying, both established while diagnosing it:
+>
+> - **A refresh was never incremental.** motir-ai's incremental entry is
+>   `GraphIndexPublisher.refresh`; the ingest route runs `receiveAndIndex` →
+>   `indexAndPublish` → `store.indexRepo`, a whole-tree build, and nothing has ever called
+>   the incremental one. Moving refresh onto the fleet therefore loses no incremental
+>   semantics — the same whole-tree parse moves off a 180 s budget onto a container's
+>   30-minute one — but it does move the cost onto a metered container per (repo × project)
+>   per debounced push, admitted by `codeGraphIndexAdmissionService` (§7).
+> - **The lesson generalizes past this file** (`motir-meta/notes.html` #215): a migration's
+>   unit is the SET OF CALLERS of the path being abandoned, not the one caller that
+>   motivated it.
 
 **Not decided here:** MOTIR-1974's checkpointing is not re-opened; how the product _asks_ for a
 repo or surfaces index _freshness_ stays with MOTIR-1754; motir-ai's graph **engine** and its

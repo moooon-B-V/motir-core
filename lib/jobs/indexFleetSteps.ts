@@ -79,10 +79,21 @@ import type {
 // dropped, and exhausting the whole budget FAILS the run rather than skipping the
 // repo (§6: a `succeeded` row is a permanent claim that the repo is indexed).
 //
-// ⚠️ `system.code-graph-refresh` IS UNTOUCHED. It keeps today's in-process shape
-// (§11: "Still building in-process, unchanged") and therefore keeps
-// `runCodeGraphIndexSteps` in `codeGraphSteps.ts`; the two jobs stop sharing one
-// function rather than one of them growing a mode flag.
+// ⚠️ `system.code-graph-refresh` DRIVES THIS SAME SHAPE (MOTIR-2057). MOTIR-2027
+// left it on the in-process `runCodeGraphIndexSteps` (§11: "Still building
+// in-process, unchanged"), and production then showed why an abandoned path with
+// a live caller is not a neutral state: a push refresh fetched the whole tarball
+// into the function under a 180 s client deadline, `motir-core` never fit, and
+// its retries starved every other repo's refresh at a ~68% failure rate. Both
+// jobs are now one code path, differing ONLY in their event and in the refresh
+// job's per-repo debounce — that difference is config on the job, not a mode
+// flag in here, which is why they can share this function without one.
+//
+// So EVERY caller of this file supervises containers, and the notes below about
+// the ledger, the admission cap and step-id keying hold for a refresh run
+// exactly as for a first index. `codeGraphSteps.ts` is gone: nothing calls the
+// in-process shape, and leaving it importable is how a third caller would have
+// re-adopted the same defect.
 
 /**
  * A dispatched index container did not index its project.
