@@ -29,11 +29,20 @@ const { NotProjectAdminError, ProjectNotFoundError } = await import('@/lib/proje
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
+// ⚠️ These fixtures are motir-ai's REAL `GET /v1/convention` body — the producer's
+// `CodingConventionDto` / `ConventionSurface` (`src/services/codingConventionService.ts`),
+// asserted verbatim by its own real-Postgres test `tests/codeHealthSurface.test.ts`:
+//   expect(await convRes.json()).toEqual({ convention: null, versions: [], nextCursor: null })
+// They are NOT built from motir-core's own boundary type. Building them from the
+// consumer's type is what let MOTIR-2127 ship: the mock agreed with the mapper
+// while neither matched the producer, so every field the page renders was null in
+// production and green in CI. Keep this keyed to motir-ai, and reread the producer
+// when it changes.
 function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
   return {
     id: 'conv_1',
     aiProjectId: 'ai_1',
-    status: 'proposed',
+    repoKey: 'acme/web',
     version: 2,
     contentMd: '# House rules\n\n- Route → Service → Repository.',
     provenance: [
@@ -41,11 +50,6 @@ function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
       { ruleId: 'error.typed-taxonomy', category: 'error-handling', source: 'proposed' },
     ],
     sourceAuditId: 'audit_1',
-    approvedByUserId: null,
-    approvedAt: null,
-    supersededByVersion: null,
-    editedByUserId: null,
-    editedAt: null,
     createdAt: '2026-07-04T00:00:00.000Z',
     updatedAt: '2026-07-04T00:00:00.000Z',
     ...over,
@@ -54,9 +58,7 @@ function rawConvention(over: Partial<RawConvention> = {}): RawConvention {
 
 function rawConventionSurface(over: Partial<RawConventionSurface> = {}): RawConventionSurface {
   return {
-    repoKey: 'acme/web',
-    proposed: rawConvention(),
-    standard: null,
+    convention: rawConvention(),
     versions: [rawConvention()],
     nextCursor: null,
     ...over,
@@ -121,20 +123,54 @@ describe('aiConventionService — project-admin gate', () => {
     expect(getConventionMock).toHaveBeenCalledWith(
       expect.objectContaining({ coreWorkspaceId: workspace.id, coreProjectId: project.id }),
     );
+    // The regression MOTIR-2127 fixes: the producer's `convention` reaches the
+    // field the page renders instead of being dropped for a `proposed` key
+    // motir-ai never sends.
+    expect(dto.convention).not.toBeNull();
+    expect(dto.convention?.id).toBe('conv_1');
+    expect(dto.convention?.version).toBe(2);
+    expect(dto.convention?.contentMd).toContain('House rules');
     expect(dto.repoKey).toBe('acme/web');
-    expect(dto.proposed?.id).toBe('conv_1');
-    expect(dto.proposed?.status).toBe('proposed');
-    expect(dto.proposed?.provenance).toEqual([
+    expect(dto.convention?.provenance).toEqual([
       { ruleId: 'layering.no-upward-imports', category: 'layering', source: 'adopted' },
       { ruleId: 'error.typed-taxonomy', category: 'error-handling', source: 'proposed' },
     ]);
+    expect(dto.versions).toHaveLength(1);
     expect(JSON.stringify(dto)).not.toContain('aiProjectId');
   });
 
-  it('passes repoKey scope through to the boundary query', async () => {
+  it('retires the deleted approve-lifecycle fields from the DTO (MOTIR-1660/1662)', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
-    getConventionMock.mockResolvedValue(rawConventionSurface({ repoKey: 'acme/api' }));
+    getConventionMock.mockResolvedValue(rawConventionSurface());
+
+    const dto = await aiConventionService.getConvention(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+
+    // Assert on KEYS, not on a serialized substring — `proposed` survives as a
+    // provenance VALUE (adopted vs proposed), which is a different axis entirely.
+    expect(Object.keys(dto).sort()).toEqual(['convention', 'nextCursor', 'repoKey', 'versions']);
+    expect(Object.keys(dto.convention!).sort()).toEqual([
+      'contentMd',
+      'createdAt',
+      'id',
+      'provenance',
+      'repoKey',
+      'version',
+    ]);
+  });
+
+  it('takes the surface repoKey from the REQUESTED repo, which motir-ai does not echo', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getConventionMock.mockResolvedValue(
+      rawConventionSurface({
+        convention: rawConvention({ repoKey: 'acme/api' }),
+        versions: [rawConvention({ repoKey: 'acme/api' })],
+      }),
+    );
 
     const dto = await aiConventionService.getConvention(
       project.id,
@@ -149,6 +185,40 @@ describe('aiConventionService — project-admin gate', () => {
       expect.objectContaining({ repoKey: 'acme/api' }),
     );
     expect(dto.repoKey).toBe('acme/api');
+    expect(dto.convention?.repoKey).toBe('acme/api');
+  });
+
+  it('falls back to the row repoKey when the caller scoped to no repo', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getConventionMock.mockResolvedValue(rawConventionSurface());
+
+    const dto = await aiConventionService.getConvention(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+
+    expect(dto.repoKey).toBe('acme/web');
+  });
+
+  it('maps motir-ai’s EMPTY surface to the null convention the empty state reads', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    // The producer's verbatim empty body (motir-ai tests/codeHealthSurface.test.ts).
+    getConventionMock.mockResolvedValue({ convention: null, versions: [], nextCursor: null });
+
+    const dto = await aiConventionService.getConvention(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      { repoKey: 'acme/web' },
+    );
+
+    expect(dto).toEqual({
+      repoKey: 'acme/web',
+      convention: null,
+      versions: [],
+      nextCursor: null,
+    });
   });
 
   it('maps the audit health summary + findings defensively', async () => {

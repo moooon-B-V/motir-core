@@ -3,8 +3,6 @@
 // motir-ai boundary responses into, stripping the internal aiProjectId. Dates stay
 // ISO strings (they crossed the wire as JSON and the UI only formats them).
 
-export type ConventionStatus = 'proposed' | 'standard' | 'superseded';
-
 export interface ConventionProvenanceDTO {
   ruleId: string;
   category: string;
@@ -13,17 +11,18 @@ export interface ConventionProvenanceDTO {
   source: 'adopted' | 'proposed';
 }
 
+// One derived convention version. There is NO lifecycle here: MOTIR-1660/1662
+// deleted the proposed→standard approve gate, so the fields that encoded it
+// (`status`, `approvedByUserId`, `approvedAt`, `editedByUserId`, `editedAt`,
+// `supersededByVersion`) are retired — motir-ai stopped sending them and nothing
+// on the surface may switch on them (MOTIR-2127).
 export interface CodingConventionDTO {
   id: string;
-  status: ConventionStatus;
+  // The repo this version was derived for (e.g. "acme/web"), off the producer row.
+  repoKey: string;
   version: number;
   contentMd: string;
   provenance: ConventionProvenanceDTO[];
-  approvedByUserId: string | null;
-  approvedAt: string | null;
-  editedByUserId: string | null;
-  editedAt: string | null;
-  supersededByVersion: number | null;
   createdAt: string;
 }
 
@@ -32,13 +31,13 @@ export interface CodingConventionDTO {
 // each with its derived convention document (read-only) and a "Refine with Motir"
 // entry that opens the universal AI chat launcher.
 export interface ConventionSurfaceDTO {
-  // The repo this convention belongs to (e.g. "acme/web"). Null for a project
-  // with no connected repo (the empty/fresh state).
+  // The repo this surface was READ for (e.g. "acme/web") — the requested repoKey,
+  // which motir-ai does not echo at the surface level. Null only when the caller
+  // scoped to no repo and the store returned nothing (the empty/fresh state).
   repoKey: string | null;
-  // The latest derived convention (always auto-used — no proposed→standard gate).
-  proposed: CodingConventionDTO | null;
-  // The current active version, or null before the first derivation.
-  standard: CodingConventionDTO | null;
+  // The latest derived convention for this repo, or null before the first
+  // derivation. Always auto-used — there is no proposed→standard gate.
+  convention: CodingConventionDTO | null;
   // Version history, newest first.
   versions: CodingConventionDTO[];
   nextCursor: string | null;

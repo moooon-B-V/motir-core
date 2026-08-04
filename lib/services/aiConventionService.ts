@@ -38,25 +38,28 @@ function toProvenance(raw: RawConvention['provenance']): CodingConventionDTO['pr
 function toConventionDTO(raw: RawConvention): CodingConventionDTO {
   return {
     id: raw.id,
-    status: raw.status,
+    repoKey: raw.repoKey,
     version: raw.version,
     contentMd: raw.contentMd,
     provenance: toProvenance(raw.provenance),
-    approvedByUserId: raw.approvedByUserId,
-    approvedAt: raw.approvedAt,
-    editedByUserId: raw.editedByUserId,
-    editedAt: raw.editedAt,
-    supersededByVersion: raw.supersededByVersion,
     createdAt: raw.createdAt,
   };
 }
 
-function toConventionSurfaceDTO(raw: RawConventionSurface): ConventionSurfaceDTO {
+// Map motir-ai's `{ convention, versions, nextCursor }` body (MOTIR-2127). The
+// surface-level `repoKey` comes from the REQUESTED repoKey — motir-ai does not
+// echo it at the surface level, only on each row — falling back to the row's own
+// repoKey so a caller that scoped to no repo still labels the card correctly.
+function toConventionSurfaceDTO(
+  raw: RawConventionSurface,
+  requestedRepoKey: string | undefined,
+): ConventionSurfaceDTO {
+  const versions = (raw.versions ?? []).map(toConventionDTO);
+  const convention = raw.convention ? toConventionDTO(raw.convention) : null;
   return {
-    repoKey: raw.repoKey ?? null,
-    proposed: raw.proposed ? toConventionDTO(raw.proposed) : null,
-    standard: raw.standard ? toConventionDTO(raw.standard) : null,
-    versions: (raw.versions ?? []).map(toConventionDTO),
+    repoKey: requestedRepoKey ?? convention?.repoKey ?? versions[0]?.repoKey ?? null,
+    convention,
+    versions,
     nextCursor: raw.nextCursor,
   };
 }
@@ -189,7 +192,7 @@ export const aiConventionService = {
       repoKey: opts.repoKey,
       versionsCursor: opts.versionsCursor,
     });
-    return toConventionSurfaceDTO(raw);
+    return toConventionSurfaceDTO(raw, opts.repoKey);
   },
 
   // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →

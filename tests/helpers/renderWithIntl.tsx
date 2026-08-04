@@ -15,15 +15,20 @@ export function renderWithIntl(
   {
     locale = defaultLocale,
     messages = enMessages,
+    now,
     ...options
   }: Omit<RenderOptions, 'wrapper'> & {
     locale?: string;
     messages?: Record<string, unknown>;
+    /** Pins the instant `useFormatter().relativeTime()` measures against, so a
+     * relative-date assertion is deterministic (and next-intl does not fall back
+     * to the environment clock). Mirrors `i18n/request.ts`'s per-request `now`. */
+    now?: Date;
   } = {},
 ) {
   function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <NextIntlClientProvider locale={locale} messages={messages}>
+      <NextIntlClientProvider locale={locale} messages={messages} now={now}>
         {children}
       </NextIntlClientProvider>
     );
