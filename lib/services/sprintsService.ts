@@ -397,13 +397,21 @@ export const sprintsService = {
       );
     }
 
-    const result = await withWorkspaceContext(
+    const activate = withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
-        // Authoritative one-active guard: lock the project's active sprint row
-        // FOR UPDATE so two concurrent starts serialize; a winner that committed
-        // between the pre-check and here is caught (the partial-unique index is
-        // the final backstop).
+        // One-active guard for the RE-activation case: lock the project's active
+        // sprint row FOR UPDATE so two concurrent starts serialize; a winner that
+        // committed between the pre-check and here is caught.
+        //
+        // ⚠️ This lock CANNOT guard the FIRST activation, and that is not a
+        // subtlety — it is the common case. `SELECT … FOR UPDATE` over a project
+        // with no active sprint matches ZERO ROWS, so it locks nothing: two
+        // concurrent starts both see `locked === null`, both fall through, and
+        // both UPDATE. What actually stops the second is the
+        // `sprint_one_active_per_project` partial-unique index, which raises a
+        // unique violation at COMMIT — handled below, because an untranslated one
+        // reaches the caller as a raw Prisma error (MOTIR-2071).
         const locked = await sprintRepository.findActiveByProjectForUpdate(
           existing.projectId,
           ctx.workspaceId,
@@ -441,6 +449,24 @@ export const sprintsService = {
         return { row, committedIssueCount };
       },
     );
+
+    // Translate the index's refusal into the SAME typed error the in-transaction
+    // lock raises, so a caller sees one outcome for one condition however the
+    // race was actually lost. Without this the loser of a first-activation race
+    // gets a raw `PrismaClientKnownRequestError` — which every transport then
+    // renders as an unexplained 500 (the `/api/v1` map recognises domain codes,
+    // not driver codes).
+    //
+    // The winner's id is re-read rather than assumed: by the time we are here it
+    // has committed, so the error can name the sprint that actually won.
+    const result = await activate.catch(async (err: unknown) => {
+      if (!isUniqueViolation(err)) throw err;
+      const winner = await sprintRepository.findActiveByProject(
+        existing.projectId,
+        ctx.workspaceId,
+      );
+      throw new SprintAlreadyActiveError(existing.projectId, winner?.id ?? id);
+    });
     return toSprintDto(result.row, result.committedIssueCount);
   },
 
@@ -958,6 +984,18 @@ async function computeSprintValidity(
  * existence leak), then requires the actor to be the workspace owner. Mirrors
  * `boardsService.assertBoardConfigAdmin`.
  */
+/**
+ * A Postgres unique-constraint violation, surfaced by Prisma as `P2002`.
+ *
+ * Used by `startSprint` to recognise the `sprint_one_active_per_project` index
+ * refusing a second activation — the guard that actually fires when a project
+ * has no active sprint to lock yet. Mirrors the helper `organizationsService`
+ * already uses for the same job.
+ */
+function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequestError {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
 async function assertSprintAdmin(
   userId: string,
   projectId: string,

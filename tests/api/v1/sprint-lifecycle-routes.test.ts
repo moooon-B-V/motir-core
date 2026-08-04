@@ -116,32 +116,53 @@ describe('POST /api/v1/sprints/{sprintId}/start', () => {
   });
 
   // ⚠️ THE deliverable of this card.
-  it('lets exactly ONE of two SIMULTANEOUS starts win, and types the loser 409', async () => {
+  //
+  // Driven REPEATEDLY, and that is not belt-and-braces — it is the difference
+  // between this test working and not. The race has two losing paths and they do
+  // NOT occur with equal probability:
+  //
+  //   • the in-transaction `FOR UPDATE` lock catches the loser (rare here), or
+  //   • the `sprint_one_active_per_project` partial-unique index does (common).
+  //
+  // A single round hits the first path often enough to go green on a developer
+  // machine while the second is broken — which is exactly what happened: this
+  // test passed locally and failed in CI, where the untranslated unique
+  // violation surfaced as a 500 (MOTIR-2071). Five rounds makes the common path
+  // the one under test.
+  it('lets exactly ONE of two SIMULTANEOUS starts win, and types the loser 409 — every time', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read', 'sprints:write'] });
-    const first = await makeSprint(caller, 'One');
-    const second = await makeSprint(caller, 'Two');
 
-    // Genuine concurrency: both requests are in flight before either resolves.
-    // A serial pair would pass against a completely unguarded implementation.
-    const [a, b] = await Promise.all([
-      action(START, caller, first.id),
-      action(START, caller, second.id),
-    ]);
+    for (let round = 0; round < 5; round += 1) {
+      const first = await makeSprint(caller, `One-${round}`);
+      const second = await makeSprint(caller, `Two-${round}`);
 
-    const statuses = [a.status, b.status].sort((x, y) => x - y);
-    expect(statuses).toEqual([200, 409]);
+      // Genuine concurrency: both requests are in flight before either resolves.
+      // A serial pair would pass against a completely unguarded implementation.
+      const [a, b] = await Promise.all([
+        action(START, caller, first.id),
+        action(START, caller, second.id),
+      ]);
 
-    // Either ordering is legitimate; what must NOT happen is two winners, or the
-    // loser receiving a raw unique-violation 500 with a driver message.
-    const loser = a.status === 409 ? a : b;
-    expect(await loser.json()).toEqual({
-      code: 'SPRINT_ALREADY_ACTIVE',
-      error: expect.any(String),
-    });
+      const statuses = [a.status, b.status].sort((x, y) => x - y);
+      expect(statuses, `round ${round}`).toEqual([200, 409]);
 
-    // And the database agrees: exactly one active sprint on the project.
-    const sprints = await sprintsService.listByProject(caller.fixture.projectId, caller.ctx);
-    expect(sprints.filter((s) => s.state === 'active')).toHaveLength(1);
+      // Either ordering is legitimate; what must NOT happen is two winners, or
+      // the loser receiving a raw unique-violation 500 with a driver message.
+      const loser = a.status === 409 ? a : b;
+      expect(await loser.json(), `round ${round} loser body`).toEqual({
+        code: 'SPRINT_ALREADY_ACTIVE',
+        error: expect.any(String),
+      });
+
+      // And the database agrees: exactly one active sprint on the project.
+      const sprints = await sprintsService.listByProject(caller.fixture.projectId, caller.ctx);
+      const active = sprints.filter((s) => s.state === 'active');
+      expect(active, `round ${round} active count`).toHaveLength(1);
+
+      // Clear the slot so the next round races for a FIRST activation again —
+      // the case the lock cannot guard, and therefore the case worth repeating.
+      await action(COMPLETE, caller, active[0]?.id as string);
+    }
   });
 
   it('refuses to start a sprint that is not planned — 422, typed', async () => {
