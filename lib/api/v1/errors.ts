@@ -205,6 +205,22 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // A conflict with existing STATE, not a malformed request: the body is fine,
   // the sprint is simply frozen.
   CANNOT_MODIFY_COMPLETED_SPRINT: 409,
+
+  // 11.3.6 (MOTIR-2063) — the lifecycle moves, the only read-derived writes in
+  // this story.
+  //
+  // ⚠️ 409, not 422. Losing the race to activate is a conflict with STATE the
+  // caller could not have known about: the request was valid when it was sent and
+  // another one committed first. A 422 would tell a client to fix its body, which
+  // is exactly the wrong instruction — the right one is to re-read and retry.
+  // This is what the shipped `FOR UPDATE` guard turns a lost race INTO, so a
+  // concurrent start can never surface as a raw unique-violation 500.
+  SPRINT_ALREADY_ACTIVE: 409,
+  // 422: the sprint is in the wrong STATE for the move and the caller can see
+  // that from a read — starting a non-planned sprint, completing a non-active one.
+  SPRINT_NOT_STARTABLE: 422,
+  SPRINT_NOT_COMPLETABLE: 422,
+  INVALID_CARRY_OVER_TARGET: 422,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */

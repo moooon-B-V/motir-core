@@ -158,3 +158,42 @@ export const updateSprintBodySchema = z
   })
   .strict();
 export type UpdateSprintBody = z.infer<typeof updateSprintBodySchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The LIFECYCLE actions (Story 11.3 · Subtask 11.3.6 — MOTIR-2063)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `POST /api/v1/sprints/{sprintId}/start`.
+ *
+ * Every field optional: `startDate` defaults to now, and `name` / `goal` are the
+ * inline edits the shipped start dialog performs INSIDE the activation
+ * transaction (so Start is one atomic write, never a pre-start PATCH). `goal`
+ * keeps the tri-state — absent leaves it, explicit `null` clears it.
+ */
+export const startSprintBodySchema = z
+  .object({
+    name: z.string().optional(),
+    goal: z.string().nullish(),
+    startDate: z.string().nullish(),
+    endDate: z.string().nullish(),
+  })
+  .strict();
+export type StartSprintBody = z.infer<typeof startSprintBodySchema>;
+
+/**
+ * `POST /api/v1/sprints/{sprintId}/complete`.
+ *
+ * `carryOverTo` defaults to `'backlog'`. The union is the shipped
+ * `CarryOverDestination`: the literal string, or an object naming an existing
+ * PLANNED sprint in the same project. Declared as a union rather than two
+ * optional fields so an impossible request ("both") cannot be expressed.
+ */
+export const completeSprintBodySchema = z
+  .object({
+    carryOverTo: z
+      .union([z.literal('backlog'), z.object({ sprintId: z.string().min(1) }).strict()])
+      .optional(),
+  })
+  .strict();
+export type CompleteSprintBody = z.infer<typeof completeSprintBodySchema>;
