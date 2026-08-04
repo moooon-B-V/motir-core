@@ -194,6 +194,23 @@ jobs:
       - run: pnpm prisma generate
         if: steps.cache-prisma-build.outputs.cache-hit != 'true'
       - run: pnpm build
+      # MOTIR-1960 — the SCHEMA-DRIFT gate. `pnpm build` above ran
+      # `prisma migrate deploy` against this job's ephemeral Postgres, so the
+      # database here is a replay of every migration from empty — exactly what
+      # this diff needs, and why the gate lives in this job rather than paying
+      # for a runner and a Postgres of its own. It asserts the datamodel and that
+      # replay agree; `--exit-code` turns any difference into a non-zero exit
+      # (and it is deliberately NOT piped, so the exit status is the step's).
+      #
+      # Nothing else in CI would notice: drift is invisible to `migrate status`
+      # (which only reads history), invisible to the suite (which runs against a
+      # database built from the same migrations), and surfaces only as a spurious
+      # ALTER at the top of the NEXT person's `migrate dev` — which is how
+      # MOTIR-1960 went unnoticed from 2026-07-31 to 2026-08-01, and how the
+      # `attachment.uploader_user_id` FK drift before it went unnoticed for
+      # longer. See CLAUDE.md's "Migrations" rules for what causes it.
+      - name: Assert the datamodel and the migrations agree (no schema drift)
+        run: pnpm prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource --exit-code
       # Share the production build with the e2e job so each matrix leg's
       # webServer boots from the pre-built .next/ instead of building
       # independently (MOTIR-1706).

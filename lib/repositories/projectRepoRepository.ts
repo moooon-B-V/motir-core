@@ -451,7 +451,13 @@ export const projectRepoRepository = {
    *
    * Expressed as raw SQL because it compares two COLUMNS
    * (`applied_at < intent_at`), which Prisma's filter DSL cannot express; the
-   * partial index in the same migration is built on exactly this predicate. A
+   * partial index `project_repository_ci_actions_pending_idx` is built on
+   * exactly this predicate, over (`workspace_id`, `state`) — the two equalities
+   * below, so both land in the index condition rather than a heap filter. Its
+   * column list is deliberately NOT `(workspace_id)` alone: that collides with
+   * the model's `@@index([workspaceId])` and puts the datamodel in permanent
+   * drift against the migration-built database (MOTIR-1960 — the reasoning is
+   * on the `@@index` in `schema.prisma`, and CI now fails on that drift). A
    * NULL `applied_at` is "never asserted", which is why it is a separate OR arm
    * rather than something the comparison would cover (SQL's NULL comparison
    * yields NULL, not true — the trap this spells out).
