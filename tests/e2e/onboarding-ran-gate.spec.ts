@@ -163,3 +163,37 @@ test('never-onboarded project mid-hand-off: an active migrate run past set-up le
   await page.goto('/onboarding/discovery');
   await page.waitForURL('**/roadmap');
 });
+
+// ── MOTIR-2090: the marker closes the SIDE door too ──────────────────────────
+//
+// `/onboarding/migrate` used to gate only on `run.status === 'completed'`. The
+// marker and the run are written by different things — `markOnboardingRan` at
+// plan approve+materialize (or the seed / the MOTIR-1799 operator stamp), the run
+// only by the wizard walking `review → done` — so an established project could
+// hold a permanently `active` run and resume the set-up wizard over a shipped tree
+// just by typing the URL. That is the live MOTIR project's exact state
+// (`onboarding_ran_at` set, run `active` at `index`), reproduced here.
+test('onboarded project with a lingering ACTIVE migrate run: /onboarding/migrate is unreachable by URL (MOTIR-2090)', async ({
+  page,
+}) => {
+  const seed = await seedRoadmap('onboarded-migrate-gate@example.com', { onboarded: true });
+  await signIn(page, seed.email, seed.password);
+
+  // `migrate_onboarding` is FORCE-RLS'd on the active-workspace GUC, so the run is
+  // written through `withWorkspaceContext` — a bare `db.` insert is denied.
+  await withWorkspaceContext({ userId: seed.userId, workspaceId: seed.workspaceId }, (tx) =>
+    tx.migrateOnboarding.upsert({
+      where: { projectId: seed.projectId },
+      create: {
+        workspaceId: seed.workspaceId,
+        projectId: seed.projectId,
+        step: 'index',
+        status: 'active',
+      },
+      update: { step: 'index', status: 'active' },
+    }),
+  );
+
+  await page.goto('/onboarding/migrate');
+  await page.waitForURL('**/roadmap');
+});
