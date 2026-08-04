@@ -284,17 +284,18 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           modal; a LOCAL-state host (the roadmap canvas peek, MOTIR-1352) also
           gets its own close called so its state doesn't outlive the handoff.
           The URL-driven peek passes no `onClose`, so its `?peek=` simply stays
-          on the history entry the user came from. Hidden on an ARCHIVED item
-          (MOTIR-2050), which is not work to plan — the same gate the detail page
-          already applies (`canEdit && !isArchived`), reachable here only now that
-          the payload carries the archived state. */}
-        {data.canPlan && !data.archived ? (
-          <WorkItemPlanEntrance
-            itemKey={data.identifier}
-            hasChildren={data.hasChildren}
-            onActivate={props.onClose}
-          />
-        ) : null}
+          on the history entry the user came from. WHETHER it renders is the
+          entrance's own call (`showsPlanEntrance`, MOTIR-2084) — this surface
+          just hands over the item state: the actor's capability, the archived
+          flag (MOTIR-2050) and the status CATEGORY, all already in the payload. */}
+        <WorkItemPlanEntrance
+          itemKey={data.identifier}
+          hasChildren={data.hasChildren}
+          canPlan={data.canPlan}
+          archived={data.archived != null}
+          statusCategory={data.statusCategory}
+          onActivate={props.onClose}
+        />
         <OpenFullPageLink identifier={data.identifier} />
         <QuickViewCloseButton variant="icon" onClose={props.onClose} />
       </header>

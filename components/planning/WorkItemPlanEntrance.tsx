@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { planningWorkspaceHref } from '@/lib/planning/launcher';
+import { showsPlanEntrance } from '@/lib/planning/planEntranceVisibility';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 
 // The PER-ITEM Plan / Re-plan entrance (Subtask MOTIR-910; design
 // `design/work-items/plan-replan-entrance.mock.html` panels 1–4). The contextual
@@ -30,12 +32,32 @@ import { planningWorkspaceHref } from '@/lib/planning/launcher';
 // the pill re-skins with `data-palette` and re-shapes with `data-style`. It is a
 // real `<Link>`: keyboard-reachable, middle/⌘-clickable, and (from the peek)
 // `onActivate` hands off by closing the modal first.
+//
+// WHETHER it renders at all is decided HERE, from the item state its host hands
+// it (MOTIR-2084): the visibility rule lives in one predicate
+// (`showsPlanEntrance`) and the component applies it itself, so the gate travels
+// with the component instead of being re-derived — and re-missed — at each call
+// site. The state props are REQUIRED for exactly that reason: a new host cannot
+// mount the door without stating the item's plannability.
 
 export interface WorkItemPlanEntranceProps {
   /** The item's human identifier (e.g. `MOTIR-42`) — the workspace's anchor. */
   itemKey: string;
   /** Does the item already have children? Decides Plan vs Re-plan. */
   hasChildren: boolean;
+  /**
+   * May this actor open the planning workspace on the item (the project's
+   * `canEdit`)? Required — see `showsPlanEntrance`.
+   */
+  canPlan: boolean;
+  /** Is the item archived (`archivedAt != null`)? Required — see `showsPlanEntrance`. */
+  archived: boolean;
+  /**
+   * The item's status CATEGORY (not its status key) — a `done`-category item is
+   * finished work the engine refuses to re-plan. Required — see
+   * `showsPlanEntrance`.
+   */
+  statusCategory: StatusCategoryDto | null;
   /**
    * Fired just before navigating — the quick-view passes its close so the modal
    * is dismissed as the workspace opens (design panel 3: "clicking it closes the
@@ -48,10 +70,17 @@ export interface WorkItemPlanEntranceProps {
 export function WorkItemPlanEntrance({
   itemKey,
   hasChildren,
+  canPlan,
+  archived,
+  statusCategory,
   onActivate,
   className,
 }: WorkItemPlanEntranceProps) {
   const t = useTranslations('aiPlanning.entrance');
+  // After the hook (rules of hooks), before anything else: a door onto work the
+  // actor may not plan, or that the engine will not re-plan, is simply not drawn.
+  if (!showsPlanEntrance({ canPlan, archived, statusCategory })) return null;
+
   const label = hasChildren ? t('replan') : t('plan');
   // The accessible name NAMES THE ITEM, so the door is unambiguous when several
   // planning affordances share a screen (the global "Plan with AI" pill is

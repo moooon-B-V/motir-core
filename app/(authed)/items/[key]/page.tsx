@@ -279,6 +279,13 @@ export default async function IssueDetailPage({
   // server-side (locale-aware, the same `formatDate` the 2.9.3 list view uses);
   // the WHO rides `detail.archivedBy` (latest `'archived'` revision).
   const isArchived = item.archivedAt != null;
+  // The item's status CATEGORY (bug MOTIR-2084) — resolved through the workflow
+  // the detail bundle already carries, the same lookup `CoreFieldsPanel` does for
+  // the Sprint field's empty label. The category, never the `'done'` KEY: this
+  // project's workflow already has two done-category statuses (Done, Cancelled)
+  // and a project may define more.
+  const statusCategory =
+    detail.workflow.statuses.find((s) => s.key === item.status)?.category ?? null;
   const locale = (await getLocale()) as Locale;
   const archivedAtLabel = item.archivedAt ? formatDate(item.archivedAt, locale) : '';
 
@@ -351,15 +358,17 @@ export default async function IssueDetailPage({
               {/* MOTIR-910: the per-item Plan / Re-plan door — FIRST in the
                 right cluster, before Watch / ⋯ (the plan-replan-entrance
                 mockup's panel-1 placement). Plan when the item has no children
-                yet, Re-plan when it does. Gated on canEdit (planning proposes
-                changes to the plan, which a read-only viewer cannot approve)
-                and hidden on an archived item, which is not work to plan. */}
-              {canEdit && !isArchived ? (
-                <WorkItemPlanEntrance
-                  itemKey={item.identifier}
-                  hasChildren={detail.children.length > 0}
-                />
-              ) : null}
+                yet, Re-plan when it does. WHETHER it renders is the entrance's
+                own call (`showsPlanEntrance`, MOTIR-2084) — this page just hands
+                over the item state: the actor's capability, the archived flag
+                (MOTIR-2050) and the terminal status category. */}
+              <WorkItemPlanEntrance
+                itemKey={item.identifier}
+                hasChildren={detail.children.length > 0}
+                canPlan={canEdit}
+                archived={isArchived}
+                statusCategory={statusCategory}
+              />
               {/* 5.4.9: the watch control + watchers popover — BEFORE Edit,
                 beside the roll-up badge (the labels-components-watch mockup's
                 panel-0 placement). Every viewer gets it: watching is not

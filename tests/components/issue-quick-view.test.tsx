@@ -441,6 +441,51 @@ describe('IssueQuickViewPanel — the Plan / Re-plan entrance (MOTIR-910)', () =
     fireEvent.click(screen.getByTestId('work-item-plan-entrance'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // bug MOTIR-2084 — the door offered planning on work the engine refuses to
+  // re-plan: `validatePlanProposals` throws `PlanTargetImmutableError` for a
+  // modify/remove against a terminal target, and the canvas already draws such
+  // an item `locked`. Both faces, and the gate is on the CATEGORY (so the
+  // workflow's second done-category status, Cancelled, is covered too).
+  it('hides the door on a DONE item — the Plan face', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, statusLabel: 'Done', statusCategory: 'done' }}
+      />,
+    );
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
+  });
+
+  it('hides the door on a DONE item — the Re-plan face (children do not re-open it)', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, statusLabel: 'Done', statusCategory: 'done', hasChildren: true }}
+      />,
+    );
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
+  });
+
+  it('hides the door on a CANCELLED item — the gate reads the category, not the "done" key', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, statusLabel: 'Cancelled', statusCategory: 'done' }}
+      />,
+    );
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
+  });
+
+  it('still shows the door on live work — the gate is not over-broad', () => {
+    // todo and in_progress both keep it; the DATA fixture is in_progress.
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    expect(screen.getByTestId('work-item-plan-entrance')).toBeTruthy();
+    cleanup();
+
+    render(<IssueQuickViewPanel state="ready" data={{ ...DATA, statusCategory: 'todo' }} />);
+    expect(screen.getByTestId('work-item-plan-entrance')).toBeTruthy();
+  });
 });
 
 describe('IssueQuickViewPanel — not found / no access', () => {
