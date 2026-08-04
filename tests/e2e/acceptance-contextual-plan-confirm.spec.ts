@@ -538,8 +538,21 @@ test('a SIBLING under the anchor’s parent goes through the same confirm', asyn
   await expect(confirmBar(page)).toContainText('1 added');
   await expect(rail(page).getByRole('alert')).toHaveCount(0);
 
-  // It is reviewable on the PARENT's level, where the proposal actually belongs.
-  await drillInto(page, 'Authentication', authEpicId);
+  // It is reviewable on the PARENT's level, where the proposal actually belongs —
+  // and NO drill is needed to get there. The anchored arrival (MOTIR-2070) opens
+  // the workspace canvas on the ANCHOR'S OWN level, and the anchor here is a story
+  // (Login UI), so its own level IS the epic's children: the level a sibling
+  // parented on the epic lands on (`proposedAddsForLevel(index, focusNodeId)`,
+  // planChangeLevel.tsx). The breadcrumb naming the epic is that arrival's
+  // authoritative signal — the canvas publishes a trail only for a level it has
+  // actually loaded. (Before MOTIR-2070 the canvas opened on the roots and this
+  // step drilled down by hand; keeping the drill after it would hunt for an
+  // `Authentication` card that the arrival has already left behind.)
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Breadcrumb' })
+      .getByRole('button', { name: `${seed.authEpicKey} · Authentication` }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(addFrames(page)).toHaveCount(1);
   await expect(page.getByText(SIBLING, { exact: true })).toBeVisible();
 
