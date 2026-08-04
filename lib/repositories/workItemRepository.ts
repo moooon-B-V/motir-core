@@ -2318,6 +2318,12 @@ export const workItemRepository = {
    * ships the whole archive. The archiver is resolved in the SAME read via a
    * LATERAL pick of the latest `'archived'` revision joined to `user`. Read-only
    * path → `db` singleton.
+   *
+   * The projection carries EVERY `WorkItemListRow` column — `type` included
+   * (MOTIR-2108, where it was missing): `$queryRaw<ArchivedWorkItemRow[]>` is an
+   * UNCHECKED cast, so a column this SELECT omits is `undefined` at runtime on
+   * every row rather than a compile error, and the DTO's `null`-means-container
+   * contract silently breaks for the first consumer to read it.
    */
   async findArchivedByProject(
     projectId: string,
@@ -2329,6 +2335,7 @@ export const workItemRepository = {
     return client.$queryRaw<ArchivedWorkItemRow[]>`
       SELECT w."id",
              w."kind"::text       AS "kind",
+             w."type"::text       AS "type",
              w."key",
              w."identifier",
              w."title",

@@ -97,6 +97,29 @@ describe('listArchivedWorkItems — only-archived projection + ordering', () => 
     expect(items[0]!.archivedBy).toBeNull();
     expect(items[0]!.archivedAt).toBe(new Date('2026-06-05T00:00:00.000Z').toISOString());
   });
+
+  // MOTIR-2108 — the archived read is a `$queryRaw<ArchivedWorkItemRow[]>`, an
+  // UNCHECKED cast: a column the SELECT omits comes back `undefined` on every
+  // row and nothing in the toolchain notices (that is exactly how `type` went
+  // missing here). Pins the same leaf/container pair `issue-list-view.test.ts`
+  // pins for the ACTIVE read, so the two views agree on the field's contract:
+  // the work type on a leaf, `null` — never `undefined` — on a container.
+  it("projects each archived item's work `type`, null on a container (MOTIR-2108)", async () => {
+    const fx = await makeFixture();
+    const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    const task = await createWorkItem(fx, { kind: 'task', title: 'Task' });
+    await db.workItem.update({ where: { id: task.id }, data: { type: 'code' } });
+    await workItemsService.archiveWorkItem(task.id, fx.ctx);
+    await workItemsService.archiveWorkItem(epic.id, fx.ctx);
+
+    const { items } = await workItemsService.listArchivedWorkItems(fx.projectId, {}, fx.ctx);
+    const byId = new Map(items.map((r) => [r.id, r]));
+
+    expect(byId.get(task.id)?.type).toBe('code');
+    // `toBeNull` (not `toBeUndefined`/falsy) is the assertion that matters — an
+    // unprojected column would read `undefined` and pass a looser check.
+    expect(byId.get(epic.id)?.type).toBeNull(); // container — no work type
+  });
 });
 
 describe('listArchivedWorkItems — scope isolation', () => {
