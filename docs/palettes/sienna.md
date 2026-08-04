@@ -45,6 +45,7 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 | Text scale          | Mistral warm-charcoal ink — `#1f1f1f` → `#f5efe2`; secondary `#4a4a4a` → `#b3a892`                                     |
 | Accent (CTA)        | Mistral-orange fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#c4400a` → `#ff8a4c` text |
 | Surfaces            | Mediterranean Warm-Ivory `#fffaeb` over cream `#fbf1d3` → warm-black `#15120d` / `#1f1d17`                             |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#f5e9cb` → `#100d08`                                    |
 | Borders             | warm beige hairlines — `#ece0c4` → `#322c1d`                                                                           |
 | Links               | the brand orange (darkened flame) — `#c4400a` → `#ff9a5c`                                                              |
 | Semantic            | added warm-consistent (Mistral ships none) — success/warning/danger/info, AA-safe in both themes                       |

@@ -42,6 +42,7 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 | Text scale          | Mauve ink `#211f26` + a Pink-12 berry emphasis `#651249` → Mauve-dark `#eeeef0` + Pink-dark-12 `#fdd1ea`             |
 | Accent (CTA)        | light-pink fill `Pink-6 #efbfdd` → `Pink-dk-11 #ff8dcc` with **dark berry labels**; pink `#c2298a` text              |
 | Surfaces            | candy-paper pinks `Pink-1 #fffcfe` / `Pink-3 #fee9f5` → pink-tinted black `#191117` / `#37172f`                      |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `Pink-4 #fbdcef` → `#120c11`                           |
 | Borders             | soft candy-pink hairlines `Pink-5 #f6cee7` → `Pink-dk-6 #692955`                                                     |
 | Accent / links      | berry-plum highlight `Plum-9 #ab4aba`; Sky-11 candy-blue links `#00749e` → `#75c7f0`                                 |
 | Semantic            | Radix candy text-steps — Grass success / Amber warning / Crimson danger / Sky info, brightened on dark               |

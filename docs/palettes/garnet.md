@@ -43,6 +43,7 @@ axis; `tests/theme/paletteRegistry.test.ts` enforces it).
 | Text scale          | Pinterest neutral-grey ink — Cod-Gray `#111111` → `#efefef`; secondary `#444444` → `#b5b5b5`; grey `#767676` |
 | Accent (CTA)        | deep Pushpin-red fill `#c30021` with **white labels** both themes; red `#c30021` → `#ff5a76` as text         |
 | Surfaces            | white over neutral grey `#efefef` → Cod-Gray near-black `#0e0e0e` / `#1a1a1a`                                |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#e7e7e7` → `#090909`                          |
 | Borders             | neutral hairlines — `#e0e0e0` → `#2e2e2e`                                                                    |
 | Links               | Gestalt "Skycicle" blue, distinct from the red — `#0a66c2` → `#5aa0ff`                                       |
 | Semantic            | danger held distinct (orange-red `#e0300f`/`#ff6b6b`) from the red brand · success/warning/info              |

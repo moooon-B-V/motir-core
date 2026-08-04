@@ -48,6 +48,7 @@ axis's job, enforced by `tests/theme/paletteRegistry.test.ts`.
 | Text scale          | Binance cool-grey ink — `#181a20` → `#eaecef`; secondary `#4a5159` → `#b7bdc6`; signature grey `#848e9c`   |
 | Accent (CTA)        | Binance Gold fill `#f0b90b` → `#fcd535` with **dark labels** `#181a20`; gold `#8a6a00` → `#fcd535` as text |
 | Surfaces            | white over cool graphite (light, derived) → the authentic trading floor `#0b0e11` / "Shark" `#1e2329`      |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `#eaecf0` → `#07090c`                        |
 | Borders             | cool graphite hairlines — `#e6e8eb` → `#2b3139`                                                            |
 | Links               | clear blue, distinct from the gold — `#1366c4` → `#6fb3ff`                                                 |
 | Semantic            | Binance buy-green `#0ECB81` + sell-red `#F6465D` (darkened for light AA) · warning amber · info blue       |

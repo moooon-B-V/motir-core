@@ -52,6 +52,7 @@ invented hue — keeping the palette a faithful Miro 5-hue system.
 | Text scale          | Stratos ink `#050038` + Mirotone gray ramp — secondary `gray-600 #4a4e5e` → `gray-300 #c1c3cd`                |
 | Accent (CTA)        | Sunglow fill `#ffd02f` (`yellow-500`) with **dark Stratos labels** `#050038`; gold `#746019` → `#ffd02f` text |
 | Surfaces            | white over `gray-100 #f3f4f6` → Miro-black `#090909` / `gray-900 #1a1b1e`                                     |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `gray-150 #ebecf0` → `#040404`                  |
 | Borders             | Mirotone gray hairlines — `gray-200 #e0e1e6` → `gray-750 #2b2e35`                                             |
 | Accent / links      | Miro action-blue `#3859ff` (`blue-500`) → `blue-400 #7a90fe`                                                  |
 | Semantic            | Mirotone `green-500 #1c8f00` / `red-500 #d8182c` ramps (brightened one step on dark) · warning gold           |
