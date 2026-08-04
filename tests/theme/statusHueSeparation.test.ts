@@ -28,7 +28,7 @@ import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascad
 // the same helper StatusPicker paints with — so a workflow that grows a status
 // drags it into this check automatically.
 
-const { rules } = loadTokenLayer();
+const { rules, paletteBlock } = loadTokenLayer();
 const THEMES = ['light', 'dark'] as const;
 const STATUS_TOKENS = DEFAULT_STATUSES.map((status) => statusElVar(status));
 
@@ -46,8 +46,9 @@ const MIN_DELTA_E = 10;
  * The contrast floor for a hue that carries meaning as a GRAPHICAL OBJECT — the
  * 3:1 of WCAG 1.4.11, and the bar `docs/palettes/*.md` state for icon/UI hues.
  *
- * Applied to the hue MOTIR-2073 introduces, under the palette it introduces it
- * in. It is deliberately NOT swept across the whole ramp: `--el-status-todo`
+ * Applied to every step a palette OVERRIDES directly — MOTIR-2073's Graphite
+ * hue and the eight MOTIR-2075 added across five palettes. It is deliberately
+ * NOT swept across the whole ramp: `--el-status-todo`
  * (`--color-stone`) and, in a few palettes, `--el-status-done` sit in the low
  * 2s by design — `stone` is the documented "faint labels (decorative, sub-AA)"
  * step, the dots are `aria-hidden` and always rendered beside the status LABEL,
@@ -63,28 +64,18 @@ const MIN_UI_CONTRAST = 3;
  * Asserted EXACTLY, the house idiom from `paletteTokenCoverage.test.ts`: a
  * fixed entry turns this suite red until it is deleted, so a stale allowlist
  * cannot rot into a silent pass and a NEW collision cannot hide behind an old
- * one. Every entry below is MOTIR-2075 — the same defect class MOTIR-2073 fixed
- * in Graphite, found in five more palettes by this sweep (a bare `!==` never
- * saw them because the hexes differ). Remove them as 2075 lands.
+ * one.
+ *
+ * EMPTY as of MOTIR-2075, and it should stay that way: every palette x theme
+ * now clears the floor, so a new entry here means a palette shipped a collision
+ * rather than that the check needs relaxing. The nine it used to hold were the
+ * same defect class MOTIR-2073 fixed in Graphite, found in five more palettes by
+ * this sweep (a bare `!==` never saw them because the hexes differ) — each fixed
+ * the same way: keep the palette's Tier-0 identity choices and give the STATUS
+ * RAMP its own documented step. See `docs/palettes/{citrine,cobalt,evergreen,
+ * garnet,sienna}.md` for the per-palette reasoning.
  */
-const KNOWN_TOO_CLOSE = [
-  // in_progress `--color-info` #0d63b8 vs in_review `--color-primary` #3a57cf.
-  'cobalt/light --el-status-in-progress vs --el-status-in-review — ΔE 8.4',
-  // in_review `--color-primary` (emerald) vs done `--color-success` (grass) —
-  // the palette's own comment says they should "read apart"; they do not.
-  'evergreen/light --el-status-in-review vs --el-status-done — ΔE 5.5',
-  'evergreen/dark --el-status-in-review vs --el-status-done — ΔE 4.7',
-  // todo `--color-stone` vs cancelled `--color-steel` — the two-greys pair the
-  // base keeps ~12 apart, compressed by these palettes' neutral ramps.
-  'evergreen/dark --el-status-todo vs --el-status-cancelled — ΔE 8.3',
-  'garnet/light --el-status-todo vs --el-status-cancelled — ΔE 8.8',
-  'citrine/light --el-status-todo vs --el-status-cancelled — ΔE 10.0',
-  // blocked `--color-warning` vs in_review `--color-primary` — both gold in
-  // Citrine (#ffd850 vs #ffd02f in dark is a 3.0), flame-vs-amber in Sienna.
-  'sienna/light --el-status-blocked vs --el-status-in-review — ΔE 7.1',
-  'citrine/light --el-status-blocked vs --el-status-in-review — ΔE 9.7',
-  'citrine/dark --el-status-blocked vs --el-status-in-review — ΔE 3.0',
-];
+const KNOWN_TOO_CLOSE: string[] = [];
 
 // ── Colour maths (sRGB → CIELAB → CIEDE2000, and WCAG relative luminance) ────
 
@@ -237,21 +228,60 @@ describe('status hue separation — every palette keeps the six statuses apart',
     }
   });
 
-  it(`keeps Graphite's review step past ${MIN_UI_CONTRAST}:1 on the surfaces the dot sits on`, () => {
+  it(`keeps every OVERRIDDEN step past ${MIN_UI_CONTRAST}:1 on the surfaces the dot sits on`, () => {
+    // Generalised from Graphite-only by MOTIR-2075, which added eight more
+    // overrides across five palettes. The set is DERIVED from the stylesheet
+    // rather than listed here, so a palette that gains a status override in
+    // future is dragged into this bar automatically instead of being covered
+    // only if someone remembered to extend a literal list.
     const failures: string[] = [];
-    for (const theme of THEMES) {
-      const ctx: ThemeContext = { palette: 'graphite', theme };
-      const hue = hueOf(ctx, '--el-status-in-review');
-      // `--el-card` is the row/card fill under most dots; `--el-surface` is the
-      // sectioned backdrop the card sits in — the AC's named pairing.
-      for (const backdrop of ['--el-card', '--el-surface'] as const) {
-        const ratio = contrast(hue, hueOf(ctx, backdrop));
-        if (ratio < MIN_UI_CONTRAST) {
-          failures.push(`graphite/${theme} on ${backdrop} — ${ratio.toFixed(2)}:1`);
+    let checked = 0;
+    for (const ctx of CONTEXTS) {
+      const block = paletteBlock(ctx.palette, ctx.theme);
+      for (const token of STATUS_TOKENS) {
+        if (!(token in block)) continue; // rides its --color-* source; not an override
+        checked += 1;
+        const hue = hueOf(ctx, token);
+        // `--el-card` is the row/card fill under most dots; `--el-surface` is
+        // the sectioned backdrop the card sits in — the AC's named pairing.
+        for (const backdrop of ['--el-card', '--el-surface'] as const) {
+          const ratio = contrast(hue, hueOf(ctx, backdrop));
+          if (ratio < MIN_UI_CONTRAST) {
+            failures.push(
+              `${ctx.palette}/${ctx.theme} ${token} on ${backdrop} — ${ratio.toFixed(2)}:1`,
+            );
+          }
         }
       }
     }
     expect(failures).toEqual([]);
+    // Guards the guard: a `paletteBlock` that returned nothing would make the
+    // sweep above vacuous. Graphite (1 token x 2 themes) + MOTIR-2075's five.
+    expect(checked).toBeGreaterThanOrEqual(14);
+  });
+
+  it('declares every status override in BOTH themes of its palette (the cascade trap)', () => {
+    // `[data-palette='x']` and the base `[data-theme='dark']` TIE on specificity
+    // (0,1,0), and the palette blocks come LATER in the sheet — so a status
+    // override written only in a palette's light block silently LEAKS onto its
+    // dark canvas, where it was never measured. Verified in the cascade model
+    // and in Chromium (MOTIR-2075).
+    //
+    // The rule is therefore about PAIRING, not about the value: where a theme
+    // needs no change, its block re-asserts the same `var(--color-*)` source
+    // explicitly. That is why several blocks carry what looks like a no-op.
+    const unpaired: string[] = [];
+    for (const palette of PALETTE_IDS.filter((id) => id !== DEFAULT_PALETTE_ID)) {
+      const [light, dark] = THEMES.map((theme) => paletteBlock(palette, theme));
+      for (const token of STATUS_TOKENS) {
+        const inLight = token in (light ?? {});
+        const inDark = token in (dark ?? {});
+        if (inLight !== inDark) {
+          unpaired.push(`${palette} declares ${token} in ${inLight ? 'light' : 'dark'} only`);
+        }
+      }
+    }
+    expect(unpaired).toEqual([]);
   });
 
   it('re-skins the ramp away from the base in every other palette', () => {

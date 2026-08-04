@@ -47,17 +47,48 @@ invented hue — keeping the palette a faithful Miro 5-hue system.
 
 ## Colour roles (the `--el-*` element-token layer)
 
-| Role group          | Citrine / Miro (light → dark) — all Mirotone steps                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Text scale          | Stratos ink `#050038` + Mirotone gray ramp — secondary `gray-600 #4a4e5e` → `gray-300 #c1c3cd`                |
-| Accent (CTA)        | Sunglow fill `#ffd02f` (`yellow-500`) with **dark Stratos labels** `#050038`; gold `#746019` → `#ffd02f` text |
-| Surfaces            | white over `gray-100 #f3f4f6` → Miro-black `#090909` / `gray-900 #1a1b1e`                                     |
-| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `gray-150 #ebecf0` → `#040404`                  |
-| Borders             | Mirotone gray hairlines — `gray-200 #e0e1e6` → `gray-750 #2b2e35`                                             |
-| Accent / links      | Miro action-blue `#3859ff` (`blue-500`) → `blue-400 #7a90fe`                                                  |
-| Semantic            | Mirotone `green-500 #1c8f00` / `red-500 #d8182c` ramps (brightened one step on dark) · warning gold           |
-| Pastel tints        | Mirotone light ramp steps (`tint-yellow` = `yellow-150`, `tint-sky` = `blue-100`, `tint-mint` = `green-150`)  |
-| Work-item type hues | re-skin via the `--color-*` they map to — Miro's 5-hue set (yellow / blue / green / red + the dark golds)     |
+| Role group          | Citrine / Miro (light → dark) — all Mirotone steps                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Text scale          | Stratos ink `#050038` + Mirotone gray ramp — secondary `gray-600 #4a4e5e` → `gray-300 #c1c3cd`                                                 |
+| Accent (CTA)        | Sunglow fill `#ffd02f` (`yellow-500`) with **dark Stratos labels** `#050038`; gold `#746019` → `#ffd02f` text                                  |
+| Surfaces            | white over `gray-100 #f3f4f6` → Miro-black `#090909` / `gray-900 #1a1b1e`                                                                      |
+| Recessed canvas     | planning board — recessed below the page and `--el-surface` — `gray-150 #ebecf0` → `#040404`                                                   |
+| Borders             | Mirotone gray hairlines — `gray-200 #e0e1e6` → `gray-750 #2b2e35`                                                                              |
+| Accent / links      | Miro action-blue `#3859ff` (`blue-500`) → `blue-400 #7a90fe`                                                                                   |
+| Semantic            | Mirotone `green-500 #1c8f00` / `red-500 #d8182c` ramps (brightened one step on dark) · warning gold                                            |
+| Status ramp         | `--el-status-in-review` set directly — Mirotone blue-650 `#243797` → blue-200 `#d9dffc`; `--el-status-cancelled` → gray-600 `#4a4e5e` in light |
+| Pastel tints        | Mirotone light ramp steps (`tint-yellow` = `yellow-150`, `tint-sky` = `blue-100`, `tint-mint` = `green-150`)                                   |
+| Work-item type hues | re-skin via the `--color-*` they map to — Miro's 5-hue set (yellow / blue / green / red + the dark golds)                                      |
+
+### The status ramp — why `in_review` and `cancelled` are set directly
+
+Two collisions, both a consequence of transcribing Mirotone faithfully
+(MOTIR-2075):
+
+- **`blocked` vs `in_review`.** `--color-warning` is **yellow-650** `#91771e` and
+  `--color-primary` is **yellow-700** `#746019` — _adjacent steps of one gold
+  ramp_, **ΔE2000 9.7**. In dark it is far worse: `#ffd850` against `#ffd02f`,
+  **ΔE 3.0**, two Sunglow golds one hex apart. Miro is a five-hue system with
+  **no orange ramp** (see the block header), and the golds that clear AA on a
+  light surface are exactly the two that collide — so the gold cannot separate
+  itself. The status ramp therefore takes **Miro's other brand hue at its own
+  depth**: the action blue, **blue-650** `#243797` in light and **blue-200**
+  `#d9dffc` in dark (blue-650 sits at 1.7:1 on the near-black dark surface and
+  would fail the icon bar). `in_progress` rides **blue-500** `#3859ff`, so this
+  is one hue family at two depths — the Graphite idiom — **ΔE 17.0 / 18.4**
+  apart. Contrast **9.2:1 / 13.1:1** on `--el-surface`. `blocked` stays on the
+  warning gold, where its semantics belong.
+- **`todo` vs `cancelled` (light).** **gray-450** `#7f8497` vs **gray-500**
+  `#656b81`, **ΔE 10.0** — again one step apart on Mirotone's ramp. `cancelled`
+  drops to **gray-600** `#4a4e5e` (**ΔE 20.6**, contrast 7.5:1). Dark needs no
+  change and re-asserts `var(--color-steel)`.
+
+Every value above is a documented Mirotone step — the palette's own rule that
+nothing is invented or hand-darkened still holds. Each override is declared in
+BOTH themes even where one needs no change, because an unpaired light override
+leaks onto the dark canvas (the palette block and `[data-theme='dark']` tie on
+specificity, palette wins by source order);
+`tests/theme/statusHueSeparation.test.ts` enforces the pairing.
 
 ## Accessibility
 

@@ -53,6 +53,7 @@ from the emerald greens.
 | Borders             | cool hairlines — `--el-border` `#d9e2dc`, `-soft`, `-strong`                                                                                                            |
 | Links               | blue affordance — `--el-link` `#0a6ebd` / `--el-link-pressed` `#08537f`                                                                                                 |
 | Semantic            | `--el-success` `#127c3e` (grassy) · `--el-warning` `#b45309` · `--el-danger` `#d63d3d` · `--el-info` `#1366c4`                                                          |
+| Status ramp         | `--el-status-in-review` set directly — Radix Jade 12 `#1d3b31` → `#adf0d4`; `--el-status-cancelled` → slate `#9aaaa1` in dark — see below                               |
 | Pastel tints        | cool/green-leaning washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}`                                                                                           |
 | Work-item type hues | distinguishable rainbow via `--el-type-*` (emerald research, grass story/test, blue task/code, teal subtask/content, violet epic/design, red bug/deploy, orange review) |
 
@@ -64,6 +65,30 @@ a bright emerald primary (`#3ddc97`) carrying dark label text (Supabase-style)
 over a deep-forest canvas (`#0c130f`), with the cooled neutrals, tints, and
 semantic hues brightened for the dark base. Both blocks override only colour
 tokens.
+
+### The status ramp — why `in_review` and `cancelled` are set directly
+
+Two collisions, both found by the perceptual sweep in MOTIR-2075:
+
+- **`in_review` vs `done`.** `--el-status-in-review` rides `--color-primary`
+  (emerald `#0c7a52` → `#3ddc97`) and `--el-status-done` rides `--color-success`
+  (grass `#127c3e` → `#34d27a`) — two greens **ΔE2000 5.5** apart in light and
+  **4.7** in dark. This document previously claimed they "read apart"; measured,
+  they do not. The **status ramp takes its own step of the palette's jade** —
+  **Radix Jade 12**, deep in light (`#1d3b31`) and pale in dark (`#adf0d4`), the
+  same light/dark inversion Graphite's accent step uses. Separation **ΔE 19.2 /
+  17.2**; contrast **10.9:1 / 13.3:1** on `--el-surface`.
+- **`todo` vs `cancelled` (dark).** `--color-stone` `#5a6b62` against
+  `--color-steel` `#6f8077` is **ΔE 8.3** — this palette's neutral ramp is
+  compressed against the base's, which keeps the pair ~12 apart. `cancelled`
+  takes the palette's own next step up, `--color-slate` `#9aaaa1` (**ΔE 22.4**,
+  contrast 7.1:1). Light needs no change and re-asserts `var(--color-steel)`.
+
+Every override is declared in BOTH themes even where one needs no change: a
+palette's light block and the base `[data-theme='dark']` block tie on
+specificity and the palette block comes later in the sheet, so an unpaired light
+override would leak onto the dark canvas.
+`tests/theme/statusHueSeparation.test.ts` enforces the pairing.
 
 ## Accessibility
 
