@@ -31,6 +31,7 @@ import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
 import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
+import { statusDerivationOnTransitioned } from './definitions/statusDerivation';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
 // Subtask 1.6.2). Adding a new job = define it under `definitions/` and add it
@@ -64,4 +65,5 @@ export const jobFunctions = [
   ciRunnerProvisionSweep,
   ciRunnerBoot,
   ciRunnerReap,
+  statusDerivationOnTransitioned,
 ];
