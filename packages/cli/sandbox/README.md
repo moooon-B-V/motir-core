@@ -136,6 +136,46 @@ transcription, so the registry is always the authority:
 docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 ```
 
+### Public, and asserted to be (MOTIR-2010)
+
+**No `docker login`, no token, no org membership.** The package is public, which
+is what makes the `docker run` at the top of this file a real instruction rather
+than an instruction-shaped sentence.
+
+That is worth stating because it was once false and nothing noticed. `cli-v0.1.0`
+built nine images, smoke-tested them, pushed them, pulled every one back by
+digest, recorded the nine digests above, and went green — while the package was
+**private**, so the first command in [`docs/cli.md`](../../../docs/cli.md)
+returned `unauthorized` for everyone outside the org. The verify job pulled as
+the _publisher_, and for a publisher a private package is perfectly pullable.
+_Published_ and _obtainable_ are different claims, and only a caller with **no
+credential** can tell them apart.
+
+So the release lane now ends with a job that holds none:
+[`smoke/assert-public.mjs`](smoke/assert-public.mjs) resolves every digest it
+just pushed against GHCR with no `Authorization` header, from a job with no
+registry login and no `packages:` scope, and fails the release if any of them
+refuses. It probes a known-public repository first and reports INDETERMINATE if
+_that_ fails — a broken probe answers "private" to everything, and "private" is
+the answer it is hunting.
+
+**It is ONE package, not nine.** Every profile is a TAG in the single OCI
+repository `moooon-b-v/motir-sandbox` — the registry says so itself, issuing the
+same `scope="repository:moooon-b-v/motir-sandbox:pull"` challenge for `:claude`,
+`:codex` and `:base` alike. GHCR's visibility is a property of the package, so
+one setting governs all eighteen tags. (Useful to know before touching it: the
+public-visibility flip is UI-only and **irreversible** — see
+[`docs/decisions/fleet-image-pull.md`](../../../docs/decisions/fleet-image-pull.md)
+§4.1.)
+
+Check it yourself, from any shell, credentials or not — the script never sends
+one either way:
+
+```sh
+node packages/cli/sandbox/smoke/assert-public.mjs \
+  --ref ghcr.io/moooon-b-v/motir-sandbox:claude
+```
+
 ## What it confines — and what it does not
 
 |                |                                                                                                                                                                                                                                                                                   |
@@ -611,11 +651,18 @@ git tag cli-v0.2.0 && git push origin cli-v0.2.0
 ```
 
 The tag fires the guard (tag version must equal `packages/cli/package.json`), then
-the [validation](#validation) matrix with its push steps on, then a
-**post-deploy verification** job that pulls every image back **by digest** and
-runs `motir --version` in it — because "the push exited 0" and "a user can pull
-this and run it" are different claims. That job's summary prints the digest
-table; paste it into [Published images](#published-images).
+the [validation](#validation) matrix with its push steps on, then **two**
+post-deploy verification jobs, because there are two different claims to check:
+
+1. **`sandbox-published`** pulls every image back **by digest** and runs `motir
+--version` in it — "the push exited 0" and "the bytes are in the registry and
+   they run" are not the same claim. Its summary prints the digest table; paste
+   it into [Published images](#published-images).
+2. **`sandbox-public`** asks whether a **stranger** can pull them, which the
+   first job structurally cannot: it logs in, and a private package is pullable
+   by its publisher. See [Public, and asserted to
+   be](#public-and-asserted-to-be-motir-2010) for why that gap shipped nine
+   unobtainable images green, and what closed it.
 
 Auth is the workflow's own `GITHUB_TOKEN` under a `packages: write` permission
 block, granted on the release lane only. **No repository secret, no registry
@@ -624,11 +671,14 @@ no such block, cannot push even if it tried.
 
 Four things worth knowing before your first release:
 
-- **Package visibility.** A GHCR package starts private. After the first
+- **Package visibility.** A GHCR package starts **private**. After the first
   successful release, make it public once at
-  `https://github.com/orgs/moooon-B-V/packages/container/motir-sandbox/settings`,
-  or the `docker run` at the top of this page will ask a stranger for
-  credentials.
+  `https://github.com/orgs/moooon-B-V/packages/container/motir-sandbox/settings`
+  — one flip, covering every tag, and **irreversible**. This bullet existed
+  before `cli-v0.1.0` and the step was skipped anyway, which is exactly why the
+  release now FAILS on it (`sandbox-public`) instead of merely mentioning it. Do
+  it before the tag if you can; the failing job prints the same URL if you
+  cannot.
 - **`workflow_dispatch` with `dry_run: true`** runs the whole lane without
   pushing — how to validate a change to the release path without minting a
   version.
