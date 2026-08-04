@@ -121,6 +121,23 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // project must not be able to enumerate which project keys are real.
   PROJECT_ACCESS_DENIED: 404,
 
+  // 11.2.6 (MOTIR-2046) — the write pair. Every one is a request the caller can
+  // fix, proven by a test that drives the REAL service error through the wrapper.
+  ILLEGAL_PARENT_TYPE: 422,
+  CROSS_PROJECT_PARENT: 422,
+  PARENT_CYCLE: 422,
+  DEPTH_LIMIT_EXCEEDED: 422,
+  TYPE_NOT_ALLOWED_ON_KIND: 422,
+  ASSIGNEE_NOT_IN_WORKSPACE: 422,
+  REPORTER_NOT_IN_WORKSPACE: 422,
+  UNKNOWN_TARGET_REPO: 422,
+  ARCHIVED_TARGET_REPO: 422,
+  INVALID_ESTIMATE: 422,
+  // ⚠️ 412, a status ADR §4's table does not yet list. A new CONDITION getting a
+  // status is additive under §8 (unlike an existing condition changing one), so
+  // the row is appended to the ADR rather than emitted undocumented.
+  STALE_WORK_ITEM: 412,
+
   // 11.2.4 (MOTIR-2042) — the FilterAST the collection endpoint accepts. Every
   // one is a malformed REQUEST the caller can fix, so every one is a 422 with a
   // code specific enough to act on: which field, which operator, which value.

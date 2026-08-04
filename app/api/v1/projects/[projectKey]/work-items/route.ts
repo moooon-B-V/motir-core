@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { encodePageCursor, parsePageRequest } from '@/lib/api/v1/pagination';
-import { presentWorkItemSummary } from '@/lib/api/v1/workItems/schema';
+import {
+  createWorkItemBodySchema,
+  encodeWorkItemETag,
+  parseV1Body,
+  presentWorkItemDetail,
+  presentWorkItemSummary,
+} from '@/lib/api/v1/workItems/schema';
 import { FILTER_PARAM, decodeFilterParam } from '@/lib/filters/ast';
 import type { FilterAst } from '@/lib/filters/ast';
 import { projectsService } from '@/lib/services/projectsService';
@@ -70,6 +76,83 @@ export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async 
         : null,
   });
 });
+
+// POST /api/v1/projects/{projectKey}/work-items (Subtask 11.2.6 — MOTIR-2046).
+//
+// A SECOND export in this module, reusing the GET's project resolution rather
+// than re-deriving it, and declaring its OWN scope — the shipped guard catches
+// "a POST that bypasses the wrapper even when a sibling GET does not", and the
+// ADR's §3 map is per OPERATION, not per resource.
+export const POST = withV1Route<{ projectKey: string }>(
+  { scope: 'work_items:write' },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, createWorkItemBodySchema);
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+
+    // A `MOTIR-<n>` parent key resolves to the internal id here; a cuid never
+    // crosses the wire in either direction (ADR §7). An unknown or cross-project
+    // key surfaces as the service's own mapped domain error, not a 500.
+    const parentId = body.parentKey
+      ? (
+          await workItemsService.getWorkItemByIdentifier(
+            project.id,
+            body.parentKey.toUpperCase(),
+            ctx.service,
+          )
+        ).id
+      : null;
+
+    const created = await workItemsService.createWorkItem(
+      {
+        projectId: project.id,
+        kind: body.kind,
+        title: body.title,
+        parentId,
+        ...pick(body, [
+          'descriptionMd',
+          'priority',
+          'type',
+          'executor',
+          'storyPoints',
+          'estimateMinutes',
+          'targetRepo',
+          'assigneeId',
+          'dueDate',
+        ]),
+        // ⚠️ Stamped SERVER-SIDE, exactly as the MCP tool stamps `mcp`. A row's
+        // origin cannot be reconstructed after the fact, and the client does not
+        // get to claim one (MOTIR-2044).
+        provenance: { planning: { source: 'api' } },
+      },
+      ctx.service,
+    );
+
+    const detail = await workItemsService.getIssueDetail(
+      project.id,
+      created.identifier,
+      ctx.service,
+    );
+    ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
+    ctx.responseHeaders.set('Location', `/api/v1/work-items/${created.identifier}`);
+    return NextResponse.json(presentWorkItemDetail(detail, 0), { status: 201 });
+  },
+);
+
+/**
+ * Copy only the keys a caller actually SUPPLIED.
+ *
+ * `exactOptionalPropertyTypes` makes `{ x: undefined }` and `{}` different
+ * types, and the service distinguishes absent (leave alone) from null (clear) —
+ * so spreading the parsed body wholesale would turn every omitted field into an
+ * explicit `undefined` and blur exactly the distinction the schema drew.
+ */
+function pick<T extends object, K extends keyof T>(source: T, keys: readonly K[]): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of keys) {
+    if (key in source && source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
 
 /** The keyset position a validated cursor names, in the shape the service takes. */
 function toAfter(cursor: { createdAt: string; id: string }): { createdAt: Date; id: string } {

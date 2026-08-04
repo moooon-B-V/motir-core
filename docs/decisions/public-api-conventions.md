@@ -178,14 +178,15 @@ second error shape into the same codebase.
 
 The status table — each row is the condition that produces it:
 
-| Status  | Condition                                                                                                |
-| ------- | -------------------------------------------------------------------------------------------------------- |
-| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**  |
-| **403** | A valid token whose granted scopes do not include the required one                                       |
-| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer       |
-| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation |
-| **429** | The token's rate-limit budget is exhausted (§6)                                                          |
-| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                            |
+| Status  | Condition                                                                                                                                                                                                              |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**                                                                                                                |
+| **403** | A valid token whose granted scopes do not include the required one                                                                                                                                                     |
+| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer                                                                                                                     |
+| **412** | An `If-Match` precondition failed — the resource moved since the validator was issued (added 2026-08-03 by Subtask 11.2.6; a NEW condition getting a status, which §8 permits, not an existing condition changing one) |
+| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation                                                                                                               |
+| **429** | The token's rate-limit budget is exhausted (§6)                                                                                                                                                                        |
+| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                                                                                                                                          |
 
 Three of those rows are decisions, not defaults:
 

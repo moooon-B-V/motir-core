@@ -513,3 +513,97 @@ export function decodeWorkItemETag(raw: string): Date {
   if (Number.isNaN(parsed.getTime())) throw invalid();
   return parsed;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REQUEST schemas (Story 11.2 · Subtask 11.2.6 — MOTIR-2046)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// These live beside the RESPONSE schemas deliberately: Story 11.4 emits the
+// OpenAPI operations from this module, and an operation is a request shape AND a
+// response shape. Splitting them would put half an operation in each of two
+// places.
+//
+// ⚠️ ABSENT vs NULL is the commonest PATCH defect, so it is spelled out rather
+// than left to zod's defaults: a field that is ABSENT is untouched; a field
+// explicitly set to `null` CLEARS the column. `.optional()` models the first and
+// `.nullable()` the second, and the pairing is what makes them distinguishable —
+// `updateWorkItemBodySchema.parse({})` yields `{}`, not a patch full of nulls.
+
+/** A story-point value, mirroring the shipped `validateStoryPoints` bounds. */
+const storyPointsSchema = z.number().min(0).max(9999.99).nullable();
+const estimateMinutesSchema = z.number().int().min(0).nullable();
+
+/** `POST /api/v1/projects/{projectKey}/work-items`. */
+export const createWorkItemBodySchema = z
+  .object({
+    kind: kindSchema,
+    title: z.string().min(1),
+    // A `MOTIR-<n>` key, never a cuid (ADR §7) — the route resolves it to the
+    // internal parent id.
+    parentKey: workItemKeySchema.nullish(),
+    descriptionMd: z.string().nullish(),
+    priority: prioritySchema.optional(),
+    type: typeSchema.nullish(),
+    executor: executorSchema.nullish(),
+    storyPoints: storyPointsSchema.optional(),
+    estimateMinutes: estimateMinutesSchema.optional(),
+    targetRepo: z.string().nullish(),
+    assigneeId: z.string().nullish(),
+    dueDate: z.string().datetime().nullish(),
+  })
+  .strict();
+export type CreateWorkItemBody = z.infer<typeof createWorkItemBodySchema>;
+
+/**
+ * `PATCH /api/v1/work-items/{key}` — the shipped `UpdateWorkItemInput` PATCH
+ * keys, plus `parentKey` (re-file) and `kind` (re-classify), both of which the
+ * ONE service method already validates against the kind-parent matrix.
+ *
+ * `.strict()` on both: an unknown property is a 422, not a silent no-op. A
+ * client that misspells a field name has a bug, and telling them beats
+ * pretending the write succeeded.
+ */
+export const updateWorkItemBodySchema = z
+  .object({
+    kind: kindSchema.optional(),
+    title: z.string().min(1).optional(),
+    descriptionMd: z.string().nullish(),
+    explanationMd: z.string().nullish(),
+    parentKey: workItemKeySchema.nullish(),
+    priority: prioritySchema.optional(),
+    type: typeSchema.nullish(),
+    executor: executorSchema.nullish(),
+    storyPoints: storyPointsSchema.optional(),
+    estimateMinutes: estimateMinutesSchema.optional(),
+    targetRepo: z.string().nullish(),
+    assigneeId: z.string().nullish(),
+    dueDate: z.string().datetime().nullish(),
+  })
+  .strict();
+export type UpdateWorkItemBody = z.infer<typeof updateWorkItemBodySchema>;
+
+/**
+ * Parse a request body against a schema, or raise the v1 422.
+ *
+ * Centralised so every write endpoint reports a validation failure with the
+ * SAME code and the same envelope — the ADR's "two error shapes means every
+ * client writes two parsers", applied to the request side.
+ */
+export async function parseV1Body<T>(req: Request, schema: z.ZodType<T>): Promise<T> {
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    throw new InvalidRequestError('INVALID_BODY', 'The request body is not valid JSON.');
+  }
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    const at = first?.path.length ? ` at \`${first.path.join('.')}\`` : '';
+    throw new InvalidRequestError(
+      'INVALID_BODY',
+      `The request body is invalid${at}: ${first?.message ?? 'validation failed'}.`,
+    );
+  }
+  return parsed.data;
+}
