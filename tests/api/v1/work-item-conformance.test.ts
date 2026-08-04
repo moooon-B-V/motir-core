@@ -521,7 +521,16 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
       'app/api/v1/work-items/[key]/archive/route.ts',
       'app/api/v1/work-items/[key]/restore/route.ts',
     ];
-    const shipped = v1RouteFiles(process.cwd()).filter((f) => f.includes('work-items'));
+    // ⚠️ 11.2's OWN work-item endpoints, not every path that ends in
+    // `work-items`. Story 11.3 adds two membership moves —
+    // `sprints/{id}/work-items` and `projects/{key}/backlog/work-items` — which
+    // are SPRINT operations wearing a work-item noun: they carry `sprints:write`
+    // and their journey is 11.3's conformance suite, not this one. Filtering
+    // them out here keeps this guard honest about what IT covers rather than
+    // making it fail for another story's endpoints.
+    const shipped = v1RouteFiles(process.cwd()).filter(
+      (f) => f.includes('work-items') && !/\/(sprints|backlog)\//.test(f),
+    );
 
     // Enumerated rather than counted: a NEW work-item endpoint appears here as a
     // failure naming the file, which is the prompt to add its journey step.

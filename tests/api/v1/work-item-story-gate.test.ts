@@ -103,7 +103,7 @@ describe('gate — the work-item route surface exists and is clean', () => {
       // keyed on the SPRINT, so every write under a `sprints` segment takes
       // `sprints:write`, including the membership move that happens to end in
       // `/work-items`.
-      if (/\bsprints\b/.test(file)) return 'sprints:write';
+      if (/\bsprints\b/.test(file) || /\bbacklog\b/.test(file)) return 'sprints:write';
       return 'work_items:write';
     };
 

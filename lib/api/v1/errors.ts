@@ -221,6 +221,17 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   SPRINT_NOT_STARTABLE: 422,
   SPRINT_NOT_COMPLETABLE: 422,
   INVALID_CARRY_OVER_TARGET: 422,
+
+  // 11.3.7 (MOTIR-2064) — the membership moves.
+  //
+  // 422: the batch is too large for one atomic move. The service's message names
+  // the cap, so a caller can split the batch rather than guess at it. NOT
+  // silently truncated — a partial move is exactly what the atomicity of these
+  // endpoints exists to prevent.
+  BULK_BATCH_TOO_LARGE: 422,
+  // 422: the item and the sprint belong to different projects. A request the
+  // caller can fix, and one that rejects the WHOLE batch before any write.
+  CROSS_PROJECT_SPRINT_ASSIGNMENT: 422,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */
