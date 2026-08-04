@@ -106,6 +106,20 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.free
   // tenant's data. 403 answers "your token may not do this KIND of thing";
   // 404 answers "there is no such resource *for you*". (ADR §4.)
   NOT_A_MEMBER: 404,
+
+  // ── Story 11.2, the work-item resource ────────────────────────────────────
+  // Each row is added deliberately and each is exercised by a test that drives
+  // the REAL error through the wrapper — an unproven row is indistinguishable
+  // from a missing one, and a missing one is a silent 500.
+
+  // 11.2.2 (MOTIR-2040) — the single-item read.
+  WORK_ITEM_NOT_FOUND: 404,
+  PROJECT_NOT_FOUND: 404,
+  // ⚠️ 404, NOT 403. A 403 on a project the caller cannot browse confirms that
+  // the project EXISTS — the same existence-oracle argument ADR §4 makes for
+  // cross-tenant access, applied WITHIN a tenant. A caller who may not browse a
+  // project must not be able to enumerate which project keys are real.
+  PROJECT_ACCESS_DENIED: 404,
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */

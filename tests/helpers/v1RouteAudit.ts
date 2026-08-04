@@ -117,13 +117,24 @@ export function readRouteSource(repoRoot: string, file: string): string {
   return readFileSync(join(repoRoot, file), 'utf8');
 }
 
+/**
+ * A route handler as Next.js calls it: the request, plus the resolved dynamic
+ * params for a parameterised segment. The second argument is OPTIONAL because a
+ * static route ignores it — but it must be in the TYPE, or a sweep over the tree
+ * cannot drive `app/api/v1/work-items/[key]/route.ts` at all (Story 11.2).
+ */
+export type V1RouteHandler = (
+  req: Request,
+  args?: { params: Promise<Record<string, string>> },
+) => Promise<Response>;
+
 /** The App-Router handler exports a route module can carry. */
 export interface V1RouteModule {
-  GET?: (req: Request) => Promise<Response>;
-  POST?: (req: Request) => Promise<Response>;
-  PUT?: (req: Request) => Promise<Response>;
-  PATCH?: (req: Request) => Promise<Response>;
-  DELETE?: (req: Request) => Promise<Response>;
+  GET?: V1RouteHandler;
+  POST?: V1RouteHandler;
+  PUT?: V1RouteHandler;
+  PATCH?: V1RouteHandler;
+  DELETE?: V1RouteHandler;
 }
 
 /**
