@@ -137,12 +137,18 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
       tiptap-markdown:
         specifier: ^0.9.0
         version: 0.9.0(@tiptap/core@3.24.0(@tiptap/pm@3.24.0))
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       zod:
         specifier: ^3.25.76
         version: 3.25.76
