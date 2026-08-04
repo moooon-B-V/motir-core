@@ -1,3 +1,4 @@
+import type { ConcurrencyOption } from 'inngest/types';
 import { inngest } from './client';
 import { jobServices, type JobServices } from './services';
 import { resolveRetries, type RetryPolicyName } from './retries';
@@ -82,6 +83,13 @@ export interface FailureHandlerArgs {
  * `JobEventName` either way — that's the type-safety the 1:1 convention
  * existed to give.
  */
+/**
+ * Inngest's own concurrency-constraint shape, re-exported so a job definition
+ * can type a constraint without reaching into `inngest/types` itself
+ * (`{ limit, key?, scope? }` — see the `concurrency` option below).
+ */
+export type { ConcurrencyOption };
+
 export type JobIdAndTrigger<N extends JobEventName> =
   | {
       /** The job id. Also the triggering event name (1:1 convention). */
@@ -106,8 +114,31 @@ export type DefineJobOptions<N extends JobEventName> = JobIdAndTrigger<N> & {
   /** Raw Inngest retry count (additional attempts after the first). Escape
    * hatch for an exact number; prefer `retryPolicy`. Mutually exclusive with it. */
   retries?: number;
-  /** Optional concurrency limit (max simultaneous runs). */
-  concurrency?: number;
+  /**
+   * Optional concurrency constraint(s) (MOTIR-1982). Three accepted forms, all
+   * Inngest's own (`ConcurrencyOption` re-exported above):
+   *
+   *   - `number` — a bare limit on simultaneous runs of THIS function, across
+   *     the whole environment. Every tenant shares one lane.
+   *   - `ConcurrencyOption` — `{ limit, key?, scope? }`. `key` is a CEL
+   *     expression over the triggering event (`event.data.workspaceId`), and
+   *     Inngest creates a SUB-QUEUE per distinct key value.
+   *   - `ConcurrencyOption[]` — several constraints at once, ALL of which must
+   *     admit a run. This is how a job expresses fairness AND capacity:
+   *
+   *     ```ts
+   *     concurrency: [
+   *       { limit: 1, key: 'event.data.workspaceId' }, // no tenant monopolizes
+   *       { limit: 4 },                                // total capacity
+   *     ]
+   *     ```
+   *
+   * The keyed form's fairness behaviour was MEASURED, not assumed — see the
+   * "Concurrency" section of `docs/jobs.md` for the numbers, the harness that
+   * produced them (`scripts/experiments/inngest-concurrency-fairness.mjs`),
+   * and the one thing still unproven (the same run against Inngest Cloud).
+   */
+  concurrency?: number | ConcurrencyOption | ConcurrencyOption[];
   /**
    * Optional idempotency key template, evaluated against the event payload
    * (e.g. `"event.data.idempotencyKey"`). Forwarded to Inngest, which dedups
@@ -208,7 +239,24 @@ export function defineJob<N extends JobEventName>(
     retries: maxRetries,
     triggers: cron !== undefined ? [{ cron }] : [{ event: triggerEvent }],
     onFailure,
-    ...(concurrency !== undefined ? { concurrency: { limit: concurrency } } : {}),
+    // Concurrency is forwarded to Inngest essentially VERBATIM (MOTIR-1982).
+    // Until then this read `{ concurrency: { limit: concurrency } }` off a
+    // `concurrency?: number` option, which silently discarded `key` and
+    // `scope` — the two fields that make a limit per-TENANT rather than one
+    // global lane every workspace queues in. No job on the substrate could
+    // express fairness, because the wrapper threw the expressiveness away at
+    // the boundary, not because Inngest lacked it.
+    //
+    // The ONE thing not passed through untouched is the bare `number`, which
+    // is still normalized to `{ limit: n }`. That is deliberate: it is exactly
+    // the object today's call sites already produce, so widening the option
+    // cannot change what an existing job syncs (Inngest's own schema coerces
+    // the two to the same config, but "identical bytes" is a cheaper thing to
+    // guarantee than "equivalent after coercion"). Object and array forms —
+    // the new expressiveness — are forwarded with no massaging at all.
+    ...(concurrency !== undefined
+      ? { concurrency: typeof concurrency === 'number' ? { limit: concurrency } : concurrency }
+      : {}),
     ...(idempotency !== undefined ? { idempotency } : {}),
     ...(debounce !== undefined ? { debounce } : {}),
   } as Parameters<typeof inngest.createFunction>[0];
