@@ -2,7 +2,11 @@ import { Prisma, type MigrateOnboarding, type MigrateOnboardingStep } from '@pri
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ProjectContext } from '@/lib/projects';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -336,6 +340,65 @@ const REVIEW: StepWiring = {
 };
 
 /**
+ * THE COMMIT SHAPE — the one place a step advance is written, shared by BOTH
+ * callers that can perform one: the user-driven `advance()` below and the
+ * system-driven index sweep (MOTIR-2082). Runs inside a transaction the caller
+ * opens, because the two arrive with different tenancy: `advance()` has an
+ * acting user (`withWorkspaceContext`), the sweep has none
+ * (`withWorkspaceServiceContext`). Everything AFTER the context — lock, re-read,
+ * re-assert, update — is identical by construction rather than by two
+ * similar-looking implementations drifting apart.
+ *
+ * Take the row lock, re-read the CURRENT row under it, re-assert the
+ * preconditions the caller checked outside the transaction, then persist the
+ * observed signal + the step hop (completing the run on the terminal `done`
+ * hop). This is the lock-before-read-derived-update rule (`notes.html` #35): the
+ * step read before the lock is stale by construction, so nothing derived from it
+ * may be written without re-reading under the lock.
+ *
+ * `onPreconditionMiss` picks what a lost race MEANS to the caller:
+ *   * `'throw'` (the wizard) — a double-click / wrong-step call is a 409, the
+ *     shipped behaviour the routes and their tests depend on.
+ *   * `'skip'` (the sweep) — a run the wizard advanced first is a normal no-op,
+ *     not an error; returns `null` so the sweep records it and moves on.
+ */
+async function commitAdvance(
+  args: {
+    id: string;
+    workspaceId: string;
+    wiring: StepWiring;
+    patch?: Prisma.MigrateOnboardingUncheckedUpdateInput;
+    /** Also re-assert `status` under the lock (the sweep: a run marked `failed`
+     *  between the scan and the commit must not be advanced). */
+    requireActive?: boolean;
+    onPreconditionMiss: 'throw' | 'skip';
+  },
+  tx: Prisma.TransactionClient,
+): Promise<MigrateOnboarding | null> {
+  const { id, workspaceId, wiring, patch, requireActive, onPreconditionMiss } = args;
+  const locked = await migrateOnboardingRepository.lockById(id, tx);
+  if (!locked) {
+    if (onPreconditionMiss === 'skip') return null;
+    throw new MigrateOnboardingNotFoundError(id);
+  }
+  const fresh = await migrateOnboardingRepository.findById(id, workspaceId, tx);
+  if (!fresh) {
+    if (onPreconditionMiss === 'skip') return null;
+    throw new MigrateOnboardingNotFoundError(id);
+  }
+  if (fresh.step !== wiring.from || (requireActive && fresh.status !== 'active')) {
+    if (onPreconditionMiss === 'skip') return null;
+    throw new MigrateOnboardingStepError(id, fresh.step, wiring.from);
+  }
+  const isTerminal = wiring.to === 'done';
+  return migrateOnboardingRepository.update(
+    id,
+    { ...(patch ?? {}), step: wiring.to, ...(isTerminal ? { status: 'completed' } : {}) },
+    tx,
+  );
+}
+
+/**
  * The shared transition mechanic. Resolve + access-gate the run and its project,
  * then OUTSIDE any transaction: (1) idempotently KICK the current step's driving
  * action (a motir-ai job submit / grant read — never inside a lock), (2) POLL the
@@ -381,26 +444,158 @@ async function advance(
   // concurrent advance (or a double click) lands on the wrong-step guard.
   const row = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
-    async (tx) => {
-      const locked = await migrateOnboardingRepository.lockById(id, tx);
-      if (!locked) throw new MigrateOnboardingNotFoundError(id);
-      const fresh = await migrateOnboardingRepository.findById(id, ctx.workspaceId, tx);
-      if (!fresh) throw new MigrateOnboardingNotFoundError(id);
-      if (fresh.step !== wiring.from) {
-        throw new MigrateOnboardingStepError(id, fresh.step, wiring.from);
-      }
-      const isTerminal = wiring.to === 'done';
-      return migrateOnboardingRepository.update(
-        id,
-        { ...(patch ?? {}), step: wiring.to, ...(isTerminal ? { status: 'completed' } : {}) },
+    (tx) =>
+      commitAdvance(
+        { id, workspaceId: ctx.workspaceId, wiring, patch, onPreconditionMiss: 'throw' },
         tx,
-      );
-    },
+      ),
   );
-  return toMigrateOnboardingDto(row);
+  // `onPreconditionMiss: 'throw'` never yields null — the non-null assertion is
+  // the type system catching up with that, not an unchecked assumption.
+  return toMigrateOnboardingDto(row!);
+}
+
+/** Page size for the sweep's cross-workspace scan — bounded (finding #57).
+ *  Injectable for tests; production omits it. */
+export const MIGRATE_INDEX_SWEEP_PAGE_SIZE = 200;
+
+/** What one sweep tick did, for the job ledger. `advanced` counts rows actually
+ *  moved `index → import`; `failed` counts runs whose commit threw and were
+ *  isolated (a summary that hid those would make a broken sweep look idle). */
+export interface MigrateIndexSweepSummary {
+  /** Active runs found parked at `index` this tick. */
+  scanned: number;
+  /** Runs advanced `index → import`. */
+  advanced: number;
+  /** Runs whose commit threw — isolated, logged, retried next tick. */
+  failed: number;
 }
 
 export const migrateOnboardingService = {
+  /**
+   * THE INDEX SWEEP (MOTIR-2082) — re-evaluate the `index` step's exit condition
+   * for every run parked there, from durable state, on a schedule.
+   *
+   * WHY A SWEEP AND NOT A COMPLETION HOOK. `INDEX.checkExit` reads the job ledger
+   * correctly, but it only ever RUNS when someone calls a transition — and the
+   * only callers are the wizard client and its `index-status` poll, both in the
+   * browser. Close the tab while the index is still running (the index is
+   * *expected* to be slow — waiting on it is why the wizard exists) and the exit
+   * condition can flip true with nobody listening; the run then sits `active` at
+   * `index` indefinitely. A hook on `system.code-graph-index` would not fix that:
+   * it fires only when a NEW index succeeds, so it could never heal a run whose
+   * index already succeeded — which is the entire motivating population. A sweep
+   * re-derives from state, so it repairs runs wedged before it shipped and is
+   * robust to a dropped hook, where a hook gets no second chance.
+   *
+   * Immediacy is not lost. While the user IS watching, the wizard's own poll
+   * still advances the run within seconds; the sweep exists for when they are not.
+   *
+   * WHERE IT STOPS, AND WHY THAT IS CORRECT. It advances `index → import` and
+   * nothing further. It does NOT set `importSkipped`: the import step is an
+   * OPTIONAL, user-owned decision (import your Jira/Linear backlog, or skip), and
+   * a background job answering it would silently discard a real product choice.
+   * So a swept run lands at `import` and waits for a human — not a wedge, but the
+   * machine correctly parked on a decision only the user can make. The bug is
+   * confined to `index`, whose exit condition is machine-observable and was
+   * simply never observed.
+   *
+   * TENANCY, in two phases (the `autoPlanCadenceService` shape). Phase 1 is the
+   * ONE read with no workspace to bind — "which runs, anywhere, are parked at
+   * `index`?" — under `withSystemContext`, riding the policy's system-admin
+   * branch (added for this sweep in 20260804180000). Phase 2 commits each run
+   * inside THAT run's workspace under `withWorkspaceServiceContext`, which binds
+   * only `app.workspace_id`: a cron tick has no acting user, so it cannot route
+   * through `advance()` (gated by `projectAccessService.assertCanEdit`), but it
+   * does not need — and so must not take — cross-tenant WRITE reach either. The
+   * cross-tenant reach is exactly one bounded, read-only scan.
+   *
+   * The exit signal is read via `listSucceededCodeGraphIndexRepoRefs` ONCE PER
+   * WORKSPACE rather than `findSucceededCodeGraphIndex` once per run: same
+   * ledger question, one round-trip per workspace instead of N per run.
+   */
+  async runIndexSweep(opts: { pageSize?: number } = {}): Promise<MigrateIndexSweepSummary> {
+    const pageSize = opts.pageSize ?? MIGRATE_INDEX_SWEEP_PAGE_SIZE;
+    let after: string | undefined;
+    let scanned = 0;
+    let advanced = 0;
+    let failed = 0;
+
+    for (;;) {
+      // Phase 1 — the cross-workspace discovery scan, in its OWN system-context
+      // transaction (the GUC is transaction-scoped). A page is read fully before
+      // any run is acted on, so no commit runs inside the scanning transaction.
+      const page = await withSystemContext((tx) =>
+        migrateOnboardingRepository.listActiveAtStep(
+          'index',
+          { take: pageSize, ...(after ? { after } : {}) },
+          tx,
+        ),
+      );
+      if (page.length === 0) break;
+      scanned += page.length;
+
+      // Group the page by workspace so the ledger question is asked once per
+      // workspace. Runs with no `connectedRepoRef` never reached a repo to index
+      // — `INDEX.checkExit` returns not-ready for them and so does this.
+      const byWorkspace = new Map<string, typeof page>();
+      for (const run of page) {
+        const bucket = byWorkspace.get(run.workspaceId);
+        if (bucket) bucket.push(run);
+        else byWorkspace.set(run.workspaceId, [run]);
+      }
+
+      for (const [workspaceId, runs] of byWorkspace) {
+        const indexedRefs = new Set(
+          await withSystemContext((tx) =>
+            jobRunRepository.listSucceededCodeGraphIndexRepoRefs(workspaceId, tx),
+          ),
+        );
+
+        for (const run of runs) {
+          // The SAME exit condition `INDEX.checkExit` applies: an already-observed
+          // `codeGraphReady`, or a succeeded index row for this run's repo.
+          const ready =
+            run.codeGraphReady || (!!run.connectedRepoRef && indexedRefs.has(run.connectedRepoRef));
+          if (!ready) continue;
+
+          try {
+            // Phase 2 — the commit, in this run's OWN workspace context, through
+            // the shared lock → re-read → re-assert → update shape. A wizard
+            // advance that won the race leaves the row at `import`, the re-assert
+            // under the lock fails, and this returns null: exactly ONE transition
+            // happens and the loser no-ops instead of throwing.
+            const row = await withWorkspaceServiceContext(workspaceId, (tx) =>
+              commitAdvance(
+                {
+                  id: run.id,
+                  workspaceId,
+                  wiring: INDEX,
+                  patch: { codeGraphReady: true },
+                  requireActive: true,
+                  onPreconditionMiss: 'skip',
+                },
+                tx,
+              ),
+            );
+            if (row) advanced += 1;
+          } catch (err) {
+            // Failure isolation: one run's commit blowing up must not stop the
+            // sweep for any other run. The scan is re-runnable, so the next tick
+            // retries this run from durable state.
+            failed += 1;
+            console.error(`migrate-onboarding index sweep: run ${run.id} failed to advance:`, err);
+          }
+        }
+      }
+
+      if (page.length < pageSize) break;
+      after = page[page.length - 1]!.id;
+    }
+
+    return { scanned, advanced, failed };
+  },
+
   /**
    * Begin a migrate-onboarding run for a project at the `connect` step. At most
    * ONE run per project (the DB unique index guards it; a lost create-race is
