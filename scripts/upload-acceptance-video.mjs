@@ -31,6 +31,8 @@
 //      ACCEPTANCE_PR_TITLE (PR-derived) / ACCEPTANCE_FALLBACK_STORY_KEY;
 //      MOTIR_OIDC_AUDIENCE (default motir-acceptance-video),
 //      MOTIR_BASE_URL (default https://app.motir.co),
+//      ACCEPTANCE_MAX_ARTIFACT_BYTES (the publish target's per-file cap the
+//      up-front size gate measures against — default 100 MB, MOTIR-1911),
 //      ACCEPTANCE_OUTPUT_DIR (default out/playwright-output-acceptance),
 //      ACCEPTANCE_PRODUCED_BY, plus GitHub's GITHUB_SHA / GITHUB_RUN_ID / … for
 //      provenance. Also usable as a library: import { findRecordings,
@@ -374,6 +376,121 @@ export function assessWatchability(args = {}) {
   return { watchable: true, reason: null, totalSeconds, medianGapSeconds };
 }
 
+// ── THE ARTIFACT-SIZE BOUNDARY (MOTIR-1911) ──────────────────────────────────
+//
+// The publish target caps every uploaded file. That cap is NOT a Vercel Blob
+// platform ceiling, as it first looked: it is Motir's OWN per-file entitlement
+// (`entitlementsService.resolvePerFileLimitBytes` — 10 MB baseline, 100 MB on a
+// cloud `scaled` org), minted into the client upload token as
+// `maximumSizeInBytes`. @vercel/blob then rejects an over-size `put` client-side
+// with an opaque "File is too large, the file length cannot be greater than
+// 104857600 bytes" — thrown from inside the upload, after the story resolved,
+// after the watchability verdict, after the token mint.
+//
+// Measured on run 30579274284 (see the PR body): the CADENCE recording's video
+// is a few MB and its TRACE is well over the cap, so MOTIR-813 was the one story
+// of eight that lost its receipt — to an artifact that is a debugging aid, not
+// the receipt. Hence the policy below, and hence measuring UP FRONT: an
+// artifact's size is knowable from `fs.statSync` before any auth, so it belongs
+// beside the watchability verdict, reported through the same annotation +
+// summary channels `continue-on-error` cannot swallow (MOTIR-1905).
+
+/** The publish target's per-file ceiling, assumed when nothing says otherwise:
+ *  the cloud `scaled` tier's `maxUploadBytes` (`lib/services/entitlementsService`),
+ *  which is what app.motir.co mints for the moooon workspace. A deployment on a
+ *  different tier (the 10 MB baseline off-cloud / on `free`) sets
+ *  ACCEPTANCE_MAX_ARTIFACT_BYTES so the up-front gate matches its real cap. */
+export const DEFAULT_MAX_ARTIFACT_BYTES = 100 * 1024 * 1024;
+
+/** The per-file cap this run measures against. A non-numeric / non-positive
+ *  override is IGNORED rather than obeyed — a typo'd env var must not silently
+ *  disable the gate or reject every artifact.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {number}
+ */
+export function resolveMaxArtifactBytes(env = process.env) {
+  const raw = env['ACCEPTANCE_MAX_ARTIFACT_BYTES'];
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return DEFAULT_MAX_ARTIFACT_BYTES;
+  }
+  const parsed = Number(String(raw).trim());
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_MAX_ARTIFACT_BYTES;
+}
+
+/** Bytes on disk, or null when the file is absent / unreadable (an absent file
+ *  is the upload's problem to report, not the size gate's to guess at). */
+export function fileSizeBytes(file) {
+  if (!file) return null;
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return null;
+  }
+}
+
+/** Human-readable MB, for annotations a person reads on a run page. */
+export function formatBytes(bytes) {
+  return bytes === null ? 'unknown' : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Measure a recording's artifacts against the per-file cap (MOTIR-1911).
+ *
+ * The two artifacts are NOT equal, so they do not fail the same way:
+ *
+ *  - The VIDEO **is** the receipt (Principle #18 — a Story is accepted by
+ *    watching it). An over-cap video is unpublishable, and the recording is
+ *    rejected exactly like an unwatchable one: reported, annotated, never
+ *    uploaded, and the step exits non-zero.
+ *  - The TRACE is a debugging aid. Failing the whole publish over it costs the
+ *    story its evidence to save an attachment nobody accepts a story on — which
+ *    is precisely what happened to MOTIR-813. So an over-cap trace is DROPPED:
+ *    the video publishes, and the drop is reported as a warning.
+ *
+ * @param {{ video: string, trace?: string|null, maxBytes?: number }} args
+ * @returns {{ maxBytes: number, videoBytes: number|null, traceBytes: number|null,
+ *             publishable: boolean, reason: string|null, dropTrace: boolean,
+ *             dropReason: string|null }}
+ */
+export function assessArtifactSizes(args) {
+  const { video, trace = null, maxBytes = DEFAULT_MAX_ARTIFACT_BYTES } = args;
+  const videoBytes = fileSizeBytes(video);
+  const traceBytes = fileSizeBytes(trace);
+
+  const videoOver = videoBytes !== null && videoBytes > maxBytes;
+  const traceOver = traceBytes !== null && traceBytes > maxBytes;
+
+  return {
+    maxBytes,
+    videoBytes,
+    traceBytes,
+    publishable: !videoOver,
+    reason: videoOver
+      ? `the video is ${formatBytes(videoBytes)}, over the ${formatBytes(maxBytes)} per-file limit`
+      : null,
+    dropTrace: traceOver,
+    dropReason: traceOver
+      ? `the trace is ${formatBytes(traceBytes)}, over the ${formatBytes(maxBytes)} per-file limit`
+      : null,
+  };
+}
+
+/** Fail an over-cap artifact by NAME before `put` sees it, so the error says
+ *  which file, how big, and against what limit (MOTIR-1911). No-ops when the
+ *  mint response carries no `maxBytes`. */
+function assertWithinMintedCap(label, file, target) {
+  const maxBytes = typeof target?.maxBytes === 'number' ? target.maxBytes : null;
+  if (maxBytes === null) return;
+  const bytes = fileSizeBytes(file);
+  if (bytes === null || bytes <= maxBytes) return;
+  throw new Error(
+    `the ${label} is ${formatBytes(bytes)}, over the publish target's ${formatBytes(maxBytes)} ` +
+      `per-file limit — set ACCEPTANCE_MAX_ARTIFACT_BYTES=${maxBytes} so the size gate catches ` +
+      'this before the upload',
+  );
+}
+
 /**
  * Publish the artifacts DIRECT-TO-BLOB (MOTIR-1681), so a large video never
  * streams through the ~4.5MB serverless request-body cap the old multipart POST
@@ -417,6 +534,20 @@ export async function uploadAcceptanceVideo({
   }
   const targets = await tokenRes.json();
 
+  // The AUTHORITATIVE per-file cap, straight from the mint (MOTIR-1911). The
+  // gate in `main` measures against a CONFIGURED expectation, because sizes are
+  // knowable before auth and that is where the run reports them; this is the
+  // server's real number, which is tier-derived and can be lower (10 MB off-cloud
+  // / on `free`). Checked here so an over-cap artifact fails with a message that
+  // names it, its size and the cap, instead of @vercel/blob's opaque "File is
+  // too large, the file length cannot be greater than 104857600 bytes" thrown
+  // from inside `put`. `maxBytes` is optional — an older server omits it and the
+  // check simply abstains.
+  assertWithinMintedCap('video', artifacts.video, targets.video);
+  if (artifacts.trace && targets.trace) {
+    assertWithinMintedCap('trace', artifacts.trace, targets.trace);
+  }
+
   // 2. Upload the artifacts DIRECTLY to the private Blob store with the tokens.
   await putBlob(targets.video.pathname, fs.readFileSync(artifacts.video), {
     access: 'private',
@@ -437,7 +568,12 @@ export async function uploadAcceptanceVideo({
     headers: { ...headers, 'content-type': 'application/json' },
     body: JSON.stringify({
       videoPathname: targets.video.pathname,
-      tracePathname: targets.trace ? targets.trace.pathname : null,
+      // Register the trace pathname only when a trace was actually UPLOADED to
+      // it. A pathname registered for a blob that was never put would make the
+      // evidence row point at nothing — and `artifacts.trace` is null whenever
+      // the caller dropped an over-cap trace (MOTIR-1911), so the two conditions
+      // are exactly the `put` above's.
+      tracePathname: artifacts.trace && targets.trace ? targets.trace.pathname : null,
       chapters: readChapters(artifacts.chapters),
       commitSha: provenance.commitSha ?? null,
       ciRunUrl: provenance.ciRunUrl ?? null,
@@ -532,8 +668,10 @@ export async function main() {
     process.exit(1);
   }
 
-  // WATCHABILITY GATE (MOTIR-1772) — assessed before any auth or upload, so an
-  // unwatchable receipt never lands a clip nobody can review.
+  // WATCHABILITY + ARTIFACT-SIZE GATES (MOTIR-1772 / MOTIR-1911) — both assessed
+  // before any auth or upload, so an unwatchable receipt never lands a clip
+  // nobody can review, and an over-cap artifact is a REPORTED verdict rather
+  // than an exception thrown from inside `put` after the token was minted.
   //
   // PER-RECORDING, NOT ALL-OR-NOTHING (MOTIR-1905). This gate used to
   // `process.exit(1)` on the FIRST unwatchable clip, before publishing anything —
@@ -549,6 +687,7 @@ export async function main() {
   // weakened: an unwatchable clip is still never published, and the step still
   // fails.
   ciSummary('### Acceptance videos\n');
+  const maxArtifactBytes = resolveMaxArtifactBytes();
   const assessed = targets.map((t) => {
     // Read the meta ONCE — the watchability verdict and the MOTIR-1937 ownership
     // gate both key off it (`totalSeconds` and `specFile` respectively).
@@ -557,28 +696,48 @@ export async function main() {
       ...t,
       meta,
       verdict: assessWatchability({ chapters: readChapters(t.recording.chapters), meta }),
+      sizes: assessArtifactSizes({
+        video: t.recording.video,
+        trace: t.recording.trace,
+        maxBytes: maxArtifactBytes,
+      }),
     };
   });
-  const unwatchable = assessed.filter((t) => !t.verdict.watchable);
-  const publishable = assessed.filter((t) => t.verdict.watchable);
+  // Two independent ways to be REJECTED, reported separately because they tell
+  // the author to do different things — but pooled here, because the downstream
+  // handling is identical: not published, annotated, and non-zero at the end.
+  const rejected = assessed.filter((t) => !t.verdict.watchable || !t.sizes.publishable);
+  const publishable = assessed.filter((t) => t.verdict.watchable && t.sizes.publishable);
 
-  for (const { storyKey, recording, verdict } of unwatchable) {
-    const message =
-      `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is NOT watchable: ${verdict.reason}. ` +
-      'It was NOT published; the other recordings in this run were unaffected. ' +
-      'Pace the recorded happy path: wrap each phase in `chapter(...)` (which paces itself) and ' +
-      '`await beat()` after each user-visible action, both in tests/e2e/_helpers/acceptance-video.ts. ' +
-      'Do NOT fix this by lowering the floor.';
+  for (const { storyKey, recording, verdict, sizes } of rejected) {
+    const message = !verdict.watchable
+      ? `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is NOT watchable: ${verdict.reason}. ` +
+        'It was NOT published; the other recordings in this run were unaffected. ' +
+        'Pace the recorded happy path: wrap each phase in `chapter(...)` (which paces itself) and ' +
+        '`await beat()` after each user-visible action, both in tests/e2e/_helpers/acceptance-video.ts. ' +
+        'Do NOT fix this by lowering the floor.'
+      : `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is TOO LARGE to publish: ${sizes.reason}. ` +
+        'It was NOT published; the other recordings in this run were unaffected. ' +
+        'The VIDEO is the receipt, so it cannot simply be dropped: record this lane at a lower ' +
+        'resolution or bitrate (playwright.acceptance.config.ts `video.size`), or split the story. ' +
+        'Do NOT fix this by shortening the clip below the watchability floor.';
     console.error(message);
     // A CI ANNOTATION, so the failure is visible on the run without opening the
     // raw job log (MOTIR-1905). `continue-on-error` rewrites the step's
     // conclusion to `success`, which is why the log was the only witness.
-    ciAnnotate('error', `Unwatchable acceptance video for ${storyKey}: ${verdict.reason}`);
-    ciSummary(`- ❌ **${storyKey}** — not published: ${verdict.reason}`);
+    ciAnnotate(
+      'error',
+      !verdict.watchable
+        ? `Unwatchable acceptance video for ${storyKey}: ${verdict.reason}`
+        : `Over-limit acceptance video for ${storyKey}: ${sizes.reason}`,
+    );
+    ciSummary(
+      `- ❌ **${storyKey}** — not published: ${!verdict.watchable ? verdict.reason : sizes.reason}`,
+    );
   }
 
   if (publishable.length === 0) {
-    console.error('No watchable acceptance recording in this run — nothing to publish.');
+    console.error('No publishable acceptance recording in this run — nothing to publish.');
     process.exit(1);
   }
 
@@ -599,9 +758,10 @@ export async function main() {
   // OWNERSHIP GATE (MOTIR-1937) — publish only the receipts for the acceptance
   // specs THIS run changed; everything else is a rehearsal.
   //
-  // Applied AFTER the watchability assessment on purpose, so a PR still pays for
-  // every check: the recordings were discovered, each story resolved, and each
-  // clip measured against the MOTIR-1772 floor — all reported and annotated. Only
+  // Applied AFTER the watchability + size assessment on purpose, so a PR still
+  // pays for every check: the recordings were discovered, each story resolved, and
+  // each clip measured against the MOTIR-1772 floor and the MOTIR-1911 per-file
+  // cap — all reported and annotated. Only
   // the WRITE is scoped. Skipping the work entirely for un-owned recordings would
   // move those checks to whichever run does own them, which is how a broken
   // acceptance gate stayed invisible for days (MOTIR-1905).
@@ -623,15 +783,15 @@ export async function main() {
 
   if (owned.length === 0) {
     console.log(
-      `Nothing to publish: ${publishable.length} watchable recording(s), none produced by a spec ` +
+      `Nothing to publish: ${publishable.length} publishable recording(s), none produced by a spec ` +
         `this run changed (${ownedSpecs.size} owned spec(s)). A story's receipt is written by the ` +
         'PR that changes its acceptance spec, so an unrelated run never supersedes it.',
     );
-    // An unwatchable clip is still a defect worth failing on — the author of a
-    // pacing regression is whoever is looking at this run.
-    if (unwatchable.length > 0) {
+    // An unwatchable or over-limit clip is still a defect worth failing on — the
+    // author of a pacing / size regression is whoever is looking at this run.
+    if (rejected.length > 0) {
       console.error(
-        `${unwatchable.length} unwatchable recording(s) out of ${targets.length} — reported above.`,
+        `${rejected.length} unpublishable recording(s) out of ${targets.length} — reported above.`,
       );
       process.exit(1);
     }
@@ -675,7 +835,18 @@ export async function main() {
   // one story's bad publish cannot cost the others their receipt; the step still
   // exits non-zero at the end, so a partial publish is never silently green.
   let failed = 0;
-  for (const { recording, storyKey, verdict } of owned) {
+  for (const { recording, storyKey, verdict, sizes } of owned) {
+    // An over-cap TRACE is dropped, not fatal (MOTIR-1911). The receipt is the
+    // video; refusing to publish it because a debugging aid is too big is how
+    // MOTIR-813 lost its evidence for a 113 MB trace beside a 6 MB clip.
+    if (sizes.dropTrace) {
+      const dropped =
+        `Acceptance TRACE for ${storyKey} (${path.basename(recording.dir)}) was DROPPED: ${sizes.dropReason}. ` +
+        'The video — the receipt itself — is published without it. A trace this size means the ' +
+        'recorded journey is long: reduce trace fidelity for this lane or split the story.';
+      console.warn(dropped);
+      ciAnnotate('warning', `Acceptance trace dropped for ${storyKey}: ${sizes.dropReason}`);
+    }
     try {
       const result = await uploadAcceptanceVideo({
         baseUrl,
@@ -684,14 +855,17 @@ export async function main() {
         storyKey,
         artifacts: {
           video: recording.video,
-          trace: recording.trace,
+          trace: sizes.dropTrace ? null : recording.trace,
           chapters: recording.chapters,
         },
         provenance,
       });
       console.log(`Published acceptance evidence for ${storyKey}: ${result?.evidence?.id ?? 'ok'}`);
       ciSummary(
-        `- ✅ **${storyKey}** — published (${verdict.totalSeconds?.toFixed(1) ?? '?'}s clip).`,
+        `- ✅ **${storyKey}** — published (${verdict.totalSeconds?.toFixed(1) ?? '?'}s clip, ` +
+          `video ${formatBytes(sizes.videoBytes)}` +
+          (sizes.dropTrace ? `; trace DROPPED — ${sizes.dropReason}` : '') +
+          ').',
       );
     } catch (err) {
       failed += 1;
@@ -707,12 +881,14 @@ export async function main() {
     `Published ${owned.length - failed} of ${owned.length} owned acceptance recording(s) ` +
       `(${targets.length} recorded in this run).`,
   );
-  // Non-zero on EITHER kind of problem — an unwatchable clip is as much a broken
-  // acceptance gate as a failed upload, and both must survive `continue-on-error`
-  // as a visible annotation rather than a green step (MOTIR-1905).
-  if (failed > 0 || unwatchable.length > 0) {
+  // Non-zero on EITHER kind of problem — a clip that is unwatchable or too big to
+  // publish is as much a broken acceptance gate as a failed upload, and both must
+  // survive `continue-on-error` as a visible annotation rather than a green step
+  // (MOTIR-1905 / MOTIR-1911). A DROPPED TRACE is deliberately NOT in here: the
+  // receipt published, so the run is not broken — it is a warning, not a failure.
+  if (failed > 0 || rejected.length > 0) {
     console.error(
-      `${failed} publish failure(s) and ${unwatchable.length} unwatchable recording(s) out of ${targets.length}.`,
+      `${failed} publish failure(s) and ${rejected.length} unpublishable recording(s) out of ${targets.length}.`,
     );
     process.exit(1);
   }

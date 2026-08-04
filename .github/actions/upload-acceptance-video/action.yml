@@ -77,6 +77,24 @@ inputs:
     description: The E2E subtask key that produced the video (e.g. MOTIR-1638).
     required: false
     default: ''
+  max-artifact-bytes:
+    description: >
+      The publish target's PER-FILE byte cap, which the uploader measures every
+      recording against BEFORE authenticating (MOTIR-1911). Over-cap artifacts are
+      then a reported verdict — annotation + job summary, like the watchability
+      one — instead of an opaque "File is too large, the file length cannot be
+      greater than 104857600 bytes" thrown from inside the Blob `put`.
+
+      Defaults to 100 MB, the cloud `scaled` tier's `maxUploadBytes`. A workspace
+      on the 10 MB baseline (self-hosted, or cloud `free`) must set `10485760` or
+      the gate will wave through artifacts its own store will reject.
+
+      Policy is per artifact: an over-cap TRACE is dropped and the video still
+      publishes (the video IS the receipt — a debugging aid must not cost a story
+      its evidence, which is exactly what it did to MOTIR-813); an over-cap VIDEO
+      is not published and the step exits non-zero.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -96,4 +114,5 @@ runs:
         ACCEPTANCE_OUTPUT_DIR: ${{ inputs.output-dir }}
         ACCEPTANCE_PRODUCED_BY: ${{ inputs.produced-by }}
         ACCEPTANCE_CHANGED_SPECS: ${{ inputs.changed-specs }}
+        ACCEPTANCE_MAX_ARTIFACT_BYTES: ${{ inputs.max-artifact-bytes }}
       run: node scripts/upload-acceptance-video.mjs

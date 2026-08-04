@@ -169,6 +169,52 @@ Plan-lapse keeps evidence read-only because the video is a _record of an accepte
 story_, not an ongoing service — pruning it would destroy audit history the org
 already paid to produce.
 
+#### Amendment 2026-08-04 (MOTIR-1911) — the size ceiling applies PER ARTIFACT, and the trace is not the receipt
+
+The amendment above leans on the size ceiling as "the real cost bound", and it
+is. What neither it nor the table said is **which artifact** the ceiling bites,
+and the answer turned out to matter: a recording publishes **two** files against
+the same per-file cap — the video and the Playwright **trace** — and until now an
+over-cap either one failed the whole publish.
+
+**Measured** (run 30579274284, the first run after MOTIR-1905 unblocked
+publishing): the cadence recording's `video.webm` was **6,340,169 B** — squarely
+inside the envelope this ADR predicts — and its `trace.zip` was **118,924,401 B**,
+past the 104,857,600 B cap. Seven of eight stories got their receipt; MOTIR-813
+was the one that did not, and it lost it to the artifact that is **not** the
+receipt. (A `trace: 'on'` recording bundles a screenshot stream plus every
+network body, so trace size tracks the journey's length and weight, not the
+clip's — a 1.6-minute walk-through produces a ~113 MB trace beside a 6 MB video.)
+
+Also worth stating plainly, because the failure text hid it: the 100 MB is **not
+a Vercel Blob platform ceiling**. It is Motir's own per-file entitlement
+(`resolvePerFileLimitBytes`), minted into the client upload token as
+`maximumSizeInBytes` — so on the 10 MB baseline (self-hosted / cloud `free`) the
+same failure arrives ten times sooner.
+
+**The rule, per artifact:**
+
+| Artifact  | Over the per-file cap                                                                        | Why                                                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Video** | **Not published.** Reported + annotated, and the publish step exits non-zero.                | The video **is** the receipt (Principle #18). There is nothing to fall back to, so this is a defect to fix, not one to route around. |
+| **Trace** | **Dropped.** The video publishes without it; reported as a WARNING and the step stays green. | The trace is a debugging aid. Costing a story its evidence to save an attachment nobody accepts a story on is the bug, not the fix.  |
+
+And the boundary is now **checked up front rather than discovered**: the uploader
+measures every artifact beside the watchability verdict, before any auth or token
+mint, and reports through the same annotation + job-summary channels
+`continue-on-error` cannot swallow (MOTIR-1905). The mint additionally returns its
+own `maxBytes`, so a deployment on a different tier fails with a message naming
+the file, its size and the cap — not with @vercel/blob's opaque "File is too
+large, the file length cannot be greater than 104857600 bytes" thrown from inside
+`put`.
+
+**Not chosen: lowering trace fidelity for the lane** (`screenshots: false`, or
+`retain-on-failure`). It would shrink the artifact, but this lane exists to record
+the GREEN run, and a trace that is only kept on failure is no trace at all here.
+The per-artifact rule fixes the actual defect — a story losing its receipt — and
+leaves the trace as the best-effort extra it always was. If trace size becomes a
+CI-storage problem in its own right, that is the change to make then.
+
 ### 3. Org-level scope + default
 
 The switch is an org-wide **Boolean column on `Organization`** (mirrors

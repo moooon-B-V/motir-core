@@ -100,6 +100,23 @@ describe('POST acceptance-evidence/upload-token', () => {
     expect(body.trace).toBeNull();
   });
 
+  // MOTIR-1911 — the cap the grant is bound by is REPORTED, not just enforced.
+  // Without it the uploader can only learn the limit by exceeding it, and what
+  // it gets back is @vercel/blob's opaque "File is too large, the file length
+  // cannot be greater than 104857600 bytes" thrown from inside `put`.
+  it('reports the per-file cap the token was minted with (maxBytes)', async () => {
+    const token = await integrationToken(fx);
+    const res = await POST(tokenReq(token, { hasTrace: true }), paramsFor(story));
+    const body = (await res.json()) as {
+      video: { maxBytes: number };
+      trace: { maxBytes: number } | null;
+    };
+    expect(typeof body.video.maxBytes).toBe('number');
+    expect(body.video.maxBytes).toBeGreaterThan(0);
+    // Both grants carry the SAME org-tier cap — one entitlement, two artifacts.
+    expect(body.trace!.maxBytes).toBe(body.video.maxBytes);
+  });
+
   it('hasTrace:true → also mints a trace target (application/zip) sharing the prefix', async () => {
     const token = await integrationToken(fx);
     const res = await POST(tokenReq(token, { hasTrace: true }), paramsFor(story));

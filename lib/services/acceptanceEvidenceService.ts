@@ -244,6 +244,9 @@ export const acceptanceEvidenceService = {
         maxBytes: perFileLimit,
       }),
       contentType: 'video/webm',
+      // Tell the caller the cap it is bound by (MOTIR-1911) — otherwise the only
+      // way to learn it is to exceed it and read @vercel/blob's opaque error.
+      maxBytes: perFileLimit,
     };
 
     let trace: AcceptanceUploadTargetDTO | null = null;
@@ -256,6 +259,7 @@ export const acceptanceEvidenceService = {
           maxBytes: perFileLimit,
         }),
         contentType: 'application/zip',
+        maxBytes: perFileLimit,
       };
     }
     return { video, trace };

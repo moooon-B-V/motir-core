@@ -33,6 +33,19 @@
 // run's own `/backlog` render instead, because a sibling test would pay a second
 // cold render of that page and this lane cannot currently afford it (see the
 // comment at the assertion, and the run note in the PR).
+//
+// THIS RECORDING PUBLISHES WITHOUT ITS TRACE (MOTIR-1911). It is the lane's
+// longest and heaviest journey, and `trace: 'on'` bundles a screenshot stream
+// plus every network body — so while the clip itself is small (measured on run
+// 30579274284: video.webm 6,340,169 B, comfortably inside the ADR's envelope),
+// the trace came to 118,924,401 B, past the workspace's 104,857,600 B per-file
+// cap. That used to fail the WHOLE publish, which is how MOTIR-813 ended up the
+// one story of eight with no receipt at all. The uploader now measures both
+// artifacts up front and DROPS an over-cap trace rather than the receipt, so
+// this spec's video publishes and the trace is a best-effort extra. Nothing here
+// needs to shrink: the trace is a debugging aid, and the fix for a long journey
+// is a smaller STORY, never a faster or shorter recording (the watchability
+// amendment in docs/decisions/acceptance-video.md).
 
 import { test, expect } from './_helpers/acceptance-video';
 import type { Page } from '@playwright/test';
