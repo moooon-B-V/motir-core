@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ReadyItemDispatchDto } from '@/lib/dto/ready';
+import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -60,7 +61,8 @@ function summarize(
   // The prose-vs-graph advisory (MOTIR-2079). Phrased as a prompt to LOOK, never
   // as a failure: the claim SUCCEEDED and the item is In Progress either way.
   const references = advisories.filter((a) => a.kind !== 'shape');
-  const shapes = advisories.filter((a) => a.kind === 'shape');
+  const shapes = advisories.filter(isOrderingAdvisory);
+  const straddles = advisories.filter(isRepoStraddleAdvisory);
   if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card's acceptance criteria name ` +
@@ -77,6 +79,22 @@ function summarize(
         `says "${s.phrase}", which is state that exists only AFTER this card's own PR has ` +
         'merged — and your boundary ends at PR opened. That criterion and everything below it ' +
         'belongs to a follow-on card; build what is above the line and report the split.',
+    );
+  }
+  // The REPO-STRADDLE advisory (MOTIR-2177). The claimer is about to create ONE
+  // worktree; a criterion discharged in a second repo is one it cannot satisfy
+  // from there, and finding that out after branching is run.md guard #5 firing
+  // at the expensive end.
+  for (const s of straddles) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): acceptance criterion ${s.criterionIndex} ` +
+        `names ${s.path}, which lives in ${s.repo}` +
+        (s.reason === 'contradiction'
+          ? " — not this card's pinned repo."
+          : ', and this card pins no repo while its criteria name more than one.') +
+        ' One subtask, one repo, one PR. CHECK IT before you branch: if the other repo already ' +
+        "has that half, or this card's body pins a producer/mirror contract split, proceed — " +
+        "otherwise surface the split and stop rather than dropping the other repo's criteria.",
     );
   }
   if (item.descriptionMd) {
@@ -126,6 +144,14 @@ export async function runClaimNextReady(
         // The ORDERING exemption's inputs (MOTIR-2175) — already on the ready row.
         type: item.type,
         executor: item.executor,
+        // The REPO-STRADDLE pin (MOTIR-2177). This is the RESOLVED repo, not the
+        // raw column, and the two are interchangeable for this check: they can
+        // only differ on an UNPINNED card, where resolution falls back to the
+        // workspace's SINGLE connected repo — and with one candidate repo there
+        // is nothing to contradict and no second repo to be unpinnable between,
+        // so both values emit nothing. With two or more repos an unpinned card
+        // resolves to `null`, which is the raw column exactly.
+        targetRepo: item.targetRepo,
       },
       ctx,
     ),

@@ -369,6 +369,13 @@ async function projectedProseAdvisories(
       executor: proj.projectedExecutor.has(node.id)
         ? (proj.projectedExecutor.get(node.id) ?? null)
         : (stored?.executor ?? null),
+      // The REPO-STRADDLE pin (MOTIR-2177) is the STORED value or nothing —
+      // there is no projected counterpart and that is not a gap. A proposal
+      // carries a `targetRepoRole`, resolved to a repo NAME only at
+      // materialize, so an `add` has no name to contradict: it takes the
+      // unpinnable arm, which is exactly gate 1's question about a card whose
+      // deliverables you can enumerate but whose repo you cannot.
+      targetRepo: stored?.targetRepo ?? null,
     };
   });
 

@@ -3,8 +3,13 @@ import {
   POST_MERGE_CRITERION_PHRASES,
   acceptanceCriteriaSpan,
   bodyReferenceSeverities,
+  criterionRepoPaths,
   firstPostMergeCriterion,
+  firstRepoStraddleCriterion,
+  hasCriterionPathTokens,
   isOrderingCheckExempt,
+  resolvePathRepo,
+  type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 
 // The PURE half of the prose-vs-graph advisory (MOTIR-1969) — reference
@@ -305,5 +310,243 @@ describe("isOrderingCheckExempt — the rule's own remedy, read back as a predic
     expect(isOrderingCheckExempt('decision', 'coding_agent')).toBe(false);
     expect(isOrderingCheckExempt(null, null)).toBe(false);
     expect(isOrderingCheckExempt(undefined, undefined)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE REPO-STRADDLE CHECK (MOTIR-2177) — gate 1's repo column, mechanized as a
+// CONTRADICTION rather than a count.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The workspace's connected repos, in the shape the resolver takes. */
+const REPOS: RepoCandidate[] = [
+  { name: 'motir-core', repoRef: 'moooon-B-V/motir-core' },
+  { name: 'motir-ai', repoRef: 'moooon-B-V/motir-ai' },
+  { name: 'motir-gateway', repoRef: 'moooon-B-V/motir-gateway' },
+];
+
+describe('resolvePathRepo — a path-like token to a repo NAME', () => {
+  it('resolves the BARE-NAME form from the first segment', () => {
+    expect(resolvePathRepo('motir-ai/src/services/codeRepoService.ts', REPOS)).toBe('motir-ai');
+    expect(resolvePathRepo('motir-core/lib/dto/workItems.ts', REPOS)).toBe('motir-core');
+  });
+
+  it('resolves the `owner/name` form from the first TWO segments', () => {
+    expect(resolvePathRepo('moooon-B-V/motir-ai/src/index.ts', REPOS)).toBe('motir-ai');
+    // `owner/name` with no path after it is still the repo.
+    expect(resolvePathRepo('moooon-B-V/motir-gateway', REPOS)).toBe('motir-gateway');
+  });
+
+  it('matches case-insensitively and returns the CANDIDATE casing', () => {
+    // A git host's repo names are case-insensitive, so a criterion that
+    // capitalizes differently names the same checkout — but the value the
+    // finding reports must be the one `targetRepo` stores, or the two disagree.
+    expect(resolvePathRepo('MOTIR-AI/src/x.ts', REPOS)).toBe('motir-ai');
+    expect(resolvePathRepo('moooon-b-v/Motir-Core/lib/x.ts', REPOS)).toBe('motir-core');
+  });
+
+  it('prefers the `owner/name` reading over a bare first segment that collides', () => {
+    const colliding: RepoCandidate[] = [
+      { name: 'motir-core', repoRef: 'acme/motir-core' },
+      { name: 'acme', repoRef: 'other/acme' },
+    ];
+    expect(resolvePathRepo('acme/motir-core/lib/x.ts', colliding)).toBe('motir-core');
+  });
+
+  it('a token that resolves to NOTHING is body text — null, never an error', () => {
+    expect(resolvePathRepo('packages/cli/src/index.ts', REPOS)).toBeNull();
+    expect(resolvePathRepo('docs/decisions/code-graph.md', REPOS)).toBeNull();
+    expect(resolvePathRepo('https://ghcr.io/token', REPOS)).toBeNull();
+    expect(resolvePathRepo('and/or', REPOS)).toBeNull();
+  });
+
+  it('a token with NO slash is null even when it exactly NAMES a repo', () => {
+    // The bare-SYMBOL form this check does not cover — see the module note.
+    // Treating it as a path would fire on every card that says "motir-ai".
+    expect(resolvePathRepo('motir-ai', REPOS)).toBeNull();
+    expect(resolvePathRepo('SHARED_PLANNING_RULES', REPOS)).toBeNull();
+  });
+
+  it('an EMPTY candidate set resolves nothing', () => {
+    expect(resolvePathRepo('motir-ai/src/x.ts', [])).toBeNull();
+  });
+});
+
+describe('criterionRepoPaths — the repo column, per criterion', () => {
+  it('attributes each path to its criterion and drops unresolvable ones', () => {
+    const md = withCriteria(
+      'the DTO in `lib/dto/workItems.ts` gains a field',
+      'the mirror in `motir-ai/src/planning/rules.ts` reads it',
+      'the docs at `docs/decisions/x.md` are updated',
+      'the gateway path `motir-gateway/relay/billing/ratio/model.go` is untouched',
+    );
+    expect(criterionRepoPaths(md, REPOS)).toEqual([
+      { path: 'motir-ai/src/planning/rules.ts', repo: 'motir-ai', criterionIndex: 2 },
+      {
+        path: 'motir-gateway/relay/billing/ratio/model.go',
+        repo: 'motir-gateway',
+        criterionIndex: 4,
+      },
+    ]);
+  });
+
+  it('scans the AC span ONLY — a path in the narrative or Context refs is not a criterion', () => {
+    const md = [
+      'This card touches `motir-ai/src/planner.ts` conceptually.',
+      '',
+      '## Acceptance criteria',
+      '',
+      '- the route returns 200',
+      '',
+      '## Context refs',
+      '',
+      '- `motir-ai/src/services/x.ts` — the consumer',
+    ].join('\n');
+    expect(criterionRepoPaths(md, REPOS)).toEqual([]);
+  });
+
+  it('attributes a path on a CONTINUATION line to the bullet it wraps from', () => {
+    const md = [
+      '## Acceptance criteria',
+      '',
+      '- the first criterion',
+      '- the second criterion, whose deliverable is',
+      '  `motir-ai/src/x.ts`',
+    ].join('\n');
+    expect(criterionRepoPaths(md, REPOS)).toEqual([
+      { path: 'motir-ai/src/x.ts', repo: 'motir-ai', criterionIndex: 2 },
+    ]);
+  });
+
+  it('yields nothing for an empty body, a body with no AC heading, or no candidates', () => {
+    expect(criterionRepoPaths(null, REPOS)).toEqual([]);
+    expect(criterionRepoPaths('', REPOS)).toEqual([]);
+    expect(criterionRepoPaths('Prose naming `motir-ai/src/x.ts`.', REPOS)).toEqual([]);
+    expect(criterionRepoPaths(withCriteria('`motir-ai/src/x.ts` changes'), [])).toEqual([]);
+  });
+});
+
+describe('hasCriterionPathTokens — the pre-check that saves the repo read', () => {
+  it('is TRUE when a criterion carries any path-like token, resolvable or not', () => {
+    // Deliberately over-inclusive: it cannot know which prefixes resolve, and
+    // its only job is deciding whether the connected-repo read is worth making.
+    expect(hasCriterionPathTokens(withCriteria('`docs/decisions/x.md` is written'))).toBe(true);
+    expect(hasCriterionPathTokens(withCriteria('`motir-ai/src/x.ts` changes'))).toBe(true);
+  });
+
+  it('is FALSE for a body with no path in its criteria', () => {
+    expect(hasCriterionPathTokens(withCriteria('the endpoint returns 200'))).toBe(false);
+    expect(hasCriterionPathTokens('Prose naming `motir-ai/src/x.ts` and no AC heading.')).toBe(
+      false,
+    );
+    expect(hasCriterionPathTokens(null)).toBe(false);
+    expect(hasCriterionPathTokens('')).toBe(false);
+  });
+
+  it('does not carry regex state between calls', () => {
+    // A `g`-flagged regex reused across `test()` calls advances `lastIndex` and
+    // returns false every other time. The guard is a separate non-global copy.
+    const md = withCriteria('`motir-ai/src/x.ts` changes');
+    expect([1, 2, 3, 4].map(() => hasCriterionPathTokens(md))).toEqual([true, true, true, true]);
+  });
+});
+
+describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
+  it('MOTIR-2162 REGRESSION: pinned motir-core, criteria naming motir-ai — names the FIRST', () => {
+    // The shape MOTIR-2164 recorded: the card pinned `motir-core` while two of
+    // its criteria were discharged in `motir-ai`.
+    const md = withCriteria(
+      '`motir-core/docs/decisions/code-graph-index-fleet.md` gains an offboarding section.',
+      "`motir-ai/src/services/codeRepoService.ts`'s header block points at the decision.",
+      '`motir-ai/tests/codeRepoService.test.ts` covers the new branch.',
+    );
+    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toEqual({
+      path: 'motir-ai/src/services/codeRepoService.ts',
+      repo: 'motir-ai',
+      criterionIndex: 2,
+      reason: 'contradiction',
+    });
+  });
+
+  it('does NOT fire when every resolvable path is in the PINNED repo', () => {
+    const md = withCriteria(
+      '`motir-core/lib/workItems/proseVsGraph.ts` exports the resolver',
+      '`motir-core/tests/workItems/proseVsGraph.test.ts` covers both forms',
+      'the docs at `docs/decisions/x.md` are untouched',
+    );
+    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toBeNull();
+  });
+
+  it('compares the pin case-insensitively', () => {
+    const md = withCriteria('`MOTIR-CORE/lib/x.ts` changes');
+    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toBeNull();
+  });
+
+  it('UNPINNED with two or more distinct repos fires with the `unpinnable` reason', () => {
+    // Gate 1: "`targetRepo: null` on a card whose deliverables you can ENUMERATE
+    // is not 'not yet pinned': check whether it is UNPINNABLE." The reported
+    // path is where the SECOND repo enters — the point the split becomes visible.
+    const md = withCriteria(
+      '`motir-core/lib/services/x.ts` submits the job',
+      '`motir-core/tests/x.test.ts` covers it',
+      '`motir-ai/src/jobs/x.ts` executes it',
+    );
+    expect(firstRepoStraddleCriterion(md, null, REPOS)).toEqual({
+      path: 'motir-ai/src/jobs/x.ts',
+      repo: 'motir-ai',
+      criterionIndex: 3,
+      reason: 'unpinnable',
+    });
+  });
+
+  it('UNPINNED with exactly ONE repo emits nothing — that card is merely unpinned', () => {
+    const md = withCriteria(
+      '`motir-core/lib/services/x.ts` changes',
+      '`motir-core/tests/x.test.ts` covers it',
+    );
+    expect(firstRepoStraddleCriterion(md, null, REPOS)).toBeNull();
+  });
+
+  it('a BOUNDARY-CONTRACT card DOES fire — an ACCEPTED false positive, recorded here', () => {
+    // A producer plus its mirrored consumer is legitimately ONE card shipping
+    // TWO coordinated PRs (`plan-rules.md`, the two-PRs-one-card rule), and this
+    // check cannot tell it from a straddle: both name two repos in the criteria.
+    //
+    // The behaviour is a DECISION, not a gap — the advisory never blocks, the
+    // shape is rare, and one line of output is the whole cost. It is also why
+    // this check is the first to withdraw if advisory fatigue shows. This test
+    // exists so that a future reader finds the trade-off written down instead of
+    // discovering it as a surprise and "fixing" it.
+    const md = withCriteria(
+      '`motir-core/lib/dto/planning.ts` gains the producer field',
+      'the consumer mirror in `motir-ai/src/contracts/planning.ts` reads it defensively, so ' +
+        'either merge order is safe',
+    );
+    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toEqual({
+      path: 'motir-ai/src/contracts/planning.ts',
+      repo: 'motir-ai',
+      criterionIndex: 2,
+      reason: 'contradiction',
+    });
+  });
+
+  it('the BARE-SYMBOL tell is invisible — MOTIR-1983 would NOT be caught', () => {
+    // The other stated blind spot, pinned as behaviour: MOTIR-1983's whole
+    // self-declaration was `SHARED_PLANNING_RULES` (a motir-ai symbol) inside a
+    // parenthetical. Mapping a symbol to a repo needs an index this check does
+    // not have; gate 1's prose remains the only cover for it.
+    const md = withCriteria(
+      "a repeat-defect trigger is added to `plan-rules.md`'s per-card gate checklist " +
+        '(and mirrored into `SHARED_PLANNING_RULES` — a planning RULE has two homes)',
+    );
+    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toBeNull();
+  });
+
+  it('emits nothing with no candidates, no AC heading, or an empty body', () => {
+    const md = withCriteria('`motir-ai/src/x.ts` changes');
+    expect(firstRepoStraddleCriterion(md, 'motir-core', [])).toBeNull();
+    expect(firstRepoStraddleCriterion('Prose only.', 'motir-core', REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(null, 'motir-core', REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion('', null, REPOS)).toBeNull();
   });
 });

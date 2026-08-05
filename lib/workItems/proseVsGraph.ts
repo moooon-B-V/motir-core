@@ -286,3 +286,220 @@ export function isOrderingCheckExempt(
 ): boolean {
   return type === 'deploy' || executor === 'human';
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE REPO-STRADDLE CHECK (MOTIR-2177) — gate 1's criterion-by-criterion repo
+// column, mechanized as far as it mechanizes and NO FURTHER.
+//
+// A CONTRADICTION, not a count. The naive form — count the distinct repos named
+// across the criteria, warn at two — fires on nearly every card in this corpus,
+// because motir-core submitting a job that EXECUTES in motir-ai is the
+// architecture, and gate 1's own text says so. So the question asked here is
+// narrower and answerable from facts the card already asserts: an acceptance
+// criterion names a repo-qualified path whose owning repo is NOT the card's
+// `targetRepo`. ONE SUBTASK = ONE REPO = ONE PR, so a criterion discharged
+// outside the pin is unsatisfiable inside it — wrong regardless of how the
+// reference was meant.
+//
+// ⚠️ TWO FORMS OF THE TELL THIS CHECK CANNOT SEE. Neither is an oversight, and a
+// reader who assumes `likely-repo-straddle` retires gate 1's prose will lose
+// coverage rather than gain it:
+//
+//   1. **The BARE SYMBOL.** MOTIR-1983's entire self-declaration was
+//      `SHARED_PLANNING_RULES` inside a parenthetical — a symbol whose repo a
+//      reader happens to know. Mapping a symbol to a repo needs a cross-repo
+//      index this check does not have and is not getting. Gate 1's prose remains
+//      the ONLY cover for that form.
+//   2. **A BOUNDARY-CONTRACT card** — a producer plus its mirrored consumer, two
+//      coordinated PRs, legitimately one card — WILL fire here. That is an
+//      ACCEPTED false positive, not a bug: the advisory never blocks, the shape
+//      is rare, and one line of output is the whole cost. It is also why this is
+//      the FIRST check to withdraw if advisory fatigue shows — its precision is
+//      lower than the ordering check's, and the prose still covers its family.
+//
+// Deliberately NO exemption predicate (contrast {@link isOrderingCheckExempt}).
+// The ordering check's exemption is the RULE'S OWN REMEDY read back — a `deploy`
+// / `human` card is DEFINED by needing the merge. Gate 1 has no such shape;
+// suppressing the boundary-contract card would need a signal the plan does not
+// carry, and guessing at one would cost real coverage to buy tidiness.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One repo the check can resolve a path prefix against — the structural subset
+ * of `ConnectedRepoName` (`lib/workItems/targetRepo.ts`) this module needs.
+ *
+ * Declared here rather than imported so the module stays pure and unit-testable
+ * with a literal; `ConnectedRepoName` is structurally assignable to it, so the
+ * service passes the workspace's connected set straight through.
+ */
+export interface RepoCandidate {
+  /** The bare repo NAME — the value `work_item.targetRepo` stores. */
+  name: string;
+  /** `owner/name`, the form the GitHub surfaces display. */
+  repoRef: string;
+}
+
+/**
+ * A path-like token: two or more `/`-separated segments. Matched against text
+ * with {@link INLINE_MARKUP_RE} already stripped, because the corpus writes
+ * paths in backticks (`` `motir-ai/src/foo.ts` ``).
+ */
+const PATH_TOKEN_RE = /[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+/g;
+
+/** {@link PATH_TOKEN_RE} without `g`, for a `test()` that must not carry state. */
+const PATH_TOKEN_PRESENT_RE = new RegExp(PATH_TOKEN_RE.source);
+
+/**
+ * The repo a path-like token belongs to, or `null` when it belongs to none of
+ * `candidates`.
+ *
+ * Both prefix forms `targetRepo` itself accepts (`normalizeTargetRepo`) are
+ * resolved, `owner/name` first so an owner that happens to share a repo's name
+ * cannot shadow it:
+ *  - `moooon-B-V/motir-core/lib/x.ts` → the `owner/name` form, matched against
+ *    {@link RepoCandidate.repoRef};
+ *  - `motir-core/lib/x.ts` → the bare-name form, matched against
+ *    {@link RepoCandidate.name}.
+ *
+ * Case-insensitive (git-host repo names are), and the returned value is the
+ * CANDIDATE's own casing, so a finding and the `targetRepo` column can never
+ * disagree on spelling.
+ *
+ * **A token that resolves to nothing is BODY TEXT and yields `null`** — no
+ * error, no finding. `packages/cli/build.ts`, `docs/decisions/x.md` and
+ * `https://ghcr.io/token` are all just prose here, which is what keeps the check
+ * a reading of the repo registry rather than a guess about what a slash means.
+ *
+ * A token with NO slash is likewise `null` even when it exactly names a repo: a
+ * bare name is the SYMBOL form this check does not cover (see the module note),
+ * and treating it as a path would fire on every card that merely says
+ * "motir-ai".
+ */
+export function resolvePathRepo(
+  token: string,
+  candidates: readonly RepoCandidate[],
+): string | null {
+  const segments = token.split('/').filter((s) => s.length > 0);
+  if (segments.length < 2) return null;
+  const ownerName = `${segments[0]}/${segments[1]}`.toLowerCase();
+  const byRef = candidates.find((c) => c.repoRef.toLowerCase() === ownerName);
+  if (byRef) return byRef.name;
+  const bare = (segments[0] as string).toLowerCase();
+  return candidates.find((c) => c.name.toLowerCase() === bare)?.name ?? null;
+}
+
+/** A resolvable repo-qualified path, and which criterion wrote it. */
+export interface CriterionRepoPath {
+  /** The path token as the criterion wrote it (markup stripped). */
+  path: string;
+  /** The repo it resolves to, in the candidate's own casing. */
+  repo: string;
+  /** 1-based index of the criterion within the acceptance-criteria list. */
+  criterionIndex: number;
+}
+
+/**
+ * Whether a body's acceptance criteria contain ANY path-like token at all.
+ *
+ * Pure, candidate-free, and cheap — its only job is to let the service skip the
+ * connected-repositories read for the common card that names no path. It is
+ * deliberately over-inclusive (it cannot know which prefixes resolve); a `true`
+ * here means "worth resolving", never "there is a finding".
+ */
+export function hasCriterionPathTokens(md: string | null | undefined): boolean {
+  if (!md) return false;
+  const span = acceptanceCriteriaSpan(md);
+  if (!span) return false;
+  for (const raw of md.slice(span.start, span.end).split('\n')) {
+    if (PATH_TOKEN_PRESENT_RE.test(raw.replace(INLINE_MARKUP_RE, ''))) return true;
+  }
+  return false;
+}
+
+/**
+ * Every repo-qualified path in the acceptance-criteria span, in document order,
+ * each attributed to the criterion that carries it.
+ *
+ * Scope and attribution are {@link firstPostMergeCriterion}'s exactly — the AC
+ * span only, enumerated criteria only, a continuation line belonging to the
+ * bullet it wraps from — so the two shape checks report the same criterion
+ * numbering and a card carrying both findings can be cut against one index.
+ * Unresolvable tokens are dropped as they are met.
+ */
+export function criterionRepoPaths(
+  md: string | null | undefined,
+  candidates: readonly RepoCandidate[],
+): CriterionRepoPath[] {
+  if (!md || candidates.length === 0) return [];
+  const span = acceptanceCriteriaSpan(md);
+  if (!span) return [];
+
+  const found: CriterionRepoPath[] = [];
+  let criterionIndex = 0;
+  for (const raw of md.slice(span.start, span.end).split('\n')) {
+    if (CRITERION_BULLET_RE.test(raw)) criterionIndex += 1;
+    if (criterionIndex === 0) continue; // the heading and any lead-in prose
+    for (const m of raw.replace(INLINE_MARKUP_RE, '').matchAll(PATH_TOKEN_RE)) {
+      const path = m[0];
+      const repo = resolvePathRepo(path, candidates);
+      if (repo !== null) found.push({ path, repo, criterionIndex });
+    }
+  }
+  return found;
+}
+
+/**
+ * Why a straddle finding was emitted — the two arms are different questions and
+ * a reader must not have to infer which one fired.
+ *
+ * - `contradiction` — the card PINS `targetRepo: X` and a criterion is
+ *   discharged in repo Y. The card contradicts itself; the pin and the criterion
+ *   are both things the card asserts.
+ * - `unpinnable` — the card pins NOTHING and its criteria name two or more
+ *   distinct repos. Gate 1's *"`targetRepo: null` on a card whose deliverables
+ *   you can ENUMERATE is not 'not yet pinned' — check whether it is
+ *   UNPINNABLE"*, which is the same finding wearing a friendlier face.
+ */
+export type RepoStraddleReason = 'contradiction' | 'unpinnable';
+
+/** The REPO-STRADDLE finding: which path, whose repo, which criterion, why. */
+export interface RepoStraddleCriterion extends CriterionRepoPath {
+  reason: RepoStraddleReason;
+}
+
+/**
+ * The FIRST acceptance criterion that straddles a repo boundary, or `null`.
+ *
+ * **Pinned card (`targetRepo` non-null) — the CONTRADICTION arm.** The first
+ * resolvable path whose repo is not the pin. A criterion naming a path in the
+ * PINNED repo is the normal case and never fires, however many times it does so.
+ *
+ * **Unpinned card (`targetRepo` null) — the UNPINNABLE arm.** With nothing to
+ * contradict, one repo across the criteria is a card that simply has not been
+ * pinned yet, and nothing is emitted. TWO OR MORE distinct repos is the finding:
+ * the reported path is the first occurrence of the SECOND repo — the point at
+ * which the split becomes visible, which is the same cut-line semantics
+ * {@link firstPostMergeCriterion} reports and the same place a human building
+ * gate 1's repo column would stop.
+ *
+ * Returns the first offender only, for gate 14's reason: the remedy is one
+ * number, and the criteria after it are consequences rather than findings.
+ */
+export function firstRepoStraddleCriterion(
+  md: string | null | undefined,
+  targetRepo: string | null,
+  candidates: readonly RepoCandidate[],
+): RepoStraddleCriterion | null {
+  const paths = criterionRepoPaths(md, candidates);
+  if (paths.length === 0) return null;
+
+  if (targetRepo !== null) {
+    const pin = targetRepo.toLowerCase();
+    const offender = paths.find((p) => p.repo.toLowerCase() !== pin);
+    return offender ? { ...offender, reason: 'contradiction' } : null;
+  }
+
+  const first = (paths[0] as CriterionRepoPath).repo.toLowerCase();
+  const second = paths.find((p) => p.repo.toLowerCase() !== first);
+  return second ? { ...second, reason: 'unpinnable' } : null;
+}

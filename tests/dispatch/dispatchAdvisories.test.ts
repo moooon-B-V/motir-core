@@ -605,3 +605,258 @@ describe('the ORDERING advisory — a card whose criterion turns on its OWN merg
     expect(dto.prompt).not.toContain('OWN MERGE');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE REPO-STRADDLE ADVISORY (MOTIR-2177) — gate 1's repo column, as a
+// CONTRADICTION between two things the card itself asserts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Connect a repo to the fixture's workspace — the candidate set the check
+ *  resolves path prefixes against, through the SAME registry `targetRepo`
+ *  validation reads. */
+async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'): Promise<void> {
+  const installationId = `inst-${fx.workspaceId}`;
+  const inst = await db.githubInstallation.upsert({
+    where: { installationId },
+    create: {
+      installationId,
+      workspaceId: fx.workspaceId,
+      accountLogin: owner,
+      accountType: 'Organization',
+      provider: 'github',
+    },
+    update: {},
+  });
+  await db.githubRepo.create({
+    data: {
+      installationId: inst.id,
+      workspaceId: fx.workspaceId,
+      repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
+      owner,
+      name,
+      defaultBranch: 'main',
+      archived: false,
+      provider: 'github',
+    },
+  });
+}
+
+/** Create a card with an explicit `targetRepo` pin. */
+async function makePinnedItem(
+  fx: WorkItemFixture,
+  title: string,
+  descriptionMd: string,
+  targetRepo: string | null,
+) {
+  return workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title, descriptionMd, targetRepo },
+    fx.ctx,
+  );
+}
+
+/**
+ * MOTIR-2162's shape, verbatim in structure: pinned `motir-core`, with two
+ * criteria naming paths in `motir-ai`. `run.md` guard #5 caught this at
+ * dispatch — the wrong end of the process for a contradiction the card already
+ * carried in two structured fields.
+ */
+const CARD_STRADDLING_TWO_REPOS = [
+  'Nothing removes a tenant’s code graph on disconnect.',
+  '',
+  '## Acceptance criteria',
+  '',
+  '- `motir-core/docs/decisions/code-graph-index-fleet.md` gains an offboarding section.',
+  '- `motir-ai/src/services/codeRepoService.ts` removes the durable snapshot.',
+  '- `motir-ai/tests/codeRepoService.test.ts` covers the removal branch.',
+].join('\n');
+
+describe('the REPO-STRADDLE advisory — a criterion discharged outside the card’s repo', () => {
+  it('MOTIR-2162 REGRESSION: pinned motir-core, criteria in motir-ai — names the FIRST', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await makePinnedItem(
+      fx,
+      'Code-graph offboarding',
+      CARD_STRADDLING_TWO_REPOS,
+      'motir-core',
+    );
+
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-repo-straddle',
+        path: 'motir-ai/src/services/codeRepoService.ts',
+        repo: 'motir-ai',
+        reason: 'contradiction',
+        criterionIndex: 2,
+      },
+    ]);
+  });
+
+  it('does NOT fire when every resolvable path is in the PINNED repo', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await makePinnedItem(
+      fx,
+      'Single-repo card',
+      [
+        '## Acceptance criteria',
+        '',
+        '- `motir-core/lib/workItems/proseVsGraph.ts` exports the resolver.',
+        '- `docs/decisions/x.md` is untouched (an unresolvable prefix is body text).',
+      ].join('\n'),
+      'motir-core',
+    );
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([]);
+  });
+
+  it('UNPINNED with two repos fires as `unpinnable`; with one, nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const two = await makePinnedItem(
+      fx,
+      'Unpinnable',
+      [
+        '## Acceptance criteria',
+        '',
+        '- `motir-core/lib/services/x.ts` submits the job.',
+        '- `motir-ai/src/jobs/x.ts` executes it.',
+      ].join('\n'),
+      null,
+    );
+    const one = await makePinnedItem(
+      fx,
+      'Merely unpinned',
+      '## Acceptance criteria\n\n- `motir-core/lib/services/x.ts` changes.',
+      null,
+    );
+    expect(await buildDispatchProseAdvisories(two, fx.ctx)).toEqual([
+      {
+        kind: 'shape',
+        item: two.identifier,
+        severity: 'likely-repo-straddle',
+        path: 'motir-ai/src/jobs/x.ts',
+        repo: 'motir-ai',
+        reason: 'unpinnable',
+        criterionIndex: 2,
+      },
+    ]);
+    expect(await buildDispatchProseAdvisories(one, fx.ctx)).toEqual([]);
+  });
+
+  it('resolves against the WORKSPACE’s connected set — an unconnected repo is body text', async () => {
+    // The candidate set is the repo registry, not a hardcoded list: the SAME
+    // body emits nothing in a workspace where `motir-ai` is not connected,
+    // because `motir-ai/src/…` then resolves to no repo at all.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    const card = await makePinnedItem(
+      fx,
+      'Code-graph offboarding',
+      CARD_STRADDLING_TWO_REPOS,
+      'motir-core',
+    );
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([]);
+  });
+
+  it('⚠️ READINESS IS UNTOUCHED — byte-identical whether or not it is emitted', async () => {
+    // The same strict invariant the ordering family carries (MOTIR-2175): two
+    // cards identical but for the offending path produce the SAME readiness.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const flagged = await makePinnedItem(fx, 'Flagged', CARD_STRADDLING_TWO_REPOS, 'motir-core');
+    const clean = await makePinnedItem(
+      fx,
+      'Clean',
+      CARD_STRADDLING_TWO_REPOS.replaceAll('motir-ai/', 'motir-core/'),
+      'motir-core',
+    );
+
+    expect(await buildDispatchProseAdvisories(flagged, fx.ctx)).toHaveLength(1);
+    expect(await buildDispatchProseAdvisories(clean, fx.ctx)).toEqual([]);
+
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(flagged.identifier)).toEqual(await readinessOf(clean.identifier));
+    expect((await readinessOf(flagged.identifier)).ready).toBe(true);
+    expect((await readinessOf(flagged.identifier)).openBlockers).toEqual([]);
+  });
+
+  it('rides ALONGSIDE the ordering advisory on one card, in a stable order', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await makePinnedItem(
+      fx,
+      'Both shape defects',
+      [
+        '## Acceptance criteria',
+        '',
+        '- `motir-ai/src/x.ts` is updated.',
+        '- the row is visible on `main`.',
+      ].join('\n'),
+      'motir-core',
+    );
+    const advisories = await buildDispatchProseAdvisories(card, fx.ctx);
+    // Two shape findings, ordered by severity (`likely-ordering-violation` <
+    // `likely-repo-straddle`) rather than by insertion — the tie-break is
+    // stated, not inherited from sort stability.
+    expect(advisories.map((a) => a.kind === 'shape' && a.severity)).toEqual([
+      'likely-ordering-violation',
+      'likely-repo-straddle',
+    ]);
+  });
+
+  it('reaches the AGENT through dispatch_prompt — prompt, DTO and human summary', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await makePinnedItem(
+      fx,
+      'Code-graph offboarding',
+      CARD_STRADDLING_TWO_REPOS,
+      'motir-core',
+    );
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(dto.advisories).toHaveLength(1);
+    expect(dto.prompt).toContain('A CRITERION DISCHARGED IN ANOTHER REPO');
+    expect(dto.prompt).toContain(
+      'acceptance criterion 2 names motir-ai/src/services/codeRepoService.ts',
+    );
+    expect(dto.prompt).toContain('ONE SUBTASK = ONE REPO = ONE PR');
+    // …and it still dispatches, in the same workflow mode.
+    expect(dto.workflowMode).toBe('per_item_pr');
+
+    const res = await runDispatchPrompt({ key: card.identifier }, fx.ctx);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('Advisory (NOT a blocker');
+    expect(text).toContain('names motir-ai/src/services/codeRepoService.ts');
+  });
+
+  it('reaches the PLANNER through claim_next_ready — summary text and payload', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    await makePinnedItem(fx, 'Code-graph offboarding', CARD_STRADDLING_TWO_REPOS, 'motir-core');
+
+    const res = await runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('Advisory (NOT a blocker — the claim stands)');
+    expect(text).toContain('names motir-ai/src/services/codeRepoService.ts');
+    expect(text).toContain('One subtask, one repo, one PR');
+    const payload = res.structuredContent as { advisories: WorkItemProseAdvisoryDto[] };
+    expect(payload.advisories.map((a) => a.kind === 'shape' && a.severity)).toEqual([
+      'likely-repo-straddle',
+    ]);
+  });
+});

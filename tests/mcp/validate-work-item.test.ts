@@ -919,3 +919,247 @@ describe('validate_work_item (MCP) — the ORDERING advisory reaches the author'
     await client.close();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE REPO-STRADDLE ADVISORY (MOTIR-2177) — gate 1's repo column, on the same
+// surface the SEALING AUTHOR reads. The dispatch half is pinned in
+// `tests/dispatch/dispatchAdvisories.test.ts`; this suite pins the subtree walk
+// and the `validate_work_item` rendering.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** MOTIR-2162's other defect: criteria discharged in a SECOND repo. */
+const STRADDLE_BODY = [
+  '## Acceptance criteria',
+  '- `motir-core/docs/decisions/code-graph-index-fleet.md` gains an offboarding section',
+  '- `motir-ai/src/services/codeRepoService.ts` removes the durable snapshot',
+  '- `motir-ai/tests/codeRepoService.test.ts` covers the removal branch',
+].join('\n');
+
+/** Connect a repo to the fixture's workspace — the candidate set the check reads. */
+async function connectRepo(
+  fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+  name: string,
+): Promise<void> {
+  const installationId = `inst-${fx.workspaceId}`;
+  const inst = await db.githubInstallation.upsert({
+    where: { installationId },
+    create: {
+      installationId,
+      workspaceId: fx.workspaceId,
+      accountLogin: 'moooon',
+      accountType: 'Organization',
+      provider: 'github',
+    },
+    update: {},
+  });
+  await db.githubRepo.create({
+    data: {
+      installationId: inst.id,
+      workspaceId: fx.workspaceId,
+      repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
+      owner: 'moooon',
+      name,
+      defaultBranch: 'main',
+      archived: false,
+      provider: 'github',
+    },
+  });
+}
+
+describe('workItemsService.validateWorkItem — the REPO-STRADDLE advisory', () => {
+  const pinned = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    title: string,
+    descriptionMd: string,
+    targetRepo: string | null,
+    parentId?: string,
+  ) =>
+    workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title, descriptionMd, targetRepo, parentId },
+      fx.ctx,
+    );
+
+  it('MOTIR-2162 REGRESSION: pinned motir-core, criteria in motir-ai — names the FIRST', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await pinned(fx, 'Code-graph offboarding', STRADDLE_BODY, 'motir-core');
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-repo-straddle',
+        path: 'motir-ai/src/services/codeRepoService.ts',
+        repo: 'motir-ai',
+        reason: 'contradiction',
+        criterionIndex: 2,
+      },
+    ]);
+  });
+
+  it('⚠️ `valid` and `blockers` are BYTE-IDENTICAL whether or not it is emitted', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const flagged = await pinned(fx, 'Flagged', STRADDLE_BODY, 'motir-core');
+    const clean = await pinned(
+      fx,
+      'Clean',
+      STRADDLE_BODY.replaceAll('motir-ai/', 'motir-core/'),
+      'motir-core',
+    );
+
+    const a = await workItemsService.validateWorkItem(fx.projectId, flagged.identifier, fx.ctx);
+    const b = await workItemsService.validateWorkItem(fx.projectId, clean.identifier, fx.ctx);
+    expect(a.advisories).toHaveLength(1);
+    expect(b.advisories).toEqual([]);
+    expect({ valid: a.valid, blockers: a.blockers }).toEqual({
+      valid: b.valid,
+      blockers: b.blockers,
+    });
+    expect(a.valid).toBe(true);
+    expect(a.blockers).toEqual([]);
+
+    // …and the same for the issue-detail readiness both surfaces gate on.
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(flagged.identifier)).toEqual(await readinessOf(clean.identifier));
+  });
+
+  it('scans a whole SUBTREE — the story reports its straddling child', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Code-graph offboarding', 'story');
+    const child = await pinned(fx, 'The removal seam', STRADDLE_BODY, 'motir-core', story.id);
+    await pinned(
+      fx,
+      'The clean sibling',
+      '## Acceptance criteria\n- `motir-core/lib/x.ts` changes',
+      'motir-core',
+      story.id,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories.map((a) => a.item)).toEqual([child.identifier]);
+  });
+
+  it('a DONE member is not scanned for it either — its prose is history', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const shipped = await pinned(fx, 'Already shipped', STRADDLE_BODY, 'motir-core', story.id);
+    await markDone(shipped.id);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.advisories).toEqual([]);
+  });
+});
+
+describe('validate_work_item (MCP) — the REPO-STRADDLE advisory reaches the author', () => {
+  const struct = (r: CallToolResult) => r.structuredContent as unknown as WorkItemValidityDto;
+  const text = (r: CallToolResult) => JSON.stringify(r.content);
+
+  it('renders the criterion, the PATH, its repo and the SPLIT remedy — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Code-graph offboarding',
+        descriptionMd: STRADDLE_BODY,
+        targetRepo: 'motir-core',
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).blockers).toEqual([]);
+    expect(struct(res).advisories).toHaveLength(1);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('NOT a blocker');
+    expect(text(res)).toContain(
+      'criterion 2 names motir-ai/src/services/codeRepoService.ts (motir-ai)',
+    );
+    expect(text(res)).toContain('while the card pins a different targetRepo');
+    expect(text(res)).toContain('Split the card per repo');
+    // The two knowingly-uncovered forms are stated to the reader, so nobody
+    // concludes gate 1's prose has been retired (MOTIR-2177's own AC).
+    expect(text(res)).toContain('BOUNDARY-CONTRACT');
+    expect(text(res)).toContain('bare-SYMBOL');
+    await client.close();
+  });
+
+  it('says UNPINNABLE rather than "a different targetRepo" when the card pins nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Unpinnable',
+        descriptionMd: STRADDLE_BODY,
+        targetRepo: null,
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(text(res)).toContain('check whether it is UNPINNABLE rather than unpinned');
+    expect(text(res)).not.toContain('while the card pins a different targetRepo');
+    await client.close();
+  });
+
+  it('renders BOTH shape members as separate blocks when a card carries both', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Both shape defects',
+        descriptionMd: [
+          '## Acceptance criteria',
+          '- `motir-ai/src/x.ts` is updated',
+          '- the row is visible on `main`',
+        ].join('\n'),
+        targetRepo: 'motir-core',
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).advisories).toHaveLength(2);
+    // The ORDERING block's sentence …
+    expect(text(res)).toContain("which exists only AFTER the card's own PR has merged");
+    // … and the STRADDLE block's, which asks a different question and has a
+    // different remedy — neither is folded into the other.
+    expect(text(res)).toContain("discharged in a repo that is not the card's own");
+    await client.close();
+  });
+});
