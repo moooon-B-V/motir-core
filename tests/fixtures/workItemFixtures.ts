@@ -1,5 +1,6 @@
 import type {
   Executor,
+  Prisma,
   User,
   Workspace,
   WorkItem,
@@ -9,6 +10,7 @@ import type {
   WorkItemType,
 } from '@prisma/client';
 import { db } from '@/lib/db';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -96,13 +98,53 @@ export interface CreateTestWorkItemInput {
 }
 
 /**
+ * The `position` a seeded row must get: a VALID, project-globally-unique
+ * fractional-index key (`lib/workItems/positioning.ts`), appended after the
+ * highest key the project currently holds so the chain ascends in creation
+ * order. This is the same thing `scripts/plan-seed/seed.ts:396-412` does, for
+ * the same two reasons — read that comment; it is the one that learned this
+ * first.
+ *
+ * ⚠️ **NEVER write a zero-padded number here** (`String(key).padStart(6, '0')`,
+ * the shape this fixture used until MOTIR-2196). A padded number like
+ * `"000001"` has head `'0'`, which `generateKeyBetween` REJECTS
+ * (`invalid order key head: 0`) — so the next create through the real service
+ * that appends after such a row throws a raw `Error`, `classifyApiV1Error`
+ * does not recognise it, and the caller gets a bare 500 with no `code`. It is
+ * scoped to SIBLINGS, so it stayed dormant for as long as every suite that
+ * created through the API happened to create a CHILD of the seeded row; when
+ * it fires, it fires in a suite whose subject is something else entirely.
+ *
+ * ⚠️ **And the chain is GLOBAL per project, not per parent** — deliberately
+ * wider than the product's own append (which is sibling-scoped). A board
+ * column orders cards by `position` ACROSS parents, so two rows must never
+ * share a key: dropping a card between two equal-keyed neighbours calls
+ * `keyBetween(k, k)`, which throws `prev >= next` → a different 500. A single
+ * ascending chain keeps every key distinct (matching the ordering the old
+ * padded key had) while staying valid, and siblings are still created
+ * consecutively, so each parent's children sort correctly under the tree.
+ */
+export async function nextTestPosition(
+  projectId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<string> {
+  const client = tx ?? db;
+  const last = await client.workItem.findFirst({
+    where: { projectId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  return keyForAppend(last?.position ?? null);
+}
+
+/**
  * Create a work item the way the service does: allocate the per-project key
- * inside a transaction, derive the identifier, and insert the row — all
- * through the repository (which surfaces the DB triggers as typed errors).
- * `position` is a zero-padded key string: lexicographically stable and
- * sufficient for the structural-trigger tests, which never assert ordering.
- * (Tests that DO care about fractional ordering drive workItemsService, whose
- * createWorkItem mints real fractional positions.)
+ * inside a transaction, mint a real fractional-index `position`, derive the
+ * identifier, and insert the row — all through the repository (which surfaces
+ * the DB triggers as typed errors).
+ *
+ * The position is minted by {@link nextTestPosition}; read its warning before
+ * changing how this row's `position` is written.
  */
 export async function createTestWorkItem(
   fx: WorkItemFixture,
@@ -110,11 +152,12 @@ export async function createTestWorkItem(
 ): Promise<WorkItem> {
   return db.$transaction(async (tx) => {
     const key = await projectRepository.allocateWorkItemNumber(fx.projectId, tx);
+    const parentId = input.parentId ?? null;
     return workItemRepository.create(
       {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
-        parentId: input.parentId ?? null,
+        parentId,
         kind: input.kind,
         type: input.type ?? null,
         executor: input.executor ?? null,
@@ -122,7 +165,7 @@ export async function createTestWorkItem(
         identifier: `${fx.projectIdentifier}-${key}`,
         title: input.title,
         reporterId: fx.ownerId,
-        position: String(key).padStart(6, '0'),
+        position: await nextTestPosition(fx.projectId, tx),
       },
       tx,
     );

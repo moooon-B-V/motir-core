@@ -16,7 +16,8 @@ const { entitlementsService } = await import('@/lib/services/entitlementsService
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { workItemRepository } = await import('@/lib/repositories/workItemRepository');
-const { makeWorkItemFixture, createTestUser } = await import('./fixtures');
+const { makeWorkItemFixture, createTestUser, nextTestPosition } = await import('./fixtures');
+const { keyForAppend } = await import('@/lib/workItems/positioning');
 const { truncateAuthTables } = await import('./helpers/db');
 const { EntitlementExceededError } = await import('@/lib/billing/errors');
 
@@ -55,8 +56,12 @@ async function seedWorkItems(
   opts: { archived?: boolean } = {},
 ): Promise<void> {
   const archivedAt = opts.archived ? new Date() : null;
-  await db.workItem.createMany({
-    data: Array.from({ length: count }, (_, i) => ({
+  // Real fractional-index positions, chained in creation order — never a
+  // zero-padded number (see `nextTestPosition`'s warning; MOTIR-2196). Chained
+  // in memory rather than re-reading per row: this seeds hundreds of items.
+  let position = await nextTestPosition(fx.projectId);
+  const rows = Array.from({ length: count }, (_, i) => {
+    const row = {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
       kind: 'task' as const,
@@ -64,10 +69,13 @@ async function seedWorkItems(
       identifier: `${fx.projectIdentifier}-${i + 1}`,
       title: `Item ${i + 1}`,
       reporterId: fx.ownerId,
-      position: String(i + 1).padStart(6, '0'),
+      position,
       archivedAt,
-    })),
+    };
+    position = keyForAppend(position);
+    return row;
   });
+  await db.workItem.createMany({ data: rows });
 }
 
 beforeEach(async () => {
@@ -102,7 +110,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
         identifier: `${fx.projectIdentifier}-250`,
         title: 'Item 250',
         reporterId: fx.ownerId,
-        position: '000250',
+        position: await nextTestPosition(fx.projectId),
       },
     });
 
@@ -189,6 +197,16 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     const orgId = await orgIdOf(fx.workspaceId);
     await seedWorkItems(fx, 249);
 
+    // Both positions are minted BEFORE the race, and distinct: two racing
+    // transactions would each read the same last sibling and mint the same
+    // key, and duplicate positions are the second half of the trap
+    // `nextTestPosition` warns about (keyBetween(k, k) throws).
+    const racePosition = await nextTestPosition(fx.projectId);
+    const positions: Record<number, string> = {
+      250: racePosition,
+      251: keyForAppend(racePosition),
+    };
+
     const attempt = (key: number) =>
       db.$transaction(async (tx) => {
         await entitlementsService.assertWithinWorkItemCap(orgId, tx);
@@ -201,7 +219,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
             identifier: `${fx.projectIdentifier}-${key}`,
             title: `race ${key}`,
             reporterId: fx.ownerId,
-            position: String(key).padStart(6, '0'),
+            position: positions[key]!,
           },
           tx,
         );

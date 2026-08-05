@@ -9,6 +9,10 @@
 //   createTestWorkItem       → a work item (allocate-key + create dance)
 //   createTestLink           → a work-item link
 //   makeWorkItemFixture      → user + workspace + project bundle (+ ctx)
+//   nextTestPosition         → the real fractional-index `position` a seeded
+//                              row must carry (never a zero-padded number —
+//                              MOTIR-2196; read its doc comment before
+//                              hand-writing a `position` anywhere)
 
 export { createTestUser, TEST_PASSWORD } from './userFixtures';
 export type { CreateTestUserOptions } from './userFixtures';
@@ -19,7 +23,12 @@ export type { CreateTestWorkspaceOptions, CreateTestWorkspaceResult } from './wo
 export { createTestProject } from './projectFixtures';
 export type { CreateTestProjectOptions } from './projectFixtures';
 
-export { makeWorkItemFixture, createTestWorkItem, createTestLink } from './workItemFixtures';
+export {
+  makeWorkItemFixture,
+  createTestWorkItem,
+  createTestLink,
+  nextTestPosition,
+} from './workItemFixtures';
 export type {
   WorkItemFixture,
   MakeWorkItemFixtureOptions,

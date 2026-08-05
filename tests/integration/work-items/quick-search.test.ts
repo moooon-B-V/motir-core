@@ -13,7 +13,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { usersService } from '@/lib/services/usersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { makeWorkItemFixture } from '../../fixtures';
+import { makeWorkItemFixture, nextTestPosition } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 6.9.1 — the reusable server-side issue quick-search read.
@@ -69,7 +69,7 @@ async function seedItem(args: {
         identifier: `${args.identifier}-${key}`,
         title: args.title,
         reporterId: args.reporterId,
-        position: String(key).padStart(6, '0'),
+        position: await nextTestPosition(args.projectId, tx),
       },
       tx,
     );
