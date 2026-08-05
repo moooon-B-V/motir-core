@@ -1,7 +1,13 @@
 import { z } from 'zod/v4';
 import type { ZodType } from 'zod/v4';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
-import { dispatchPromptSchema } from '@/lib/api/v1/workLoop/schema';
+import {
+  dispatchPromptSchema,
+  integrationBodySchema,
+  integrationResultSchema,
+  sessionCloseOutBodySchema,
+  sessionCloseOutSchema,
+} from '@/lib/api/v1/workLoop/schema';
 
 // The WORK-LOOP operation declarations (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237). Paths, verbs and scopes come from ADR Amendment 6 Q1/Q2; the
@@ -65,9 +71,76 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // malformed key or an unsafe `sessionBranch`.
     errorStatuses: [404, 422],
   }),
+
+  // ── Session close-out (Subtask 11.7.4 — MOTIR-2238) ─────────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/integration',
+    operationId: 'recordWorkItemIntegration',
+    summary: 'Record a work item as integrated on a session branch',
+    description:
+      'Record that a work item’s work has been integrated onto a session branch: it moves to ' +
+      '“In review” and records the branch, in ONE transaction, which unblocks its dependents ' +
+      'while the session pull request awaits a human merge. Optionally self-report the ' +
+      'implementation harness and model (`implementationSource` defaults to `byok`); omit all ' +
+      'three to leave the item’s recorded provenance untouched. Honors the project’s workflow ' +
+      'rules — an item with no legal path to “In review” is refused and its branch is left ' +
+      'unchanged.',
+    scope: 'integration',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item’s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: integrationBodySchema,
+      description: 'The session branch the work was integrated onto, and optional provenance.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: integrationResultSchema },
+      description: 'The item’s new status, its recorded branch and its provenance.',
+    },
+    // 422 covers a malformed key, a failed body validation, and the workflow's
+    // own refusal (`ILLEGAL_TRANSITION`).
+    errorStatuses: [404, 422],
+  }),
+
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/sessions/complete',
+    operationId: 'completeSession',
+    summary: 'Close out a merged session branch',
+    description:
+      'Close out a session branch after its pull request is merged: every work item recorded ' +
+      'on the branch moves to “Done” and its recorded branch is cleared. Returns a PER-ITEM ' +
+      'outcome (`completed` / `already_done` / `failed`) — a partial close-out is a real ' +
+      'result, not an error: the items that could close DID, and the ones that could not are ' +
+      'named with a reason. Read the results; do not infer an outcome from their count. A ' +
+      'branch nothing is recorded on returns an empty list, not a 404. The branch travels in ' +
+      'the BODY because a git ref routinely contains `/`.',
+    scope: 'integration',
+    parameters: [],
+    requestBody: {
+      schema: sessionCloseOutBodySchema,
+      description: 'The merged session branch, and optional provenance for every item closed.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: sessionCloseOutSchema },
+      description: 'The branch and one outcome per item that was recorded on it.',
+    },
+    errorStatuses: [422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
 export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
+  IntegrationResult: integrationResultSchema,
+  SessionCloseOut: sessionCloseOutSchema,
 };

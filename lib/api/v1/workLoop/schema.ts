@@ -450,3 +450,117 @@ export const activityChangeSchema = z.object({
   actor: z.object({ userId: z.string(), name: z.string().nullable() }),
   parts: z.array(activityPartSchema),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The close-out mappers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The body BOTH close-out writes accept.
+ *
+ * `sessionBranch` rides in the body on both, and on the bulk close that is a
+ * DECISION rather than a convention (ADR Amendment 6 Q1): a session branch is a
+ * git ref and routinely contains `/`, a Next.js `[param]` segment does not match
+ * one, and `%2F` is normalised away by proxies before the route ever sees it. A
+ * body field carries the ref exactly as the caller wrote it.
+ *
+ * The provenance triple is a SELF-REPORT, so `source` admits only the two
+ * self-reportable values — `hosted` is never accepted on this seam.
+ */
+export const closeOutProvenanceBodySchema = z.object({
+  implementationSource: z.enum(['byok', 'manual']).optional(),
+  implementationHarness: z.string().min(1).optional(),
+  implementationModel: z.string().min(1).optional(),
+});
+
+/** `POST /api/v1/work-items/{key}/integration`. */
+export const integrationBodySchema = z
+  .object({ sessionBranch: z.string().min(1).max(200) })
+  .extend(closeOutProvenanceBodySchema.shape)
+  .strict();
+
+/** `POST /api/v1/sessions/complete`. */
+export const sessionCloseOutBodySchema = z
+  .object({ sessionBranch: z.string().min(1).max(200) })
+  .extend(closeOutProvenanceBodySchema.shape)
+  .strict();
+
+/**
+ * The provenance triple as the SERVICE takes it, or `undefined` when the caller
+ * reported none.
+ *
+ * The `undefined` is load-bearing and is why this is a function rather than a
+ * spread at each route: passing a half-built object would stamp `byok` over a
+ * hosted run's own record. Omitted → the item's recorded provenance is left
+ * exactly as it is.
+ */
+export function toProvenanceInput(body: {
+  implementationSource?: 'byok' | 'manual';
+  implementationHarness?: string;
+  implementationModel?: string;
+}): { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null } | undefined {
+  if (
+    body.implementationSource === undefined &&
+    body.implementationHarness === undefined &&
+    body.implementationModel === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    ...(body.implementationSource === undefined ? {} : { source: body.implementationSource }),
+    harness: body.implementationHarness ?? null,
+    model: body.implementationModel ?? null,
+  };
+}
+
+export type V1IntegrationResult = z.infer<typeof integrationResultSchema>;
+export type V1SessionCloseOut = z.infer<typeof sessionCloseOutSchema>;
+
+/** What `markIntegrated` returns, shaped for the wire — field by field. */
+export function presentIntegrationResult(item: {
+  identifier: string;
+  status: string;
+  sessionBranch: string | null;
+  updatedAt: string;
+  implementationSource: 'hosted' | 'byok' | 'manual' | null;
+  implementationHarness: string | null;
+  implementationModel: string | null;
+}): V1IntegrationResult {
+  return {
+    key: item.identifier,
+    status: item.status,
+    sessionBranch: item.sessionBranch,
+    updatedAt: item.updatedAt,
+    // `hosted` cannot be reported on this seam, but it CAN already be on the row
+    // (a hosted run stamped it), so the wire shape has to be able to say so. The
+    // BODY's enum is the narrow one; this is the read-back.
+    implementationSource: item.implementationSource === 'hosted' ? null : item.implementationSource,
+    implementationHarness: item.implementationHarness,
+    implementationModel: item.implementationModel,
+  };
+}
+
+/**
+ * What the bulk close returns — the per-item outcomes, verbatim.
+ *
+ * ⚠️ The per-item result IS the payload. A branch with a dozen items can
+ * legitimately close nine and skip three, and that is neither a failure nor a
+ * uniform success: the underlying write deliberately does not roll back the nine.
+ * Nothing here collapses the list into a count or a boolean, and a client reports
+ * what came back rather than re-deriving an outcome from a length.
+ */
+export function presentSessionCloseOut(result: {
+  sessionBranch: string;
+  results: { key: string; outcome: 'completed' | 'already_done' | 'failed'; reason?: string }[];
+}): V1SessionCloseOut {
+  return {
+    sessionBranch: result.sessionBranch,
+    results: result.results.map((item) => ({
+      key: item.key,
+      outcome: item.outcome,
+      // Present only on `failed` — an `undefined` here is an absent key on the
+      // wire, which is what the schema declares.
+      ...(item.reason === undefined ? {} : { reason: item.reason }),
+    })),
+  };
+}

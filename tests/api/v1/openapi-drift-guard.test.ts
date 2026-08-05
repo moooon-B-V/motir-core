@@ -194,7 +194,7 @@ describe('every operation’s REAL response validates against its declared schem
     await truncateAuthTables();
     resetRateLimitStore();
     caller = await createV1ProjectCaller({
-      scopes: ['read', 'work_items:write', 'work_items:archive', 'sprints:write'],
+      scopes: ['read', 'work_items:write', 'work_items:archive', 'sprints:write', 'integration'],
     });
     const pk = caller.projectKey;
 
@@ -392,6 +392,34 @@ describe('every operation’s REAL response validates against its declared schem
       () => import('@/app/api/v1/work-items/[key]/restore/route'),
       send(`/api/v1/work-items/${key}/restore`, 'POST'),
       { key },
+    );
+
+    // ── Session close-out (Story 11.7) ──────────────────────────────────────
+    // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
+    // `in_review` and `completeSession` then closes it, so driving them on the
+    // item every other operation shares would change the state those drives
+    // asserted against.
+    const closing = await createItem('An item to integrate');
+    {
+      const { POST } = await import('@/app/api/v1/work-items/[key]/transitions/route');
+      const res = await POST(
+        send(`/api/v1/work-items/${closing}/transitions`, 'POST', { status: 'in_progress' }),
+        { params: Promise.resolve({ key: closing }) },
+      );
+      expect(res.status, 'seeding the integration item').toBe(200);
+    }
+    await drive(
+      'recordWorkItemIntegration',
+      () => import('@/app/api/v1/work-items/[key]/integration/route'),
+      send(`/api/v1/work-items/${closing}/integration`, 'POST', {
+        sessionBranch: 'session/drift-guard',
+      }),
+      { key: closing },
+    );
+    await drive(
+      'completeSession',
+      () => import('@/app/api/v1/sessions/complete/route'),
+      send('/api/v1/sessions/complete', 'POST', { sessionBranch: 'session/drift-guard' }),
     );
   }, 120_000);
 

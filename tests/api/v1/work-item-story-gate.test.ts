@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
-import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { TOKEN_SCOPES, TOOL_SCOPES } from '@/lib/mcp/scopes';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   auditV1RouteSource,
@@ -104,6 +104,14 @@ describe('gate — the work-item route surface exists and is clean', () => {
       // `sprints:write`, including the membership move that happens to end in
       // `/work-items`.
       if (/\bsprints\b/.test(file) || /\bbacklog\b/.test(file)) return 'sprints:write';
+      // Story 11.7's two close-out writes. ADR §3 has a row of its own for them
+      // — "Mark-integrated / complete-session (external-agent writes) →
+      // `integration`" — and Amendment 6 Q2 pins that v1 MIRRORS the shipped
+      // `lib/mcp/scopes.ts` entry rather than re-deriving one. So the expectation
+      // is READ OFF that map: if the shared map ever moved these operations, this
+      // guard would follow it instead of contradicting it.
+      if (/\/integration\//.test(file)) return TOOL_SCOPES.mark_integrated;
+      if (/\/sessions\//.test(file)) return TOOL_SCOPES.complete_session;
       return 'work_items:write';
     };
 
