@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import { workItemKeySchema } from '@/lib/api/v1/workItems/schema';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
 // The v1 WORK-LOOP resources, declared once (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237). The paths, verbs, scopes and response shapes are pinned by ADR
@@ -562,5 +563,114 @@ export function presentSessionCloseOut(result: {
       // wire, which is what the schema declares.
       ...(item.reason === undefined ? {} : { reason: item.reason }),
     })),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The plan mappers (11.7.5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type V1PlanOutcome = z.infer<typeof planOutcomeSchema>;
+export type V1Plan = z.infer<typeof planSchema>;
+
+/** The job handle both 202 endpoints return. */
+export function presentPlanJobHandle(result: { jobId: string; planId: string }): V1PlanJobHandle {
+  return {
+    jobId: result.jobId,
+    planId: result.planId,
+    statusUrl: planStatusUrl(result.planId),
+  };
+}
+
+/**
+ * What became of a submitted job — field by field.
+ *
+ * `projectId` is DROPPED rather than mapped: it is an internal cuid, and §7's
+ * rule is that an identifier on the wire is the one a user sees. A caller who
+ * asked about this plan already knows which project it asked in.
+ */
+export function presentPlanOutcome(outcome: PlanOutcomeDto): V1PlanOutcome {
+  return {
+    planId: outcome.planId,
+    status: outcome.status,
+    origin: outcome.origin,
+    jobId: outcome.jobId,
+    // RENAMED from the DTO's `itemCount`: "item" means WORK ITEM everywhere else
+    // on this API, and a client reading `itemCount` off a plan would reasonably
+    // believe that many work items exist. None do until the plan is approved.
+    proposalCount: outcome.itemCount,
+    createdAt: outcome.createdAt,
+    plannedAt: outcome.plannedAt,
+    decidedAt: outcome.decidedAt,
+    job:
+      outcome.job === null
+        ? null
+        : {
+            status: outcome.job.status,
+            reachable: outcome.job.reachable,
+            failure:
+              outcome.job.failure === null
+                ? null
+                : { code: outcome.job.failure.code, message: outcome.job.failure.message },
+          },
+  };
+}
+
+/**
+ * A plan WITH its proposals — field by field, and NEVER a cuid.
+ *
+ * `workItemId` on a `modify` / `remove` is the internal id, which §7 forbids on
+ * the wire; `keyOfId` resolves it to the `MOTIR-<n>` a client can act on. An id
+ * that does not resolve — a deleted target, or one in a project this caller may
+ * not browse — becomes `null` rather than leaking the cuid, exactly as
+ * `presentWorkItemRef` degrades an unresolvable parent.
+ *
+ * An `add`'s target is `null` because no work item exists yet, and THAT null is
+ * the contract: it is how a client tells a proposal from a work item without
+ * reading prose.
+ */
+export function presentPlan(
+  plan: PlanWithItemsDto,
+  keyOfId: (id: string) => string | undefined,
+): V1Plan {
+  return {
+    id: plan.id,
+    status: plan.status,
+    origin: plan.origin,
+    title: plan.title,
+    summary: plan.summary,
+    sourceJobId: plan.sourceJobId,
+    proposalCount: plan.itemCount,
+    createdAt: plan.createdAt,
+    plannedAt: plan.plannedAt,
+    decidedAt: plan.decidedAt,
+    proposals: plan.items.map((item) => ({
+      id: item.id,
+      op: item.op,
+      workItemKey: item.workItemId === null ? null : (keyOfId(item.workItemId) ?? null),
+      proposedFields:
+        item.proposedFields === null ? null : presentProposedFields(item.proposedFields),
+      patch: item.patch === null ? null : { ...item.patch },
+      parentRef: item.parentRef,
+      blockedByRefs: item.blockedByRefs,
+    })),
+  };
+}
+
+/** An `add`'s proposed values — shaped explicitly, so a field the planner starts
+ *  sending for an internal reason does not become public API by accident. */
+function presentProposedFields(
+  fields: PlanItemProposedFields,
+): z.infer<typeof planProposalFieldsSchema> {
+  return {
+    title: fields.title,
+    kind: fields.kind ?? null,
+    type: fields.type ?? null,
+    priority: fields.priority ?? null,
+    executor: fields.executor ?? null,
+    storyPoints: fields.storyPoints ?? null,
+    estimateMinutes: fields.estimateMinutes ?? null,
+    descriptionMd: fields.descriptionMd ?? null,
+    targetRepo: fields.targetRepo ?? null,
   };
 }

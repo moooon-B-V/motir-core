@@ -188,16 +188,18 @@ second error shape into the same codebase.
 
 The status table — each row is the condition that produces it:
 
-| Status  | Condition                                                                                                                                                                                                              |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**                                                                                                                |
-| **403** | A valid token whose granted scopes do not include the required one                                                                                                                                                     |
-| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer                                                                                                                     |
-| **409** | A conflict with existing STATE, not a malformed request — e.g. creating a link that already exists (added 2026-08-03 by Subtask 11.2.9; likewise a new condition, permitted by §8)                                     |
-| **412** | An `If-Match` precondition failed — the resource moved since the validator was issued (added 2026-08-03 by Subtask 11.2.6; a NEW condition getting a status, which §8 permits, not an existing condition changing one) |
-| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation                                                                                                               |
-| **429** | The token's rate-limit budget is exhausted (§6)                                                                                                                                                                        |
-| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                                                                                                                                          |
+| Status  | Condition                                                                                                                                                                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**                                                                                                                                                       |
+| **403** | A valid token whose granted scopes do not include the required one                                                                                                                                                                                            |
+| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer                                                                                                                                                            |
+| **409** | A conflict with existing STATE, not a malformed request — e.g. creating a link that already exists (added 2026-08-03 by Subtask 11.2.9; likewise a new condition, permitted by §8)                                                                            |
+| **412** | An `If-Match` precondition failed — the resource moved since the validator was issued (added 2026-08-03 by Subtask 11.2.6; a NEW condition getting a status, which §8 permits, not an existing condition changing one)                                        |
+| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation                                                                                                                                                      |
+| **402** | The workspace owner's AI credits are exhausted — the request was valid and was refused for want of BALANCE (added 2026-08-05 by Subtask 11.7.5; a new condition, permitted by §8)                                                                             |
+| **429** | The token's rate-limit budget is exhausted (§6)                                                                                                                                                                                                               |
+| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                                                                                                                                                                                 |
+| **503** | A dependency the operation needs — the motir-ai planning service — could not be reached or is misconfigured (added 2026-08-05 by Subtask 11.7.5; a new condition, permitted by §8). Distinct from 500: the request was fine and a retry is the right response |
 
 Three of those rows are decisions, not defaults:
 
@@ -221,12 +223,17 @@ Three of those rows are decisions, not defaults:
 **Every response carries a request id header**, success and failure alike, so a
 developer can quote one identifier in a support conversation.
 
-> **⚠️ Amended 2026-08-05 — the SUCCESS vocabulary gains `202`; see
+> **⚠️ Amended 2026-08-05 — the SUCCESS vocabulary gains `202`, and the table
+> above gains `402` and `503`; see
 > [Amendment 6, Q3](#q3--a-job-submitting-endpoint-publishes-accepted-and-cannot-publish-a-result).**
 > The two job-submitting endpoints return before anything has been planned, so
-> "accepted" needs a status of its own. A new condition getting a status is what
-> §8 permits and what 409 and 412 already arrived by; no existing condition
-> changes status.
+> "accepted" needs a status of its own. `402` and `503` arrive with the same
+> endpoints (Subtask 11.7.5): an exhausted AI balance is neither a malformed body
+> nor a spent rate-limit window, and an upstream planning service being down is
+> not an UNEXPECTED fault, so §4's code-less 500 would tell a client nothing it
+> could act on. All three are NEW conditions getting a status, which is what §8
+> permits and what 409 and 412 already arrived by; no existing condition changes
+> status.
 >
 > **⚠️ The table above is the STATUS VOCABULARY the emitted document must cover —
 > see [Amendment 4](#amendment-4-2026-08-05--how-the-openapi-31-document-is-emitted-where-it-is-served-and-what-the-published-reference-is).**

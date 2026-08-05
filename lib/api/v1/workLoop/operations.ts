@@ -5,6 +5,9 @@ import {
   dispatchPromptSchema,
   integrationBodySchema,
   integrationResultSchema,
+  planJobHandleSchema,
+  planOutcomeSchema,
+  planSchema,
   sessionCloseOutBodySchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
@@ -136,6 +139,105 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     errorStatuses: [422],
   }),
+
+  // ── Expansion + the two plan reads (Subtask 11.7.5 — MOTIR-2239) ────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/expansions',
+    operationId: 'submitWorkItemExpansion',
+    summary: 'Submit an AI expansion of a container work item',
+    description:
+      'Submit an AI expansion of one CONTAINER work item (epic / story / task / bug): the ' +
+      'planner drafts the children it should have. Returns `202` with `{ jobId, planId, ' +
+      'statusUrl }` the moment the job is ACCEPTED — it does not wait for the planner, and ' +
+      'the body carries no result because there is none yet. ' +
+      '⚠️ IMPORTANT: this does NOT create work items. The job produces a PLAN of proposals, ' +
+      'and approving that plan in Motir is the only thing that turns a proposal into a work ' +
+      'item. Do not report expanded children as created. ' +
+      '⚠️ A submit SPENDS the token owner’s AI credits, so wrapping this call in a blind ' +
+      'retry-on-timeout costs real money — poll `statusUrl` instead of resubmitting. A leaf ' +
+      '(subtask) cannot be expanded.',
+    scope: 'work_items:write',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The container work item’s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 202,
+      body: { kind: 'object', schema: planJobHandleSchema },
+      description:
+        'The job was accepted. Nothing has been planned yet — poll `statusUrl` for the outcome.',
+    },
+    // 422: a malformed key, or a target that is not a container. 402: the
+    // owner's AI credits are exhausted. 503: motir-ai could not be reached.
+    errorStatuses: [402, 404, 422, 503],
+  }),
+
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/plans/{planId}/status',
+    operationId: 'getPlanStatus',
+    summary: 'Read what became of a submitted planning job',
+    description:
+      'Read a plan’s status (`generating` / `planned` / `approved` / `declined`), how many ' +
+      'PROPOSALS it bundles, and — while it is still generating — whether the producing job ' +
+      'is alive or already FAILED. That last distinction is the point of this endpoint: a ' +
+      'failed job leaves its plan `generating` forever, so the plan status alone cannot tell ' +
+      'you to stop polling. `job.reachable: false` means motir-ai could not be asked, not ' +
+      'that the job died. A pure read; the proposal count is NOT a count of created work items.',
+    scope: 'read',
+    parameters: [
+      {
+        name: 'planId',
+        in: 'path',
+        required: true,
+        description: 'The plan id an expansion or plan-session submit returned.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: planOutcomeSchema },
+      description: 'The plan’s status, its proposal count, and the job’s liveness.',
+    },
+    errorStatuses: [404],
+  }),
+
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/plans/{planId}',
+    operationId: 'getPlan',
+    summary: 'Read a plan with the proposals it bundles',
+    description:
+      'Read a plan WITH its proposals — what a planning pass actually proposed, not just how ' +
+      'many. Each proposal carries its `op` (`add` / `modify` / `remove`), the ' +
+      '`proposedFields` of an `add`, the `patch` of a `modify`, and the `parentRef` / ' +
+      '`blockedByRefs` that let you rebuild the proposed tree and its dependency edges. ' +
+      '⚠️ These are PROPOSALS, not work items: an `add`’s `workItemKey` is `null` and stays ' +
+      'null until the plan is approved in Motir, which is the only path from a proposal to a ' +
+      'work item. A plan still generating returns the proposals that have arrived so far.',
+    scope: 'read',
+    parameters: [
+      {
+        name: 'planId',
+        in: 'path',
+        required: true,
+        description: 'The plan id.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: planSchema },
+      description: 'The plan and its proposals.',
+    },
+    errorStatuses: [404],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -143,4 +245,7 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
   IntegrationResult: integrationResultSchema,
   SessionCloseOut: sessionCloseOutSchema,
+  PlanJobHandle: planJobHandleSchema,
+  PlanOutcome: planOutcomeSchema,
+  Plan: planSchema,
 };

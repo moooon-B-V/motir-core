@@ -15,6 +15,7 @@ import {
 } from '../../helpers/v1RouteAudit';
 import { createV1Caller, createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { createTestWorkItem } from '../../fixtures';
+import { plansService } from '@/lib/services/plansService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { truncateAuthTables } from '../../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
@@ -431,6 +432,13 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirs.ctx,
     );
 
+    // Story 11.7's plan reads need a `[planId]` the caller owns, and a foreign
+    // plan whose id must never appear either. Created through the service
+    // directly — no motir-ai involved, because a Plan row exists independently
+    // of the job that fills it.
+    const myPlan = await plansService.createPlan(mine.fixture.projectId, {}, mine.ctx);
+    const theirPlan = await plansService.createPlan(theirs.fixture.projectId, {}, theirs.ctx);
+
     const foreign = [
       theirs.workspace.id,
       theirs.user.id,
@@ -439,6 +447,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       theirItem.identifier,
       theirs.fixture.projectId,
       theirSprint.id,
+      theirPlan.id,
     ];
 
     /** Fill one `[slug]` segment with a value the CALLER legitimately owns. */
@@ -446,6 +455,7 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       if (slug === 'key') return myItem.identifier;
       if (slug === 'projectKey') return mine.projectKey;
       if (slug === 'sprintId') return mySprint.id;
+      if (slug === 'planId') return myPlan.id;
       throw new Error(
         `the cross-tenant sweep has no value for the dynamic segment [${slug}] — ` +
           'add one rather than letting the route be skipped',

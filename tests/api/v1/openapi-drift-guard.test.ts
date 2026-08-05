@@ -1,6 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// motir-ai is STUBBED, and only motir-ai. Story 11.7's expansion submit is the
+// one operation in the registry that reaches outside this process, and the
+// alternative to a stub is an `UNDRIVABLE` excuse — i.e. a declared operation
+// whose real response nothing validates, which is precisely the hole this suite
+// exists to close. The stub replaces the network hop and nothing else: the
+// route, the service, the Plan row it opens and the response it shapes are all
+// real, against real Postgres.
+vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
+  submitJob: vi.fn(async () => ({ jobId: 'job_drift_guard' })),
+}));
 import { z } from 'zod/v4';
 import { V1_OPERATIONS, findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
@@ -420,6 +432,30 @@ describe('every operation’s REAL response validates against its declared schem
       'completeSession',
       () => import('@/app/api/v1/sessions/complete/route'),
       send('/api/v1/sessions/complete', 'POST', { sessionBranch: 'session/drift-guard' }),
+    );
+
+    // ── Expansion + the two plan reads (Story 11.7) ─────────────────────────
+    // The submit is driven on the STORY (a container — a leaf cannot be
+    // expanded) and its `planId` addresses both reads, so all three validate
+    // against one real chain rather than three fixtures.
+    const submitted = await drive(
+      'submitWorkItemExpansion',
+      () => import('@/app/api/v1/work-items/[key]/expansions/route'),
+      send(`/api/v1/work-items/${key}/expansions`, 'POST'),
+      { key },
+    );
+    const planId = (submitted.body as { planId: string }).planId;
+    await drive(
+      'getPlanStatus',
+      () => import('@/app/api/v1/plans/[planId]/status/route'),
+      get(`/api/v1/plans/${planId}/status`),
+      { planId },
+    );
+    await drive(
+      'getPlan',
+      () => import('@/app/api/v1/plans/[planId]/route'),
+      get(`/api/v1/plans/${planId}`),
+      { planId },
     );
   }, 120_000);
 
