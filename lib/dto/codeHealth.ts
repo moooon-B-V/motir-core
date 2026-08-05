@@ -121,10 +121,22 @@ export interface CodeAuditSurfaceDTO {
   scanner: ExternalScannerStateDTO | null;
 }
 
-// The re-audit trigger result (MOTIR-928 · POST /v1/code-context/refresh): the two
-// queued job ids (a fresh code_audit + propose_convention). The UI uses it only to
-// enter the "re-auditing" state and poll the surface until the new audit lands.
-export interface ReauditResultDTO {
+// One repo's queued pair (MOTIR-928 · POST /v1/code-context/refresh): a fresh
+// code_audit + propose_convention, both scoped to `repoKey`.
+export interface ReauditRepoJobsDTO {
+  // The repo this pair was queued for (`owner/name`). Null ONLY for the single
+  // unscoped pair a project with NO connected repo still submits.
+  repoKey: string | null;
   auditJobId: string;
   conventionJobId: string;
+}
+
+// The re-audit trigger result. PER REPO since MOTIR-2123: the trigger fans out
+// over the connected repo SET — one pair per repo, each carrying its own
+// `repoRef` — because both motir-ai handlers derive for ONE repo per job, so a
+// single submit left four of MOTIR's five repos with no convention at all. The
+// UI uses it only to enter the "re-auditing" state and poll the surface until
+// the new audit lands.
+export interface ReauditResultDTO {
+  repos: ReauditRepoJobsDTO[];
 }

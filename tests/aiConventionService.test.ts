@@ -25,6 +25,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 const { aiConventionService } = await import('@/lib/services/aiConventionService');
 const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
+const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { NotProjectAdminError, ProjectNotFoundError } = await import('@/lib/projects/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
@@ -64,6 +65,36 @@ function rawConventionSurface(over: Partial<RawConventionSurface> = {}): RawConv
     ...over,
   };
 }
+
+/**
+ * A Motir-shaped grant for the MOTIR-2123 fan-out tests: ONE workspace, several
+ * connected repos. `githubRepoRepository.listByInstallation` orders `owner asc,
+ * name asc`, which is what makes the collapse deterministic (`motir-ai` always
+ * won) and what fixes the fan-out's expected order here.
+ */
+const THREE_REPOS = [
+  {
+    providerRepoId: '201',
+    owner: 'moooon',
+    name: 'motir-ai',
+    defaultBranch: 'main',
+    archived: false,
+  },
+  {
+    providerRepoId: '202',
+    owner: 'moooon',
+    name: 'motir-core',
+    defaultBranch: 'main',
+    archived: false,
+  },
+  {
+    providerRepoId: '203',
+    owner: 'moooon',
+    name: 'motir-gateway',
+    defaultBranch: 'master',
+    archived: false,
+  },
+];
 
 function rawAuditSurface(over: Partial<RawCodeAuditSurface> = {}): RawCodeAuditSurface {
   return {
@@ -308,7 +339,7 @@ describe('aiConventionService — project-admin gate', () => {
     expect(detected.scanner?.ingested?.tools).toEqual(['CodeQL']);
   });
 
-  it('reaudit triggers the refresh over the boundary', async () => {
+  it('reaudit triggers the refresh over the boundary (no connected repo → one unscoped pair)', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
@@ -319,7 +350,9 @@ describe('aiConventionService — project-admin gate', () => {
       project.identifier,
     );
 
-    expect(result).toEqual({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+    expect(result).toEqual({
+      repos: [{ repoKey: null, auditJobId: 'job_a', conventionJobId: 'job_c' }],
+    });
     expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
     const [tenant, context, actor] = refreshCodeAuditMock.mock.calls[0]!;
     expect(tenant).toMatchObject({
@@ -327,8 +360,91 @@ describe('aiConventionService — project-admin gate', () => {
       projectId: project.id,
       projectKey: project.identifier,
     });
+    // No installation ⇒ no repo set ⇒ no `repoRef`: byte-identical to the
+    // envelope this call sent before the fan-out landed (MOTIR-2123).
     expect(context).toEqual({ code: {} });
     expect(actor).toEqual({ userId: owner.id });
+  });
+
+  // ── The MOTIR-2123 fan-out ────────────────────────────────────────────────
+  // The defect: ONE submit derives ONE repo (motir-ai's `parseCodeAuditInput`
+  // resolves `repoRef ?? repos[0]`), so a five-repo project got one convention
+  // and four repos with nothing. These pin that the trigger now submits one
+  // audit + convention pair PER connected repo, each carrying its OWN `repoRef`.
+
+  it('reaudit fans out one pair per connected repo, each carrying its own repoRef', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-reaudit-fanout',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: THREE_REPOS,
+    });
+    let n = 0;
+    refreshCodeAuditMock.mockImplementation(() => {
+      n += 1;
+      return Promise.resolve({ auditJobId: `job_a${n}`, conventionJobId: `job_c${n}` });
+    });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+    );
+
+    // One pair per repo, in the mirror's stable order (owner asc, name asc).
+    expect(result).toEqual({
+      repos: [
+        { repoKey: 'moooon/motir-ai', auditJobId: 'job_a1', conventionJobId: 'job_c1' },
+        { repoKey: 'moooon/motir-core', auditJobId: 'job_a2', conventionJobId: 'job_c2' },
+        { repoKey: 'moooon/motir-gateway', auditJobId: 'job_a3', conventionJobId: 'job_c3' },
+      ],
+    });
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(3);
+
+    // The WHOLE context bag, exact shape: the per-repo `repoRef` — which
+    // motir-ai treats as authoritative over `repos[]` — rides beside the
+    // unchanged repo SET, so no boundary change is implied.
+    const repoSet = [
+      { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
+      { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
+      { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
+    ];
+    expect(refreshCodeAuditMock.mock.calls.map((call) => call[1])).toEqual([
+      { code: { repos: repoSet, repoRef: 'moooon/motir-ai' } },
+      { code: { repos: repoSet, repoRef: 'moooon/motir-core' } },
+      { code: { repos: repoSet, repoRef: 'moooon/motir-gateway' } },
+    ]);
+  });
+
+  it('reaudit on a SINGLE-repo project queues exactly one pair (unchanged behaviour)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-reaudit-single',
+        accountLogin: 'acme',
+        accountType: 'Organization',
+      },
+      repos: [THREE_REPOS[0]!],
+    });
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+    );
+
+    expect(result).toEqual({
+      repos: [{ repoKey: 'moooon/motir-ai', auditJobId: 'job_a', conventionJobId: 'job_c' }],
+    });
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
   });
 
   it('reaudit is blocked for a non-admin (403) without hitting the boundary', async () => {

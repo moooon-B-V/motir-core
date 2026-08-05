@@ -18,6 +18,7 @@ import type {
   CodeHealthSummaryDTO,
   ExternalScannerStateDTO,
   ExternalScannerSource,
+  ReauditRepoJobsDTO,
   ReauditResultDTO,
 } from '@/lib/dto/codeHealth';
 
@@ -197,6 +198,19 @@ export const aiConventionService = {
 
   // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →
   // "Re-audit now" action, MOTIR-1592 over the MOTIR-928 refresh seam).
+  //
+  // FANS OUT over the connected repo SET (MOTIR-2123). One submit derives ONE
+  // repo: motir-ai's `parseCodeAuditInput` resolves `repoRef ?? repos[0]` ("an
+  // audit targets ONE repo") and `proposeConvention` records that same key, so a
+  // single call left every repo but the alphabetically-first one with no
+  // convention. Both jobs must fan out TOGETHER — `resolveSourceAuditId` reads
+  // the audit for the SAME (project, repo), so a convention derived for a repo
+  // with no audit of its own would link `sourceAuditId: null`.
+  //
+  // The per-repo scope rides the EXISTING envelope: `repoRef` is authoritative
+  // over `repos[]` on the far side, so the repo set stays on `context.code`
+  // beside it and no boundary change is needed. A project with NO connected repo
+  // still submits exactly one unscoped pair — unchanged from before the fan-out.
   async reaudit(
     projectId: string,
     ctx: AccessActorContext,
@@ -208,17 +222,25 @@ export const aiConventionService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
-    const { auditJobId, conventionJobId } = await refreshCodeAudit(
-      {
-        organizationId,
-        isMeta,
-        workspaceId: ctx.workspaceId,
-        projectId,
-        projectKey,
-      },
-      { code: code ?? {} },
-      { userId: ctx.userId },
-    );
-    return { auditJobId, conventionJobId };
+    const tenant = {
+      organizationId,
+      isMeta,
+      workspaceId: ctx.workspaceId,
+      projectId,
+      projectKey,
+    };
+    const repoRefs = code?.repos.map((repo) => repo.repoRef) ?? [];
+    const targets: (string | null)[] = repoRefs.length > 0 ? repoRefs : [null];
+
+    const repos: ReauditRepoJobsDTO[] = [];
+    for (const repoKey of targets) {
+      const { auditJobId, conventionJobId } = await refreshCodeAudit(
+        tenant,
+        { code: repoKey === null ? (code ?? {}) : { ...code, repoRef: repoKey } },
+        { userId: ctx.userId },
+      );
+      repos.push({ repoKey, auditJobId, conventionJobId });
+    }
+    return { repos };
   },
 };
