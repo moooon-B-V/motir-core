@@ -59,12 +59,24 @@ function summarize(
   if (item.contextRefs.length > 0) lines.push(`Context refs: ${item.contextRefs.join(', ')}`);
   // The prose-vs-graph advisory (MOTIR-2079). Phrased as a prompt to LOOK, never
   // as a failure: the claim SUCCEEDED and the item is In Progress either way.
-  if (advisories.length > 0) {
+  const references = advisories.filter((a) => a.kind !== 'shape');
+  const shapes = advisories.filter((a) => a.kind === 'shape');
+  if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card's acceptance criteria name ` +
-        `${advisories.map((a) => `${a.referenced} (${a.referencedStatus})`).join(', ')} ` +
+        `${references.map((a) => `${a.referenced} (${a.referencedStatus})`).join(', ')} ` +
         'with no blocked_by edge to it. Verify each one is on origin/main before you branch; ' +
         'if it lives only on an open PR, wire the blocked_by edge and stop.',
+    );
+  }
+  // The ORDERING advisory (MOTIR-2175) — the one a claimer most needs up front,
+  // because it says part of the card is not this run's to finish.
+  for (const s of shapes) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): acceptance criterion ${s.criterionIndex} ` +
+        `says "${s.phrase}", which is state that exists only AFTER this card's own PR has ` +
+        'merged — and your boundary ends at PR opened. That criterion and everything below it ' +
+        'belongs to a follow-on card; build what is above the line and report the split.',
     );
   }
   if (item.descriptionMd) {
@@ -107,7 +119,14 @@ export async function runClaimNextReady(
   const [counts, advisories] = await Promise.all([
     commentsService.getCommentCountsForItems([item.id], ctx),
     buildDispatchProseAdvisories(
-      { id: item.id, identifier: item.key, descriptionMd: item.descriptionMd },
+      {
+        id: item.id,
+        identifier: item.key,
+        descriptionMd: item.descriptionMd,
+        // The ORDERING exemption's inputs (MOTIR-2175) — already on the ready row.
+        type: item.type,
+        executor: item.executor,
+      },
       ctx,
     ),
   ]);

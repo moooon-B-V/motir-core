@@ -1,0 +1,1860 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The developer documentation surface (Story 11.4 · 11.4.2)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE DEVELOPER DOCUMENTATION SURFACE.
+      Story 11.4's 11.4.2 design gate (MOTIR-2183). The one user-facing surface
+      in an otherwise headless story.
+
+      It specifies what 11.4.7 (the reference + both doors) and 11.4.8 (the guide
+      + the policy) build against:
+        A. ONE docs shell with in-page navigation, holding THREE pages — the API
+           reference (operation catalogue + operation detail), the getting-started
+           guide, and the stability & deprecation policy.
+        B. BOTH ACCESS PATHS, drawn in their PARENT surfaces:
+           * the PUBLIC door — the `Docs` item in the shipped marketing top bar,
+             which today renders as a NON-INTERACTIVE LABEL because it resolves to
+             no page (`app/(public)/explore/_components/ExploreTopBar.tsx`). This
+             design does not invent a nav pattern: it turns that existing label
+             into a real link. Plus the footer's Product column, same treatment.
+           * the IN-APP door — a link row on the shipped API-tokens settings page
+             (`app/(authed)/settings/account/api-tokens/page.tsx`), for the reader
+             with the sharpest need: someone who has just minted a PAT.
+        C. The states the real product has rather than the happy path: an
+           in-page find over ~25 operations, the mobile layout, the wide-code-block
+           rule, the spec-unavailable failure state, and dark mode.
+
+      ⚠️ WHAT THIS DESIGN DOES **NOT** OWN — see design-notes.md, which says the
+      same on both counts:
+        * The API-tokens settings page and its token manager belong to
+          `design/settings/` (account-settings + token-scopes). Panel 8 places ONE
+          affordance on it and redraws nothing else.
+        * The marketing top bar and footer belong to `design/project-square/`
+          (Story 6.13). Panel 7 changes ONE nav item's TREATMENT (label -> link)
+          and redraws nothing else.
+        * The renderer, the routes and the spec URL are ADR Amendment 4's
+          (11.4.1). This asset draws to that answer; it does not re-decide it.
+
+      RENDERER — our OWN primitives, not Scalar / Redoc / Swagger UI. ADR
+      Amendment 4 Q4 records why: a third-party reference ships a second visual
+      system that neither `data-palette` nor `data-style` reaches, and it would
+      leave this asset with nothing to specify. Every element below is therefore
+      a shipped `components/ui/*` primitive.
+
+      Built FROM the real design system: the token block is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*) — the SAME
+      block design/settings/token-scopes.mock.html uses. Colour strictly via
+      --el-*; shape strictly via element-semantic tokens; NO invented colour, no
+      raw hex for any meaning-bearing element. Chips carry the hue in the
+      BACKGROUND with --el-text-strong text (AA, finding #35).
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) The reference — catalogue + operation detail, the default view.
+        (2) Operation detail, close-up: scope, parameters, request, response,
+            errors, and the copy-pasteable authenticated `curl`.
+        (3) The catalogue's in-page FIND, filtering ~25 operations.
+        (4) Getting started — the linear read's rhythm (prose / code / callout).
+        (5) Stability & deprecation — the short prose page.
+        (6) The SPEC-UNAVAILABLE failure state.
+        (7) The PUBLIC DOOR, in the shipped marketing top bar + footer.
+        (8) The IN-APP DOOR, on the shipped API-tokens settings page.
+        (9) Mobile (390px) — the catalogue drawer and the scrolling code block.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label .note {
+        display: block;
+        margin-top: 4px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+
+      /* ── The shipped marketing chrome — markup mirrored 1:1 from
+           app/(public)/explore/_components/ExploreTopBar.tsx ─────────────── */
+      .site-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px var(--spacing-card-padding);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand .tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .brand .name {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .site-nav {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      /* The SHIPPED treatment: a future page renders as a non-interactive label. */
+      .site-nav .nav-label {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      /* The SHIPPED treatment for a nav item that resolves to a real page. */
+      .site-nav .nav-link {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-nav .nav-current {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+        text-decoration: none;
+      }
+      .site-foot {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 32px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 32px var(--spacing-card-padding);
+      }
+      .site-foot h2 {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .site-foot ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .site-foot a {
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-foot .tagline {
+        margin: 8px 0 0;
+        max-width: 22rem;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The docs shell (THIS design) ───────────────────────────────────── */
+      .docs {
+        display: flex;
+        min-height: 660px;
+      }
+      .docs-nav {
+        flex: none;
+        width: 264px;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-sidebar-bg);
+        padding: 16px 12px 24px;
+        overflow: hidden;
+      }
+      .docs-main {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 36px 40px;
+      }
+      .docs-aside {
+        flex: none;
+        width: 200px;
+        border-left: 1px solid var(--el-border);
+        padding: 28px 16px;
+      }
+      .searchbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text-faint);
+        font-size: 13px;
+      }
+      .searchbox .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        color: var(--el-text-faint);
+      }
+      .navgroup {
+        margin-top: 18px;
+      }
+      .navgroup > h3 {
+        margin: 0 0 6px;
+        padding-left: var(--spacing-control-x);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .navrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .navrow:hover {
+        background: var(--el-sidebar-item-bg-hover);
+      }
+      .navrow.is-active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .navrow .op {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── HTTP method chip — a Pill, hue in the BACKGROUND, --el-text-strong ── */
+      .verb {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .verb--get {
+        background: var(--el-tint-sky);
+      }
+      .verb--post {
+        background: var(--el-tint-mint);
+      }
+      .verb--patch {
+        background: var(--el-tint-peach);
+      }
+      .verb--delete {
+        background: var(--el-tint-rose);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--scope {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-head .hsub {
+        margin-top: 3px;
+        max-width: 54ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+
+      /* ── Docs typography ────────────────────────────────────────────────── */
+      .doc h1 {
+        margin: 0 0 6px;
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h2 {
+        margin: 28px 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h3 {
+        margin: 20px 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .doc p {
+        margin: 0 0 12px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .doc .lede {
+        max-width: 68ch;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .doc code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        padding: 1px 5px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .doc ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+      }
+
+      /* ⚠️ WIDE CONTENT SCROLLS INSIDE ITS OWN CONTAINER, never the page. */
+      .codeblock {
+        position: relative;
+        margin: 0 0 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-code-bg);
+        overflow: hidden;
+      }
+      .codeblock > pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-code-text);
+        white-space: pre;
+      }
+      .codeblock .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+      }
+      .codeblock .cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+
+      .callout {
+        display: flex;
+        gap: 10px;
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        max-width: 68ch;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .callout--warn {
+        background: var(--el-tint-peach);
+      }
+
+      /* ── The operation-detail tables ────────────────────────────────────── */
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 16px;
+        font-size: 13px;
+      }
+      table.spec th {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      table.spec td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      table.spec td .nm {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      table.spec td .ty {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .status {
+        display: inline-flex;
+        min-width: 34px;
+        justify-content: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .status--ok {
+        background: var(--el-tint-mint);
+      }
+      .status--client {
+        background: var(--el-tint-peach);
+      }
+      .status--server {
+        background: var(--el-tint-rose);
+      }
+
+      .op-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .op-path {
+        font-family: var(--font-mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .toc {
+        font-size: 12px;
+      }
+      .toc h4 {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .toc a {
+        display: block;
+        padding: 4px 0;
+        color: var(--el-text-muted);
+        text-decoration: none;
+      }
+      .toc a.is-active {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 72px 24px;
+        text-align: center;
+      }
+      .empty h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        max-width: 46ch;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .empty .glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        font-size: 20px;
+      }
+
+      .phone {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .phone .docs-main {
+        padding: 18px 16px 24px;
+      }
+      .row2 {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      /* The settings-page row grammar (mirrors design/settings/*) */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow .lbl {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .desc {
+        margin-top: 2px;
+        max-width: 58ch;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .settings-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .settings-head p {
+        margin: 4px 0 0;
+        max-width: 34rem;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      .anno {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The developer documentation surface</h1>
+        <p>
+          Story 11.4 · Subtask 11.4.2 (MOTIR-2183) — the API reference, the getting-started guide,
+          the stability policy, and the two doors that reach them. Nine panels; review each.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════ PANEL 1 — the reference, default view ════════ -->
+    <div class="panel-label">
+      Panel 1 · /api-docs — the API reference, default view
+      <span class="note">
+        ONE docs shell: a left catalogue (search + operations grouped by resource), the content
+        column, and a right in-page contents. The three pages — Reference, Getting started,
+        Stability — are the top group in the same nav, so they read as one surface rather than three
+        unrelated pages. The catalogue is the DEFAULT landing content: an integrator arriving cold
+        sees what the API can do before being asked to choose.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <a class="nav-current" href="/api-docs" aria-current="page">Docs</a>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+
+        <div class="docs">
+          <nav class="docs-nav" aria-label="API reference">
+            <div class="searchbox">
+              <span aria-hidden="true">⌕</span>Find an operation<span class="kbd">/</span>
+            </div>
+
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow is-active" href="/api-docs">API reference</a>
+              <a class="navrow" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow" href="/api-docs/stability">Stability &amp; deprecation</a>
+            </div>
+
+            <div class="navgroup">
+              <h3>Work items</h3>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>List</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Create</a>
+              <a class="navrow is-active" href="#"><span class="verb verb--get">GET</span>Read</a>
+              <a class="navrow" href="#"><span class="verb verb--patch">PATCH</span>Update</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Transitions</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Transition</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Links</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Link</a>
+              <a class="navrow" href="#"><span class="verb verb--delete">DEL</span>Unlink</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Comments</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Comment</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Archive</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Restore</a>
+            </div>
+
+            <div class="navgroup">
+              <h3>Sprints</h3>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Read</a>
+              <a class="navrow" href="#"><span class="verb verb--patch">PATCH</span>Update</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Start</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Complete</a>
+            </div>
+
+            <div class="navgroup">
+              <h3>Projects · Backlog · Ready</h3>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Projects</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Backlog</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Ready set</a>
+            </div>
+          </nav>
+
+          <main class="docs-main doc">
+            <div class="op-head">
+              <span class="verb verb--get">GET</span>
+              <span class="op-path">/api/v1/work-items/{key}</span>
+              <span class="pill pill--scope">read</span>
+            </div>
+            <p class="lede" style="margin-bottom: 18px">
+              The full work item: its own fields, its parent and children, its five link groups, its
+              readiness verdict and its comment count. The response carries an <code>ETag</code> for
+              use as an <code>If-Match</code> on a later update.
+            </p>
+
+            <h3>Request</h3>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 22%">Parameter</th>
+                  <th style="width: 14%">In</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <span class="nm">key</span><br /><span class="ty">string · required</span>
+                  </td>
+                  <td><span class="pill pill--neutral">path</span></td>
+                  <td>The work item’s <code>MOTIR-&lt;n&gt;</code> key. Never its internal id.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Example</h3>
+            <div class="codeblock">
+              <div class="cap">curl</div>
+              <button class="btn btn-sm btn-secondary copy" type="button">Copy</button>
+              <pre>
+curl https://app.motir.co/api/v1/work-items/MOTIR-1854 \
+  -H "Authorization: Bearer motir_pat_&lt;your-token&gt;"</pre
+              >
+            </div>
+
+            <h3>Responses</h3>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 12%">Status</th>
+                  <th style="width: 26%">Body</th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="status status--ok">200</span></td>
+                  <td><span class="nm">WorkItemDetail</span></td>
+                  <td>The work item.</td>
+                </tr>
+                <tr>
+                  <td><span class="status status--client">401</span></td>
+                  <td><span class="nm">ErrorBody</span></td>
+                  <td>
+                    Authentication required — the five token failures are deliberately
+                    undifferentiated.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="status status--client">403</span></td>
+                  <td><span class="nm">ErrorBody</span></td>
+                  <td>The token is valid but lacks the <code>read</code> scope.</td>
+                </tr>
+                <tr>
+                  <td><span class="status status--client">404</span></td>
+                  <td><span class="nm">ErrorBody</span></td>
+                  <td>
+                    No such item, <em>or</em> it is outside this token’s workspace — the same
+                    answer, on purpose.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="status status--client">429</span></td>
+                  <td><span class="nm">ErrorBody</span></td>
+                  <td>Budget spent. Read <code>X-RateLimit-Reset</code>.</td>
+                </tr>
+                <tr>
+                  <td><span class="status status--server">500</span></td>
+                  <td><span class="nm">InternalErrorBody</span></td>
+                  <td>An unexpected fault — no <code>code</code>, by design.</td>
+                </tr>
+              </tbody>
+            </table>
+          </main>
+
+          <aside class="docs-aside toc">
+            <h4>On this page</h4>
+            <a class="is-active" href="#">Request</a>
+            <a href="#">Example</a>
+            <a href="#">Responses</a>
+            <a href="#">Response schema</a>
+            <div
+              style="
+                margin-top: 20px;
+                border-top: 1px solid var(--el-border-soft);
+                padding-top: 14px;
+              "
+            >
+              <h4>Spec</h4>
+              <a href="/api/openapi/v1.json">openapi/v1.json</a>
+              <p
+                style="
+                  margin: 6px 0 0;
+                  font-size: 11.5px;
+                  line-height: 1.5;
+                  color: var(--el-text-faint);
+                "
+              >
+                OpenAPI 3.1 · v1.0.0
+              </p>
+            </div>
+          </aside>
+        </div>
+
+        <footer class="site-foot">
+          <div>
+            <span class="brand"
+              ><span
+                class="tile"
+                style="width: 24px; height: 24px; font-size: 12px"
+                aria-hidden="true"
+                >M</span
+              ><span class="name" style="font-size: 14px">Motir</span></span
+            >
+            <p class="tagline">
+              The AI-native way to plan, track, and ship — explore what teams are building in the
+              open.
+            </p>
+          </div>
+          <div>
+            <h2>Explore by topic</h2>
+            <ul>
+              <li><a href="#">Developer tools</a></li>
+              <li><a href="#">AI</a></li>
+              <li><a href="#">Open source</a></li>
+            </ul>
+          </div>
+          <div>
+            <h2>Product</h2>
+            <ul>
+              <li>Overview</li>
+              <li>AI planning</li>
+              <li>Boards &amp; sprints</li>
+              <li><a href="/api-docs">API docs</a> <span class="anno">NEW LINK</span></li>
+              <li>Pricing</li>
+            </ul>
+          </div>
+          <div>
+            <h2>Company</h2>
+            <ul>
+              <li>About</li>
+              <li>Blog</li>
+              <li>Open source</li>
+              <li>Contact</li>
+            </ul>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 2 — operation detail, close-up ════════ -->
+    <div class="panel-label">
+      Panel 2 · Operation detail — a WRITE, close-up
+      <span class="note">
+        The content column at full width, on the operation with the most to say: a request body, a
+        conditional header, and the two statuses Story 11.2 added (409 · 412). The order is fixed —
+        scope, request, example, responses, schema — so a reader who has read one operation can skim
+        the next. The <code>curl</code> is copy-pasteable and carries the bearer placeholder, not a
+        fake token.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 28px 36px 34px">
+        <div class="doc">
+          <div class="op-head">
+            <span class="verb verb--patch">PATCH</span>
+            <span class="op-path">/api/v1/work-items/{key}</span>
+            <span class="pill pill--scope">work_items:write</span>
+            <span class="pill pill--warning">If-Match supported</span>
+          </div>
+          <p class="lede" style="margin-bottom: 18px">
+            Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field
+            explicitly set to <code>null</code> CLEARS it.
+          </p>
+
+          <h3>Request</h3>
+          <table class="spec">
+            <thead>
+              <tr>
+                <th style="width: 22%">Parameter</th>
+                <th style="width: 14%">In</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="nm">key</span><br /><span class="ty">string · required</span></td>
+                <td><span class="pill pill--neutral">path</span></td>
+                <td>The work item’s <code>MOTIR-&lt;n&gt;</code> key.</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="nm">If-Match</span><br /><span class="ty">string · optional</span>
+                </td>
+                <td><span class="pill pill--neutral">header</span></td>
+                <td>
+                  An <code>ETag</code> from a previous read. When present, the update is refused
+                  with <strong>412</strong> if the item moved since that read. Omitting it means
+                  last-write-wins.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Body</h3>
+          <div class="codeblock">
+            <div class="cap">application/json</div>
+            <pre>
+{
+  "title":          string?,
+  "descriptionMd":  string | null?,
+  "priority":       "lowest" | "low" | "medium" | "high" | "highest"?,
+  "storyPoints":    number | null?,
+  "parentKey":      string | null?
+}</pre
+            >
+          </div>
+
+          <h3>Example</h3>
+          <div class="codeblock">
+            <div class="cap">curl · conditional update</div>
+            <button class="btn btn-sm btn-secondary copy" type="button">Copy</button>
+            <pre>
+curl -X PATCH https://app.motir.co/api/v1/work-items/MOTIR-1854 \
+  -H "Authorization: Bearer motir_pat_&lt;your-token&gt;" \
+  -H "Content-Type: application/json" \
+  -H 'If-Match: "2026-08-05T09:51:35.667Z"' \
+  -d '{"priority":"high","storyPoints":5}'</pre
+            >
+          </div>
+
+          <h3>Responses</h3>
+          <table class="spec">
+            <thead>
+              <tr>
+                <th style="width: 12%">Status</th>
+                <th style="width: 24%">Code</th>
+                <th>Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="status status--ok">200</span></td>
+                <td><span class="ty">—</span></td>
+                <td>The updated work item.</td>
+              </tr>
+              <tr>
+                <td><span class="status status--client">412</span></td>
+                <td><span class="nm">STALE_WORK_ITEM</span></td>
+                <td>The <code>If-Match</code> validator no longer matches — re-read and retry.</td>
+              </tr>
+              <tr>
+                <td><span class="status status--client">422</span></td>
+                <td>
+                  <span class="nm">ILLEGAL_PARENT_TYPE</span><br /><span class="nm"
+                    >CROSS_PROJECT_PARENT</span
+                  ><br /><span class="nm">PARENT_CYCLE</span>
+                </td>
+                <td>A malformed request the caller can fix, named precisely enough to act on.</td>
+              </tr>
+              <tr>
+                <td><span class="status status--client">404</span></td>
+                <td><span class="nm">WORK_ITEM_NOT_FOUND</span></td>
+                <td>No such item, or outside this token’s workspace.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="callout">
+            <span aria-hidden="true">◆</span>
+            <span>
+              Every response — success and failure alike — carries <code>X-Request-Id</code> and the
+              three <code>X-RateLimit-*</code> headers. Quote the request id in a support
+              conversation.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 3 — the in-page find ════════ -->
+    <div class="panel-label">
+      Panel 3 · The catalogue’s in-page FIND — ~25 operations today, more later
+      <span class="note">
+        Typing filters the catalogue in place and keeps the group headings of surviving matches, so
+        a reader learns where the operation LIVES rather than only that it exists. The count line is
+        the honest signal at scale; <code>/</code> focuses the box. Nothing navigates until a row is
+        chosen — the content column is unchanged behind the filter.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage" style="max-width: 320px">
+        <nav class="docs-nav" style="width: 100%; border-right: 0" aria-label="API reference">
+          <div class="searchbox" style="border-color: var(--el-accent); color: var(--el-text)">
+            <span aria-hidden="true">⌕</span>sprint<span class="kbd">esc</span>
+          </div>
+          <p
+            style="
+              margin: 10px 0 0;
+              padding-left: var(--spacing-control-x);
+              font-size: 11.5px;
+              color: var(--el-text-faint);
+            "
+          >
+            5 of 28 operations
+          </p>
+
+          <div class="navgroup">
+            <h3>Sprints</h3>
+            <a class="navrow" href="#"><span class="verb verb--get">GET</span>Read</a>
+            <a class="navrow" href="#"><span class="verb verb--patch">PATCH</span>Update</a>
+            <a class="navrow" href="#"><span class="verb verb--post">POST</span>Start</a>
+            <a class="navrow" href="#"><span class="verb verb--post">POST</span>Complete</a>
+          </div>
+          <div class="navgroup">
+            <h3>Projects</h3>
+            <a class="navrow" href="#"><span class="verb verb--get">GET</span>Sprints</a>
+          </div>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 4 — getting started ════════ -->
+    <div class="panel-label">
+      Panel 4 · /api-docs/getting-started — the linear read’s RHYTHM
+      <span class="note">
+        The words are 11.4.8’s; this panel fixes the rhythm they land in — numbered step heading,
+        one short paragraph, one code block, and a callout only where a reader would otherwise get
+        it wrong. Five steps, always in this order: mint → first call → paginate → read an error →
+        read the rate-limit headers. Same shell, same right-hand contents; only the content column
+        changes.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="searchbox">
+              <span aria-hidden="true">⌕</span>Find an operation<span class="kbd">/</span>
+            </div>
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/api-docs">API reference</a>
+              <a class="navrow is-active" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow" href="/api-docs/stability">Stability &amp; deprecation</a>
+            </div>
+            <div class="navgroup">
+              <h3>Work items</h3>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>List</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Create</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Read</a>
+            </div>
+          </nav>
+
+          <main class="docs-main doc">
+            <h1>Getting started</h1>
+            <p class="lede" style="margin-bottom: 20px">
+              From an account to a working call, in five steps. Everything below uses the same token
+              you mint in step 1.
+            </p>
+
+            <h2>1 · Mint a token</h2>
+            <p>
+              Settings → API tokens → <strong>New token</strong>. Choose the workspace it is bound
+              to and the scopes it carries. The secret is shown <strong>once</strong>.
+            </p>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                >A token is bound to ONE workspace and its scopes NARROW your role — they never
+                widen it.</span
+              >
+            </div>
+
+            <h2>2 · Your first call</h2>
+            <p>
+              <code>GET /api/v1/me</code> answers who the token is and what it may do, so it is the
+              call to make before any other.
+            </p>
+            <div class="codeblock">
+              <div class="cap">curl</div>
+              <button class="btn btn-sm btn-secondary copy" type="button">Copy</button>
+              <pre>
+curl https://app.motir.co/api/v1/me \
+  -H "Authorization: Bearer motir_pat_&lt;your-token&gt;"</pre
+              >
+            </div>
+
+            <h2>3 · Paginate</h2>
+            <p>
+              Collections are cursor-paged. Pass the previous response’s
+              <code>nextCursor</code> back as <code>?cursor=</code>; a <code>null</code> cursor is
+              the last page.
+            </p>
+            <div class="codeblock">
+              <div class="cap">curl · the second page</div>
+              <button class="btn btn-sm btn-secondary copy" type="button">Copy</button>
+              <pre>
+curl "https://app.motir.co/api/v1/projects/MOTIR/work-items?limit=50&amp;cursor=$CURSOR" \
+  -H "Authorization: Bearer motir_pat_&lt;your-token&gt;"</pre
+              >
+            </div>
+
+            <h2>4 · Read an error</h2>
+            <p>
+              Branch on <code>code</code>, never on <code>error</code> — the sentence is for a human
+              reading a terminal and is reworded freely.
+            </p>
+            <div class="codeblock">
+              <div class="cap">404 · application/json</div>
+              <pre>{ "code": "WORK_ITEM_NOT_FOUND", "error": "Work item not found." }</pre>
+            </div>
+
+            <h2>5 · Read the rate-limit headers</h2>
+            <p>They ride EVERY response, including the ones that failed.</p>
+            <div class="codeblock">
+              <div class="cap">response headers</div>
+              <pre>
+X-RateLimit-Limit:     600
+X-RateLimit-Remaining: 594
+X-RateLimit-Reset:     1785312000
+X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
+              >
+            </div>
+            <div class="callout callout--warn">
+              <span aria-hidden="true">▲</span>
+              <span>
+                On a <strong>429</strong>, back off until <code>X-RateLimit-Reset</code>. There is
+                no <code>Retry-After</code> — an absolute instant cannot go stale in transit.
+              </span>
+            </div>
+          </main>
+
+          <aside class="docs-aside toc">
+            <h4>On this page</h4>
+            <a href="#">1 · Mint a token</a>
+            <a class="is-active" href="#">2 · Your first call</a>
+            <a href="#">3 · Paginate</a>
+            <a href="#">4 · Read an error</a>
+            <a href="#">5 · Rate-limit headers</a>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 5 — stability & deprecation ════════ -->
+    <div class="panel-label">
+      Panel 5 · /api-docs/stability — the published promise
+      <span class="note">
+        A short prose page, deliberately narrower than the reference: it is read once, in order, and
+        then cited. The two lists are the load-bearing content, so they are the page’s only
+        structure. Generated from ADR §8 rather than re-typed (Amendment 4 Q5) — a second
+        hand-written copy of a stability promise is the same drift this story exists to prevent,
+        applied to prose.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="searchbox">
+              <span aria-hidden="true">⌕</span>Find an operation<span class="kbd">/</span>
+            </div>
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/api-docs">API reference</a>
+              <a class="navrow" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow is-active" href="/api-docs/stability">Stability &amp; deprecation</a>
+            </div>
+          </nav>
+
+          <main class="docs-main doc">
+            <h1>Stability &amp; deprecation</h1>
+            <p class="lede" style="margin-bottom: 20px">
+              What <code>v1</code> promises, what may change without notice, and how anything is
+              ever taken away.
+            </p>
+
+            <h2>Additive, without notice</h2>
+            <ul>
+              <li>A new endpoint.</li>
+              <li>A new optional query parameter.</li>
+              <li>A new field on a response object.</li>
+              <li>A new value on a field documented as open-ended.</li>
+              <li>A new error <code>code</code> for a NEW condition.</li>
+              <li>A raised rate-limit budget.</li>
+            </ul>
+
+            <h2>Never, without a new major</h2>
+            <ul>
+              <li>Removing or renaming a field.</li>
+              <li>Changing a field’s type or nullability.</li>
+              <li>Removing or re-purposing an error <code>code</code>.</li>
+              <li>Changing an existing status for an existing condition.</li>
+              <li>Tightening a limit, or making an optional parameter required.</li>
+            </ul>
+
+            <div class="callout callout--warn">
+              <span aria-hidden="true">▲</span>
+              <span>
+                <strong>Your side of the promise.</strong> A client MUST tolerate unknown fields and
+                unknown enum values, and MUST NOT parse the human <code>error</code> sentence. A
+                client that rejects unknown fields will break on a change this page calls safe.
+              </span>
+            </div>
+
+            <h2>Deprecation</h2>
+            <p>
+              A deprecated operation or field is marked <code>deprecated: true</code>
+              <strong>in the spec</strong>, carries its reason and its replacement in the
+              description, and keeps working for the announced window. The spec is the announcement
+              channel because it is the one artifact every client already reads.
+            </p>
+
+            <h2>How <code>v2</code> arrives</h2>
+            <p>
+              As a second document at a second path, served <em>alongside</em> <code>v1</code>.
+              <code>v1</code> is not rewritten and does not stop working the day <code>v2</code>
+              ships; deprecating it is itself an announcement under the same window.
+            </p>
+          </main>
+
+          <aside class="docs-aside toc">
+            <h4>On this page</h4>
+            <a class="is-active" href="#">Additive</a>
+            <a href="#">Never</a>
+            <a href="#">Deprecation</a>
+            <a href="#">How v2 arrives</a>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 6 — the failure state ════════ -->
+    <div class="panel-label">
+      Panel 6 · The SPEC-UNAVAILABLE state
+      <span class="note">
+        The reference renders from <code>/api/openapi/v1.json</code>. When that cannot be read the
+        page must not render an empty catalogue that reads as “this API has no operations” — it says
+        what happened, what the reader can still do (the spec URL is public; the guide and the
+        policy do not depend on it), and offers a retry. The shell and both doors stay intact, so a
+        reader is never stranded.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="searchbox" style="opacity: 0.5">
+              <span aria-hidden="true">⌕</span>Find an operation
+            </div>
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/api-docs">API reference</a>
+              <a class="navrow" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow" href="/api-docs/stability">Stability &amp; deprecation</a>
+            </div>
+          </nav>
+          <main class="docs-main">
+            <div class="empty">
+              <span class="glyph" aria-hidden="true">▲</span>
+              <h2>The API reference could not be loaded</h2>
+              <p>
+                The specification did not respond. Getting started and the stability policy are
+                unaffected — and the spec is public, so you can fetch it yourself.
+              </p>
+              <span style="display: inline-flex; gap: 8px; margin-top: 4px">
+                <button class="btn btn-sm btn-primary" type="button">Try again</button>
+                <a class="btn btn-sm btn-secondary" href="/api/openapi/v1.json"
+                  >Open openapi/v1.json</a
+                >
+              </span>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 7 — the PUBLIC door ════════ -->
+    <div class="panel-label">
+      Panel 7 · THE PUBLIC DOOR — in the shipped marketing chrome
+      <span class="note">
+        NOT a new nav pattern. The shipped <code>ExploreTopBar</code> already renders
+        <code>Product</code>, <code>Docs</code> and <code>Pricing</code> as NON-INTERACTIVE LABELS,
+        for the reason its own comment gives: they “are future marketing pages, so they render as
+        non-interactive labels rather than dead links a crawler would 404 on.” This design makes
+        <code>Docs</code> the first of the three to resolve, so it takes the treatment the bar
+        already has for a real page — the same one <code>Explore</code> uses. The footer’s Product
+        column gains an “API docs” link on the same reasoning. BEFORE and AFTER are shown together
+        because the change is a treatment, not a new element.
+        <strong
+          >This design owns only these two items; the bar and the footer belong to
+          <code>design/project-square/</code>.</strong
+        >
+      </span>
+    </div>
+    <div class="panel">
+      <div class="row2">
+        <div style="flex: 1; min-width: 0">
+          <p
+            style="
+              margin: 0 0 8px;
+              font-family: var(--font-mono);
+              font-size: 11px;
+              color: var(--el-text-faint);
+            "
+          >
+            BEFORE — shipped today
+          </p>
+          <div class="stage">
+            <header class="site-top">
+              <span class="brand"
+                ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+              >
+              <nav class="site-nav" aria-label="Product">
+                <span class="nav-label">Product</span>
+                <span class="nav-label">Docs</span>
+                <span class="nav-label">Pricing</span>
+                <a class="nav-current" href="/explore" aria-current="page">Explore</a>
+              </nav>
+              <span style="display: inline-flex; gap: 8px">
+                <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+                <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+              </span>
+            </header>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <p
+            style="
+              margin: 0 0 8px;
+              font-family: var(--font-mono);
+              font-size: 11px;
+              color: var(--el-text-faint);
+            "
+          >
+            AFTER — this design
+          </p>
+          <div class="stage">
+            <header class="site-top">
+              <span class="brand"
+                ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+              >
+              <nav class="site-nav" aria-label="Product">
+                <span class="nav-label">Product</span>
+                <a class="nav-link" href="/api-docs">Docs</a><span class="anno">NOW A LINK</span>
+                <span class="nav-label">Pricing</span>
+                <a class="nav-current" href="/explore" aria-current="page">Explore</a>
+              </nav>
+              <span style="display: inline-flex; gap: 8px">
+                <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+                <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+              </span>
+            </header>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px">
+        <p
+          style="
+            margin: 0 0 8px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--el-text-faint);
+          "
+        >
+          AFTER — the footer’s Product column
+        </p>
+        <div class="stage">
+          <footer class="site-foot">
+            <div>
+              <span class="brand"
+                ><span
+                  class="tile"
+                  style="width: 24px; height: 24px; font-size: 12px"
+                  aria-hidden="true"
+                  >M</span
+                ><span class="name" style="font-size: 14px">Motir</span></span
+              >
+              <p class="tagline">
+                The AI-native way to plan, track, and ship — explore what teams are building in the
+                open.
+              </p>
+            </div>
+            <div>
+              <h2>Explore by topic</h2>
+              <ul>
+                <li><a href="#">Developer tools</a></li>
+                <li><a href="#">AI</a></li>
+                <li><a href="#">Open source</a></li>
+              </ul>
+            </div>
+            <div>
+              <h2>Product</h2>
+              <ul>
+                <li>Overview</li>
+                <li>AI planning</li>
+                <li>Boards &amp; sprints</li>
+                <li><a href="/api-docs">API docs</a> <span class="anno">NEW LINK</span></li>
+                <li>Pricing</li>
+              </ul>
+            </div>
+            <div>
+              <h2>Company</h2>
+              <ul>
+                <li>About</li>
+                <li>Blog</li>
+                <li>Open source</li>
+                <li>Contact</li>
+              </ul>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 8 — the IN-APP door ════════ -->
+    <div class="panel-label">
+      Panel 8 · THE IN-APP DOOR — on the shipped API-tokens settings page
+      <span class="note">
+        The reader with the sharpest need is someone who has just minted a PAT and is holding a
+        secret with nothing to do with it. The affordance is a single link row placed directly under
+        the page header, ABOVE the CLI panel and the token manager — the same “the route out reads
+        first” argument MOTIR-1869 used to put <code>ConnectCliPanel</code> above the token list,
+        applied one line higher, because reading the docs is the cheaper first step than either.
+        <strong
+          >This design owns ONLY the row marked NEW. The header, the CLI panel and the token manager
+          below it belong to <code>design/settings/</code> (account-settings + token-scopes) and are
+          drawn here only as context — nothing about them changes.</strong
+        >
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 28px 36px 34px">
+        <div class="settings-head" style="margin-bottom: 18px">
+          <h2>API tokens</h2>
+          <p>
+            Personal access tokens authenticate the CLI, the MCP server and anything you build
+            against the public API.
+          </p>
+        </div>
+
+        <div class="card" style="border-color: var(--el-accent)">
+          <div class="card-body" style="padding-top: 14px; padding-bottom: 14px">
+            <div class="srow">
+              <div>
+                <div class="lbl">
+                  Build against the API <span class="anno">NEW — THIS DESIGN</span>
+                </div>
+                <div class="desc">
+                  Every endpoint, its scopes and a copy-pasteable example — plus a five-step guide
+                  from a fresh token to a working call.
+                </div>
+              </div>
+              <span style="display: inline-flex; flex: none; gap: 8px">
+                <a class="btn btn-sm btn-secondary" href="/api-docs/getting-started"
+                  >Getting started</a
+                >
+                <a class="btn btn-sm btn-primary" href="/api-docs">API reference</a>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px; opacity: 0.55">
+          <div class="card-head">
+            <div>
+              <h3>Connect the CLI</h3>
+              <div class="hsub">
+                Owned by <code>design/cli-connect</code> — drawn as context, unchanged.
+              </div>
+            </div>
+            <span class="pill pill--neutral">existing</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px; opacity: 0.55">
+          <div class="card-head">
+            <div>
+              <h3>Your tokens</h3>
+              <div class="hsub">
+                Owned by <code>design/settings</code> (account-settings Panels 3–8 · token-scopes) —
+                drawn as context, unchanged.
+              </div>
+            </div>
+            <span class="pill pill--neutral">existing</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 9 — mobile ════════ -->
+    <div class="panel-label">
+      Panel 9 · Mobile — 390 px
+      <span class="note">
+        The catalogue collapses to a disclosure button above the content (there is no room for a 264
+        px rail), and the right-hand contents drops entirely — on a phone the page IS the contents.
+        The rule that matters: a <code>curl</code> line is wider than any phone, so the CODE BLOCK
+        scrolls inside its own container and the PAGE never scrolls sideways. The tables become
+        stacked definition rows rather than shrinking columns to unreadable widths.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="phone">
+        <header class="site-top" style="padding: 10px 16px">
+          <span class="brand"
+            ><span
+              class="tile"
+              style="width: 24px; height: 24px; font-size: 12px"
+              aria-hidden="true"
+              >M</span
+            ><span class="name" style="font-size: 14px">Motir</span></span
+          >
+          <a class="btn btn-sm btn-primary" href="/sign-up">Start free</a>
+        </header>
+        <div class="docs-main doc">
+          <button
+            class="btn btn-sm btn-secondary"
+            type="button"
+            style="width: 100%; justify-content: space-between; margin-bottom: 16px"
+          >
+            <span>API reference · 28 operations</span><span aria-hidden="true">▾</span>
+          </button>
+
+          <div class="op-head" style="gap: 8px">
+            <span class="verb verb--get">GET</span>
+            <span class="op-path" style="font-size: 13px">/api/v1/work-items/{key}</span>
+          </div>
+          <span class="pill pill--scope">read</span>
+          <p style="margin-top: 12px; font-size: 13.5px">
+            The full work item: its fields, its parent and children, its five link groups, its
+            readiness verdict and its comment count.
+          </p>
+
+          <h3>Example</h3>
+          <div class="codeblock">
+            <div class="cap">curl · scrolls here, not the page →</div>
+            <pre>
+curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer motir_pat_&lt;your-token&gt;"</pre
+            >
+          </div>
+
+          <h3>Responses</h3>
+          <div style="border-top: 1px solid var(--el-border-soft)">
+            <div class="srow">
+              <span class="status status--ok">200</span
+              ><span style="font-size: 12.5px; color: var(--el-text-secondary)"
+                >WorkItemDetail</span
+              >
+            </div>
+            <div class="srow">
+              <span class="status status--client">404</span
+              ><span style="font-size: 12.5px; color: var(--el-text-secondary)"
+                >No such item, or outside your workspace</span
+              >
+            </div>
+            <div class="srow">
+              <span class="status status--client">429</span
+              ><span style="font-size: 12.5px; color: var(--el-text-secondary)">Budget spent</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

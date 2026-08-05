@@ -52,6 +52,32 @@ const inputSchema = {
     ),
 };
 
+/**
+ * The advisory one-liners, one per family (MOTIR-2079 + MOTIR-2175). Both are
+ * already rendered INSIDE the prompt; repeating them at the top is what makes a
+ * caller who skims the summary see them at all.
+ */
+function advisorySummary(dto: DispatchPromptDto): string[] {
+  const references = dto.advisories.filter((a) => a.kind !== 'shape');
+  const shapes = dto.advisories.filter((a) => a.kind === 'shape');
+  const lines: string[] = [];
+  if (references.length > 0) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): its acceptance criteria ` +
+        `name ${references.map((a) => `${a.referenced} (${a.referencedStatus})`).join(', ')} ` +
+        'with no blocked_by edge. Verify each is on origin/main before branching.',
+    );
+  }
+  for (const s of shapes) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): acceptance criterion ` +
+        `${s.criterionIndex} says "${s.phrase}", state that exists only after this card's own ` +
+        'PR has merged. Cut the card there — the remainder belongs to a follow-on card.',
+    );
+  }
+  return lines;
+}
+
 /** Compact summary for the human watching the session; the prompt itself rides
  *  in `structuredContent` (it is the machine payload, and long). */
 function summarize(dto: DispatchPromptDto): string {
@@ -66,13 +92,7 @@ function summarize(dto: DispatchPromptDto): string {
     // The advisory is inside the prompt already; naming it up here is what makes
     // a caller that skims the summary see it (MOTIR-2079 — the whole incident was
     // a signal that was emitted correctly and read by nobody).
-    ...(dto.advisories.length > 0
-      ? [
-          `Advisory (NOT a blocker — ${dto.key} still dispatches): its acceptance criteria ` +
-            `name ${dto.advisories.map((a) => `${a.referenced} (${a.referencedStatus})`).join(', ')} ` +
-            'with no blocked_by edge. Verify each is on origin/main before branching.',
-        ]
-      : []),
+    ...advisorySummary(dto),
     '',
     dto.prompt,
   ].join('\n');

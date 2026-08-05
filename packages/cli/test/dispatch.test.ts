@@ -12,7 +12,12 @@ import {
 } from '../src/dispatch.js';
 import { resolveAgent, notReadyError } from '../src/commands/dispatch.js';
 import type { LinkConfig } from '../src/config/linkConfig.js';
-import type { DispatchAdvisory, DispatchPrompt } from '../src/mcpClient.js';
+import type {
+  DispatchAdvisory,
+  DispatchPrompt,
+  DispatchReferenceAdvisory,
+  DispatchShapeAdvisory,
+} from '../src/mcpClient.js';
 
 // The PURE dispatch engine: repo routing, the bootstrap post-condition, agent
 // resolution, and the human-facing text. No MCP, no spawn, no filesystem —
@@ -183,11 +188,21 @@ describe('notReadyError', () => {
 });
 
 describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)', () => {
-  const advisory = (over: Partial<DispatchAdvisory> = {}): DispatchAdvisory => ({
+  const advisory = (over: Partial<DispatchReferenceAdvisory> = {}): DispatchAdvisory => ({
     item: 'PROD-7',
     referenced: 'PROD-5',
     referencedStatus: 'in_review',
     severity: 'likely-missing-edge',
+    ...over,
+  });
+
+  /** The SHAPE family (MOTIR-2175) — no referenced item anywhere in it. */
+  const shapeAdvisory = (over: Partial<DispatchShapeAdvisory> = {}): DispatchAdvisory => ({
+    kind: 'shape',
+    item: 'PROD-7',
+    severity: 'likely-ordering-violation',
+    phrase: 'once it lands',
+    criterionIndex: 5,
     ...over,
   });
 
@@ -227,6 +242,25 @@ describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)',
     // Version skew is the normal case for a separately-published CLI: absent
     // must read as "no advisories", never as a crash.
     expect(renderDispatchAdvisories(prompt())).toBeNull();
+  });
+
+  it('renders a SHAPE advisory by its criterion and phrase — never as a bare reference', () => {
+    // The regression this variant exists to prevent: mapping a shape entry
+    // through the reference renderer prints "- undefined (undefined)".
+    const text = renderDispatchAdvisories(prompt({ advisories: [shapeAdvisory()] })) as string;
+    expect(text).toContain('criterion 5 says "once it lands"');
+    expect(text).toContain('NOT a blocker');
+    expect(text).not.toContain('undefined');
+    expect(text).not.toContain('--force');
+  });
+
+  it('renders BOTH families together, each with its own remedy', () => {
+    const text = renderDispatchAdvisories(
+      prompt({ advisories: [shapeAdvisory(), advisory()] }),
+    ) as string;
+    expect(text).toContain('PROD-5 (in_review)');
+    expect(text).toContain('criterion 5 says "once it lands"');
+    expect(text).not.toContain('undefined');
   });
 });
 

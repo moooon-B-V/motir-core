@@ -175,13 +175,32 @@ export function workflowLabel(mode: DispatchWorkflowMode, sessionBranch: string 
 export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | null {
   const advisories = dispatch.advisories ?? [];
   if (advisories.length === 0) return null;
-  return [
-    `Advisory:   ${dispatch.key}'s acceptance criteria name work items it has no blocked_by edge to.`,
-    ...advisories.map((a) => `            - ${a.referenced} (${a.referencedStatus})`),
-    '            This is NOT a blocker — the dispatch proceeds. Before branching,',
-    '            check each one is already on origin/main; if it lives only on an open',
-    '            PR, add the blocked_by edge and stop instead of rebuilding its half.',
-  ].join('\n');
+  const references = advisories.filter((a) => a.kind !== 'shape');
+  const shapes = advisories.filter((a) => a.kind === 'shape');
+  const lines: string[] = [];
+
+  if (references.length > 0) {
+    lines.push(
+      `Advisory:   ${dispatch.key}'s acceptance criteria name work items it has no blocked_by edge to.`,
+      ...references.map((a) => `            - ${a.referenced} (${a.referencedStatus})`),
+      '            This is NOT a blocker — the dispatch proceeds. Before branching,',
+      '            check each one is already on origin/main; if it lives only on an open',
+      '            PR, add the blocked_by edge and stop instead of rebuilding its half.',
+    );
+  }
+  // The ORDERING advisory (MOTIR-2175). Same disposition, different remedy: the
+  // reference block says "go check something"; this one says "part of this card
+  // is not yours to finish", which the operator needs BEFORE the agent starts.
+  for (const s of shapes) {
+    lines.push(
+      `Advisory:   ${dispatch.key}'s acceptance criterion ${s.criterionIndex} says "${s.phrase}" —`,
+      "            state that exists only after this card's own PR has merged.",
+      '            This is NOT a blocker — the dispatch proceeds. Your boundary ends at',
+      '            PR opened, so that criterion and everything below it belongs to a',
+      '            follow-on card. Build what is above the line and report the split.',
+    );
+  }
+  return lines.join('\n');
 }
 
 export interface DispatchSummaryInput {

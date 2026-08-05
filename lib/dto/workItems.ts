@@ -1142,6 +1142,13 @@ export interface WorkItemValidityDto {
 export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge';
 
 /**
+ * The severity of a SHAPE advisory (MOTIR-2175) — a defect in what a card's own
+ * acceptance criteria ASK FOR, with no second work item involved. One member
+ * today; `likely-repo-straddle` is the next (MOTIR-2177).
+ */
+export type WorkItemProseShapeSeverityDto = 'likely-ordering-violation';
+
+/**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
  * `descriptionMd` NAMES a not-`done` work item it carries no `blocked_by` edge
  * to. Let **N** = the items a body names via `motir:` link tokens and **E** =
@@ -1161,7 +1168,14 @@ export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge
  * Deliberately shaped like {@link SprintBlockerDto}: `item` is the card whose
  * body names the reference; `referenced` is the far end.
  */
-export interface WorkItemProseAdvisoryDto {
+export interface WorkItemProseReferenceAdvisoryDto {
+  /**
+   * The union discriminant — see {@link WorkItemProseAdvisoryDto}. OPTIONAL and
+   * never emitted, because this variant is the wire shape three shipped
+   * consumers already read; the tag rides on the NEW variant instead, so
+   * widening the union changed no byte of the old one.
+   */
+  kind?: 'reference';
   /** The in-subtree card whose `descriptionMd` names the reference. */
   item: string;
   /** The referenced item's identifier (or a `planItem:<id>` temp-ref, projected). */
@@ -1171,3 +1185,58 @@ export interface WorkItemProseAdvisoryDto {
   /** How strongly this reference suggests a missing `blocked_by` edge. */
   severity: WorkItemProseAdvisorySeverityDto;
 }
+
+/**
+ * ONE SHAPE advisory (MOTIR-2175): a card whose own ACCEPTANCE CRITERIA are
+ * mis-shaped, with no second work item involved anywhere in the finding.
+ *
+ * Today's sole member is `likely-ordering-violation` — gate 14's ORDERING axis,
+ * mechanized. A card's boundary ends at *PR opened* (`subtask_pr_merge_mode` is
+ * `manual`), so a criterion whose truth requires the merge belongs to a
+ * different card, and the remedy is to CUT the card at that line. Hence
+ * {@link criterionIndex}: the line number is the actionable half of the finding,
+ * not decoration.
+ *
+ * ⚠️ Same channel, same never-a-blocker contract as
+ * {@link WorkItemProseReferenceAdvisoryDto} — `valid` / `blockers` and the
+ * issue-detail `ready` / `openBlockers` are byte-identical whether or not this
+ * is emitted. A gate here would be actively harmful for a reason specific to
+ * this check: a release *cut* card is DEFINED by needing the merge (see
+ * `isOrderingCheckExempt`, which suppresses exactly that shape).
+ */
+export interface WorkItemProseShapeAdvisoryDto {
+  /** The union discriminant — see {@link WorkItemProseAdvisoryDto}. */
+  kind: 'shape';
+  /** The card whose own acceptance criteria carry the defect. */
+  item: string;
+  /** Which shape defect this is. */
+  severity: WorkItemProseShapeSeverityDto;
+  /** The gate-14 phrase that matched, in its canonical list form. */
+  phrase: string;
+  /** 1-based index of the offending criterion — where gate 14 says to cut. */
+  criterionIndex: number;
+}
+
+/**
+ * ONE prose advisory — a discriminated union over `kind` (MOTIR-2175).
+ *
+ * Two families, ONE non-blocking channel:
+ *  - **`reference`** — the card NAMES a not-done work item it has no
+ *    `blocked_by` edge to ({@link WorkItemProseReferenceAdvisoryDto}).
+ *  - **`shape`** — the card's own criteria are mis-shaped; there is no far end
+ *    at all ({@link WorkItemProseShapeAdvisoryDto}).
+ *
+ * ⚠️ **The discriminant is OPTIONAL on `reference` and REQUIRED on `shape`, and
+ * that asymmetry is deliberate.** Every field of the reference variant but
+ * `item` presumes a referenced work item, so a shape advisory cannot be squeezed
+ * into it without empty strings — hence the union rather than a widened
+ * interface. But the reference shape is already published: it crosses the MCP
+ * wire in `validate_work_item`'s `structuredContent`, in `claim_next_ready`'s
+ * payload, and in `dispatch_prompt`'s DTO. Tagging the OLD variant would have
+ * changed those bytes for every existing consumer to buy nothing; tagging the
+ * NEW one discriminates just as well. Narrow with `a.kind === 'shape'` — the
+ * `else` branch narrows to `reference`, tag present or not.
+ */
+export type WorkItemProseAdvisoryDto =
+  | WorkItemProseReferenceAdvisoryDto
+  | WorkItemProseShapeAdvisoryDto;

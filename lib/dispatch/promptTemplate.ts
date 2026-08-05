@@ -285,21 +285,52 @@ function section(heading: string, lines: string[]): string[] {
  */
 function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   if (advisories.length === 0) return [];
-  return [
-    '',
-    'REFERENCED BUT NOT A DEPENDENCY — verify these before you branch:',
-    ...advisories.map(
-      (a) =>
-        `    - ${a.referenced} (${a.referencedStatus}) is named in this card's acceptance` +
-        ` criteria, but this item carries no blocked_by edge to it.`,
-    ),
-    '  For each one, confirm the substrate it provides is already on origin/main',
-    '  (git ls-tree / git grep origin/main for the file, symbol or test the criterion',
-    '  names). If it lives ONLY on an open pull request, this item is blocked in fact:',
-    '  wire the blocked_by edge and STOP. Do not rebuild the other half yourself and do',
-    '  not stack onto the unmerged branch — two green pull requests whose composition',
-    '  turns main red is the recurring failure this warning exists to prevent.',
-  ];
+  const references = advisories.filter((a) => a.kind !== 'shape');
+  const shapes = advisories.filter((a) => a.kind === 'shape');
+  const lines: string[] = [];
+
+  if (references.length > 0) {
+    lines.push(
+      '',
+      'REFERENCED BUT NOT A DEPENDENCY — verify these before you branch:',
+      ...references.map(
+        (a) =>
+          `    - ${a.referenced} (${a.referencedStatus}) is named in this card's acceptance` +
+          ` criteria, but this item carries no blocked_by edge to it.`,
+      ),
+      '  For each one, confirm the substrate it provides is already on origin/main',
+      '  (git ls-tree / git grep origin/main for the file, symbol or test the criterion',
+      '  names). If it lives ONLY on an open pull request, this item is blocked in fact:',
+      '  wire the blocked_by edge and STOP. Do not rebuild the other half yourself and do',
+      '  not stack onto the unmerged branch — two green pull requests whose composition',
+      '  turns main red is the recurring failure this warning exists to prevent.',
+    );
+  }
+
+  // The ORDERING advisory (MOTIR-2175). Addressed to the agent because the agent
+  // is the party the defect lands on: its two moves are to stop with the card
+  // half-done or to fake the precondition (tag a pre-merge commit, publish from
+  // an unmerged tree), and both are rule violations. Naming the criterion index
+  // is what makes the third move — cut the card here — available.
+  if (shapes.length > 0) {
+    lines.push(
+      '',
+      "A CRITERION THAT TURNS ON THIS CARD'S OWN MERGE — read this before you start:",
+      ...shapes.map(
+        (a) =>
+          `    - acceptance criterion ${a.criterionIndex} says "${a.phrase}", which is state` +
+          ` that exists only after this card's pull request has MERGED.`,
+      ),
+      '  Your boundary ends at PR opened: this repo merges manually, and the merge is',
+      "  the human reviewer's. So that criterion — and every criterion below it, which",
+      '  inherits the same dependency — belongs to a follow-on card blocked_by this one.',
+      '  Do NOT fake the precondition (no tagging a pre-merge commit, no publishing from',
+      '  an unmerged tree) and do NOT silently drop the criterion. Build everything ABOVE',
+      '  the line, then report the split so the remainder can be carded (plan-rules.md,',
+      '  gate 14, ORDERING axis).',
+    );
+  }
+  return lines;
 }
 
 /** The CONTEXT section's fact lines + the card's narrative body. */
