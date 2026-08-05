@@ -1168,6 +1168,148 @@
         font-style: italic;
       }
 
+      /* ── Panel 7 — the MULTI-REPO audit tab (MOTIR-2206) ─────────────────
+         The repo list is a list of shipped ROWS, not a new primitive: the row
+         reuses the `.version` current-row highlight grammar for "selected"
+         (border --el-accent-on-surface + bg --el-surface-soft — the same pair
+         `.version.current` and `.tool-rec` already use), the `.count-pill`
+         chip for counts, `.coderef` mono for the repo name, `.spin` for the
+         deriving ring, and the icon+word state vocabulary design/repository-set
+         §15.6 fixed (colour on the ICON, the WORD carries the meaning). */
+      .rollup {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      .rollup strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .repos {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .repo-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        background: transparent;
+      }
+      .repo-row + .repo-row {
+        border-top-color: var(--el-border-soft);
+      }
+      /* SELECTED — the same highlight `.version.current` / `.tool-rec` use. */
+      .repo-row.sel {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+      }
+      /* Selection is NEVER colour-only: the selected row's name goes semibold. */
+      .repo-row.sel .rr-name {
+        font-weight: 700;
+      }
+      /* --el-text-muted is 4.34:1 on --el-surface-soft — below AA. On the
+         selected row the timestamp steps up to --el-text-secondary. */
+      .repo-row.sel .rr-when {
+        color: var(--el-text-secondary);
+      }
+      .repo-row .octo {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .rr-name {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .rr-grade {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      /* The SHIPPED tone rule, unchanged: AuditPanel's HealthSummary picks the
+         tint by conformance (>=70 mint · >=40 yellow · else peach). The hue is
+         in the TINT background with --el-text-strong ink (finding #35). */
+      .rr-grade.g-good {
+        background: var(--el-tint-mint);
+      }
+      .rr-grade.g-watch {
+        background: var(--el-tint-yellow);
+      }
+      .rr-grade.g-poor {
+        background: var(--el-tint-peach);
+      }
+      .rr-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .rr-state svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .rr-state .i-warn {
+        color: var(--el-warning);
+      }
+      .rr-state .i-danger {
+        color: var(--el-danger);
+      }
+      .rr-fill {
+        flex: 1;
+      }
+      .rr-when {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+      }
+      .rr-cursor {
+        position: relative;
+      }
+      .rr-cursor::after {
+        content: '';
+        position: absolute;
+        right: -13px;
+        top: 50%;
+        width: 11px;
+        height: 11px;
+        border-right: 2px solid var(--el-accent-on-surface);
+        border-bottom: 2px solid var(--el-accent-on-surface);
+        transform: rotate(-45deg);
+      }
+      .anatomy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+      }
+      .anatomy b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+
       /* ── Panel 5 — access path: the sidebar rail (mirrors components/ui/Sidebar.tsx
          + app/(authed)/_components/SidebarNav.tsx) so the reader SEES the door ──── */
       .access-row {
@@ -3105,6 +3247,480 @@ jobs:
           re-opens it; the preference is per-project, so it won't nag on every visit.
         </p>
       </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 7 — THE AUDIT TAB FOR A MULTI-REPO PROJECT (MOTIR-2206)
+         Panel 1 draws ONE audit report and Panel 4b draws the states before one
+         exists — both written when the tab showed a single repo. MOTIR-2123 made
+         the DERIVATION plural (one code_audit + propose_convention pair per
+         connected repo) and deliberately left the PRESENTATION on repos[0]. This
+         panel is the layer ABOVE Panel 1 that decides which repo's report is on
+         screen; Panels 1, 2 and 4b are unchanged beneath it.
+         Sole consumer: MOTIR-2207. Nothing here is deferred to another card.
+         ══════════════════════════════════════════════════════════════════ -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="octo" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.3-.54-1.53.11-3.19 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.89.12 3.19.77.84 1.23 1.92 1.23 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"
+        />
+      </symbol>
+    </svg>
+
+    <div class="panel-label">
+      Panel 7 · Content region · the Audit tab for a MULTI-REPO project — the repo list, one report
+      at a time (MOTIR-2206)
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </svg>
+        Code health <span class="sep">›</span>
+        <span class="here">Audit tab · 5 connected repositories</span>
+      </span>
+      <span>— the same screen as Panel 1, with the layer that chooses whose report is shown.</span>
+    </div>
+    <div class="panel">
+      <p class="subtle" style="margin: 0 0 14px">
+        A re-audit now derives <strong>one report per connected repo</strong> and the tab renders
+        <code class="coderef">repoRefs[0]</code> — so MOTIR holds five
+        <code class="coderef">CodeAudit</code> rows and shows the one that sorts first by
+        <code class="coderef">owner asc, name asc</code>. The other four are derived, stored, paid
+        for and invisible, and the single grade on screen reads as a statement about the
+        <em>project</em> when it is a statement about <code class="coderef">motir-ai</code>. The
+        model below is <strong>LIST-AND-REPORT</strong>: a worst-first list of the repos with their
+        own grades, and the selected repo's report — Panel 1's report, unchanged — beneath it.
+      </p>
+
+      <!-- ── 7a — the steady state: 5 repos, 4 audited ─────────────────── -->
+      <div class="eyebrow" style="margin: 4px 0 10px">
+        7a · Steady state · five connected repos, four audited — the list, then the selected repo's
+        report
+      </div>
+
+      <div class="card">
+        <div class="card-head" style="margin-bottom: 10px">
+          <h3>Repositories</h3>
+          <span class="count-pill">5 connected</span>
+        </div>
+        <p class="rollup">
+          <span><strong>4 of 5</strong> audited</span>
+          <span>·</span>
+          <span><strong>462</strong> findings across them</span>
+          <span>·</span>
+          <span>1 not audited yet</span>
+        </p>
+        <div class="repos" role="group" aria-label="Choose a repository's audit report">
+          <div class="repo-row sel rr-cursor" aria-current="true">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-gateway</span>
+            <span class="rr-grade g-poor">D · 34% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">96 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-ai</span>
+            <span class="rr-grade g-watch">C · 63% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">143 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-core</span>
+            <span class="rr-grade g-good">B · 78% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">212 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/nextjs-prisma-vercel-starter</span>
+            <span class="rr-grade g-good">A · 94% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">11 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-meta</span>
+            <span class="rr-state">
+              <!-- lucide: folder-git-2 — the code exists, it just hasn't been read -->
+              <svg
+                class="i-warn"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+              Not audited yet
+            </span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">—</span>
+          </div>
+        </div>
+        <p class="setup-hint">
+          <strong>No project-level grade is drawn, and that is the decision.</strong> Four grades
+          over four codebases of different sizes do not average into a fifth: a mean would say
+          &ldquo;67%&rdquo; about a project where one repo is at 34% and another at 94%, and it
+          would move when a repo is connected rather than when any code changed. What the strip
+          above carries instead are numbers that are TRUE by addition — how many repos are audited,
+          how many findings there are in total — the same rule
+          <code class="coderef">design/repository-set</code> §15.6 fixed for its own header count
+          (&ldquo;the header count counts what is TRUE&rdquo;).
+        </p>
+      </div>
+
+      <!-- The selected repo's report — Panel 1, unchanged. -->
+      <div class="card">
+        <div class="card-head" style="margin-bottom: 10px">
+          <h3>Audit</h3>
+          <span class="count-pill">96 findings</span>
+        </div>
+        <p class="subtle" style="margin: 0 0 14px">
+          Audited <code class="coderef">moooon-B-V/motir-gateway@7f31c02</code> against
+          <span class="conv-ref">§ Convention v1 · your standard</span> · code graph index v7 · 2
+          minutes ago.
+        </p>
+        <div class="health">
+          <div
+            class="grade"
+            style="background: var(--el-tint-peach)"
+            aria-label="Convention conformance grade D, 34 percent"
+          >
+            <span class="g-letter">D</span>
+            <span class="g-score">34% conform</span>
+          </div>
+          <div class="health-body">
+            <div style="font-size: 15px; color: var(--el-text); font-weight: 500">
+              34% of this repository's code meets its convention — 41 files fall below the standard.
+            </div>
+            <p class="subtle" style="margin: 6px 0 0">
+              Panel 1's report, unchanged. The only thing this panel changes about it is WHICH
+              repository it describes — the sub-line above already names the repo and the commit, so
+              nothing inside the report needs a new element to say which one you are reading.
+            </p>
+            <div class="cat-grid">
+              <span class="cat"><span class="dot dot-bad"></span> Layering · 18 off-standard</span>
+              <span class="cat"><span class="dot dot-warn"></span> Naming · 9 off-standard</span>
+              <span class="cat"
+                ><span class="dot dot-bad"></span> Complexity · 21 off-standard</span
+              >
+              <span class="cat"><span class="dot dot-warn"></span> Duplication · 4 clusters</span>
+              <span class="cat"><span class="dot dot-bad"></span> Testing · below standard</span>
+              <span class="cat"><span class="dot dot-ok"></span> Error handling · conforms</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="access-note" style="margin-bottom: 22px">
+        <strong>The door.</strong> The row IS the affordance — clicking a row swaps the report
+        beneath it (the arrow marks the selected row). There is no new nav, no second
+        <code class="coderef">Segmented</code> control, and no route change: the tab is reached
+        exactly as Panel 1 draws it (the persistent <em>Code health</em> sidebar entry → the
+        <em>Audit</em> tab), and the selection is component state on the same client island that
+        already owns the tab, never a query param.
+      </p>
+
+      <!-- ── 7b — the FIFTH state: partially derived ───────────────────── -->
+      <div class="eyebrow" style="margin: 4px 0 10px">
+        7b · The fifth state · PARTIALLY DERIVED — some repos audited, some still running (the state
+        MOTIR sits in for minutes after the first audit fires)
+      </div>
+      <p class="subtle" style="margin: 0 0 12px">
+        Panel 4b's four states were drawn for ONE report, so all four are all-or-nothing. A fan-out
+        makes that false: <code class="coderef">reaudit()</code> queues N pairs at once and they
+        land one at a time.
+        <strong>The partial state lives in the LIST, not in an empty state</strong>
+        — which is what makes it structurally different from 4b's C and D rather than a fifth
+        variant of them. Two cases, by whether the SELECTED repo is one of the finished ones.
+      </p>
+
+      <div class="eyebrow" style="margin: 12px 0 8px">
+        E1 · the selected repo has landed — the report renders; the list carries the others'
+        progress
+      </div>
+      <div class="card">
+        <p class="rollup">
+          <span><strong>2 of 5</strong> audited</span>
+          <span>·</span>
+          <span><strong>223</strong> findings across them</span>
+          <span>·</span>
+          <span>2 deriving</span>
+          <span>·</span>
+          <span>1 not audited yet</span>
+        </p>
+        <div class="repos">
+          <div class="repo-row sel">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-core</span>
+            <span class="rr-grade g-good">B · 78% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">212 findings</span>
+            <span class="rr-when">just now</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/nextjs-prisma-vercel-starter</span>
+            <span class="rr-grade g-good">A · 94% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">11 findings</span>
+            <span class="rr-when">just now</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-ai</span>
+            <span class="rr-state"><span class="spin"></span> Deriving…</span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">started 40 seconds ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-gateway</span>
+            <span class="rr-state"><span class="spin"></span> Deriving…</span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">started 40 seconds ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-meta</span>
+            <span class="rr-state">
+              <svg
+                class="i-warn"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+              Not audited yet
+            </span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">—</span>
+          </div>
+        </div>
+        <p class="setup-hint">
+          The report for <code class="coderef">motir-core</code> renders below exactly as in 7a —
+          <strong>a partially-derived project is not an empty screen.</strong> The counts stay
+          honest while the run is in flight: <em>2 of 5 audited</em> and <em>223 findings</em> count
+          what has actually landed, never what was queued.
+        </p>
+      </div>
+
+      <div class="eyebrow" style="margin: 16px 0 8px">
+        E2 · the selected repo is still deriving while a sibling has landed — the report area, and
+        only the report area, is empty
+      </div>
+      <div class="card">
+        <div class="repos" style="margin-bottom: 14px">
+          <div class="repo-row sel">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-gateway</span>
+            <span class="rr-state"><span class="spin"></span> Deriving…</span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">started 40 seconds ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-core</span>
+            <span class="rr-grade g-good">B · 78% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">212 findings</span>
+            <span class="rr-when">just now</span>
+          </div>
+        </div>
+        <div class="card empty">
+          <div class="es-spin"></div>
+          <h2>Deriving the audit for moooon-B-V/motir-gateway…</h2>
+          <p>
+            Motir is reading this repository's code graph, deriving its convention, and scoring the
+            code against it. The other repositories are unaffected — pick one above to read its
+            report while this finishes.
+          </p>
+          <p class="dur">
+            This usually takes a few minutes. You can leave this page — the audit keeps running.
+          </p>
+        </div>
+        <p class="setup-hint">
+          <strong>This is NOT Panel 4b State C, and the copy is what separates them.</strong> C says
+          &ldquo;Motir is reading the code graph for <em>these repos</em>&rdquo; over a chip row of
+          the whole set, because at that point nothing has been derived and the whole project is
+          waiting. Here one repo is waiting and the rest are readable, so the headline names
+          <strong>one</strong> repository and the description says the others are unaffected. It is
+          not State D either: D is what shows when the 60-second poll gives up with
+          <em>nothing at all</em> on screen. Panel 4b's A–D keep their shipped copy and fire
+          unchanged whenever NO repo has an audit.
+        </p>
+      </div>
+
+      <!-- ── 7c — the row anatomy and its four states ──────────────────── -->
+      <div class="eyebrow" style="margin: 22px 0 10px">
+        7c · The row · one anatomy, four states — the ONLY per-repo row grammar this page has
+      </div>
+      <div class="card">
+        <div class="repos">
+          <div class="repo-row sel">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-core</span>
+            <span class="rr-grade g-good">B · 78% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">212 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-ai</span>
+            <span class="rr-state"><span class="spin"></span> Deriving…</span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">started 40 seconds ago</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-meta</span>
+            <span class="rr-state">
+              <svg
+                class="i-warn"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+              Not audited yet
+            </span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">—</span>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-gateway</span>
+            <span class="rr-state">
+              <!-- lucide: triangle-alert -->
+              <svg
+                class="i-danger"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              Couldn't load this report
+            </span>
+            <span class="rr-fill"></span>
+            <button class="btn btn-ghost btn-sm">Try again</button>
+          </div>
+        </div>
+        <div class="anatomy">
+          <span
+            ><b>Left to right:</b> the octocat + the repo's
+            <code class="coderef">owner/name</code> in mono (<code class="coderef">.coderef</code>
+            grammar) · then EITHER the grade chip OR an icon-and-word state · then the finding count
+            as a neutral <code class="coderef">count-pill</code> · then when it was audited.</span
+          >
+          <span
+            ><b>Selected</b> is the highlight this asset already uses for a current row —
+            <code class="coderef">--el-accent-on-surface</code> border on
+            <code class="coderef">--el-surface-soft</code> — the same pair as
+            <code class="coderef">.version.current</code> and the Recommended
+            <code class="coderef">.tool-rec</code> card. No new selected-state vocabulary.</span
+          >
+          <span
+            ><b>Colour is never alone.</b> The grade chip puts the hue in the TINT with
+            <code class="coderef">--el-text-strong</code> ink and repeats the grade LETTER and the
+            percentage as text; the three non-graded states carry the colour on the ICON and the
+            meaning in the WORD — the rule <code class="coderef">design/repository-set</code> §15.6
+            fixed for its own per-repository rows.</span
+          >
+          <span
+            ><b>A failed read fails ONE row.</b> MOTIR-2207 must degrade a rejected per-repo read to
+            this row alone; the siblings stay readable and the page never falls into the whole-page
+            rose error strip. That is why the fourth state exists at all — the card requires the
+            behaviour, so the design owes it a drawn state.</span
+          >
+          <span
+            ><b>Rows are sibling buttons, never a listbox.</b> A row carries a per-row action
+            (&ldquo;Try again&rdquo;), and a <code class="coderef">role="listbox"</code> of
+            <code class="coderef">role="option"</code> rows may not contain interactive children —
+            the shipped <code class="coderef">SavedFilterDropdown</code> failed the 6.2.6 axe sweep
+            on exactly that (<code class="coderef">aria-required-children</code> critical +
+            <code class="coderef">nested-interactive</code> serious). So: a
+            <code class="coderef">role="group"</code> wrapper, one
+            <code class="coderef">&lt;button&gt;</code> per row whose accessible name is the repo
+            plus its state, the recovery as a SIBLING button, and the selected row marked
+            <code class="coderef">aria-current</code> — with its name in semibold, so selection is
+            not colour-only for a sighted reader either.</span
+          >
+        </div>
+      </div>
+
+      <p class="setup-hint" style="margin: 14px 0 0">
+        <strong>The four rules the consuming card cannot re-decide.</strong>
+        <strong>(1) The poll watches the repo whose report is on screen.</strong>
+        <code class="coderef">reaudit()</code> fires ONE
+        <code class="coderef">POST /refresh</code> (the MOTIR-2123 invariant) and then polls the
+        SELECTED repo's audit surface for a new <code class="coderef">audit.id</code>; if no repo is
+        selected yet, it polls the first row. The selection does not move for the duration of the
+        run, so the repo being waited on is always the repo being looked at.
+        <strong>(2) The order is worst-first and it re-sorts only on a completed read</strong> —
+        ascending <code class="coderef">conformancePct</code>, then never-audited rows, with
+        connected-repo order (<code class="coderef">owner asc, name asc</code>) as the tiebreak and
+        as the whole order before any audit exists. Selection is held by
+        <code class="coderef">repoRef</code>, never by index, so a re-sort can never move it.
+        <strong>(3) Findings stay PER REPO and the pagination contract is untouched.</strong>
+        <code class="coderef">nextOffset</code> is an offset into ONE audit's findings; merging N
+        lists would need N interleaved cursors, and no mirror does it. Switching repos RESETS the
+        list — the new repo's first page, not an append onto the previous repo's.
+        <strong>(4) The list is not drawn at all for a single-repo project</strong> — one row can
+        neither be compared nor chosen, so N = 1 renders exactly what ships today.
+      </p>
     </div>
   </body>
 </html>
