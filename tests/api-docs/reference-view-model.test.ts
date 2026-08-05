@@ -55,8 +55,13 @@ describe('the reference covers the registry', () => {
       'identity',
       'workspaces',
       'work-items',
+      // Story 11.7's two NEW resources. `sessions` reads beside work items
+      // because it closes them out; `plans` reads last because a plan is what
+      // the planning conversation PRODUCES.
+      'sessions',
       'sprints',
       'planning',
+      'plans',
     ]);
   });
 

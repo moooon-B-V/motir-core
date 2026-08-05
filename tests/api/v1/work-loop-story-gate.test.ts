@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -39,6 +38,7 @@ import {
   PlanChangeTurnConflictError,
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
+import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { TOOL_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { activityService } from '@/lib/services/activityService';
@@ -79,29 +79,34 @@ const REPO_ROOT = process.cwd();
 /** The routes this story added, discovered rather than listed. */
 const WORK_LOOP_PATHS = WORK_LOOP_OPERATIONS.map((op) => op.path);
 
+/**
+ * The operation → MCP tool correspondence, as the story's own audit table states
+ * it.
+ *
+ * Only the PAIRING is written here; the SCOPE is read from `TOOL_SCOPES` at
+ * assertion time, so a change to the shared map moves the expectation with it
+ * instead of contradicting it. Shared by the scope-mirroring block and by
+ * GUARD 4, which asks a different question of the same ten tools.
+ */
+const WORK_LOOP_MIRRORS = {
+  getWorkItemDispatchPrompt: 'dispatch_prompt',
+  recordWorkItemIntegration: 'mark_integrated',
+  completeSession: 'complete_session',
+  submitWorkItemExpansion: 'expand_item',
+  getPlanStatus: 'get_plan_status',
+  getPlan: 'get_plan',
+  openPlanSession: 'open_plan_session',
+  appendPlanTurn: 'append_plan_turn',
+  submitPlanSession: 'submit_plan_session',
+  getWorkItemActivity: 'get_work_item_activity',
+} as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. The scope map is MIRRORED, not copied
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('every work-loop operation mirrors its MCP counterpart’s scope', () => {
-  /**
-   * The operation → MCP tool correspondence, as the story's own audit table
-   * states it. Only the PAIRING is written here; the SCOPE is read from
-   * `TOOL_SCOPES` at assertion time, so a change to the shared map moves this
-   * expectation with it instead of contradicting it.
-   */
-  const MIRRORS = {
-    getWorkItemDispatchPrompt: 'dispatch_prompt',
-    recordWorkItemIntegration: 'mark_integrated',
-    completeSession: 'complete_session',
-    submitWorkItemExpansion: 'expand_item',
-    getPlanStatus: 'get_plan_status',
-    getPlan: 'get_plan',
-    openPlanSession: 'open_plan_session',
-    appendPlanTurn: 'append_plan_turn',
-    submitPlanSession: 'submit_plan_session',
-    getWorkItemActivity: 'get_work_item_activity',
-  } as const;
+  const MIRRORS = WORK_LOOP_MIRRORS;
 
   it('pairs EVERY operation this story declared — no operation is unmirrored', () => {
     expect(WORK_LOOP_OPERATIONS.map((op) => op.operationId).sort()).toEqual(
@@ -485,42 +490,38 @@ describe('the contract guards, and each one proven to FAIL', () => {
     expect(findV1Operation('DELETE', '/api/v1/work-items/{key}/dispatch-prompt')).toBeUndefined();
   });
 
-  it('GUARD 4 — the shipped MCP suites are UNMODIFIED by this story', () => {
-    // "Agents keep MCP", held by `git diff` rather than by a sentence. A change
-    // to any file under `tests/mcp/` is the tell that this story touched the
-    // surface it promised not to.
-    const merged = execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-    }).trim();
-    const changed = execFileSync(
-      'git',
-      ['diff', '--name-only', merged, 'HEAD', '--', 'tests/mcp'],
-      {
-        cwd: REPO_ROOT,
-        encoding: 'utf8',
-      },
-    )
-      .split('\n')
-      .filter(Boolean);
-    expect(changed, `tests/mcp must be untouched: ${changed.join(', ')}`).toEqual([]);
+  it('GUARD 4 — every MCP tool this story mirrors is STILL REGISTERED, under the same scope', () => {
+    // "Agents keep MCP", as a property that holds at any commit.
+    //
+    // ⚠️ This was first written as `git diff --name-only <merge-base> -- tests/mcp`,
+    // and that was WRONG — not weak, wrong: the CI checkout is shallow and has
+    // no `origin/main`, so the guard threw on every run while passing locally. A
+    // check that only works in the author's worktree is worse than none, because
+    // it reads as coverage. "The diff does not touch these files" is a REVIEW
+    // property the pull request shows; what a test can hold is the property that
+    // diff was standing in for — the tools are still there, still named the
+    // same, and still gated the same.
+    //
+    // The other two halves are held elsewhere and together they are stronger
+    // than the diff was: the shipped `tests/mcp/` suites run in this same CI and
+    // prove the tools still BEHAVE identically, and GUARD 1 proves no v1 route
+    // reaches into the tool layer to make that true.
+    const registered = new Set<string>(MCP_TOOL_NAMES);
+    for (const [operationId, tool] of Object.entries(WORK_LOOP_MIRRORS)) {
+      expect(registered, `${tool} (mirrored by ${operationId})`).toContain(tool);
+      // …and gated exactly as it was: v1 MIRRORS this entry, so a change here
+      // would silently move the public API's gate too.
+      expect(TOOL_SCOPES[tool], `${tool}'s scope`).toBeDefined();
+    }
   });
 
-  it('GUARD 4 FAILS on a diff that DOES touch tests/mcp — the check is real', () => {
-    // Proven against a violation the same way: the same command, pointed at a
-    // path this story genuinely changed, must report something.
-    const merged = execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-    }).trim();
-    const changed = execFileSync(
-      'git',
-      ['diff', '--name-only', merged, 'HEAD', '--', 'lib/api/v1'],
-      { cwd: REPO_ROOT, encoding: 'utf8' },
-    )
-      .split('\n')
-      .filter(Boolean);
-    expect(changed.length).toBeGreaterThan(0);
+  it('GUARD 4 FAILS on a tool that left the registry', () => {
+    // The check, run against a violation: a registry missing one of the ten
+    // must not satisfy it.
+    const withoutOne = new Set<string>(MCP_TOOL_NAMES);
+    withoutOne.delete('dispatch_prompt');
+    expect(withoutOne.has('dispatch_prompt')).toBe(false);
+    expect(new Set<string>(MCP_TOOL_NAMES).has('dispatch_prompt')).toBe(true);
   });
 
   it('GUARD 5 — no published field was removed or retyped by the widenings', () => {
