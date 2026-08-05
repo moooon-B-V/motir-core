@@ -8,6 +8,12 @@
 This asset defines the logomark, the wordmark and its lockups, the light/dark colour rule, the
 favicon / app-icon set, the 1200 × 630 OG template, and every shipped surface the mark enters.
 
+**The mark is not a letterform.** An earlier revision built it from the letter M; that was rejected
+(Yue, 2026-08-05) — an initial says only what the product is _called_, and Motir's name is not the
+interesting thing about it. Every candidate in §1 is a **mathematical object chosen because it is
+true of what Motir does**. Everything outside §1 is glyph-agnostic, so MOTIR-1140 can substitute one
+candidate for another by swapping `<path>` data alone.
+
 ---
 
 ## 0. Drawn against shipped reality
@@ -50,23 +56,61 @@ literals).
 
 ## 1. The logomark — three candidates for MOTIR-1140
 
-MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Three glyphs, one
-construction grid, one stroke system, one colour rule. Picking any of them changes only the `<path>`
-data MOTIR-1150 consumes.
+MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Three
+mathematical objects, one construction grid, one stroke system, one colour rule. Picking any of them
+changes only the `<path>` data MOTIR-1150 consumes.
 
-|                                | Concept                                                                                                                                                                                       | Cost                                                                                                                                                 |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A · Ascent** _(recommended)_ | One continuous stroke. Left stem = where a plan starts; the fork descends to the decision it turns on; the right stem rises **above** the left — idea → shipped. Reads unambiguously as an M. | —                                                                                                                                                    |
-| **B · Nodes**                  | Same skeleton, three vertices resolved as filled nodes: the mark says "dependency graph" out loud (Principle #14).                                                                            | The 2.4 stroke + 2.7 r nodes make the node/stroke ratio do the reading; at 16 px the nodes swell into the strokes, so it needs a separate 16 px cut. |
-| **C · Tile**                   | A knocked-out reversal of A on an `--el-accent` tile — the continuous upgrade of the purple M-tile shipping today.                                                                            | A tile is a container, not a mark: it cannot sit on a coloured surface, in an email footer or in single-colour print without re-cutting.             |
+### A · Lattice _(recommended)_
 
-**Recommendation:** ship **A** as the mark, adopt **C** as A's app-icon lockup (§5 — the one place a
-mark _should_ be tiled), keep **B** on file. B is A plus two attributes, so adopting it later is a
-`<path>` swap in one component, not a re-brand.
+> _The Hasse diagram of a fork–join — nested inside itself._
 
-**Why A wins on durability:** it has **no tight counters** — the nearest two strokes are 14.8 units
-apart on a 24 grid — so nothing fuses at 16 px. It is one path, so a consumer needs no `fill-rule`,
-no mask and no second colour.
+A plan is a **finite partially ordered set**, and the rhombus is how mathematics draws the smallest
+non-trivial one: one start, two independent paths, one convergence. That is the fork–join, the
+atomic unit of every project plan.
+
+Nesting a second rhombus at exactly **half** scale says the other true thing about a plan — it is
+**self-similar**. An epic holds stories holds subtasks, and every level is the same object at a
+different depth (Principle #9, _"the plan deepens just in time"_; Principle #14, _"the plan is a DAG,
+not a list"_). Zoom in and you find the same figure again.
+
+**Why it wins:** two closed paths, one stroke weight, no fill, and no counter tighter than 4.4 units
+— the inner rhombus is still an unmistakable rhombus at **16 px**, so it is the only candidate that
+needs no separate small cut. The 1:2 ratio means one number generates the whole family (the next
+level in is 2.2), and a rhombus's extreme points lie on the axes rather than at bounding-box corners,
+which is what makes the maskable icon (§5) cheap.
+
+### B · Hypocycloid
+
+> _The curve traced by a point on a circle rolling inside a circle five times larger._
+
+A small cycle running inside a larger arc, drawing the shape of the whole as it goes — a sprint
+inside a roadmap. One closed curve, five cusps, solid: the warmest of the three and the closest in
+feel to a radial mark.
+
+**Cost:** a solid concave star is a _silhouette_, so it carries no interior and says less than it
+looks like it does. Five cusps also sit close to the four-cusp astroid — the ✨ every AI product now
+uses, and which Motir's own "Plan with AI" launcher already renders via lucide's `Sparkles`. The
+distance is real but it is one cusp wide.
+
+### C · Borromean
+
+> _Three rings, no two of which are linked, all three inseparable — a Brunnian link._
+
+Cut any one ring and the other two fall apart, because no two were ever joined. That is **exactly**
+Motir's thesis: AI planning, the PM core and agent orchestration are one product, and dropping any
+pillar leaves the other two holding nothing. The most beautiful of the three, and the most
+on-message.
+
+**Cost:** six arcs and six crossing gaps. Superb at 40 px and up; it **fails below 24 px** — the
+interior collapses in the tab strip. Choosing it means shipping a second, simplified cut for the
+favicon, a permanent two-artwork tax the other two do not carry.
+
+### Recommendation
+
+**A.** It is the only candidate that is simultaneously true of the product, legible at every shipped
+size, and free of a second cut. **C** is the better story and the worse mark — if the brand will
+accept a separate favicon artwork it is defensible, and the cost is stated above. **B** is the
+fallback if a solid silhouette is wanted for stamping, embroidery or single-colour print.
 
 ---
 
@@ -74,24 +118,22 @@ no mask and no second colour.
 
 ```svg
 <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-  <path
-    d="M4.6 19.6V7.4L12 14.4l7.4-10v15.2"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="3.4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+  <g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M12 3.2L20.8 12L12 20.8L3.2 12Z" />
+    <path d="M12 7.6L16.4 12L12 16.4L7.6 12Z" />
+  </g>
 </svg>
 ```
 
-|                  |                                                                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **viewBox**      | `0 0 24 24` — the same grid every `lucide-react` icon in the app uses, so the mark drops into any icon slot unscaled.                                   |
-| **extent**       | x 2.9 → 21.1 (18.2 wide) · y 2.7 → 21.3 (18.6 tall). Optically centred on (12, 12) in **both** axes — a consumer centres it by geometry, with no nudge. |
-| **clear space**  | 2 × the stroke weight = **6.8 units** (28% of the box edge) on all four sides, measured from the **extent**, never from the viewBox.                    |
-| **minimum size** | **16 px** for the bare glyph (the stroke lands at 2.27 px). Below 16 px use the tiled form.                                                             |
-| **colour**       | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                    |
+|                  |                                                                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **viewBox**      | `0 0 24 24` — the same grid every `lucide-react` icon in the app uses, so the mark drops into any icon slot unscaled.                                                                                                                                        |
+| **paths**        | Two closed rhombi, the inner at exactly **half** the outer's half-diagonal (8.8 → 4.4). One number generates the whole family; the next level in would be 2.2.                                                                                               |
+| **paint**        | `fill="none"`, `stroke="currentColor"`, `stroke-width="2.5"`, `stroke-linejoin="round"`. No `stroke-linecap` — both paths are closed.                                                                                                                        |
+| **extent**       | x and y both 1.95 → 22.05 (20.1 square), centred on (12, 12) **by construction** — a consumer centres it by geometry, with no nudge. The mark occupies 84% of the box, which is why it holds its own beside a 24 px lucide icon rather than reading smaller. |
+| **clear space**  | 2 × the stroke weight = **5.0 units** (21% of the box edge) on all four sides, measured from the **extent**, never from the viewBox. A rhombus reads with more air around it than a square of the same extent, so this is the floor, not the target.         |
+| **minimum size** | **16 px** for the bare glyph — the stroke lands at 1.67 px and the inner rhombus at 2.9 px across, still an unmistakable rhombus. Below 16 px use the tiled form (§5).                                                                                       |
+| **colour**       | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                         |
 
 `currentColor` is deliberate: it makes the dark variant a token choice rather than a second asset
 (§4).
@@ -180,20 +222,21 @@ Three rules follow:
 `app/favicon.ico` (16 + 32) is the only icon that ships today and stays as the legacy fallback.
 Everything else is new — and Next.js only auto-wires files it _finds_, so each of these has to exist:
 
-| File                 | Size    | Radius | Notes                                                                                                                               |
-| -------------------- | ------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `app/icon.svg`       | 32      | rx 7   | Modern browsers; resolution-free. Uses the **tiled** form — a browser tab has no surface behind it to tint against.                 |
-| `app/apple-icon.png` | 180     | rx 40  | iOS masks corners itself but supplies **no background** — the tile must be opaque `--el-accent`, and the file must be PNG, not SVG. |
-| `app/icon-192.png`   | 192     | rx 0   | `purpose: 'maskable'`, full bleed.                                                                                                  |
-| `app/icon-512.png`   | 512     | rx 0   | `purpose: 'maskable'`, full bleed.                                                                                                  |
-| `app/favicon.ico`    | 16 + 32 | rx 7   | Kept for old clients and anything requesting `/favicon.ico` by path. Re-cut from the same glyph so the two never disagree.          |
+| File                 | Size    | Radius | Notes                                                                                                                                                             |
+| -------------------- | ------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/icon.svg`       | 32      | rx 7   | Modern browsers; resolution-free. Uses the **tiled** form (glyph knocked out of an `--el-accent` field) — a browser tab has no surface behind it to tint against. |
+| `app/apple-icon.png` | 180     | rx 40  | iOS masks corners itself but supplies **no background** — the tile must be opaque `--el-accent`, and the file must be PNG, not SVG.                               |
+| `app/icon-192.png`   | 192     | rx 0   | `purpose: 'maskable'`, full bleed.                                                                                                                                |
+| `app/icon-512.png`   | 512     | rx 0   | `purpose: 'maskable'`, full bleed.                                                                                                                                |
+| `app/favicon.ico`    | 16 + 32 | rx 7   | Kept for old clients and anything requesting `/favicon.ico` by path. Re-cut from the same glyph so the two never disagree.                                        |
 
 - **Corner radius** = **0.22 × the canvas** (32 → 7, 180 → 40). 0.22 is `--radius-lg` (12) over a
   56 px tile — the app's own container ratio, so the icon reads as the same family as the UI.
 - **Safe zone.** Maskable icons are cropped to an arbitrary OS shape, so the glyph must sit inside the
-  centred circle of diameter **0.8 × canvas**. Rendering the glyph SVG at **0.66 × canvas** satisfies
-  this with margin: the mark's extent is 0.758 × 0.775 of its own box, so its bounding-box diagonal is
-  `0.66 × √(0.758² + 0.775²) = 0.715 × canvas` — comfortably inside 0.8. Non-maskable icons use the
+  centred circle of diameter **0.8 × canvas**. A rhombus makes this cheap: its extreme points lie on
+  the axes, not at bounding-box corners, so its circumradius is only `10.05 / 24 = 0.419 × the glyph
+box`. Rendered at **0.66 × canvas** that is 0.55 × canvas across — comfortably inside 0.8. (A square
+  or a letterform pays √2 for the same extent and has to be shrunk to fit.) Non-maskable icons use the
   same 0.66, centred.
 - **`app/manifest.ts`** declares both maskable entries plus `name: 'Motir'`, `short_name: 'Motir'`,
   `theme_color` = the light `--el-accent` literal and `background_color` = the light `--el-page-bg`
@@ -299,6 +342,9 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
 - The artifact this card does **not** produce is the raster set itself (`apple-icon.png`,
   `icon-192/512.png`). Those are build outputs — MOTIR-1150 renders them from the single SVG source
   defined in §2 at the sizes and safe zones in §5.
+- **The glyph is decided by MOTIR-1140, not by this card.** Keep the two `<path>` strings in ONE
+  module so a substitution (to B or C) is a single-file change. If C wins, that module also owns the
+  simplified ≤24 px cut, and every call site below 24 px must resolve to it.
 
 ## File-name note
 

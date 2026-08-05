@@ -15,6 +15,17 @@
       candidates for the 8.3.2 decision), the wordmark and its lockups, the
       light/dark colour rule, the favicon / app-icon set, the 1200x630 OG
       template, and every shipped surface the mark enters.
+
+      -- NOT A LETTERFORM (Yue, 2026-08-05) --
+      An earlier revision of this asset built the mark from the letter M. That
+      was rejected: an initial says only what the product is called. Every
+      candidate in Panel 1 is now a MATHEMATICAL OBJECT chosen because it is true
+      of what Motir does -- a Hasse diagram nested inside itself (a plan is a
+      poset, and it is self-similar), a hypocycloid (a small cycle running inside
+      a larger arc), and a Brunnian link (three pillars, none pairwise joined,
+      all three inseparable). The shipped glyph is the first of these; the rest
+      of this asset is glyph-agnostic, so 8.3.2 can substitute one of the others
+      by swapping <path> data alone.
       Story MOTIR-656 (8.3 Marketing site + brand mark) - subtask MOTIR-1139.
       Layout source of truth for MOTIR-1150 (apply the mark across the app) and
       the option set for MOTIR-1140 (final logomark approval).
@@ -3485,6 +3496,12 @@
         line-height: 1.6;
         color: var(--el-text-secondary);
       }
+      .cand-math {
+        color: var(--el-accent-on-surface) !important;
+        font-weight: 500;
+        border-left: 2px solid var(--el-border);
+        padding-left: 10px;
+      }
       .cand-why {
         border-top: 1px solid var(--el-border);
         padding-top: 8px;
@@ -4043,45 +4060,27 @@
   <body>
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
-        <!-- Candidate A — "Ascent". The recommended glyph. One stroked path. -->
-        <g id="mark-a">
-          <path
-            d="M4.6 19.6V7.4L12 14.4l7.4-10v15.2"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="3.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
+        <!-- Candidate A — "Lattice". The recommended glyph: the Hasse diagram of a
+         fork-join, nested inside itself. Two rhombi, the inner exactly half the
+         outer. One stroke weight, no fill, no letterform. -->
+        <g id="mark-a" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">
+          <path d="M12 3.2L20.8 12L12 20.8L3.2 12Z" />
+          <path d="M12 7.6L16.4 12L12 16.4L7.6 12Z" />
         </g>
-        <!-- Candidate B — "Nodes". Same skeleton, thinner stroke + three DAG nodes. -->
+        <!-- Candidate B — "Hypocycloid". The curve traced by a point on a circle
+         rolling inside a circle five times larger. One closed curve, solid. -->
         <g id="mark-b">
           <path
-            d="M4.6 19.6V7.4L12 14.4l7.4-10v15.2"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            d="M12.00 2.44L12.00 2.46L12.00 2.50L12.01 2.57L12.02 2.67L12.05 2.80L12.08 2.95L12.13 3.13L12.19 3.33L12.26 3.55L12.36 3.79L12.47 4.04L12.60 4.32L12.75 4.60L12.93 4.90L13.12 5.20L13.34 5.51L13.57 5.82L13.83 6.13L14.10 6.44L14.40 6.74L14.71 7.04L15.03 7.33L15.37 7.61L15.73 7.88L16.09 8.13L16.46 8.37L16.84 8.59L17.22 8.79L17.60 8.98L17.98 9.14L18.35 9.29L18.72 9.42L19.08 9.53L19.43 9.62L19.76 9.69L20.08 9.75L20.38 9.79L20.66 9.82L20.92 9.83L21.15 9.84L21.36 9.83L21.54 9.82L21.70 9.81L21.82 9.79L21.92 9.77L21.99 9.76L22.04 9.75L22.05 9.74L22.04 9.75L22.00 9.76L21.93 9.79L21.84 9.84L21.73 9.90L21.59 9.98L21.44 10.08L21.27 10.19L21.08 10.34L20.88 10.50L20.67 10.69L20.45 10.90L20.23 11.13L20.00 11.38L19.77 11.66L19.55 11.96L19.32 12.28L19.11 12.62L18.90 12.98L18.70 13.35L18.51 13.74L18.34 14.14L18.17 14.55L18.03 14.97L17.90 15.39L17.79 15.82L17.70 16.24L17.62 16.67L17.56 17.09L17.52 17.50L17.50 17.90L17.49 18.29L17.50 18.67L17.52 19.03L17.55 19.37L17.60 19.69L17.65 19.99L17.71 20.26L17.78 20.51L17.84 20.73L17.91 20.93L17.98 21.10L18.04 21.24L18.10 21.36L18.14 21.45L18.18 21.51L18.20 21.55L18.21 21.56L18.20 21.55L18.17 21.51L18.13 21.46L18.06 21.39L17.96 21.30L17.85 21.19L17.71 21.08L17.54 20.95L17.35 20.82L17.13 20.68L16.89 20.54L16.62 20.40L16.33 20.26L16.02 20.12L15.68 19.99L15.33 19.86L14.95 19.75L14.56 19.65L14.16 19.56L13.74 19.49L13.32 19.43L12.88 19.38L12.44 19.36L12.00 19.35L11.56 19.36L11.12 19.38L10.68 19.43L10.26 19.49L9.84 19.56L9.44 19.65L9.05 19.75L8.67 19.86L8.32 19.99L7.98 20.12L7.67 20.26L7.38 20.40L7.11 20.54L6.87 20.68L6.65 20.82L6.46 20.95L6.29 21.08L6.15 21.19L6.04 21.30L5.94 21.39L5.87 21.46L5.83 21.51L5.80 21.55L5.79 21.56L5.80 21.55L5.82 21.51L5.86 21.45L5.90 21.36L5.96 21.24L6.02 21.10L6.09 20.93L6.16 20.73L6.22 20.51L6.29 20.26L6.35 19.99L6.40 19.69L6.45 19.37L6.48 19.03L6.50 18.67L6.51 18.29L6.50 17.90L6.48 17.50L6.44 17.09L6.38 16.67L6.30 16.24L6.21 15.82L6.10 15.39L5.97 14.97L5.83 14.55L5.66 14.14L5.49 13.74L5.30 13.35L5.10 12.98L4.89 12.62L4.68 12.28L4.45 11.96L4.23 11.66L4.00 11.38L3.77 11.13L3.55 10.90L3.33 10.69L3.12 10.50L2.92 10.34L2.73 10.19L2.56 10.08L2.41 9.98L2.27 9.90L2.16 9.84L2.07 9.79L2.00 9.76L1.96 9.75L1.95 9.74L1.96 9.75L2.01 9.76L2.08 9.77L2.18 9.79L2.30 9.81L2.46 9.82L2.64 9.83L2.85 9.84L3.08 9.83L3.34 9.82L3.62 9.79L3.92 9.75L4.24 9.69L4.57 9.62L4.92 9.53L5.28 9.42L5.65 9.29L6.02 9.14L6.40 8.98L6.78 8.79L7.16 8.59L7.54 8.37L7.91 8.13L8.27 7.88L8.63 7.61L8.97 7.33L9.29 7.04L9.60 6.74L9.90 6.44L10.17 6.13L10.43 5.82L10.66 5.51L10.88 5.20L11.07 4.90L11.25 4.60L11.40 4.32L11.53 4.04L11.64 3.79L11.74 3.55L11.81 3.33L11.87 3.13L11.92 2.95L11.95 2.80L11.98 2.67L11.99 2.57L12.00 2.50L12.00 2.46L12.00 2.44Z"
+            fill="currentColor"
           />
-          <circle cx="4.6" cy="7.4" r="2.7" fill="currentColor" />
-          <circle cx="12" cy="14.4" r="2.7" fill="currentColor" />
-          <circle cx="19.4" cy="4.4" r="2.7" fill="currentColor" />
         </g>
-        <!-- Candidate C — "Tile". A reversed lockup: the glyph knocked out of a
-         filled accent tile. This is ALSO the app-icon container for A. -->
-        <g id="mark-c">
-          <rect width="24" height="24" rx="6" fill="var(--el-accent)" />
-          <g transform="translate(12 12) scale(0.66) translate(-12 -12)">
-            <path
-              d="M4.6 19.6V7.4L12 14.4l7.4-10v15.2"
-              fill="none"
-              stroke="var(--el-accent-text)"
-              stroke-width="3.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </g>
+        <!-- Candidate C — "Borromean". Three rings, no two of which are linked,
+         all three inseparable (a Brunnian link). Three arc pairs, one stroke. -->
+        <g id="mark-c" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round">
+          <path d="M18.04 10.71A6.2 6.2 0 0 1 10.21 15.24 M7.79 13.85A6.2 6.2 0 1 1 18.05 7.93" />
+          <path d="M10.87 19.22A6.2 6.2 0 0 1 10.87 10.18 M13.29 8.78A6.2 6.2 0 1 1 13.29 20.62" />
+          <path d="M7.09 8.76A6.2 6.2 0 0 1 14.92 13.29 M14.93 16.07A6.2 6.2 0 1 1 4.67 10.15" />
         </g>
         <!-- The construction grid overlay (documentation only — never shipped). -->
         <g id="mark-grid">
@@ -4096,7 +4095,7 @@
           />
           <path d="M12 0V24M0 12H24" stroke="var(--el-border)" stroke-width="0.4" />
           <path
-            d="M2.9 0V24M21.1 0V24M0 2.7H24M0 21.3H24"
+            d="M1.95 0V24M22.05 0V24M0 1.95H24M0 22.05H24"
             stroke="var(--el-accent-on-surface)"
             stroke-width="0.3"
             stroke-dasharray="1 1"
@@ -4115,8 +4114,9 @@
       </h1>
       <p class="mt-3 max-w-[62ch] font-sans text-base text-(--el-text-secondary)">
         Logomark, wordmark, lockups, the dark variant, the favicon / app-icon set and the OG
-        template — specified against the surfaces that ship today. Every panel below is drawn with
-        the real
+        template — specified against the surfaces that ship today. <b>The mark is not a letter:</b>
+        each candidate in Panel 1 is a mathematical object that is true of what Motir does. Every
+        panel below is drawn with the real
         <code
           class="rounded-(--radius-kbd) bg-(--el-code-bg) px-1 py-0.5 font-mono text-[0.85em] text-(--el-code-text)"
           >--el-*</code
@@ -4313,80 +4313,102 @@
     <section class="panel">
       <p class="panel-label">Panel 1 — The logomark: three candidates for MOTIR-1140</p>
       <p class="panel-note">
-        MOTIR-1140 (8.3.2) is a <code>decision</code> card — "final logomark approval". A decision
-        needs something to decide BETWEEN, so this panel ships three glyphs on one construction
-        grid, one stroke system and one colour rule. All three are buildable SVG today; picking any
-        of them changes only the <code>&lt;path&gt;</code> data MOTIR-1150 consumes.
+        <b>No letterform.</b> The mark is not an M and is not derived from one — an initial says
+        only what the product is called, and Motir's name is not the interesting thing about it.
+        Each candidate below is a <b>mathematical object</b> that is true of what Motir actually
+        does, drawn on one construction grid with one stroke system and one colour rule. MOTIR-1140
+        (8.3.2) is a <code>decision</code> card, and a decision needs something to decide between;
+        all three are buildable SVG today, and picking any of them changes only the
+        <code>&lt;path&gt;</code> data MOTIR-1150 consumes.
       </p>
 
       <div class="cand-row">
         <figure class="cand cand-rec">
           <span class="cand-badge">Recommended</span>
           <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="text-(--el-accent-on-surface)">
+            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
               <use href="#mark-a" />
             </svg>
           </div>
           <figcaption>
-            <b>A · Ascent</b>
+            <b>A · Lattice</b>
+            <p class="cand-math">The Hasse diagram of a fork–join — nested inside itself.</p>
             <p>
-              One continuous stroke. The left stem is where a plan starts; the fork descends to the
-              decision it turns on; the right stem rises ABOVE the left — the ascent is idea →
-              shipped, which is the whole product in one gesture. It also reads, unambiguously, as
-              an M.
+              A plan is a <b>finite partially ordered set</b>, and the rhombus is how mathematics
+              draws the smallest non-trivial one: one start, two independent paths, one convergence.
+              Nesting a second rhombus at exactly half scale says the other true thing about a plan
+              — it is <b>self-similar</b>. An epic holds stories holds subtasks, and every level is
+              the same object at a different depth (Principle&nbsp;#9, "the plan deepens just in
+              time"). Zoom in and you find the same figure again.
             </p>
             <p class="cand-why">
-              <b>Why it wins:</b> it has <b>no tight counters</b> — the nearest two strokes are 14.8
-              units apart on a 24 grid — so nothing fuses at 16&nbsp;px. It is one path, so a
-              consumer needs no <code>fill-rule</code>, no mask and no second colour.
+              <b>Why it wins:</b> two closed paths, one stroke weight, no fill, no counters tighter
+              than 4.4&nbsp;units — the inner rhombus is still an unmistakable rhombus at
+              <b>16&nbsp;px</b>. It is the only candidate that needs no separate small cut, and the
+              1:2 ratio means a consumer can generate any further level from one number.
             </p>
           </figcaption>
         </figure>
 
         <figure class="cand">
           <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="text-(--el-accent-on-surface)">
+            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
               <use href="#mark-b" />
             </svg>
           </div>
           <figcaption>
-            <b>B · Nodes</b>
+            <b>B · Hypocycloid</b>
+            <p class="cand-math">
+              The curve traced by a point on a circle rolling inside a circle five times larger.
+            </p>
             <p>
-              The same skeleton with the three vertices resolved as filled nodes — the mark says
-              "dependency graph" out loud (Principle&nbsp;#14: the plan is a DAG, not a list).
+              A small cycle running inside a larger arc, drawing the shape of the whole as it goes —
+              a sprint inside a roadmap. One closed curve, five cusps, solid: the warmest of the
+              three and the closest in feel to a radial mark.
             </p>
             <p class="cand-why">
-              <b>Cost:</b> the thinner 2.4 stroke plus 2.7&nbsp;r nodes means the node/stroke ratio
-              does the reading, and at 16&nbsp;px the nodes swell into the strokes. It needs a
-              separate 16&nbsp;px cut. Louder, less durable.
+              <b>Cost:</b> a solid concave star is a <i>silhouette</i>, so it carries no interior
+              and says less than it looks like it does. Five cusps also sit close to the four-cusp
+              astroid — the ✨ every AI product now uses, and which Motir's own "Plan with AI"
+              launcher already renders. The distance is real but it is one cusp wide.
             </p>
           </figcaption>
         </figure>
 
         <figure class="cand">
           <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112"><use href="#mark-c" /></svg>
+            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
+              <use href="#mark-c" />
+            </svg>
           </div>
           <figcaption>
-            <b>C · Tile</b>
+            <b>C · Borromean</b>
+            <p class="cand-math">
+              Three rings, no two of which are linked, all three inseparable — a Brunnian link.
+            </p>
             <p>
-              A knocked-out reversal of A on an <code>--el-accent</code> tile — the direct,
-              continuous upgrade of the purple M-tile that ships today.
+              Cut any one ring and the other two fall apart, because no two were ever joined. That
+              is
+              <b>exactly</b> Motir's thesis: AI planning, the PM core and agent orchestration are
+              one product, and dropping any pillar leaves the other two holding nothing. The most
+              beautiful of the three, and the most on-message.
             </p>
             <p class="cand-why">
-              <b>Cost:</b> a tile is a container, not a mark: it cannot sit on a coloured surface,
-              in an email footer or in a single-colour print without re-cutting.
-              <b>But it is not discarded</b> — it is exactly the app-icon container for&nbsp;A
-              (Panel&nbsp;5), which is the one place a mark SHOULD be tiled.
+              <b>Cost:</b> six arcs and six crossing gaps. It is superb at 40&nbsp;px and up and it
+              <b>fails below 24&nbsp;px</b> — the interior collapses in the tab strip. Choosing it
+              means shipping a second, simplified cut for the favicon, which is a permanent
+              two-artwork tax the other two do not carry.
             </p>
           </figcaption>
         </figure>
       </div>
 
       <p class="decision-line">
-        <b>Recommendation to MOTIR-1140:</b> ship <b>A</b> as the mark, adopt <b>C</b> as A's
-        app-icon lockup, and keep <b>B</b> on file — it is A plus two attributes, so adopting it
-        later is a <code>&lt;path&gt;</code> swap in one component, not a re-brand.
+        <b>Recommendation to MOTIR-1140: A.</b> It is the only one that is simultaneously true of
+        the product, legible at every shipped size, and free of a second cut. <b>C</b> is the better
+        story and the worse mark — if the brand can accept a separate favicon artwork, it is a
+        defensible choice and the notes say what that costs. <b>B</b> is the fallback if a solid
+        silhouette is wanted for stamping, embroidery or single-colour print.
       </p>
     </section>
 
@@ -4400,7 +4422,9 @@
             <use href="#mark-grid" />
             <use href="#mark-a" />
           </svg>
-          <p class="art-cap">24-unit grid · the dashed box is the mark's true extent</p>
+          <p class="art-cap">
+            24-unit grid · the dashed box is the mark's true extent (20.1 square)
+          </p>
         </div>
         <div class="constr-spec">
           <dl class="spec">
@@ -4409,28 +4433,37 @@
               <code>0 0 24 24</code> — the same grid every <code>lucide-react</code> icon in the app
               uses, so the mark drops into any icon slot unscaled.
             </dd>
-            <dt>path</dt>
-            <dd><code class="path-d">M4.6 19.6V7.4L12 14.4l7.4-10v15.2</code></dd>
+            <dt>paths</dt>
+            <dd>
+              <code class="path-d">M12 3.2L20.8 12L12 20.8L3.2 12Z</code> and
+              <code class="path-d">M12 7.6L16.4 12L12 16.4L7.6 12Z</code> — two closed rhombi, the
+              inner at exactly <b>half</b> the outer's half-diagonal (8.8 → 4.4). One number
+              generates the whole family: the next level in would be 2.2.
+            </dd>
             <dt>paint</dt>
             <dd>
               <code>fill="none"</code>, <code>stroke="currentColor"</code>,
-              <code>stroke-width="3.4"</code>, <code>stroke-linecap="round"</code>,
-              <code>stroke-linejoin="round"</code>
+              <code>stroke-width="2.5"</code>, <code>stroke-linejoin="round"</code>. No
+              <code>stroke-linecap</code> — both paths are closed.
             </dd>
             <dt>extent</dt>
             <dd>
-              x 2.9 → 21.1 (18.2 wide) · y 2.7 → 21.3 (18.6 tall). Optically centred on (12, 12) in
-              both axes — a consumer can centre it by geometry, with no nudge.
+              x and y both 1.95 → 22.05 (20.1 square), centred on (12, 12) by construction — a
+              consumer centres it by geometry, with no nudge. The mark occupies 84% of the box,
+              which is why it holds its own beside a 24&nbsp;px lucide icon rather than reading
+              smaller.
             </dd>
             <dt>clear space</dt>
             <dd>
-              <b>2 × the stroke weight = 6.8 units</b> (28% of the box edge) on all four sides,
-              measured from the extent above — never from the viewBox.
+              <b>2 × the stroke weight = 5.0 units</b> (21% of the box edge) on all four sides,
+              measured from the extent above — never from the viewBox. A rhombus reads with more air
+              around it than a square of the same extent, so this is the floor, not the target.
             </dd>
             <dt>minimum size</dt>
             <dd>
-              <b>16 px</b> for the bare glyph (stroke lands at 2.27 px). Below 16 px use the tiled
-              form (Panel 5), which keeps the glyph at 66% inside a solid field.
+              <b>16 px</b> for the bare glyph — the stroke lands at 1.67 px and the inner rhombus at
+              2.9 px across, still an unmistakable rhombus. Below 16 px use the tiled form (Panel
+              5), which keeps the glyph at 66% inside a solid field.
             </dd>
             <dt>colour</dt>
             <dd>
@@ -4441,7 +4474,7 @@
         </div>
       </div>
 
-      <p class="sub-label">Scale ladder — the same path at every shipped size</p>
+      <p class="sub-label">Scale ladder — the same two paths at every shipped size</p>
       <div class="ladder">
         <span
           ><svg viewBox="0 0 24 24" width="16" height="16" class="text-(--el-accent-on-surface)">
@@ -4819,8 +4852,9 @@
             <b>icon-192 · maskable</b><i>192 × 192 · full bleed</i
             ><span
               >Maskable icons are cropped to an arbitrary OS shape. The glyph sits inside the
-              <b>80% safe circle</b> (the dashed ring) — 51.6% of the canvas here — so no crop can
-              clip it. Square corners, not rounded: the OS rounds them.</span
+              <b>80% safe circle</b> (the dashed ring) — the rhombus spans 0.55 × the canvas across
+              its widest axis, so no crop can clip it. Square corners, not rounded: the OS rounds
+              them.</span
             >
           </figcaption>
         </figure>
@@ -4865,8 +4899,12 @@
         </dd>
         <dt>safe zone</dt>
         <dd>
-          Maskable: glyph inside the centred circle of diameter 0.8 × canvas. Non-maskable: glyph at
-          66% of the tile, centred.
+          Maskable: the glyph sits inside the centred circle of diameter <b>0.8 × canvas</b>. A
+          rhombus makes this cheap — its extreme points lie on the axes, not at bounding-box
+          corners, so its circumradius is only 10.05/24 = <b>0.419 × the glyph box</b>, or 0.55 ×
+          canvas across at the 66% render used here. Comfortably inside 0.8. (A square or a
+          letterform pays √2 for the same extent and has to be shrunk to fit.) Non-maskable: the
+          same 66%, centred.
         </dd>
         <dt>manifest</dt>
         <dd>
@@ -5205,7 +5243,7 @@
             <img
               class="email-mark"
               alt="Motir"
-              src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20'%3E%3Cpath d='M4.6 19.6V7.4L12 14.4l7.4-10v15.2' fill='none' stroke='%235645d4' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+              src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20'%3E%3Cg fill='none' stroke='%235645d4' stroke-width='2.5' stroke-linejoin='round'%3E%3Cpath d='M12 3.2L20.8 12L12 20.8L3.2 12Z'/%3E%3Cpath d='M12 7.6L16.4 12L12 16.4L7.6 12Z'/%3E%3C/g%3E%3C/svg%3E"
             />
             <span>Motir</span>
           </div>
