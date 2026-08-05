@@ -813,6 +813,103 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TWO RUNS, ONE (repo × project) — MOTIR-2160.
+//
+// The refresh job debounces pushes on `installationId/owner/name` with a 2-minute
+// window, which coalesces merges INSIDE one window and does nothing once a run has
+// started — while an index takes minutes. So a second run arriving mid-index is
+// ordinary merge cadence. What the caps could not see is that the slot key names
+// the WORK, not the worker: a second run's held-slot read was indistinguishable
+// from a replay, and it booted a container judged against none of the three bounds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a refresh run whose (repo × project) is already being indexed', () => {
+  /** Take the slot as a DIFFERENT run, through the real gate — a first run mid-index. */
+  async function heldByAnotherRun(workspaceId: string, projectId: string, dispatchId: string) {
+    const workspace = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    return codeGraphIndexAdmissionService.admit({
+      projectId,
+      repoRef: REPO_REF,
+      dispatchId,
+      workspaceId,
+      organizationId: workspace.organizationId,
+      containerTimeoutMs: 1_800_000,
+    });
+  }
+
+  // ⚠️ THE ASSERTION THE CARD TURNS ON: THE COUNT OF BOOTED CONTAINERS. One unit
+  // of index work is one container's worth of spend, and the second run must not
+  // add another however many times it asks.
+  it('BOOTS NOTHING while the first run holds the slot', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-overlap', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    const projectId = projectIds[0]!;
+    expect(await heldByAnotherRun(workspaceId, projectId, 'evt-first')).toMatchObject({
+      outcome: 'admitted',
+    });
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { error } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      // Enough sleeps for the whole waiting budget — the second run WAITS, and
+      // only fails once the budget is exhausted. Nothing is dropped silently.
+      steps: sleepSteps(projectIds, INDEX_ADMISSION_BUDGETS.maxAttempts),
+    });
+
+    // NOT ONE container for the second run — the first one's is the only one.
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect((error as Error).message).toContain('repo_index_in_flight');
+    // …and it never took a second slot, so the first run's capacity is intact and
+    // still names its real owner.
+    const slots = await db.fleetInFlightSlot.findMany();
+    expect(slots).toHaveLength(1);
+    expect(slots[0]).toMatchObject({ ownerRef: 'evt-first', ref: `${projectId}:${REPO_REF}` });
+    // The ledger recorded a FAILED run: a refresh that indexed nothing must never
+    // claim the repo (§6).
+    const runs = await refreshJobRuns();
+    expect(runs.at(-1)?.status).not.toBe('succeeded');
+  }, 60_000);
+
+  // The other side of the same coin, and the property scoping `already_held` to
+  // the run must not cost: THIS run asking again for capacity it already holds is
+  // a replay, not an overlap — the case MOTIR-2002 asserted for the CI fleet by
+  // call count, asserted here by container count.
+  it('still admits the SAME run’s replayed admit step, and boots exactly once', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-replay', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    // ⚠️ Bind the REAL method BEFORE spying, or the fall-through re-enters the spy.
+    const real = codeGraphIndexAdmissionService.admit.bind(codeGraphIndexAdmissionService);
+    const seen: Array<{ outcome: string }> = [];
+    // Every admit step runs TWICE against the real gate — the shape of a durable
+    // step whose work committed but whose memo did not, so the retry re-executes
+    // it. The run proceeds on the SECOND answer.
+    vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockImplementation(async (request, now) => {
+      const first = await real(request, now);
+      const again = await real(request, now);
+      seen.push(first, again);
+      return again;
+    });
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { result } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps(projectIds),
+    });
+
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    // The re-execution was NOT refused, and it was not a second slot either.
+    expect(seen.map((v) => v.outcome)).toEqual(['admitted', 'already_held']);
+    // ONE container, from the run that owns the capacity.
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    // And it gave that capacity back — which an ownership-checked release only
+    // does for the run that took it.
+    expect(await db.fleetInFlightSlot.count()).toBe(0);
+  }, 30_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // THE DEFINITION — the cap is NOT here, and must never come back (MOTIR-1990).
 // ─────────────────────────────────────────────────────────────────────────────
 

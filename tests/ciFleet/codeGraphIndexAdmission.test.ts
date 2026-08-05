@@ -85,12 +85,22 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
   };
 }
 
+/** The DISPATCH every case shares unless it is ABOUT two of them — so a case that
+ *  asks twice for one (repo × project) is a REDELIVERY of one dispatch, which is
+ *  what `already_held` is for. A second one is spelled out explicitly (MOTIR-2160). */
+const RUN = 'evt-01HZZ';
+
 /** Ask for admission for one (repo × project), through the real gate. */
-function admit(fx: Fixture, repoRef = `moooon/repo-${(seq += 1)}`): Promise<IndexAdmissionVerdict> {
+function admit(
+  fx: Fixture,
+  repoRef = `moooon/repo-${(seq += 1)}`,
+  dispatchId = RUN,
+): Promise<IndexAdmissionVerdict> {
   return codeGraphIndexAdmissionService.admit(
     {
       projectId: fx.projectId,
       repoRef,
+      dispatchId,
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
       containerTimeoutMs: CONTAINER_TIMEOUT_MS,
@@ -330,6 +340,7 @@ describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
       {
         projectId: second.id,
         repoRef: 'moooon/a',
+        dispatchId: RUN,
         workspaceId: fx.workspaceId,
         organizationId: fx.organizationId,
         containerTimeoutMs: CONTAINER_TIMEOUT_MS,
@@ -405,7 +416,7 @@ describe('a refused index WAITS and later runs — nothing is dropped', () => {
       pending.push(...stillPending);
       // The admitted containers finish and give their capacity back.
       for (const repo of admitted) {
-        await codeGraphIndexAdmissionService.release(indexSlotRef(fx.projectId, repo));
+        await codeGraphIndexAdmissionService.release(indexSlotRef(fx.projectId, repo), RUN);
       }
     }
 
@@ -425,7 +436,7 @@ describe('a refused index WAITS and later runs — nothing is dropped', () => {
     });
 
     expect(
-      await codeGraphIndexAdmissionService.release(indexSlotRef(fx.projectId, 'moooon/first')),
+      await codeGraphIndexAdmissionService.release(indexSlotRef(fx.projectId, 'moooon/first'), RUN),
     ).toBe(true);
 
     expect((await admit(await seedTenant(), 'moooon/third')).outcome).toBe('admitted');
@@ -589,13 +600,44 @@ describe('the index gate fails CLOSED', () => {
   });
 
   // The lost-insert race the `ON CONFLICT DO NOTHING` closes: another transaction
-  // committed the same ref between this one's read and its write.
-  it('a LOST INSERT RACE reports already_held, never a second slot', async () => {
+  // committed the same ref between this one's read and its write. `mockResolvedValueOnce`
+  // makes only the FIRST read miss, so the winner is read back for real afterwards —
+  // which is what decides the verdict (MOTIR-2160).
+  it('a LOST INSERT RACE by the SAME run reports already_held, never a second slot', async () => {
     const fx = await seedTenant();
     await admit(fx, 'moooon/raced');
-    vi.spyOn(fleetInFlightSlotRepository, 'findByRef').mockResolvedValue(null);
+    vi.spyOn(fleetInFlightSlotRepository, 'findByRef').mockResolvedValueOnce(null);
 
     expect(await admit(fx, 'moooon/raced')).toMatchObject({ outcome: 'already_held' });
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // ⚠️ AND THE SAME RACE LOST TO A DIFFERENT RUN IS A DEFERRAL, NOT A TICKET. The
+  // conflict alone cannot tell the two apart, and reading it as one's own
+  // redelivery is what let a second container boot past every cap.
+  it('a LOST INSERT RACE to ANOTHER run defers — the conflict is not proof of ownership', async () => {
+    const fx = await seedTenant();
+    await admit(fx, 'moooon/raced', 'evt-first');
+    vi.spyOn(fleetInFlightSlotRepository, 'findByRef').mockResolvedValueOnce(null);
+
+    expect(await admit(fx, 'moooon/raced', 'evt-second')).toMatchObject({
+      outcome: 'deferred',
+      reason: 'repo_index_in_flight',
+    });
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // Fail CLOSED on an unreadable winner too: the insert conflicted, so SOMETHING
+  // holds the slot, and a holder that cannot be identified is not this run.
+  it('DEFERS when the winning row cannot be read back at all', async () => {
+    const fx = await seedTenant();
+    await admit(fx, 'moooon/unreadable');
+    vi.spyOn(fleetInFlightSlotRepository, 'findByRef').mockResolvedValue(null);
+
+    expect(await admit(fx, 'moooon/unreadable')).toMatchObject({
+      outcome: 'deferred',
+      reason: 'repo_index_in_flight',
+    });
     expect(await indexInFlight()).toBe(1);
   });
 });
@@ -635,6 +677,7 @@ describe('the slot a granted admission takes', () => {
       {
         projectId: fx.projectId,
         repoRef: 'moooon/next',
+        dispatchId: RUN,
         workspaceId: fx.workspaceId,
         organizationId: fx.organizationId,
         containerTimeoutMs: CONTAINER_TIMEOUT_MS,
@@ -646,13 +689,228 @@ describe('the slot a granted admission takes', () => {
   });
 
   it('releasing a slot that was never held is visible, not silent', async () => {
-    expect(await codeGraphIndexAdmissionService.release('never:taken')).toBe(false);
+    expect(await codeGraphIndexAdmissionService.release('never:taken', RUN)).toBe(false);
   });
 
   it('keys the slot by (projectId, repoRef) — deterministic, never run-scoped', () => {
     expect(indexSlotRef('proj-1', 'moooon/core')).toBe('proj-1:moooon/core');
     expect(indexSlotRef('proj-1', 'moooon/core')).toBe(indexSlotRef('proj-1', 'moooon/core'));
     expect(indexSlotRef('proj-2', 'moooon/core')).not.toBe(indexSlotRef('proj-1', 'moooon/core'));
+  });
+
+  // …and the RUN that took it rides on the ROW, which is the half the key
+  // deliberately cannot carry (MOTIR-2160).
+  it('stamps the taking run on the slot, without putting it in the key', async () => {
+    const fx = await seedTenant();
+    await admit(fx, 'moooon/owned', 'evt-owner');
+
+    const slot = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.findByRef(
+        'code_graph_index',
+        indexSlotRef(fx.projectId, 'moooon/owned'),
+        tx,
+      ),
+    );
+    expect(slot).toMatchObject({ ownerRef: 'evt-owner' });
+    // The key is unchanged — a run-scoped KEY is what would let retries walk the cap.
+    expect(slot!.ref).toBe(`${fx.projectId}:moooon/owned`);
+  });
+});
+
+// ── TWO RUNS, ONE (repo × project) — MOTIR-2160 ─────────────────────────────
+//
+// The debounce coalesces pushes inside a 2-minute window and stops at the run
+// boundary; an index takes minutes. So a SECOND run for a repo the first is still
+// indexing is ordinary merge cadence, and the slot key alone cannot tell it from
+// the first run's own replay. Everything below is that distinction, against real
+// transactions.
+
+describe('a second RUN for a (repo × project) the first is still indexing', () => {
+  it('is DEFERRED, not admitted — the ticket count is what the cap really bounds', async () => {
+    // Room for a dozen: nothing here may be a CAP refusal in disguise.
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '12');
+    const fx = await seedTenant();
+
+    expect(await admit(fx, 'moooon/core', 'evt-A')).toMatchObject({ outcome: 'admitted' });
+    const second = await admit(fx, 'moooon/core', 'evt-B');
+
+    expect(second).toMatchObject({ outcome: 'deferred', reason: 'repo_index_in_flight' });
+    // ⚠️ THE ASSERTION THE CARD TURNS ON, stated as capacity: one unit of index
+    // work, one slot, one container's worth of spend — never two.
+    expect(await indexInFlight()).toBe(1);
+    // And the deferral names the holder, so an operator reading the run's log can
+    // tell "another run has this repo" from "the fleet is full".
+    if (second.outcome !== 'deferred') throw new Error('expected a deferral');
+    expect(second.detail).toContain('evt-A');
+  });
+
+  it('never lets both of TWO CONCURRENT runs through — the race, not the sequence', async () => {
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '12');
+    const fx = await seedTenant();
+
+    // Two dispatchers arriving together on the same repo, as two pushes four
+    // minutes apart really do. Under the shared `fleet` lock exactly one may win.
+    const verdicts = await Promise.all([
+      admit(fx, 'moooon/core', 'evt-A'),
+      admit(fx, 'moooon/core', 'evt-B'),
+    ]);
+
+    expect(verdicts.filter((v) => v.outcome === 'admitted')).toHaveLength(1);
+    expect(verdicts.filter((v) => v.outcome === 'deferred')).toHaveLength(1);
+    expect(verdicts.filter((v) => v.outcome === 'already_held')).toHaveLength(0);
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // ⚠️ AND IT IS THE RUN, NOT THE REPO, THAT IS SERIALIZED. Two runs indexing the
+  // same repo into DIFFERENT projects are two units of work, and the fan-out
+  // depends on both proceeding.
+  it('does not serialize two PROJECTS of the same repo', async () => {
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '12');
+    const first = await seedTenant();
+    const second = await seedTenant();
+
+    expect(await admit(first, 'moooon/core', 'evt-A')).toMatchObject({ outcome: 'admitted' });
+    expect(await admit(second, 'moooon/core', 'evt-B')).toMatchObject({ outcome: 'admitted' });
+    expect(await indexInFlight()).toBe(2);
+  });
+
+  // The deferral is a WAIT, and the holder settling is what ends it — the same
+  // "nothing is dropped" contract every other deferral has.
+  it('lets the waiting run in as soon as the holder releases', async () => {
+    const fx = await seedTenant();
+    const first = await admit(fx, 'moooon/core', 'evt-A');
+    if (first.outcome !== 'admitted') throw new Error('expected a ticket');
+    expect(await admit(fx, 'moooon/core', 'evt-B')).toMatchObject({
+      reason: 'repo_index_in_flight',
+    });
+
+    await codeGraphIndexAdmissionService.release(first.admission.slotRef, 'evt-A');
+
+    expect(await admit(fx, 'moooon/core', 'evt-B')).toMatchObject({ outcome: 'admitted' });
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // ⚠️ THE NON-REFUSAL THAT MUST SURVIVE. `already_held` exists for a redelivered
+  // job and a replayed step, and scoping it to the run must not cost that: a run
+  // asking again for capacity it is already holding still gets its ticket, still
+  // ahead of every cap.
+  it('still admits the SAME run’s retry — even with indexing at its cap', async () => {
+    vi.stubEnv('MOTIR_INDEX_MAX_IN_FLIGHT', '1');
+    const fx = await seedTenant();
+    const first = await admit(fx, 'moooon/core', 'evt-A');
+    if (first.outcome !== 'admitted') throw new Error('expected a ticket');
+
+    const replay = await admit(fx, 'moooon/core', 'evt-A');
+
+    expect(replay).toMatchObject({ outcome: 'already_held' });
+    if (replay.outcome === 'deferred') throw new Error('expected a ticket');
+    // The SAME slot — the replay boots on the capacity it already holds.
+    expect(replay.admission.slotRef).toBe(first.admission.slotRef);
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // A row taken before `owner_ref` existed belongs to a run this one cannot name.
+  // It DEFERS: the question is whether to boot a second container beside a live
+  // one, and an unidentifiable holder is not evidence that it is safe.
+  it('defers behind an UNOWNED slot — a holder it cannot identify is not itself', async () => {
+    const fx = await seedTenant();
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'code_graph_index',
+          ref: indexSlotRef(fx.projectId, 'moooon/legacy'),
+          organizationId: fx.organizationId,
+          workspaceId: fx.workspaceId,
+          expiresAt: new Date(NOW.getTime() + CONTAINER_TIMEOUT_MS),
+        },
+        tx,
+      ),
+    );
+
+    expect(await admit(fx, 'moooon/legacy', 'evt-A')).toMatchObject({
+      outcome: 'deferred',
+      reason: 'repo_index_in_flight',
+    });
+  });
+});
+
+// ── The release owns what it frees ──────────────────────────────────────────
+
+describe('a settle may only release the slot ITS OWN run took', () => {
+  // ⚠️ MUTATION-CHECK THIS TEST: make `release` delegate to
+  // `fleetInFlightSlotRepository.release` (the unchecked delete) and it MUST go
+  // red. That was the shipped behaviour, and it is how the first run to settle
+  // freed capacity a second run's live container was still spending.
+  it('leaves the holder’s slot — and the census still counts the live container', async () => {
+    const fx = await seedTenant();
+    const held = await admit(fx, 'moooon/core', 'evt-A');
+    if (held.outcome !== 'admitted') throw new Error('expected a ticket');
+
+    // run-B settles — a container of its own, on a slot it never took.
+    const released = await codeGraphIndexAdmissionService.release(held.admission.slotRef, 'evt-B');
+
+    expect(released).toBe(false);
+    // THE INVARIANT: a live container is still counted. Under-counting one is the
+    // one direction the ceiling must never err in.
+    expect(await indexInFlight()).toBe(1);
+    const census = await withSystemContext((tx) => fleetCeilingService.census(NOW, tx));
+    expect(census.byWorkload.code_graph_index).toBe(1);
+    // …and the row is untouched, still naming its real owner.
+    const slot = await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.findByRef('code_graph_index', held.admission.slotRef, tx),
+    );
+    expect(slot).toMatchObject({ ownerRef: 'evt-A' });
+  });
+
+  it('frees it for the run that DID take it', async () => {
+    const fx = await seedTenant();
+    const held = await admit(fx, 'moooon/core', 'evt-A');
+    if (held.outcome !== 'admitted') throw new Error('expected a ticket');
+
+    expect(await codeGraphIndexAdmissionService.release(held.admission.slotRef, 'evt-A')).toBe(
+      true,
+    );
+    expect(await indexInFlight()).toBe(0);
+  });
+
+  // The cascade the ownership check removes: with an unchecked delete, run-B's
+  // settle frees the slot run-C is holding, and no row names the container it
+  // stands for any more.
+  it('cannot cascade — a stale settle does not free a LATER run’s slot', async () => {
+    const fx = await seedTenant();
+    const first = await admit(fx, 'moooon/core', 'evt-A');
+    if (first.outcome !== 'admitted') throw new Error('expected a ticket');
+    await codeGraphIndexAdmissionService.release(first.admission.slotRef, 'evt-A');
+    const later = await admit(fx, 'moooon/core', 'evt-C');
+    expect(later.outcome).toBe('admitted');
+
+    // run-B settles late, holding the same ref it once asked about.
+    await codeGraphIndexAdmissionService.release(first.admission.slotRef, 'evt-B');
+
+    expect(await indexInFlight()).toBe(1);
+  });
+
+  // The migration window, stated as a test so the asymmetry is deliberate rather
+  // than discovered: an UNOWNED row blocks a second admission (above) but does not
+  // strand its own holder's release for a full TTL.
+  it('frees an UNOWNED slot, so a run in flight at deploy time is not stranded', async () => {
+    const fx = await seedTenant();
+    const slotRef = indexSlotRef(fx.projectId, 'moooon/legacy');
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'code_graph_index',
+          ref: slotRef,
+          organizationId: fx.organizationId,
+          workspaceId: fx.workspaceId,
+          expiresAt: new Date(NOW.getTime() + CONTAINER_TIMEOUT_MS),
+        },
+        tx,
+      ),
+    );
+
+    expect(await codeGraphIndexAdmissionService.release(slotRef, 'evt-A')).toBe(true);
+    expect(await indexInFlight()).toBe(0);
   });
 });
 

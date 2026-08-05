@@ -16,6 +16,11 @@ export interface FleetInFlightSlotTakeInput {
   workload: string;
   /** The workload's own id for the thing holding the container. */
   ref: string;
+  /** WHICH RUN is taking it (MOTIR-2160) — the workload's own identifier for the
+   *  dispatch, stamped so a later admission can tell this holder apart from a
+   *  second run asking for the same `ref`, and so a release can be refused unless
+   *  it owns the row. Omit it to keep the pre-MOTIR-2160 behaviour. */
+  ownerRef?: string | null;
   organizationId?: string | null;
   workspaceId?: string | null;
   /** When this slot stops being counted if it is never released. NOT the
@@ -36,7 +41,10 @@ export const fleetInFlightSlotRepository = {
    *
    * `DO NOTHING` and not `DO UPDATE`: refreshing `expires_at` on a redelivery
    * would let a caller extend a slot's safety net indefinitely by retrying,
-   * turning the leak bound back into no bound at all.
+   * turning the leak bound back into no bound at all. It is also what keeps
+   * `owner_ref` truthful (MOTIR-2160) — a losing insert must not restamp the row
+   * with ITS run, or the holder's own settle would then fail to recognise the
+   * slot it is holding.
    *
    * Two things raw SQL bypasses and this supplies explicitly (the pair
    * `ciPeriodChargeRepository.ensureRow` documents): `@updatedAt` (hence the
@@ -46,12 +54,13 @@ export const fleetInFlightSlotRepository = {
   async take(data: FleetInFlightSlotTakeInput, tx: Prisma.TransactionClient): Promise<boolean> {
     const inserted = await tx.$executeRaw`
       INSERT INTO "fleet_in_flight_slot"
-        ("id", "workload", "ref", "organization_id", "workspace_id",
+        ("id", "workload", "ref", "owner_ref", "organization_id", "workspace_id",
          "claimed_at", "expires_at", "created_at", "updated_at")
       VALUES (
         ${randomUUID()},
         ${data.workload},
         ${data.ref},
+        ${data.ownerRef ?? null},
         ${data.organizationId ?? null},
         ${data.workspaceId ?? null},
         NOW(), ${data.expiresAt}, NOW(), NOW()
@@ -78,6 +87,43 @@ export const fleetInFlightSlotRepository = {
    */
   async release(workload: string, ref: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const result = await tx.fleetInFlightSlot.deleteMany({ where: { workload, ref } });
+    return result.count === 1;
+  },
+
+  /**
+   * Give a slot back ONLY IF THIS RUN IS THE ONE HOLDING IT (MOTIR-2160).
+   *
+   * The ownership-checked half of {@link release}, and the smaller of the two
+   * halves that stop two runs sharing one slot's capacity. `release` deletes by
+   * `(workload, ref)` alone, which is correct for a workload whose ref already
+   * names one run — and was silently wrong for the index workload, whose ref is
+   * `(projectId, repoRef)`: the first run to settle deleted the row while the
+   * OTHER run's container was still alive and still billing, and the census then
+   * under-counted a live container. Worse, the freed row could be taken by a
+   * third run and deleted in turn by the second's settle — a cascade in which no
+   * slot ever names the container it stands for.
+   *
+   * ⚠️ THE NULL ARM IS DELIBERATE, and it is the migration window, not a loophole.
+   * A row with no `owner_ref` was taken before this column existed, so no run can
+   * prove it; refusing those would strand every slot in flight at deploy time for
+   * its full TTL. It is safe exactly where this method is called from — after a
+   * SUCCESSFUL teardown, i.e. once the caller's own container is provably gone —
+   * so the only way it under-counts is a pre-MOTIR-2160 overlapping pair, which
+   * is the defect this column removes and cannot arise for rows written after it.
+   * A slot owned by a DIFFERENT named run is never released.
+   *
+   * Returns whether a row was actually removed, so a refused release is visible
+   * to the caller rather than silent.
+   */
+  async releaseOwned(
+    workload: string,
+    ref: string,
+    ownerRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.fleetInFlightSlot.deleteMany({
+      where: { workload, ref, OR: [{ ownerRef }, { ownerRef: null }] },
+    });
     return result.count === 1;
   },
 

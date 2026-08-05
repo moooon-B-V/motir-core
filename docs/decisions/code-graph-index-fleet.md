@@ -268,6 +268,53 @@ product controls, not in the provider's billing controls._ The shared org's real
 is not "one provider cap for three workloads" — it is **one invoice with nothing but Motir's own
 counter in front of it.**
 
+### §7.3 — CORRECTION: the caps only bind the FIRST run for a (repo × project) — MOTIR-2160
+
+MOTIR-1990 shipped the slot key as `<projectId>:<repoRef>`, _"deterministic, and deliberately not
+run-scoped"_, so that a redelivery, an Inngest replay and a job retry find the slot they already
+hold instead of taking a second one. That reasoning is sound and the key has not changed. **What
+it silently also assumed is that a held slot could only ever be the asking run's own** — and
+nothing in the system was holding that assumption up.
+
+`system.code-graph-refresh` debounces pushes on `installationId/owner/name` with a **2-minute**
+window (`lib/jobs/definitions/codeGraphRefresh.ts`). That coalesces merges INSIDE one window and
+does nothing once a run has started: a push arriving mid-index opens a new window and fires a
+second run. An index takes **minutes** — §11 records `motir-core`'s own tree failing to parse in
+180 s — so a second run for a repo the first is still indexing is ordinary merge cadence, not an
+exotic race. And the job deliberately carries **no `concurrency`** (MOTIR-2057, correctly: it
+would cap supervisors, not containers), so nothing else serialized it either.
+
+Two consequences, both of which contradict §7 / §7.2 as written:
+
+- **`admit` returned `already_held` BEFORE evaluating any cap** — that early return is what makes
+  a replay idempotent — so the second run's container booted having been judged against **none**
+  of `workspaceIndexInFlightCap`, `indexInFlightCap` or `fleetInFlightCeiling`, the last of which
+  §7.2 establishes has nothing whatsoever behind it.
+- **Whichever run settled first released the shared slot**, so the census under-counted a
+  container that was still running and still billing — the one direction §7 says the ceiling must
+  never err in — and a third dispatch could then take the freed row only to have it deleted in
+  turn by the second run's settle.
+
+**The correction keeps the key and adds the OWNER.** `fleet_in_flight_slot.owner_ref` records the
+dispatching run (`ctx.runId`, stable across a run's replays and retries, different for every new
+run). Admission compares it: the same run keeps its capacity (`already_held`, still ahead of the
+caps, still not a refusal), a different run is `deferred` with the new reason
+`repo_index_in_flight` and waits on the existing budget — 60 attempts, 5 s → 60 s, `step.sleep`,
+so waiting costs no invocation. Release is ownership-checked (`releaseOwned`), which is the half
+that stops the cascade and is worth having on its own.
+
+Putting the run in the **key** would have re-created exactly what MOTIR-1990 rejected — every
+retry taking its own slot and walking past the cap. Putting it in an **owner column** does not:
+the key still names one unit of index work, and the row now also says who is doing it.
+
+**And it closes a second defect by construction, in the other repo.** motir-ai's `recordSnapshot`
+writes the pointer unconditionally (no compare against the row's `commitSha`/`indexedAt`), so two
+overlapping runs finishing out of start order could land the OLDER graph while stamping
+`indexedAt = now()` — a stale code graph that claims to be current, with no detection point until
+the next push. Serializing the runs removes the only way two writers for one (repo × project) can
+exist, so no motir-ai card is owed. If a later decision ever tolerates overlap again, that guard
+comes back with it.
+
 ## §8 — Decision 7
 
 **The META org runs indexing ON the fleet, by the same path a customer takes.**
@@ -495,6 +542,7 @@ and each may cite **this file by path** instead of restating the argument:
 | **MOTIR-1990** | the admission cap — global + per-workspace `ceil(global / 2)`; takes a `fleet_in_flight_slot`; **no meta exemption**                  | §7, §7.2, §8.3 |
 | **MOTIR-1995** | the COGS meter — per-container seconds + cost, `workload` stamped, **meta metered and not charged**                                   | §9, §9.1       |
 | **MOTIR-1994** | live verification that a container really boots in `motir-fleet` and its credentials are provably narrow                              | §3, §4         |
+| **MOTIR-2160** | the slot's OWNER — one run at a time per (repo × project), ownership-checked release                                                  | §7.3           |
 
 **Already shipped, and load-bearing for this story:** MOTIR-1979 (the `motir-fleet` org),
 MOTIR-1997 (the cross-workload ceiling that counts `code_graph_index` before it exists),

@@ -175,6 +175,18 @@ export async function runIndexFleetSteps(
       // INSIDE a memoized step, so a replay pass (which Inngest re-invokes
       // with the same run) never re-mints against a different identity.
       runId: ctx.runId,
+      // ⚠️ AND THE DISPATCH'S IDENTITY, WHICH OWNS THE ADMISSION SLOT
+      // (MOTIR-2160) — the triggering event's id, exactly the expression
+      // `defineJob` derives its ledger `eventId` from, so a deferred run and the
+      // run it is waiting on are findable by the same key.
+      //
+      // NOT `ctx.runId`, and the difference is the point: this value is compared
+      // ACROSS passes (taken in `index-admit`, checked again in `index-settle`
+      // many passes later), whereas `runId` is re-read at the top of the handler
+      // on every one of them. The event's id is a property of the trigger, so it
+      // survives the round trip the ownership check depends on. The `??` mirrors
+      // `defineJob`'s own fallback for a trigger that carries no id.
+      dispatchId: ctx.event.id ?? ctx.runId,
     };
 
     // ⚠️ THE CAP, BEFORE ANY CONTAINER IS BOOTED. Nothing below can run without
