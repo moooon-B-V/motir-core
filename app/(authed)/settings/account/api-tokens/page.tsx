@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { apiTokensService } from '@/lib/services/apiTokensService';
+import { ApiDocsLinkPanel } from '../_components/ApiDocsLinkPanel';
 import { ApiTokensManager } from '../_components/ApiTokensManager';
 import { ConnectCliPanel } from '../_components/ConnectCliPanel';
 
@@ -38,6 +39,15 @@ export default async function AccountApiTokensPage() {
         <h2 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h2>
         <p className="max-w-[34rem] font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
       </header>
+
+      {/* The DOCS route reads first of all (MOTIR-2188, design `design/api-docs`
+          Panel 8): the reader with the sharpest need is someone who has just
+          minted a token and is holding a secret with nothing to do with it.
+          Same "the route out reads first" argument as the CLI panel below,
+          one line higher — reading the docs is cheaper than either minting by
+          hand or installing a CLI. This link is the ONLY thing Story 11.4 adds
+          to this page. */}
+      <ApiDocsLinkPanel />
 
       {/* The CLI route reads FIRST — above the tokens card AND above the empty
           state (MOTIR-1869, design `cli-connect` Panels 9–10). A first-time user
