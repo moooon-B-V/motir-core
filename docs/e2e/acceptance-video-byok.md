@@ -133,11 +133,25 @@ The policy differs per artifact, because they are not equally important:
 - an over-cap **video** is **NOT published** — a `::error::` annotation, and the step
   exits non-zero. The video is the receipt; there is nothing to fall back to.
 
-`max-artifact-bytes` defaults to **100 MB**. **Set it to `10485760` if your workspace
-is on the 10 MB baseline** (self-hosted, or cloud `free`) — otherwise the up-front gate
-waves through artifacts your own store will reject, and you get the failure at `put`
-time instead. The mint also returns its real `maxBytes`, so that late failure at least
-names the file, its size and the cap.
+`max-artifact-bytes` defaults to **100 MB**, and **on Motir Cloud that is always the
+right number** — so most callers never touch it. Publishing is gated on a paid AI plan
+(`hasPaidAiPlan`), and a paid AI plan is the _same_ flag that lifts the cap
+(`pmTierForOrg`: `aiIncludedSeat → 'scaled'` → 100 MB). An org without one is capped at
+10 MB but gets a **402 before any upload**, so those 10 MB never bind anything. Every
+org that can publish at all has 100 MB.
+
+**Set it to `10485760` if you are SELF-HOSTING.** That is the one configuration where
+the gate is open and the cap is tight: `resolvePerFileLimitBytes` returns the 10 MB
+baseline from its `!isCloudBilling()` branch _before_ any tier is consulted, while
+eligibility is separately ungated off-cloud (`applicable:false ⇒ eligible`). Leave it at
+the default there and the up-front gate waves through artifacts your own store will
+reject, and you get the failure at `put` time instead. The mint also returns its real
+`maxBytes`, so that late failure at least names the file, its size and the cap.
+
+Worth knowing at 10 MB: these clips run ~59 KiB/s at 720p (measured — MOTIR-813's is
+104.7 s / 6,340,169 B), so the **video** arm trips at roughly **three minutes** of
+recording off-cloud, versus ~29 minutes on cloud. Self-hosted, a long story's receipt is
+a real possibility, not a theoretical one.
 
 ### How the target story is resolved (MOTIR-1684)
 
