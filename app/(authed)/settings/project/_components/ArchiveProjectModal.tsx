@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { TriangleAlert } from 'lucide-react';
+import { CODE_GRAPH_RETENTION_WINDOW_DAYS } from '@/lib/codeGraph/offboarding';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -76,6 +77,17 @@ export function ArchiveProjectModal({
             {t('archive.modalTitle', { projectName })}
           </h2>
           <p className="text-(--el-text-muted) mt-1 font-sans text-sm">{t('archive.modalDesc')}</p>
+          {/* THE RETENTION DISCLOSURE (MOTIR-2171 ·
+              `docs/decisions/code-graph-index-fleet.md` §14). Archiving now
+              schedules removal of the derived code index, so the dialog says so
+              — a defined retention window nobody is told about is an internal
+              implementation detail wearing a compliance word. The duration is
+              INTERPOLATED from the constant the enqueue reads, never typed into
+              the catalog: a number that can drift from the behaviour it
+              describes is the exact failure this sentence exists to prevent. */}
+          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
+            {t('archive.modalCodeIndex', { days: CODE_GRAPH_RETENTION_WINDOW_DAYS })}
+          </p>
         </div>
       </div>
 

@@ -1302,6 +1302,7 @@
       "deleteErrorTitle": "Could not delete workspace",
       "deleteModalTitle": "Delete {workspaceName}?",
       "deleteModalDesc": "This will permanently delete the workspace and all its data (projects, work items, members). This action cannot be undone.",
+      "deleteModalCodeIndex": "The code index Motir built from this workspace's repositories is removed immediately — deleting a workspace has no recovery window.",
       "confirmLabel": "Type {workspaceName} to confirm",
       "deleteConfirmButton": "Delete workspace"
     },
@@ -1320,7 +1321,8 @@
       "archivedToast": "Project archived",
       "archiveErrorTitle": "Could not archive project",
       "modalTitle": "Archive {projectName}?",
-      "modalDesc": "Archiving hides this project from the switcher and lists. Its work items and history are preserved — you can restore the project later. This does not delete any data.",
+      "modalDesc": "Archiving hides this project from the switcher and lists. Its work items and history are preserved — you can restore the project later.",
+      "modalCodeIndex": "Motir also removes the code index it built from this project's repositories, after {days} days. Re-indexing the project before then cancels the removal.",
       "confirmLabel": "Type {identifier} to confirm",
       "modalConfirm": "Archive project"
     },
@@ -4873,7 +4875,8 @@
       "title": "Repositories",
       "caption": "Only the repositories you selected on GitHub. Motir reads these — it can't see any others.",
       "empty": "No repositories are selected yet. Choose repositories on GitHub to get started.",
-      "foot": "To add or remove repositories, update the Motir App's access on GitHub."
+      "foot": "To add or remove repositories, update the Motir App's access on GitHub.",
+      "codeIndex": "Removing a repository there also removes the code index Motir built from it, after {days} days. Re-selecting it before then cancels the removal."
     },
     "needsAccess": {
       "pill": "Action needed",

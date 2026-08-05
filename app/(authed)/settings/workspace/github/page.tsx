@@ -11,6 +11,7 @@ import { encodeInstallState } from '@/lib/github/installState';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
+import { CODE_GRAPH_RETENTION_WINDOW_DAYS } from '@/lib/codeGraph/offboarding';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { GithubIdentityDTO, GithubInstallationDTO } from '@/lib/dto/github';
@@ -123,6 +124,7 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
             reposCaption: t('repos.caption'),
             reposEmpty: t('repos.empty'),
             reposFoot: t('repos.foot'),
+            reposCodeIndex: t('repos.codeIndex', { days: CODE_GRAPH_RETENTION_WINDOW_DAYS }),
           }}
         />
       ) : (
@@ -233,6 +235,7 @@ function ConnectedPanel({
     reposCaption: string;
     reposEmpty: string;
     reposFoot: string;
+    reposCodeIndex: string;
   };
 }) {
   const manageUrl = githubInstallationManageUrl({
@@ -267,9 +270,19 @@ function ConnectedPanel({
           </div>
         }
         footer={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="font-sans text-sm text-(--el-text-muted)">{copy.reposFoot}</p>
-            <ManageOnGithubLink href={manageUrl} label={copy.manage} />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="font-sans text-sm text-(--el-text-muted)">{copy.reposFoot}</p>
+              <ManageOnGithubLink href={manageUrl} label={copy.manage} />
+            </div>
+            {/* THE RETENTION DISCLOSURE (MOTIR-2171 ·
+                `docs/decisions/code-graph-index-fleet.md` §14). De-selecting a
+                repository on GitHub is the repo-DISCONNECT trigger: the next
+                installation reconcile prunes its row, so nothing will index it
+                again and its derived code index is queued for removal. It happens
+                on GitHub's own screen, so this footer — the one place that
+                explains where that screen is — is where the user can be told. */}
+            <p className="font-sans text-sm text-(--el-text-muted)">{copy.reposCodeIndex}</p>
           </div>
         }
       >
