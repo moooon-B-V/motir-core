@@ -1681,114 +1681,134 @@ with `docs/decisions/status-derivation.md` about BEHAVIOUR, the ADR wins.
 
 ---
 
-# Roles & permissions grid (Story MOTIR-2255) — Subtask MOTIR-2259 output
+# Roles & permissions — the role matrix, and creating a role (Story MOTIR-2255) — Subtask MOTIR-2259 output
 
 **Files:** `design/projects/roles-permissions.mock.html` (source of truth) ·
 `design/projects/roles-permissions.png` (light-mode full-page export) · this section.
 
-**Surface:** `Project settings → Access → Roles & permissions`. Shows a project's roles and, for
-each, the permissions it holds. **Read-only** in this story, over the three built-in roles;
-MOTIR-2257 turns the same page into an editor.
+**Surface:** `Project settings → Access → Roles & permissions`. Shows every role in the project and,
+for each, the permissions it holds.
 
-**Consumer:** MOTIR-2263 (the settings page + its rail entry + i18n) builds to **panel 0**, with
-**panel 1** as the density spec and **panel 2** as the member-view spec. MOTIR-2265 (the story E2E)
-asserts panels 0 and 2. MOTIR-2257 inherits **panel 3** as its placement decision.
+**Consumers:** MOTIR-2263 (the read-only page + rail entry + i18n) builds **panels 0 and 3**.
+MOTIR-2265 (story E2E) asserts panels 0 and 3. **MOTIR-2257 (custom roles) builds panels 1 and 2** —
+the custom column and the create-role modal are specified here so that story adds behaviour to a
+drawn surface rather than inventing one.
 
-## What this asset does NOT re-specify (it composes)
+## The three decisions this asset makes
 
-| Surface                                                                                                                        | Owned by                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| The settings-area chrome — rail, groups, back-link header, page frame (`.shell` / `.rail` / `.content`)                        | `design/projects/settings-area.mock.html` (Subtask 6.5.1)  |
-| The Members + Access cards, and the ROLE-CHIP grammar reused here (`pill-admin` lavender · `pill-member` sky · `pill-ro` mint) | `design/projects/access-members.mock.html` (Subtask 6.4.1) |
+### 1 · Permissions are ROWS, roles are COLUMNS
 
-Both are inherited **verbatim** — their CSS is copied into this mock unchanged so the asset can
-never drift from them. Neither is redrawn, and a change to either belongs in _that_ asset, not here.
+The first draft gave each role its own card listing all eleven permissions — the same eleven
+repeated once per role, 33 rows to say what 11 rows say, and a page roughly **three times taller
+than it needed to be** (2 900px → 1 149px for the same content). A matrix is what both mirrors use,
+and it is the shape that survives custom roles: **a new role costs one COLUMN, not another
+full-height card.** Panel 1 is the proof — four roles still fit one screen.
 
-> Two `color: #fff` literals survive inside the inherited blocks (`.proj .pav`, the unused
-> `.btn-danger`). They are **pre-existing** in `settings-area.mock.html`, carried over byte-identical
-> rather than silently diverged; this asset introduces no colour literal of its own.
+### 2 · Built-in roles are IMMUTABLE, and the interface says so
 
-## Access path (drawn, not just named)
+The epic seeds Admin / Member / Viewer precisely so they reproduce today's behaviour exactly, so
+**editing one is not a thing that exists.** Each built-in column therefore carries a **lock + the
+word "Built-in"** and **no control at all** — not a disabled edit button, not a tooltip explaining
+why you can't. Only a **custom** role column carries `Edit` and `Delete` (panel 1).
 
-The rail's **ACCESS** group, directly beneath **Members & access** and above **Code access** —
-drawn in **panels 0 and 2**. The registry entry MOTIR-2263 adds is `id: 'roles'`, group `access`,
-href `/settings/project/roles`, `access: browse` (every current entry is browse-gated; changing that
-to a permission is MOTIR-2258's job, not this story's).
+> This corrects the first draft, which drew a per-role `Edit` affordance on all three built-in
+> cards — a promise the model does not keep.
 
-**Icon:** the `shield` glyph (`i-shield` in the mock's sprite, `Shield` from `lucide-react` in code).
-It is the one new glyph this surface adds; the registry already imports from the same package.
+Consequence worth stating for MOTIR-2263: on the read-only story, the ONLY write affordance on this
+page is `Create role`, and it opens MOTIR-2257's surface. Until that ships, MOTIR-2263 may ship the
+button disabled, or omit it — the matrix is what this story delivers.
+
+### 3 · The `public_request:*` permissions are NOT a column
+
+They are **level**-gated — granted by the project's `accessLevel` being `public`, to every visitor
+including an anonymous one, and to nobody on an open/limited/private project, a workspace owner
+included. No role can hold or withhold them, so a role column would misrepresent what a role
+controls. They sit **below** the matrix in an `Access level`-chipped card with an **eye** mark
+instead of a check/dash. (`lib/permissions/builtinRoles.ts` draws the same line by keeping them out
+of every role set.)
 
 ## Panels (inspect every one)
 
-0. **The populated page, project-ADMIN view**, inside the settings shell. Three role cards; each
-   permission row carries its human label + description, never the raw catalog key.
-1. **The grid AT WIDTH** — the same cards without the chrome. Each domain heading carries a
-   `held/total` count and every description collapses to ONE line (`.compact`), so a domain that
-   grows to a dozen rows stays a scannable list instead of a wall.
-2. **The MEMBER (non-admin) view** — identical content; the read is browse-gated, so a member sees
-   how their project is governed. It differs from panel 0 in **exactly one place**: the note at the
-   top. Nothing on this page is editable for anyone in this story, so there is no admin-only
-   affordance to hide.
-3. **The room reserved for editing** — a PLACEMENT decision, not working controls. _Create role_
-   takes the page-header slot; a per-role _Edit_ takes the top-right of each role card, beside its
-   `Built-in` chip (which a custom role swaps for its own). Both drawn dashed and tagged MOTIR-2257.
+0. **The populated page, project-admin view**, inside the settings shell — the whole model on one
+   screen. The access path is drawn: the rail's **ACCESS** group, directly under _Members & access_.
+1. **A custom role joins as a COLUMN** (MOTIR-2257). "Contractor" is the epic's own motivating gap —
+   _may comment and attach but not transition_ — which none of the three built-ins can express
+   (Viewer can't comment, Member can edit). Shows the affordance split: built-ins locked, custom
+   editable/deletable.
+2. **Creating a role** (MOTIR-2257) — name, a **base role to start from**, then the permission list.
+   The base's permissions arrive already checked and **visually distinct** (grey + `from Viewer`)
+   from what the author adds on top (accent). Starting from a base rather than an empty grid is the
+   GitHub custom-role pattern: it keeps a new role comprehensible instead of asking the author to
+   derive eight booleans from nothing. The footer counts the result before they commit to it.
+3. **The member (non-admin) view** — browse-gated, so a member reads the same matrix. Two
+   differences from panel 0, both admin-only WRITE affordances: no `Create role` button, and a
+   custom column would show no edit/delete. The note replaces the create-a-role invitation a member
+   cannot act on.
 
-## Two decisions this asset makes that the code could not
+## Access path (drawn, not just named)
 
-1. **The `public_request:*` permissions get their OWN card, not a role column.** They are
-   **level-gated** — granted by the project's `accessLevel` being `public`, to every visitor
-   including an anonymous one, and to nobody on an open/limited/private project. No role can hold or
-   withhold them. Rendering them as rows inside a role card would be a lie about what a role
-   controls, so they sit below the roles in an _Access level_-chipped card with an **eye** mark
-   instead of a check/dash. (This is the same distinction `lib/permissions/builtinRoles.ts` draws by
-   keeping them out of every role set.)
-2. **A withheld permission stays VISIBLE, muted, with a dash — never omitted.** The three cards
-   exist to be compared column-to-column, so a role's _gaps_ are part of what it says. Omitting them
-   would make Viewer a short card that tells you nothing about what it cannot do.
+The rail's **ACCESS** group, beneath **Members & access** and above **Code access** — drawn in
+panels 0 and 3. The registry entry MOTIR-2263 adds is `id: 'roles'`, group `access`, href
+`/settings/project/roles`, `access: browse` (every current entry is browse-gated; changing that to a
+permission is MOTIR-2258's job). **Icon:** the `shield` glyph (`Shield` from `lucide-react`) — the
+one new glyph this surface adds, from the package the registry already imports.
 
-## Primitives composed (no hand-rolling) — NO NEW PRIMITIVE IS REQUIRED
+## What this asset does NOT re-specify (it composes)
 
-| Element                      | Shipped primitive                                        | Token role                                                              |
-| ---------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Role card · level-gated card | `Card`                                                   | `--radius-card` · `--shadow-card` · `--spacing-card-padding`            |
-| `Built-in` chip              | `Pill`                                                   | `--el-tint-peach` bg + `--el-text-strong` ink · `--radius-badge`        |
-| `Access level` chip          | `Pill` (neutral tone)                                    | `--el-surface` · `--el-border` · `--el-text-secondary`                  |
-| Domain heading               | `SectionLabel`                                           | `--el-text-faint`, uppercase                                            |
-| Rail, groups, rows           | `Sidebar` / `SidebarSection` / `SidebarNavItem`          | `--el-sidebar-*` · `--radius-control` · `--height-control`              |
-| _Create role_ (panel 3)      | `Button` (primary)                                       | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md` |
-| Per-role _Edit_ (panel 3)    | `Button` (ghost, sm)                                     | `--el-border` · `--radius-btn` · `--height-btn-sm`                      |
-| Read-only / member note      | the shipped callout shape (`--el-surface-soft` + border) | `--radius-card`                                                         |
+| Surface                                                                  | Owned by                                           |
+| ------------------------------------------------------------------------ | -------------------------------------------------- |
+| Settings-area chrome — rail, groups, back-link header, `.content` frame  | `design/projects/settings-area.mock.html` (6.5.1)  |
+| Members + Access cards, and the role-chip grammar                        | `design/projects/access-members.mock.html` (6.4.1) |
+| `Input` / editable-field rows, and the `Modal` (scrim, head, body, foot) | `design/projects/details.mock.html` (6.8.3)        |
+
+All three are inherited **verbatim** — their CSS is copied in unchanged so this asset cannot drift
+from them. A change to any belongs in _that_ asset.
+
+> Two `color: #fff` literals survive inside the inherited blocks (`.proj .pav`, the unused
+> `.btn-danger`). They are **pre-existing**, carried byte-identical rather than silently diverged;
+> this asset introduces no colour literal of its own.
+
+## Primitives composed — NO NEW PRIMITIVE IS REQUIRED
+
+| Element                            | Shipped primitive                               | Token role                                                              |
+| ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
+| The matrix container               | `Card`                                          | `--radius-card` · `--shadow-card` · `--el-border`                       |
+| Column head / group heading        | `SectionLabel` grammar                          | `--el-surface-soft` · `--el-muted` · `--el-text-faint`                  |
+| Held / withheld / level-gated mark | icon + `aria-label`                             | `--el-success` · `--el-text-faint`                                      |
+| Custom-role column tint            | `Pill` tint grammar                             | `--el-tint-sky` bg + `--el-text-strong` ink                             |
+| Edit / Delete on a custom role     | `Button` (icon)                                 | `--spacing-icon-btn` (PADDING) · `--radius-control`                     |
+| `Create role`                      | `Button` (primary)                              | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md` |
+| Create-role dialog                 | `Modal`                                         | `--radius-modal` · `--shadow-modal`                                     |
+| Name field · Start-from picker     | `Input` / `FormField`                           | `--radius-input` · `--height-input` · `--spacing-input-x/y`             |
+| Permission checkbox                | `Switch`/checkbox grammar                       | `--el-accent` (added) vs `--el-muted` (from base)                       |
+| Rail, groups, rows                 | `Sidebar` / `SidebarSection` / `SidebarNavItem` | `--el-sidebar-*` · `--radius-control` · `--height-control`              |
 
 ### Colour + shape rules (mock === component)
 
-- **Held** = `i-check` in `--el-success`; **withheld** = `i-minus` in `--el-text-faint`;
-  **level-gated** = `i-eye`. The mark is a `role="img"` with an `aria-label` (`Held` / `Not held` /
-  `Granted by access level`), so the state is never carried by colour or glyph ALONE.
-- The `Built-in` chip puts its hue in the **tint background** with `--el-text-strong` ink (finding
-  #35, AA-safe) and pairs it with a lock glyph — again, never colour alone.
-- No Tier-0 `--color-*` and no raw `rounded-*` / `p-*` / `h-*` outside the inherited globals.css
-  token block. Verified: `data-theme="dark"` keeps every surface legible.
-- `.role-card` supplies its own `var(--spacing-card-padding)` because the shipped `Card` carries no
-  padding of its own (it puts it on `.card-head` / body sections) and this card is composed of bare
-  rows.
-- `.role-desc` is floored at **four lines** (`min-height: 5.8em`, in the element's own type scale).
-  Without it a shorter description starts its domain groups a row higher than its siblings, which
-  breaks the column-to-column comparison the layout exists for.
+- **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated**
+  = `eye`. Each mark is a `role="img"` with an `aria-label` (_Held_ / _Not held_ / _Granted by
+  access level_), so state is never carried by colour or glyph ALONE.
+- In the create-role list, a permission **from the base** is a grey check; one the author **added**
+  is an accent check. Two visual states, both with the same checkbox affordance.
+- No Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*` outside the inherited token block.
+  `data-theme="dark"` verified on every panel.
+- **`--spacing-icon-btn` is a PADDING token (4px), not a size.** Using it as `width`/`height`
+  collapses an icon button to a 4px artifact — the glyph sizes the box, the token pads it.
 - `.rp-headrow` / `.rp-stack` are named to AVOID colliding with the inherited `.page-head` /
-  `.stack`; the latter is capped at 640px for the Details form column, which is wrong for a
-  three-across grid.
+  `.stack`; the latter is capped at 640px for the Details form column, which is wrong for a matrix.
 
 ## Content grounding
 
-The eleven permissions, their six domain groups and the three role sets are **transcribed from the
-shipped model**, not invented: `lib/permissions/catalog.ts` (MOTIR-2260) and
+The eleven permissions, their domain groups and the three built-in role sets are **transcribed from
+the shipped model**, not invented: `lib/permissions/catalog.ts` (MOTIR-2260) and
 `lib/permissions/builtinRoles.ts` (MOTIR-2261). Admin holds 8 of 8 role permissions, Member 4,
-Viewer 1. Copy for each label/description matches the `permissions.*` i18n namespace those cards
-added, so MOTIR-2263 renders the same strings this mock shows.
+Viewer 1. Copy matches the `permissions.*` i18n namespace those cards added, so MOTIR-2263 renders
+the same strings this mock shows. "Contractor" (3 of 8) is illustrative — a custom role, not a
+shipped one.
 
 ## Source of truth
 
 When a string or structure here disagrees with the shipped `lib/permissions/*` catalog or role sets,
-**the code wins** — this mock renders them. When it disagrees with `settings-area.mock.html` or
-`access-members.mock.html` about the chrome or the role-chip grammar, **those assets win** — this
-one composes them.
+**the code wins** — this mock renders them. When it disagrees with `settings-area.mock.html`,
+`access-members.mock.html` or `details.mock.html` about chrome, chip grammar, Input or Modal,
+**those assets win** — this one composes them.

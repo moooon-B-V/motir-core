@@ -604,163 +604,486 @@
         cursor: not-allowed;
       }
 
-      /* ── Roles & permissions page ─────────────────────────────────────────
-         The surface this asset specifies. Everything above is inherited from
-         settings-area.mock.html (shell/rail/Card) + the shared Pill/Button
-         primitives; nothing above is re-specified here.                      */
-
-      /* The three role cards sit in a responsive row; each is a Card. */
-      .roles {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        align-items: start;
-      }
-      /* The shipped Card primitive carries NO padding of its own — it puts it on
-         .card-head / its body sections. A card composed of bare rows therefore
-         has to supply its own, through the card padding TOKEN so a style swap
-         still reaches it. */
-      .role-card {
-        min-width: 0;
-        padding: var(--spacing-card-padding);
-      }
-      .role-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 10px;
-        padding-bottom: 10px;
+      /* editable field rows */
+      .field {
+        padding: 16px 0;
         border-bottom: 1px solid var(--el-border-soft);
-        /* The domain groups start on the same line across all three cards —
-           see the four-line floor on .role-desc, which is what equalises them. */
       }
-      .role-id {
-        min-width: 0;
+      .field:last-child {
+        border-bottom: 0;
       }
-      .role-name {
+      .field-label {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 15px;
-        font-weight: 650;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .field-label svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+      .field-help {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 7px;
+        line-height: 1.45;
+      }
+
+      /* ── Input (components/ui/Input) ─────────────────────────────────────── */
+      .input {
+        width: 100%;
+        height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 14px;
+        font-family: var(--font-sans);
+      }
+      .input.mono {
+        font-family: var(--font-mono);
+        letter-spacing: 0.04em;
+      }
+      .input.focus {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring-color) 24%, transparent);
+        outline: none;
+      }
+      .input.err {
+        border-color: var(--el-danger);
+      }
+      .input.err.focus {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-danger) 22%, transparent);
+      }
+      .input-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 7px;
+        font-size: 12px;
+        color: var(--el-danger-text);
+        line-height: 1.4;
+      }
+      .input-err svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .input-ok {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 7px;
+        font-size: 12px;
+        color: var(--el-success);
+      }
+      .input-ok svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* read-only key row + change affordance */
+      .key-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .key-val {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 14px;
+        letter-spacing: 0.04em;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* avatar field — chip + edit affordance */
+      .avatar-field {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      /* ── Modal (components/ui/Modal) ─────────────────────────────────────── */
+      .modal-scrim {
+        background: rgba(15, 15, 15, 0.32);
+        border-radius: var(--radius-card);
+        padding: 30px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      [data-theme='dark'] .modal-scrim {
+        background: rgba(0, 0, 0, 0.55);
+      }
+      .modal {
+        width: 460px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .modal-body {
+        padding: 22px var(--spacing-card-padding) 8px;
+      }
+      .modal-head {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin-bottom: 12px;
+      }
+      .modal-head .mtitle {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
         color: var(--el-text);
       }
-      .role-desc {
-        margin-top: 4px;
-        font-size: 12.5px;
-        line-height: 1.45;
-        color: var(--el-text-muted);
-        /* Floored at FOUR lines (4 x 1.45em), expressed in the element's own
-           type scale rather than a pixel constant. The three descriptions run to
-           three or four lines at column width, and an unfloored one starts its
-           domain groups a row higher than its siblings — which breaks the
-           column-to-column comparison the whole layout exists for. */
-        min-height: 5.8em;
+      .modal-icon {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
-      .role-count {
-        margin-top: 8px;
+      .modal-icon svg {
+        width: 19px;
+        height: 19px;
+      }
+      .modal-icon.key {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .modal-icon.danger {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .modal-lede {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+        margin: 0 0 16px;
+      }
+      .consequence {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        margin-bottom: 16px;
+      }
+      .cq {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+      }
+      .cq svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .cq.go svg {
+        color: var(--el-success);
+      }
+      .cq.warn svg {
+        color: var(--el-warning);
+      }
+      .cq b {
+        color: var(--el-text);
+        font-weight: 600;
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .field-lab {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        margin-bottom: 7px;
+        display: block;
+      }
+
+      /* ── Roles & permissions page ─────────────────────────────────────────
+         The surface this asset specifies. Everything above is inherited from
+         settings-area.mock.html (shell/rail/Card), details.mock.html (Input,
+         Modal) + the shared Pill/Button primitives; nothing above is
+         re-specified here.                                                   */
+
+      /* The page header ROW. Deliberately NOT `.page-head` — settings-area.mock.html
+         already owns that class (margin + h2 + sub) and this asset inherits it
+         verbatim; a same-name rule here would silently redefine the shared
+         chrome. This wraps it instead. */
+      .rp-headrow {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      .rp-headrow .page-head {
+        margin-bottom: 0;
+      }
+
+      /* The inherited `.stack` is capped at 640px — right for the Details form
+         column it was written for, wrong for a role MATRIX. Full content width. */
+      .rp-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .crumb {
+        display: block;
         font-family: var(--font-mono);
         font-size: 11px;
         letter-spacing: 0.02em;
         color: var(--el-text-faint);
+        margin-bottom: 8px;
       }
 
-      /* The `Built-in` chip — hue in the TINT background with --el-text-strong
-         ink (AA-safe, finding #35), and a lock glyph so the state is never
-         carried by colour alone. */
-      .pill-builtin {
-        background: var(--el-tint-peach);
-        color: var(--el-text-strong);
+      /* A chip never breaks across lines. */
+      .pill {
+        white-space: nowrap;
       }
 
-      /* A domain group inside a role card. */
-      .dom {
-        border-top: 1px solid var(--el-border-soft);
-        padding-top: 10px;
-        margin-top: 10px;
+      /* ── THE MATRIX ───────────────────────────────────────────────────────
+         Permissions are ROWS, roles are COLUMNS. The first draft gave each role
+         its own card listing all eleven permissions, which repeated every
+         permission once per role — 33 rows to say what 11 rows say, and a page
+         roughly three times taller than it needed to be. A matrix is also what
+         both mirrors use, and it is the shape that survives custom roles: a new
+         role is one more COLUMN, not another full-height card.               */
+      .matrix {
+        --role-cols: 3;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) repeat(var(--role-cols), 132px);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
       }
-      .dom:first-of-type {
-        border-top: 0;
-        margin-top: 12px;
+      .matrix.with-custom {
+        --role-cols: 4;
       }
-      .dom-label {
+
+      /* Column head — the role identity. */
+      .mhead {
         display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 6px;
+        gap: 5px;
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        text-align: center;
+      }
+      .mhead.mcorner {
+        align-items: flex-start;
+        text-align: left;
+        justify-content: flex-end;
+        padding-left: var(--spacing-card-padding);
+      }
+      .mhead .rname {
+        font-size: 13.5px;
+        font-weight: 650;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .mhead .rmeta {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-faint);
+      }
+      .mcorner .clabel {
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--el-text-faint);
-        margin-bottom: 6px;
-      }
-      .dom-count {
-        font-family: var(--font-mono);
-        font-weight: 500;
-        letter-spacing: 0;
-        text-transform: none;
       }
 
-      /* One permission row: mark + label + description. */
-      .perm {
-        display: grid;
-        grid-template-columns: 16px minmax(0, 1fr);
-        gap: 8px;
-        padding: 5px 0;
-        align-items: start;
-      }
-      .perm .mark {
-        margin-top: 2px;
-        width: 16px;
-        height: 16px;
-        display: inline-flex;
+      /* A domain group heading spans the whole matrix. */
+      .mgroup {
+        grid-column: 1 / -1;
+        display: flex;
         align-items: center;
-        justify-content: center;
-        flex: none;
-      }
-      .perm .mark svg {
-        width: 14px;
-        height: 14px;
-      }
-      .perm-on .mark {
-        color: var(--el-success);
-      }
-      .perm-off .mark {
+        gap: 8px;
+        padding: 9px var(--spacing-card-padding);
+        background: var(--el-muted);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         color: var(--el-text-faint);
       }
-      .perm .plabel {
+
+      /* One permission row: its label cell + one cell per role. */
+      .mperm {
+        padding: 9px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+        min-width: 0;
+      }
+      .mperm .plabel {
+        display: block;
         font-size: 13px;
         font-weight: 500;
         color: var(--el-text);
         line-height: 1.3;
       }
-      .perm .pdesc {
+      .mperm .pdesc {
+        display: block;
         font-size: 12px;
-        line-height: 1.45;
+        line-height: 1.4;
         color: var(--el-text-muted);
-        margin-top: 2px;
+        margin-top: 1px;
       }
-      /* A withheld permission stays VISIBLE but recedes — the three cards must
-         be directly comparable, so a role's gaps are part of what it says. */
-      .perm-off .plabel {
-        color: var(--el-text-muted);
-        font-weight: 400;
+      .mcell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-bottom: 1px solid var(--el-border-soft);
+        border-left: 1px solid var(--el-border-soft);
+        padding: 9px 4px;
       }
-      .perm-off .pdesc {
+      .mcell svg {
+        width: 15px;
+        height: 15px;
+      }
+      .mcell.on {
+        color: var(--el-success);
+      }
+      .mcell.off {
         color: var(--el-text-faint);
       }
-      /* At width (panel 2) the description collapses to one line so a
-         twelve-row domain reads as a list, not a wall. */
-      .compact .pdesc {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .compact .perm {
-        padding: 3px 0;
+      /* The last row loses its rule so it meets the card's rounded edge cleanly. */
+      .matrix > .mlast {
+        border-bottom: 0;
       }
 
-      /* The read-only banner — states that nothing here is editable yet. */
+      /* ── Role-column affordances ──────────────────────────────────────────
+         A BUILT-IN role is immutable: it gets a lock and NO control. Only a
+         CUSTOM role carries edit/delete. Drawing an "Edit" on a built-in was the
+         first draft's mistake — the epic seeds the three built-ins precisely so
+         they reproduce today's behaviour, so editing one is not a thing.      */
+      .lockchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 10.5px;
+        font-weight: 500;
+        color: var(--el-text-faint);
+      }
+      .lockchip svg {
+        width: 11px;
+        height: 11px;
+      }
+      .rowacts {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .iconbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* --spacing-icon-btn is a PADDING token, not a size — the glyph sizes
+           the box. Using it as width/height collapses the button to 4px. */
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        border: 1px solid transparent;
+      }
+      .iconbtn:hover {
+        background: var(--el-muted);
+      }
+      .iconbtn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .mhead.custom {
+        background: var(--el-tint-sky);
+      }
+      .mhead.custom .rname,
+      .mhead.custom .rmeta {
+        color: var(--el-text-strong);
+      }
+
+      /* The level-gated card — three rows, kept OUT of the role matrix. */
+      .level-card {
+        padding: var(--spacing-card-padding);
+      }
+      .level-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .level-head .rname {
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .level-head .rdesc {
+        margin-top: 4px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+      .lrow {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 7px 0 0;
+      }
+      .lrow svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .lrow .plabel {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .lrow .pdesc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* The read-only / member banner. */
       .ro-note {
         display: flex;
         align-items: flex-start;
@@ -781,7 +1104,88 @@
         color: var(--el-text-muted);
       }
 
-      /* Panel 4 only — the RESERVED slots, drawn as placement, not controls. */
+      /* ── Create-role modal (MOTIR-2257's surface, specified here) ────────── */
+      .modal.wide {
+        width: 560px;
+      }
+      .base-help {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+        line-height: 1.45;
+      }
+      .permlist {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      .permlist .mgroup {
+        grid-column: auto;
+      }
+      .prow {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding: 8px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .prow:last-child {
+        border-bottom: 0;
+      }
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        border-radius: var(--radius-control);
+        border: 1.5px solid var(--el-border-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+      }
+      .cbox svg {
+        width: 11px;
+        height: 11px;
+      }
+      .cbox.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* A permission the BASE already grants: checked, but visually distinct so
+         the author can see at a glance what came from the base and what they
+         added on top of it. */
+      .cbox.frombase {
+        background: var(--el-muted);
+        border-color: var(--el-border-strong);
+        color: var(--el-text-secondary);
+      }
+      .prow .plabel {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .prow .pdesc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.4;
+        margin-top: 1px;
+      }
+      .prow .from {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-faint);
+        margin-left: 6px;
+      }
+      .count-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-right: auto;
+      }
+
+      /* Panel annotation for a reserved / future slot. */
       .reserved {
         position: relative;
         outline: 1.5px dashed var(--el-border-strong);
@@ -800,80 +1204,35 @@
         color: var(--el-text-faint);
         white-space: nowrap;
       }
-      /* The page header ROW. Deliberately NOT `.page-head` — settings-area.mock.html
-         already owns that class (margin + h2 + sub) and this asset inherits it
-         verbatim; a same-name rule here would silently redefine the shared
-         chrome. This wraps it instead. */
-      .rp-headrow {
+
+      /* A picker trigger reads as a picker — the Input primitive plus its
+         chevron, the same grammar access-members.mock.html uses for the role
+         and access selects. */
+      .input.select {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 22px;
-      }
-      .rp-headrow .page-head {
-        margin-bottom: 0;
-      }
-
-      /* The inherited `.stack` is capped at 640px — right for the Details form
-         column it was written for, wrong for a three-across permission grid.
-         This surface uses the full content width. */
-      .rp-stack {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-      }
-
-      .crumb {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        letter-spacing: 0.02em;
-        color: var(--el-text-faint);
-        margin-bottom: 8px;
-      }
-
-      /* A chip never breaks across lines — "Built-in" wrapping to two rows
-         collided with the role name. */
-      .pill {
-        white-space: nowrap;
-      }
-      .role-edit {
-        display: inline-flex;
         align-items: center;
-        gap: 5px;
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--el-text-secondary);
-        height: var(--height-btn-sm);
-        padding: 0 var(--spacing-btn-x-sm);
-        border-radius: var(--radius-btn);
-        border: 1px solid var(--el-border);
+        justify-content: space-between;
+        gap: 8px;
       }
-      .role-edit svg {
-        width: 13px;
-        height: 13px;
-      }
-
-      /* The level-gated card is one wide card, not one of the three columns —
-         same padding token, its own head. */
-      .level-card {
-        padding: var(--spacing-card-padding);
+      .input.select svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
       }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
-        <h1>Roles &amp; permissions — the read-only permission grid</h1>
+        <h1>Roles &amp; permissions — the role matrix, and creating a role</h1>
         <p>
           Story MOTIR-2255 · Subtask MOTIR-2259 design asset — built from app/globals.css tokens.
-          The surface that shows a project’s roles and, for each, the permissions it holds.
-          Read-only over the three built-in roles; MOTIR-2257 turns this same page into an editor.
-          COMPOSES design/projects/settings-area.mock.html (the rail + chrome) and inherits the
-          role-chip grammar from design/projects/access-members.mock.html — neither is re-specified
-          here. Source of truth = this HTML; see design-notes.md “Roles &amp; permissions grid
-          (MOTIR-2255)”. Gates MOTIR-2263.
+          Permissions are ROWS, roles are COLUMNS. Built-in roles are IMMUTABLE (lock, no control);
+          only a custom role carries edit/delete. Panel 2 specifies creating a role, the surface
+          MOTIR-2257 builds. COMPOSES design/projects/settings-area.mock.html (rail + chrome),
+          access-members.mock.html (role-chip grammar) and details.mock.html (Input, Modal) — none
+          is re-specified here. See design-notes.md “Roles &amp; permissions grid (MOTIR-2255)”.
         </p>
       </div>
       <button
@@ -890,8 +1249,9 @@
     <!-- ════════════ PANEL 0 — the populated page, project-admin view ════════════ -->
     <div class="panel-label">
       0 · The populated page, project-admin view — reached from the settings rail’s ACCESS group,
-      the entry directly under “Members &amp; access”. Three role cards; each permission row shows
-      the human label and description, never the raw catalog key.
+      the entry directly under “Members &amp; access”. Permissions are ROWS and roles are COLUMNS,
+      so the whole model is one screen: eleven rows instead of the same eleven repeated once per
+      role. Each built-in column carries a LOCK and no control — a built-in role is immutable.
     </div>
     <div class="panel">
       <div class="stage">
@@ -994,428 +1354,205 @@
           <div class="content">
             <span class="crumb">Settings · motir · Roles &amp; permissions</span>
             <div class="rp-headrow">
-              <div>
+              <div class="page-head">
                 <h2>Roles &amp; permissions</h2>
                 <p class="sub">
                   What each role in <strong>motir</strong> can do. Workspace owners and admins
                   always hold everything.
                 </p>
               </div>
+              <span class="btn btn-primary"
+                ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create role</span
+              >
             </div>
             <div class="rp-stack">
               <div class="ro-note">
                 <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
                 <span
-                  >These three roles are built into Motir and can’t be changed. Every member of the
-                  project can read this page — it’s how the project says what each role means.</span
+                  >The three built-in roles can’t be changed — they’re what Motir guarantees. To fit
+                  a shape they don’t cover, create a role of your own.</span
                 >
               </div>
-              <div class="roles">
-                <div class="card role-card">
-                  <div class="role-head">
-                    <div class="role-id">
-                      <div class="role-name">Admin</div>
-                      <div class="role-desc">
-                        Full control of the project — its settings, its members and all of its work.
-                      </div>
-                      <div class="role-count">8 of 8 role permissions</div>
-                    </div>
-                    <span class="pill pill-builtin"
-                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                    >
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Project<span class="dom-count">2/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">View project</span>
-                        <span class="pdesc"
-                          >Open the project and read its work items, boards, backlog and
-                          reports.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Administer project</span>
-                        <span class="pdesc"
-                          >Change project settings — members, workflow, boards, fields, components
-                          and automation.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Edit work items</span>
-                        <span class="pdesc"
-                          >Create, update, assign and move work items, and transition them on the
-                          board.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Comments<span class="dom-count">2/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add comments</span>
-                        <span class="pdesc"
-                          >Post comments on work items, and edit or delete your own.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Moderate comments</span>
-                        <span class="pdesc"
-                          >Edit and delete anyone’s comments, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Attachments<span class="dom-count">2/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add attachments</span>
-                        <span class="pdesc"
-                          >Upload files onto work items, and delete the ones you uploaded.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Delete any attachment</span>
-                        <span class="pdesc"
-                          >Remove attachments uploaded by anyone, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Watchers<span class="dom-count">1/1</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Manage watchers</span>
-                        <span class="pdesc"
-                          >Add and remove other people from a work item’s watcher list.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
+              <div class="matrix">
+                <div class="mhead mcorner"><span class="clabel">Permission</span></div>
+                <div class="mhead">
+                  <span class="rname">Admin</span>
+                  <span class="rmeta">8 of 8</span>
+                  <span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
                 </div>
-                <div class="card role-card">
-                  <div class="role-head">
-                    <div class="role-id">
-                      <div class="role-name">Member</div>
-                      <div class="role-desc">
-                        Does the work: creates and edits work items, comments and attaches files.
-                      </div>
-                      <div class="role-count">4 of 8 role permissions</div>
-                    </div>
-                    <span class="pill pill-builtin"
-                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                    >
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">View project</span>
-                        <span class="pdesc"
-                          >Open the project and read its work items, boards, backlog and
-                          reports.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Administer project</span>
-                        <span class="pdesc"
-                          >Change project settings — members, workflow, boards, fields, components
-                          and automation.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Edit work items</span>
-                        <span class="pdesc"
-                          >Create, update, assign and move work items, and transition them on the
-                          board.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Comments<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add comments</span>
-                        <span class="pdesc"
-                          >Post comments on work items, and edit or delete your own.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Moderate comments</span>
-                        <span class="pdesc"
-                          >Edit and delete anyone’s comments, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Attachments<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add attachments</span>
-                        <span class="pdesc"
-                          >Upload files onto work items, and delete the ones you uploaded.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Delete any attachment</span>
-                        <span class="pdesc"
-                          >Remove attachments uploaded by anyone, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Manage watchers</span>
-                        <span class="pdesc"
-                          >Add and remove other people from a work item’s watcher list.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
+                <div class="mhead">
+                  <span class="rname">Member</span>
+                  <span class="rmeta">4 of 8</span>
+                  <span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
                 </div>
-                <div class="card role-card">
-                  <div class="role-head">
-                    <div class="role-id">
-                      <div class="role-name">Viewer</div>
-                      <div class="role-desc">
-                        Read-only. Sees everything in the project and changes nothing.
-                      </div>
-                      <div class="role-count">1 of 8 role permissions</div>
-                    </div>
-                    <span class="pill pill-builtin"
-                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                    >
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">View project</span>
-                        <span class="pdesc"
-                          >Open the project and read its work items, boards, backlog and
-                          reports.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Administer project</span>
-                        <span class="pdesc"
-                          >Change project settings — members, workflow, boards, fields, components
-                          and automation.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Work items<span class="dom-count">0/1</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Edit work items</span>
-                        <span class="pdesc"
-                          >Create, update, assign and move work items, and transition them on the
-                          board.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Comments<span class="dom-count">0/2</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add comments</span>
-                        <span class="pdesc"
-                          >Post comments on work items, and edit or delete your own.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Moderate comments</span>
-                        <span class="pdesc"
-                          >Edit and delete anyone’s comments, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Attachments<span class="dom-count">0/2</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add attachments</span>
-                        <span class="pdesc"
-                          >Upload files onto work items, and delete the ones you uploaded.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Delete any attachment</span>
-                        <span class="pdesc"
-                          >Remove attachments uploaded by anyone, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Manage watchers</span>
-                        <span class="pdesc"
-                          >Add and remove other people from a work item’s watcher list.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
+                <div class="mhead">
+                  <span class="rname">Viewer</span>
+                  <span class="rmeta">1 of 8</span>
+                  <span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
+                </div>
+                <div class="mgroup">Project</div>
+                <div class="mperm">
+                  <span class="plabel">View project</span>
+                  <span class="pdesc"
+                    >Open the project and read its work items, boards and reports.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Administer project</span>
+                  <span class="pdesc"
+                    >Change project settings — members, workflow, boards, fields.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Work items</div>
+                <div class="mperm">
+                  <span class="plabel">Edit work items</span>
+                  <span class="pdesc"
+                    >Create, update, assign and move work items on the board.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Comments</div>
+                <div class="mperm">
+                  <span class="plabel">Add comments</span>
+                  <span class="pdesc">Post comments, and edit or delete your own.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Moderate comments</span>
+                  <span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Attachments</div>
+                <div class="mperm">
+                  <span class="plabel">Add attachments</span>
+                  <span class="pdesc">Upload files, and delete the ones you uploaded.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Delete any attachment</span>
+                  <span class="pdesc">Remove attachments uploaded by anyone.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Watchers</div>
+                <div class="mperm mlast">
+                  <span class="plabel">Manage watchers</span>
+                  <span class="pdesc"
+                    >Add and remove other people from a work item’s watcher list.</span
+                  >
+                </div>
+                <div class="mcell on mlast" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off mlast" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off mlast" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
               </div>
               <div class="card level-card">
-                <div class="role-head">
-                  <div class="role-id">
-                    <div class="role-name">Public requests</div>
-                    <div class="role-desc">
-                      Granted by the project’s <strong>access level</strong>, not by a role. Every
-                      visitor of a <strong>public</strong> project holds all three — signed in or
-                      not — and nobody holds them on an open, limited or private project.
+                <div class="level-head">
+                  <div>
+                    <div class="rname">Public requests</div>
+                    <div class="rdesc">
+                      Granted by the project’s <strong>access level</strong>, not by a role — which
+                      is why they are not a column above. Every visitor of a
+                      <strong>public</strong> project holds all three, signed in or not; nobody
+                      holds them on an open, limited or private project, a workspace owner included.
                     </div>
                   </div>
                   <span class="pill pill-neutral"
                     ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Access level</span
                   >
                 </div>
-                <div class="dom" style="border-top: 0; padding-top: 0">
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Granted by access level"
-                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Submit requests</span>
-                      <span class="pdesc"
-                        >Send a bug report or feature request into the project’s triage queue.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Granted by access level"
-                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Upvote requests</span>
-                      <span class="pdesc">Vote on a public request to signal demand for it.</span>
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Granted by access level"
-                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Comment on requests</span>
-                      <span class="pdesc">Reply on a public request’s thread.</span>
-                    </span>
-                  </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Submit requests</span>
+                    <span class="pdesc"
+                      >Send a bug report or feature request into the triage queue.</span
+                    ></span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Upvote requests</span>
+                    <span class="pdesc"
+                      >Vote on a public request to signal demand for it.</span
+                    ></span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Comment on requests</span>
+                    <span class="pdesc">Reply on a public request’s thread.</span></span
+                  >
                 </div>
               </div>
             </div>
@@ -1424,380 +1561,339 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 1 — the grid at width ════════════ -->
+    <!-- ════════════ PANEL 1 — a custom role joins as a COLUMN ════════════ -->
     <div class="panel-label">
-      1 · The grid at width — the same three cards without the shell. A domain heading carries a
-      held/total count, and each permission’s description collapses to ONE line, so a domain that
-      grows to a dozen rows reads as a scannable list instead of a wall. Withheld permissions stay
-      VISIBLE but recede (muted label, dash mark) — a role’s gaps are part of what it says, and the
-      three columns have to be directly comparable.
+      1 · A custom role joins as one more COLUMN (MOTIR-2257) — this is why the matrix is the right
+      shape: a new role costs a column, not another full-height card. “Contractor” is the epic’s own
+      motivating gap — may comment and attach but not transition — which none of the three built-ins
+      can express (Viewer can’t comment, Member can edit). Note the affordance split: the built-in
+      columns carry a LOCK, the custom column carries EDIT and DELETE. Built-in roles are not
+      editable, so they have no edit control at all.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="content" style="padding: 22px">
-          <div class="roles">
-            <div class="card role-card compact">
-              <div class="role-head">
-                <div class="role-id">
-                  <div class="role-name">Admin</div>
-                  <div class="role-desc">
-                    Full control of the project — its settings, its members and all of its work.
-                  </div>
-                  <div class="role-count">8 of 8 role permissions</div>
-                </div>
-                <span class="pill pill-builtin"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                >
-              </div>
-              <div class="dom">
-                <div class="dom-label">Project<span class="dom-count">2/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">View project</span>
-                    <span class="pdesc"
-                      >Open the project and read its work items, boards, backlog and reports.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Administer project</span>
-                    <span class="pdesc"
-                      >Change project settings — members, workflow, boards, fields, components and
-                      automation.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Edit work items</span>
-                    <span class="pdesc"
-                      >Create, update, assign and move work items, and transition them on the
-                      board.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Comments<span class="dom-count">2/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Add comments</span>
-                    <span class="pdesc"
-                      >Post comments on work items, and edit or delete your own.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Moderate comments</span>
-                    <span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Attachments<span class="dom-count">2/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Add attachments</span>
-                    <span class="pdesc"
-                      >Upload files onto work items, and delete the ones you uploaded.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Delete any attachment</span>
-                    <span class="pdesc"
-                      >Remove attachments uploaded by anyone, not only your own.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Watchers<span class="dom-count">1/1</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Manage watchers</span>
-                    <span class="pdesc"
-                      >Add and remove other people from a work item’s watcher list.</span
-                    >
-                  </span>
-                </div>
-              </div>
+          <div class="matrix with-custom">
+            <div class="mhead mcorner"><span class="clabel">Permission</span></div>
+            <div class="mhead">
+              <span class="rname">Admin</span>
+              <span class="rmeta">8 of 8</span>
+              <span class="lockchip"
+                ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+              >
             </div>
-            <div class="card role-card compact">
-              <div class="role-head">
-                <div class="role-id">
-                  <div class="role-name">Member</div>
-                  <div class="role-desc">
-                    Does the work: creates and edits work items, comments and attaches files.
-                  </div>
-                  <div class="role-count">4 of 8 role permissions</div>
-                </div>
-                <span class="pill pill-builtin"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                >
-              </div>
-              <div class="dom">
-                <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">View project</span>
-                    <span class="pdesc"
-                      >Open the project and read its work items, boards, backlog and reports.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Administer project</span>
-                    <span class="pdesc"
-                      >Change project settings — members, workflow, boards, fields, components and
-                      automation.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Edit work items</span>
-                    <span class="pdesc"
-                      >Create, update, assign and move work items, and transition them on the
-                      board.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Comments<span class="dom-count">1/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Add comments</span>
-                    <span class="pdesc"
-                      >Post comments on work items, and edit or delete your own.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Moderate comments</span>
-                    <span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Attachments<span class="dom-count">1/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Add attachments</span>
-                    <span class="pdesc"
-                      >Upload files onto work items, and delete the ones you uploaded.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Delete any attachment</span>
-                    <span class="pdesc"
-                      >Remove attachments uploaded by anyone, not only your own.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Manage watchers</span>
-                    <span class="pdesc"
-                      >Add and remove other people from a work item’s watcher list.</span
-                    >
-                  </span>
-                </div>
-              </div>
+            <div class="mhead">
+              <span class="rname">Member</span>
+              <span class="rmeta">4 of 8</span>
+              <span class="lockchip"
+                ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+              >
             </div>
-            <div class="card role-card compact">
-              <div class="role-head">
-                <div class="role-id">
-                  <div class="role-name">Viewer</div>
-                  <div class="role-desc">
-                    Read-only. Sees everything in the project and changes nothing.
-                  </div>
-                  <div class="role-count">1 of 8 role permissions</div>
-                </div>
-                <span class="pill pill-builtin"
-                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                >
-              </div>
-              <div class="dom">
-                <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                <div class="perm perm-on">
-                  <span class="mark" role="img" aria-label="Held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">View project</span>
-                    <span class="pdesc"
-                      >Open the project and read its work items, boards, backlog and reports.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Administer project</span>
-                    <span class="pdesc"
-                      >Change project settings — members, workflow, boards, fields, components and
-                      automation.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Work items<span class="dom-count">0/1</span></div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Edit work items</span>
-                    <span class="pdesc"
-                      >Create, update, assign and move work items, and transition them on the
-                      board.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Comments<span class="dom-count">0/2</span></div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Add comments</span>
-                    <span class="pdesc"
-                      >Post comments on work items, and edit or delete your own.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Moderate comments</span>
-                    <span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Attachments<span class="dom-count">0/2</span></div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Add attachments</span>
-                    <span class="pdesc"
-                      >Upload files onto work items, and delete the ones you uploaded.</span
-                    >
-                  </span>
-                </div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Delete any attachment</span>
-                    <span class="pdesc"
-                      >Remove attachments uploaded by anyone, not only your own.</span
-                    >
-                  </span>
-                </div>
-              </div>
-              <div class="dom">
-                <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                <div class="perm perm-off">
-                  <span class="mark" role="img" aria-label="Not held"
-                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                  ></span>
-                  <span>
-                    <span class="plabel">Manage watchers</span>
-                    <span class="pdesc"
-                      >Add and remove other people from a work item’s watcher list.</span
-                    >
-                  </span>
-                </div>
-              </div>
+            <div class="mhead">
+              <span class="rname">Viewer</span>
+              <span class="rmeta">1 of 8</span>
+              <span class="lockchip"
+                ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+              >
+            </div>
+            <div class="mhead custom">
+              <span class="rname">Contractor</span>
+              <span class="rmeta">3 of 8</span>
+              <span class="rowacts"
+                ><span class="iconbtn" role="img" aria-label="Edit role"
+                  ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg></span
+                ><span class="iconbtn" role="img" aria-label="Delete role"
+                  ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg></span
+              ></span>
+            </div>
+            <div class="mgroup">Project</div>
+            <div class="mperm">
+              <span class="plabel">View project</span>
+              <span class="pdesc"
+                >Open the project and read its work items, boards and reports.</span
+              >
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mperm">
+              <span class="plabel">Administer project</span>
+              <span class="pdesc"
+                >Change project settings — members, workflow, boards, fields.</span
+              >
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mgroup">Work items</div>
+            <div class="mperm">
+              <span class="plabel">Edit work items</span>
+              <span class="pdesc">Create, update, assign and move work items on the board.</span>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mgroup">Comments</div>
+            <div class="mperm">
+              <span class="plabel">Add comments</span>
+              <span class="pdesc">Post comments, and edit or delete your own.</span>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mperm">
+              <span class="plabel">Moderate comments</span>
+              <span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mgroup">Attachments</div>
+            <div class="mperm">
+              <span class="plabel">Add attachments</span>
+              <span class="pdesc">Upload files, and delete the ones you uploaded.</span>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mperm">
+              <span class="plabel">Delete any attachment</span>
+              <span class="pdesc">Remove attachments uploaded by anyone.</span>
+            </div>
+            <div class="mcell on" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mgroup">Watchers</div>
+            <div class="mperm mlast">
+              <span class="plabel">Manage watchers</span>
+              <span class="pdesc"
+                >Add and remove other people from a work item’s watcher list.</span
+              >
+            </div>
+            <div class="mcell on mlast" role="img" aria-label="Held">
+              <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="mcell off mlast" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off mlast" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+            </div>
+            <div class="mcell off mlast" role="img" aria-label="Not held">
+              <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ════════════ PANEL 2 — the member (non-admin) view ════════════ -->
+    <!-- ════════════ PANEL 2 — CREATE A ROLE (the MOTIR-2257 surface) ════════════ -->
     <div class="panel-label">
-      2 · The member (non-admin) view — browse-gated, so a plain member opens the same page and sees
-      the same content. It differs from panel 0 in exactly one place: the note at the top. Nothing
-      on this page is editable for anyone in this story, so there is no admin-only affordance to
-      hide.
+      2 · Creating a role — the surface “Create role” opens, and the one thing this page lets anyone
+      DO (the built-ins being immutable). A role is named, STARTS FROM a built-in base, and then
+      adds to it: the base’s permissions arrive already checked and visually distinct (grey, “from
+      Viewer”) from what the author adds on top (accent). Starting from a base rather than an empty
+      grid is the GitHub custom-role pattern — it keeps a new role comprehensible instead of making
+      the author derive eight booleans from nothing. The footer counts the result so the author sees
+      what they are about to create. MOTIR-2257 builds this; MOTIR-2263 builds only panels 0/3.
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 26px 0">
+        <div class="modal-scrim">
+          <div class="modal wide">
+            <div class="modal-body">
+              <div class="modal-head">
+                <span class="modal-icon key"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span class="mtitle">Create a role</span>
+              </div>
+              <p class="modal-lede">
+                A role is a set of permissions with a name your team chose. It applies to this
+                project only.
+              </p>
+
+              <div class="field">
+                <span class="field-label">Name</span>
+                <div class="input focus">Contractor</div>
+              </div>
+
+              <div class="field">
+                <span class="field-label">Start from</span>
+                <div class="input select">
+                  <span>Viewer</span>
+                  <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <p class="base-help">
+                  The new role begins with everything <strong>Viewer</strong> holds. Add to it below
+                  — you can always take something back off.
+                </p>
+              </div>
+
+              <div class="field">
+                <span class="field-label">Permissions</span>
+                <div class="permlist">
+                  <div class="mgroup">Project</div>
+                  <div class="prow">
+                    <span class="cbox frombase"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                    <span
+                      ><span class="plabel">View project</span><span class="from">from Viewer</span>
+                      <span class="pdesc"
+                        >Open the project and read its work items, boards and reports.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="prow">
+                    <span class="cbox"></span>
+                    <span
+                      ><span class="plabel">Administer project</span>
+                      <span class="pdesc"
+                        >Change project settings — members, workflow, boards, fields.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="mgroup">Work items</div>
+                  <div class="prow">
+                    <span class="cbox"></span>
+                    <span
+                      ><span class="plabel">Edit work items</span>
+                      <span class="pdesc"
+                        >Create, update, assign and move work items on the board.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="mgroup">Comments</div>
+                  <div class="prow">
+                    <span class="cbox on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                    <span
+                      ><span class="plabel">Add comments</span>
+                      <span class="pdesc">Post comments, and edit or delete your own.</span></span
+                    >
+                  </div>
+                  <div class="prow">
+                    <span class="cbox"></span>
+                    <span
+                      ><span class="plabel">Moderate comments</span>
+                      <span class="pdesc"
+                        >Edit and delete anyone’s comments, not only your own.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="mgroup">Attachments</div>
+                  <div class="prow">
+                    <span class="cbox on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                    <span
+                      ><span class="plabel">Add attachments</span>
+                      <span class="pdesc"
+                        >Upload files, and delete the ones you uploaded.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="prow">
+                    <span class="cbox"></span>
+                    <span
+                      ><span class="plabel">Delete any attachment</span>
+                      <span class="pdesc">Remove attachments uploaded by anyone.</span></span
+                    >
+                  </div>
+                  <div class="mgroup">Watchers</div>
+                  <div class="prow">
+                    <span class="cbox"></span>
+                    <span
+                      ><span class="plabel">Manage watchers</span>
+                      <span class="pdesc"
+                        >Add and remove other people from a work item’s watcher list.</span
+                      ></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <span class="count-note">Holds <strong>3</strong> of 8 permissions</span>
+              <span class="btn btn-ghost">Cancel</span>
+              <span class="btn btn-primary">Create role</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — the member (non-admin) view ════════════ -->
+    <div class="panel-label">
+      3 · The member (non-admin) view — browse-gated, so a member opens the same page and reads the
+      same matrix. Two differences from panel 0, both admin-only WRITE affordances: the “Create
+      role” button is absent, and a custom column would show no edit/delete. The note replaces the
+      create-a-role invitation, which a member cannot act on.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1900,838 +1996,199 @@
           <div class="content">
             <span class="crumb">Settings · motir · Roles &amp; permissions</span>
             <div class="rp-headrow">
-              <div>
+              <div class="page-head">
                 <h2>Roles &amp; permissions</h2>
-                <p class="sub">
-                  What each role in <strong>motir</strong> can do. Workspace owners and admins
-                  always hold everything.
-                </p>
+                <p class="sub">What each role in <strong>motir</strong> can do.</p>
               </div>
             </div>
             <div class="rp-stack">
               <div class="ro-note">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
                 <span
-                  >You’re a <strong>member</strong> of this project. This page is read-only for
-                  everyone — a member sees exactly what an admin sees, because how a project is
-                  governed is not a secret from the people it governs.</span
+                  >You’re a <strong>member</strong> of this project. This page is read-only for you
+                  — how a project is governed is not a secret from the people it governs.</span
                 >
               </div>
-              <div class="roles">
-                <div class="card role-card">
-                  <div class="role-head">
-                    <div class="role-id">
-                      <div class="role-name">Admin</div>
-                      <div class="role-desc">
-                        Full control of the project — its settings, its members and all of its work.
-                      </div>
-                      <div class="role-count">8 of 8 role permissions</div>
-                    </div>
-                    <span class="pill pill-builtin"
-                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                    >
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Project<span class="dom-count">2/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">View project</span>
-                        <span class="pdesc"
-                          >Open the project and read its work items, boards, backlog and
-                          reports.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Administer project</span>
-                        <span class="pdesc"
-                          >Change project settings — members, workflow, boards, fields, components
-                          and automation.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Edit work items</span>
-                        <span class="pdesc"
-                          >Create, update, assign and move work items, and transition them on the
-                          board.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Comments<span class="dom-count">2/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add comments</span>
-                        <span class="pdesc"
-                          >Post comments on work items, and edit or delete your own.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Moderate comments</span>
-                        <span class="pdesc"
-                          >Edit and delete anyone’s comments, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Attachments<span class="dom-count">2/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add attachments</span>
-                        <span class="pdesc"
-                          >Upload files onto work items, and delete the ones you uploaded.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Delete any attachment</span>
-                        <span class="pdesc"
-                          >Remove attachments uploaded by anyone, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Watchers<span class="dom-count">1/1</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Manage watchers</span>
-                        <span class="pdesc"
-                          >Add and remove other people from a work item’s watcher list.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
+              <div class="matrix">
+                <div class="mhead mcorner"><span class="clabel">Permission</span></div>
+                <div class="mhead">
+                  <span class="rname">Admin</span>
+                  <span class="rmeta">8 of 8</span>
+                  <span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
                 </div>
-                <div class="card role-card">
-                  <div class="role-head">
-                    <div class="role-id">
-                      <div class="role-name">Member</div>
-                      <div class="role-desc">
-                        Does the work: creates and edits work items, comments and attaches files.
-                      </div>
-                      <div class="role-count">4 of 8 role permissions</div>
-                    </div>
-                    <span class="pill pill-builtin"
-                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                    >
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">View project</span>
-                        <span class="pdesc"
-                          >Open the project and read its work items, boards, backlog and
-                          reports.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Administer project</span>
-                        <span class="pdesc"
-                          >Change project settings — members, workflow, boards, fields, components
-                          and automation.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Edit work items</span>
-                        <span class="pdesc"
-                          >Create, update, assign and move work items, and transition them on the
-                          board.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Comments<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add comments</span>
-                        <span class="pdesc"
-                          >Post comments on work items, and edit or delete your own.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Moderate comments</span>
-                        <span class="pdesc"
-                          >Edit and delete anyone’s comments, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Attachments<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add attachments</span>
-                        <span class="pdesc"
-                          >Upload files onto work items, and delete the ones you uploaded.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Delete any attachment</span>
-                        <span class="pdesc"
-                          >Remove attachments uploaded by anyone, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Manage watchers</span>
-                        <span class="pdesc"
-                          >Add and remove other people from a work item’s watcher list.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
+                <div class="mhead">
+                  <span class="rname">Member</span>
+                  <span class="rmeta">4 of 8</span>
+                  <span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
                 </div>
-                <div class="card role-card">
-                  <div class="role-head">
-                    <div class="role-id">
-                      <div class="role-name">Viewer</div>
-                      <div class="role-desc">
-                        Read-only. Sees everything in the project and changes nothing.
-                      </div>
-                      <div class="role-count">1 of 8 role permissions</div>
-                    </div>
-                    <span class="pill pill-builtin"
-                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                    >
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                    <div class="perm perm-on">
-                      <span class="mark" role="img" aria-label="Held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">View project</span>
-                        <span class="pdesc"
-                          >Open the project and read its work items, boards, backlog and
-                          reports.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Administer project</span>
-                        <span class="pdesc"
-                          >Change project settings — members, workflow, boards, fields, components
-                          and automation.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Work items<span class="dom-count">0/1</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Edit work items</span>
-                        <span class="pdesc"
-                          >Create, update, assign and move work items, and transition them on the
-                          board.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Comments<span class="dom-count">0/2</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add comments</span>
-                        <span class="pdesc"
-                          >Post comments on work items, and edit or delete your own.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Moderate comments</span>
-                        <span class="pdesc"
-                          >Edit and delete anyone’s comments, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Attachments<span class="dom-count">0/2</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Add attachments</span>
-                        <span class="pdesc"
-                          >Upload files onto work items, and delete the ones you uploaded.</span
-                        >
-                      </span>
-                    </div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Delete any attachment</span>
-                        <span class="pdesc"
-                          >Remove attachments uploaded by anyone, not only your own.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
-                  <div class="dom">
-                    <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                    <div class="perm perm-off">
-                      <span class="mark" role="img" aria-label="Not held"
-                        ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                      ></span>
-                      <span>
-                        <span class="plabel">Manage watchers</span>
-                        <span class="pdesc"
-                          >Add and remove other people from a work item’s watcher list.</span
-                        >
-                      </span>
-                    </div>
-                  </div>
+                <div class="mhead">
+                  <span class="rname">Viewer</span>
+                  <span class="rmeta">1 of 8</span>
+                  <span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
+                </div>
+                <div class="mgroup">Project</div>
+                <div class="mperm">
+                  <span class="plabel">View project</span>
+                  <span class="pdesc"
+                    >Open the project and read its work items, boards and reports.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Administer project</span>
+                  <span class="pdesc"
+                    >Change project settings — members, workflow, boards, fields.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Work items</div>
+                <div class="mperm">
+                  <span class="plabel">Edit work items</span>
+                  <span class="pdesc"
+                    >Create, update, assign and move work items on the board.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Comments</div>
+                <div class="mperm">
+                  <span class="plabel">Add comments</span>
+                  <span class="pdesc">Post comments, and edit or delete your own.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Moderate comments</span>
+                  <span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Attachments</div>
+                <div class="mperm">
+                  <span class="plabel">Add attachments</span>
+                  <span class="pdesc">Upload files, and delete the ones you uploaded.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Delete any attachment</span>
+                  <span class="pdesc">Remove attachments uploaded by anyone.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">Watchers</div>
+                <div class="mperm mlast">
+                  <span class="plabel">Manage watchers</span>
+                  <span class="pdesc"
+                    >Add and remove other people from a work item’s watcher list.</span
+                  >
+                </div>
+                <div class="mcell on mlast" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off mlast" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off mlast" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
               </div>
               <div class="card level-card">
-                <div class="role-head">
-                  <div class="role-id">
-                    <div class="role-name">Public requests</div>
-                    <div class="role-desc">
-                      Granted by the project’s <strong>access level</strong>, not by a role. Every
-                      visitor of a <strong>public</strong> project holds all three — signed in or
-                      not — and nobody holds them on an open, limited or private project.
+                <div class="level-head">
+                  <div>
+                    <div class="rname">Public requests</div>
+                    <div class="rdesc">
+                      Granted by the project’s <strong>access level</strong>, not by a role — which
+                      is why they are not a column above. Every visitor of a
+                      <strong>public</strong> project holds all three, signed in or not; nobody
+                      holds them on an open, limited or private project, a workspace owner included.
                     </div>
                   </div>
                   <span class="pill pill-neutral"
                     ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Access level</span
                   >
                 </div>
-                <div class="dom" style="border-top: 0; padding-top: 0">
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Granted by access level"
-                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Submit requests</span>
-                      <span class="pdesc"
-                        >Send a bug report or feature request into the project’s triage queue.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Granted by access level"
-                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Upvote requests</span>
-                      <span class="pdesc">Vote on a public request to signal demand for it.</span>
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Granted by access level"
-                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Comment on requests</span>
-                      <span class="pdesc">Reply on a public request’s thread.</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════════ PANEL 3 — the room reserved for editing ════════════ -->
-    <div class="panel-label">
-      3 · The room reserved for editing — a PLACEMENT decision, not working controls. When
-      MOTIR-2257 lands, “Create role” takes the page-header slot (dashed) and a per-role “Edit”
-      takes the top-right of each role card, beside its Built-in chip — which a custom role swaps
-      for its own chip. Deciding both now costs one panel; discovering them later costs the page.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="content" style="padding: 22px">
-          <span class="crumb">Settings · motir · Roles &amp; permissions</span>
-          <div class="rp-headrow">
-            <div>
-              <h2>Roles &amp; permissions</h2>
-              <p class="sub">What each role in <strong>motir</strong> can do.</p>
-            </div>
-            <span class="reserved"
-              ><span class="reserved-tag">MOTIR-2257</span
-              ><span class="btn btn-primary is-disabled"
-                ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create role</span
-              ></span
-            >
-          </div>
-          <div class="rp-stack">
-            <div class="roles">
-              <div class="card role-card">
-                <div class="role-head">
-                  <div class="role-id">
-                    <div class="role-name">Admin</div>
-                    <div class="role-desc">
-                      Full control of the project — its settings, its members and all of its work.
-                    </div>
-                    <div class="role-count">8 of 8 role permissions</div>
-                  </div>
-                  <span class="pill pill-builtin"
-                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                  >
-                  <span class="reserved"
-                    ><span class="reserved-tag">MOTIR-2257</span
-                    ><span class="role-edit"
-                      ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Edit</span
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Submit requests</span>
+                    <span class="pdesc"
+                      >Send a bug report or feature request into the triage queue.</span
                     ></span
                   >
                 </div>
-                <div class="dom">
-                  <div class="dom-label">Project<span class="dom-count">2/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">View project</span>
-                      <span class="pdesc"
-                        >Open the project and read its work items, boards, backlog and
-                        reports.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Administer project</span>
-                      <span class="pdesc"
-                        >Change project settings — members, workflow, boards, fields, components and
-                        automation.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Edit work items</span>
-                      <span class="pdesc"
-                        >Create, update, assign and move work items, and transition them on the
-                        board.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Comments<span class="dom-count">2/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Add comments</span>
-                      <span class="pdesc"
-                        >Post comments on work items, and edit or delete your own.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Moderate comments</span>
-                      <span class="pdesc"
-                        >Edit and delete anyone’s comments, not only your own.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Attachments<span class="dom-count">2/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Add attachments</span>
-                      <span class="pdesc"
-                        >Upload files onto work items, and delete the ones you uploaded.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Delete any attachment</span>
-                      <span class="pdesc"
-                        >Remove attachments uploaded by anyone, not only your own.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Watchers<span class="dom-count">1/1</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Manage watchers</span>
-                      <span class="pdesc"
-                        >Add and remove other people from a work item’s watcher list.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div class="card role-card">
-                <div class="role-head">
-                  <div class="role-id">
-                    <div class="role-name">Member</div>
-                    <div class="role-desc">
-                      Does the work: creates and edits work items, comments and attaches files.
-                    </div>
-                    <div class="role-count">4 of 8 role permissions</div>
-                  </div>
-                  <span class="pill pill-builtin"
-                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
-                  >
-                  <span class="reserved"
-                    ><span class="reserved-tag">MOTIR-2257</span
-                    ><span class="role-edit"
-                      ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Edit</span
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Upvote requests</span>
+                    <span class="pdesc"
+                      >Vote on a public request to signal demand for it.</span
                     ></span
                   >
                 </div>
-                <div class="dom">
-                  <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">View project</span>
-                      <span class="pdesc"
-                        >Open the project and read its work items, boards, backlog and
-                        reports.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Administer project</span>
-                      <span class="pdesc"
-                        >Change project settings — members, workflow, boards, fields, components and
-                        automation.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Work items<span class="dom-count">1/1</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Edit work items</span>
-                      <span class="pdesc"
-                        >Create, update, assign and move work items, and transition them on the
-                        board.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Comments<span class="dom-count">1/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Add comments</span>
-                      <span class="pdesc"
-                        >Post comments on work items, and edit or delete your own.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Moderate comments</span>
-                      <span class="pdesc"
-                        >Edit and delete anyone’s comments, not only your own.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Attachments<span class="dom-count">1/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Add attachments</span>
-                      <span class="pdesc"
-                        >Upload files onto work items, and delete the ones you uploaded.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Delete any attachment</span>
-                      <span class="pdesc"
-                        >Remove attachments uploaded by anyone, not only your own.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Manage watchers</span>
-                      <span class="pdesc"
-                        >Add and remove other people from a work item’s watcher list.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div class="card role-card">
-                <div class="role-head">
-                  <div class="role-id">
-                    <div class="role-name">Viewer</div>
-                    <div class="role-desc">
-                      Read-only. Sees everything in the project and changes nothing.
-                    </div>
-                    <div class="role-count">1 of 8 role permissions</div>
-                  </div>
-                  <span class="pill pill-builtin"
-                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Comment on requests</span>
+                    <span class="pdesc">Reply on a public request’s thread.</span></span
                   >
-                  <span class="reserved"
-                    ><span class="reserved-tag">MOTIR-2257</span
-                    ><span class="role-edit"
-                      ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Edit</span
-                    ></span
-                  >
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Project<span class="dom-count">1/2</span></div>
-                  <div class="perm perm-on">
-                    <span class="mark" role="img" aria-label="Held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">View project</span>
-                      <span class="pdesc"
-                        >Open the project and read its work items, boards, backlog and
-                        reports.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Administer project</span>
-                      <span class="pdesc"
-                        >Change project settings — members, workflow, boards, fields, components and
-                        automation.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Work items<span class="dom-count">0/1</span></div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Edit work items</span>
-                      <span class="pdesc"
-                        >Create, update, assign and move work items, and transition them on the
-                        board.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Comments<span class="dom-count">0/2</span></div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Add comments</span>
-                      <span class="pdesc"
-                        >Post comments on work items, and edit or delete your own.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Moderate comments</span>
-                      <span class="pdesc"
-                        >Edit and delete anyone’s comments, not only your own.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Attachments<span class="dom-count">0/2</span></div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Add attachments</span>
-                      <span class="pdesc"
-                        >Upload files onto work items, and delete the ones you uploaded.</span
-                      >
-                    </span>
-                  </div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Delete any attachment</span>
-                      <span class="pdesc"
-                        >Remove attachments uploaded by anyone, not only your own.</span
-                      >
-                    </span>
-                  </div>
-                </div>
-                <div class="dom">
-                  <div class="dom-label">Watchers<span class="dom-count">0/1</span></div>
-                  <div class="perm perm-off">
-                    <span class="mark" role="img" aria-label="Not held"
-                      ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg
-                    ></span>
-                    <span>
-                      <span class="plabel">Manage watchers</span>
-                      <span class="pdesc"
-                        >Add and remove other people from a work item’s watcher list.</span
-                      >
-                    </span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -3038,6 +2495,18 @@
           <path
             d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
           />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
         </g>
       </defs>
     </svg>
