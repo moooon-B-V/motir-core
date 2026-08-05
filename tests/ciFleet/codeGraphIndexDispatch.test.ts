@@ -1026,9 +1026,56 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
   // real tenant, attributed and costed. The rest of this file runs on fabricated
   // ids (`org-1`), which is why these tests seed their own tenant instead.
   const PASSWORD = 'hunter2hunter2';
-  /** When the poll observes the container — injected, so the accrued seconds are a
-   *  fixed arithmetic fact rather than a race with the wall clock. */
+  /**
+   * How long the container has been RUNNING when the poll observes it — measured
+   * from `handle.createdAt`, which is the stamp the accrual measures from, and
+   * NOT from `session.bootedAt` (MOTIR-2091).
+   *
+   * ⚠️ THE ANCHOR IS THE WHOLE POINT, and naming it here is the fix. Injecting
+   * `observedAt` removes the race with the wall clock only if it is offset from
+   * the SAME stamp the arithmetic under test reads. `buildContainerAccrual`
+   * computes `ceil((observedAt − startedAt) / 1000)` from the container's
+   * provider-reported `startedAt`; `session.bootedAt` is stamped LATER, after
+   * provisioning returns and credentials are minted. Offsetting from `bootedAt`
+   * therefore asserts `ceil((90_000 + δ) / 1000)` where δ is whatever that boot
+   * tail cost — and because `Math.ceil` has no tolerance at all, ONE millisecond
+   * of δ flips 90 to 91. That is a knife-edge, not a margin: it passed only on a
+   * machine fast enough to land the whole tail inside one millisecond, and it
+   * red-lit an unrelated PR (#1826) the first time it lost that race.
+   */
   const OBSERVED_AT_MS = 90_000;
+  /**
+   * A deliberate, generous δ between the fake's provision and the service's
+   * `bootedAt` stamp — injected into every boot below so the wrong anchor cannot
+   * come back green.
+   *
+   * At 1.5s it is three orders of magnitude past the real skew and, being over a
+   * whole second, it would move the asserted count by TWO were the anchor wrong
+   * again (`ceil(91_500 / 1000) = 92`). The tests assert the skew is really
+   * present, so this guard can never go vacuous.
+   */
+  const BOOT_SKEW_MS = 1_500;
+
+  /** Boot with that δ in place. `options.now` is read only for `bootedAt`, so
+   *  advancing it is exactly "the boot tail took 1.5s". */
+  const bootWithSkew = () =>
+    codeGraphIndexDispatchService.bootIndexContainer(dbInput, admissionFor(dbInput), {
+      ...FAST,
+      now: () => new Date(Date.now() + BOOT_SKEW_MS),
+    });
+
+  /** The observation moment, anchored to the stamp the accrual measures FROM.
+   *  The fake stamps `createdAt` and `startedAt` at one instant, at provision
+   *  (`lib/orchestrator/adapters/fake/index.ts`), so the handle's `createdAt` IS
+   *  the `startedAt` the checkpoint reads back off `describe`. */
+  const observedAtFor = (session: IndexSession) =>
+    new Date(new Date(session.handle.createdAt).getTime() + OBSERVED_AT_MS);
+
+  /** The δ the boot actually carries — asserted, never assumed, so a future
+   *  change that removes the skew fails loudly instead of quietly disarming the
+   *  regression guard. */
+  const bootSkewOf = (session: IndexSession) =>
+    new Date(session.bootedAt).getTime() - new Date(session.handle.createdAt).getTime();
 
   let tenant: { organizationId: string; workspaceId: string; projectId: string };
   let dbInput: IndexDispatchInput;
@@ -1096,13 +1143,12 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // The incremental half. An index container is job-shaped and would survive on
     // teardown-time costing alone; this is here because Epic 9's agent container is
     // story-shaped (HOURS) and reaches teardown far too late to be the first write.
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
-      dbInput,
-      admissionFor(dbInput),
-      FAST,
-    );
+    const booted = await bootWithSkew();
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
-    const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
+    // The δ is REAL on this boot — without it the assertions below would pass
+    // whether or not the anchor is right, which is how the defect survived.
+    expect(bootSkewOf(booted.session)).toBeGreaterThanOrEqual(BOOT_SKEW_MS);
+    const observedAt = observedAtFor(booted.session);
 
     const polled = await codeGraphIndexDispatchService.pollIndexContainer(
       booted.session,
@@ -1131,13 +1177,10 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // because the checkpoint reports the container's TOTAL to date rather than a
     // delta — a delta here would overstate Motir's own cost on every replay,
     // silently.
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
-      dbInput,
-      admissionFor(dbInput),
-      FAST,
-    );
+    const booted = await bootWithSkew();
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
-    const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
+    expect(bootSkewOf(booted.session)).toBeGreaterThanOrEqual(BOOT_SKEW_MS);
+    const observedAt = observedAtFor(booted.session);
     const options = { ...FAST, indexTimeoutMs: 600_000, now: () => observedAt };
 
     await codeGraphIndexDispatchService.pollIndexContainer(
@@ -1161,13 +1204,10 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // The two seams meeting: the poll's partial figure and the teardown's true total
     // land on ONE row and ONE rollup, which is what "extended, not duplicated" means
     // once both moments write.
-    const booted = await codeGraphIndexDispatchService.bootIndexContainer(
-      dbInput,
-      admissionFor(dbInput),
-      FAST,
-    );
+    const booted = await bootWithSkew();
     if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
-    const observedAt = new Date(new Date(booted.session.bootedAt).getTime() + OBSERVED_AT_MS);
+    expect(bootSkewOf(booted.session)).toBeGreaterThanOrEqual(BOOT_SKEW_MS);
+    const observedAt = observedAtFor(booted.session);
     await codeGraphIndexDispatchService.pollIndexContainer(
       booted.session,
       INITIAL_INDEX_POLL_STATE,
@@ -1184,7 +1224,12 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     const settled = await codeGraphIndexDispatchService.settleIndexContainer(booted.session, {
       done: true,
       reason: 'job_completed',
-      startedAt: new Date(booted.session.bootedAt).toISOString(),
+      // The provider-reported container start, which is what a real verdict
+      // carries (`status.startedAt`) — NOT `bootedAt`. Anchoring the settle to
+      // the later stamp makes `stoppedAt − startedAt` negative under a real δ,
+      // clamping the settled total to zero and letting the rollup invariant
+      // below hold for the wrong reason.
+      startedAt: booted.session.handle.createdAt,
       exitCode: 0,
       failureDetail: null,
     });
