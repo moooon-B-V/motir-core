@@ -228,6 +228,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // Self-scoped like whoami: no resource key, and the workspace comes from
         // the token — so it can only ever list the CALLER's own projects.
         list_projects: {},
+        // Resource-targeting: the key names tenant A's project, so a non-member
+        // must read its state as not-found rather than learn A's setup.
+        get_project_state: { projectKey: 'PROD' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
@@ -586,6 +589,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const argFor: Record<McpToolName, Record<string, unknown>> = {
         whoami: {},
         list_projects: {},
+        // Read-scoped, aimed at the caller's OWN project — the read-only-token
+        // loop asserts every `read` tool actually EXECUTES, and an unconfigured
+        // project is exactly the well-formed "nothing configured" answer.
+        get_project_state: { projectKey: 'PROD' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },

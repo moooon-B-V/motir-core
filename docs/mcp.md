@@ -87,14 +87,14 @@ delete scope still cannot delete in a workspace its owner can't reach.
 
 The scopes and the tools each one gates:
 
-| Scope                | Gates                                                                                                                                                                                                                             |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_projects`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`, `open_plan_session`       |
-| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item`, `append_plan_turn`, `submit_plan_session` |
-| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                                                              |
-| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                                                                |
-| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                                                                                                         |
-| `integration`        | `mark_integrated`, `complete_session`                                                                                                                                                                                             |
+| Scope                | Gates                                                                                                                                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_projects`, `get_project_state`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`, `open_plan_session` |
+| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item`, `append_plan_turn`, `submit_plan_session`                |
+| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                                                                             |
+| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                                                                               |
+| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                                                                                                                        |
+| `integration`        | `mark_integrated`, `complete_session`                                                                                                                                                                                                            |
 
 **Default grant set.** A token minted without an explicit scope choice gets
 **every scope EXCEPT `work_items:delete`** — full read + write + archive +
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **38 tools**.
+`initialize` handshake and registers **39 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1262,6 +1262,73 @@ reachable projects returns an **empty list**, not an error.
 how many projects come back. `createdAt` and a work-item count are deliberately
 omitted — either would cost an extra projection or a query per row, which a
 client looping over projects would inherit as a scale bug.
+
+#### `get_project_state`
+
+Read a project's **planning preconditions** — the configuration an agent should
+**verify** before planning against it, instead of assuming. `list_projects`
+answers "which projects can I reach"; this answers "what state is one in".
+
+Four questions, one call:
+
+- **Is the project established?** The immutable onboarding marker, resolved
+  through `resolvePlanningHostGate` — the same gate the planning surfaces read.
+- **Is code connected?** Whether the workspace has a GitHub App installation and
+  which repositories the grant covers.
+- **Is that code INDEXED?** Per-repo `indexed` / `pending`, from the succeeded
+  `system.code-graph-index` ledger, plus the set-level `hasRunning`.
+- **What is the project's repository SET, and where did onboarding stop?**
+
+**Input**
+
+| Field        | Type   | Required | Notes                       |
+| ------------ | ------ | -------- | --------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"PROD"`. |
+
+**Output** — `structuredContent`: a `ProjectStateDto`:
+
+| Field          | Type                           | Notes                                                                                                               |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `project`      | object                         | `{ key, id, name, onboardingRanAt }` — the marker is carried beside the verdict it produced.                        |
+| `planningGate` | `"workspace" \| "onboarding"`  | `resolvePlanningHostGate`'s verdict: `workspace` = established, `onboarding` = never onboarded.                     |
+| `code`         | object                         | `{ installed: boolean, index: MigrateIndexStatusDto }` — see below.                                                 |
+| `repoSet`      | `ProjectRepoDto[]`             | The PROJECT's repository set (distinct from the workspace's connected set); `[]` when the establish step never ran. |
+| `onboarding`   | `MigrateOnboardingDto \| null` | The migrate-onboarding run (`step` / `status` / `codeGraphReady` / `conventionApprovedAt`), or `null`.              |
+
+`code.index` is the **shipped `MigrateIndexStatusDto`** — the exact shape the
+migrate wizard's Index step polls — reused rather than re-invented:
+`{ repos: [{ provider, repoRef, status }], indexedCount, total, hasRunning, allIndexed }`.
+`status` is `indexed` when a succeeded index run matches the repo's `owner/name`
+ref and `pending` otherwise; `pending` covers queued, in flight, **and never
+attempted** — the ledger cannot separate them per repo, because a running row
+carries no `repoRef` (which is why `hasRunning` is a set-level flag). A
+repository connected before the index feature shipped reports `pending`, which is
+the honest answer: it has no graph (MOTIR-1961).
+
+`code.installed` is carried separately from `index.total === 0` on purpose: no
+installation and an installation whose grant covers no repositories are different
+states with different fixes.
+
+**Nothing configured is an ANSWER, not an error.** A project with no
+installation, no repos and no migrate run returns
+`installed: false`, an empty index status, `repoSet: []` and `onboarding: null` —
+every field present. A planner must be able to tell "there is no code" from "I
+could not look".
+
+**Read-only.** There is no way here to stamp the onboarding marker, trigger an
+index, or advance a migrate run. Reporting a precondition and satisfying it are
+different acts; only the first lives on this surface. It also makes no `motir-ai`
+round-trip — pre-plan document contents and the code-graph query surface stay
+behind the open-core boundary.
+
+**Access + tenancy.** `projectKey` selects **within** the token's workspace, it
+does not choose one: the key is resolved by the same browse-gated service every
+other project-scoped tool uses, so another tenant's key reads as a plain
+not-found (404-not-403, no existence leak).
+
+**No per-repo cost.** The index state comes from ONE ledger query joined against
+the repo list in memory, so the call's query count is invariant to how many
+repositories the grant covers.
 
 #### `mark_integrated`
 
