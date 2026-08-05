@@ -267,6 +267,60 @@
     "readOnlyHint": "You have read-only access to this project",
     "readOnlyBoardBanner": "Read-only access — you can view this board but can’t move or edit cards."
   },
+  "permissions": {
+    "domain": {
+      "project": "Project",
+      "work_item": "Work items",
+      "comment": "Comments",
+      "attachment": "Attachments",
+      "watcher": "Watchers",
+      "public_request": "Public requests"
+    },
+    "project_browse": {
+      "label": "View project",
+      "description": "Open the project and read its work items, boards, backlog and reports."
+    },
+    "project_administer": {
+      "label": "Administer project",
+      "description": "Change project settings — members, workflow, boards, fields, components and automation."
+    },
+    "work_item_edit": {
+      "label": "Edit work items",
+      "description": "Create, update, assign and move work items, and transition them on the board."
+    },
+    "comment_add": {
+      "label": "Add comments",
+      "description": "Post comments on work items, and edit or delete your own."
+    },
+    "comment_moderate": {
+      "label": "Moderate comments",
+      "description": "Edit and delete anyone's comments, not only your own."
+    },
+    "attachment_create": {
+      "label": "Add attachments",
+      "description": "Upload files onto work items, and delete the ones you uploaded."
+    },
+    "attachment_delete_any": {
+      "label": "Delete any attachment",
+      "description": "Remove attachments uploaded by anyone, not only your own."
+    },
+    "watcher_manage": {
+      "label": "Manage watchers",
+      "description": "Add and remove other people from a work item's watcher list. Anyone who can view a work item may watch it themselves."
+    },
+    "public_request_submit": {
+      "label": "Submit requests",
+      "description": "Send a bug report or feature request into the project's triage queue. Public projects only."
+    },
+    "public_request_upvote": {
+      "label": "Upvote requests",
+      "description": "Vote on a public request to signal demand for it. Public projects only."
+    },
+    "public_request_comment": {
+      "label": "Comment on requests",
+      "description": "Reply on a public request's thread. Public projects only."
+    }
+  },
   "localeToggle": {
     "label": "Language",
     "activate": "Activate to change."

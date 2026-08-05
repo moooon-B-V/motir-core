@@ -267,6 +267,60 @@
     "readOnlyHint": "你对此项目仅有只读访问权限",
     "readOnlyBoardBanner": "只读访问——你可以查看此看板，但无法移动或编辑卡片。"
   },
+  "permissions": {
+    "domain": {
+      "project": "项目",
+      "work_item": "工作项",
+      "comment": "评论",
+      "attachment": "附件",
+      "watcher": "关注者",
+      "public_request": "公开请求"
+    },
+    "project_browse": {
+      "label": "查看项目",
+      "description": "打开项目，查看其工作项、面板、待办列表和报表。"
+    },
+    "project_administer": {
+      "label": "管理项目",
+      "description": "修改项目设置——成员、工作流、面板、字段、组件和自动化。"
+    },
+    "work_item_edit": {
+      "label": "编辑工作项",
+      "description": "创建、更新、分配和移动工作项，并在面板上流转其状态。"
+    },
+    "comment_add": {
+      "label": "发表评论",
+      "description": "在工作项下发表评论，并编辑或删除自己发表的评论。"
+    },
+    "comment_moderate": {
+      "label": "管理评论",
+      "description": "编辑和删除任何人的评论，而不仅是自己的。"
+    },
+    "attachment_create": {
+      "label": "添加附件",
+      "description": "向工作项上传文件，并删除自己上传的附件。"
+    },
+    "attachment_delete_any": {
+      "label": "删除任意附件",
+      "description": "删除任何人上传的附件，而不仅是自己的。"
+    },
+    "watcher_manage": {
+      "label": "管理关注者",
+      "description": "将他人添加到工作项的关注列表或从中移除。任何能查看工作项的人都可以自行关注。"
+    },
+    "public_request_submit": {
+      "label": "提交请求",
+      "description": "向项目的收件箱提交缺陷报告或功能请求。仅适用于公开项目。"
+    },
+    "public_request_upvote": {
+      "label": "为请求投票",
+      "description": "为公开请求投票以表达需求强度。仅适用于公开项目。"
+    },
+    "public_request_comment": {
+      "label": "评论请求",
+      "description": "在公开请求的讨论串中回复。仅适用于公开项目。"
+    }
+  },
   "localeToggle": {
     "label": "语言",
     "activate": "点击切换。"
