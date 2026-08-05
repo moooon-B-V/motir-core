@@ -1122,3 +1122,188 @@ The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
 wide). Composes `planning-workspace.mock.html` sheet 4 (MOTIR-1193); gates the
 code subtask **MOTIR-1812** (the callout menu shell), and reserves the rows
 MOTIR-1343 / MOTIR-1344 deliver.
+
+---
+
+## ⭐ The planner SPEAKS in the plan-change thread — the findings report, the question, and the waiting rail (MOTIR-2225, 2026-08-05)
+
+**Amendment to this asset set, for `MOTIR-2225`.** `MOTIR-2222` (motir-ai) gives the
+planner a voice: **every** planning turn now returns a message — a findings
+report before the proposals, and at most one clarifying question when the
+request is genuinely not determinate. The plan-change thread has nowhere to put
+either. This section draws that room. The code subtask it gates is
+**`MOTIR-2226`** (the `assistant` turn role, its rendering, and the reply path),
+which is `blocked_by` this design.
+
+**Asset:** `plan-change-planner-speaks.mock.html` (source) +
+`plan-change-planner-speaks.png` + `plan-change-planner-speaks.dark.png`. A
+six-panel review board, every state drawn **in situ** — inside the real
+two-pane workspace, at the rail's real `22rem`, beside the real canvas.
+
+| Panel   | What it shows                                                                                                                                                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1**   | **The access path, unchanged** — the shipped `TopNav` hero pill, the floating **M** orb and ⌘K on any authed screen, opening the one planning workspace this all happens inside |
+| **A**   | **The findings report** — the planner's per-turn narration, with work-item chips, arriving **before** the proposals land on the canvas                                          |
+| **B**   | **The question, and the whole rail waiting on it** — the asking bubble plus what changes around it, and the comparison table that carries the load-bearing decision             |
+| **C**   | **The answer and the resumption** — and the same session reopened hours later, its pending state recovered from the persisted thread rather than from client state              |
+| **D·E** | **Work-item chips at realistic density**, and **the question nobody answered** — superseded, marked, never dropped and never blocking                                           |
+| **F**   | **Anatomy + the token map** the code card composes, in light and in the real dark flip                                                                                          |
+
+### ⭐ Drawn against SHIPPED REALITY — rendered before drawn (`notes.html` #73)
+
+Every rail fragment on the board is the **real emitted markup** of the shipped
+`components/planning/PlanChangeRail.tsx` + `PlanChangeComposer.tsx`, captured by
+a headless render of the actual components (the repo's own
+`tests/helpers/renderWithIntl` harness → `container.innerHTML`) against the real
+`packages/design-system/theme.css`, at the rail's real width. The class strings
+in the mock are therefore not a stylised redraw — they are what the app emits,
+so the asset cannot silently drift from the implementation and the code card can
+lift the new elements' markup verbatim. What the render corrected, versus what
+reading the `.tsx` alone would have suggested:
+
+- **An assistant/user contrast already exists**, and it is strong: the assistant
+  bubble is the soft `--el-chat-bubble-ai` fill with the accent **M** avatar on
+  the LEFT; the user bubble is the accent fill with a `·` avatar and the whole
+  row `flex-row-reverse`. A findings report needs **no new treatment at all** to
+  read as the planner speaking.
+- **The `label` slot already renders inside the bubble** (mono, 10 px, uppercase,
+  `opacity-80`) and is used **only by user turns** today (`turn 1`,
+  `turn 2 · refine`). That is why the question reuses that slot rather than
+  inventing a bubble header.
+- **The submission marker is a centred `--el-text-faint` line**, not a bubble —
+  the vocabulary both new marker lines borrow.
+- **At `22rem` the rail header is already full** (status dot + `Motir AI` +
+  mode chip), which is why the pending state lives on the composer and not in a
+  header pill.
+
+### ⚠️ INHERITED vs NEW — what is not redrawn
+
+**Inherited, verbatim** from `plan-change-conversation.mock.html` (MOTIR-1727)
+and the shipped components it composes: the two-pane frame
+(`PlanningWorkspace`, `grid-cols-[1fr_22rem]`), the canvas pane and its node +
+edge language (`design/roadmap/`, MOTIR-1009, over `PlanningCanvas`), the rail
+head, the assistant `Bubble` anatomy that **panel 3 of that asset already draws
+as the AI reply**, the user bubble, the submission marker, the confirm-to-persist
+review block, the `@`-target composer, and the exit chrome. **The bubble, the
+rail, the composer and the canvas are NOT redrawn here.**
+
+**Genuinely new — four things, and only four:**
+
+1. An assistant turn that is **persisted** (it belongs to the thread's history and
+   survives a reload, rather than being local chrome as every assistant bubble on
+   screen today is).
+2. The **asking** variant of that bubble — the same anatomy with two token values
+   swapped and the existing label slot filled.
+3. The **answer bar**, a sibling pinned above the composer input where the target
+   tray already sits.
+4. Two **marker lines** in the shipped marker vocabulary — _Answered — planning
+   resumed_ and _Not answered — Motir AI carried on with what you asked_.
+
+### ⭐ The load-bearing decision: a report and a question at a glance
+
+Most turns are reports; questions are rare by construction, because `MOTIR-2222`'s
+whole bar is _derive before you ask_. That ratio is exactly what makes a question
+dangerous — a rare thing that looks like the common thing gets skimmed, and a
+skimmed question is a thread that dies silently with each side waiting on the
+other. So the distinction cannot rest on wording, and it does not rest on colour
+either. In one sentence:
+
+> **A report changes only the transcript. A question changes the composer.**
+
+|             | report                      | question                   |
+| ----------- | --------------------------- | -------------------------- |
+| bubble fill | `--el-chat-bubble-ai`       | `--el-warning-surface`     |
+| bubble ink  | `--el-text`                 | `--el-warning-text`        |
+| label slot  | none                        | `asking` + the `?` glyph   |
+| answer bar  | —                           | pinned above the composer  |
+| placeholder | _Reply, or refine further…_ | _Answer Motir AI…_         |
+| Send button | icon only                   | icon + the word **Answer** |
+| canvas      | proposals land              | untouched                  |
+
+**Three cues, none of them colour alone:** a word (`asking` / _Waiting for your
+answer_ / **Answer**), a glyph (lucide `message-circle-question-mark`), and a
+**position** — the bar sits against the input, which is pinned, so "the planner
+is waiting on you" is legible with the thread scrolled anywhere.
+
+**No dashed or dotted border carries the pending state.** Pending is a
+token-driven tint plus a label: a hardcoded dashed edge would fight the
+`data-style` axis and collide with the canvas's proposed-node language, which
+already owns dashed-accent.
+
+**Why a bar and not a header pill:** measured at the rail's real `22rem`, the
+header row already carries the status dot, the `Motir AI` label and the mode
+chip; a fourth element truncates. The bar has the full width, sits in the pinned
+region, and is adjacent to the control whose behaviour actually changed.
+
+### The states (A–E)
+
+| State | What it is                                                                   | How it is drawn                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** | **The findings report** — what was searched, what came back, what that means | An **ordinary** assistant `Bubble`: same fill, ink, avatar and width as the opener and the proposal summary. It arrives **before** the proposals, so a wrong match is catchable before a branch is built on it (the ordering `MOTIR-2222` asserts on the producing side).                                                                                                                                                                                                                                                                                                                                              |
+| **B** | **The question** — the request admits two outcomes the grounding cannot rank | The same `Bubble` with `--el-warning-surface` / `--el-warning-text` and the `asking` label + glyph, **plus** the answer bar, the `Answer Motir AI…` placeholder and the relabelled Send. The canvas stays untouched — nothing is proposed while the planner is blocked.                                                                                                                                                                                                                                                                                                                                                |
+| **C** | **The answer, and resumption**                                               | An **ordinary user turn**, labelled `answer` in the slot user turns already number themselves in — not a paired or nested element. Resumption is one centred `--el-text-faint` marker, _Answered — planning resumed_. The bar clears, Send returns to its icon, the placeholder returns.                                                                                                                                                                                                                                                                                                                               |
+| **D** | **Referenced work items inside a turn**                                      | The shipped `WorkItemRefChip` autolink, reused as-is (type-hue icon · mono key · title · status dot, peek on click) — no new inline treatment. **Two or three per report is the density**, and it is a decision: the chip is `white-space: nowrap`, so a fourth turns a report at `22rem` into a wall of boxes. A report with no match names none.                                                                                                                                                                                                                                                                     |
+| **E** | **A question left unanswered**                                               | **SUPERSEDED — never dropped, never blocking.** The instant the user sends anything else the pending state clears (bar gone, Send an icon, placeholder back) and the planner proceeds on its own best reading of the original request. The question bubble **stays in the thread exactly as it was** — it is a persisted turn and the transcript never rewrites itself — and gains one marker line beneath it: _Not answered — Motir AI carried on with what you asked_. Not dimmed, not struck through, not removed: the user has to be able to see later **why** a plan rests on an assumption they never confirmed. |
+
+**Awaiting is DERIVED, not stored client-side.** The rail is in the awaiting
+state exactly when _the last planner turn is a question with no user turn after
+it_. That is why panel C's second frame — the same session reopened hours later
+from a cold start — comes back to the identical bar, placeholder and button, and
+it is what `MOTIR-2226`'s reload criterion asserts.
+
+### Primitives composed (no hand-rolling)
+
+| Element                               | Built from                                                                                                           | Colour                                                     | Shape                                                                    |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| the two-pane frame                    | the shipped `PlanningWorkspace` (`grid-cols-[1fr_22rem]`)                                                            | —                                                          | —                                                                        |
+| canvas pane, nodes, edges             | the standalone work-item canvas (`design/roadmap/`, MOTIR-1009) over `PlanningCanvas` — composed, never redrawn      | `--el-canvas`, `--el-type-*`, `--el-canvas-edge-committed` | `--radius-card`                                                          |
+| rail head, bubbles, markers, composer | the shipped `PlanChangeRail` / `PlanChangeComposer` — real emitted markup                                            | as shipped                                                 | as shipped                                                               |
+| **report bubble**                     | `Bubble role="assistant"`, unchanged                                                                                 | `--el-chat-bubble-ai` / `--el-text`                        | `--radius-card`                                                          |
+| **question bubble**                   | the same `Bubble`, `label` slot filled                                                                               | `--el-warning-surface` / `--el-warning-text`               | `--radius-card`                                                          |
+| **asking label**                      | the `label` span user turns already use                                                                              | inherits the bubble ink at `opacity-80`                    | `font-mono text-[10px] uppercase`                                        |
+| **answer bar**                        | NEW — a sibling in `PlanChangeComposer`, where the target tray sits                                                  | `--el-warning-surface` / `--el-warning-text`               | `--radius-card`; its button `--radius-control` + `--spacing-control-x/y` |
+| **Send → Answer**                     | `Button variant="primary" size="sm"` with a visible label                                                            | `--el-accent` / `--el-accent-text`                         | `--radius-btn`, `--height-btn-sm`                                        |
+| **resumed / not-answered markers**    | the shipped `system`-marker line                                                                                     | `--el-text-faint`                                          | `text-center text-xs`                                                    |
+| work-item reference                   | the shipped `WorkItemRefChip` (`.wi-chip`)                                                                           | `--el-surface-soft`, key `--el-link`, hue `--el-type-*`    | `--radius-control`, `--spacing-kbd-x/y`                                  |
+| the entrance (panel 1)                | the shipped `PlanWithAILauncher` + `PlanWithAIFab` + ⌘K — unchanged, drawn so the reader sees the door               | palette-derived hero gradient                              | `--radius-badge`                                                         |
+| icons                                 | lucide-react — `message-circle-question-mark`, `send`, `at-sign`, `sparkles`, `check`, the `--el-type-*` kind glyphs | —                                                          | —                                                                        |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*`. The mock's stylesheet is Tailwind's **real
+  output for this page**, built over `packages/design-system/theme.css`, so the
+  Tier-0 `--color-*`, the `[data-theme='dark']` flip and the Tier-3 `--el-*`
+  layer are the shipped values verbatim — **no retyped hex and no invented hue**.
+  Even the canvas grid-dot texture is a `color-mix()` of two tokens.
+- **Shape** strictly via element-semantic tokens (`--radius-card|control|input|badge`,
+  `--spacing-chip-x/y`, `--spacing-control-x/y`, `--spacing-kbd-x/y`,
+  `--height-btn-sm`, `--shadow-*`), so a `data-style` swap reshapes the new bar
+  exactly as it reshapes the bubbles. `rounded-full` only on the status dot, the
+  avatars and the orb.
+- **AA** — charcoal `--el-warning-text` on `--el-warning-surface` is the
+  tint-background recipe finding #35 pins (~10:1 in both themes); the hue never
+  lands under light ink. The `See it` control is a real button, not link-coloured
+  text on a tint.
+- **Not colour alone** — every new state pairs its tint with a word AND a glyph,
+  and the awaiting state additionally changes a control's label and position.
+- **Dark** is drawn from the real token flip (`data-theme="dark"` **plus**
+  `data-appearance-scope`, since the Tier-3 layer is declared on
+  `:root,[data-appearance-scope]` and a nested subtree must re-emit it). The
+  states stay distinguishable — the warm `--el-warning-surface` against the
+  near-black `--el-chat-bubble-ai` — which is why the `.dark.png` ships.
+- **A11y** — the question is an ordinary turn inside the rail's existing
+  `role="log"`; the answer bar is not an alert (nothing failed) but its copy
+  names the state in text, so it is announced when the log updates; the composer's
+  `aria-label` tracks its placeholder, as the shipped composer already
+  guarantees; `See it` moves focus to the question turn; decorative glyphs are
+  `aria-hidden`.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
+(this section) · `plan-change-planner-speaks.mock.html` (source) ·
+`plan-change-planner-speaks.png` (+ `.dark.png`), full-page Playwright chromium
+exports, `deviceScaleFactor: 2`, 1240 px wide; `prettier --check` clean.
+Composes `plan-change-conversation.mock.html` (MOTIR-1727) +
+`planning-workspace.mock.html` (MOTIR-1193); grounded in the producer
+**MOTIR-2222**; gates the code subtask **MOTIR-2226**.
