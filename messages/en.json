@@ -4826,7 +4826,10 @@
         "discover": "Discover",
         "shape": "Shape",
         "validate": "Validate",
-        "plan": "Plan"
+        "plan": "Plan",
+        "noDocs": "No docs",
+        "docsCount": "{count} of 4 docs",
+        "crumb": "Planning"
       }
     }
   },

@@ -91,7 +91,15 @@ export function StationCard({
 }: {
   station: StationView;
   doc: DirectionDocView | undefined;
-  session: DiscoverySession;
+  /**
+   * The live discovery session, when the mount HAS one. OPTIONAL (MOTIR-2205): it
+   * is read in exactly two places — the `design` station's `designChoice`, and the
+   * classification/platform FALLBACK for a `discovery` doc that carries no
+   * structured `summary` — so a mount with no session (the roadmap's drilled
+   * pre-plan station level, which draws only the four tier stations) simply omits
+   * it. The onboarding canvas keeps passing it and renders identically.
+   */
+  session?: DiscoverySession;
   /** Present on the `design` station — opens the web-only design step (MOTIR-1040). */
   onOpenDesign?: () => void;
   /** Present on the CURRENT "you are here" (active) tier — advances the step
@@ -122,7 +130,7 @@ export function StationCard({
   // step (you can skip it right up to acting on it) — but NOT once its doc is
   // produced (a linked tier is no longer skippable) and, for the design step, NOT
   // once a design has been chosen (MOTIR-1363).
-  const designChosen = isDesign && session.designChoice !== null;
+  const designChosen = isDesign && (session?.designChoice ?? null) !== null;
   const showCanSkip =
     station.optional &&
     (station.state === 'upcoming' || station.state === 'active') &&
@@ -341,7 +349,7 @@ function CapturedFindings({
 }: {
   kind: DirectionDocKind;
   doc: DirectionDocView | undefined;
-  session: DiscoverySession;
+  session?: DiscoverySession;
   deciding: boolean;
 }) {
   const t = useTranslations('onboarding.chat.canvas');
@@ -356,8 +364,8 @@ function CapturedFindings({
 
   const facts: string[] = [];
   if (kind === 'discovery') {
-    if (session.classification) facts.push(`${t('facts.type')} — ${session.classification}`);
-    if (session.platform) facts.push(`${t('facts.platform')} — ${session.platform}`);
+    if (session?.classification) facts.push(`${t('facts.type')} — ${session.classification}`);
+    if (session?.platform) facts.push(`${t('facts.platform')} — ${session.platform}`);
   }
   const fallbackLines = hasSummary ? [] : [...facts, ...captureLines(doc?.contentMd)];
 

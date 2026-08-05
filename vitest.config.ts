@@ -361,6 +361,16 @@ export default defineConfig({
         // carries the top-up + the DTO→adapter→canvas seam.
         'components/planning/ProjectRoadmapCanvas.tsx',
         'components/planning/WorkItemRoadmap.tsx',
+        // Story MOTIR-1755 · Subtask MOTIR-2205 — the planning phase card's DOOR
+        // joins the same gate, and for the same reason: these three are CLIENT
+        // modules with no service behind them, so the decisions they make — which
+        // level the drill is served from, which stations are openable, and what the
+        // card is allowed to ASSERT about a journey — reach the browser with nothing
+        // in between. The badge in particular is a claim about provenance, and every
+        // untested branch of it is a claim nobody checked.
+        'components/planning/preplanStationLevel.tsx',
+        'components/planning/PlanningOriginCluster.tsx',
+        'components/planning/workItemLevel.tsx',
         // Story MOTIR-1863 (connect the CLI) · Subtask MOTIR-1870 — the whole
         // `motir login` surface joins the gate now that every code card has
         // merged and the numbers are real. This is a CREDENTIAL path: the
@@ -1231,6 +1241,18 @@ export default defineConfig({
           lines: 90,
         },
         'components/planning/WorkItemRoadmap.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Subtask MOTIR-2205 — the planning phase card's drill surface, same floor.
+        'components/planning/preplanStationLevel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'components/planning/PlanningOriginCluster.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'components/planning/workItemLevel.tsx': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-1870 — the `motir login` surface at the same floor.
         'lib/repositories/deviceCodeRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/cliDeviceMappers.ts': { branches: 90, functions: 90, lines: 90 },

@@ -1,13 +1,18 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
-import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
+import { buildWorkItemLevel, ORIGIN_ID } from '@/components/planning/workItemLevel';
+import { buildPreplanStationLevel } from '@/components/planning/preplanStationLevel';
+import { TierDocModal } from '@/components/planning/TierDocModal';
+import { isDirectionDocKind, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import { fetchPreplanState, producedTierKinds } from '@/lib/onboarding/preplanClient';
+import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
 import {
   fetchRoadmapLevel,
   type RoadmapLevelData,
@@ -26,6 +31,25 @@ import {
 // canvas surfaces a "View" button on the selected card, and this consumer opens the
 // shipped peek (`WorkItemQuickView`) for that node — driven by LOCAL state, so the
 // reusable canvas stays route-agnostic (no `?peek=` URL coupling).
+//
+// THE PLANNING PHASE CARD IS A DOOR (MOTIR-2205 / design
+// `design/roadmap/planning-origin-drill.*`). The pinned planning-origin cluster is
+// `drillable`, and this adapter serves what is behind it: `loadLevel` intercepts
+// `ORIGIN_ID` and returns a SYNTHETIC level of pre-plan station cards built from the
+// project's pre-plan read (`buildPreplanStationLevel`) — no `fetchRoadmapLevel` call,
+// because no work item backs those nodes. A produced station is `viewable`, so the
+// canvas's own View button surfaces on it, and `onView` routes a tier id to
+// `TierDocModal` (`origin="roadmap"`) exactly as `OnboardingCanvas` already does.
+// Neither hop is a new interaction: drill is the canvas's, View-opens-the-doc is
+// onboarding's, on the same `StationCard`.
+//
+// ⚠️ THE PRE-PLAN READ NEVER BLOCKS THE FIRST PAINT (the MOTIR-2069 lesson). The
+// STATION level's read happens on DRILL, inside the canvas's own per-level load,
+// which already has a spinner. The only thing level 0 wants it for is the phase
+// card's honest badge — so it is fired from an effect AFTER mount and folded into
+// `reloadKey` when it lands: the card paints chip-less immediately and UPGRADES.
+// A failed read leaves `produced` null (no chip) and the drilled level renders its
+// four `upcoming` stations — never an error on `/roadmap`.
 
 const ROOT_KEY = '__root__';
 
@@ -79,7 +103,7 @@ export function WorkItemRoadmap({
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
   // The shared work-item quick-view peek (MOTIR-1352) — the same one the onboarding
   // canvas uses; opened by the canvas "View" button.
-  const { registerItems, onView, quickView } = useWorkItemQuickView();
+  const { registerItems, onView: onViewWorkItem, quickView } = useWorkItemQuickView();
 
   // A MANUAL REFRESH (MOTIR-1542): the caller bumps `refreshSignal`, which folds into
   // the canvas `reloadKey` (below) so the canvas re-runs its load for the CURRENT
@@ -91,6 +115,58 @@ export function WorkItemRoadmap({
   const cacheGenRef = useRef(refreshSignal);
   const settledRef = useRef(refreshSignal);
 
+  // The phase card only renders in the WHOLE-PROJECT scope (the sprint slice's road
+  // did not start at onboarding), so neither the badge read nor the station level is
+  // owed anywhere else.
+  const originEnabled = showPlanningOrigin && scope !== 'sprint';
+
+  // ONE pre-plan read, shared by the badge and the drilled station level, held as a
+  // PROMISE so a drill that lands while the badge's read is still in flight joins it
+  // instead of firing a second request. Keyed by the refresh generation so a manual
+  // refresh (MOTIR-1542) re-reads it exactly like the level cache.
+  const preplanRef = useRef<{ gen: number; read: Promise<PreplanStateDTO | null> } | null>(null);
+  const readPreplan = useCallback((): Promise<PreplanStateDTO | null> => {
+    if (!preplanRef.current || preplanRef.current.gen !== refreshSignal) {
+      // `fetchPreplanState` already resolves null on any non-OK response; the catch
+      // covers a hard network failure and the `docs` guard a response that parsed but
+      // is not a pre-plan state. All three land on `null` — the honest "we do not
+      // know" — so neither the badge nor the level load can ever reject.
+      preplanRef.current = {
+        gen: refreshSignal,
+        read: fetchPreplanState()
+          .then((state) => (state && Array.isArray(state.docs) ? state : null))
+          .catch(() => null),
+      };
+    }
+    return preplanRef.current.read;
+  }, [refreshSignal]);
+
+  // The produced tiers behind the phase card's badge — `null` until the read lands
+  // (and if it fails), which is exactly the chip-less state the card renders.
+  const [produced, setProduced] = useState<DirectionDocKind[] | null>(null);
+  useEffect(() => {
+    if (!originEnabled) return;
+    let alive = true;
+    void readPreplan().then((state) => {
+      if (alive) setProduced(state ? producedTierKinds(state) : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [originEnabled, readPreplan]);
+
+  // The tier whose doc is open in the on-canvas viewer, or null. Work-item ids are
+  // cuids and never a tier kind, so routing on the id is unambiguous — the same
+  // discrimination `OnboardingCanvas` makes.
+  const [viewTier, setViewTier] = useState<DirectionDocKind | null>(null);
+  const handleView = useCallback(
+    (id: string) => {
+      if (isDirectionDocKind(id)) setViewTier(id);
+      else onViewWorkItem(id);
+    },
+    [onViewWorkItem],
+  );
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // A new refresh generation invalidates every cached level so this load hits the
@@ -100,6 +176,14 @@ export function WorkItemRoadmap({
         cacheRef.current.clear();
       }
       try {
+        // THE PHASE CARD'S LEVEL (MOTIR-2205) — synthetic, so it short-circuits the
+        // work-item read entirely: no work item backs a pre-plan station, and
+        // `fetchRoadmapLevel(ORIGIN_ID)` would ask the API for the children of an id
+        // it has never heard of. The pre-plan read is awaited HERE, on the drill, not
+        // ahead of the canvas.
+        if (parentId === ORIGIN_ID) {
+          return buildPreplanStationLevel(await readPreplan());
+        }
         // Scope is part of the cache key so a project-scope level is never reused
         // for sprint scope (MOTIR-1382). The page also remounts this component on a
         // scope change (its React `key`), so the canvas re-loads the ROOT in the new
@@ -124,8 +208,10 @@ export function WorkItemRoadmap({
         // the sprint-validity "not in sprint" signal (MOTIR-1379).
         return buildWorkItemLevel(wi, {
           markActive: true,
-          includeOrigin: parentId === null && showPlanningOrigin && scope !== 'sprint',
+          includeOrigin: parentId === null && originEnabled,
           scope,
+          originCrumbLabel: t('origin.crumb'),
+          originProduced: produced,
         });
       } finally {
         // A refresh-triggered load has completed → let the caller clear its loading
@@ -139,7 +225,17 @@ export function WorkItemRoadmap({
         }
       }
     },
-    [projectKey, scope, registerItems, showPlanningOrigin, refreshSignal, onRefreshSettled],
+    [
+      projectKey,
+      scope,
+      registerItems,
+      originEnabled,
+      refreshSignal,
+      onRefreshSettled,
+      readPreplan,
+      produced,
+      t,
+    ],
   );
 
   return (
@@ -147,13 +243,16 @@ export function WorkItemRoadmap({
       <ProjectRoadmapCanvas
         loadLevel={loadLevel}
         // Fold the manual-refresh counter into the reload key so a refresh re-runs
-        // the canvas's per-level load effect for the CURRENT level (MOTIR-1542).
-        reloadKey={`${scope}:${refreshSignal}`}
+        // the canvas's per-level load effect for the CURRENT level (MOTIR-1542), and
+        // the resolved produced set (MOTIR-2205) so the phase card's badge UPGRADES
+        // in place when the late read lands. That rebuild is served from the level
+        // cache — it re-renders the card, it does not re-hit the roadmap API.
+        reloadKey={`${scope}:${refreshSignal}:${produced ? produced.join(',') : '-'}`}
         positions={positions}
         onNodeMove={onNodeMove}
         onResetPositions={onResetPositions}
         onSelect={onSelect}
-        onView={onView}
+        onView={handleView}
         searchable
         fullScreenable
         locatable
@@ -178,6 +277,12 @@ export function WorkItemRoadmap({
         }
       />
       {quickView}
+      {/* The tier-doc viewer a produced station's View opens (MOTIR-1355, shipped and
+          untouched). `origin="roadmap"` because the user is already inside the app
+          shell, so its head's "Open full page" lands on `/direction/[tier]` in-shell
+          rather than a new tab. Read-only here: a materialized roadmap has no
+          "current step" to continue, so no `isCurrentStep` / `onContinue`. */}
+      <TierDocModal tier={viewTier} origin="roadmap" onClose={() => setViewTier(null)} />
     </>
   );
 }
