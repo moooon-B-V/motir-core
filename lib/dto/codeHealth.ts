@@ -121,6 +121,23 @@ export interface CodeAuditSurfaceDTO {
   scanner: ExternalScannerStateDTO | null;
 }
 
+// ONE connected repo's audit surface, as the multi-repo page reads it
+// (MOTIR-2207 · design/coding-convention Panel 7). The page reads one of these
+// per connected repo, so the two "there is no report here" cases must be told
+// apart — they are DIFFERENT rows in the design's state table and only one of
+// them is a failure:
+//
+//   surface.audit === null  → "Not audited yet". The read SUCCEEDED and the
+//                             store has nothing for this repo. Never an error.
+//   surface === null        → "Couldn't load this report". This repo's read
+//                             REJECTED. It degrades THIS row only — its
+//                             siblings' reports still render and the page does
+//                             not fall into the whole-page `loadError`.
+export interface RepoAuditSurfaceDTO {
+  repoKey: string;
+  surface: CodeAuditSurfaceDTO | null;
+}
+
 // One repo's queued pair (MOTIR-928 · POST /v1/code-context/refresh): a fresh
 // code_audit + propose_convention, both scoped to `repoKey`.
 export interface ReauditRepoJobsDTO {

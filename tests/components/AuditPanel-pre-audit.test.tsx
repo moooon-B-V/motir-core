@@ -40,6 +40,9 @@ function renderPanel(
     pollExhausted?: boolean;
     onReaudit?: () => void;
     onCheckAgain?: () => void;
+    partiallyDerivedRepoRef?: string | null;
+    unavailableRepoRef?: string | null;
+    onRetryRepo?: () => void;
   } = {},
 ) {
   return renderWithIntl(
@@ -54,6 +57,11 @@ function renderPanel(
       scanner={null}
       reauditing={over.reauditing ?? false}
       onReaudit={over.onReaudit ?? vi.fn()}
+      // Null by default: states A–D fire exactly when NO repo has an audit, so
+      // every pre-existing case here must go on reaching them untouched.
+      partiallyDerivedRepoRef={over.partiallyDerivedRepoRef ?? null}
+      unavailableRepoRef={over.unavailableRepoRef ?? null}
+      onRetryRepo={over.onRetryRepo ?? vi.fn()}
       pollExhausted={over.pollExhausted ?? false}
       onCheckAgain={over.onCheckAgain ?? vi.fn()}
       deepenDismissed={false}

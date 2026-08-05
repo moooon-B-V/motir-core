@@ -162,10 +162,19 @@ export const aiConventionService = {
   // The latest code-health audit summary + a page of findings. `findingsOffset`
   // pages the (bounded, virtualized) list as it scrolls; `repoKey` scopes to a
   // single repo (MOTIR-1662 per-repo scope).
+  //
+  // `findingsLimit` overrides the page size for a SUMMARY read (MOTIR-2207 ·
+  // Panel 7 §3). The multi-repo list needs `healthSummary` + `total` for every
+  // connected repo and `findings` for only the selected one, so reading N
+  // surfaces at the full page size would ship N × 100 findings to draw an N-row
+  // list. This is a passthrough, not a boundary change: `GET /v1/code-audit`
+  // already accepts the param and `motirAiClient.getCodeAudit` already forwards
+  // it. Note motir-ai's `parsePositiveInt` REJECTS `0`, so the cheapest legal
+  // summary read is `1` — see SUMMARY_FINDINGS_LIMIT at the page.
   async getAudit(
     projectId: string,
     ctx: AccessActorContext,
-    opts: { repoKey?: string; findingsOffset?: number } = {},
+    opts: { repoKey?: string; findingsOffset?: number; findingsLimit?: number } = {},
   ): Promise<CodeAuditSurfaceDTO> {
     await projectAccessService.assertCanManage(projectId, ctx);
     const raw = await getCodeAudit({
@@ -173,7 +182,7 @@ export const aiConventionService = {
       coreProjectId: projectId,
       repoKey: opts.repoKey,
       findingsOffset: opts.findingsOffset,
-      findingsLimit: FINDINGS_PAGE_SIZE,
+      findingsLimit: opts.findingsLimit ?? FINDINGS_PAGE_SIZE,
     });
     return toCodeAuditSurfaceDTO(raw);
   },

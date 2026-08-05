@@ -117,13 +117,33 @@ function render(
     repoRefs?: string[];
     initialAudit?: CodeAuditSurfaceDTO | null;
     loadError?: string | false;
+    /** Whose report is on screen. Defaults to the first connected repo; set it
+     *  explicitly to seed a report for a repo that is no longer connected. */
+    selectedRepoKey?: string | null;
   } = {},
 ) {
+  const repoRefs = over.repoRefs ?? REPOS;
+  const initialAudit = over.initialAudit ?? null;
+  // The audit surface is now a SET (MOTIR-2207): one entry per connected repo,
+  // with the selection naming whose report is on screen. These paths are all
+  // about the FIRST repo's report, so seed it there and leave the siblings
+  // un-audited — the shape the page hands over.
+  const selected =
+    over.selectedRepoKey !== undefined ? over.selectedRepoKey : (repoRefs[0] ?? null);
   return renderWithIntl(
     <CodeHealthClient
       projectId="proj_1"
-      repoRefs={over.repoRefs ?? REPOS}
-      initialAudit={over.initialAudit ?? null}
+      repoRefs={repoRefs}
+      // ⚠️ `surface: null` means that repo's read FAILED — it is NOT "no audit
+      // yet", which is the EMPTY surface. These paths are about a repo with
+      // nothing derived, so the entry is EMPTY_AUDIT whenever there is no
+      // initial report to seed.
+      initialAudits={repoRefs.map((repoKey) => ({
+        repoKey,
+        surface: repoKey === selected ? (initialAudit ?? EMPTY_AUDIT) : EMPTY_AUDIT,
+      }))}
+      initialSelectedRepoKey={selected}
+      initialSelectedAudit={initialAudit}
       initialConventions={[]}
       loadError={over.loadError ?? false}
     />,
@@ -221,18 +241,28 @@ describe('CodeHealthClient — the island’s remaining paths', () => {
   // report is still on screen (it is a stored row, not a live read) but there is
   // no `repoKey` left to scope a request by, and both boundary reads require one.
   // Every read path must therefore no-op rather than fire an unscoped 400.
+  // A report whose repo has since left the connected set. Since MOTIR-2207 every
+  // read is scoped to THE REPO WHOSE REPORT IS ON SCREEN rather than to an
+  // ambient `repoRefs[0]`, so these paths no longer silently no-op when the
+  // connected set is empty — they address the audit the reader is looking at.
   describe('a stored report with no connected repo left', () => {
-    it('does not page the findings list', async () => {
-      render({ repoRefs: [], initialAudit: surface() });
+    const orphan = { repoRefs: [], initialAudit: surface(), selectedRepoKey: REPOS[0]! };
+
+    it('keeps the report on screen and pages it against ITS OWN repo', async () => {
+      render(orphan);
       await click('Load more findings');
 
-      expect(calls).toHaveLength(0);
       expect(screen.getByText('no-god-object')).toBeTruthy();
+      const auditCalls = calls.filter((c) => c.url.includes('/audit'));
+      expect(auditCalls).toHaveLength(1);
+      // Scoped to the report's repo — not unscoped, which both boundary
+      // endpoints `requireQuery` against and would answer with a 400.
+      expect(new URL(auditCalls[0]!.url, 'http://t').searchParams.get('repoKey')).toBe(REPOS[0]);
     });
 
-    it('fires the re-audit but polls nothing, since there is no surface to poll', async () => {
+    it('fires the re-audit ONCE and polls the repo whose report is on screen', async () => {
       vi.useFakeTimers();
-      render({ repoRefs: [], initialAudit: surface() });
+      render(orphan);
 
       await click('Set up CodeQL');
       await click('Re-audit now');
@@ -240,8 +270,13 @@ describe('CodeHealthClient — the island’s remaining paths', () => {
         await vi.advanceTimersByTimeAsync(3000 * 3);
       });
 
+      // The ONE-POST invariant is untouched, whatever the poll does.
       expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
-      expect(calls.filter((c) => c.url.includes('/audit'))).toHaveLength(0);
+      const polled = calls.filter((c) => c.url.includes('/audit'));
+      expect(polled.length).toBeGreaterThan(0);
+      for (const call of polled) {
+        expect(new URL(call.url, 'http://t').searchParams.get('repoKey')).toBe(REPOS[0]);
+      }
     });
   });
 

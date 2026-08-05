@@ -6,15 +6,23 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Segmented } from '@/components/ui/Segmented';
 import { AuditPanel } from './AuditPanel';
+import { AuditRepoList } from './AuditRepoList';
 import { ConventionPanel } from './ConventionPanel';
 import type {
   CodeAuditSurfaceDTO,
   ConventionSurfaceDTO,
   ReauditResultDTO,
+  RepoAuditSurfaceDTO,
 } from '@/lib/dto/codeHealth';
+import { buildRepoAuditRows, defaultSelectedRepoKey } from '@/lib/codeHealth/repoAuditRows';
 import type { JobStatus } from '@/lib/ai/types';
 
 type Tab = 'audit' | 'convention';
+
+// The cheapest LEGAL per-repo SUMMARY read — motir-ai's `parsePositiveInt`
+// rejects `0`, so the floor is one row (Panel 7 §3). Mirrors the page's own
+// constant; the island re-reads the same two-phase shape the server seeded with.
+const SUMMARY_FINDINGS_LIMIT = '1';
 
 const AUDIT_URL = '/api/ai/coding-convention/audit';
 const CONVENTION_URL = '/api/ai/coding-convention/convention';
@@ -147,7 +155,9 @@ function clearRun(projectId: string): void {
 export function CodeHealthClient({
   projectId,
   repoRefs,
-  initialAudit,
+  initialAudits,
+  initialSelectedRepoKey,
+  initialSelectedAudit,
   initialConventions,
   loadError,
 }: {
@@ -156,7 +166,13 @@ export function CodeHealthClient({
    * server page. REQUIRED: the audit tab's pre-audit copy is false unless it
    * knows whether there is any code at all (MOTIR-2081). */
   repoRefs: string[];
-  initialAudit: CodeAuditSurfaceDTO | null;
+  /** ONE entry per connected repo, at SUMMARY depth — the list's source
+   *  (MOTIR-2207 · Panel 7). An entry's `surface === null` means that repo's
+   *  read failed; `surface.audit === null` means it has no audit yet. */
+  initialAudits: RepoAuditSurfaceDTO[];
+  initialSelectedRepoKey: string | null;
+  /** The selected repo's report, read at the FULL findings page size. */
+  initialSelectedAudit: CodeAuditSurfaceDTO | null;
   initialConventions: ConventionSurfaceDTO[];
   loadError: string | false;
 }) {
@@ -169,19 +185,32 @@ export function CodeHealthClient({
   // conventions are a SET, one surface per connected repo, exactly what the page
   // seeded and what `ConventionPanel` renders a card each for.
   //
-  // The audit stays on ONE repo — the same first repo the page rendered — which
-  // is what keeps the re-audit poll watching the surface on screen rather than
-  // tripping on a sibling repo's fresh audit now that every repo derives one.
-  const auditRepoRef = repoRefs[0] ?? null;
-  const auditUrl = (params: Record<string, string> = {}): string | null =>
-    auditRepoRef === null
-      ? null
-      : `${AUDIT_URL}?${new URLSearchParams({ repoKey: auditRepoRef, ...params }).toString()}`;
+  // The AUDIT is now a set too (MOTIR-2207): every connected repo has a row, and
+  // the SELECTED repo has the report. `auditUrl` therefore takes its repo
+  // explicitly — there is no ambient "the audit repo" left to get wrong.
+  const auditUrl = (repoKey: string, params: Record<string, string> = {}): string =>
+    `${AUDIT_URL}?${new URLSearchParams({ repoKey, ...params }).toString()}`;
+  const summaryUrl = (repoKey: string): string =>
+    auditUrl(repoKey, { findingsLimit: SUMMARY_FINDINGS_LIMIT });
   const conventionUrl = (repoKey: string): string =>
     `${CONVENTION_URL}?${new URLSearchParams({ repoKey }).toString()}`;
 
-  const [audit, setAudit] = useState<CodeAuditSurfaceDTO | null>(initialAudit);
+  const [audits, setAudits] = useState<RepoAuditSurfaceDTO[]>(initialAudits);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(initialSelectedRepoKey);
+  // The selected repo's FULL report, tagged with the repo it belongs to. Tagging
+  // it is what keeps a slower switch from painting the previous repo's findings
+  // under the new repo's name — and `nextOffset` is an offset into ONE audit, so
+  // switching repos RESETS the list rather than appending to it (Panel 7 §3).
+  const [report, setReport] = useState<{ repoKey: string; surface: CodeAuditSurfaceDTO } | null>(
+    initialSelectedRepoKey !== null && initialSelectedAudit !== null
+      ? { repoKey: initialSelectedRepoKey, surface: initialSelectedAudit }
+      : null,
+  );
   const [conventions, setConventions] = useState<ConventionSurfaceDTO[]>(initialConventions);
+  // The repos a run has queued whose audit has not changed since. NOT a DTO
+  // field: inventing one would be a motir-ai change and a two-repo straddle
+  // (Panel 7 §5) — `reaudit()` already answers with exactly which repos it fired.
+  const [derivingRepos, setDerivingRepos] = useState<string[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reauditing, setReauditing] = useState(false);
   // The FIRST-audit poll ran out while the job kept going (MOTIR-2080). Held apart
@@ -193,6 +222,15 @@ export function CodeHealthClient({
   );
   const pageSeq = useRef(0);
   const reauditSeq = useRef(0);
+  // The report currently being fetched for a repo switch. Guards the same stale
+  // race `pageSeq` guards for pagination: a slow read for repo A must not land
+  // after the user has already moved to repo B.
+  const reportSeq = useRef(0);
+  // Each queued repo's audit id AS IT WAS when the run was fired. A repo stops
+  // being "deriving" the moment its id differs from this — which is the same
+  // signal `observeRun` polls on, applied per repo instead of to the selected
+  // one alone.
+  const runBaseline = useRef<Record<string, string | null>>({});
 
   const deepenDismissed = useSyncExternalStore(
     subscribeDismiss,
@@ -253,9 +291,23 @@ export function CodeHealthClient({
     if (outcomes.includes('active')) {
       setRunResolved(true);
       setReauditing(true);
+      // Restore the per-repo deriving rows too — a resumed run is the same run,
+      // and the list must say which repos it is still waiting on, not just that
+      // "something" is in flight. Only the repos whose job motir-ai still calls
+      // active count; the rest have landed or are gone.
+      const stillDeriving = run.repos
+        .map((repo, index) => (outcomes[index] === 'active' ? repo.repoKey : null))
+        .filter((repoKey): repoKey is string => repoKey !== null);
+      runBaseline.current = Object.fromEntries(
+        stillDeriving.map((repoKey) => [
+          repoKey,
+          audits.find((a) => a.repoKey === repoKey)?.surface?.audit?.id ?? null,
+        ]),
+      );
+      setDerivingRepos(stillDeriving);
       const seq = ++reauditSeq.current;
       try {
-        await observeRun(seq, audit?.audit?.id ?? null);
+        await observeRun(seq, report?.surface.audit?.id ?? null);
       } finally {
         if (seq === reauditSeq.current) setReauditing(false);
       }
@@ -270,23 +322,85 @@ export function CodeHealthClient({
     if (outcomes.includes('terminal')) await reload();
   }
 
+  // ONE repo's summary read, contained exactly as the server contains it: a
+  // rejection becomes THIS repo's `surface: null` ("Couldn't load this report")
+  // and never the whole page's error strip (MOTIR-2207).
+  async function readRepoSummary(repoKey: string): Promise<RepoAuditSurfaceDTO> {
+    try {
+      const res = await fetch(summaryUrl(repoKey));
+      if (!res.ok) throw new Error('audit failed');
+      return { repoKey, surface: (await res.json()) as CodeAuditSurfaceDTO };
+    } catch {
+      return { repoKey, surface: null };
+    }
+  }
+
+  // The selected repo's FULL findings page. Returns null when the repo has no
+  // report to fetch (never audited, or its read failed) — the panel draws that.
+  async function readRepoReport(repoKey: string): Promise<CodeAuditSurfaceDTO | null> {
+    try {
+      const res = await fetch(auditUrl(repoKey));
+      if (!res.ok) throw new Error('audit failed');
+      return (await res.json()) as CodeAuditSurfaceDTO;
+    } catch {
+      return null;
+    }
+  }
+
+  // A repo is still deriving only while its audit id matches what it was when
+  // the run was fired. Recomputed on every COMPLETED read, which is also the
+  // only moment the list re-sorts (Panel 7 §4) — so a repo landing mid-run can
+  // never re-order the rows under the reader.
+  function pruneDeriving(next: RepoAuditSurfaceDTO[]): void {
+    setDerivingRepos((prev) =>
+      prev.filter((repoKey) => {
+        const entry = next.find((a) => a.repoKey === repoKey);
+        if (entry === undefined) return false;
+        return (entry.surface?.audit?.id ?? null) === (runBaseline.current[repoKey] ?? null);
+      }),
+    );
+  }
+
   async function reload() {
     setError(null);
-    const url = auditUrl();
-    if (url === null) {
+    if (repoRefs.length === 0) {
       // No connected repo: there is nothing to read, and the page seeded nothing
       // either. Not an error state — the audit tab draws the start-fresh case.
-      setAudit(null);
+      setAudits([]);
+      setReport(null);
+      setSelectedRepo(null);
       setConventions([]);
       return;
     }
+    // Every repo's summary refreshes together, so the list and its rollup are a
+    // consistent snapshot; the selected repo's report follows from it.
+    const nextAudits = await Promise.all(repoRefs.map(readRepoSummary));
+    setAudits(nextAudits);
+    pruneDeriving(nextAudits);
+
+    // Hold the selection if it is still a connected repo; otherwise re-derive it
+    // (worst-first) from the snapshot just read.
+    const stillConnected = selectedRepo !== null && repoRefs.includes(selectedRepo);
+    const nextSelected = stillConnected
+      ? selectedRepo
+      : defaultSelectedRepoKey(buildRepoAuditRows(nextAudits, derivingRepos));
+    setSelectedRepo(nextSelected);
+
+    const seq = ++reportSeq.current;
+    const entry = nextAudits.find((a) => a.repoKey === nextSelected);
+    const surface =
+      nextSelected !== null && entry?.surface?.audit != null
+        ? await readRepoReport(nextSelected)
+        : null;
+    if (seq === reportSeq.current) {
+      setReport(
+        surface === null || nextSelected === null ? null : { repoKey: nextSelected, surface },
+      );
+    }
+
     try {
-      const [aRes, cResList] = await Promise.all([
-        fetch(url),
-        Promise.all(repoRefs.map((repoKey) => fetch(conventionUrl(repoKey)))),
-      ]);
-      if (!aRes.ok || cResList.some((r) => !r.ok)) throw new Error('load failed');
-      setAudit((await aRes.json()) as CodeAuditSurfaceDTO);
+      const cResList = await Promise.all(repoRefs.map((repoKey) => fetch(conventionUrl(repoKey))));
+      if (cResList.some((r) => !r.ok)) throw new Error('load failed');
       const surfaces = (await Promise.all(cResList.map((r) => r.json()))) as ConventionSurfaceDTO[];
       // Same per-repo filter the page seeds with: a repo with nothing derived
       // yet renders no card, and never suppresses the repos that do have one.
@@ -296,10 +410,49 @@ export function CodeHealthClient({
     }
   }
 
+  // Swap which repo's report is on screen. The findings list RESETS rather than
+  // appending: `nextOffset` is an offset into ONE audit, so carrying it across
+  // repos would page repo B's list with repo A's cursor (Panel 7 §3).
+  async function selectRepo(repoKey: string) {
+    if (repoKey === selectedRepo) return;
+    const seq = ++reportSeq.current;
+    setSelectedRepo(repoKey);
+    setReport(null);
+    const entry = audits.find((a) => a.repoKey === repoKey);
+    // Nothing to fetch for a repo with no audit, or one whose read failed — the
+    // panel renders that repo's own state instead.
+    if (entry?.surface?.audit == null) return;
+    const surface = await readRepoReport(repoKey);
+    if (seq !== reportSeq.current) return;
+    if (surface === null) {
+      // The report read failed where the summary had succeeded: degrade THIS
+      // repo to the row state that says so, leaving every sibling readable.
+      setAudits((prev) =>
+        prev.map((a) => (a.repoKey === repoKey ? { repoKey, surface: null } : a)),
+      );
+      return;
+    }
+    setReport({ repoKey, surface });
+  }
+
+  // Re-read ONE repo after its read failed. Deliberately not a re-audit: the row
+  // failed to LOAD, which says nothing about whether it needs deriving.
+  async function retryRepo(repoKey: string) {
+    const fresh = await readRepoSummary(repoKey);
+    setAudits((prev) => prev.map((a) => (a.repoKey === repoKey ? fresh : a)));
+    if (repoKey === selectedRepo && fresh.surface?.audit != null) {
+      const seq = ++reportSeq.current;
+      const surface = await readRepoReport(repoKey);
+      if (seq === reportSeq.current && surface !== null) setReport({ repoKey, surface });
+    }
+  }
+
   async function loadMoreFindings() {
-    if (!audit || audit.nextOffset === null || loadingMore) return;
-    const url = auditUrl({ findingsOffset: String(audit.nextOffset) });
-    if (url === null) return;
+    const current = report;
+    if (!current || current.surface.nextOffset === null || loadingMore) return;
+    const url = auditUrl(current.repoKey, {
+      findingsOffset: String(current.surface.nextOffset),
+    });
     const seq = ++pageSeq.current;
     setLoadingMore(true);
     try {
@@ -307,10 +460,19 @@ export function CodeHealthClient({
       if (!res.ok) throw new Error('page failed');
       const next = (await res.json()) as CodeAuditSurfaceDTO;
       if (seq !== pageSeq.current) return;
-      setAudit((prev) =>
-        prev
-          ? { ...prev, findings: [...prev.findings, ...next.findings], nextOffset: next.nextOffset }
-          : next,
+      setReport((prev) =>
+        // Append only onto the SAME repo's list — a page that arrives after a
+        // repo switch belongs to an audit that is no longer on screen.
+        prev && prev.repoKey === current.repoKey
+          ? {
+              repoKey: prev.repoKey,
+              surface: {
+                ...prev.surface,
+                findings: [...prev.surface.findings, ...next.findings],
+                nextOffset: next.nextOffset,
+              },
+            }
+          : prev,
       );
     } catch {
       setError(t('errorLoadMore'));
@@ -322,9 +484,16 @@ export function CodeHealthClient({
   // The OBSERVE half of a run, shared by the click path and the resume path. It
   // only ever re-READS the audit surface: MOTIR-2123's one-POST invariant is per
   // RUN, and a resumed run was POSTed by an earlier mount.
+  //
+  // ⚠️ IT POLLS THE REPO WHOSE REPORT IS ON SCREEN (Panel 7 §4). With every repo
+  // now deriving its own audit, polling a fixed `repos[0]` would sit waiting on
+  // a report the user cannot see — and would call the run finished the moment an
+  // unrelated repo landed. The selection does not move for the duration of a run,
+  // so the repo captured here is the repo the reader is watching.
   async function observeRun(seq: number, prevAuditId: string | null): Promise<void> {
-    const url = auditUrl();
-    if (url === null) return;
+    const watched = selectedRepo;
+    if (watched === null) return;
+    const url = auditUrl(watched);
     for (let i = 0; i < REAUDIT_POLL_TRIES; i++) {
       await delay(REAUDIT_POLL_MS);
       if (seq !== reauditSeq.current) return;
@@ -355,7 +524,7 @@ export function CodeHealthClient({
     // that is still asking the server about a run must not fire a second one.
     if (reauditing || resuming) return;
     const seq = ++reauditSeq.current;
-    const prevAuditId = audit?.audit?.id ?? null;
+    const prevAuditId = report?.surface.audit?.id ?? null;
     setReauditing(true);
     setError(null);
     setPollExhausted(false);
@@ -372,6 +541,19 @@ export function CodeHealthClient({
       const result = (await res.json()) as ReauditResultDTO;
       const repos = (result?.repos ?? []).filter((r) => typeof r?.auditJobId === 'string');
       if (repos.length > 0) writeRun(projectId, { repos });
+      // The fan-out told us exactly which repos it queued, so the list can show
+      // each of them deriving rather than the whole tab going vague. Their audit
+      // ids AS OF NOW are the baseline every later read is measured against.
+      const queued = repos
+        .map((r) => r.repoKey)
+        .filter((repoKey): repoKey is string => repoKey !== null);
+      runBaseline.current = Object.fromEntries(
+        queued.map((repoKey) => [
+          repoKey,
+          audits.find((a) => a.repoKey === repoKey)?.surface?.audit?.id ?? null,
+        ]),
+      );
+      setDerivingRepos(queued);
       await observeRun(seq, prevAuditId);
     } catch {
       setError(t('errorReaudit'));
@@ -379,6 +561,28 @@ export function CodeHealthClient({
       if (seq === reauditSeq.current) setReauditing(false);
     }
   }
+
+  // ── What the audit tab is looking at, derived fresh each render ───────────
+  const rows = buildRepoAuditRows(audits, derivingRepos);
+  // Only ever the SELECTED repo's report. A report still tagged with the
+  // previous repo is not shown at all — a stale grade under a new repo's name is
+  // worse than the half-second of the panel's own state.
+  const shownReport = report !== null && report.repoKey === selectedRepo ? report.surface : null;
+  const selectedRow = rows.find((row) => row.repoKey === selectedRepo) ?? null;
+  const siblingAudited = rows.some(
+    (row) => row.repoKey !== selectedRepo && row.state === 'audited',
+  );
+  const unavailableRepoRef = selectedRow?.state === 'unavailable' ? selectedRow.repoKey : null;
+  // E2 fires exactly on the design's condition: the selected repo has no audit
+  // and at least one sibling does. When NO repo has one, Panel 4b's A–D fire
+  // unchanged — this panel takes nothing away from MOTIR-2080 / MOTIR-2081.
+  const partiallyDerivedRepoRef =
+    shownReport?.audit == null &&
+    selectedRepo !== null &&
+    unavailableRepoRef === null &&
+    siblingAudited
+      ? selectedRepo
+      : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -404,34 +608,52 @@ export function CodeHealthClient({
       ) : null}
 
       {tab === 'audit' ? (
-        <AuditPanel
-          audit={audit?.audit ?? null}
-          repoRefs={repoRefs}
-          findings={audit?.findings ?? []}
-          total={audit?.total ?? 0}
-          hasMore={(audit?.nextOffset ?? null) !== null}
-          loadingMore={loadingMore}
-          onLoadMore={() => void loadMoreFindings()}
-          scanner={audit?.scanner ?? null}
-          // `resuming` counts as deriving: a run WAS fired from this browser, and
-          // until the server says otherwise the honest screen is the one that
-          // shows work in progress and offers no button to fire it again.
-          reauditing={reauditing || resuming}
-          onReaudit={() => void reaudit()}
-          pollExhausted={pollExhausted}
-          // "Check again" re-READS; it must never re-POST /refresh, which would
-          // queue a second code_audit + propose_convention pair for work already
-          // in flight. `reload()` setAudit()s the island's own state — the
-          // page-state contract's case 3, since a server re-read cannot reach a
-          // client island seeded from useState(initialProps).
-          onCheckAgain={() => {
-            setPollExhausted(false);
-            void reload();
-          }}
-          deepenDismissed={deepenDismissed}
-          onDeepenDismiss={() => writeDismissed(projectId, true)}
-          onDeepenReopen={() => writeDismissed(projectId, false)}
-        />
+        <>
+          <AuditRepoList
+            rows={rows}
+            selectedRepoKey={selectedRepo}
+            onSelect={(repoKey) => void selectRepo(repoKey)}
+            onRetry={(repoKey) => void retryRepo(repoKey)}
+          />
+          <AuditPanel
+            audit={shownReport?.audit ?? null}
+            repoRefs={repoRefs}
+            findings={shownReport?.findings ?? []}
+            total={shownReport?.total ?? 0}
+            hasMore={(shownReport?.nextOffset ?? null) !== null}
+            loadingMore={loadingMore}
+            onLoadMore={() => void loadMoreFindings()}
+            scanner={shownReport?.scanner ?? null}
+            // Panel 7 §5 · E2 — the selected repo has no report while a SIBLING
+            // does. Panel 4b's A–D are all-or-nothing by construction, so they
+            // must not fire here: the project is not waiting, one repo is.
+            partiallyDerivedRepoRef={partiallyDerivedRepoRef}
+            // The selected repo's read FAILED. Distinct from E2 in the one way
+            // that matters: nothing is coming unless the reader retries.
+            unavailableRepoRef={unavailableRepoRef}
+            onRetryRepo={() => {
+              if (selectedRepo !== null) void retryRepo(selectedRepo);
+            }}
+            // `resuming` counts as deriving: a run WAS fired from this browser, and
+            // until the server says otherwise the honest screen is the one that
+            // shows work in progress and offers no button to fire it again.
+            reauditing={reauditing || resuming}
+            onReaudit={() => void reaudit()}
+            pollExhausted={pollExhausted}
+            // "Check again" re-READS; it must never re-POST /refresh, which would
+            // queue a second code_audit + propose_convention pair for work already
+            // in flight. `reload()` setAudit()s the island's own state — the
+            // page-state contract's case 3, since a server re-read cannot reach a
+            // client island seeded from useState(initialProps).
+            onCheckAgain={() => {
+              setPollExhausted(false);
+              void reload();
+            }}
+            deepenDismissed={deepenDismissed}
+            onDeepenDismiss={() => writeDismissed(projectId, true)}
+            onDeepenReopen={() => writeDismissed(projectId, false)}
+          />
+        </>
       ) : (
         <ConventionPanel conventions={conventions} />
       )}

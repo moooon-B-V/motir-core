@@ -47,3 +47,14 @@ export function parseOffsetParam(raw: string | null): number | undefined {
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : undefined;
 }
+
+// Parse an optional POSITIVE-integer findings limit; absent/invalid → undefined
+// (the service applies its page size). Distinct from the offset above: this one
+// is 1-BASED, because motir-ai's `parsePositiveInt` rejects `0` outright — so a
+// `?findingsLimit=0` that slipped through here would be a 502, not a cheap read.
+// Used by the audit tab's per-repo SUMMARY reads (MOTIR-2207 · Panel 7 §3).
+export function parseLimitParam(raw: string | null): number | undefined {
+  if (raw === null) return undefined;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : undefined;
+}
