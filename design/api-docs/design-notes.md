@@ -308,6 +308,20 @@ recorded in `design/api-docs/design-notes.md` with its reason."_
 | `DELETE` in the verb chip                                        | `DEL` visible, `DELETE` in the accessible name                                                      | Every verb fits one 52 px chip so the paths align down the rail. The full verb stays in the accessible tree via `sr-only`, so a screen reader is not handed a truncation.                                                                                                                                                                                                                                                               |
 | Panel 1's catalogue rail beside a persistent right-hand contents | The rail collapses ABOVE the content below `lg`, and the right-hand contents is not built in 11.4.7 | The in-page contents is per-PAGE navigation and the reference is one long page of anchored sections, so the catalogue already serves that role; a second list of the same anchors would be two things to keep in step. The mobile treatment (Panel 9) is what ships at every width below `lg`.                                                                                                                                          |
 
+### Panel 6 (spec-unavailable) is asserted by a UNIT render, not by the E2E
+
+Not a design deviation — a testing one, recorded here because the panel exists in
+this asset and a reader will look for its browser coverage.
+
+The reference reads the document from the emitter IN-PROCESS rather than fetching
+`/api/openapi/v1.json` (ADR Amendment 4; Subtask 11.4.7), which is what makes the
+page independent of the app being up to describe the app. That same property
+leaves **no seam a browser can reach in to make the build fail**, so Subtask
+11.4.10's E2E cannot drive this panel without a test-only switch in production
+code — which its scope boundary forbids. It is asserted instead by Subtask
+11.4.9's story gate, which renders the real page with a throwing builder and
+checks the message, the retry and the still-reachable sibling pages.
+
 ---
 
 ## What the code cards build from this
