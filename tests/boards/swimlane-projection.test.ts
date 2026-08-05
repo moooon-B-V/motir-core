@@ -6,6 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type { BoardCardDto, BoardProjectionDto } from '@/lib/dto/boards';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -194,7 +195,12 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
   it('buckets the whole bounded set under a group-by while the lane count is the full aggregate (no load-all, 3.8.2)', async () => {
     const fx = await makeFixture('swl-bound@example.com');
     const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
-    // 120 unassigned todo cards — well past the old 50-card page size
+    // 120 unassigned todo cards — well past the old 50-card page size.
+    // `position` is a VALID fractional-index key chained in insertion order
+    // (MOTIR-2198): the old `p${padStart(4)}` form sorted correctly but is a key
+    // nothing in the product can mint (head `'p'` demands a 17-char integer
+    // part), so the fixture seeded a state the application cannot reach.
+    let position: string | null = null;
     await db.workItem.createMany({
       data: Array.from({ length: 120 }, (_, i) => {
         const key = 1000 + i;
@@ -207,7 +213,7 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
           title: `Bulk ${i}`,
           status: 'todo',
           reporterId: fx.ctx.userId,
-          position: `p${String(i).padStart(4, '0')}`,
+          position: (position = keyForAppend(position)),
         };
       }),
     });

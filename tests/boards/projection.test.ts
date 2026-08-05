@@ -6,6 +6,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
@@ -70,6 +71,12 @@ async function cardInStatus(fx: Fixture, status: string, title: string): Promise
  * colliding with service-allocated keys). */
 async function bulkCards(fx: Fixture, status: string, n: number): Promise<void> {
   const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+  // A VALID fractional-index key per row, chained so the lexicographic position
+  // sort is still the insertion order (MOTIR-2198). The old `p${padStart(4)}`
+  // form sorted correctly but is a key nothing in the product can mint — head
+  // `'p'` demands a 17-char integer part — so a fixture built from it seeds a
+  // board state the application cannot reach.
+  let position: string | null = null;
   await db.workItem.createMany({
     data: Array.from({ length: n }, (_, i) => {
       const key = 1000 + i;
@@ -82,8 +89,7 @@ async function bulkCards(fx: Fixture, status: string, n: number): Promise<void> 
         title: `Bulk ${i}`,
         status,
         reporterId: fx.ctx.userId,
-        // zero-padded so the lexicographic position sort is the insertion order
-        position: `p${String(i).padStart(4, '0')}`,
+        position: (position = keyForAppend(position)),
       };
     }),
   });
@@ -164,6 +170,7 @@ describe('boardsService.getBoard — projection', () => {
   it('windows a terminal (done) column to the Done-age window; old done items are excluded but still counted (3.8.2)', async () => {
     const fx = await makeFixture('proj-doneage@example.com');
     const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    let donePosition: string | null = null;
     const mkDone = async (key: number, title: string) =>
       db.workItem.create({
         data: {
@@ -175,7 +182,7 @@ describe('boardsService.getBoard — projection', () => {
           title,
           status: 'done',
           reporterId: fx.ctx.userId,
-          position: `p${key}`,
+          position: (donePosition = keyForAppend(donePosition)),
         },
       });
     const recent = await mkDone(3001, 'recent done');
@@ -201,6 +208,8 @@ describe('boardsService.getBoard — projection', () => {
     // position-order and recency-order disagree — proving the done column uses
     // recency (most-recently-updated first).
     const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const earlierKey = keyForAppend(null);
+    const laterKey = keyForAppend(earlierKey);
     await db.workItem.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -211,7 +220,7 @@ describe('boardsService.getBoard — projection', () => {
         title: 'earlier position',
         status: 'done',
         reporterId: fx.ctx.userId,
-        position: 'pa',
+        position: earlierKey,
       },
     });
     const laterPos = await db.workItem.create({
@@ -224,7 +233,7 @@ describe('boardsService.getBoard — projection', () => {
         title: 'later position, touched last',
         status: 'done',
         reporterId: fx.ctx.userId,
-        position: 'pb',
+        position: laterKey,
       },
     });
     // touch the later-position card so it is the most recently updated

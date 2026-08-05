@@ -50,6 +50,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import {
   seedLargeBoard,
   SEED_LARGE_OWNER_EMAIL,
@@ -181,8 +182,14 @@ async function seedSmallBoard(): Promise<SmallSeed> {
     identifier: 'SML',
   });
   // A few task cards in the first status — well under any sane lowered cap.
+  // `position` is a VALID fractional-index key chained in insertion order
+  // (MOTIR-2198): a padded/prefixed number like `p0000001` is a key nothing in
+  // the product can mint (head `'p'` demands a 17-char integer part), so a board
+  // seeded with them renders fine but exercises `keyBetweenSafe`'s invalid-bound
+  // tolerance arm instead of the ordinary reorder path this spec is about.
   const statuses = await workflowsService.listStatusesByProject(project.id, workspace.id);
   const firstKey = [...statuses].sort((a, b) => a.position.localeCompare(b.position))[0]!.key;
+  let smallPosition: string | null = null;
   await db.workItem.createMany({
     data: Array.from({ length: 3 }, (_, i) => ({
       workspaceId: workspace.id,
@@ -193,7 +200,7 @@ async function seedSmallBoard(): Promise<SmallSeed> {
       title: `Small ${i + 1}`,
       status: firstKey,
       reporterId: owner.id,
-      position: `p${String(i + 1).padStart(7, '0')}`,
+      position: (smallPosition = keyForAppend(smallPosition)),
     })),
   });
   await db.workspaceMembership.update({

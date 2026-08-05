@@ -36,13 +36,29 @@ import { signUp } from './_helpers/shell-session';
 import { getBoard, columnByStatus } from './_helpers/board';
 import { projectsService } from '@/lib/services/projectsService';
 import { DONE_AGE_WINDOW_DAYS } from '@/lib/services/boardsService';
+import { keyForAppend } from '@/lib/workItems/positioning';
 
 // The over-cap case loads the full cap (5,000) over real HTTP + renders it
 // (virtualized), so give the suite generous headroom.
 test.describe.configure({ timeout: 120_000 });
 
+// A VALID fractional-index `position` per seeded card, chained in insertion
+// order across every `bulkSeed` call in a test (MOTIR-2198). `position` MUST be
+// a key the product can actually mint — the shape `lib/workItems/positioning.ts`
+// produces — NOT a padded/prefixed number: `p0000001` has a 7-digit integer part
+// where head `'p'` demands 17, so `generateKeyBetween` rejects it outright
+// ("invalid order key: p0000001"). A board seeded with such keys still RENDERS in
+// order, so nothing goes red; what it silently exercises is `keyBetweenSafe`'s
+// invalid-bound TOLERANCE arm (which degrades a drop to an append) rather than
+// the ordinary `keyBetween` path a real board reorder takes. The chain is global
+// per test so keys stay distinct across calls — two equal keys make a drop
+// between them call keyBetween(k, k), which throws.
+let positionCursor: string | null = null;
+const nextPosition = (): string => (positionCursor = keyForAppend(positionCursor));
+
 test.beforeEach(async () => {
   await resetDatabase();
+  positionCursor = null;
 });
 
 test.afterAll(async () => {
@@ -97,7 +113,7 @@ async function bulkSeed(
       title: `Card ${key}`,
       status,
       reporterId: seed.userId,
-      position: `p${String(key).padStart(7, '0')}`,
+      position: nextPosition(),
     };
   });
   await db.workItem.createMany({ data: rows });
