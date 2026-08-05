@@ -44,18 +44,45 @@ interface ValidateWorkItemArgs {
  */
 function advisoryLines(result: WorkItemValidityDto): string[] {
   if (result.advisories.length === 0) return [];
-  return [
-    '',
-    `Advisory (NOT a blocker — ${result.key} is ${result.valid ? 'still VALID' : 'unaffected'} ` +
-      "either way): these items are NAMED in a card's description but have no blocked_by edge " +
-      'from it:',
-    ...result.advisories.map(
-      (a) =>
-        `  ${a.item} names ${a.referenced} (${a.referencedStatus})` +
-        `${a.severity === 'likely-missing-edge' ? ' IN ITS ACCEPTANCE CRITERIA — likely a missing blocked_by' : ''}`,
-    ),
-    'Wire a blocked_by edge if the card consumes it; ignore this if the reference is context only.',
-  ];
+  const unaffected = `NOT a blocker — ${result.key} is ${
+    result.valid ? 'still VALID' : 'unaffected'
+  } either way`;
+
+  const references = result.advisories.filter((a) => a.kind !== 'shape');
+  const shapes = result.advisories.filter((a) => a.kind === 'shape');
+
+  const lines: string[] = [];
+  if (references.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these items are NAMED in a card's description but have no ` +
+        'blocked_by edge from it:',
+      ...references.map(
+        (a) =>
+          `  ${a.item} names ${a.referenced} (${a.referencedStatus})` +
+          `${a.severity === 'likely-missing-edge' ? ' IN ITS ACCEPTANCE CRITERIA — likely a missing blocked_by' : ''}`,
+      ),
+      'Wire a blocked_by edge if the card consumes it; ignore this if the reference is context only.',
+    );
+  }
+  // The SHAPE family (MOTIR-2175) — a defect in what the card's own criteria ask
+  // for, with no second item involved, so it gets its own block and its own
+  // remedy rather than being squeezed into the sentence above.
+  if (shapes.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards have an acceptance criterion that reads on state ` +
+        "which exists only AFTER the card's own PR has merged — and a card's boundary ends at " +
+        'PR opened:',
+      ...shapes.map(
+        (a) => `  ${a.item} criterion ${a.criterionIndex} says "${a.phrase}" (${a.severity})`,
+      ),
+      'Cut the card at that criterion: everything from it down belongs to a follow-on card, ' +
+        'blocked_by this one (gate 14, ORDERING axis). A deploy / human card that legitimately ' +
+        'needs the merge — the release trio\'s "cut" leg — is exempt and never reported here.',
+    );
+  }
+  return lines;
 }
 
 /** Human-readable summary for the dual-content text block. */
@@ -117,9 +144,12 @@ export function registerValidateWorkItem(
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
         'Returns `{ key, valid, blockers: [...], advisories: [...] }` — `blockers` naming each ' +
         'in-subtree item and the out-of-subtree, unsatisfied work gating it. `advisories` is a ' +
-        'SEPARATE, NEVER-BLOCKING channel: an in-subtree card whose DESCRIPTION names a not-done ' +
-        'work item it has no blocked_by edge to (severity `likely-missing-edge` when the ' +
-        "reference sits in the card's own acceptance criteria, else `advisory`). Advisories " +
+        'SEPARATE, NEVER-BLOCKING channel with two families: a `reference` advisory names an ' +
+        'in-subtree card whose DESCRIPTION names a not-done work item it has no blocked_by edge ' +
+        "to (severity `likely-missing-edge` when the reference sits in the card's own acceptance " +
+        'criteria, else `advisory`); a `shape` advisory (`kind: "shape"`) names a card whose own ' +
+        'acceptance criterion reads on post-merge state (`likely-ordering-violation`, with the ' +
+        'matched phrase and the 1-based criterion index to cut at). Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Read-only.',
       inputSchema,

@@ -6,7 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { runDispatchPrompt } from '@/lib/mcp/tools/dispatchPrompt';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
-import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemProseAdvisoryDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -98,7 +98,10 @@ async function toInReview(id: string, fx: WorkItemFixture): Promise<void> {
   await workItemsService.updateStatus(id, 'in_review', fx.ctx);
 }
 
-const keys = (advisories: WorkItemProseAdvisoryDto[]) => advisories.map((a) => a.referenced);
+// The REFERENCE family's far ends. `advisories` is a union since MOTIR-2175, so
+// the shape variant (which has no far end) is narrowed out rather than mapped.
+const keys = (advisories: WorkItemProseAdvisoryDto[]) =>
+  advisories.filter((a) => a.kind !== 'shape').map((a) => a.referenced);
 
 describe('buildDispatchProseAdvisories — the single-card resolver', () => {
   it('reports a card whose ACCEPTANCE CRITERIA name a not-done item it has no edge to', async () => {
@@ -409,5 +412,196 @@ describe('claim_next_ready — the advisories reach the PLANNER AGENT', () => {
     const struct = structOf(await runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx));
     expect(struct.item).toBeNull();
     expect(struct.advisories).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ORDERING ADVISORY AT DISPATCH (MOTIR-2175) — gate 14's third axis.
+//
+// The SHAPE family: a defect in what the card's own acceptance criteria ask for,
+// with no second work item involved anywhere in the finding. It is
+// dispatch-relevant by construction — the agent about to branch is the one who
+// physically cannot discharge a criterion that turns on its own merge — so it
+// rides the same never-a-blocker channel the reference family does, and every
+// readiness assertion below exists for the same reason as the ones above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * MOTIR-2162's body, in the shape that got through: criterion 5 reads on the
+ * card's OWN merge, and it names no work item at all — which is why the
+ * reference scan could never have caught it. Criterion 5 is quoted from
+ * MOTIR-2164's record of the incident.
+ */
+function cardWithPostMergeCriterion(): string {
+  return [
+    'Nothing removes a tenant’s code graph — the decision this card owes.',
+    '',
+    '## Acceptance criteria',
+    '',
+    '- The ADR gains an offboarding section answering which artifacts are removed.',
+    '- The decision names the order and the idempotency requirement.',
+    '- The core→ai trigger is pinned as a named seam.',
+    '- Every deferral it writes is a card filed in the same action.',
+    "- `src/services/codeRepoService.ts`'s header block … is updated to point at the decision " +
+      '**once it lands**, so the pointer does not outlive the gap.',
+    '- A `docs/`-prefixed branch.',
+  ].join('\n');
+}
+
+/** Create a card with an explicit work type / executor (the exemption's inputs). */
+async function makeTypedItem(
+  fx: WorkItemFixture,
+  title: string,
+  descriptionMd: string,
+  fields: { type?: WorkItemTypeDto; executor?: ExecutorDto },
+) {
+  return workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title, descriptionMd, ...fields },
+    fx.ctx,
+  );
+}
+
+describe('the ORDERING advisory — a card whose criterion turns on its OWN merge', () => {
+  it('MOTIR-2162 REGRESSION: names criterion 5 and the phrase, with no reference in sight', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeItem(fx, 'Offboarding decision', cardWithPostMergeCriterion());
+
+    const advisories = await buildDispatchProseAdvisories(card, fx.ctx);
+    expect(advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-ordering-violation',
+        phrase: 'once it lands',
+        criterionIndex: 5,
+      },
+    ]);
+  });
+
+  it('fires on a card that names NOTHING — the case the reference scan cannot see', async () => {
+    // The load-bearing difference between the two families. This body has no
+    // `motir:` token anywhere, so `bodyReferenceSeverities` is empty and the old
+    // short-circuit would have returned [] before any scan ran.
+    const fx = await makeWorkItemFixture();
+    const card = await makeItem(
+      fx,
+      'Release prep',
+      '## Acceptance criteria\n\n- the tag is pushed once this lands',
+    );
+    const advisories = await buildDispatchProseAdvisories(card, fx.ctx);
+    expect(advisories.map((a) => a.kind)).toEqual(['shape']);
+  });
+
+  it('⚠️ READINESS IS UNTOUCHED — byte-identical whether or not it is emitted', async () => {
+    // The same invariant the reference family carries, asserted the strict way:
+    // two cards identical but for the offending criterion produce the SAME
+    // readiness object.
+    const fx = await makeWorkItemFixture();
+    const flagged = await makeItem(fx, 'Flagged', cardWithPostMergeCriterion());
+    const clean = await makeItem(
+      fx,
+      'Clean',
+      cardWithPostMergeCriterion().replace(/ \*\*once it lands\*\*,/, ','),
+    );
+
+    expect(await buildDispatchProseAdvisories(flagged, fx.ctx)).toHaveLength(1);
+    expect(await buildDispatchProseAdvisories(clean, fx.ctx)).toEqual([]);
+
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(flagged.identifier)).toEqual(await readinessOf(clean.identifier));
+    expect((await readinessOf(flagged.identifier)).ready).toBe(true);
+    expect((await readinessOf(flagged.identifier)).openBlockers).toEqual([]);
+  });
+
+  it("EXEMPTS the release trio's CUT leg — a `deploy` card is the shape the rule ASKED for", async () => {
+    // Gate 14's own remedy is to move post-merge criteria onto a deploy / human
+    // card. Such a card carrying the phrase is CORRECT, not tolerated — so the
+    // exemption costs no coverage, and firing here is what would train readers
+    // to skip the whole advisory channel.
+    const fx = await makeWorkItemFixture();
+    const cut = await makeTypedItem(
+      fx,
+      'Cut the @motir/cli 0.1.1 release',
+      [
+        'The middle leg of the release trio: push the tag, watch both lanes go green.',
+        '',
+        '## Acceptance criteria',
+        '',
+        '- `cli-v0.1.1` is pushed once this lands on `main`.',
+        '- Both publish lanes are green and the published image is pullable by digest.',
+      ].join('\n'),
+      { type: 'deploy', executor: 'human' },
+    );
+    expect(await buildDispatchProseAdvisories(cut, fx.ctx)).toEqual([]);
+  });
+
+  it('exempts a `human` executor on its own, and does NOT exempt a plain code card', async () => {
+    const fx = await makeWorkItemFixture();
+    const body = '## Acceptance criteria\n\n- verified after release';
+    const human = await makeTypedItem(fx, 'Manual step', body, { executor: 'human' });
+    const code = await makeTypedItem(fx, 'Code step', body, {
+      type: 'code',
+      executor: 'coding_agent',
+    });
+    expect(await buildDispatchProseAdvisories(human, fx.ctx)).toEqual([]);
+    expect(await buildDispatchProseAdvisories(code, fx.ctx)).toHaveLength(1);
+  });
+
+  it('rides ALONGSIDE a reference advisory, SHAPE first, on one card', async () => {
+    const fx = await makeWorkItemFixture();
+    const substrate = await makeItem(fx, 'Substrate');
+    await toInReview(substrate.id, fx);
+    const card = await makeItem(
+      fx,
+      'Both defects at once',
+      [
+        '## Acceptance criteria',
+        '',
+        `- extends the helper ${ref('SUBSTRATE', substrate.id)} adds.`,
+        '- the row is visible on `main`.',
+      ].join('\n'),
+    );
+    const advisories = await buildDispatchProseAdvisories(card, fx.ctx);
+    expect(advisories.map((a) => a.kind)).toEqual(['shape', undefined]);
+    expect(keys(advisories)).toEqual([substrate.identifier]);
+  });
+
+  it('reaches the AGENT through dispatch_prompt — prompt, DTO and human summary', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeItem(fx, 'Offboarding decision', cardWithPostMergeCriterion());
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(dto.advisories).toHaveLength(1);
+    expect(dto.prompt).toContain("A CRITERION THAT TURNS ON THIS CARD'S OWN MERGE");
+    expect(dto.prompt).toContain('acceptance criterion 5 says "once it lands"');
+    expect(dto.prompt).toContain('Your boundary ends at PR opened');
+    // …and it still dispatches, in the same workflow mode.
+    expect(dto.workflowMode).toBe('per_item_pr');
+
+    const res = await runDispatchPrompt({ key: card.identifier }, fx.ctx);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('Advisory (NOT a blocker');
+    expect(text).toContain('acceptance criterion 5 says "once it lands"');
+  });
+
+  it('a clean card renders no ordering section at all', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeItem(
+      fx,
+      'Clean',
+      '## Acceptance criteria\n\n- the endpoint returns 200',
+    );
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(dto.advisories).toEqual([]);
+    expect(dto.prompt).not.toContain('OWN MERGE');
   });
 });

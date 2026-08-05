@@ -86,6 +86,20 @@ interface Projection {
    * WHOLE project and descriptions are long.
    */
   projectedDescription: Map<string, string | null>;
+  /**
+   * The PROJECTED `type` / `executor` of each node the plan sets one on — an
+   * `add`'s proposed values, or a `modify`'s patched `type`. Read ONLY by the
+   * ORDERING advisory's exemption (MOTIR-2175), which suppresses on
+   * `type: 'deploy'` / `executor: 'human'`: a plan that PROPOSES the release
+   * trio's *cut* leg must not be warned about the very shape gate 14 asked for.
+   *
+   * Sparse, with `has()` semantics exactly like {@link projectedDescription}:
+   * absent means "the plan does not touch it", so the stored value wins. (A
+   * `modify` patch carries no `executor` field at all, so a modified node's
+   * executor is always the stored one.)
+   */
+  projectedType: Map<string, string | null>;
+  projectedExecutor: Map<string, string | null>;
 }
 
 function addEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: string): void {
@@ -161,9 +175,15 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
   // Pass 1 — virtual `add` nodes (keyed by their temp-ref, so an intra-plan
   // parent/blocker ref resolves with no topo ordering needed).
   const projectedDescription = new Map<string, string | null>();
+  const projectedType = new Map<string, string | null>();
+  const projectedExecutor = new Map<string, string | null>();
   for (const item of adds) {
     const id = `${TEMP_REF_PREFIX}${item.id}`;
     projectedDescription.set(id, item.proposedFields?.descriptionMd ?? null);
+    // An `add` has no stored row, so its proposed shape is the ONLY shape there
+    // is — set both keys unconditionally, absent proposal included (`null`).
+    projectedType.set(id, item.proposedFields?.type ?? null);
+    projectedExecutor.set(id, item.proposedFields?.executor ?? null);
     nodes.set(id, {
       id,
       identifier: id,
@@ -219,6 +239,12 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
     if (item.patch && 'descriptionMd' in item.patch) {
       projectedDescription.set(item.workItemId, item.patch.descriptionMd ?? null);
     }
+    // Same sparse-patch semantics for the ORDERING exemption's `type`
+    // (MOTIR-2175). `PlanItemPatch` has no `executor` key, so a modified node's
+    // executor is never projected — the stored value stands.
+    if (item.patch && 'type' in item.patch) {
+      projectedType.set(item.workItemId, item.patch.type ?? null);
+    }
     for (const ref of item.patch?.blockedByAdd ?? []) {
       const toId = resolveRef(ref);
       if (nodes.has(toId)) addEdge(blockedBy, item.workItemId, toId);
@@ -259,6 +285,8 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
     childrenByParent,
     terminalByProject,
     projectedDescription,
+    projectedType,
+    projectedExecutor,
   };
 }
 
@@ -307,14 +335,15 @@ async function projectedProseAdvisories(
     .filter((n): n is ProjectedNode => n !== undefined && !isDone(proj, n));
   if (scanned.length === 0) return [];
 
-  // Stored bodies for the real members the plan does not re-write.
-  const needsStoredBody = scanned
-    .filter((n) => !n.id.startsWith(TEMP_REF_PREFIX) && !proj.projectedDescription.has(n.id))
-    .map((n) => n.id);
-  const storedBodies = new Map(
-    (await workItemRepository.findDescriptionsByIds(needsStoredBody, ctx.workspaceId)).map((r) => [
+  // Stored rows for every REAL member scanned. A `modify` whose body the plan
+  // re-writes still needs its stored `type` / `executor` (the patch may touch
+  // neither), so the read is keyed on "is this node real", not on "is its body
+  // projected" — one batched read either way.
+  const needsStoredRow = scanned.filter((n) => !n.id.startsWith(TEMP_REF_PREFIX)).map((n) => n.id);
+  const storedRows = new Map(
+    (await workItemRepository.findDescriptionsByIds(needsStoredRow, ctx.workspaceId)).map((r) => [
       r.id,
-      r.descriptionMd,
+      r,
     ]),
   );
 
@@ -326,12 +355,20 @@ async function projectedProseAdvisories(
       parentId = proj.nodes.get(parentId)?.parentId ?? null;
     }
     for (const blockerId of proj.blockedBy.get(node.id) ?? []) exemptIds.add(blockerId);
+    const stored = storedRows.get(node.id);
     return {
       item: node.identifier,
       descriptionMd: proj.projectedDescription.has(node.id)
         ? (proj.projectedDescription.get(node.id) ?? null)
-        : (storedBodies.get(node.id) ?? null),
+        : (stored?.descriptionMd ?? null),
       exemptIds,
+      // Projected shape wins where the plan sets one; stored otherwise.
+      type: proj.projectedType.has(node.id)
+        ? (proj.projectedType.get(node.id) ?? null)
+        : (stored?.type ?? null),
+      executor: proj.projectedExecutor.has(node.id)
+        ? (proj.projectedExecutor.get(node.id) ?? null)
+        : (stored?.executor ?? null),
     };
   });
 

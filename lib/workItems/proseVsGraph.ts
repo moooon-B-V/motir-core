@@ -152,3 +152,137 @@ export function bodyReferenceSeverities(
   if (span) scan(md.slice(span.start, span.end), 'likely-missing-edge');
   return out;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ORDERING CHECK (MOTIR-2175) — gate 14's third axis, mechanized.
+//
+// A different question from everything above: not "does this body name a card
+// the graph has no edge to", but "does this body ask for state that cannot
+// exist yet". It shares only the AC span with the reference scan, which is why
+// it lives in the same module and not in a new one.
+//
+// A card's own boundary ends at **PR opened** — `subtask_pr_merge_mode` is
+// `manual`, `motir run` stops at the PR, and the merge is Yue's. So an
+// acceptance criterion whose truth requires the merge belongs to a DIFFERENT
+// card, and gate 14's remedy is to cut the card at that line. The 1-based index
+// of the offending criterion is therefore the actionable half of the finding:
+// it names where the cut goes.
+//
+// ⚠️ The phrase list below is gate 14's own, VERBATIM. It is not a heuristic to
+// tune and not a place to be clever — `notes.html` #221 chose a string match
+// over a smell test in those words, and MOTIR-2164 established that the miss
+// was about what EXECUTES the check, not about how it is worded. Widening or
+// narrowing this list is a change to `plan-rules.md` first, mirrored here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Gate 14's ORDERING phrase list (`plan-rules.md`, *"An ACCEPTANCE CRITERION
+ * must be satisfiable INSIDE the card's own scope boundary"*), verbatim. A
+ * criterion carrying any of these reads on state that exists only after the
+ * card's own PR has merged.
+ *
+ * `the published` is the list's `the published <X>` entry — the phrase is the
+ * prefix; what follows it is the artifact and varies per card.
+ *
+ * ⚠️ Pinned against the prose by `tests/workItems/proseVsGraph.test.ts`, so a
+ * drift between `plan-rules.md` and this constant is a RED TEST rather than a
+ * silent gap in the check.
+ */
+export const POST_MERGE_CRITERION_PHRASES = [
+  'merged to main',
+  'once this lands',
+  'once it lands',
+  'after release',
+  'on main',
+  'the published',
+] as const;
+
+/** One phrase, as a whitespace-tolerant, word-bounded matcher. */
+const POST_MERGE_PHRASE_MATCHERS: ReadonlyArray<{ phrase: string; re: RegExp }> =
+  POST_MERGE_CRITERION_PHRASES.map((phrase) => ({
+    phrase,
+    // `\s+` between words so a criterion that wraps a line still matches; `\b`
+    // at both ends so `on main` does not fire inside `companion maintainer`.
+    re: new RegExp(`\\b${phrase.split(' ').join('\\s+')}\\b`, 'i'),
+  }));
+
+/** A criterion line: a top-level `-`/`*`/`+` or `1.`/`1)` bullet, unindented. */
+const CRITERION_BULLET_RE = /^(?:[-*+]|\d+[.)])\s+/;
+
+/**
+ * Inline markup a phrase can be wearing. Gate 14's own prose writes "merged to
+ * `main`" and MOTIR-2162 wrote "**once it lands**", so a matcher that reads the
+ * raw Markdown finds neither. Backticks and emphasis runs are stripped before
+ * matching; nothing else is touched (underscores stay, so identifiers survive).
+ */
+const INLINE_MARKUP_RE = /[`*]/g;
+
+/** The ORDERING finding: which phrase, and which criterion carries it. */
+export interface PostMergeCriterion {
+  /** The matched phrase in its canonical {@link POST_MERGE_CRITERION_PHRASES} form. */
+  phrase: string;
+  /** 1-based index of the offending criterion within the acceptance-criteria list. */
+  criterionIndex: number;
+}
+
+/**
+ * The FIRST acceptance criterion that reads on post-merge state, or `null`.
+ *
+ * Scope is the **acceptance-criteria span only** — {@link acceptanceCriteriaSpan}
+ * — and its degrade-never-suppress contract applies here unchanged, with one
+ * inversion worth stating out loud: for the reference scan, no AC heading means
+ * every reference falls back to the plain `advisory` tier; here it means
+ * **nothing is emitted at all**. That is deliberate rather than a shortcut. The
+ * phrases are perfectly legitimate in a body's narrative — a card's own
+ * explanation may say "once this lands, the next card can start" — and are a
+ * DEFECT only in a criterion, which is the thing the card is closed against. A
+ * body-wide scan would fire on most well-written cards in this corpus.
+ *
+ * Only ENUMERATED criteria count. A bullet (or `1.` item) at column zero opens a
+ * criterion; everything after it — continuation lines, indented sub-bullets —
+ * belongs to that criterion, so a phrase in a wrapped line is attributed to the
+ * bullet it wraps from. Prose inside the AC section that is not under any bullet
+ * is not a criterion and is not scanned; there is no index to report for it.
+ *
+ * Returns the FIRST offender because gate 14's remedy needs exactly one number:
+ * *"EVERY criterion at or below the first line carrying one belongs to a
+ * different card"* — so the first index IS the cut line, and the ones below it
+ * are consequences rather than separate findings.
+ */
+export function firstPostMergeCriterion(md: string | null | undefined): PostMergeCriterion | null {
+  if (!md) return null;
+  const span = acceptanceCriteriaSpan(md);
+  if (!span) return null;
+
+  let criterionIndex = 0;
+  for (const raw of md.slice(span.start, span.end).split('\n')) {
+    if (CRITERION_BULLET_RE.test(raw)) criterionIndex += 1;
+    // Before the first bullet: the heading itself and any lead-in prose.
+    if (criterionIndex === 0) continue;
+    const text = raw.replace(INLINE_MARKUP_RE, '');
+    for (const { phrase, re } of POST_MERGE_PHRASE_MATCHERS) {
+      if (re.test(text)) return { phrase, criterionIndex };
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a card is EXEMPT from the ordering check — `type: 'deploy'` or
+ * `executor: 'human'`.
+ *
+ * ⚠️ This is the rule's own remedy read back as a predicate, NOT a noise filter
+ * and NOT a threshold. Gate 14 says post-merge criteria belong on a `deploy` /
+ * `human` card — the release trio's *cut* leg, which is DEFINED by needing the
+ * merge — so such a card carrying such a phrase is the shape the rule wants and
+ * the phrase in it is correct. Suppressing there costs no coverage at all,
+ * while a false positive on it would train readers to skip the advisory
+ * channel, which is how the check that DID fire unaided (`likely-missing-edge`)
+ * gets ignored.
+ */
+export function isOrderingCheckExempt(
+  type: string | null | undefined,
+  executor: string | null | undefined,
+): boolean {
+  return type === 'deploy' || executor === 'human';
+}
