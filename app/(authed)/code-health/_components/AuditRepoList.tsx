@@ -150,7 +150,9 @@ function RepoRow({
   return (
     <div
       className={`flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y) last:border-b-0 ${
-        selected ? 'rounded-(--radius-control) border-(--el-accent-on-surface) bg-(--el-surface-soft)' : ''
+        selected
+          ? 'rounded-(--radius-control) border-(--el-accent-on-surface) bg-(--el-surface-soft)'
+          : ''
       }`}
     >
       {/* ONE button per row, named "<the action> · <the state>" (§6). The name is

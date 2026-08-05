@@ -393,7 +393,9 @@ export function CodeHealthClient({
         ? await readRepoReport(nextSelected)
         : null;
     if (seq === reportSeq.current) {
-      setReport(surface === null || nextSelected === null ? null : { repoKey: nextSelected, surface });
+      setReport(
+        surface === null || nextSelected === null ? null : { repoKey: nextSelected, surface },
+      );
     }
 
     try {
@@ -425,7 +427,9 @@ export function CodeHealthClient({
     if (surface === null) {
       // The report read failed where the summary had succeeded: degrade THIS
       // repo to the row state that says so, leaving every sibling readable.
-      setAudits((prev) => prev.map((a) => (a.repoKey === repoKey ? { repoKey, surface: null } : a)));
+      setAudits((prev) =>
+        prev.map((a) => (a.repoKey === repoKey ? { repoKey, surface: null } : a)),
+      );
       return;
     }
     setReport({ repoKey, surface });
@@ -573,7 +577,10 @@ export function CodeHealthClient({
   // and at least one sibling does. When NO repo has one, Panel 4b's A–D fire
   // unchanged — this panel takes nothing away from MOTIR-2080 / MOTIR-2081.
   const partiallyDerivedRepoRef =
-    shownReport?.audit == null && selectedRepo !== null && unavailableRepoRef === null && siblingAudited
+    shownReport?.audit == null &&
+    selectedRepo !== null &&
+    unavailableRepoRef === null &&
+    siblingAudited
       ? selectedRepo
       : null;
 
@@ -602,50 +609,50 @@ export function CodeHealthClient({
 
       {tab === 'audit' ? (
         <>
-        <AuditRepoList
-          rows={rows}
-          selectedRepoKey={selectedRepo}
-          onSelect={(repoKey) => void selectRepo(repoKey)}
-          onRetry={(repoKey) => void retryRepo(repoKey)}
-        />
-        <AuditPanel
-          audit={shownReport?.audit ?? null}
-          repoRefs={repoRefs}
-          findings={shownReport?.findings ?? []}
-          total={shownReport?.total ?? 0}
-          hasMore={(shownReport?.nextOffset ?? null) !== null}
-          loadingMore={loadingMore}
-          onLoadMore={() => void loadMoreFindings()}
-          scanner={shownReport?.scanner ?? null}
-          // Panel 7 §5 · E2 — the selected repo has no report while a SIBLING
-          // does. Panel 4b's A–D are all-or-nothing by construction, so they
-          // must not fire here: the project is not waiting, one repo is.
-          partiallyDerivedRepoRef={partiallyDerivedRepoRef}
-          // The selected repo's read FAILED. Distinct from E2 in the one way
-          // that matters: nothing is coming unless the reader retries.
-          unavailableRepoRef={unavailableRepoRef}
-          onRetryRepo={() => {
-            if (selectedRepo !== null) void retryRepo(selectedRepo);
-          }}
-          // `resuming` counts as deriving: a run WAS fired from this browser, and
-          // until the server says otherwise the honest screen is the one that
-          // shows work in progress and offers no button to fire it again.
-          reauditing={reauditing || resuming}
-          onReaudit={() => void reaudit()}
-          pollExhausted={pollExhausted}
-          // "Check again" re-READS; it must never re-POST /refresh, which would
-          // queue a second code_audit + propose_convention pair for work already
-          // in flight. `reload()` setAudit()s the island's own state — the
-          // page-state contract's case 3, since a server re-read cannot reach a
-          // client island seeded from useState(initialProps).
-          onCheckAgain={() => {
-            setPollExhausted(false);
-            void reload();
-          }}
-          deepenDismissed={deepenDismissed}
-          onDeepenDismiss={() => writeDismissed(projectId, true)}
-          onDeepenReopen={() => writeDismissed(projectId, false)}
-        />
+          <AuditRepoList
+            rows={rows}
+            selectedRepoKey={selectedRepo}
+            onSelect={(repoKey) => void selectRepo(repoKey)}
+            onRetry={(repoKey) => void retryRepo(repoKey)}
+          />
+          <AuditPanel
+            audit={shownReport?.audit ?? null}
+            repoRefs={repoRefs}
+            findings={shownReport?.findings ?? []}
+            total={shownReport?.total ?? 0}
+            hasMore={(shownReport?.nextOffset ?? null) !== null}
+            loadingMore={loadingMore}
+            onLoadMore={() => void loadMoreFindings()}
+            scanner={shownReport?.scanner ?? null}
+            // Panel 7 §5 · E2 — the selected repo has no report while a SIBLING
+            // does. Panel 4b's A–D are all-or-nothing by construction, so they
+            // must not fire here: the project is not waiting, one repo is.
+            partiallyDerivedRepoRef={partiallyDerivedRepoRef}
+            // The selected repo's read FAILED. Distinct from E2 in the one way
+            // that matters: nothing is coming unless the reader retries.
+            unavailableRepoRef={unavailableRepoRef}
+            onRetryRepo={() => {
+              if (selectedRepo !== null) void retryRepo(selectedRepo);
+            }}
+            // `resuming` counts as deriving: a run WAS fired from this browser, and
+            // until the server says otherwise the honest screen is the one that
+            // shows work in progress and offers no button to fire it again.
+            reauditing={reauditing || resuming}
+            onReaudit={() => void reaudit()}
+            pollExhausted={pollExhausted}
+            // "Check again" re-READS; it must never re-POST /refresh, which would
+            // queue a second code_audit + propose_convention pair for work already
+            // in flight. `reload()` setAudit()s the island's own state — the
+            // page-state contract's case 3, since a server re-read cannot reach a
+            // client island seeded from useState(initialProps).
+            onCheckAgain={() => {
+              setPollExhausted(false);
+              void reload();
+            }}
+            deepenDismissed={deepenDismissed}
+            onDeepenDismiss={() => writeDismissed(projectId, true)}
+            onDeepenReopen={() => writeDismissed(projectId, false)}
+          />
         </>
       ) : (
         <ConventionPanel conventions={conventions} />

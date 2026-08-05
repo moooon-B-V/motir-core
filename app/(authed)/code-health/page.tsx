@@ -144,9 +144,7 @@ export async function loadCodeHealthSurfaces(
 
   const [audits, conventions] = await Promise.all([
     Promise.all(
-      repoRefs.map((repoKey) =>
-        readRepoAudit(projectId, svcCtx, repoKey, SUMMARY_FINDINGS_LIMIT),
-      ),
+      repoRefs.map((repoKey) => readRepoAudit(projectId, svcCtx, repoKey, SUMMARY_FINDINGS_LIMIT)),
     ),
     readConventions(),
   ]);
