@@ -74,6 +74,15 @@ export const MOTIR_SEED_BURST_END = new Date('2026-06-15T14:27:16.297Z');
  * cancelled card, so it is excluded — the same local-constant exclusion
  * `workItemsService` (ROADMAP_CANCELLED_KEY) and `publicProjectsService`
  * (ROADMAP_EXCLUDED_DONE_KEY) already make against this set.
+ *
+ * That claim was HALF TRUE when written: `workItemsService` made the exclusion on
+ * its roadmap meter but NOT on its live `applyStatusTransition` stamp, so this
+ * offline classifier and the live lane disagreed about which terminal statuses
+ * mean implemented, and cancelling a human/manual card wrote `manual` onto
+ * abandoned work. MOTIR-2221 closed the gap (guard + a forward data migration
+ * clearing the rows already written); the two encodings now agree, and
+ * `tests/integration/work-items/provenance-cancelled-parity.test.ts` pins them
+ * together so they cannot drift apart again silently.
  */
 export const CANCELLED_STATUS_KEY = 'cancelled';
 

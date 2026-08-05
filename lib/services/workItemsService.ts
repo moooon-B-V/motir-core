@@ -563,7 +563,12 @@ function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkI
  * renamed / recategorised — `lib/workflows/defaultWorkflow.ts`), so the literal
  * is stable; a project's CUSTOM `done` statuses still count as done by category
  * (no project-specific cancel detection is attempted). Mirrors the public
- * roadmap's `ROADMAP_EXCLUDED_DONE_KEY` (publicProjectsService).
+ * roadmap's `ROADMAP_EXCLUDED_DONE_KEY` (publicProjectsService) and the offline
+ * classifier's `CANCELLED_STATUS_KEY` (lib/workItems/provenanceBackfill.ts).
+ *
+ * Read by TWO consumers here, for the same reason: the roadmap meter below, and
+ * `applyStatusTransition`'s manual-implementation stamp (MOTIR-2221) — abandoned
+ * is not implemented, so neither counts a cancelled card as finished work.
  */
 const ROADMAP_CANCELLED_KEY = 'cancelled';
 
@@ -1717,12 +1722,25 @@ export const workItemsService = {
       // Manual implementation lane (MOTIR-1685, docs/decisions/work-item-provenance.md):
       // a human-executed / manual-type item reaching a done status with no
       // implementation provenance yet was implemented MANUALLY (no agent report) →
-      // stamp `manual`. Guarded three ways: NEVER overwrites an existing stamp (a
-      // BYOK agent's `mark_integrated` report at in_review wins), NEVER under a
-      // `system` bulk set (the importer — those items were implemented in the source
-      // tool, provenance stays null/unknown), and ONLY for human/manual work (a
-      // coding_agent item dragged to done without a report keeps null, not manual).
+      // stamp `manual`. Guarded FOUR ways: never on `cancelled` (below), NEVER
+      // overwrites an existing stamp (a BYOK agent's `mark_integrated` report at
+      // in_review wins), NEVER under a `system` bulk set (the importer — those items
+      // were implemented in the source tool, provenance stays null/unknown), and ONLY
+      // for human/manual work (a coding_agent item dragged to done without a report
+      // keeps null, not manual).
+      //
+      // `cancelled` is a `done`-CATEGORY status that means ABANDONED, not implemented
+      // (MOTIR-2221) — so the category alone is the wrong discriminator here and the
+      // stamp must be keyed on the status KEY. Nothing was implemented on a cancelled
+      // card, so stamping it writes a false claim into a record whose entire value is
+      // that it is true. This is the same exclusion `roadmapDoneStatusKeys` (above),
+      // `publicProjectsService` (ROADMAP_EXCLUDED_DONE_KEY) and the offline classifier
+      // in `lib/workItems/provenanceBackfill.ts` (CANCELLED_STATUS_KEY, whose doc
+      // comment cites THIS lane as making it) already make against the terminal set.
+      // Clearing `sessionBranch` above is NOT narrowed: an abandoned card should keep
+      // no stale lineage either.
       if (
+        toStatusKey !== ROADMAP_CANCELLED_KEY &&
         !opts.system &&
         current.implementationSource === null &&
         (current.executor === 'human' || current.type === 'manual')
