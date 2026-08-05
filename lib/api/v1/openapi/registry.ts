@@ -2,6 +2,7 @@ import type { z } from 'zod/v4';
 import { operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { PLANNING_COMPONENTS, PLANNING_OPERATIONS } from '@/lib/api/v1/planning/operations';
 import { WORK_ITEM_COMPONENTS, WORK_ITEM_OPERATIONS } from '@/lib/api/v1/workItems/operations';
+import { WORK_LOOP_COMPONENTS, WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
 
 // The v1 OPERATION REGISTRY (Story 11.4 · Subtask 11.4.4 — MOTIR-2185).
 //
@@ -27,6 +28,10 @@ export interface V1ResourceModule {
 const RESOURCE_MODULES: readonly V1ResourceModule[] = [
   { operations: WORK_ITEM_OPERATIONS, components: WORK_ITEM_COMPONENTS },
   { operations: PLANNING_OPERATIONS, components: PLANNING_COMPONENTS },
+  // Story 11.7's work-loop resources. It grows one entry per endpoint card, in
+  // step with the routes — see the module header for why a declaration cannot
+  // land ahead of its route.
+  { operations: WORK_LOOP_OPERATIONS, components: WORK_LOOP_COMPONENTS },
 ];
 
 /**

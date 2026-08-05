@@ -247,6 +247,15 @@ describe('every operation’s REAL response validates against its declared schem
       get(`/api/v1/work-items/${key}`),
       { key },
     );
+    // The work-loop read (Story 11.7). Driven HERE, beside the detail read, so
+    // the assembled prompt is validated against its declared schema on a real
+    // item rather than on a fixture.
+    await drive(
+      'getWorkItemDispatchPrompt',
+      () => import('@/app/api/v1/work-items/[key]/dispatch-prompt/route'),
+      get(`/api/v1/work-items/${key}/dispatch-prompt`),
+      { key },
+    );
     await drive(
       'updateWorkItem',
       () => import('@/app/api/v1/work-items/[key]/route'),
