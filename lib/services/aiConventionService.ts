@@ -8,6 +8,7 @@ import {
   type RawExternalScannerState,
 } from '@/lib/ai/motirAiClient';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { EmptyRepoScopeError, UnknownRepoScopeError } from '@/lib/codeHealth/errors';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import type {
@@ -158,6 +159,28 @@ function toCodeAuditSurfaceDTO(raw: RawCodeAuditSurface): CodeAuditSurfaceDTO {
   };
 }
 
+// Resolve the repos a `reaudit` submits for, from the project's CONNECTED set and
+// the caller's optional scope. Validation happens here — in the same step that
+// resolves the connected set — so an invalid scope can never reach a submit.
+function resolveReauditTargets(
+  connectedRepoRefs: string[],
+  scope: string[] | undefined,
+): (string | null)[] {
+  // No scope: the shipped whole-set fan-out. A project with no connected repo
+  // still sends exactly one unscoped pair.
+  if (scope === undefined) {
+    return connectedRepoRefs.length > 0 ? connectedRepoRefs : [null];
+  }
+  if (scope.length === 0) throw new EmptyRepoScopeError();
+
+  const connected = new Set(connectedRepoRefs);
+  const unknown = scope.filter((repoKey) => !connected.has(repoKey));
+  if (unknown.length > 0) throw new UnknownRepoScopeError([...new Set(unknown)]);
+
+  // Preserve the caller's order; collapse repeats.
+  return [...new Set(scope)];
+}
+
 export const aiConventionService = {
   // The latest code-health audit summary + a page of findings. `findingsOffset`
   // pages the (bounded, virtualized) list as it scrolls; `repoKey` scopes to a
@@ -220,10 +243,25 @@ export const aiConventionService = {
   // over `repos[]` on the far side, so the repo set stays on `context.code`
   // beside it and no boundary change is needed. A project with NO connected repo
   // still submits exactly one unscoped pair — unchanged from before the fan-out.
+  //
+  // `opts.repoKeys` SCOPES the fan-out to an explicit target set (MOTIR-2247), so
+  // deriving one repo's report no longer costs every repo's. Semantics:
+  //
+  //   undefined  → the shipped whole-set behaviour, byte for byte (including the
+  //                single unscoped pair a project with no connected repo sends).
+  //   []         → EmptyRepoScopeError. NOT "derive nothing": a client that
+  //                computes zero targets must fail loudly, not look successful.
+  //   [a, b]     → exactly those, VALIDATED against the connected set first.
+  //                An unknown key raises before ANY submit, so a request mixing
+  //                valid and invalid members queues nothing (no partial fan-out).
+  //
+  // Duplicates collapse to one pair — "one pair per NAMED repo" — since a repeated
+  // key would spend a second derivation on a repo already being derived.
   async reaudit(
     projectId: string,
     ctx: AccessActorContext,
     projectKey: string,
+    opts: { repoKeys?: string[] } = {},
   ): Promise<ReauditResultDTO> {
     await projectAccessService.assertCanManage(projectId, ctx);
     const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
@@ -239,7 +277,7 @@ export const aiConventionService = {
       projectKey,
     };
     const repoRefs = code?.repos.map((repo) => repo.repoRef) ?? [];
-    const targets: (string | null)[] = repoRefs.length > 0 ? repoRefs : [null];
+    const targets: (string | null)[] = resolveReauditTargets(repoRefs, opts.repoKeys);
 
     const repos: ReauditRepoJobsDTO[] = [];
     for (const repoKey of targets) {

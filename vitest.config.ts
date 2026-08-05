@@ -676,6 +676,14 @@ export default defineConfig({
         // a project silently showing one repo's grade as if it were its own.
         'lib/codeHealth/repoAuditRows.ts',
         'app/(authed)/code-health/_components/AuditRepoList.tsx',
+        // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-SCOPED audit trigger.
+        // The scope decides how many derivations a click PAYS for, so an
+        // untested branch here is either a fan-out that spends N times what was
+        // asked for, or a body parse that silently downgrades a client bug into
+        // a whole-set run. The typed rejections gate the same money.
+        'lib/codeHealth/errors.ts',
+        'app/api/ai/coding-convention/_shared.ts',
+        'app/api/ai/coding-convention/refresh/route.ts',
         'lib/codeGraph/offboarding.ts',
         'lib/repositories/codeGraphOffboardingRepository.ts',
         'lib/services/codeGraphOffboardingService.ts',
@@ -710,6 +718,14 @@ export default defineConfig({
         // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
         'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },
         'app/(authed)/code-health/_components/AuditRepoList.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-scoped audit trigger.
+        'lib/codeHealth/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/coding-convention/_shared.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/coding-convention/refresh/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

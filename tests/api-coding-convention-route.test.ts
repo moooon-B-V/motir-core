@@ -39,10 +39,32 @@ const { GET: auditGET } = await import('@/app/api/ai/coding-convention/audit/rou
 const { GET: conventionGET } = await import('@/app/api/ai/coding-convention/convention/route');
 const { POST: refreshPOST } = await import('@/app/api/ai/coding-convention/refresh/route');
 const { createTestWorkspace, createTestProject } = await import('./fixtures');
+const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
+const { parseRepoScopeBody, parseOffsetParam, parseLimitParam, mapCodeHealthError } =
+  await import('@/app/api/ai/coding-convention/_shared');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
 const BASE = 'http://localhost:3000/api/ai/coding-convention';
+
+// Two connected repos, so a scoped refresh has something to NOT submit for.
+// `listByInstallation` orders `owner asc, name asc`.
+const ROUTE_REPOS = [
+  {
+    providerRepoId: '301',
+    owner: 'moooon',
+    name: 'motir-ai',
+    defaultBranch: 'main',
+    archived: false,
+  },
+  {
+    providerRepoId: '302',
+    owner: 'moooon',
+    name: 'motir-core',
+    defaultBranch: 'main',
+    archived: false,
+  },
+];
 
 async function signInAtProject() {
   const { workspace, owner } = await createTestWorkspace();
@@ -152,8 +174,20 @@ describe('GET /api/ai/coding-convention/audit', () => {
 });
 
 describe('POST /api/ai/coding-convention/refresh', () => {
+  // ⚠️ The SHIPPED island posts with NO body and NO content-type
+  // (`fetch(REFRESH_URL, { method: 'POST' })`, CodeHealthClient) — so this,
+  // not a `{}` body, is the request the whole-set path must keep serving
+  // (MOTIR-2247).
+  const bodylessRequest = () => new Request(`${BASE}/refresh`, { method: 'POST' });
+  const scopedRequest = (body: unknown) =>
+    new Request(`${BASE}/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+
   it('401s with no session', async () => {
-    const res = await refreshPOST();
+    const res = await refreshPOST(bodylessRequest());
     expect(res.status).toBe(401);
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
@@ -161,7 +195,7 @@ describe('POST /api/ai/coding-convention/refresh', () => {
   it('triggers a re-audit for an admin and returns the queued job ids per repo (202)', async () => {
     await signInAtProject();
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
-    const res = await refreshPOST();
+    const res = await refreshPOST(bodylessRequest());
     expect(res.status).toBe(202);
     const body = await res.json();
     // The workspace has no installation here, so the fan-out submits the single
@@ -175,8 +209,154 @@ describe('POST /api/ai/coding-convention/refresh', () => {
   it('maps a motir-ai outage to 502', async () => {
     await signInAtProject();
     refreshCodeAuditMock.mockRejectedValue(new MotirAiUnavailableError('down'));
-    const res = await refreshPOST();
+    const res = await refreshPOST(bodylessRequest());
     expect(res.status).toBe(502);
+  });
+
+  // ── The MOTIR-2247 repo scope ────────────────────────────────────────────
+  // The route half: an optional body that narrows the fan-out, with the
+  // no-body path pinned unchanged above.
+
+  it('forwards a repo scope to the service — one pair for the named repo only', async () => {
+    const { workspace } = await signInAtProject();
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-route-scope',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: ROUTE_REPOS,
+    });
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const res = await refreshPOST(scopedRequest({ repoKeys: ['moooon/motir-core'] }));
+
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({
+      repos: [{ repoKey: 'moooon/motir-core', auditJobId: 'job_a', conventionJobId: 'job_c' }],
+    });
+    // The OTHER connected repo is untouched — the whole point of the card.
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+    expect(refreshCodeAuditMock.mock.calls[0]![1]).toMatchObject({
+      code: { repoRef: 'moooon/motir-core' },
+    });
+  });
+
+  it('422s a scope naming a repo the project is not connected to, submitting nothing', async () => {
+    await signInAtProject();
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const res = await refreshPOST(scopedRequest({ repoKeys: ['evil/elsewhere'] }));
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('UNKNOWN_REPO_SCOPE');
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('422s an EMPTY scope rather than answering a cheerful 202 for zero work', async () => {
+    await signInAtProject();
+
+    const res = await refreshPOST(scopedRequest({ repoKeys: [] }));
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('EMPTY_REPO_SCOPE');
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unparseable JSON', '{ not json'],
+    ['repoKeys of the wrong type', { repoKeys: 'moooon/motir-core' }],
+    ['repoKeys holding a non-string', { repoKeys: ['moooon/motir-core', 7] }],
+    ['a top-level array', ['moooon/motir-core']],
+  ])('400s a malformed body (%s) without reaching the service', async (_label, body) => {
+    await signInAtProject();
+
+    const res = await refreshPOST(scopedRequest(body));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('MALFORMED_REPO_SCOPE');
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('treats a well-formed body with no repoKeys as the whole-set fan-out', async () => {
+    await signInAtProject();
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const res = await refreshPOST(scopedRequest({}));
+
+    expect(res.status).toBe(202);
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+    expect(refreshCodeAuditMock.mock.calls[0]![1]).toEqual({ code: {} });
+  });
+});
+
+// The route layer's shared parsing + error-mapping helpers, exercised directly.
+// `parseRepoScopeBody` is the MOTIR-2247 addition; the two query-param parsers
+// and the rethrow arm are the pre-existing neighbours the same file gates.
+describe('coding-convention route helpers', () => {
+  it('parseRepoScopeBody reads an absent body as "no scope", not a parse failure', async () => {
+    const req = new Request(`${BASE}/refresh`, { method: 'POST' });
+    expect(await parseRepoScopeBody(req)).toEqual({ ok: true, repoKeys: undefined });
+  });
+
+  it('parseRepoScopeBody reads an explicit null repoKeys as "no scope"', async () => {
+    const req = new Request(`${BASE}/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ repoKeys: null }),
+    });
+    expect(await parseRepoScopeBody(req)).toEqual({ ok: true, repoKeys: undefined });
+  });
+
+  it('parseRepoScopeBody rejects an empty-string repo key', async () => {
+    const req = new Request(`${BASE}/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ repoKeys: ['moooon/motir-core', '  '] }),
+    });
+    expect(await parseRepoScopeBody(req)).toEqual({ ok: false });
+  });
+
+  it('parseRepoScopeBody treats an UNREADABLE body as malformed, never as "no scope"', async () => {
+    // Reading it as "no scope" would answer a broken request with a whole-set
+    // fan-out — N derivations paid for by a stream error.
+    const req = { text: () => Promise.reject(new Error('stream reset')) } as unknown as Request;
+    expect(await parseRepoScopeBody(req)).toEqual({ ok: false });
+  });
+
+  it('parseRepoScopeBody passes an EMPTY array through for the service to reject', async () => {
+    const req = new Request(`${BASE}/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ repoKeys: [] }),
+    });
+    expect(await parseRepoScopeBody(req)).toEqual({ ok: true, repoKeys: [] });
+  });
+
+  it('mapCodeHealthError rethrows an unknown error so it becomes a genuine 500', () => {
+    const boom = new Error('boom');
+    expect(() => mapCodeHealthError(boom)).toThrow(boom);
+  });
+
+  it.each([
+    [null, undefined],
+    ['0', 0],
+    ['12', 12],
+    ['-1', undefined],
+    ['1.5', undefined],
+    ['nope', undefined],
+  ])('parseOffsetParam(%s) → %s', (raw, expected) => {
+    expect(parseOffsetParam(raw)).toBe(expected);
+  });
+
+  it.each([
+    [null, undefined],
+    // 1 is the FLOOR: motir-ai's `parsePositiveInt` rejects 0 outright.
+    ['0', undefined],
+    ['1', 1],
+    ['100', 100],
+    ['2.5', undefined],
+    ['nope', undefined],
+  ])('parseLimitParam(%s) → %s', (raw, expected) => {
+    expect(parseLimitParam(raw)).toBe(expected);
   });
 });
 

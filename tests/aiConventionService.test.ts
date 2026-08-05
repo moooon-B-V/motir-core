@@ -28,6 +28,7 @@ const { workspacesService } = await import('@/lib/services/workspacesService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { NotProjectAdminError, ProjectNotFoundError } = await import('@/lib/projects/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
+const { EmptyRepoScopeError, UnknownRepoScopeError } = await import('@/lib/codeHealth/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
 // ⚠️ These fixtures are motir-ai's REAL `GET /v1/convention` body — the producer's
@@ -480,6 +481,177 @@ describe('aiConventionService — project-admin gate', () => {
       repos: [{ repoKey: 'moooon/motir-ai', auditJobId: 'job_a', conventionJobId: 'job_c' }],
     });
     expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  // ── The MOTIR-2247 repo SCOPE ─────────────────────────────────────────────
+  // Deriving one repo's report must stop costing every repo's. These pin the
+  // scoped fan-out, the two typed rejections, and — the one that matters most —
+  // that the UNSCOPED call still submits exactly what it submitted before.
+
+  async function connectThreeRepos(workspaceId: string, installationId: string) {
+    await githubInstallationService.persistInstallation({
+      workspaceId,
+      installation: {
+        installationId,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: THREE_REPOS,
+    });
+  }
+
+  it('reaudit with a repo scope submits ONE pair per named repo and none for the others', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connectThreeRepos(workspace.id, 'inst-scope-subset');
+    let n = 0;
+    refreshCodeAuditMock.mockImplementation(() => {
+      n += 1;
+      return Promise.resolve({ auditJobId: `job_a${n}`, conventionJobId: `job_c${n}` });
+    });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+      { repoKeys: ['moooon/motir-gateway', 'moooon/motir-ai'] },
+    );
+
+    expect(result).toEqual({
+      repos: [
+        { repoKey: 'moooon/motir-gateway', auditJobId: 'job_a1', conventionJobId: 'job_c1' },
+        { repoKey: 'moooon/motir-ai', auditJobId: 'job_a2', conventionJobId: 'job_c2' },
+      ],
+    });
+
+    // Asserted on the recorded SUBMITS, not the return value alone: exactly two
+    // envelopes, each carrying its own `repoRef`, and `moooon/motir-core` — a
+    // connected repo that was NOT named — appears in none of them.
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(2);
+    const repoSet = [
+      { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
+      { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
+      { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
+    ];
+    expect(refreshCodeAuditMock.mock.calls.map((call) => call[1])).toEqual([
+      { code: { repos: repoSet, repoRef: 'moooon/motir-gateway' } },
+      { code: { repos: repoSet, repoRef: 'moooon/motir-ai' } },
+    ]);
+  });
+
+  it('reaudit with a repo scope collapses a repeated key to one pair', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connectThreeRepos(workspace.id, 'inst-scope-dupe');
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+      { repoKeys: ['moooon/motir-core', 'moooon/motir-core'] },
+    );
+
+    expect(result.repos).toHaveLength(1);
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reaudit REJECTS a scope naming an unconnected repo and submits NOTHING at all', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connectThreeRepos(workspace.id, 'inst-scope-unknown');
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    // The scope MIXES a valid member with an invalid one: the valid one must not
+    // be submitted either. A partial fan-out would spend real money deriving half
+    // of what was asked for and still report the request as failed.
+    await expect(
+      aiConventionService.reaudit(
+        project.id,
+        { userId: owner.id, workspaceId: workspace.id },
+        project.identifier,
+        { repoKeys: ['moooon/motir-core', 'evil/elsewhere'] },
+      ),
+    ).rejects.toBeInstanceOf(UnknownRepoScopeError);
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('reaudit REJECTS an empty scope rather than treating it as "derive nothing"', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connectThreeRepos(workspace.id, 'inst-scope-empty');
+
+    await expect(
+      aiConventionService.reaudit(
+        project.id,
+        { userId: owner.id, workspaceId: workspace.id },
+        project.identifier,
+        { repoKeys: [] },
+      ),
+    ).rejects.toBeInstanceOf(EmptyRepoScopeError);
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('reaudit with NO scope produces the identical submit sequence it produces today', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connectThreeRepos(workspace.id, 'inst-scope-regression');
+    let n = 0;
+    refreshCodeAuditMock.mockImplementation(() => {
+      n += 1;
+      return Promise.resolve({ auditJobId: `job_a${n}`, conventionJobId: `job_c${n}` });
+    });
+
+    // The `opts` argument is OMITTED entirely — the call every shipped caller makes.
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+    );
+
+    expect(result.repos.map((r) => r.repoKey)).toEqual([
+      'moooon/motir-ai',
+      'moooon/motir-core',
+      'moooon/motir-gateway',
+    ]);
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('reaudit with an explicit undefined scope keeps the no-connected-repo unscoped pair', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+      { repoKeys: undefined },
+    );
+
+    expect(result).toEqual({
+      repos: [{ repoKey: null, auditJobId: 'job_a', conventionJobId: 'job_c' }],
+    });
+    expect(refreshCodeAuditMock.mock.calls[0]![1]).toEqual({ code: {} });
+  });
+
+  it('reaudit checks the project-admin gate BEFORE it validates the scope', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const outsider = await createTestUser();
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
+
+    // A non-admit caller sending a bad scope gets the 403, never a 422 that would
+    // tell them which repos this project is connected to.
+    await expect(
+      aiConventionService.reaudit(
+        project.id,
+        { userId: outsider.id, workspaceId: workspace.id },
+        project.identifier,
+        { repoKeys: ['evil/elsewhere'] },
+      ),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
   it('reaudit is blocked for a non-admin (403) without hitting the boundary', async () => {
