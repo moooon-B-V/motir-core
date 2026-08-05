@@ -23,6 +23,13 @@ document is their durable home, because a work-item description is not where an 
 lives: sibling cards cite this by path instead of each carrying the argument in its own body.
 It **records** those decisions. It does not re-open them.
 
+**A TENTH decision was added later — §14, offboarding (MOTIR-2162, 2026-08-05).** It is not one
+of the nine and does not pretend to be: it answers a question §11 left open, on evidence read two
+days after the nine were settled, and it carries its own dated evidence block rather than being
+retrofitted into §13. **Section numbers are append-only in this file** — §11, §12 and §13 are
+cited by cards, by `notes.html` #223 and by comments in both repos, so a later decision is
+appended rather than slotted into the numeric run.
+
 **It records the REJECTED alternatives with equal weight, and that is the point.** Three of
 the nine were **proposed, pinned, and then reversed** during a single day's planning. An
 argument that was strong enough to win once is strong enough to be re-proposed by the next
@@ -46,19 +53,22 @@ Neither changes a decision. Both change what the decision is allowed to claim.
 
 ## §1 — The nine decisions, in one table
 
-| #   | Decision                                                                                    | Where                  |
-| --- | ------------------------------------------------------------------------------------------- | ---------------------- |
-| 1   | Indexing runs in a **container on the `ContainerOrchestrator` port**, not a Vercel function | [§2](#2--decision-1)   |
-| 2   | Containers run in the **shared `motir-fleet` org** — not production, not a per-workload org | [§3](#3--decision-2)   |
-| 3   | Isolation comes from **credential scope**, not org count                                    | [§4](#4--decision-3)   |
-| 4   | The **container builds** the graph; motir-ai is **control plane only**                      | [§5](#5--decision-4)   |
-| 5   | **One container per REPO**, forced by the shipped ledger contract                           | [§6](#6--decision-5)   |
-| 6   | The concurrency cap lives in the **orchestrator's admission control**                       | [§7](#7--decision-6)   |
-| 7   | The **META org runs indexing on the fleet**, exactly like a customer                        | [§8](#8--decision-7)   |
-| 8   | `isMeta` bypasses the **CHARGE** — not the placement and **not the meter**                  | [§9](#9--decision-8)   |
-| 9   | The container holds **no GitHub credential**                                                | [§10](#10--decision-9) |
+| #   | Decision                                                                                                                       | Where                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| 1   | Indexing runs in a **container on the `ContainerOrchestrator` port**, not a Vercel function                                    | [§2](#2--decision-1)                 |
+| 2   | Containers run in the **shared `motir-fleet` org** — not production, not a per-workload org                                    | [§3](#3--decision-2)                 |
+| 3   | Isolation comes from **credential scope**, not org count                                                                       | [§4](#4--decision-3)                 |
+| 4   | The **container builds** the graph; motir-ai is **control plane only**                                                         | [§5](#5--decision-4)                 |
+| 5   | **One container per REPO**, forced by the shipped ledger contract                                                              | [§6](#6--decision-5)                 |
+| 6   | The concurrency cap lives in the **orchestrator's admission control**                                                          | [§7](#7--decision-6)                 |
+| 7   | The **META org runs indexing on the fleet**, exactly like a customer                                                           | [§8](#8--decision-7)                 |
+| 8   | `isMeta` bypasses the **CHARGE** — not the placement and **not the meter**                                                     | [§9](#9--decision-8)                 |
+| 9   | The container holds **no GitHub credential**                                                                                   | [§10](#10--decision-9)               |
+| 10  | A graph is derived customer data with a **defined retention window** — offboarding removes all three artifacts, snapshot first | [§14](#14--decision-10--offboarding) |
 
 §11 records what this deliberately does **not** change. §12 binds it to MOTIR-1981's cards.
+**Decision 10 (§14) was added 2026-08-05** by MOTIR-2162 and is not part of the original nine —
+see §0.
 
 ## §2 — Decision 1
 
@@ -509,6 +519,15 @@ repo or surfaces index _freshness_ stays with MOTIR-1754; motir-ai's graph **eng
 1-permit semaphore are unchanged and not weakened; Epic 9's container lifetime, cap and metering
 remain Epic 9's.
 
+> **AMENDED 2026-08-05 (MOTIR-2162): this section never asked what happens when a repo goes
+> AWAY, and the answer turned out to be "nothing, anywhere."** Every sentence above is about
+> what still BUILDS a graph. Nothing here — or in the nine decisions — says what removes one,
+> and §5 moved the persist path's justification ("the delta is small; leave persist where it
+> is") without anyone noticing that the persist path had no inverse. **That is now Decision 10,
+> §14.** It is recorded as an omission rather than a change of mind: no decision above is
+> reversed by it, and the gap was found by MOTIR-2161 standing in front of the code, not by any
+> gate.
+
 ### §11.1 — The workload asymmetry, for whoever reads this from Epic 9
 
 Index containers and agent containers are shaped differently, and the numbers here do not
@@ -549,6 +568,9 @@ MOTIR-1997 (the cross-workload ceiling that counts `code_graph_index` before it 
 MOTIR-2005 / MOTIR-2006 (how a fleet machine obtains image bytes — the indexer image is built
 from motir-ai's **closed** source, so `fleet-image-pull.md` §1 puts it in the **mirror** column).
 
+**Decision 10 (§14) binds its own cards, in §14.6** — they belong to MOTIR-2162, not to MOTIR-1981,
+so they are listed there rather than added to the table above.
+
 ## §13 — Sources
 
 **Read or measured 2026-08-02 – 2026-08-03.** Code references are pinned at `motir-core`
@@ -578,3 +600,183 @@ from motir-ai's **closed** source, so `fleet-image-pull.md` §1 puts it in the *
   the request-based scaling that long indexes never trip.
 - `notes.html` **#50** (a decision card is not an implementation), **#185** (express enforcement
   in terms the product controls).
+
+## §14 — Decision 10 — Offboarding
+
+**Status:** accepted · **Date:** 2026-08-05 · **Card:** MOTIR-2162 · **Implemented by:** MOTIR-2165,
+MOTIR-2166, MOTIR-2168, MOTIR-2169, MOTIR-2171 (and MOTIR-2163, the pointer back into motir-ai) ·
+**Evidence pinned at:** `motir-core` `origin/main` @ `c27c6776` · `motir-ai` `origin/main` @ `cc36f74`
+
+**A repo's code graph is DERIVED CUSTOMER DATA held under a DEFINED RETENTION WINDOW — not a permanent
+cache. Offboarding removes all three artifacts, snapshot first.**
+
+This is a later decision, not one of the nine (§0). It exists because §11 recorded what this story does
+not change and never asked what happens when a repo goes **away** — and the answer, found by MOTIR-2161
+while deleting two caller-less functions, was **nothing, anywhere.**
+
+### §14.1 — The gap, measured
+
+Under §4–§5 a repo's graph lives in three places. On `origin/main` at the date above, **no code path
+removes any of them on purpose:**
+
+| #   | artifact                                               | what removes it today                                                                                                                                    |
+| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | the Postgres `CodeRepo` coordination row               | only the `AiProject` FK cascade — and nothing in motir-ai `src/` deletes an `AiProject`, so in practice it never fires                                   |
+| 2   | the per-machine local root under the adapter's FS root | nothing. `graphCacheManager`'s LRU evicts **handles** and deliberately leaves the file on disk (`graphCacheManager.ts:28`)                               |
+| 3   | the durable object-storage snapshot                    | nothing. `graphSnapshotStore.prune` is a SIZE bound that returns early for `keep <= 0` (`:376-377`), so no argument to it removes a repo's last snapshot |
+
+**And the one deletion the system CAN do makes it worse.** The FK cascade removes the coordination rows,
+which are the only inventory of which snapshot keys exist. The objects stay under
+`codegraph/<aiProjectId>/<repoRef>/<commitSha>.db.gz` (`snapshotPrefix`, `:479`), reachable only by a
+bucket-wide `ListObjectsV2` diffed against live projects — a sweep that does not exist. **Retained data
+becomes UNREFERENCED retained data.**
+
+`prisma/schema.prisma` already carries an informal position on this — the `AiProject.codeRepos` comment
+says the snapshots and caches are then _"rebuildable-only."_ **That sentence is the accident this section
+replaces with a decision.** It is not wrong about the engineering; it simply never asked whether
+rebuildable and disposable are the same thing, and nobody had to answer because no code depended on it.
+
+### §14.2 — Why "it is a rebuildable cache, keep it" was rejected
+
+It is the cheaper answer and it is defensible on the engineering: every artifact really can be rebuilt
+from the source tree, and keeping it costs storage and nothing else. It was rejected on two counts.
+
+1. **A graph is not a cache of public data — it is a derivative of a customer's PRIVATE source.** It
+   holds their file paths, symbol names and call structure. "We keep a rebuildable artifact" describes
+   the cost model, not the obligation; the obligation follows the input, not the reconstructability.
+2. **The mirror does not do it either, and the terms this product ships under do not allow the silence.**
+   GitHub's Marketplace terms make the provider responsible for deleting the user's data _"within its
+   defined window"_ — the obligation is to **have** a defined window and be able to state it. Silence is
+   the one answer that is not available.
+
+**Rejected with it: "delete immediately on disconnect."** Sourcegraph — the closest mirror for
+code-graph data specifically — makes retention a first-class, configurable policy rather than an instant
+purge, and keeps a removed repository's data on disk _"so that in the event the repository is added
+again it doesn't need to be recloned."_ That is the accidental-disconnect case, and it matters more here
+than there: a re-index is a **metered container per (repo × project)** (§7), so an instant purge bills the
+user for their own misclick.
+
+**So the decision is the shape both rejections point at: a stated, bounded window.**
+
+### §14.3 — Per trigger
+
+Every trigger below is a control that already ships. **`repoRef` scope is per-repo where the trigger is
+per-repo, and whole-project otherwise.**
+
+| trigger                   | shipped site (motir-core)                                                                                   | scope               | when             |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------- | ---------------- |
+| disconnect ONE repo       | `gitlabConnectionService.disconnectProject`; the GitHub `deleteExcept` prune in `githubInstallationService` | that `repoRef`      | after the window |
+| disconnect the CONNECTION | `gitlabConnectionService.disconnect`                                                                        | every repo on it    | after the window |
+| ARCHIVE a project         | `projectsService.archiveProject`                                                                            | whole project       | after the window |
+| DELETE a workspace        | `workspacesService.deleteWorkspace`                                                                         | every project in it | **immediately**  |
+
+**There is no project hard-delete to decide for.** `archiveProject` is this product's terminal project
+lifecycle action — its own comment says so, and `git grep` finds no `project.delete` anywhere in `lib/`
+or `app/`. MOTIR-2162 was authored asking what "deleting a project" should remove; the honest answer is
+that the operation does not exist, and archive is the edge that stands in for it. That is the same
+reading MOTIR-1972 already took when it hung the runner-group cleanup off archive.
+
+**Why the workspace arm has no window.** The other three leave the project row standing, so the scope
+remains readable and a re-connect can cancel the pending removal. `deleteWorkspace` is a hard delete
+that cascades: there is no surface left to undo into, so a window would protect nothing and only extend
+retention. **A grace period the user cannot reach is not a grace period.**
+
+**The window is 30 days**, one named constant in motir-core (MOTIR-2166), interpolated into the copy that
+states it (MOTIR-2171) rather than retyped — so the promise and the behaviour cannot drift.
+
+**Re-onboarding CANCELS a pending offboard.** A repo reconnected, or re-indexed, before its due date
+clears the queue row. This is what makes the window a grace period rather than a delay, and it is why
+the window is worth having at all.
+
+### §14.4 — The ORDER, and why it is the load-bearing part
+
+**Snapshot → local root → coordination row. Always, and asserted by a test rather than a comment.**
+
+The row is the only record of which object keys belong to a repo. Removing it first does not merely
+waste a step — it strands the snapshot as garbage nobody can name, which is **precisely what the FK
+cascade does today** (§14.1). A removal path that ships in the wrong order closes green and makes the
+defect strictly worse.
+
+**Every step is idempotent by construction** — `DeleteObjects` over a prefix, `rm -f`, `deleteMany` — so a
+partial run followed by a re-run converges. Offboarding is therefore a **re-runnable sweep keyed by
+(aiProjectId, repoRef)**, never a one-shot fired at the trigger.
+
+### §14.5 — The SEAM, pinned
+
+**Trigger → `CodeGraphOffboarding` queue row (motir-core) → `system.code-graph-offboard-sweep` cron
+(motir-core) → `POST /v1/code-graph/offboard` (motir-ai) → the three deletions.**
+
+Three properties, each checked against shipped reality rather than assumed:
+
+- **The queue row is deliberately NOT foreign-keyed to the workspace or project.** It must outlive the
+  cascade that makes it necessary. An FK here would reproduce the exact defect this section exists to
+  fix, one repo over — and it would look correct in review, because every other table in that schema
+  should have one.
+- **The clock lives in motir-core.** `git grep` over motir-ai's `src/` finds no cron, no interval and no
+  scheduled entrypoint — it receives `POST /v1/jobs` and serves `/v1/*`. motir-core already owns every
+  recurring sweep (`system.attachment-gc`, `system.automation-retention-sweep`, `system.ci-runner-reap`),
+  and keeping the clock there preserves §5's control-plane-only shape for motir-ai.
+- **The queue IS the retry.** The row is deleted only on a successful response, so a motir-ai outage
+  leaves it due and the next tick picks it up. No bespoke attempt counter, no dead-letter table.
+
+**Why a queue rather than the `deleteQuietly` precedent.** `archiveProject` already fires a post-commit,
+best-effort external cleanup at a runner group (MOTIR-1972, `ci-runner-fleet.md` §7.3), and that is the
+right **shape** — outside the transaction, never failing the user's action. It is the wrong
+**mechanism** twice over: a window cannot be implemented by a call that happens now, and `deleteQuietly`'s
+failure mode is a stale access list somebody tidies later, while a dropped call here means customer-derived
+data retained forever underneath a promise that it was not. `notes.html` #185 — express enforcement in
+terms the product controls.
+
+**Enqueue is still post-commit and non-fatal**, which is correct and has a consequence: some enqueues will
+be lost. That is what the reconciliation backstop (MOTIR-2169) is for, and it is also the only thing that
+can ever find the graphs the FK cascade has **already** orphaned — the bucket-wide sweep MOTIR-2162 named
+as not existing.
+
+### §14.6 — What this does NOT decide, and the card for each
+
+Per `notes.html` #223 — the lesson written about **this document's §11** — every deferral below is a filed
+card, cited by key, filed before this section merged. There is no sentence here that names no card.
+
+| deferred                                                                                                  | card                        |
+| --------------------------------------------------------------------------------------------------------- | --------------------------- |
+| the removal endpoint + the three deletions, in order, idempotent                                          | **MOTIR-2165** (motir-ai)   |
+| the queue table, the four triggers, cancel-on-reconnect, the window constant                              | **MOTIR-2166** (motir-core) |
+| the cron that drains the queue through the seam                                                           | **MOTIR-2168** (motir-core) |
+| the reconciliation backstop + the pre-existing cascade orphans                                            | **MOTIR-2169** (motir-ai)   |
+| stating the window on the disconnect / archive / delete surfaces                                          | **MOTIR-2171** (motir-core) |
+| carrying this decision back into motir-ai's `codeRepoService` pointer and the `codeRepoOffboarding` guard | **MOTIR-2163** (motir-ai)   |
+
+Per `notes.html` #50, **this section ships nothing** and is not a precondition any of those cards may
+assume is present.
+
+**Account closure is out of scope and is not a deferral** — Motir has no account-closure operation to
+hang a trigger on. When one is built, it inherits the workspace arm (immediate, no window) for every
+workspace it removes; that is a line in that feature's own design, not an unfiled card here.
+
+**No design amendment is owed.** The rule that a decision introducing a new affordance must spawn one
+(`notes.html` #143) was evaluated, not skipped: every trigger above is an existing control, and MOTIR-2171
+adds body copy to dialogs that already ship. That card carries its own instruction to STOP and file a
+design card if the copy turns out to need an element the dialogs cannot express.
+
+### §14.7 — Sources
+
+**Read 2026-08-05.** §13's list is pinned to 2026-08-02–03 and is deliberately left alone.
+
+- `motir-core`: `lib/services/projectsService.ts` (`archiveProject`, its terminal-lifecycle comment, and
+  the `projectRunnerGroupService.deleteQuietly` post-commit precedent) · `lib/services/workspacesService.ts`
+  (`deleteWorkspace`) · `lib/services/gitlabConnectionService.ts` (`disconnectProject`, `disconnect`) ·
+  `lib/services/githubInstallationService.ts` (`deleteExcept`) · `lib/jobs/definitions/` (`system.attachment-gc`,
+  `system.automation-retention-sweep`, `system.ci-runner-reap` — the shipped sweep shapes).
+- `motir-ai`: `src/codegraph/graphSnapshotStore.ts` (`prune` `:376-377`, `snapshotPrefix` `:479`,
+  `DeleteObjectsCommand` `:62`) · `src/codegraph/graphCacheManager.ts` (`:28`, the file left on disk) ·
+  `src/services/codeRepoService.ts` (MOTIR-2161's header block) · `src/app.ts` (the `/v1` table; no
+  scheduler anywhere in `src/`) · `prisma/schema.prisma` (`AiProject` `:75`, `CodeRepo` `:156`, the
+  "rebuildable-only" comment).
+- **Sourcegraph docs** — configurable code-graph data retention policies, and a removed repository's data
+  kept on disk against re-add: <https://sourcegraph.com/docs/code-search/code-navigation/explanations/uploads>
+  and <https://docs.sourcegraph.com/admin/how-to/remove-repo>.
+- **GitHub Marketplace terms** — the provider deletes the user's data _"within its defined window"_:
+  <https://docs.github.com/en/site-policy/github-terms/github-marketplace-terms-of-service>.
+- `notes.html` **#50** (a decision ships nothing), **#143** (a new affordance owes a design amendment),
+  **#185** (enforcement in terms the product controls), **#206** (a method with no caller is not a path),
+  **#223** (a deferral is a card filed in the same action — written about §11 of this file).
