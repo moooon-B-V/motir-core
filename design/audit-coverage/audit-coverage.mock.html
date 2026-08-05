@@ -1,0 +1,2163 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The audit-coverage nudge on /planning (MOTIR-2246, gating MOTIR-2250)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the CODING-CONVENTION surface (Story 7.14 —
+      the coding-convention + code-health audit engine).
+
+      7.14.1 (MOTIR-922): original — the approve/edit convention surface.
+      7.14.1b (MOTIR-1661, this amendment): the convention is now READ-ONLY +
+      "refine with Motir" via the universal AI chat — no approve gate, no free-edit,
+      per repo. Gated by the decision MOTIR-1660.
+
+      It is the layout source of truth for the UI code subtask 7.14.5 (MOTIR-926 —
+      the code-health UI), which is `blocked_by` this card.
+
+      Built FROM the real design system: the token block below is copied from
+      packages/design-system/theme.css (the @theme Tier-0 --color-*/shape scale,
+      the Tier-3 --el-* element layer, the [data-theme='dark'] overrides), and the
+      markup mirrors the SHIPPED primitives — Card (--radius-card + --el-border +
+      --el-card + data-surface="card"), Pill (severity info|success|warning|danger
+      + status planned|done tones — hue in the TINT, --el-text-strong ink, AA-safe
+      per finding #35), Button (primary/secondary/ghost), EmptyState (Card + lucide
+      icon + serif title + --el-text-subtitle desc + action). Every panel is
+      a NEW ARRANGEMENT of these primitives — no new vocabulary invented.
+
+      Model (per the 7.14.2e decision MOTIR-1660): the CodingConvention is DERIVED +
+      AUTO-USED — there is no human approve gate and no free-edit. The convention is
+      READ-ONLY, discoverable on the Code-health page; to change it, the user tells
+      Motir in the universal AI chat via the "Refine with Motir" entry. PER REPO —
+      one convention per (project, repo) pair. The CodeAudit measures EXISTING code
+      against the derived convention and a clean-code baseline where the convention is
+      silent. See design-notes.md for the full spec, the per-element --el-* role map,
+      the copy strings, and the verified mirror (CodeScene CodeHealth™).
+
+      Covers (multi-panel board — review EACH panel, mistake #31):
+        (1) the code-health audit report — health SUMMARY (score/grade + category
+            breakdown, NOT a raw lint dump) + grouped findings list, virtualized.
+            MIGRATE-only (there is code to audit).
+        (2) the READ-ONLY convention per repo — the contentMd as a sectioned document,
+            each rule badged Adopted vs Proposed, with the "Derived from your code ·
+            auto-used" banner and a "Refine with Motir" entry that composes the
+            universal AI chat (PlanWithAILauncher → PlanningWorkspace, per MOTIR-1193 /
+            MOTIR-1299 design/ai-chat).
+        (3) the FRESH (establish-only) + version states — the no-codebase EmptyState,
+            the stack-derived proposal, the version-history affordance, and the
+            "Re-run audit" action.
+        (4) the ACCESS PATH (the door) — the project sidebar rail with the "Code health"
+            entry drawn active + the fresh-project onboarding wizard step, so the reader
+            SEES the door, not just a named route.
+        (5) the "Deepen this audit" scanner affordance — state gallery (unchanged).
+      Toggle dark mode (top-right) to confirm token parity in both themes.
+    -->
+    <style>
+      /* ══════════════════════════════════════════════════════════════════════
+         TOKENS — copied from packages/design-system/theme.css.
+         Tier-0 @theme (the --color-* + shape scale) + Tier-3 --el-* element layer
+         + the [data-theme='dark'] overrides. A mock.html can't @import the package CSS,
+         so the used subset is inlined 1:1 (the same convention as design/ready).
+         ══════════════════════════════════════════════════════════════════════ */
+      :root {
+        /* Tier 0 — colour (light base) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Tier 0 — shape (warm-editorial base) */
+        --radius-sm: 6px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-btn-x: 18px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --transition-duration: 150ms;
+        --active-scale: 0.98;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-success-surface: var(--color-tint-mint);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-overlay-scrim: #00000066;
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-canvas: var(--color-canvas);
+      }
+
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-overlay-scrim: #000000a6;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         Mock chrome (NOT part of the design — just the review page scaffold,
+         mirroring design/ready/ready.mock.html).
+         ══════════════════════════════════════════════════════════════════════ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         SHIPPED-PRIMITIVE mirrors — each class reproduces a components/ui/*
+         primitive's shipped classes/tokens (annotated). No new vocabulary.
+         ══════════════════════════════════════════════════════════════════════ */
+
+      /* Card — packages/design-system/src/components/ui/Card.tsx
+         (rounded --radius-card, border --el-border, p --spacing-card-padding,
+          untinted bg --el-card + data-surface="card"). */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card + .card {
+        margin-top: 12px;
+      }
+
+      /* Button — packages/design-system/src/components/ui/Button.tsx */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      /* Pill — packages/design-system/src/components/ui/Pill.tsx
+         All tones: hue in the TINT background, --el-text-strong ink (AA-safe,
+         finding #35). severity: info|success|warning|danger; status: planned|done. */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+      } /* severity=danger  → Critical */
+      .pill-warning {
+        background: var(--el-tint-peach);
+      } /* severity=warning → High */
+      .pill-info {
+        background: var(--el-tint-sky);
+      } /* severity=info    → Medium */
+      .pill-neutral {
+        /* tone=neutral → Low */
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-adopted {
+        background: var(--el-tint-mint);
+      } /* severity=success → provenance: Adopted */
+      .pill-proposed {
+        background: var(--el-tint-lavender);
+      } /* status=planned  → provenance: Proposed */
+
+      /* neutral count chip (the Pill tone="neutral" count badge) */
+      .count-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-chip-border);
+        white-space: nowrap;
+      }
+
+      /* mono file / symbol reference (--el-text-identifier + --el-code-bg) */
+      .coderef {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        background: var(--el-code-bg);
+        border-radius: var(--radius-control);
+        padding: 1px 6px;
+      }
+      /* convention-rule reference — the audit finding cites the convention section
+         it violates (lavender = the convention identity, matching the Proposed tone) */
+      .conv-ref {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-callout-text);
+        background: var(--el-callout-bg);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+      /* general clean-code finding (convention silent here) — a quiet neutral tag */
+      .base-ref {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        background: var(--el-chip-bg);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+
+      /* section header inside a Card */
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .card-head h2,
+      .card-head h3 {
+        font-family: var(--font-serif);
+        margin: 0;
+      }
+      .card-head h2 {
+        font-size: 20px;
+      }
+      .card-head h3 {
+        font-size: 16px;
+      }
+      .card-head .spacer {
+        flex: 1;
+      }
+      .subtle {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Panel 1 — health summary ──────────────────────────────────────── */
+      .health {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+      }
+      .grade {
+        flex: none;
+        width: 96px;
+        height: 96px;
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-success-surface);
+        color: var(--el-text-strong);
+      }
+      .grade .g-letter {
+        font-family: var(--font-serif);
+        font-size: 40px;
+        line-height: 1;
+      }
+      .grade .g-score {
+        font-size: 12px;
+        margin-top: 2px;
+        color: var(--el-text-secondary);
+      }
+      .health-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .cat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .cat {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-badge);
+        flex: none;
+      }
+      .dot-ok {
+        background: var(--el-success);
+      }
+      .dot-warn {
+        background: var(--el-warning);
+      }
+      .dot-bad {
+        background: var(--el-danger);
+      }
+
+      /* ── Panel 1 — findings list (virtualized) ─────────────────────────── */
+      .group-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 18px 0 8px;
+      }
+      .group-label .eyebrow {
+        color: var(--el-text-secondary);
+      }
+      .findings {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        /* the list VIRTUALIZES — this is the windowed slice (see the count note). */
+        max-height: 360px;
+        overflow: hidden;
+        position: relative;
+        padding-bottom: 6px;
+      }
+      .finding {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+      .finding .sev {
+        flex: none;
+        width: 78px;
+      }
+      .finding .f-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .finding .f-rule {
+        font-size: 14px;
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .finding .f-why {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 3px;
+        line-height: 1.45;
+      }
+      .finding .f-refs {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      /* the fade + count note that annotate the virtualized window */
+      .vfade {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 48px;
+        background: linear-gradient(to bottom, transparent, var(--el-card));
+        pointer-events: none;
+      }
+      .list-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-family: var(--font-mono);
+      }
+      /* review-only annotation (not shipped) — mirrors design/ready's .virt-note */
+      .virt-note {
+        margin-top: 10px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 8px 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        background: transparent;
+      }
+      .virt-note strong {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .virt-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+
+      /* ── Panel 1 — "Deepen this audit" connect-scanner affordance ────────
+         §10.3 external-scanner step (MOTIR-1590 decision) rendered against the
+         backend `noExternalScanner` state (MOTIR-1591). A SECONDARY, dismissible
+         card: it sits INSIDE the audit report, only DEEPENS it, and NEVER blocks
+         reading the report. Quiet --el-surface-soft fill (not the white --el-card)
+         so it reads as an optional aside, distinct from the report cards. */
+      .deepen {
+        position: relative;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card + .deepen {
+        margin-top: 12px;
+      }
+      .deepen-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding-right: 32px; /* clear the dismiss button */
+      }
+      .deepen-head .d-lead {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-accent-on-surface);
+      }
+      .deepen .d-eyebrow {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin-bottom: 3px;
+      }
+      .deepen .d-title {
+        font-family: var(--font-serif);
+        font-size: 16px;
+        color: var(--el-text-strong);
+        margin: 0;
+      }
+      .deepen .d-sub {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 4px 0 0;
+      }
+      /* dismiss — a ghost icon button (--radius-control small affordance) */
+      .deepen-dismiss {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .deepen-dismiss svg {
+        width: 16px;
+        height: 16px;
+      }
+      .bestfit-label {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 16px 0 8px;
+      }
+      .bestfit-label code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      /* the two best-fit tool options */
+      .tool-opts {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .tool {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+      }
+      /* the best-fit (recommended) tool — accent edge + quiet accent-adjacent
+         wash (reuses the current-version highlight pattern: accent-on-surface
+         border + --el-surface-soft). */
+      .tool.tool-rec {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+      }
+      .tool .tool-ico {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .tool-rec .tool-ico {
+        color: var(--el-accent-on-surface);
+      }
+      .tool .tool-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .tool .tool-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .tool .tool-desc {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+        margin-top: 3px;
+      }
+      .tool .tool-action {
+        flex: none;
+        align-self: center;
+      }
+      /* the brand-lavender "Recommended" tag (best-fit for this repo) —
+         --el-callout-* = the brand/convention identity tone. */
+      .tag-rec {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-callout-text);
+        background: var(--el-callout-bg);
+      }
+      /* copy-paste setup guidance — a code block on the code tokens
+         (--el-code-bg / --el-code-text, editor-surface --radius-input). */
+      .setup-code {
+        margin: 10px 0 0;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: var(--el-code-text);
+        background: var(--el-code-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 12px 14px;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .setup-hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 8px 0 0;
+        line-height: 1.45;
+      }
+      .deepen-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+      /* the dismissed state — a quiet one-line re-open link in the report */
+      .deepen-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-link);
+        padding: 10px 0 0;
+      }
+      .deepen-link svg {
+        width: 15px;
+        height: 15px;
+      }
+      /* the connected/deepened confirmation banner (page-state-after-mutation:
+         the report re-audits and shows external findings). */
+      .deepen-done {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-success-surface);
+      }
+      .deepen-done svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-success);
+      }
+      .deepen-done .b-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .deepen-done .b-sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      /* the Tier-2 "external findings ingested" chip on the audit sub-line
+         (auto-detected OR after a connect). */
+      .tier2-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-callout-text);
+        background: var(--el-callout-bg);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+      .tier2-chip svg {
+        width: 12px;
+        height: 12px;
+      }
+      /* re-auditing spinner ring (a plain circular affordance) */
+      .spin {
+        width: 14px;
+        height: 14px;
+        border-radius: var(--radius-badge);
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent-on-surface);
+        flex: none;
+      }
+
+      /* ── Panel 2/3 — the convention document ───────────────────────────── */
+      .banner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+        margin-bottom: 14px;
+      }
+      .banner svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .banner .b-text {
+        flex: 1;
+      }
+      .banner .b-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .banner .b-sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      .banner-proposed {
+        background: var(--el-warning-surface);
+      }
+      .banner-proposed svg {
+        color: var(--el-warning);
+      }
+      .banner-standard {
+        background: var(--el-success-surface);
+      }
+      .banner-standard svg {
+        color: var(--el-success);
+      }
+
+      .doc-section {
+        padding: 14px 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .doc-section:first-of-type {
+        border-top: 0;
+      }
+      .doc-section h4 {
+        font-family: var(--font-serif);
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+      .rule {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 5px 0;
+      }
+      .rule .r-badge {
+        flex: none;
+        width: 84px;
+      }
+      .rule .r-text {
+        flex: 1;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .rule code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* ── Panel 3 — edit + approve ──────────────────────────────────────── */
+      .field-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .textarea {
+        /* Textarea — packages/design-system/src/components/ui/Textarea.tsx
+           (w-full, rounded --radius-input, border --el-input-border, bg --el-page-bg,
+            px/py --spacing-input-*). */
+        width: 100%;
+        min-height: 200px;
+        resize: vertical;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text);
+        white-space: pre-wrap;
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+      .approve-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .approve-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+        max-width: 460px;
+      }
+
+      /* Modal — packages/design-system/src/components/ui/Modal.tsx (Radix dialog).
+         Drawn OPEN over its scrim so the confirm gate is reviewable in the static
+         mock. role="alertdialog" (a destructive-style deliberate confirm). */
+      .modal-stage {
+        position: relative;
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        min-height: 260px;
+        border: 1px dashed var(--el-border-strong);
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+      }
+      .modal {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(28rem, 90%);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      .modal p {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-subtitle);
+        margin: 0 0 8px;
+      }
+      .modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      /* ── Panel 4 — EmptyState + version history ────────────────────────── */
+      /* EmptyState — packages/design-system/src/components/ui/EmptyState.tsx
+         (Card + lucide icon in --el-icon-muted + serif title + --el-text-subtitle
+          description + action). */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .es-icon {
+        color: var(--el-icon-muted);
+        margin-bottom: 16px;
+      }
+      .empty .es-icon svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        color: var(--el-text-subtitle);
+        font-size: 14px;
+        margin: 12px 0 0;
+        max-width: 44ch;
+        line-height: 1.5;
+      }
+      .empty .es-action {
+        margin-top: 16px;
+      }
+      .versions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .version {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        font-size: 13px;
+      }
+      .version.current {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+      }
+      .version .v-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        flex: none;
+        width: 44px;
+      }
+      .version .v-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .version .v-date {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      /* ── MOTIR-2087 · the audit tab's PRE-AUDIT states ────────────────────
+         State cells for the Panel 4b contrast gallery. Colour stays on --el-*,
+         shape on the element-semantic scale; the deriving state is signalled by
+         the shipped .spin ring grammar, never a border-style change. */
+      .state-cell > .eyebrow {
+        margin: 0 0 8px;
+      }
+      .empty .repo-chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 12px;
+      }
+      .empty .es-spin {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-badge);
+        border: 3px solid var(--el-border-strong);
+        border-top-color: var(--el-accent-on-surface);
+        margin-bottom: 16px;
+        flex: none;
+      }
+      .empty p.dur {
+        color: var(--el-text-muted);
+        font-size: 13px;
+        margin: 12px 0 0;
+        max-width: 44ch;
+      }
+      @media (max-width: 720px) {
+        .cols {
+          grid-template-columns: 1fr;
+        }
+      }
+      .access-note {
+        max-width: 1080px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* ── Panel 7 — the MULTI-REPO audit tab (MOTIR-2206) ─────────────────
+         The repo list is a list of shipped ROWS, not a new primitive: the row
+         reuses the `.version` current-row highlight grammar for "selected"
+         (border --el-accent-on-surface + bg --el-surface-soft — the same pair
+         `.version.current` and `.tool-rec` already use), the `.count-pill`
+         chip for counts, `.coderef` mono for the repo name, `.spin` for the
+         deriving ring, and the icon+word state vocabulary design/repository-set
+         §15.6 fixed (colour on the ICON, the WORD carries the meaning). */
+      .rollup {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      .rollup strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .repos {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .repo-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        background: transparent;
+      }
+      .repo-row + .repo-row {
+        border-top-color: var(--el-border-soft);
+      }
+      /* SELECTED — the same highlight `.version.current` / `.tool-rec` use. */
+      .repo-row.sel {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+      }
+      /* Selection is NEVER colour-only: the selected row's name goes semibold. */
+      .repo-row.sel .rr-name {
+        font-weight: 700;
+      }
+      /* --el-text-muted is 4.34:1 on --el-surface-soft — below AA. On the
+         selected row the timestamp steps up to --el-text-secondary. */
+      .repo-row.sel .rr-when {
+        color: var(--el-text-secondary);
+      }
+      .repo-row .octo {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .rr-name {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .rr-grade {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      /* The SHIPPED tone rule, unchanged: AuditPanel's HealthSummary picks the
+         tint by conformance (>=70 mint · >=40 yellow · else peach). The hue is
+         in the TINT background with --el-text-strong ink (finding #35). */
+      .rr-grade.g-good {
+        background: var(--el-tint-mint);
+      }
+      .rr-grade.g-watch {
+        background: var(--el-tint-yellow);
+      }
+      .rr-grade.g-poor {
+        background: var(--el-tint-peach);
+      }
+      .rr-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .rr-state svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .rr-state .i-warn {
+        color: var(--el-warning);
+      }
+      .rr-state .i-danger {
+        color: var(--el-danger);
+      }
+      .rr-fill {
+        flex: 1;
+      }
+      .rr-when {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+      }
+      .rr-cursor {
+        position: relative;
+      }
+      .rr-cursor::after {
+        content: '';
+        position: absolute;
+        right: -13px;
+        top: 50%;
+        width: 11px;
+        height: 11px;
+        border-right: 2px solid var(--el-accent-on-surface);
+        border-bottom: 2px solid var(--el-accent-on-surface);
+        transform: rotate(-45deg);
+      }
+      .anatomy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+      }
+      .anatomy b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+
+      /* ── Panel 5 — access path: the sidebar rail (mirrors components/ui/Sidebar.tsx
+         + app/(authed)/_components/SidebarNav.tsx) so the reader SEES the door ──── */
+      .access-row {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .rail {
+        width: 240px;
+        flex: none;
+        background: var(--el-sidebar-bg);
+        border: 1px solid var(--el-sidebar-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .rail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+      }
+      .rail-head .pj {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: var(--font-serif);
+      }
+      .rail-head .pj-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .rail-head .pj-sub {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .rail-sec {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail hr {
+        border: 0;
+        border-top: 1px solid var(--el-sidebar-border);
+        margin: 0;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+      .nav-item .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .nav-item .lbl {
+        flex: 1;
+        white-space: nowrap;
+      }
+      /* active row = canvas inset into the rail (--el-sidebar-item-bg-active) */
+      .nav-item.active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .nav-item.active .ic {
+        color: var(--el-accent-on-surface);
+      }
+      .nav-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font-sans);
+      }
+      .between-note {
+        flex: 1;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .between-note .pin {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .between-note code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      /* the fresh-project door — the onboarding wizard step strip */
+      .wizard {
+        margin-top: 14px;
+      }
+      .steps {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 12px;
+      }
+      .step {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 12px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+      }
+      .step.done {
+        color: var(--el-text-secondary);
+      }
+      .step.done .s-dot {
+        background: var(--el-success);
+      }
+      .step.current {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-weight: 500;
+        box-shadow: var(--shadow-subtle);
+      }
+      .step.current .s-dot {
+        background: var(--el-accent-on-surface);
+      }
+      .s-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-border-strong);
+        flex: none;
+      }
+      .step-sep {
+        color: var(--el-text-faint);
+        font-size: 12px;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         APP SHELL — the real AppLayout: full-width TopNav (56px) above a
+         [240px rail | scrolling main] grid. So the mock shows the ACTUAL screen
+         (persistent nav + top bar + content), not floating cards.
+         ══════════════════════════════════════════════════════════════════════ */
+      .screen {
+        max-width: 1180px;
+        margin: 0 auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+      }
+      /* TopNav — mirrors app/(authed)/_components/TopNav.tsx */
+      .topbar {
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .tb-left,
+      .tb-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* ShellTierNav — Org › Workspace crumb */
+      .tb-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .tb-crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .tb-crumb .muted {
+        color: var(--el-text-secondary);
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: var(--height-control);
+        min-width: var(--height-control);
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+        border: 1px solid transparent;
+      }
+      .tb-btn svg {
+        width: 17px;
+        height: 17px;
+      }
+      .tb-plan {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .tb-plan svg {
+        width: 15px;
+        height: 15px;
+      }
+      .tb-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      /* the [rail | main] grid */
+      .shell-body {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        min-height: 620px;
+      }
+      .shell-body .rail {
+        border: 0;
+        border-right: 1px solid var(--el-sidebar-border);
+        border-radius: 0;
+        height: auto;
+      }
+      .main {
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .content {
+        padding: 24px 28px 28px;
+      }
+      /* page header — mirrors the shipped serif h1 + subtitle header */
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .page-head .ph-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .page-head h1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head h1 svg {
+        width: 22px;
+        height: 22px;
+        color: var(--el-text-secondary);
+      }
+      .page-head .ph-sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin: 3px 0 0;
+      }
+      /* Segmented tabs — mirrors components/ui/Segmented.tsx */
+      .tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+        margin-bottom: 18px;
+      }
+      .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 14px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        border: 0;
+        background: transparent;
+      }
+      .tab svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-faint);
+      }
+      .tab.active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .tab.active svg {
+        color: var(--el-tabnav-active);
+      }
+      /* a compact "which screen / which tab" context strip for content-only panels */
+      .ctx {
+        max-width: 1080px;
+        margin: 0 auto 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ctx .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+      }
+      .ctx .crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .ctx .crumb .here {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <style>
+      /* ── The audit-coverage banner (MOTIR-2246) ────────────────────────────
+         NO new grammar. This is the shipped `SettingsBanner`
+         (app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx):
+         role="status", --radius-card, --spacing-card-padding inline, py-3,
+         text-sm, and the info tone's --el-callout-bg / --el-callout-text pair.
+         One line. Only the strip that HOSTS it in the planning workspace is
+         new, and that is layout, not decoration. */
+      .wsframe {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-canvas, var(--el-surface));
+      }
+      .wsbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+      }
+      .wsbar .close {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .wsbar .close svg {
+        width: 16px;
+        height: 16px;
+      }
+      .wsbar .proj {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* THE STRIP — the one region both signals share. FULL-BLEED and FLUSH:
+         no padding, so its children span the workspace edge to edge and the
+         first one touches the top bar with no gap. Layout only. */
+      .wsstrip {
+        padding: 0;
+      }
+      .wspanes {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        min-height: 190px;
+      }
+      .wscanvas {
+        padding: 16px;
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .wschat {
+        border-left: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        padding: 16px;
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .ghostbox {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 14px;
+        color: var(--el-text-faint);
+        font-size: 12.5px;
+        text-align: center;
+      }
+      /* The BANNER — SettingsBanner's box, one line, no dismiss. */
+      .cbanner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        /* FULL-BLEED: no radius. This is the ONE deviation from the shipped
+           SettingsBanner box, and it follows from spanning the full width —
+           a rounded corner only reads as a corner when there is margin
+           outside it. Everything else (fill, ink, role, py-3, text-sm) is
+           SettingsBanner's, unchanged. The bottom rule is the same
+           --el-border-soft the workspace top bar already uses. */
+        border-radius: 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        padding: 12px var(--spacing-card-padding);
+        font-size: 14px;
+        background: var(--el-callout-bg);
+        color: var(--el-callout-text);
+      }
+      .cbanner svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .cbanner .msg {
+        min-width: 0;
+      }
+      .cbanner .msg strong {
+        font-weight: 600;
+      }
+      .cbanner .fill {
+        flex: 1;
+      }
+      .cbanner a {
+        color: var(--el-callout-text);
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        white-space: nowrap;
+      }
+      /* MOTIR-1764's sibling element, drawn only as the quiet status line it is. */
+      .fresh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        padding: 8px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+        margin: 0;
+      }
+    </style>
+
+    <div class="panel-label">
+      Panel 1 · The AUDIT-COVERAGE BANNER on /planning — one line, never blocking, admin-only, and
+      its entrance into /code-health (MOTIR-2246)
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </svg>
+        Planning workspace <span class="sep">›</span>
+        <span class="here">the strip above the panes</span>
+      </span>
+      <span
+        >— the workspace frame below is the SHIPPED two-pane layout, drawn only far enough to place
+        the banner. Its canvas, rail and composer are not redrawn.</span
+      >
+    </div>
+    <div class="panel">
+      <p class="subtle" style="margin: 0 0 14px">
+        A project can carry a repository Motir has never assessed, and the only place that fact is
+        written down is a row on a page nobody has a reason to open. This is the telling. It renders
+        on <code class="coderef">/planning</code> because that is where the consequence lands: the
+        planner reads a repo's convention and audit when it decomposes work, so an un-audited repo
+        is one the next plan reasons about without its recorded standards.
+        <strong
+          >It is ONE LINE, it never blocks the plan, and it is present every time the condition
+          holds.</strong
+        >
+      </p>
+
+      <!-- ── A — the banner, in situ ─────────────────────────────────────── -->
+      <div class="eyebrow" style="margin: 4px 0 10px">
+        A · ≥1 connected repo with no audit, viewer IS a project admin — the banner in its host
+      </div>
+
+      <div class="wsframe">
+        <div class="wsbar">
+          <span class="close">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+            Close
+          </span>
+          <span class="proj">Motir</span>
+        </div>
+        <div class="wsstrip">
+          <div class="cbanner" role="status">
+            <!-- lucide: folder-git-2 — the SAME glyph the not-audited ROW uses
+                 on /code-health, so the signal and its destination match. -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+              />
+              <circle cx="13" cy="12" r="2" />
+              <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+              <circle cx="20" cy="19" r="2" />
+            </svg>
+            <span class="msg"
+              ><strong>2 repositories have no code-health audit.</strong> Plans that touch them are
+              made without their recorded standards.</span
+            >
+            <span class="fill"></span>
+            <a href="#">Review code health</a>
+          </div>
+        </div>
+        <div class="wspanes">
+          <div class="wscanvas">
+            <div class="ghostbox">
+              the shipped planning CANVAS — <code class="coderef">PlanChangeCanvas</code>, not
+              redrawn here · <strong>fully usable, the banner takes one line above it</strong>
+            </div>
+          </div>
+          <div class="wschat">
+            <div class="ghostbox">the shipped conversation pane — not redrawn here</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="setup-hint" style="margin: 12px 0 0">
+        <strong>One line, FULL-BLEED, and that is the whole non-blocking mechanism.</strong> It is
+        the shipped <code class="coderef">SettingsBanner</code> —
+        <code class="coderef">role="status"</code>,
+        <code class="coderef">--el-callout-bg</code> fill, <code class="coderef">py-3</code>,
+        <code class="coderef">text-sm</code> — spanning the workspace edge to edge and sitting FLUSH
+        against the top bar, with no gutter and no gap. It costs a MEASURED
+        <strong>41 px</strong> (one text line plus its bottom rule) and nothing else. There is no
+        heading, no repo list, no card, no glyph column: a person who does not care reads past it in
+        one glance and keeps planning, which is what makes a dismiss unnecessary rather than merely
+        optional.
+      </p>
+
+      <p class="setup-hint" style="margin: 10px 0 0">
+        <strong>The strip is between the workspace's top bar and its panes</strong> —
+        <code class="coderef">PlanningWorkspaceHost</code>'s canvas column already has exactly this
+        seam (the <code class="coderef">Close · project name</code> bar, then a
+        <code class="coderef">min-h-0 flex-1</code> canvas). Full-width above BOTH panes rather than
+        inside the canvas, so it never scrolls away with the tree and never narrows the
+        conversation. <strong>It is full-bleed and flush</strong>: no gutter either side, no gap
+        above, square corners, and a <code class="coderef">--el-border-soft</code> bottom rule — the
+        SAME rule the top bar already draws, so the banner reads as one more band of workspace
+        chrome rather than a floating object placed on the plan.
+        <strong>The ONE deviation from <code class="coderef">SettingsBanner</code></strong> is the
+        dropped <code class="coderef">--radius-card</code>, which follows from the full bleed: a
+        rounded corner only reads as a corner when there is margin outside it.
+      </p>
+
+      <!-- ── B — always present ──────────────────────────────────────────── -->
+      <div class="eyebrow" style="margin: 18px 0 10px">
+        B · NO DISMISS · it is present EVERY time the workspace opens, until the audits exist
+      </div>
+
+      <div class="card">
+        <p class="setup-hint" style="margin: 0">
+          <strong>There is no × and no dismissed state.</strong> The banner renders on every visit
+          to <code class="coderef">/planning</code> for as long as a connected repository has no
+          audit, and it disappears the moment that stops being true — because the condition, not a
+          preference, is what it reads. <strong>The remedy IS the dismissal:</strong> audit the
+          repositories and the banner is gone; that is one click away, in the link it already
+          carries.
+        </p>
+        <div class="anatomy" style="margin-top: 10px">
+          <span
+            ><b>Why a dismiss would be wrong here, not merely unnecessary.</b> A dismiss on a
+            SELF-CLEARING signal only ever hides a true statement. The state it would persist —
+            &ldquo;this person has seen it&rdquo; — has no bearing on whether the plans being made
+            right now are being made without the repository's recorded standards, which is the fact
+            the line reports.</span
+          >
+          <span
+            ><b>And it removes a whole class of bug.</b> A persisted dismissal keyed on anything
+            coarser than the exact repo set would silence a DIFFERENT problem later: connect a new
+            repository next month and the banner about IT is suppressed by a click from today. That
+            is precisely the complexity <code class="coderef">ExpansionNudgeBanner</code>'s
+            state-derived <code class="coderef">localStorage</code> key exists to manage. With no
+            dismiss, none of it is built and none of it can go wrong.</span
+          >
+          <span
+            ><b>Its non-blockingness is SIZE, not dismissibility.</b> The reason a person may ignore
+            it is that it is one quiet line above the work — not that they are given a control to
+            make it go away. Panel A is what enforces that: any growth in this banner's height is a
+            regression against this decision.</span
+          >
+        </div>
+      </div>
+
+      <!-- ── C — the two absences ────────────────────────────────────────── -->
+      <div class="eyebrow" style="margin: 18px 0 10px">
+        C · NOTHING RENDERS — zero un-audited repos, or the viewer is not a project admin. The
+        absence is drawn, so it is specified rather than incidental.
+      </div>
+
+      <div class="cols">
+        <div>
+          <p class="eyebrow" style="margin: 0 0 8px">C1 · every repo has a report</p>
+          <div class="wsframe">
+            <div class="wsbar">
+              <span class="close">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+                Close
+              </span>
+              <span class="proj">Motir</span>
+            </div>
+            <div class="wspanes" style="min-height: 150px">
+              <div class="wscanvas">
+                <div class="ghostbox">canvas — no strip at all, no reserved gap</div>
+              </div>
+              <div class="wschat">
+                <div class="ghostbox">conversation</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow" style="margin: 0 0 8px">
+            C2 · a project MEMBER, with 2 repos un-audited
+          </p>
+          <div class="wsframe">
+            <div class="wsbar">
+              <span class="close">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+                Close
+              </span>
+              <span class="proj">Motir</span>
+            </div>
+            <div class="wspanes" style="min-height: 150px">
+              <div class="wscanvas">
+                <div class="ghostbox">
+                  identical to C1 — a member sees NO banner and no hint one exists
+                </div>
+              </div>
+              <div class="wschat">
+                <div class="ghostbox">conversation</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="setup-hint" style="margin: 12px 0 0">
+        <strong>Admin-only is a RULE, not an implication.</strong> The remedy behind this banner —
+        <code class="coderef">reaudit</code> — is gated by
+        <code class="coderef">projectAccessService.assertCanManage</code>, so a banner shown to a
+        member is an invitation to a 403: it names a problem, offers a door, and the door is locked.
+        <strong>A non-admin sees nothing at all</strong> — not a disabled link, not a read-only
+        variant. C2 is drawn IDENTICAL to C1 for exactly that reason. The client gate already exists
+        as <code class="coderef">useProjectAccess().canManage</code>, and the read behind the count
+        carries the same gate on the SERVER, so the capability is never enforced only in a
+        component.
+      </p>
+
+      <!-- ── D — the shared region ───────────────────────────────────────── -->
+      <div class="eyebrow" style="margin: 18px 0 10px">
+        D · BOTH SIGNALS · the strip is shared with MOTIR-1764's code-context element — and the
+        overlap is much smaller than it looks
+      </div>
+
+      <div class="wsframe">
+        <div class="wsbar">
+          <span class="close">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+            Close
+          </span>
+          <span class="proj">Motir</span>
+        </div>
+        <div class="wsstrip">
+          <p class="fresh">
+            <span class="count-pill">MOTIR-1764's element</span> 5 repositories indexed · newest
+            <code class="coderef">a3f19c2</code>, 4 minutes ago — a quiet STATUS line, not a banner
+          </p>
+          <div class="cbanner" role="status">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+              />
+              <circle cx="13" cy="12" r="2" />
+              <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+              <circle cx="20" cy="19" r="2" />
+            </svg>
+            <span class="msg"
+              ><strong>2 repositories have no code-health audit.</strong> Plans that touch them are
+              made without their recorded standards.</span
+            >
+            <span class="fill"></span>
+            <a href="#">Review code health</a>
+          </div>
+        </div>
+        <div class="wspanes">
+          <div class="wscanvas">
+            <div class="ghostbox">canvas — still the whole pane</div>
+          </div>
+          <div class="wschat">
+            <div class="ghostbox">conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="setup-hint" style="margin: 12px 0 0">
+        <strong
+          >Three of MOTIR-1764's five states can NEVER co-occur with this banner — they are
+          logically exclusive, not merely unlikely.</strong
+        >
+        Its states <strong>A</strong> (no repo connected, work shipped), <strong>B</strong> (no repo
+        connected, nothing shipped) and <strong>E</strong> (planning without code context) all
+        require <em>zero connected repositories</em>; this banner requires
+        <em>at least one connected repository with no audit</em>. You cannot have both. So the whole
+        &ldquo;two stacked banners&rdquo; worry reduces to ONE case: MOTIR-1764's
+        <strong>C / D</strong> (connected + current, connected but stale) beside this line — a repo
+        can be indexed, current, and never assessed. There, C/D is a <em>status line</em> and this
+        is the one <em>banner</em>:
+        <strong
+          >at most ONE banner in the strip at a time, and the strip's total height stays one banner
+          plus one status line.</strong
+        >
+      </p>
+    </div>
+  </body>
+</html>
