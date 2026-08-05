@@ -325,6 +325,11 @@ export interface JobEventDataMap {
   'system.filter-subscription-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
+  /** The code-graph OFFBOARDING sweep (Story MOTIR-2192 · MOTIR-2168) — drains
+   *  due `code_graph_offboarding` rows through motir-ai's offboard seam, which is
+   *  what makes §14's retention window real. Cron triggered, so it carries no
+   *  payload beyond the scheduled envelope. */
+  'system.code-graph-offboard-sweep': SystemScheduledData;
   /** Monthly CI-minutes reconciliation (Story MOTIR-1775 · MOTIR-1896) — cron
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.ci-minutes-reconcile': SystemScheduledData;

@@ -675,6 +675,80 @@ export async function mintCodeGraphRunCredential(input: {
   return { credential: body.credential, expiresAt: body.expiresAt };
 }
 
+/** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
+export interface CodeGraphOffboardRepoResult {
+  repoRef: string;
+  snapshotObjectsDeleted: number;
+  localRootRemoved: boolean;
+  coordinationRowsDeleted: number;
+}
+
+/** What one offboard call removed, per repo and in total. */
+export interface CodeGraphOffboardResult {
+  /** False when motir-ai has no `AiProject` for these ids — a success, not a 404. */
+  projectFound: boolean;
+  repos: CodeGraphOffboardRepoResult[];
+  snapshotObjectsDeleted: number;
+  localRootsRemoved: number;
+  coordinationRowsDeleted: number;
+}
+
+/**
+ * REMOVE a tenant's derived code graph (MOTIR-2168 ·
+ * `docs/decisions/code-graph-index-fleet.md` §14.5) — the wire between
+ * motir-core's offboarding queue and the three deletions motir-ai performs
+ * (snapshot → local root → coordination row).
+ *
+ * Omit `repoRef` to cover EVERY repo of the project (the project-archive and
+ * workspace-delete arms); supply it for one (the repo-disconnect arm).
+ *
+ * JSON only, under the single {@link MOTIR_AI_REQUEST_TIMEOUT_MS} deadline like
+ * every other method here — §11's MOTIR-2138 amendment. It posts a scope and
+ * reads counts; it must never grow a byte body or a deadline of its own.
+ *
+ * ⚠️ It does NOT treat "nothing was there" as a failure. motir-ai answers 200
+ * with zero counts for an unknown project or an unindexed repo, and the SWEEP
+ * depends on that: its queue rows deliberately outlive the projects they name, so
+ * "not here" is the expected steady state on a re-run. Only a real transport or
+ * server failure throws, which is what leaves the row due for the next tick.
+ */
+export async function offboardCodeGraph(input: {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoRef?: string;
+}): Promise<CodeGraphOffboardResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/code-graph/offboard`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({
+      coreWorkspaceId: input.coreWorkspaceId,
+      coreProjectId: input.coreProjectId,
+      ...(input.repoRef === undefined ? {} : { repoRef: input.repoRef }),
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+
+  // VALIDATED, not cast — the same reasoning as `mintCodeGraphRunCredential`, for
+  // a different consequence. This value decides whether the sweep DELETES its
+  // queue row. A response that parsed but carried no counts would read as a
+  // successful removal and retire the only record that anything was owed, turning
+  // a malformed reply into permanent retention with nothing left to retry.
+  const body = (await res.json()) as Partial<CodeGraphOffboardResult> | null;
+  if (!body || typeof body.coordinationRowsDeleted !== 'number' || !Array.isArray(body.repos)) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned no offboarding counts from POST /v1/code-graph/offboard',
+    );
+  }
+  return {
+    projectFound: body.projectFound === true,
+    repos: body.repos as CodeGraphOffboardRepoResult[],
+    snapshotObjectsDeleted: body.snapshotObjectsDeleted ?? 0,
+    localRootsRemoved: body.localRootsRemoved ?? 0,
+    coordinationRowsDeleted: body.coordinationRowsDeleted,
+  };
+}
+
 // ⚠️ THE BYTE-UPLOAD METHOD IS GONE, AND MUST NOT COME BACK (MOTIR-2138). This
 // client used to carry the boundary's ONE binary method — a POST of a repo's raw
 // gzipped tarball to motir-ai's ingest route (MOTIR-1500), under a 180 s deadline

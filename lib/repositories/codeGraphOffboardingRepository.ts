@@ -95,6 +95,18 @@ export const codeGraphOffboardingRepository = {
     });
   },
 
+  /**
+   * How many rows are due — what the sweep reports as REMAINING after a capped
+   * tick (MOTIR-2168).
+   *
+   * Counted from the database rather than inferred from the batch, so a row that
+   * came due mid-tick is included: the queue depth is the honest signal, and a
+   * silent cap is how a backlog becomes invisible.
+   */
+  async countDue(now: Date, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.codeGraphOffboarding.count({ where: { dueAt: { lte: now } } });
+  },
+
   /** Delete one row by id — how the sweep retires a removal motir-ai confirmed. */
   async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
     const result = await tx.codeGraphOffboarding.deleteMany({ where: { id } });

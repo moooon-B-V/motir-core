@@ -624,6 +624,11 @@ export default defineConfig({
         'lib/codeGraph/offboarding.ts',
         'lib/repositories/codeGraphOffboardingRepository.ts',
         'lib/services/codeGraphOffboardingService.ts',
+        // Subtask MOTIR-2168 — the SWEEP that drains the queue through motir-ai.
+        // The smallest of the three cards and the one that decides whether §14 is
+        // real: an endpoint nobody calls and a queue nobody reads are both green.
+        'lib/services/codeGraphOffboardSweepService.ts',
+        'lib/jobs/definitions/codeGraphOffboardSweep.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -646,6 +651,17 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/codeGraphOffboardingService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask MOTIR-2168 — the sweep.
+        'lib/services/codeGraphOffboardSweepService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/jobs/definitions/codeGraphOffboardSweep.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story 11.3 · Subtask 11.3.10 — the planning resources.
         'lib/api/v1/projects/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/sprints/schema.ts': { branches: 90, functions: 90, lines: 90 },
