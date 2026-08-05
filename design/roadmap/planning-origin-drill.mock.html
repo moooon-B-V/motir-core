@@ -1,0 +1,2251 @@
+<!doctype html>
+<!--
+  ROADMAP — the PLANNING PHASE CARD DRILLS INTO THE PRE-PLAN STATIONS (MOTIR-2204 /
+  Story MOTIR-1755).
+
+  An AMENDMENT to the shipped `design/roadmap/` asset set. It gives the shipped
+  `PlanningOriginCluster` (MOTIR-1013) the one thing it lacks: a way to REACH the
+  direction docs it advertises. The path is two hops, and BOTH already ship:
+
+    level 0  select the phase card -> the canvas's own "Open >" pill -> DRILL
+    level 1  the onboarding StationCards -> select -> the canvas's "View" -> the doc
+
+  Nothing here redraws the canvas (`roadmap.mock.html`), the station card
+  (`components/onboarding/StationNode.tsx`), the tier-doc modal
+  (`detail-surfaces.mock.html` panel 4), the direction-doc full page (panel 5) or
+  `DirectionDocView` — every one of those is shipped and CITED, never re-specified
+  (notes.html #82 / #95). The phase card and the station cards below MIRROR their
+  shipped markup class-for-class; the only NEW pixels are which stations the drilled
+  level holds and what the phase card's badge is allowed to assert.
+
+  Built from the real design system: the `:root` token block is GENERATED verbatim
+  from `packages/design-system/theme.css` and the icon defs from `lucide-react`'s
+  `__iconNode` — no retyped hex, no drawn path, no invented colour.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — the planning card drills into the pre-plan stations (MOTIR-2204)</title>
+    <style>
+      /* GENERATED from packages/design-system/theme.css — do not hand-edit values. */
+
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+
+      [data-theme='dark'],
+      [data-theme='dark'] [data-appearance-scope] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font: 14px/1.5 var(--font-sans);
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      p.docsub code,
+      .note code,
+      td code,
+      th code,
+      .callout code,
+      .step code,
+      .cap2 code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead .n {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+      }
+      .body {
+        padding: 20px;
+      }
+      .note {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin: 0 0 14px;
+        max-width: 78ch;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .cap2 {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 14px 0 0;
+        max-width: 90ch;
+      }
+      .cap2 b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── the canvas board (COMPOSED — the shipped ProjectRoadmapCanvas) ── */
+      .canvas {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow: hidden;
+        padding: 26px 26px 34px;
+      }
+      .canvas .row {
+        display: flex;
+        align-items: flex-start;
+        gap: 44px;
+      }
+      .epic {
+        width: 210px;
+        height: 96px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .epic .kid {
+        font-size: 11px;
+        color: var(--el-text-faint);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .epic .ttl {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.35;
+      }
+      .epic .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-rose);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* the canvas's SELECTED-node ring + its action slot (ProjectRoadmapCanvas) */
+      .selwrap {
+        position: relative;
+        border-radius: var(--radius-card);
+      }
+      .selwrap.is-selected {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 2px;
+      }
+      .actions {
+        position: absolute;
+        bottom: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .actbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-btn);
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: var(--shadow-card);
+      }
+      .actbtn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .actbtn--view {
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .actbtn--open {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* the breadcrumb + Back overlay (ProjectRoadmapCanvas, shipped) */
+      .crumbbar {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin-bottom: 22px;
+      }
+      .crumbbar svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-muted);
+      }
+      .crumbbar .cur {
+        color: var(--el-text);
+      }
+
+      /* ══ THE PHASE CARD — PlanningOriginCluster.tsx, mirrored ══ */
+      .origin {
+        width: 360px;
+        height: 124px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 14px; /* p-3.5 */
+        box-shadow: var(--shadow-card);
+      }
+      .origin .ohead {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 8px;
+        min-height: 20px;
+      }
+      .origin .okicker {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        text-transform: uppercase;
+      }
+      .ochip {
+        margin-left: auto;
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      /* the NEUTRAL count / no-docs chip — the `Pill` tone="neutral" recipe */
+      .ochip.neutral {
+        background: var(--el-chip-bg);
+        border-color: var(--el-chip-border);
+        color: var(--el-text-secondary);
+      }
+      .ochip svg {
+        width: 12px;
+        height: 12px;
+      }
+      .origin .ostages {
+        margin-top: 6px; /* mt-1.5 */
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+      }
+      .ogroup {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 4px;
+      }
+      .oarrow {
+        width: 12px;
+        height: 12px;
+        flex-shrink: 0;
+        color: var(--el-text-faint);
+      }
+      .ms {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .ms .tile {
+        position: relative;
+        display: flex;
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-mint);
+        border: 1px solid transparent;
+      }
+      .ms .tile svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-strong);
+      }
+      .ms .chk {
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        display: flex;
+        width: 14px;
+        height: 14px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .ms .chk svg {
+        width: 10px;
+        height: 10px;
+        color: var(--el-accent-text);
+      }
+      .ms .lbl {
+        max-width: 100%;
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      /* a stage whose tier produced no document — no hue, no check, plate stays */
+      .ms.absent .tile {
+        background: var(--el-chip-bg);
+        border-color: var(--el-chip-border);
+      }
+      .ms.absent .tile svg {
+        color: var(--el-icon-muted);
+      }
+
+      /* ══ THE STATION CARD — components/onboarding/StationNode.tsx, mirrored ══ */
+      .st {
+        width: 300px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        padding: 12px; /* p-3 — a canvas node reads tighter than a page card */
+      }
+      .st.upcoming {
+        box-shadow: none;
+        opacity: 0.8;
+      }
+      .st-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .st-tile {
+        display: flex;
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+      }
+      .st-tile svg {
+        width: 18px;
+        height: 18px;
+      }
+      .t-discovery {
+        background: var(--el-station-tier-discovery);
+        color: var(--el-info);
+      }
+      .t-vision {
+        background: var(--el-station-tier-vision);
+        color: var(--el-accent-on-surface);
+      }
+      .t-feasibility {
+        background: var(--el-station-tier-feasibility);
+        color: var(--el-success);
+      }
+      .t-validation {
+        background: var(--el-station-tier-validation);
+        color: var(--el-warning);
+      }
+      .st-main {
+        min-width: 0;
+        flex: 1;
+      }
+      .st-title {
+        display: block;
+        font-size: 14px;
+        line-height: 1.375;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .st-sub {
+        margin-top: 2px;
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .st-cap {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 10px;
+      }
+      .st-cap .row2 {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .st-cap .row2 svg {
+        margin-top: 2px;
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        color: var(--el-success);
+      }
+      .st-cap .row2 b {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .st-foot {
+        margin-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .st-pill {
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .st-pill svg {
+        width: 14px;
+        height: 14px;
+      }
+      .canskip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        margin-bottom: 6px;
+      }
+      /* the canvas's `flow` edge between stations (drawn, NOT a dependency) */
+      .flowedge {
+        align-self: center;
+        display: flex;
+        align-items: center;
+        color: var(--el-text-faint);
+        padding: 0 10px;
+      }
+      .flowedge svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ── citation card (a SHIPPED surface, referenced not redrawn) ── */
+      .chain {
+        display: flex;
+        align-items: stretch;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .cite {
+        flex: 1 1 190px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .cite h4 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .cite p {
+        margin: 0;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .cite .src {
+        margin-top: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+        word-break: break-word;
+      }
+      .shipmark,
+      .newmark {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        color: var(--el-text-strong);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 10.5px;
+        font-weight: 600;
+      }
+      .shipmark {
+        background: var(--el-tint-sky);
+      }
+      .newmark {
+        background: var(--el-tint-lavender);
+      }
+      .arrowbox {
+        display: flex;
+        align-items: center;
+        color: var(--el-text-faint);
+      }
+      .arrowbox svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      /* ── tables ── */
+      table.spec-t {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+      }
+      table.spec-t th,
+      table.spec-t td {
+        border: 1px solid var(--el-border);
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      table.spec-t th {
+        background: var(--el-surface-soft);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      table.spec-t td {
+        color: var(--el-text-secondary);
+      }
+      table.spec-t td b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── callout ── */
+      .callout {
+        display: flex;
+        gap: 10px;
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-warning);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+        margin-top: 14px;
+      }
+      .callout b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── the compact app-shell repro (the ENTRANCE) ── */
+      .shell {
+        display: flex;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        width: 176px;
+        flex-shrink: 0;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-border);
+        padding: 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail .item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .rail .item svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-muted);
+      }
+      .rail .item.on {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .main {
+        flex: 1;
+        min-width: 0;
+        padding: 16px 18px 18px;
+      }
+      .main h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 2px;
+        color: var(--el-text);
+      }
+      .main .sub {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin: 0 0 12px;
+      }
+
+      /* ── the honest states, side by side ── */
+      .states {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .statecol {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .statecol .sname {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+
+      /* ── keyboard path ── */
+      kbd {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-kbd);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-muted);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+      }
+      .kbrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .step {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 10px 12px;
+        font-size: 11.5px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        width: 238px;
+      }
+      .step b {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--el-text-strong);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-lightbulb"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6" />
+          <path d="M10 22h4" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-search"
+          viewBox="0 0 24 24"
+        >
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-shapes"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"
+          />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <circle cx="17.5" cy="17.5" r="3.5" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-shield"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-list-checks"
+          viewBox="0 0 24 24"
+        >
+          <path d="M13 5h8" />
+          <path d="M13 12h8" />
+          <path d="M13 19h8" />
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-network"
+          viewBox="0 0 24 24"
+        >
+          <rect x="16" y="16" width="6" height="6" rx="1" />
+          <rect x="2" y="16" width="6" height="6" rx="1" />
+          <rect x="9" y="2" width="6" height="6" rx="1" />
+          <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+          <path d="M12 12V8" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-check"
+          viewBox="0 0 24 24"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-arrow-right"
+          viewBox="0 0 24 24"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-arrow-up-right"
+          viewBox="0 0 24 24"
+        >
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-eye"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-chevron-right"
+          viewBox="0 0 24 24"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-chevron-left"
+          viewBox="0 0 24 24"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-palette"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
+          />
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <symbol
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          id="i-map-pin"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+          />
+          <circle cx="12" cy="10" r="3" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <h1 class="docttl">Roadmap — the planning card DRILLS into the pre-plan stations</h1>
+    <p class="docsub">
+      MOTIR-2204 · amends <code>design/roadmap/</code> · built by MOTIR-2205. Two hops, both of them
+      shipped canvas grammar: <b>select the phase card → Open › → drill</b>, then
+      <b>select a station → View → the doc</b>. The station cards, the tier-doc modal and the
+      direction-doc page are the shipped ones — composed, never redrawn.
+    </p>
+
+    <!-- ══════════════ PANEL A — level 0 ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">A</span>
+        <b>Level 0 — the planning phase card becomes a DRILLABLE node</b>
+        <span class="cap">/roadmap · scope = Whole project · the shipped canvas</span>
+      </div>
+      <div class="body">
+        <p class="note">
+          <b>The door into this surface is unchanged:</b> the <b>Roadmap</b> primary left-nav entry
+          (MOTIR-1011) with the scope toggle on <b>Whole project</b> — the card is omitted in sprint
+          scope. The card itself keeps every pixel it has today: same <b>360 × 124</b> box, same
+          fixed position left of the first epic row, same five summary tiles, and — also unchanged —
+          <b>no dependency edge</b> into the epics. The one change is that it now <b>drills</b>: on
+          select it surfaces the canvas's own <b>Open ›</b> pill, exactly as the epic beside it
+          does.
+        </p>
+        <div class="shell">
+          <div class="rail">
+            <div class="item">
+              <svg><use href="#i-list-checks" /></svg>Items
+            </div>
+            <div class="item on">
+              <svg><use href="#i-network" /></svg>Roadmap
+            </div>
+            <div class="item">
+              <svg><use href="#i-shapes" /></svg>Board
+            </div>
+          </div>
+          <div class="main">
+            <h2>Roadmap</h2>
+            <p class="sub">Motir — whole project</p>
+            <div class="canvas">
+              <div class="row">
+                <div class="selwrap is-selected">
+                  <div class="origin">
+                    <div class="ohead">
+                      <span class="okicker">Planning</span>
+                      <span class="ochip"
+                        ><svg><use href="#i-check" /></svg>Complete</span
+                      >
+                    </div>
+                    <div class="ostages">
+                      <div class="ogroup">
+                        <span class="ms">
+                          <span class="tile"
+                            ><svg><use href="#i-lightbulb" /></svg>
+                            <span class="chk"
+                              ><svg><use href="#i-check" /></svg
+                            ></span>
+                          </span>
+                          <span class="lbl">Idea</span>
+                        </span>
+                        <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                      </div>
+                      <div class="ogroup">
+                        <span class="ms">
+                          <span class="tile"
+                            ><svg><use href="#i-search" /></svg>
+                            <span class="chk"
+                              ><svg><use href="#i-check" /></svg
+                            ></span>
+                          </span>
+                          <span class="lbl">Discover</span>
+                        </span>
+                        <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                      </div>
+                      <div class="ogroup">
+                        <span class="ms">
+                          <span class="tile"
+                            ><svg><use href="#i-shapes" /></svg>
+                            <span class="chk"
+                              ><svg><use href="#i-check" /></svg
+                            ></span>
+                          </span>
+                          <span class="lbl">Shape</span>
+                        </span>
+                        <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                      </div>
+                      <div class="ogroup">
+                        <span class="ms">
+                          <span class="tile"
+                            ><svg><use href="#i-list-checks" /></svg>
+                            <span class="chk"
+                              ><svg><use href="#i-check" /></svg
+                            ></span>
+                          </span>
+                          <span class="lbl">Validate</span>
+                        </span>
+                        <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                      </div>
+                      <div class="ogroup">
+                        <span class="ms">
+                          <span class="tile"
+                            ><svg><use href="#i-network" /></svg>
+                            <span class="chk"
+                              ><svg><use href="#i-check" /></svg
+                            ></span>
+                          </span>
+                          <span class="lbl">Plan</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <span class="actbtn actbtn--open"
+                      >Open<svg><use href="#i-chevron-right" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="epic">
+                  <span class="tile"
+                    ><svg><use href="#i-shapes" /></svg
+                  ></span>
+                  <span class="kid">MOTIR-464</span>
+                  <span class="ttl">Epic 7: AI Planning Layer</span>
+                </div>
+                <div class="epic">
+                  <span class="tile"
+                    ><svg><use href="#i-shapes" /></svg
+                  ></span>
+                  <span class="kid">MOTIR-465</span>
+                  <span class="ttl">Epic 8: Collaboration</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cap2">
+          <b>Selected (the phase card).</b> <b>Open ›</b> drills to the station level (panel B).
+          There is no <b>View</b> button beside it: the card has no detail peek of its own — its
+          detail IS the level below it.
+        </p>
+        <div class="callout">
+          <div>
+            <b>The node stays <code>decorative</code>.</b> Drillable and decorative are independent
+            axes: <code>ProjectRoadmapCanvas</code>'s auto-descend counts
+            <code>lvl.nodes.filter((n) =&gt; n.decorative !== true)</code>, the MOTIR-1824 rule that
+            provenance drawn beside the road is not a branch in it. Giving the card a drill path
+            must not make it a branch, or an onboarded single-epic project stops auto-descending
+            exactly as it did before that bug was fixed.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL B — level 1 ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">B</span>
+        <b>Level 1 — the drilled station level: the SHIPPED onboarding station cards</b>
+        <span class="cap">breadcrumb + Back are the canvas's own chrome</span>
+      </div>
+      <div class="body">
+        <p class="note">
+          The drill lands on a synthetic level holding the <b>same <code>StationCard</code></b> the
+          onboarding canvas draws (<code>components/onboarding/StationNode.tsx</code>) — same tier
+          tile and per-tier accent from <code>TIER_META</code>, same plain-language title, same
+          captured-findings rows, same <b>Reviewed</b> pill. They are joined by the canvas's
+          <code>kind: 'flow'</code> edges: drawn as sequence, and deliberately NOT counted toward
+          the Dependencies legend. Selecting one surfaces the canvas's shipped <b>View</b> button —
+          this is <code>detail-surfaces.mock.html</code> panel 3 applied verbatim, now on cards the
+          size that grammar was drawn for.
+        </p>
+        <div class="canvas">
+          <div class="crumbbar">
+            <svg><use href="#i-chevron-left" /></svg>
+            Roadmap
+            <svg style="width: 12px; height: 12px"><use href="#i-chevron-right" /></svg>
+            <span class="cur">Planning</span>
+          </div>
+          <div class="row" style="gap: 0">
+            <div class="selwrap is-selected">
+              <div class="st">
+                <div class="st-head">
+                  <span class="st-tile t-discovery"
+                    ><svg><use href="#i-search" /></svg
+                  ></span>
+                  <div class="st-main">
+                    <span class="st-title">Understanding your project</span>
+                    <span class="st-sub">what · who · competitors</span>
+                  </div>
+                </div>
+                <div class="st-cap">
+                  <div class="row2">
+                    <svg><use href="#i-check" /></svg><span><b>What</b> — an AI planning tool</span>
+                  </div>
+                  <div class="row2">
+                    <svg><use href="#i-check" /></svg><span><b>Who</b> — small startup teams</span>
+                  </div>
+                </div>
+                <div class="st-foot">
+                  <span class="st-pill"
+                    ><svg><use href="#i-check" /></svg>Reviewed</span
+                  >
+                </div>
+              </div>
+              <div class="actions">
+                <span class="actbtn actbtn--view"
+                  ><svg><use href="#i-eye" /></svg>View</span
+                >
+              </div>
+            </div>
+            <div class="flowedge">
+              <svg><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="st">
+              <div class="st-head">
+                <span class="st-tile t-vision"
+                  ><svg><use href="#i-shapes" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">What we'll build</span>
+                  <span class="st-sub">scope · key decisions</span>
+                </div>
+              </div>
+              <div class="st-cap">
+                <div class="row2">
+                  <svg><use href="#i-check" /></svg><span><b>In v1</b> — plan → board → agent</span>
+                </div>
+              </div>
+              <div class="st-foot">
+                <span class="st-pill"
+                  ><svg><use href="#i-check" /></svg>Reviewed</span
+                >
+              </div>
+            </div>
+            <div class="flowedge">
+              <svg><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="st">
+              <div class="st-head">
+                <span class="st-tile t-feasibility"
+                  ><svg><use href="#i-shield" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">Is it worth building?</span>
+                  <span class="st-sub">market · build risk</span>
+                </div>
+              </div>
+              <div class="st-cap">
+                <div class="row2">
+                  <svg><use href="#i-check" /></svg><span><b>Build risk</b> — moderate</span>
+                </div>
+              </div>
+              <div class="st-foot">
+                <span class="st-pill"
+                  ><svg><use href="#i-check" /></svg>Reviewed</span
+                >
+              </div>
+            </div>
+            <div class="flowedge">
+              <svg><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="st upcoming">
+              <span class="canskip">can skip</span>
+              <div class="st-head">
+                <span class="st-tile t-validation"
+                  ><svg><use href="#i-list-checks" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">Will people want it?</span>
+                  <span class="st-sub">demand · competition</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cap2">
+          <b>Left three — PRODUCED.</b> Full card, captured findings, <b>Reviewed</b> pill, and
+          <code>viewable: true</code>, so selecting reveals <b>View</b>.
+          <b>Right — NOT produced.</b> The shipped <code>upcoming</code> face: no findings, no pill,
+          softened, carrying its <b>can skip</b> tag — and <b>not <code>viewable</code></b
+          >, so selecting it reveals no View button at all.
+        </p>
+        <div class="callout">
+          <div>
+            <b>The not-produced card needs no new treatment, and no dashed border.</b>
+            <code>StationCard</code> already ships an <code>upcoming</code> face (<code
+              >border-(--el-border-soft) bg-(--el-surface) opacity-80</code
+            >, footer omitted) and <code>StationView.openable</code> already gates the View
+            affordance on the onboarding canvas. Reusing both is what makes the two surfaces read as
+            one product — and it keeps the state off any hardcoded border style, which would collide
+            with the <code>data-style</code> shape axis.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL C — the whole path ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">C</span>
+        <b>The whole path — and how little of it is new</b>
+        <span class="cap">two new pieces, three shipped ones</span>
+      </div>
+      <div class="body">
+        <div class="chain">
+          <div class="cite">
+            <span class="newmark">this card</span>
+            <h4>The phase card drills</h4>
+            <p>
+              <code>drillable: true</code> + a crumb label on the origin node.
+              <code>decorative</code> stays.
+            </p>
+            <span class="src">components/planning/workItemLevel.tsx</span>
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="cite">
+            <span class="newmark">this card</span>
+            <h4>A synthetic level</h4>
+            <p>
+              <code>loadLevel</code> intercepts <code>ORIGIN_ID</code> and returns the station nodes
+              from the pre-plan read — no roadmap API call.
+            </p>
+            <span class="src">components/planning/WorkItemRoadmap.tsx</span>
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="cite">
+            <span class="shipmark"
+              ><svg style="width: 11px; height: 11px"><use href="#i-check" /></svg>shipped</span
+            >
+            <h4>StationCard + View</h4>
+            <p>
+              The card, its <code>upcoming</code> face, and
+              <code>viewable = isDirectionDocKind &amp;&amp; openable</code> — copied from the
+              onboarding canvas, not reinvented.
+            </p>
+            <span class="src">components/onboarding/StationNode.tsx · OnboardingCanvas.tsx</span>
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="cite">
+            <span class="shipmark"
+              ><svg style="width: 11px; height: 11px"><use href="#i-check" /></svg>shipped</span
+            >
+            <h4>TierDocModal</h4>
+            <p>
+              <code>origin="roadmap"</code>. Loading / error / empty states and the
+              <code>DirectionDocView</code> body are shipped behaviour, untouched.
+            </p>
+            <span class="src">components/planning/TierDocModal.tsx · detail-surfaces panel 4</span>
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-up-right" /></svg>
+          </div>
+          <div class="cite">
+            <span class="shipmark"
+              ><svg style="width: 11px; height: 11px"><use href="#i-check" /></svg>shipped</span
+            >
+            <h4>/direction/[tier]</h4>
+            <p>
+              The read-only full page, reached from the modal head's <b>Open full page</b>. The
+              roadmap never links it directly.
+            </p>
+            <span class="src"
+              >app/(authed)/direction/[tier]/page.tsx · detail-surfaces panel 5</span
+            >
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>Which stations the level shows: four of the six.</b> <code>STATION_ORDER</code> is
+            the four <code>DirectionDocKind</code> tiers plus <code>design</code> and
+            <code>plan</code>. Both extras are dropped here, for the same reason: their cards exist
+            to carry a LIVE-journey action. <code>design</code>'s card is a CTA into the onboarding
+            design step (MOTIR-1040), which a finished project reaches through Settings → Appearance
+            instead; <code>plan</code>'s card previews the work-item tree, which is the level the
+            user just drilled OUT of, one Back away. Neither holds a document, so neither could be
+            openable — and a station you cannot open, on a level whose whole purpose is opening
+            things, is noise.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL D — the phase card's honest states ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">D</span>
+        <b>What the phase card is allowed to ASSERT</b>
+        <span class="cap">the badge follows the documents, not the marker</span>
+      </div>
+      <div class="body">
+        <p class="note">
+          <code>showPlanningOrigin</code> is <code>ctx.project.onboardingRanAt != null</code> and
+          nothing else (<code>app/(authed)/roadmap/page.tsx</code>), so today <b>every</b> onboarded
+          project renders the mint <b>Complete</b> badge and five done checks — including one whose
+          journey wrote no document at all. The marker stays the gate on WHETHER the card renders
+          (MOTIR-1264's contract); what it ASSERTS follows the produced set.
+        </p>
+        <div class="states">
+          <div class="statecol">
+            <span class="sname">A · all four documents</span>
+            <div class="origin">
+              <div class="ohead">
+                <span class="okicker">Planning</span>
+                <span class="ochip"
+                  ><svg><use href="#i-check" /></svg>Complete</span
+                >
+              </div>
+              <div class="ostages">
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-lightbulb" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Idea</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-search" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Discover</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-shapes" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Shape</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-list-checks" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Validate</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-network" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Plan</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="statecol">
+            <span class="sname">B · partial (2 of 4)</span>
+            <div class="origin">
+              <div class="ohead">
+                <span class="okicker">Planning</span>
+                <span class="ochip neutral">2 of 4 docs</span>
+              </div>
+              <div class="ostages">
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-lightbulb" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Idea</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-search" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Discover</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-shapes" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Shape</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-list-checks" /></svg></span
+                    ><span class="lbl">Validate</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-network" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Plan</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="statecol">
+            <span class="sname">C · none</span>
+            <div class="origin">
+              <div class="ohead">
+                <span class="okicker">Planning</span>
+                <span class="ochip neutral">No docs</span>
+              </div>
+              <div class="ostages">
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-lightbulb" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Idea</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-search" /></svg></span
+                    ><span class="lbl">Discover</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-shapes" /></svg></span
+                    ><span class="lbl">Shape</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-list-checks" /></svg></span
+                    ><span class="lbl">Validate</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-network" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Plan</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="statecol">
+            <span class="sname">· before the read resolves</span>
+            <div class="origin">
+              <div class="ohead"><span class="okicker">Planning</span></div>
+              <div class="ostages">
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-lightbulb" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Idea</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-search" /></svg></span
+                    ><span class="lbl">Discover</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-shapes" /></svg></span
+                    ><span class="lbl">Shape</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms absent">
+                    <span class="tile"
+                      ><svg><use href="#i-list-checks" /></svg></span
+                    ><span class="lbl">Validate</span>
+                  </span>
+                  <svg class="oarrow"><use href="#i-arrow-right" /></svg>
+                </div>
+                <div class="ogroup">
+                  <span class="ms">
+                    <span class="tile"
+                      ><svg><use href="#i-network" /></svg>
+                      <span class="chk"
+                        ><svg><use href="#i-check" /></svg
+                      ></span> </span
+                    ><span class="lbl">Plan</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>Why the unconditional “Complete” is wrong.</b> The badge is a claim about the
+            journey's <i>output</i>, but its only evidence is a marker that records the journey
+            <i>ran</i> — so on a project whose pre-plan wrote nothing it asserts four documents that
+            do not exist. <b>Not an error state:</b> <code>Idea</code> and <code>Plan</code> keep
+            their checks (the marker is set on first plan approve/materialize, so it genuinely
+            attests both), the strip still reads as provenance, and the neutral chip reports a fact
+            rather than flagging a fault. <b>And it never blocks first paint:</b> the produced set
+            is the only thing the badge needs, so the card paints its chip-less state immediately
+            and upgrades when the read lands — it can never claim “Complete” before it knows.
+            Drillability needs no read at all: drilling is what reveals whether documents exist.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL E — the empty station level ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">E</span>
+        <b>Drilling a journey that produced NOTHING — still worth landing on</b>
+        <span class="cap">the card is always drillable</span>
+      </div>
+      <div class="body">
+        <p class="note">
+          The phase card drills whether or not documents exist, so this level has to say something
+          on its own. It does: the four stations in their shipped <code>upcoming</code> face name
+          the journey's shape, and none of them offers a View. No empty-state illustration, no
+          error, no new component — the honest reading is “this is what a pre-plan produces, and
+          this project has none of it”.
+        </p>
+        <div class="canvas">
+          <div class="crumbbar">
+            <svg><use href="#i-chevron-left" /></svg>
+            Roadmap
+            <svg style="width: 12px; height: 12px"><use href="#i-chevron-right" /></svg>
+            <span class="cur">Planning</span>
+          </div>
+          <div class="row" style="gap: 0">
+            <div class="st upcoming">
+              <div class="st-head">
+                <span class="st-tile t-discovery"
+                  ><svg><use href="#i-search" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">Understanding your project</span>
+                  <span class="st-sub">what · who · competitors</span>
+                </div>
+              </div>
+            </div>
+            <div class="flowedge">
+              <svg><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="st upcoming">
+              <div class="st-head">
+                <span class="st-tile t-vision"
+                  ><svg><use href="#i-shapes" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">What we'll build</span>
+                  <span class="st-sub">scope · key decisions</span>
+                </div>
+              </div>
+            </div>
+            <div class="flowedge">
+              <svg><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="st upcoming">
+              <span class="canskip">can skip</span>
+              <div class="st-head">
+                <span class="st-tile t-feasibility"
+                  ><svg><use href="#i-shield" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">Is it worth building?</span>
+                  <span class="st-sub">market · build risk</span>
+                </div>
+              </div>
+            </div>
+            <div class="flowedge">
+              <svg><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="st upcoming">
+              <span class="canskip">can skip</span>
+              <div class="st-head">
+                <span class="st-tile t-validation"
+                  ><svg><use href="#i-list-checks" /></svg
+                ></span>
+                <div class="st-main">
+                  <span class="st-title">Will people want it?</span>
+                  <span class="st-sub">demand · competition</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cap2">
+          Identical to the state the onboarding canvas draws before a journey starts — which is
+          exactly right, because nothing has been produced. A motir-ai failure on the pre-plan read
+          lands here too, never on an error page.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL F — the keyboard path ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">F</span>
+        <b>The keyboard path — both hops, on the canvas's own affordances</b>
+        <span class="cap">no new canvas contract, no new key handling</span>
+      </div>
+      <div class="body">
+        <p class="note">
+          Because both hops use the canvas's OWN action slot rather than a control drawn inside a
+          card, the keyboard path is the one the canvas already ships and this design adds no key
+          handling at all. <code>PlanningCanvas</code> wraps every node in a
+          <code>tabIndex={0}</code> div whose <kbd>Enter</kbd> / <kbd>Space</kbd> selects it, and
+          the <b>Open ›</b> / <b>View</b> buttons that selection reveals are real
+          <code>&lt;button&gt;</code>s inside that wrapper, so <kbd>Tab</kbd> reaches them.
+        </p>
+        <div class="kbrow">
+          <div class="step">
+            <b>① the phase card</b>
+            <kbd>Tab</kbd> to the node · <kbd>Enter</kbd> selects it — the canvas's
+            <code>outline --el-accent</code> ring.
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="step">
+            <b>② drill</b>
+            <kbd>Tab</kbd> onto <b>Open ›</b> · <kbd>Enter</kbd> drills. Breadcrumb + Back appear;
+            focus lands on the new level.
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="step">
+            <b>③ a station</b>
+            <kbd>Tab</kbd> through the stations · <kbd>Enter</kbd> selects. A not-produced station
+            reveals no View.
+          </div>
+          <div class="arrowbox">
+            <svg><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="step">
+            <b>④ the doc</b>
+            <kbd>Tab</kbd> onto <b>View</b> · <kbd>Enter</kbd> opens <code>TierDocModal</code>.
+            Focus moves into the dialog; <kbd>Esc</kbd> returns it.
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>This is the affordance argument, not just an accessibility note.</b> A control drawn
+            INSIDE a card would have had to fight the wrapper — its keydown bubbles into a handler
+            that calls <code>preventDefault()</code>, which cancels a nested button's implicit click
+            — and a press on it would have had to <code>stopPropagation</code> to escape the
+            canvas's drag/select gesture. Routing both hops through the canvas's own action slot
+            means none of that exists to get wrong, and <code>notes.html</code> #139 (a bare click
+            on a canvas card only ever selects) holds by construction rather than by care.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PANEL G — the tables ══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">G</span>
+        <b>The station set, the states, and every code delta</b>
+        <span class="cap">nothing left unstated</span>
+      </div>
+      <div class="body">
+        <table class="spec-t" style="margin-bottom: 20px">
+          <thead>
+            <tr>
+              <th style="width: 120px"><code>STATION_ORDER</code></th>
+              <th style="width: 110px">On this level?</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>discovery</b></td>
+              <td>YES</td>
+              <td>
+                Holds a <code>DirectionDoc</code>. Openable when produced; the shipped
+                <code>upcoming</code> face when not.
+              </td>
+            </tr>
+            <tr>
+              <td><b>vision</b></td>
+              <td>YES</td>
+              <td>
+                Same. Its <code>FeatureCatalogView</code> folds into the doc, exactly as it already
+                does in the modal.
+              </td>
+            </tr>
+            <tr>
+              <td><b>feasibility</b></td>
+              <td>YES</td>
+              <td>Same. Optional tier — keeps its shipped <b>can skip</b> tag while unproduced.</td>
+            </tr>
+            <tr>
+              <td><b>validation</b></td>
+              <td>YES</td>
+              <td>Same.</td>
+            </tr>
+            <tr>
+              <td><b>design</b></td>
+              <td>NO</td>
+              <td>
+                Holds no document. Its card exists to carry a CTA into the live onboarding design
+                step (MOTIR-1040); a finished project changes its look in Settings → Appearance.
+              </td>
+            </tr>
+            <tr>
+              <td><b>plan</b></td>
+              <td>NO</td>
+              <td>
+                Holds no document. Its card previews the work-item tree — which is the level the
+                user just drilled OUT of, one Back away.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table class="spec-t" style="margin-bottom: 20px">
+          <thead>
+            <tr>
+              <th style="width: 132px">State</th>
+              <th style="width: 168px">Condition</th>
+              <th style="width: 172px">Phase-card chip</th>
+              <th>Station level</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>A</b> all four</td>
+              <td>4 kinds produced</td>
+              <td>mint <code>Complete</code> + check — shipped, unchanged</td>
+              <td>four full station cards, each openable (panel B)</td>
+            </tr>
+            <tr>
+              <td><b>B</b> partial</td>
+              <td>1–3 kinds produced</td>
+              <td>neutral <code>{n} of 4 docs</code></td>
+              <td>produced stations openable, the rest <code>upcoming</code></td>
+            </tr>
+            <tr>
+              <td><b>C</b> none</td>
+              <td>marker set, 0 produced</td>
+              <td>neutral <code>No docs</code></td>
+              <td>four <code>upcoming</code> stations, none openable (panel E)</td>
+            </tr>
+            <tr>
+              <td>· pending / failed read</td>
+              <td>read in flight, or motir-ai down</td>
+              <td>no chip at all</td>
+              <td>the level's own shipped spinner, then state C</td>
+            </tr>
+            <tr>
+              <td><b>D</b> sprint scope</td>
+              <td><code>scope === 'sprint'</code></td>
+              <td>—</td>
+              <td>
+                The card is not rendered at all —
+                <code
+                  >includeOrigin: parentId === null &amp;&amp; showPlanningOrigin &amp;&amp; scope
+                  !== 'sprint'</code
+                >
+                (<code>WorkItemRoadmap.tsx</code>). Shipped; nothing new.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table class="spec-t">
+          <thead>
+            <tr>
+              <th style="width: 320px">Code delta for MOTIR-2205</th>
+              <th>Where</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                Origin node gains <code>drillable: true</code> + a <code>crumbLabel</code>;
+                <b><code>decorative: true</code> STAYS</b> (the MOTIR-1824 auto-descend rule)
+              </td>
+              <td><code>components/planning/workItemLevel.tsx</code></td>
+            </tr>
+            <tr>
+              <td>
+                <code>loadLevel</code> intercepts <code>parentId === ORIGIN_ID</code> and returns
+                the synthetic station level — no <code>fetchRoadmapLevel</code> call; stations
+                joined by <code>kind: 'flow'</code> edges
+              </td>
+              <td><code>components/planning/WorkItemRoadmap.tsx</code></td>
+            </tr>
+            <tr>
+              <td>
+                <code>onView</code> branches: a tier-station id → <code>setOpenTier(kind)</code>,
+                anything else → the existing <code>useWorkItemQuickView</code> peek. Mount
+                <code>TierDocModal origin="roadmap"</code>
+              </td>
+              <td>same — copied from <code>OnboardingCanvas.tsx</code></td>
+            </tr>
+            <tr>
+              <td>
+                <code>StationCard</code>'s <code>session</code> prop becomes OPTIONAL. It is read
+                for the <code>design</code> station's <code>designChoice</code> (not on this level)
+                and as the classification/platform FALLBACK when a doc carries no structured
+                <code>summary</code>. <code>PreplanStateDTO</code> does return a
+                <code>session</code>, so pass it when present — the card must simply stop requiring
+                it
+              </td>
+              <td><code>components/onboarding/StationNode.tsx</code></td>
+            </tr>
+            <tr>
+              <td>
+                The phase-card chip takes the produced set, resolved LATE — never awaited ahead of
+                the canvas (the MOTIR-2069 lesson)
+              </td>
+              <td>
+                <code>app/(authed)/roadmap/page.tsx</code> → <code>PlanningOriginCluster.tsx</code>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                New strings in BOTH catalogs: <code>roadmap.canvas.origin.noDocs</code> = “No docs”
+                (zh 暂无文档) · <code>roadmap.canvas.origin.docsCount</code> = “{count} of 4 docs”
+                (zh 4 份文档中的 {count} 份) · <code>roadmap.canvas.origin.crumb</code> = “Planning”
+                (zh 规划)
+              </td>
+              <td><code>messages/en.json</code> + <code>messages/zh.json</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </body>
+</html>

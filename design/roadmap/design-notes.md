@@ -18,21 +18,21 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 
 ## Asset set (the files)
 
-| File                                     | What it is                                                                                                                       |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `design-notes.md`                        | this spec (primitives, copy, token roles, per-behaviour provenance)                                                              |
-| `roadmap.mock.html`                      | the canvas source of truth — a multi-panel mock built from the real tokens                                                       |
-| `roadmap.png`                            | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                 |
-| `edges.mock.html`                        | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                                   |
-| `edges.png`                              | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                 |
-| `grid-init.mock.html`                    | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                                   |
-| `grid-init.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                 |
-| `detail-surfaces.mock.html`              | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries                    |
-| `detail-surfaces.png`                    | the detail-surfaces export (same render settings)                                                                                |
-| `auto-drill.mock.html`                   | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases                            |
-| `auto-drill.png`                         | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                 |
-| `planning-origin-door.mock.html`         | the **planning-origin cluster as a DOOR** (MOTIR-2204): which station opens which direction doc, and the cluster's honest states |
-| `planning-origin-door.png` / `.dark.png` | its full-page exports (light + dark — the door's link ink is checked in both)                                                    |
+| File                                      | What it is                                                                                                                                    |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design-notes.md`                         | this spec (primitives, copy, token roles, per-behaviour provenance)                                                                           |
+| `roadmap.mock.html`                       | the canvas source of truth — a multi-panel mock built from the real tokens                                                                    |
+| `roadmap.png`                             | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
+| `edges.mock.html`                         | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                                                |
+| `edges.png`                               | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
+| `grid-init.mock.html`                     | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                                                |
+| `grid-init.png`                           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
+| `detail-surfaces.mock.html`               | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries                                 |
+| `detail-surfaces.png`                     | the detail-surfaces export (same render settings)                                                                                             |
+| `auto-drill.mock.html`                    | the **auto-descended ARRIVAL state** (MOTIR-1805): the breadcrumb on first paint + the negative cases                                         |
+| `auto-drill.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
+| `planning-origin-drill.mock.html`         | the **planning card DRILLS into the pre-plan stations** (MOTIR-2204): the phase card, the drilled station level, and the card's honest states |
+| `planning-origin-drill.png` / `.dark.png` | its full-page exports (light + dark — the station tiles' tier tints are checked in both)                                                      |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -1066,138 +1066,156 @@ last carrying `aria-current="page"`, and the `--focus-ring-color` focus-visible 
 
 ---
 
-## ⭐ The planning-origin cluster as a DOOR (MOTIR-2204 / Story MOTIR-1755 — `planning-origin-door.mock.html`)
+## ⭐ The planning card DRILLS into the pre-plan stations (MOTIR-2204 / Story MOTIR-1755 — `planning-origin-drill.mock.html`)
 
 The shipped `PlanningOriginCluster` (MOTIR-1013) says a project came from a planning journey — five
 checked milestones and a **Complete** badge — and is wired to nothing. Meanwhile the journey's actual
 output is fully built: four `DirectionDoc` kinds in the motir-ai pre-plan store (for MOTIR itself,
 seeded by MOTIR-1354 / MOTIR-1357), a shipped modal viewer (`TierDocModal`) and a shipped full page
-(`/direction/[tier]`), both from MOTIR-1355. **The destination exists and the door does not** — which
-is what MOTIR-1762's roadmap check ("clicking one opens a real document, not an empty tier") fails
-on. This sheet draws the door, and the two states the shipped cluster cannot express.
+(`/direction/[tier]`), both from MOTIR-1355 — and `grep` finds `TierDocModal` and `StationNode`
+mounted by exactly ONE surface, `components/onboarding/OnboardingCanvas.tsx`. **The destination
+exists and the door does not**, which is what MOTIR-1762's roadmap check ("clicking one opens a real
+document, not an empty tier") fails on.
 
-**It COMPOSES; it does not redraw.** The canvas engine, the node/edge language, the cluster's own
-markup, `TierDocModal` (panel 4 of `detail-surfaces.mock.html`), `/direction/[tier]` (panel 5) and
-`DirectionDocView` (MOTIR-834) are shipped and are CITED here, never re-specified — **the code card
-must not draw a second doc viewer, must not restyle `DirectionDocView`, and must not add a direction
-route** (notes.html #82 / #95). The cluster keeps its `360 × 124` box (`ORIGIN_W` / `ORIGIN_H`
-unchanged), its fixed position, and its absence of a dependency edge into the epics.
+### The model: two hops, both of them shipped canvas grammar
 
-### DECISION 1 — the station → `DirectionDocKind` map (five stations, four docs)
+| Hop         | What the user does                                           | Whose interaction it is                                                                       |
+| ----------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| **level 0** | select the phase card → the canvas's **Open ›** pill → drill | the roadmap canvas's own drill — what every epic beside it already does                       |
+| **level 1** | select a station → the canvas's **View** button → the doc    | `detail-surfaces.mock.html` panel 3, verbatim — and the onboarding canvas's shipped behaviour |
 
-The station set and the doc set are not the same set. Every station has an explicit disposition; none
-is left for the code card to infer.
+Nothing about that is a new interaction, and the code card must not make it one. This sheet
+**COMPOSES**: the canvas engine + layout (`roadmap.mock.html`, MOTIR-1009 / build MOTIR-1194), the
+`StationCard` (`components/onboarding/StationNode.tsx`), `TierDocModal` (panel 4),
+`/direction/[tier]` (panel 5) and `DirectionDocView` (MOTIR-834) are all shipped and are CITED here.
+**No second doc viewer, no restyled `DirectionDocView`, no new direction route, and no click-to-open
+on a card body** (`notes.html` #139). The phase card keeps its `360 × 124` box (`ORIGIN_W` /
+`ORIGIN_H` unchanged), its fixed position, and its absence of a dependency edge into the epics.
 
-| Station        | `DirectionDocKind`           | Disposition                                                                                                                                                                                                         |
-| -------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`idea`**     | — none                       | **Never a door.** The journey's INPUT. Attested by the marker itself, not by a document; mint + check whenever the cluster renders.                                                                                 |
-| **`discover`** | `discovery`                  | Door ⟺ `discovery` is produced.                                                                                                                                                                                     |
-| **`shape`**    | `vision`, then `feasibility` | **Two docs.** Door ⟺ EITHER is produced; it opens the FIRST produced in that order (`DIRECTION_DOC_ORDER`; `vision` is the non-optional tier, `feasibility` is `optional: true` in `TIER_META`). No picker — below. |
-| **`validate`** | `validation`                 | Door ⟺ `validation` is produced.                                                                                                                                                                                    |
-| **`plan`**     | — none                       | **Never a door.** The journey's OUTPUT is the work-item tree on this same canvas. Attested by the marker.                                                                                                           |
+> **This design replaces a first pass that made the cluster's five 28px tiles into individual doors**
+> (Yue, 2026-08-05, mid-flight). The drill model is strictly better: it reuses two shipped
+> interactions instead of inventing a third, it dissolves the 28px-affordance problem rather than
+> solving it, and — see the keyboard section — it removes an entire class of event-handling bug the
+> in-card affordance would have had to defend against.
 
-**Why `idea` and `plan` are attested rather than doc-backed.** `showPlanningOrigin` is
-`ctx.project.onboardingRanAt != null`, and that marker is set _on first plan approve/materialize_
-(MOTIR-1264) — i.e. it is itself evidence that an idea was described and a plan was materialized.
-Those two stages therefore keep their checks in **every** state below; only the three doc-backed
-stations track documents.
+### DECISION 1 — the drilled level shows FOUR of the six stations
 
-**Why the two-doc station needs no picker.** `TierDocModal` already renders `DirectionDocView` with
-`availableDocs = producedTierKinds(state)`, and that component's cross-link footer is exactly a
-"jump to another produced tier" control. Opening `vision` puts `feasibility` one click away inside
-the viewer. A dedicated picker would be a third surface for a hop the shipped viewer already offers.
+`STATION_ORDER` is the four `DirectionDocKind` tiers plus `design` and `plan`. Every station has an
+explicit disposition; none is left for the code card to infer.
 
-### DECISION 2 — the tile IS the door (the shipped **in-block door** pattern), reconciling notes #139
+| `STATION_ORDER`   | On the level? | Why                                                                                                                                                                |
+| ----------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`discovery`**   | **yes**       | Holds a `DirectionDoc`. Openable when produced; the shipped `upcoming` face when not.                                                                              |
+| **`vision`**      | **yes**       | Same. Its `FeatureCatalogView` folds into the doc, exactly as it already does in the modal.                                                                        |
+| **`feasibility`** | **yes**       | Same. Optional tier — keeps its shipped **can skip** tag while unproduced.                                                                                         |
+| **`validation`**  | **yes**       | Same.                                                                                                                                                              |
+| **`design`**      | **no**        | Holds no document. Its card exists to carry a CTA into the LIVE onboarding design step (MOTIR-1040); a finished project changes its look in Settings → Appearance. |
+| **`plan`**        | **no**        | Holds no document. Its card previews the work-item tree — which is the level the user just drilled OUT of, one Back away.                                          |
 
-`detail-surfaces.mock.html` panel 3 specifies the onboarding board's grammar: \*a SELECTED tier
-station surfaces a **View** button → opens the doc; **only PRODUCED tiers carry it\***. The second
-clause is inherited verbatim. The first cannot be: it was drawn for four large `StationCard`s where
-the card body IS the select target, and this cluster is ONE node holding five 28px milestone tiles —
-a 28px tile has no room for a View pill, and one View button per node cannot choose between three
-destinations.
+Neither omitted station could be openable, and a station you cannot open, on a level whose whole
+purpose is opening things, is noise.
 
-So the tile itself is the control. That is **not** a bespoke interaction — it is the shipped
-**in-block door**: `StationNode`'s design-step CTA (MOTIR-1040) and `PlanItemNode`'s 24px edit button
-are both always-live `<button>`s inside a canvas node that `stopPropagation` on pointer-down so the
-node's drag/select gesture never fires. `notes.html` **#139** (a bare click on a canvas CARD must
-only select, never open) is honoured exactly: a press anywhere on the cluster body still only selects
-it; only a press on a door — a control marked as one at rest — opens a document.
+### DECISION 2 — the phase card is ALWAYS drillable; only the badge waits on data
 
-### The affordance (panel B), and the three axes that carry state
+Drilling is what reveals whether documents exist, so drillability needs no read at level 0. That
+matters twice: it keeps the entry affordance honest (there is always something behind it — see the
+empty level below), and it keeps the pre-plan read off the roadmap's first paint entirely. The read
+happens **on drill**, inside the canvas's own per-level load, which already has a spinner. The
+**only** thing level 0 needs the produced set for is the badge — so the card paints its chip-less
+state immediately and upgrades when the read lands. It can never claim "Complete" before it knows.
+(This is the MOTIR-2069 streaming lesson, and the drill model largely dissolves it.)
 
-| Element                       | Treatment                                                                                     | Tokens                                                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Door tile · rest**          | mint tile + corner check (shipped `Milestone`), promoted to `<button>`; label in **link ink** | `--el-tint-mint` fill · icon `--el-text-strong` · check on `--el-success` / `--el-accent-text` · label `--el-link` · `--radius-control` |
-| **Door tile · hover**         | tile lifts one step; label deepens + underlines                                               | `--shadow-subtle` · `--el-link-pressed`                                                                                                 |
-| **Door tile · focus-visible** | 2px ring, 2px offset — the same ring the canvas View button uses                              | `--focus-ring-color`, offset over `--el-surface`                                                                                        |
-| **Non-door · attested**       | `idea` / `plan`: mint + check, secondary label, a `<span>` (not focusable, no pointer)        | `--el-tint-mint` · `--el-text-secondary`                                                                                                |
-| **Non-door · absent**         | doc not produced: hue and check drop away, the plate stays. **No dashed / dotted border**     | `--el-chip-bg` fill · `--el-chip-border` · icon `--el-icon-muted` · `--el-text-secondary` label                                         |
-| **Header chip · A**           | mint `Complete` + check — the shipped chip, unchanged                                         | `--el-tint-mint` · `--el-text-strong` · `--radius-badge` · `--spacing-chip-x/y`                                                         |
-| **Header chip · B / C**       | the `Pill` `tone="neutral"` recipe: `No docs` / `{n} of 4 docs`, no icon                      | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary`                                                                             |
+### What the phase card is allowed to ASSERT (panel D)
 
-**Three axes, each doing one job:** the **fill** says whether the artifact exists, the **corner
-check** repeats that non-chromatically, and the **label ink** — and only the label ink — says whether
-it opens. That is why the absent state needs no dashed border: what the user reads is a missing hue
-and a missing check, not a hairline (a hardcoded dashed border would also collide with the
-`data-style` shape axis). **Measured, not assumed:** `--el-link` is 4.54:1 on `--el-surface` in light
-and 6.89:1 in dark — AA for text in both, which `--el-accent-on-surface` (4.24:1 dark) is not; and
-both non-door labels stay `--el-text-secondary` (6.24:1 / 6.67:1) because `--el-text-faint` measures
-**2.39:1** and fails AA outright.
+`showPlanningOrigin` is `ctx.project.onboardingRanAt != null` and nothing else, so today **every**
+onboarded project renders the mint **Complete** badge and five done checks — including one whose
+journey wrote no document at all. The marker stays the gate on WHETHER the card renders (MOTIR-1264's
+contract); what it ASSERTS follows the produced set.
 
-### The states (panels A · D · E · G)
+| State                   | Condition                         | Phase-card chip                              | Station level                                     |
+| ----------------------- | --------------------------------- | -------------------------------------------- | ------------------------------------------------- |
+| **A · all four**        | 4 kinds produced (the MOTIR case) | mint `Complete` + check — shipped, unchanged | four full station cards, each openable (panel B)  |
+| **B · partial**         | 1–3 kinds produced                | neutral `{n} of 4 docs`                      | produced stations openable, the rest `upcoming`   |
+| **C · none**            | marker set, 0 produced            | neutral `No docs`                            | four `upcoming` stations, none openable (panel E) |
+| · pending / failed read | read in flight, or motir-ai down  | **no chip at all**                           | the level's own shipped spinner, then state C     |
+| **D · sprint scope**    | `scope === 'sprint'`              | —                                            | the card is not rendered at all — **shipped**     |
 
-| State                   | Condition                             | Header chip                         | Stations                                                               |
-| ----------------------- | ------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------- |
-| **A · Produced**        | all 4 kinds produced (the MOTIR case) | mint `Complete` + check — unchanged | `idea` · `plan` checked; `discover` · `shape` · `validate` are doors   |
-| **B · Marker, no docs** | marker set, 0 kinds produced          | neutral `No docs`                   | `idea` · `plan` checked; the other three are absent plates, no doors   |
-| **C · Partial**         | 1–3 kinds produced                    | neutral `{n} of 4 docs`             | per station: door ⟺ one of its kinds is produced                       |
-| **D · Sprint scope**    | `scope === 'sprint'`                  | —                                   | the cluster is not rendered at all — **shipped**, nothing new is drawn |
-
-**Why the unconditional “Complete” is wrong (state B).** The badge is a claim about the journey's
-_output_, but its only evidence is a marker that records the journey _ran_ — so on a project whose
-pre-plan wrote nothing it asserts four documents that do not exist and points at nowhere. **It is
-still not an error state:** the two stages the marker really does attest keep their checks, the strip
-still reads as provenance, and a neutral chip reports a fact instead of flagging a fault — nothing is
-red and nothing asks the user to fix anything. The chip keeps the **verdict** only in state A (where
-every implied artifact exists) and otherwise reports the **count**, which is the fact the cluster can
-actually prove.
+**Why the unconditional "Complete" is wrong.** The badge is a claim about the journey's _output_, but
+its only evidence is a marker that records the journey _ran_ — so on a project whose pre-plan wrote
+nothing it asserts four documents that do not exist. **It is still not an error state:** `Idea` and
+`Plan` keep their checks (the marker is set on first plan approve/materialize, so it genuinely
+attests both), the strip still reads as provenance, and a neutral chip reports a fact instead of
+flagging a fault. The chip keeps the **verdict** only in state A, where every implied artifact
+exists, and otherwise reports the **count** — the fact the card can actually prove.
 
 Row **D** is recorded for completeness only: `WorkItemRoadmap.tsx` already gates the cluster with
 `includeOrigin: parentId === null && showPlanningOrigin && scope !== 'sprint'`.
 
+### The station level, produced and not (panels B · E)
+
+Both faces are **shipped `StationCard` states**, not new treatments. A produced tier is the full card
+— tier tile + per-tier accent from `TIER_META`, plain-language title, captured-findings rows, the
+mint **Reviewed** pill — and is `viewable: true`, so selecting it reveals **View**. A tier that
+produced nothing renders the shipped `upcoming` face (`border-(--el-border-soft) bg-(--el-surface)
+opacity-80`, footer omitted, **can skip** tag on the optional tiers) and is **not** `viewable`, so
+selecting it reveals no View button at all — panel 3's _only PRODUCED tiers carry it_, enforced by
+the same `StationView.openable` flag the onboarding canvas already uses. **No dashed or dotted
+border** is introduced: the distinction is the absent findings, the absent pill and the softened
+card, none of which collides with the `data-style` shape axis.
+
+Stations are joined by the canvas's `kind: 'flow'` edges — drawn as sequence, and deliberately NOT
+counted toward the Dependencies legend (`ProjectCanvasDep`).
+
+**A drill into a journey that produced nothing still lands somewhere worth being** (panel E): four
+`upcoming` stations naming the journey's shape, none of them openable. No empty-state illustration,
+no error, no new component — and a motir-ai failure on the pre-plan read lands here too, never on an
+error page.
+
 ### The destination — named, and NOT redrawn (panel C)
 
-A door opens **`TierDocModal` with `origin="roadmap"`** and `tier` = the station's first produced
-kind. That is the same modal `OnboardingCanvas` already mounts and the same one
-`detail-surfaces.mock.html` **panel 4** specifies; its loading / error / empty(no-doc) states and its
-`DirectionDocView` body are shipped behaviour that this design does not touch. The modal head already
-carries **Open full page** → `/direction/[tier]` (**panel 5**), so the roadmap never links the full
-page directly. What the roadmap gains is a **mount point and an open-tier state** — nothing else.
+A station's **View** opens **`TierDocModal` with `origin="roadmap"`** — the same modal
+`OnboardingCanvas` already mounts and the same one `detail-surfaces.mock.html` **panel 4** specifies;
+its loading / error / empty(no-doc) states and its `DirectionDocView` body are shipped behaviour this
+design does not touch. The modal head already carries **Open full page** → `/direction/[tier]`
+(**panel 5**), so the roadmap never links the full page directly.
 
-### The keyboard path (panel F)
+### The keyboard path (panel F) — and why it is the affordance argument
 
-`PlanningCanvas` already wraps every node in a `tabIndex={0}` div, so real `<button>` doors inside it
-join the tab order for free: **Tab ①** the node wrapper (the canvas's own `outline --el-accent` ring;
-Enter/Space here still only selects), **Tab ②③④** each door in journey order (non-door tiles are
-`<span>`s and are skipped), **Enter / Space** opens that tier's modal, and closing it returns focus to
-the tile. No roving tabindex, no arrow-key grid, and **no change to `ProjectCanvasNode`** — the
-cluster node keeps `decorative: true`, stays non-`viewable`, and needs no `onView` wiring.
+Because both hops use the canvas's OWN action slot rather than a control drawn inside a card, the
+keyboard path is the one the canvas already ships and **this design adds no key handling at all**:
+**Tab ①** the node wrapper (`tabIndex={0}`, the canvas's `outline --el-accent` ring; Enter/Space
+selects), **Tab ②** onto **Open ›** → Enter drills (breadcrumb + Back appear), **Tab ③** through the
+stations → Enter selects, **Tab ④** onto **View** → Enter opens the modal; Esc returns focus to the
+station.
+
+That is not just an accessibility note — it is the reason this shape beats an in-card affordance. A
+control drawn INSIDE a canvas card has to fight the wrapper: its keydown bubbles into a handler that
+calls `preventDefault()`, which cancels a nested button's implicit click, and a press on it has to
+`stopPropagation` to escape the canvas's drag/select gesture. Routing both hops through the canvas's
+own action slot means none of that exists to get wrong, and `notes.html` **#139** (a bare click on a
+canvas card only ever selects) holds by construction rather than by care.
 
 ### Required code deltas (what MOTIR-2205 must implement)
 
-| Change                                                                                                                                                           | Where                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `PlanningOriginCluster` takes the produced-kind set + an `onOpenTier(kind)` callback; a station renders as `<button>` iff one of its mapped kinds is in that set | `components/planning/PlanningOriginCluster.tsx`              |
-| Each door carries `onPointerDown={e => e.stopPropagation()}` **and `onKeyDown` stopPropagation for Enter/Space**                                                 | same                                                         |
-| Each door carries `aria-label` naming the DOCUMENT (`TIER_META[kind].label`), because the visible 10px label ("Discover") is not the doc's name                  | same                                                         |
-| The roadmap mounts `TierDocModal` with `origin="roadmap"` and owns the open-tier state                                                                           | `components/planning/WorkItemRoadmap.tsx` (or `RoadmapView`) |
-| The produced-kind set reaches the roadmap page (the `/api/ai/pre-plan` read is already shared via `fetchPreplanState` / `producedTierKinds`)                     | `app/(authed)/roadmap/page.tsx` → the cluster                |
+| Change                                                                                                                                                         | Where                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Origin node gains `drillable: true` + a `crumbLabel`. **`decorative: true` STAYS**                                                                             | `components/planning/workItemLevel.tsx`                       |
+| `loadLevel` intercepts `parentId === ORIGIN_ID` and returns the synthetic station level — no `fetchRoadmapLevel` call; stations joined by `kind: 'flow'` edges | `components/planning/WorkItemRoadmap.tsx`                     |
+| `onView` branches: a tier-station id → `setOpenTier(kind)`, anything else → the existing `useWorkItemQuickView` peek. Mount `TierDocModal origin="roadmap"`    | same — copied from `OnboardingCanvas.tsx`                     |
+| `StationCard`'s `session` prop becomes **optional** (see below)                                                                                                | `components/onboarding/StationNode.tsx`                       |
+| The phase-card chip takes the produced set, resolved LATE — never awaited ahead of the canvas                                                                  | `app/(authed)/roadmap/page.tsx` → `PlanningOriginCluster.tsx` |
 
-> **⚠️ The `onKeyDown` guard is not optional.** The canvas wrapper's handler is
-> `if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNodeActivate(n.id); }`, and a
-> keydown on the button BUBBLES into it — so without `stopPropagation` on the tile, the wrapper
-> cancels the button's implicit click and **the door cannot be opened from the keyboard at all**. The
-> two shipped in-block doors guard the pointer path only; this one needs both.
+> **⚠️ `decorative: true` must survive.** `ProjectRoadmapCanvas`'s auto-descend counts
+> `lvl.nodes.filter((n) => n.decorative !== true)` — the MOTIR-1824 rule that provenance drawn beside
+> the road is not a branch in it. Drillable and decorative are independent axes; making the card
+> drillable must not make it a branch, or an onboarded single-epic project stops auto-descending
+> exactly as it did before that bug was fixed.
+
+> **⚠️ `StationCard.session` is required today and the roadmap has no `DiscoverySession`.** The prop
+> is read in exactly two places: the `design` station's `designChoice` (not on this level at all) and
+> the classification/platform FALLBACK in `CapturedFindings` when a doc carries no structured
+> `summary`. `PreplanStateDTO` does return a `session`, so pass it when present — the card must simply
+> stop _requiring_ it. Relax it additively and assert the onboarding canvas's render is unchanged.
 
 ### Exact copy (the strings the frontend ships — `messages/en.json` + `zh.json`)
 
@@ -1208,30 +1226,33 @@ cluster node keeps `decorative: true`, stays non-`viewable`, and needs no `onVie
 | ----------- | ------------------- | ------------------------- |
 | `noDocs`    | `No docs`           | `暂无文档`                |
 | `docsCount` | `{count} of 4 docs` | `4 份文档中的 {count} 份` |
-| `openDoc`   | `Open {doc}`        | `打开{doc}`               |
+| `crumb`     | `Planning`          | `规划`                    |
 
-`openDoc` is the door's `aria-label`; `{doc}` is `TIER_META[kind].label`, which already ships
-untranslated — the code card does not translate it here.
+The station titles and subtitles are the onboarding catalog's existing
+`onboarding.chat.canvas.stations.*` and `TIER_META` labels — reused, not duplicated.
 
 ### Access path (DRAW THE DOOR — `run.md` design gate)
 
 **No new route and no new nav entry.** The surface is the shipped `/roadmap` page reached from the
 **Roadmap** primary left-nav entry (MOTIR-1011) with the scope toggle on **Whole project** — drawn in
-panel A as a real rail + header, not named in prose. The new door is the tile itself, drawn at rest,
-hover, and focus-visible in panel B.
+panel A as a real rail + header, not named in prose. The new door is the **Open ›** pill on the
+selected phase card, drawn in place; the second door is the **View** button on a selected station,
+drawn in panel B.
 
 ### Token / a11y discipline (same rules as the canvas)
 
-Every value in `planning-origin-door.mock.html` is GENERATED from
+Every value in `planning-origin-drill.mock.html` is GENERATED from
 `packages/design-system/theme.css` (the `@theme` Tier-0 block, the `:root, [data-appearance-scope]`
 Tier-3 block and both `[data-theme='dark']` blocks) and every glyph from `lucide-react`'s
 `__iconNode` — no retyped hex, no drawn path, no invented colour, and the dark export is a real token
-flip rather than a copy of the light one. Colour via `--el-*` only; shape via `--radius-card` /
-`--radius-control` / `--radius-badge` / `--spacing-chip-x/y` / `--shadow-subtle` / `--shadow-card` —
-no Tier-0 `--color-*`, no raw `rounded-*`/`p-*`/`h-*`, and the canvas dot-grid + review-board backdrop
-remain the only sanctioned non-semantic decoration. Semantics: doors are real `<button>`s with an
-`aria-label`; non-doors are `<span>`s (not focusable, no pointer); the corner check repeats the
-"produced" state non-chromatically so hue is never the sole carrier.
+flip rather than a copy of the light one. Colour via `--el-*` only (the station tiles take their own
+`--el-station-tier-*` tokens, per MOTIR-1277); shape via `--radius-card` / `--radius-control` /
+`--radius-badge` / `--radius-btn` / `--spacing-chip-x/y` / `--spacing-btn-x/y` / `--shadow-subtle` /
+`--shadow-card` — no Tier-0 `--color-*`, no raw `rounded-*`/`p-*`/`h-*`, and the canvas dot-grid +
+review-board backdrop remain the only sanctioned non-semantic decoration. Semantics are the canvas's
+shipped ones: the node wrapper is the `tabIndex={0}` focus target, **Open ›** / **View** are real
+`<button>`s with `aria-label`s, and the breadcrumb keeps `<nav aria-label>` → `<ol>` → real crumb
+buttons with `aria-current="page"` on the last.
 
 ---
 
@@ -1254,12 +1275,12 @@ Eleven three-file surfaces under `design/roadmap/`, sharing this `design-notes.m
   `node-worktype.png` (MOTIR-1641 / 8.8.35).
 - **Auto-descended arrival state** — `auto-drill.mock.html` + `auto-drill.png`
   (MOTIR-1805 / Story MOTIR-1803).
-- **Planning-origin cluster as a door** — `planning-origin-door.mock.html` +
-  `planning-origin-door.png` + `planning-origin-door.dark.png` (MOTIR-2204 /
-  Story MOTIR-1755).
+- **Planning card drills into the pre-plan stations** —
+  `planning-origin-drill.mock.html` + `planning-origin-drill.png` +
+  `planning-origin-drill.dark.png` (MOTIR-2204 / Story MOTIR-1755).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean. (The
-planning-origin-door surface also carries a `.dark.png`, rendered from the real
-`[data-theme='dark']` token blocks, because the door's link ink is the one new
-colour decision that had to clear AA in both themes.)
+planning-origin-drill surface also carries a `.dark.png`, rendered from the real
+`[data-theme='dark']` token blocks, so the station cards' per-tier tints are
+checked in both.)
