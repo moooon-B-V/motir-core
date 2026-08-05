@@ -1,33 +1,38 @@
 import { z } from 'zod/v4';
 
-// The v1 IDENTITY + WORKSPACE shapes (Story 11.4 · Subtask 11.4.5 — MOTIR-2186).
+// The v1 IDENTITY + WORKSPACE shapes — Story 11.1's, per ADR Amendment 5
+// (MOTIR-2195). Written by Subtask 11.4.5 (MOTIR-2186); OWNED by Story 11.1.
 //
-// ⚠️ WHY THIS MODULE EXISTS AT ALL, AND WHY IT IS 11.4's — a recorded plan gap.
+// ⚠️ WHY THE AUTHOR AND THE OWNER DIFFER — a plan gap, now closed.
 //
 // ADR Amendment 2 assigned the per-resource response schemas by STORY: 11.2 owns
 // the work-item shapes, 11.3 owns projects / sprints / backlog / ready, and
 // "11.4 … authors NO per-resource shape". Story 11.1's own two endpoints —
-// `GET /api/v1/me` and `GET /api/v1/workspaces` — were shipped BEFORE that
-// amendment was written and were never assigned to anyone, so they shape their
-// rows inline in the route (correctly, and for the stated reason: "the response
-// is shaped explicitly rather than spread, because `verify` returns the raw
-// Prisma `User` row and a public API must never leak one").
+// `GET /api/v1/me` and `GET /api/v1/workspaces` — shipped BEFORE that amendment
+// was written and appeared in none of its three sentences, so declaring an
+// OpenAPI operation for them found no schema to declare from. 11.4.5 authored
+// them here rather than leave two shipped endpoints out of the published
+// document, and filed the gap as MOTIR-2195.
 //
-// Declaring an operation for them requires a schema, and no schema exists. The
-// alternatives were to leave two shipped endpoints out of the published document
-// — the exact "a reference that covers some of an API" failure this card exists
-// to close — or to declare them here. This is the second, and the gap in
-// Amendment 2's split is filed as a planning bug against Story 11.1 rather than
-// papered over: MOTIR-2195, which decides this module's long-term home, whether
-// the two routes should MAP through it, and amends Amendment 2 so its split is
-// total.
+// **ADR Amendment 5 (2026-08-05) settled it:** this module is where the shapes
+// belong, and they are **Story 11.1's** — Amendment 2's ownership list now names
+// 11.1 alongside 11.2 and 11.3, and 11.4's "authors no per-resource shape"
+// boundary is intact because the one shape it authored was transferred here
+// rather than excused. Amendment 5 also pins how the split is CHECKED (walk
+// `app/api/v1`, never re-read the sentences) and what to do with a future
+// endpoint that arrives without an owner: declare it in its resource's own
+// module and file a card against the owning story.
 //
-// ── These schemas DESCRIBE; they do not change the routes ───────────────────
-// Neither route imports this module, and neither route changes: 11.4.5's scope
-// boundary says "the declaration follows the route", not the reverse. The
-// schemas are proven honest by `tests/api/v1/openapi-operations-coverage.test.ts`,
-// which drives the REAL routes with a REAL token and parses what they actually
-// return — not a fixture written from the same assumption as the schema.
+// ── These schemas DESCRIBE today; they will EMIT ────────────────────────────
+// Neither route imports this module yet: 11.4.5's scope boundary said "the
+// declaration follows the route", not the reverse. Amendment 5 decided the two
+// routes SHOULD map through the schema the way every other v1 resource does
+// (`presentProject`, `presentWorkItemDetail`) — a response-shaping code change,
+// so it ships as its own card with its own PR: MOTIR-2202 (11.1.7). Until that
+// lands, the schemas are proven honest by
+// `tests/api/v1/openapi-operations-coverage.test.ts`, which drives the REAL
+// routes with a REAL token and parses what they actually return — not a fixture
+// written from the same assumption as the schema.
 
 /**
  * `GET /api/v1/me` — who this token is, and what it may do.

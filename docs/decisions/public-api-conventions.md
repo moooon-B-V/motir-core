@@ -1,9 +1,11 @@
 # ADR: The public `/api/v1` contract — versioning, auth, errors, pagination, rate limits, naming, stability
 
 - **Status:** Accepted (2026-08-03) · **Amended 2026-08-03** (Subtask 11.2.1,
-  MOTIR-2038) · **Amended 2026-08-04** (Subtask 11.3.1, MOTIR-2058). See
-  [Amendments](#amendments). §5 and §9 must be read together with Amendments 1
-  and 3; response shaping with Amendment 2.
+  MOTIR-2038) · **Amended 2026-08-04** (Subtask 11.3.1, MOTIR-2058) · **Amended
+  2026-08-05** (Subtask 11.4.1, MOTIR-2182 — the OpenAPI mechanics; MOTIR-2195 —
+  the ownership split's missing owner). See [Amendments](#amendments), which is
+  the authority on the full list. §5 and §9 must be read together with
+  Amendments 1 and 3; response shaping with Amendments 2 and 5.
 - **Story / Subtask:** 11.1 (`/api/v1` foundation) · Subtask 11.1.1 (MOTIR-1857)
 - **Gates:** MOTIR-1858 (the shared route wrapper), MOTIR-1859 (pagination),
   MOTIR-1860 (rate limiting), and every endpoint in 11.2 / 11.3. Later cards
@@ -364,7 +366,10 @@ property that makes an API integrable rather than merely callable.
 > Amendment 1 carves out a **bounded** exception to the corollary below (a new
 > page ADDRESSING over an unchanged predicate is not new behaviour) and
 > Amendment 3 extends its table with by-id re-presentation. Amendment 2 settles
-> where the response shapes live. Amendment 3 also replaces the literal **ONE**
+> where the response shapes live, and
+> [Amendment 5](#amendment-5-2026-08-05--the-ownership-split-is-total-and-a-v1-route-maps-through-its-schema)
+> makes that split total and pins that a route MAPS through its schema.
+> Amendment 3 also replaces the literal **ONE**
 > below with the **bounded-call rule**: a constant number of RESOLVE / PROJECT
 > calls, never one whose result the route branches on. The thin-adapter rule
 > itself, and the no-`db.*` / no-`$transaction` rule, are unchanged.
@@ -538,6 +543,15 @@ precisely the drift 11.4 exists to prevent, performed deliberately.
 **Each resource story ships the `zod` RESPONSE schemas next to its own routes;
 Story 11.4 ASSEMBLES.** One sentence each:
 
+> **⚠️ Extended 2026-08-05 — the list below was missing Story 11.1's own two
+> endpoints, and gains their owner; see
+> [Amendment 5](#amendment-5-2026-08-05--the-ownership-split-is-total-and-a-v1-route-maps-through-its-schema).**
+> Amendment 5 also states how the split is CHECKED (by walking `app/api/v1`, not
+> by re-reading these sentences) and what happens to an endpoint that arrives
+> without an owner. The three sentences below are unchanged and still correct.
+
+- **11.1** owns the identity and workspace shapes — the `/me` payload and the
+  workspace summary row — in `lib/api/v1/identity/` (Amendment 5).
 - **11.2** owns the work-item resource schemas — the summary row, the detail
   aggregate, the link groups, the comment shape — in `lib/api/v1/workItems/`.
 - **11.3** owns the project, sprint, backlog and ready-set schemas, in its own
@@ -1167,3 +1181,127 @@ version-skew gate reads — one number with one meaning.)
 - **11.6** composes MCP payloads from schemas that are now `zod/v4` values, so any
   MCP-side module that COMPOSES one (rather than calling `.parse` on it) joins the
   Q1 boundary.
+
+---
+
+### Amendment 5 (2026-08-05) — the ownership split is TOTAL, and a v1 route MAPS through its schema
+
+**Amends:** Amendment 2's ownership list, which gains **11.1** and a rule for how
+the list is CHECKED; and Amendment 2's corollary, which gains the missing half —
+_the route emits the schema's output_.
+**Leaves unchanged:** Amendment 2's three existing sentences, its corollary that a
+v1 response is never a service DTO passed through, and Amendment 4 in full.
+**Card:** MOTIR-2195, filed against Story 11.1 by the run that hit the gap.
+
+#### The problem — a split that reads exhaustive and is not
+
+Amendment 2 assigned the per-resource response schemas by STORY, in three
+sentences that together sound like they cover the API. They cover every route
+file except two. `GET /api/v1/me` (11.1.2, MOTIR-1858) and
+`GET /api/v1/workspaces` (11.1.3, MOTIR-1859) shipped in July, **before** the
+amendment existed, and belong to Story 11.1 — which none of the three sentences
+names. Amendment 2 retired the inline form everywhere except the two routes that
+predate it.
+
+That is the ordinary way a rule acquires a blind spot: it is written about the
+work in front of the author. The cost landed on **11.4.5** (MOTIR-2186), which
+had to declare an OpenAPI operation for both endpoints and found no schema to
+declare it from — with a scope boundary (_"11.4 … authors **no** per-resource
+shape"_) forbidding exactly what its own first acceptance criterion (_"every
+`route.ts` has an operation declared for each HTTP method it exports"_) required.
+It authored `lib/api/v1/identity/schema.ts` and filed the gap rather than
+papering over it. **This amendment ratifies that module and closes the gap.**
+
+#### The decision
+
+**1. Story 11.1 owns the identity and workspace shapes, in `lib/api/v1/identity/`.**
+`meSchema` and `workspaceSummarySchema` stay exactly where 11.4.5 put them — the
+path already matches the per-resource convention (`workItems/`, `projects/`,
+`sprints/`, `ready/`), the module has no consumer but the operation declarations,
+and moving a file to record a change of owner would be motion without a reader.
+The change is that they are **11.1's**, not 11.4's, and Amendment 2's list now
+says so. Amendment 2's boundary for 11.4 is restored intact: it authors no
+per-resource shape, and the one it did author is transferred here rather than
+excused.
+
+**2. Ownership is over SHAPES, and it is checked by WALKING `app/api/v1` — never
+by re-reading the sentences.** This is the load-bearing half, because the defect
+was not a wrong sentence but a list that could not be audited against anything.
+The walk enumerates the route files; each exported verb's response shape is then
+read off the presenter the handler actually calls, and every one of them has an
+owner. Walked on `origin/main` @ `cfda1e99` — **19 route files, none unowned**:
+
+| Response shape reached from…                                                                                                        | Owner    | Module / presenter                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------- |
+| `me/`, `workspaces/`                                                                                                                | **11.1** | `lib/api/v1/identity/` — `meSchema`, `workspaceSummarySchema`           |
+| `work-items/**`, `projects/{projectKey}/work-items/`                                                                                | **11.2** | `lib/api/v1/workItems/` — `presentWorkItemSummary` / `…Detail` / `…Ref` |
+| `projects/**`, `sprints/**`, `projects/{projectKey}/ready/`, and the membership-move results on the two `…/work-items` write routes | **11.3** | `lib/api/v1/projects/`, `sprints/` (incl. `membership.ts`), `ready/`    |
+| _(no route of its own)_ — the envelopes, error body, page cursor, rate-limit headers, security scheme                               | **11.4** | `lib/api/v1/openapi/`                                                   |
+
+**A route file can compose shapes from more than one owner, and that is not an
+exception.** The two ranked collections — `GET /projects/{projectKey}/backlog`
+and `GET /sprints/{sprintId}/work-items` — return 11.2's `presentWorkItemRef`
+rows inside 11.3's ranked envelope (`lib/api/v1/rankedCollections.ts`), and the
+same two paths' write verbs return 11.3's `presentMembershipMove`. Ownership
+follows the SHAPE, not the URL, which is why the check is "walk the tree and read
+each presenter", not "match the path prefix".
+
+The table is a snapshot and will go stale; **the walk is the check.** It is
+already mechanized and needs no new guard: `tests/api/v1/openapi-operations-coverage.test.ts`
+walks the tree with `v1RouteFiles()` and FAILS on an exported verb with no
+declared operation, and `tests/api/v1/openapi-drift-guard.test.ts` FAILS when a
+declared response no longer validates against a REAL response. An endpoint
+therefore cannot ship shapeless. What those guards cannot decide is **whose**
+shape it is — which is what the next paragraph is for.
+
+**3. An endpoint whose shape has no owner is a PLAN GAP to file, not a shape for
+Story 11.4 to author.** If a route arrives — now or after 11.1–11.4 are all
+`done` — whose response shape no story owns, the run that finds it declares the
+schema in the resource's own module, names this amendment in the module header,
+and **files a card against the owning story** to record the ownership. It does
+not silently widen 11.4's boundary, and it does not leave the endpoint out of the
+published document (a reference that covers _some_ of an API is worse than one
+that covers none). That is precisely the path 11.4.5 took, and it is ratified
+here as the standing procedure rather than remembered as a one-off exception.
+
+**4. A v1 route MAPS THROUGH its schema — the shape is the value the route
+emits, not a description written beside it.** Amendment 2's corollary said a v1
+response is a schema's OUTPUT; every resource shipped since honours it by
+routing the row through a mapper the schema module exports (`presentProject`,
+`presentWorkItemDetail`, `presentSprint`, `presentReadyItem`). The two identity
+endpoints do not: they shape inline, and
+`lib/api/v1/identity/schema.ts` merely _describes_ what they return. The
+difference is small and real — a field added to `/me`'s inline literal would not
+fail typecheck, only the parse test — and the guarantee the rest of the surface
+has is that the document and the endpoint are the SAME expression, not two that a
+test says agree today.
+
+**This is a code change and it ships as its own card with its own PR** —
+**MOTIR-2202** (Subtask 11.1.7), blocked by this decision (it changes
+response-shaping code and is not a documentation edit): the two routes map
+through `presentMe` / `presentWorkspaceSummary`, and neither route's own
+reason for shaping explicitly — _"`verify` returns the raw Prisma `User` row and a
+public API must never leak one"_ — is weakened by it. That instinct is what the
+mapper institutionalises: field by field, never spread, in one place instead of
+in the handler.
+
+#### Rejected alternatives
+
+| Rejected                                                           | Why                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Leave the two endpoints owned by 11.4**                          | Makes Amendment 2's boundary ("authors **no** per-resource shape") false in the record while true in intent, and the next reader cannot tell a deliberate exception from a mistake — which is the exact confusion the module's own header was written to prevent.       |
+| **Move the module to `lib/api/v1/me/` + `lib/api/v1/workspaces/`** | Two modules of one schema each, split along the ROUTE rather than the resource. `identity` is the resource both endpoints answer about, and it is the grouping the published reference already uses (`lib/apiDocs/reference.ts`).                                       |
+| **Add a fourth sentence and stop there**                           | Fixes this instance and leaves the class: a prose list is still auditable only against itself. The route-file walk is what makes a future omission visible, and it was already shipped — writing a new prose check beside it would hand-roll a guard the code provides. |
+| **Fold the map-through change into this card**                     | A documentation card that also edits two shipped routes' response shaping is two deliverables in one PR, and the second is the one that needs the conformance suite's full attention. Its own card, its own PR.                                                         |
+| **Leave the two routes shaping inline, permanently**               | Accepts a weaker guarantee on the two OLDEST endpoints in the API — the ones most likely to be read as the pattern. The asymmetry would have to be explained forever; closing it costs one card.                                                                        |
+
+#### Consequences of this amendment
+
+- **Amendment 2's list is now total**, and its totality is checkable by a command
+  (`walk app/api/v1`) rather than by re-reading three sentences.
+- **`lib/api/v1/identity/schema.ts` is Story 11.1's**, and its header points here
+  instead of recording an open gap.
+- **The map-through change is carded** — **MOTIR-2202** (11.1.7), `blocked_by`
+  this decision, in `motir-core`, one PR.
+- **11.4's boundary is intact** — the one shape it authored is transferred, not
+  excused, so a future reader finds no per-resource schema owned by 11.4.
