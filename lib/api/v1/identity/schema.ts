@@ -1,4 +1,6 @@
 import { z } from 'zod/v4';
+import type { apiTokensService } from '@/lib/services/apiTokensService';
+import type { workspacesService } from '@/lib/services/workspacesService';
 
 // The v1 IDENTITY + WORKSPACE shapes — Story 11.1's, per ADR Amendment 5
 // (MOTIR-2195). Written by Subtask 11.4.5 (MOTIR-2186); OWNED by Story 11.1.
@@ -23,16 +25,31 @@ import { z } from 'zod/v4';
 // endpoint that arrives without an owner: declare it in its resource's own
 // module and file a card against the owning story.
 //
-// ── These schemas DESCRIBE today; they will EMIT ────────────────────────────
-// Neither route imports this module yet: 11.4.5's scope boundary said "the
-// declaration follows the route", not the reverse. Amendment 5 decided the two
-// routes SHOULD map through the schema the way every other v1 resource does
-// (`presentProject`, `presentWorkItemDetail`) — a response-shaping code change,
-// so it ships as its own card with its own PR: MOTIR-2202 (11.1.7). Until that
-// lands, the schemas are proven honest by
-// `tests/api/v1/openapi-operations-coverage.test.ts`, which drives the REAL
+// ── These schemas EMIT ──────────────────────────────────────────────────────
+// Both routes MAP THROUGH this module (MOTIR-2202 / 11.1.7, closing Amendment
+// 5 §4): `presentMe` and `presentWorkspaceSummary` below are the values
+// `/api/v1/me` and `/api/v1/workspaces` return, exactly as every other v1
+// resource emits `presentProject` / `presentWorkItemDetail`. The published
+// document and the endpoint are now the SAME expression rather than two a test
+// reports as equal — a field added here is a field the reference gains the same
+// day, and a field added anywhere else cannot reach the wire at all.
+//
+// `tests/api/v1/openapi-operations-coverage.test.ts` still drives the REAL
 // routes with a REAL token and parses what they actually return — not a fixture
-// written from the same assumption as the schema.
+// written from the same assumption as the schema. It is no longer the only
+// thing holding the two sides together, but it is what proves the mapper is
+// wired to the route rather than merely exported beside it.
+//
+// ⚠️ WHY EVERY MAPPER SHAPES FIELD BY FIELD AND NEVER SPREADS.
+// The service layer hands these mappers RAW PRISMA ROWS — `apiTokensService.verify`
+// returns a `User`, `workspacesService.listUserWorkspaces` returns `Workspace[]` —
+// and a public API must never leak one. `emailVerified`, `image`, the timestamps
+// and whatever a later migration adds would all become contract by accident.
+// This reasoning used to live in each route handler; it lives HERE now, beside
+// the field lists it governs, and each route keeps a one-line pointer to it. The
+// mapper does not weaken that instinct — it institutionalises it, in ONE place
+// instead of once per handler. (ADR Amendment 2's corollary is the same rule one
+// level up: a v1 response IS a schema's output.)
 
 /**
  * `GET /api/v1/me` — who this token is, and what it may do.
@@ -68,6 +85,37 @@ export const meSchema = z
 export type V1Me = z.infer<typeof meSchema>;
 
 /**
+ * What `apiTokensService.verify` resolves to — the mapper's input type, taken
+ * FROM the service rather than restated beside it.
+ *
+ * Restating it would reintroduce exactly the defect this card removes, one
+ * layer down: two shapes agreeing until someone edits one. Bound this way, a
+ * service that renames `workspaceId` or stops returning `scopes` breaks the
+ * build here, at the seam that decides what the public API says.
+ */
+type VerifiedToken = Awaited<ReturnType<typeof apiTokensService.verify>>;
+
+/**
+ * Map a verified token to the `/api/v1/me` payload — field by field, never a
+ * spread (see the header's WHY note: `verified.user` is a raw Prisma `User`).
+ *
+ * Widening `User` therefore changes nothing on the wire. The three fields below
+ * are the contract, and adding a fourth means editing this function — which is
+ * the same edit that updates the published document.
+ */
+export function presentMe(verified: VerifiedToken): V1Me {
+  return {
+    user: {
+      id: verified.user.id,
+      name: verified.user.name,
+      email: verified.user.email,
+    },
+    workspaceId: verified.workspaceId,
+    scopes: verified.scopes,
+  };
+}
+
+/**
  * One row of `GET /api/v1/workspaces`.
  *
  * ⚠️ Account-level, and the one place v1 answers outside the bound workspace:
@@ -86,3 +134,29 @@ export const workspaceSummarySchema = z
 
 /** One workspace row, inferred from the schema. */
 export type V1WorkspaceSummary = z.infer<typeof workspaceSummarySchema>;
+
+/**
+ * One row of what `workspacesService.listUserWorkspaces` resolves to — the
+ * mapper's input type, taken FROM the service for the reason `VerifiedToken`
+ * records.
+ */
+type WorkspaceRow = Awaited<ReturnType<typeof workspacesService.listUserWorkspaces>>[number];
+
+/**
+ * Map a workspace row to its wire resource — field by field, never a spread
+ * (see the header's WHY note: the service returns raw Prisma `Workspace` rows).
+ *
+ * `createdAt` is serialised HERE rather than left to `JSON.stringify`, so the
+ * ISO string is the mapper's output type and not an accident of how the value
+ * happens to be encoded. This is `paginateKeyset`'s row mapper, so the pager's
+ * `(createdAt, id)` sort key stays internal — it sorts the Prisma row and emits
+ * this shape.
+ */
+export function presentWorkspaceSummary(workspace: WorkspaceRow): V1WorkspaceSummary {
+  return {
+    id: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    createdAt: workspace.createdAt.toISOString(),
+  };
+}
