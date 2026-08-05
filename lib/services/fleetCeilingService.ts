@@ -88,6 +88,10 @@ export interface FleetSlotRequest {
   workload: FleetWorkloadKind;
   /** The workload's own id for the thing about to hold a container. */
   ref: string;
+  /** WHICH RUN is taking it (MOTIR-2160) — stamped on the row so the matching
+   *  {@link fleetCeilingService.release} can be ownership-checked. Only a workload
+   *  whose `ref` already names one run may leave it unset. */
+  ownerRef?: string | null;
   /** Attribution only — never a tenancy boundary, and never a bypass. */
   organizationId?: string | null;
   workspaceId?: string | null;
@@ -199,6 +203,7 @@ export const fleetCeilingService = {
           {
             workload: request.workload,
             ref: request.ref,
+            ownerRef: request.ownerRef ?? null,
             organizationId: request.organizationId ?? null,
             workspaceId: request.workspaceId ?? null,
             expiresAt: new Date(now.getTime() + ttlSeconds * 1_000),
@@ -243,10 +248,21 @@ export const fleetCeilingService = {
    * Best-effort, and deliberately so: the worst case of a failure here is a slot
    * that occupies capacity until `expires_at` ages it out — visible and bounded
    * — whereas a throw would fail a teardown path over a bookkeeping row.
+   *
+   * ⚠️ PASS `ownerRef` WHENEVER THE WORKLOAD'S `ref` DOES NOT ALREADY NAME ONE RUN
+   * (MOTIR-2160). With it the delete is ownership-checked, so a run can only free
+   * the capacity it took; without it a shared ref lets whichever run settles first
+   * release a slot another run's live container is still spending against. A
+   * workload whose ref IS its run (an intent id, an agent-run id) has nothing to
+   * check and may omit it.
    */
-  async release(workload: FleetWorkloadKind, ref: string): Promise<boolean> {
+  async release(workload: FleetWorkloadKind, ref: string, ownerRef?: string): Promise<boolean> {
     try {
-      return await withSystemContext((tx) => slots.release(workload, ref, tx));
+      return await withSystemContext((tx) =>
+        ownerRef === undefined
+          ? slots.release(workload, ref, tx)
+          : slots.releaseOwned(workload, ref, ownerRef, tx),
+      );
     } catch (err) {
       console.error('[fleetCeilingService] could not release a fleet slot', {
         workload,

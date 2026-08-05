@@ -1,0 +1,22 @@
+-- MOTIR-2160 — record WHICH RUN holds a fleet in-flight slot.
+--
+-- The slot's `ref` names the WORK (for the index workload, `<projectId>:<repoRef>`)
+-- and is deliberately deterministic, so a redelivery / replay / retry finds the
+-- slot it already holds instead of taking a second one. What it cannot say is WHO
+-- is holding it — and nothing else in the system said either, so a second
+-- `system.code-graph-refresh` run for a repo the first was still indexing looked
+-- exactly like the first run's own replay: it was admitted ahead of all three
+-- caps, and whichever run settled first deleted a row the other's live container
+-- was still spending against.
+--
+-- `owner_ref` is the run that took the row. Nullable and outside every key: the
+-- uniqueness stays `(workload, ref)` — one slot per unit of work, whoever holds
+-- it — and a workload that does not identify its runs simply leaves it NULL.
+--
+-- Additive and non-destructive: existing rows keep NULL, which the admission gate
+-- reads as "a holder I cannot identify" (it defers behind one) and the release
+-- path reads as "nobody else's" (it may free one, so a container in flight at
+-- deploy time is not stranded for its full TTL).
+--
+-- `docs/decisions/code-graph-index-fleet.md` §7.3.
+ALTER TABLE "fleet_in_flight_slot" ADD COLUMN "owner_ref" TEXT;

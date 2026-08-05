@@ -324,6 +324,20 @@ export interface IndexDispatchInput {
   readonly defaultBranch: string;
   /** The dispatching run, carried into the credential for attribution. */
   readonly runId: string;
+  /**
+   * THE DISPATCH'S OWN IDENTITY (MOTIR-2160) — the triggering event's id, which
+   * is fixed for a run and different for the next one. It owns the admission slot,
+   * so this dispatch's replays keep their capacity while a SECOND dispatch for the
+   * same (repo × project) waits instead of booting beside a live container.
+   *
+   * ⚠️ NOT `runId`, though a run has exactly one of each. `runId` is read at the
+   * top of the handler on EVERY durable-replay pass, which is fine for the
+   * credential (minted once, inside a memoized step) and wrong for an ownership
+   * token that must still be recognisable several passes later. The event's id is
+   * the identity `defineJob` already correlates the ledger row by
+   * (`event.id ?? ctx.runId`), and the one MOTIR-2002 chose for the same problem.
+   */
+  readonly dispatchId: string;
 }
 
 /**
@@ -350,6 +364,11 @@ export interface IndexSession {
    *  container reports as `50`. */
   readonly credentialExpiresAt: string;
   readonly runId: string;
+  /** The dispatch that owns this container's admission slot (MOTIR-2160) —
+   *  carried on the session for the same reason `slotRef` is: the release happens
+   *  in a different step, minutes later, and it is refused unless it names the
+   *  dispatch that took the slot. */
+  readonly dispatchId: string;
   readonly repoRef: string;
   /**
    * The `fleet_in_flight_slot` this container occupies (MOTIR-1990).
@@ -705,6 +724,11 @@ export const codeGraphIndexDispatchService = {
     return codeGraphIndexAdmissionService.admit({
       projectId: input.projectId,
       repoRef: input.repoRef,
+      // WHICH DISPATCH is asking (MOTIR-2160). The slot ref names the
+      // (repo × project) and nothing else, so this is what tells this run's own
+      // replay apart from a second run arriving on a later push while the first
+      // container is still building — the first keeps its capacity, the second waits.
+      dispatchId: input.dispatchId,
       workspaceId: input.workspaceId,
       organizationId: input.organizationId,
       // The container's REAL hard kill, which the slot's safety net is derived
@@ -815,7 +839,7 @@ export const codeGraphIndexDispatchService = {
     } catch (err) {
       // The three loud failures still throw — the ledger must never record a
       // success for a repo nothing indexed — but the capacity goes back first.
-      await codeGraphIndexAdmissionService.release(admission.slotRef);
+      await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
       throw err;
     }
 
@@ -835,7 +859,7 @@ export const codeGraphIndexDispatchService = {
     } catch (err) {
       // The port guarantees a failed `provision` left no container behind, so
       // the slot stands for nothing and is released rather than aged out.
-      await codeGraphIndexAdmissionService.release(admission.slotRef);
+      await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
       if (err instanceof OrchestratorImageUnpullableError) {
         const detail = `the indexer image could not be pulled: ${detailOf(err)}`;
         console.error('[codeGraphIndexDispatchService] the indexer image is not pullable', {
@@ -861,6 +885,7 @@ export const codeGraphIndexDispatchService = {
         bootedAt: now().toISOString(),
         credentialExpiresAt: credential.expiresAt,
         runId: input.runId,
+        dispatchId: input.dispatchId,
         repoRef: input.repoRef,
         slotRef: admission.slotRef,
         attribution: {
@@ -1091,7 +1116,13 @@ export const codeGraphIndexDispatchService = {
     // teardown returned above without releasing, because that container may still
     // be running and under-counting a live one is the direction the ceiling must
     // never err in.
-    await codeGraphIndexAdmissionService.release(session.slotRef);
+    //
+    // ⚠️ AND ONLY THIS DISPATCH'S OWN SLOT (MOTIR-2160). `session.dispatchId` makes the
+    // delete ownership-checked, which is the same invariant read from the other
+    // side: "provably gone" is a statement about THIS container, and the slot ref
+    // names a (repo × project) that another run could be holding. Passing the ref
+    // alone is how a settle used to free a live container's capacity.
+    await codeGraphIndexAdmissionService.release(session.slotRef, session.dispatchId);
 
     return {
       outcome: 'settled',

@@ -105,6 +105,12 @@ const SLOT_TTL_MARGIN_SECONDS = 300;
 /** Why an index container was not admitted. Every one of these means WAIT — the
  *  caller queues and asks again. None of them means "drop this index". */
 export type IndexAdmissionDeferralReason =
+  /** ANOTHER RUN is already indexing this (repo × project) — MOTIR-2160. Not a
+   *  cap at all: the unit of work is taken, and a second container for it would
+   *  be waste at best and a stale pointer at worst. Waiting is exactly right —
+   *  the holder is minutes from settling, and the wait ends with THIS run
+   *  indexing the newer head. */
+  | 'repo_index_in_flight'
   /** This workspace already holds `ceil(global / 2)` index containers. Its own
    *  burst is being paced so another tenant's first index is not stuck behind it. */
   | 'workspace_index_cap'
@@ -142,10 +148,15 @@ export type IndexAdmissionVerdict =
   /** Admitted AND the slot is TAKEN — decided and claimed in one transaction. */
   | { outcome: 'admitted'; admission: IndexAdmission; census: FleetInFlightCensus }
   /**
-   * This (repo × project) already holds a slot. NOT an error and NOT a refusal:
-   * a redelivered job or a replayed step must not occupy two slots for one
-   * container, and it must not be refused capacity it is already holding — that
-   * would make the caller tear down a live container to honour a refusal.
+   * THIS RUN already holds the slot for this (repo × project). NOT an error and
+   * NOT a refusal: a redelivered job or a replayed step must not occupy two slots
+   * for one container, and it must not be refused capacity it is already holding
+   * — that would make the caller tear down a live container to honour a refusal.
+   *
+   * ⚠️ SCOPED TO THE RUN SINCE MOTIR-2160. It used to mean "somebody holds it",
+   * which is the same sentence for a replay of this run and for a SECOND run that
+   * has no capacity of its own — and the second read admitted a container past
+   * every cap. A different holder is now `deferred` / `repo_index_in_flight`.
    */
   | { outcome: 'already_held'; admission: IndexAdmission }
   /** Not admitted, nothing written. The caller WAITS and asks again. */
@@ -156,6 +167,27 @@ export interface IndexAdmissionRequest {
   readonly projectId: string;
   /** `owner/name`. */
   readonly repoRef: string;
+  /**
+   * WHICH DISPATCH IS ASKING (MOTIR-2160) — the triggering event's id, the same
+   * identity `defineJob` correlates the ledger row by and the one MOTIR-2002
+   * chose for this problem on the CI fleet.
+   *
+   * That it is FIXED for a run and DIFFERENT for the next one is the whole point:
+   * it is what lets a deterministic slot key mean "one unit of index work"
+   * without also meaning "one caller". A request whose dispatch already holds the
+   * slot is a replay and keeps its capacity; a request from another dispatch
+   * finds the work taken and waits.
+   *
+   * ⚠️ THE EVENT'S ID, NOT `ctx.runId` — deliberately, and the difference is
+   * testable. `ctx.runId` is read at the top of the handler, and Inngest
+   * re-invokes that handler from the top at every step boundary; the ledger's own
+   * `eventId` derivation (`event.id ?? ctx.runId`) already prefers the event for
+   * exactly that reason. `@inngest/test` makes the consequence visible — it mints
+   * a FRESH runId per pass, so a `runId`-owned slot is taken by one pass and
+   * unrecognisable to the next. An ownership rule the suite cannot express is one
+   * nothing defends.
+   */
+  readonly dispatchId: string;
   /** Attribution, and the key the per-workspace cap counts on. */
   readonly workspaceId: string;
   readonly organizationId: string;
@@ -172,16 +204,74 @@ function detailOf(err: unknown): string {
 }
 
 /**
+ * What an EXISTING slot for this (repo × project) means for the run that just
+ * asked for it (MOTIR-2160) — the one place the two readings of a held slot are
+ * told apart, so the take path and the lost-race path cannot drift.
+ *
+ * ⚠️ AN UNOWNED ROW (`owner_ref IS NULL`) DEFERS. It was taken before this
+ * column existed, so it belongs to a run this one cannot identify — and the
+ * question here is whether to boot a SECOND container against a live one. The
+ * asymmetry with `releaseOwned`, which does treat NULL as releasable, is
+ * deliberate and points the same way both times: never run two containers for
+ * one unit of work, never under-count one that is running. It costs at most the
+ * holder's remaining TTL, once, on the deploy that ships this column.
+ */
+function heldVerdict(
+  held: { claimedAt: Date; ownerRef: string | null },
+  slotRef: string,
+  dispatchId: string,
+): IndexAdmissionVerdict {
+  const takenAt = held.claimedAt.toISOString();
+  if (held.ownerRef === dispatchId) {
+    return {
+      outcome: 'already_held',
+      admission: {
+        slotRef,
+        admittedAt: takenAt,
+        detail: `this dispatch already holds the index slot for this (repo × project), taken at ${takenAt}`,
+      },
+    };
+  }
+  return {
+    outcome: 'deferred',
+    reason: 'repo_index_in_flight',
+    detail:
+      `another dispatch is already indexing this (repo × project) — ` +
+      `slot taken at ${takenAt} by ${held.ownerRef ?? 'a dispatch that predates owner tracking'}`,
+  };
+}
+
+/**
  * The slot key for one index container: `<projectId>:<repoRef>`.
  *
- * DETERMINISTIC, and deliberately NOT run-scoped. The unit of index work is one
- * (repo × project) — §6's ledger contract forces one container per repo, and
- * `resolveIndexTarget` fans out per project — so this key names exactly one
- * container's worth of capacity. Because the slot table's uniqueness is
- * `(workload, ref)`, that makes the take IDEMPOTENT across a redelivery, an
- * Inngest replay and a job retry: the second attempt finds `already_held` instead
- * of occupying a second slot for the same container. A run-scoped key would give
- * every retry its own slot and turn the cap into a number the retries walk past.
+ * DETERMINISTIC, and NOT run-scoped — it names the WORK, never the worker. The
+ * unit of index work is one (repo × project) — §6's ledger contract forces one
+ * container per repo, and `resolveIndexTarget` fans out per project — so this key
+ * names exactly one container's worth of capacity. Because the slot table's
+ * uniqueness is `(workload, ref)`, that makes the take IDEMPOTENT across a
+ * redelivery, an Inngest replay and a job retry: the second attempt finds the row
+ * already there instead of occupying a second slot for the same container. A
+ * run-scoped KEY would give every retry its own slot and turn the cap into a
+ * number the retries walk past.
+ *
+ * ⚠️ WHAT THIS KEY ALONE CANNOT DECIDE, AND WHERE THAT IS DECIDED (MOTIR-2160).
+ * It says a slot for this work is taken; it does not say BY WHOM. Nothing else
+ * in the system said either — `system.code-graph-refresh`'s 2-minute debounce
+ * coalesces pushes inside one window and does nothing once a run has started,
+ * while an index of a large tree runs for minutes, so a second run for the same
+ * repo is ordinary, not exotic. Reading a held slot as "mine" therefore let that
+ * second run boot a container judged against NONE of the three caps, and let
+ * whichever run settled first delete a row the other's live container was still
+ * spending against.
+ *
+ * The fix keeps the key repo-scoped and puts the RUN on the row instead
+ * (`fleet_in_flight_slot.owner_ref`), which is what makes both questions
+ * answerable at once: {@link codeGraphIndexAdmissionService.admit} compares the
+ * holder against the asking run — the same run keeps its capacity, a different
+ * one waits — and the release is ownership-checked
+ * (`fleetInFlightSlotRepository.releaseOwned`). Adding the run to the KEY would
+ * have re-created exactly the walked-past cap described above; adding it as an
+ * OWNER does not.
  */
 export function indexSlotRef(projectId: string, repoRef: string): string {
   return `${projectId}:${repoRef}`;
@@ -214,19 +304,16 @@ export const codeGraphIndexAdmissionService = {
           throw new Error('the fleet admission lock could not be taken');
         }
 
-        // An already-held slot is not a NEW container, so it is not judged
-        // against any cap — see the verdict's own comment.
+        // ── 0 · IS THIS WORK ALREADY BEING DONE, AND BY WHOM? (MOTIR-2160) ────
+        // A slot held by THIS run is not a new container, so it is not judged
+        // against any cap — see the verdict's own comment. A slot held by ANOTHER
+        // run is a live container doing this exact work, and the caller must WAIT
+        // rather than boot a second one: the ownership test is the difference
+        // between an idempotent replay and an overlap, and reading it as the
+        // former was how a second run reached a boot having consulted none of the
+        // three bounds below.
         const held = await slots.findByRef(CODE_GRAPH_INDEX_WORKLOAD, slotRef, tx);
-        if (held) {
-          return {
-            outcome: 'already_held' as const,
-            admission: {
-              slotRef,
-              admittedAt: held.claimedAt.toISOString(),
-              detail: `this (repo × project) already holds an index slot, taken at ${held.claimedAt.toISOString()}`,
-            },
-          };
-        }
+        if (held) return heldVerdict(held, slotRef, request.dispatchId);
 
         // ⚠️ ONE census for all three counts. `byWorkload.code_graph_index` IS
         // the global index in-flight number, so the workload cap costs no extra
@@ -284,6 +371,7 @@ export const codeGraphIndexAdmissionService = {
           {
             workload: CODE_GRAPH_INDEX_WORKLOAD,
             ref: slotRef,
+            ownerRef: request.dispatchId,
             organizationId: request.organizationId,
             workspaceId: request.workspaceId,
             expiresAt: new Date(now.getTime() + ttlSeconds * 1_000),
@@ -291,17 +379,22 @@ export const codeGraphIndexAdmissionService = {
           tx,
         );
         // The insert raced a transaction that committed the same ref between the
-        // read above and here. Harmless and idempotent — the slot exists exactly
-        // once either way, and this caller is the one that must not double-book.
+        // read above and here. The slot exists exactly once either way — but WHOSE
+        // it is decides whether this caller may boot, so the answer comes from the
+        // same ownership test as the read above, not from the assumption that a
+        // conflict is one's own redelivery (MOTIR-2160). A row we cannot read back
+        // is treated as somebody else's: not booting is the recoverable mistake.
         if (!took) {
-          return {
-            outcome: 'already_held' as const,
-            admission: {
-              slotRef,
-              admittedAt: now.toISOString(),
-              detail: 'another dispatch took this (repo × project) slot first',
-            },
-          };
+          const winner = await slots.findByRef(CODE_GRAPH_INDEX_WORKLOAD, slotRef, tx);
+          return winner
+            ? heldVerdict(winner, slotRef, request.dispatchId)
+            : {
+                outcome: 'deferred' as const,
+                reason: 'repo_index_in_flight' as const,
+                detail:
+                  'another dispatch took this (repo × project) slot first, ' +
+                  'and the winning row could not be read back to identify it',
+              };
         }
 
         return {
@@ -346,12 +439,21 @@ export const codeGraphIndexAdmissionService = {
    * deliberately does not release, and the slot's `expires_at` ages it out
    * instead while the reaper does its work.
    *
+   * ⚠️ AND ONLY THE DISPATCH THAT TOOK IT MAY GIVE IT BACK (MOTIR-2160).
+   * `dispatchId` is not bookkeeping — it is the guard. The slot ref names a
+   * (repo × project), so an unchecked delete let one run free capacity belonging
+   * to ANOTHER run's live container: the census then under-counted a container that was still spending,
+   * and a third dispatch could take the freed row only to have it deleted by the
+   * second's settle in turn. A release that owns nothing removes nothing and
+   * reports `false`; the real holder's slot ages out through `expires_at` if its
+   * own settle never comes.
+   *
    * Best-effort by delegation: `fleetCeilingService.release` logs and returns
    * false rather than throwing, because the worst case here is a slot that
    * occupies capacity until its safety net expires — visible and bounded — while
    * a throw would fail a teardown path over a bookkeeping row.
    */
-  async release(slotRef: string): Promise<boolean> {
-    return fleetCeilingService.release(CODE_GRAPH_INDEX_WORKLOAD, slotRef);
+  async release(slotRef: string, dispatchId: string): Promise<boolean> {
+    return fleetCeilingService.release(CODE_GRAPH_INDEX_WORKLOAD, slotRef, dispatchId);
   },
 };

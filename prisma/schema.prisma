@@ -5348,6 +5348,24 @@ model FleetInFlightSlot {
   containerProvider String? @map("container_provider")
   containerId       String? @map("container_id")
 
+  /// WHICH RUN holds this slot — the workload's own identifier for the dispatch
+  /// that took it (MOTIR-2160). The `ref` says WHAT is being worked on and must
+  /// stay deterministic so a redelivery is idempotent; this says WHO is working
+  /// on it, which is the question the ref deliberately cannot answer.
+  ///
+  /// Without it a second run for the same `ref` is indistinguishable from the
+  /// first run's own replay, so it was admitted past every cap — and whichever
+  /// run settled first released a slot the other's live container was still
+  /// spending against. With it, admission can defer a DIFFERENT run while still
+  /// admitting the SAME one's retry, and a release can be refused unless it owns
+  /// the row (`fleetInFlightSlotRepository.releaseOwned`).
+  ///
+  /// Nullable, and NOT part of any uniqueness: the key stays `(workload, ref)` —
+  /// one slot per unit of work, whoever holds it. A workload that does not
+  /// identify its runs simply leaves it NULL and keeps the pre-MOTIR-2160
+  /// behaviour.
+  ownerRef String? @map("owner_ref")
+
   claimedAt DateTime @default(now()) @map("claimed_at")
 
   /// ⚠️ A SAFETY NET, NOT THE RELEASE MECHANISM. Release is an explicit delete

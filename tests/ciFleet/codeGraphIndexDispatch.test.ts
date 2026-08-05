@@ -69,6 +69,7 @@ const INPUT: IndexDispatchInput = {
   repoRef: 'moooon-B-V/motir-core',
   defaultBranch: 'main',
   runId: 'run-abc',
+  dispatchId: 'evt-abc',
 };
 
 /** Millisecond deadlines, so a whole supervised run is a few ticks. */
@@ -98,8 +99,10 @@ const ADMISSION: IndexAdmission = {
   detail: 'granted by the test',
 };
 
-/** The slot releases this dispatch performed. */
+/** The slot releases this dispatch performed — `<slotRef>` and the run that
+ *  claimed to own it, because WHO releases is now half the contract (MOTIR-2160). */
 let released: string[] = [];
+let releasedBy: Array<{ slotRef: string; dispatchId: string }> = [];
 
 /** The ticket for one dispatch input — the slot ref the gate would have granted
  *  for that (repo × project), so a stubbed grant still names the real key. */
@@ -170,15 +173,19 @@ beforeEach(() => {
   credentialResponder = credentialResponse;
   tarballResponder = redirectResponse;
   released = [];
+  releasedBy = [];
   vi.spyOn(codeGraphIndexAdmissionService, 'admit').mockResolvedValue({
     outcome: 'admitted',
     admission: ADMISSION,
     census: { total: 1, byWorkload: { ci_runner: 0, code_graph_index: 1, hosted_agent: 0 } },
   });
-  vi.spyOn(codeGraphIndexAdmissionService, 'release').mockImplementation(async (slotRef) => {
-    released.push(slotRef);
-    return true;
-  });
+  vi.spyOn(codeGraphIndexAdmissionService, 'release').mockImplementation(
+    async (slotRef, dispatchId) => {
+      released.push(slotRef);
+      releasedBy.push({ slotRef, dispatchId });
+      return true;
+    },
+  );
 
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
@@ -511,6 +518,39 @@ describe('the admission slot is held for exactly as long as a container exists',
 
     expect(outcome.outcome).toBe('teardown_failed');
     expect(released).toEqual([]);
+  });
+
+  // ⚠️ AND IT RELEASES AS ITSELF (MOTIR-2160). The slot ref names a
+  // (repo × project), not a run, so the release only frees THIS container's
+  // capacity if it also says who is asking — the run the session was booted for.
+  // `codeGraphIndexAdmission.test.ts` proves the gate enforces it; this is the
+  // wiring half, that the dispatch actually passes it.
+  it('names its OWN dispatch on every release, so it can only free its own slot', async () => {
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep: completeWith(0),
+    });
+
+    expect(outcome.outcome).toBe('settled');
+    expect(releasedBy).toEqual([{ slotRef: ADMISSION.slotRef, dispatchId: INPUT.dispatchId }]);
+  });
+
+  it('names its own dispatch on the FAILED-BOOT releases too', async () => {
+    fakeOrchestrator.failNextProvision('the fake refused');
+
+    await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+
+    expect(releasedBy).toEqual([{ slotRef: ADMISSION.slotRef, dispatchId: INPUT.dispatchId }]);
+  });
+
+  // The gate is asked as this run too — the request the ticket is granted against
+  // is what the ownership test on the other side reads.
+  it('asks for admission AS its own dispatch', async () => {
+    await codeGraphIndexDispatchService.admitIndexContainer(INPUT, FAST);
+
+    expect(codeGraphIndexAdmissionService.admit).toHaveBeenCalledWith(
+      expect.objectContaining({ dispatchId: INPUT.dispatchId, projectId: 'proj-1' }),
+    );
   });
 });
 
