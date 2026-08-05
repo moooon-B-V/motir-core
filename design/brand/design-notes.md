@@ -54,17 +54,16 @@ literals).
 
 ---
 
-## 1. The logomark — five candidates for MOTIR-1140
+## 1. The logomark — four candidates for MOTIR-1140
 
-MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Five mathematical
-objects in two families — three **flat** (§1 A–C) and two **isometric** (§1 D–E) — all on one
+MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Four mathematical
+objects in two families — three **flat** (§1 A–C) and one **isometric** (§1 D) — all on one
 construction grid. Picking any of them changes only the `<path>` data MOTIR-1150 consumes.
 
-The isometric pair uses **one colour at three opacities** (100 / 58 / 32%), never a second hue, so
-the Tier-3 token rule holds and a `data-palette` swap re-skins them for free. Both are drawn in
-**true isometric projection**, which is what makes them mathematical rather than decorative: the
-three axes meet at 120° on screen, so the direction (1, 1, 1) projects to a single point. That
-degeneracy is the whole trick — it is _why_ the tribar closes.
+The isometric candidate uses **one colour at three opacities** (100 / 58 / 30%), never a second hue,
+so the Tier-3 token rule holds and a `data-palette` swap re-skins it for free. It is drawn in **true
+isometric projection**, which is what makes it mathematical rather than decorative: the three axes
+meet at 120° on screen, so the direction (1, 1, 1) projects to a single point.
 
 ### A · Lattice _(recommended)_
 
@@ -111,47 +110,50 @@ on-message.
 interior collapses in the tab strip. Choosing it means shipping a second, simplified cut for the
 favicon, a permanent two-artwork tax the other two do not carry.
 
-### D · Cube _(isometric)_
+### D · Astroidal ellipsoid _(isometric)_
 
-> _The Hasse diagram of B₃ — the Boolean lattice on three elements._
+> _|x|^(2/3) + |y|^(2/3) + |z|^(2/3) = 1 — the surface whose cross-section in **every** coordinate
+> plane is an astroid._
 
-**This is A one dimension up, not a different idea.** Order the subsets of {plan, track, build} by
-inclusion and the lattice you get is drawn as a cube — and because B₂'s diagram is a _face_ of B₃'s,
-**each visible face of this cube is exactly candidate A's outer rhombus**. Three faces, three
-pillars, one object.
+**This is B one dimension up.** The astroid is the four-cusp member of the hypocycloid family — the
+same construction as B, a circle rolling inside a circle — and this is the solid it generates in
+three dimensions. Slice it on any of the three coordinate planes and the section you get is that
+curve. It is **not an extrusion of a flat star**: extruding a concave star produces slivers of wall
+that read as a drop shadow, not a solid (built, rendered, discarded). This is the object the curve
+_is_, given depth, which is why the six cusps sit on the three axes.
 
-**Cost:** depth needs tone, and the three tones blur below ~20 px, so the favicon takes a flattened
-single-tone cut. An isometric cube is also the most-used 3D icon there is — it is lucide's own `Box`
-— so the gapped faces are doing the differentiating work.
+Worth noting: the four-cusp astroid was rejected in 2D for being the ✨ every AI product uses. As a
+volumetric solid it reads nothing like that glyph — the concavity and the six axial cusps do the work
+— so the shape earns a second hearing here.
 
-### E · Tribar _(isometric)_
+**Cost — the highest of any candidate.** It is a faceted surface, not a curve: 80 paths in three
+tones rather than one or two `<path>`s. If it wins, the shipped glyph must be re-authored as ~6
+hand-drawn Bézier patches with the mesh as the reference render, and the tones blur below ~20 px, so
+it owes a flattened single-tone cut for the favicon — the same tax as C.
 
-> _Penrose's impossible triangle — locally consistent everywhere, globally impossible._
+### Considered and dropped
 
-The tribar is not a drawing error: its impossibility is a genuine invariant, which Penrose formalised
-as a non-zero class in the first cohomology group of the figure's cover. **Every local join checks
-out; only the whole loop fails.** That is the exact failure mode of a project plan — every card reads
-fine on its own and the plan still does not close — and seeing the whole loop is the thing Motir is
-for (the dependency DAG, `validate_sprint`, blocked-by).
-
-**Cost:** the same tonal floor as D, plus a semantic risk worth saying out loud — a mark whose
-one-word summary is "impossible" has to be explained to be read the right way, and a brand mark
-rarely gets to explain itself. It also skews toward a play/next arrow at 16 px.
+The **isometric cube** (the Hasse diagram of B₃ — which would have been candidate A one dimension up,
+since B₂'s diagram is a face of B₃'s) and the **Penrose tribar** (locally consistent everywhere,
+globally impossible — a precise description of a plan that does not close). Both are mathematically
+apt, both were built and rendered at every size, and both are among the most heavily used marks in
+software — the cube is lucide's own `Box`. A brand mark that reads as a stock icon is not worth the
+idea behind it. (Yue, 2026-08-05.)
 
 ### Recommendation
 
 **Still A.** It is the only candidate that is simultaneously true of the product, legible at every
 shipped size, and free of a second artwork.
 
-Of the isometric pair, **D** is the stronger: it is A's own object one dimension up, so choosing it
-keeps the whole system coherent and costs only the flattened favicon cut. **E** is the most striking
-mark of the five and carries the sharpest idea, at the price of needing that idea explained. **C**
-remains the best story and the worst legibility. **B** is the fallback if a solid silhouette is
-wanted for stamping, embroidery or single-colour print.
+**D** is the strongest thing here to look at and the most expensive to own: a faceted solid is a
+different _class_ of asset from a two-path glyph, and it commits the brand to maintaining a flat cut
+beside it forever. **C** remains the best story and the worst legibility. **B** is D's own curve in
+the flat, and the fallback if a solid silhouette is wanted for stamping, embroidery or single-colour
+print.
 
-**C, D and E all carry the same tax: a second, simplified cut below ~24 px.** A and B do not. That is
-the single biggest practical difference between the two families, and it is a permanent cost — every
-future palette, every future size, two artworks to keep in agreement.
+**C and D both owe a second, simplified cut below ~24 px.** A and B do not. That is the single
+biggest practical difference between the two families, and it is a permanent cost — every future
+palette, every future size, two artworks to keep in agreement.
 
 ---
 
@@ -384,8 +386,8 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
   `icon-192/512.png`). Those are build outputs — MOTIR-1150 renders them from the single SVG source
   defined in §2 at the sizes and safe zones in §5.
 - **The glyph is decided by MOTIR-1140, not by this card.** Keep the two `<path>` strings in ONE
-  module so a substitution (to B, C, D or E) is a single-file change. If C, D or E wins, that module also owns the
-  simplified ≤24 px cut, and every call site below 24 px must resolve to it — and for D/E the tonal
+  module so a substitution (to B, C or D) is a single-file change. If C or D wins, that module also owns the
+  simplified ≤24 px cut, and every call site below 24 px must resolve to it — and for D the tonal
   variant must express its three tones as **opacity on one token**, never as three colours.
 
 ## File-name note

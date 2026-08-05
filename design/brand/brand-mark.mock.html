@@ -3450,6 +3450,35 @@
       .cand-row-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+      .cand-row-1 {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .cand-wide figcaption {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 22px;
+        align-items: start;
+      }
+      .cand-wide figcaption > b:first-child,
+      .cand-wide .cand-math {
+        grid-column: 1 / -1;
+      }
+      .cand-art-lg {
+        height: 190px;
+      }
+      .dropped {
+        margin: 18px 0 0;
+        padding: 12px 14px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-md);
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 96ch;
+      }
+      .dropped b {
+        color: var(--el-text);
+      }
       .fam-label {
         margin: 4px 0 12px;
         font-size: 12px;
@@ -4102,75 +4131,654 @@
           <path d="M10.87 19.22A6.2 6.2 0 0 1 10.87 10.18 M13.29 8.78A6.2 6.2 0 1 1 13.29 20.62" />
           <path d="M7.09 8.76A6.2 6.2 0 0 1 14.92 13.29 M14.93 16.07A6.2 6.2 0 1 1 4.67 10.15" />
         </g>
-        <!-- Candidate D — "Cube". The isometric cube IS the Hasse diagram of B3,
-         the Boolean lattice on three elements — candidate A one dimension up.
-         Each visible face is exactly A's outer rhombus. ONE colour, three
-         opacities; no second hue, so a palette swap re-skins it for free. -->
+        <!-- Candidate D — "Astroidal ellipsoid": the hypocycloid family in three
+         dimensions. The superellipsoid |x|^(2/3)+|y|^(2/3)+|z|^(2/3)=1, whose
+         cross-section in EVERY coordinate plane is an astroid — candidate B's
+         curve one dimension up. Drawn as a 16x10 facet mesh in true isometric
+         projection, back-faces culled, shaded in THREE discrete opacities of a
+         single colour (never a second hue). The hairline stroke on each facet
+         carries the facet's own opacity and exists only to close anti-alias
+         seams between neighbours. -->
         <g id="mark-d">
           <path
-            d="M12.00 2.45L19.97 7.05L12.00 11.65L4.03 7.05Z"
-            fill="currentColor"
-            fill-opacity="1.0"
-          />
-          <path
-            d="M20.27 7.57L12.30 12.17L12.30 21.38L20.27 16.78Z"
+            d="M12.00 22.20L12.00 22.20L11.74 20.62L11.78 20.66Z"
             fill="currentColor"
             fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
           />
           <path
-            d="M3.73 7.57L11.70 12.17L11.70 21.38L3.73 16.78Z"
-            fill="currentColor"
-            fill-opacity="0.32"
-          />
-        </g>
-        <!-- Candidate E — "Tribar". Penrose's impossible triangle: every local
-         join is consistent, only the global loop fails. Same one-colour /
-         three-opacity rule. -->
-        <g id="mark-e">
-          <path
-            d="M6.93 1.60L21.01 9.72L17.07 12.00L2.99 3.87Z"
-            fill="currentColor"
-            fill-opacity="1.0"
-          />
-          <path
-            d="M21.01 9.72L17.07 12.00L17.07 16.55L21.01 14.28Z"
+            d="M12.00 22.20L12.00 22.20L12.22 20.66L12.26 20.62Z"
             fill="currentColor"
             fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
           />
           <path
-            d="M2.99 3.87L17.07 12.00L17.07 16.55L2.99 8.42Z"
+            d="M12.00 22.20L12.00 22.20L11.78 20.66L11.82 20.77Z"
             fill="currentColor"
-            fill-opacity="0.32"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
           />
           <path
-            d="M17.07 7.45L21.01 9.72L6.93 17.85L2.99 15.58Z"
+            d="M12.00 22.20L12.00 22.20L12.18 20.77L12.22 20.66Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 22.20L12.00 22.20L12.00 20.88L12.19 20.90Z"
             fill="currentColor"
             fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
           />
           <path
-            d="M21.01 9.72L6.93 17.85L6.93 22.40L21.01 14.28Z"
-            fill="currentColor"
-            fill-opacity="0.58"
-          />
-          <path
-            d="M2.99 15.58L6.93 17.85L6.93 22.40L2.99 20.12Z"
-            fill="currentColor"
-            fill-opacity="0.32"
-          />
-          <path
-            d="M6.93 1.60L10.87 3.87L6.93 6.15L2.99 3.87Z"
+            d="M12.00 22.20L12.00 22.20L11.81 20.90L12.00 20.88Z"
             fill="currentColor"
             fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
           />
           <path
-            d="M10.87 3.87L6.93 6.15L6.93 22.40L10.87 20.12Z"
+            d="M12.00 22.20L12.00 22.20L12.19 20.90L12.26 20.92Z"
             fill="currentColor"
             fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
           />
           <path
-            d="M2.99 3.87L6.93 6.15L6.93 22.40L2.99 20.12Z"
+            d="M12.00 22.20L12.00 22.20L11.74 20.92L11.81 20.90Z"
             fill="currentColor"
-            fill-opacity="0.32"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M11.78 20.66L11.74 20.62L10.21 16.37L10.48 16.64Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.26 20.62L12.22 20.66L13.52 16.64L13.79 16.37Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M4.54 8.26L3.17 6.90L4.40 7.31L5.58 8.49Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M20.83 6.90L19.46 8.26L18.42 8.49L19.60 7.31Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M11.82 20.77L11.78 20.66L10.48 16.64L10.73 17.40Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.22 20.66L12.18 20.77L13.27 17.40L13.52 16.64Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M8.05 12.09L7.32 11.37L4.40 7.91L5.58 9.09Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M16.68 11.37L15.95 12.09L18.42 9.09L19.60 7.91Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M5.53 7.69L12.00 8.39L12.00 8.60L6.43 7.99Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 8.39L18.47 7.69L17.57 7.99L12.00 8.60Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M10.48 16.64L10.21 16.37L7.32 11.37L8.05 12.09Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.79 16.37L13.52 16.64L15.95 12.09L16.68 11.37Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 20.88L11.81 20.90L10.69 18.28L12.00 18.13Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.19 20.90L12.00 20.88L12.00 18.13L13.31 18.28Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.26 20.92L12.19 20.90L13.31 18.28L13.79 18.44Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M11.81 20.90L11.74 20.92L10.21 18.44L10.69 18.28Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M5.58 8.49L4.40 7.31L7.32 7.23L8.05 7.95Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M19.60 7.31L18.42 8.49L15.95 7.95L16.68 7.23Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M19.46 8.26L18.25 12.00L17.37 11.70L18.42 8.49Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M5.75 12.00L4.54 8.26L5.58 8.49L6.63 11.70Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M18.42 8.49L17.37 11.70L15.31 9.93L15.95 7.95Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M6.63 11.70L5.58 8.49L8.05 7.95L8.69 9.93Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.31 18.28L12.00 18.13L12.00 15.98L15.43 16.35Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 18.13L10.69 18.28L8.57 16.35L12.00 15.98Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M10.69 18.28L10.21 18.44L7.32 16.77L8.57 16.35Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.79 18.44L13.31 18.28L15.43 16.35L16.68 16.77Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M8.05 7.95L7.32 7.23L10.21 5.56L10.48 5.84Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M16.68 7.23L15.95 7.95L13.52 5.84L13.79 5.56Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M15.95 7.95L15.31 9.93L13.27 6.60L13.52 5.84Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M8.69 9.93L8.05 7.95L10.48 5.84L10.73 6.60Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M18.25 12.00L19.46 15.74L18.42 14.91L17.37 11.70Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M4.54 15.74L5.75 12.00L6.63 11.70L5.58 14.91Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M17.37 11.70L18.42 14.91L15.95 11.91L15.31 9.93Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M5.58 14.91L6.63 11.70L8.69 9.93L8.05 11.91Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M15.43 16.35L12.00 15.98L12.00 15.40L17.57 16.01Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 15.98L8.57 16.35L6.43 16.01L12.00 15.40Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M15.31 9.93L15.95 11.91L13.52 7.36L13.27 6.60Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M8.05 11.91L8.69 9.93L10.73 6.60L10.48 7.36Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M16.68 16.77L15.43 16.35L17.57 16.01L19.60 16.69Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M8.57 16.35L7.32 16.77L4.40 16.69L6.43 16.01Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M10.48 5.84L10.21 5.56L11.74 3.08L11.78 3.12Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.79 5.56L13.52 5.84L12.22 3.12L12.26 3.08Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M15.43 12.21L12.00 11.84L12.00 7.33L13.31 7.47Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 11.84L8.57 12.21L10.69 7.47L12.00 7.33Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M10.73 6.60L10.48 5.84L11.78 3.12L11.82 3.23Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.52 5.84L13.27 6.60L12.18 3.23L12.22 3.12Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M17.57 15.40L12.00 14.80L12.00 11.84L15.43 12.21Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 14.80L6.43 15.40L8.57 12.21L12.00 11.84Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M16.68 12.63L15.43 12.21L13.31 7.47L13.79 7.63Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M8.57 12.21L7.32 12.63L10.21 7.63L10.69 7.47Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M18.47 16.31L12.00 15.61L12.00 14.80L17.57 15.40Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 15.61L5.53 16.31L6.43 15.40L12.00 14.80Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M19.60 16.09L17.57 15.40L15.43 12.21L16.68 12.63Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M6.43 15.40L4.40 16.09L7.32 12.63L8.57 12.21Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.31 7.47L12.00 7.33L12.00 3.33L12.19 3.35Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 7.33L10.69 7.47L11.81 3.35L12.00 3.33Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M13.79 7.63L13.31 7.47L12.19 3.35L12.26 3.38Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M10.69 7.47L10.21 7.63L11.74 3.38L11.81 3.35Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M19.46 15.74L20.83 17.10L19.60 16.09L18.42 14.91Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M3.17 17.10L4.54 15.74L5.58 14.91L4.40 16.09Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M19.60 16.69L17.57 16.01L18.47 16.31L20.83 17.10Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M6.43 16.01L4.40 16.69L3.17 17.10L5.53 16.31Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M20.83 17.10L18.47 16.31L17.57 15.40L19.60 16.09Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M5.53 16.31L3.17 17.10L4.40 16.09L6.43 15.40Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M11.78 3.12L11.74 3.08L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.26 3.08L12.22 3.12L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+            stroke="currentColor"
+            stroke-opacity="0.58"
+            stroke-width="0.06"
+          />
+          <path
+            d="M11.82 3.23L11.78 3.12L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.22 3.12L12.18 3.23L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="0.3"
+            stroke="currentColor"
+            stroke-opacity="0.3"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.19 3.35L12.00 3.33L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.00 3.33L11.81 3.35L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M12.26 3.38L12.19 3.35L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
+          />
+          <path
+            d="M11.81 3.35L11.74 3.38L12.00 1.80L12.00 1.80Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+            stroke="currentColor"
+            stroke-opacity="1.0"
+            stroke-width="0.06"
           />
         </g>
         <!-- The construction grid overlay (documentation only — never shipped). -->
@@ -4402,17 +5010,17 @@
 
     <!-- ══════════════════════════════════════════════════════════════════════ -->
     <section class="panel">
-      <p class="panel-label">Panel 1 — The logomark: five candidates for MOTIR-1140</p>
+      <p class="panel-label">Panel 1 — The logomark: four candidates for MOTIR-1140</p>
       <p class="panel-note">
         <b>No letterform.</b> The mark is not an M and is not derived from one — an initial says
         only what the product is called, and Motir's name is not the interesting thing about it.
         Each candidate below is a <b>mathematical object</b> that is true of what Motir actually
         does. MOTIR-1140 (8.3.2) is a <code>decision</code> card, and a decision needs something to
-        decide between: five candidates in two families — three <b>flat</b>, two <b>isometric</b> —
+        decide between: four candidates in two families — three <b>flat</b>, one <b>isometric</b> —
         all buildable SVG today, and picking any of them changes only the
-        <code>&lt;path&gt;</code> data MOTIR-1150 consumes. The isometric pair uses
-        <b>one colour at three opacities</b> (100 / 58 / 32%), never a second hue, so the Tier-3
-        token rule holds and a <code>data-palette</code> swap re-skins them for free.
+        <code>&lt;path&gt;</code> data MOTIR-1150 consumes. The isometric candidate uses
+        <b>one colour at three opacities</b> (100 / 58 / 30%), never a second hue, so the Tier-3
+        token rule holds and a <code>data-palette</code> swap re-skins it for free.
       </p>
 
       <p class="fam-label">Flat — one closed form, one stroke weight, one colour</p>
@@ -4498,78 +5106,65 @@
       </div>
 
       <p class="fam-label fam-3d">
-        <b>Isometric</b> — the same kind of objects, with depth. Both are drawn in
-        <b>true isometric projection</b>, which is what makes them mathematical rather than
+        <b>Isometric</b> — the same family, one dimension up. Drawn in
+        <b>true isometric projection</b>, which is what makes it mathematical rather than
         decorative: the three axes meet at 120° on screen, so the direction (1,&nbsp;1,&nbsp;1)
-        projects to a single point. That degeneracy is the whole trick — it is <i>why</i> the tribar
-        closes.
+        projects to a single point.
       </p>
-      <div class="cand-row cand-row-2">
-        <figure class="cand">
-          <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
+      <div class="cand-row cand-row-1">
+        <figure class="cand cand-wide">
+          <div class="cand-art cand-art-lg">
+            <svg viewBox="0 0 24 24" width="150" height="150" class="brand-glyph">
               <use href="#mark-d" />
             </svg>
           </div>
           <figcaption>
-            <b>D · Cube</b>
+            <b>D · Astroidal ellipsoid</b>
             <p class="cand-math">
-              The Hasse diagram of B₃ — the Boolean lattice on three elements.
+              |x|<sup>2/3</sup> + |y|<sup>2/3</sup> + |z|<sup>2/3</sup> = 1 — the surface whose
+              cross-section in <i>every</i> coordinate plane is an astroid.
             </p>
             <p>
-              <b>This is A one dimension up, not a different idea.</b> Order the subsets of {plan,
-              track, build} by inclusion and the lattice you get is drawn as a cube — and because
-              B₂'s diagram is a <i>face</i> of B₃'s,
-              <b>each visible face of this cube is exactly candidate A's outer rhombus</b>. Three
-              faces, three pillars, one object.
-            </p>
-            <p class="cand-why">
-              <b>Cost:</b> depth needs tone, and the three tones blur below ~20&nbsp;px, so the
-              favicon takes a flattened single-tone cut. An isometric cube is also the most-used 3D
-              icon there is — it is lucide's own <code>Box</code> — so the gapped faces are doing
-              the differentiating work.
-            </p>
-          </figcaption>
-        </figure>
-        <figure class="cand">
-          <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
-              <use href="#mark-e" />
-            </svg>
-          </div>
-          <figcaption>
-            <b>E · Tribar</b>
-            <p class="cand-math">
-              Penrose's impossible triangle — locally consistent everywhere, globally impossible.
+              <b>This is B one dimension up.</b> The astroid is the four-cusp member of the
+              hypocycloid family — the same construction as B, a circle rolling inside a circle —
+              and this is the solid it generates in three dimensions. Slice it on any of the three
+              coordinate planes and the section you get is that curve. It is not an extrusion of a
+              flat star; it is the object the curve <i>is</i>, given depth, which is why the six
+              cusps sit on the three axes.
             </p>
             <p>
-              The tribar is not a drawing error: its impossibility is a genuine invariant, which
-              Penrose formalised as a non-zero class in the first cohomology group of the figure's
-              cover. <b>Every local join checks out; only the whole loop fails.</b> That is the
-              exact failure mode of a project plan — every card reads fine on its own and the plan
-              still does not close — and seeing the whole loop is the thing Motir is for (the
-              dependency DAG, <code>validate_sprint</code>, blocked-by).
+              Worth noting: the four-cusp astroid was rejected in 2D for being the ✨ every AI
+              product uses. As a volumetric solid it reads nothing like that glyph — the concavity
+              and the six axial cusps do the work — so the shape earns a second hearing here.
             </p>
             <p class="cand-why">
-              <b>Cost:</b> the same tonal floor as D, plus a semantic risk worth saying out loud — a
-              mark whose one-word summary is "impossible" has to be explained to be read the right
-              way, and a brand mark rarely gets to explain itself. It also skews toward a play/next
-              arrow at 16&nbsp;px.
+              <b>Cost:</b> the highest of any candidate. It is a faceted surface, not a curve: 80
+              paths in three tones rather than one or two <code>&lt;path&gt;</code>s, so if it wins
+              the shipped glyph must be re-authored as ~6 hand-drawn Bézier patches with the mesh as
+              the reference render. The tones blur below ~20&nbsp;px, so it owes a flattened
+              single-tone cut for the favicon — the same tax as C.
             </p>
           </figcaption>
         </figure>
       </div>
 
+      <p class="dropped">
+        <b>Considered and dropped:</b> the <b>isometric cube</b> (the Hasse diagram of B₃, which
+        would have been candidate A one dimension up) and the <b>Penrose tribar</b> (locally
+        consistent everywhere, globally impossible — a precise description of a plan that does not
+        close). Both are mathematically apt and both were built and rendered. Both are also among
+        the most heavily used marks in software — the cube is lucide's own <code>Box</code> — and a
+        brand mark that reads as a stock icon is not worth the idea behind it.
+      </p>
+
       <p class="decision-line">
         <b>Recommendation to MOTIR-1140: still A.</b> It is the only candidate that is
         simultaneously true of the product, legible at every shipped size, and free of a second
-        artwork. Of the isometric pair, <b>D</b> is the stronger — it is A's own object one
-        dimension up, so choosing it keeps the whole system coherent and costs only the flattened
-        favicon cut. <b>E</b> is the most striking mark here and carries the sharpest idea, at the
-        price of needing that idea explained. <b>C</b> remains the best story and the worst
-        legibility; <b>B</b> is the fallback for single-colour print.
-        <b>C, D and E all carry the same tax:</b> a second, simplified cut below ~24&nbsp;px. A and
-        B do not.
+        artwork. <b>D</b> is the strongest thing here to look at and the most expensive to own — a
+        faceted solid is a different class of asset from a two-path glyph, and it commits the brand
+        to maintaining a flat cut beside it forever. <b>C</b> remains the best story and the worst
+        legibility; <b>B</b> is D's own curve in the flat, and the fallback for single-colour print.
+        <b>C and D both owe a second, simplified cut below ~24&nbsp;px.</b> A and B do not.
       </p>
     </section>
 
