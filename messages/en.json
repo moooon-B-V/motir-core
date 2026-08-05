@@ -5154,7 +5154,12 @@
         "startedRecently": "just started",
         "retry": "Try again",
         "pick": "Show the audit for {repoRef}",
-        "groupLabel": "Choose a repository’s audit report"
+        "groupLabel": "Choose a repository’s audit report",
+        "auditOne": "Audit this repo",
+        "auditOneLabel": "Audit {repoRef}",
+        "reauditOne": "Re-audit",
+        "reauditOneLabel": "Re-audit {repoRef}",
+        "auditUnaudited": "{count, plural, one {Audit the # with no report} other {Audit the # with no report}}"
       }
     },
     "convention": {
