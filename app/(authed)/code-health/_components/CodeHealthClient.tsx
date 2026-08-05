@@ -68,6 +68,23 @@ export function CodeHealthClient({
   const t = useTranslations('codeHealth');
   const [tab, setTab] = useState<Tab>('audit');
 
+  // Every read is repo-SCOPED (MOTIR-2123). Both boundary reads REQUIRE a
+  // `repoKey` — motir-ai's `/v1/code-audit` and `/v1/convention` each
+  // `requireQuery` it — so an unscoped fetch is a 400, and the fan-out means the
+  // conventions are a SET, one surface per connected repo, exactly what the page
+  // seeded and what `ConventionPanel` renders a card each for.
+  //
+  // The audit stays on ONE repo — the same first repo the page rendered — which
+  // is what keeps the re-audit poll watching the surface on screen rather than
+  // tripping on a sibling repo's fresh audit now that every repo derives one.
+  const auditRepoRef = repoRefs[0] ?? null;
+  const auditUrl = (params: Record<string, string> = {}): string | null =>
+    auditRepoRef === null
+      ? null
+      : `${AUDIT_URL}?${new URLSearchParams({ repoKey: auditRepoRef, ...params }).toString()}`;
+  const conventionUrl = (repoKey: string): string =>
+    `${CONVENTION_URL}?${new URLSearchParams({ repoKey }).toString()}`;
+
   const [audit, setAudit] = useState<CodeAuditSurfaceDTO | null>(initialAudit);
   const [conventions, setConventions] = useState<ConventionSurfaceDTO[]>(initialConventions);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -90,11 +107,25 @@ export function CodeHealthClient({
 
   async function reload() {
     setError(null);
+    const url = auditUrl();
+    if (url === null) {
+      // No connected repo: there is nothing to read, and the page seeded nothing
+      // either. Not an error state — the audit tab draws the start-fresh case.
+      setAudit(null);
+      setConventions([]);
+      return;
+    }
     try {
-      const [aRes, cRes] = await Promise.all([fetch(AUDIT_URL), fetch(CONVENTION_URL)]);
-      if (!aRes.ok || !cRes.ok) throw new Error('load failed');
+      const [aRes, cResList] = await Promise.all([
+        fetch(url),
+        Promise.all(repoRefs.map((repoKey) => fetch(conventionUrl(repoKey)))),
+      ]);
+      if (!aRes.ok || cResList.some((r) => !r.ok)) throw new Error('load failed');
       setAudit((await aRes.json()) as CodeAuditSurfaceDTO);
-      setConventions([(await cRes.json()) as ConventionSurfaceDTO]);
+      const surfaces = (await Promise.all(cResList.map((r) => r.json()))) as ConventionSurfaceDTO[];
+      // Same per-repo filter the page seeds with: a repo with nothing derived
+      // yet renders no card, and never suppresses the repos that do have one.
+      setConventions(surfaces.filter((c) => c.convention !== null));
     } catch {
       setError(t('errorLoad'));
     }
@@ -102,10 +133,12 @@ export function CodeHealthClient({
 
   async function loadMoreFindings() {
     if (!audit || audit.nextOffset === null || loadingMore) return;
+    const url = auditUrl({ findingsOffset: String(audit.nextOffset) });
+    if (url === null) return;
     const seq = ++pageSeq.current;
     setLoadingMore(true);
     try {
-      const res = await fetch(`${AUDIT_URL}?findingsOffset=${audit.nextOffset}`);
+      const res = await fetch(url);
       if (!res.ok) throw new Error('page failed');
       const next = (await res.json()) as CodeAuditSurfaceDTO;
       if (seq !== pageSeq.current) return;
@@ -131,10 +164,14 @@ export function CodeHealthClient({
     try {
       const res = await fetch(REFRESH_URL, { method: 'POST' });
       if (!res.ok) throw new Error('refresh failed');
+      // ONE POST per click, whatever the poll does — the trigger's own fan-out
+      // over the repo set happens server-side, so a poll tick must never re-POST.
+      const url = auditUrl();
+      if (url === null) return;
       for (let i = 0; i < REAUDIT_POLL_TRIES; i++) {
         await delay(REAUDIT_POLL_MS);
         if (seq !== reauditSeq.current) return;
-        const aRes = await fetch(AUDIT_URL);
+        const aRes = await fetch(url);
         if (!aRes.ok) continue;
         const next = (await aRes.json()) as CodeAuditSurfaceDTO;
         if (next.audit && next.audit.id !== prevAuditId) {

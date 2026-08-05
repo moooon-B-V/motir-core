@@ -158,13 +158,17 @@ describe('POST /api/ai/coding-convention/refresh', () => {
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
-  it('triggers a re-audit for an admin and returns the queued job ids (202)', async () => {
+  it('triggers a re-audit for an admin and returns the queued job ids per repo (202)', async () => {
     await signInAtProject();
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
     const res = await refreshPOST();
     expect(res.status).toBe(202);
     const body = await res.json();
-    expect(body).toEqual({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+    // The workspace has no installation here, so the fan-out submits the single
+    // unscoped pair (MOTIR-2123) — the per-repo shape, one entry.
+    expect(body).toEqual({
+      repos: [{ repoKey: null, auditJobId: 'job_a', conventionJobId: 'job_c' }],
+    });
     expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
   });
 
