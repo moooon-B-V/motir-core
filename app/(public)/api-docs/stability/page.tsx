@@ -42,42 +42,45 @@ export default async function StabilityPage() {
           </p>
         </header>
 
-        <section id="the-guarantee" className="mb-8 scroll-mt-6">
-          <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-            {POLICY_SECTIONS[0]?.title}
-          </h2>
-          <DocBlocks blocks={POLICY_SECTIONS[0]?.blocks ?? []} />
-        </section>
+        {POLICY_SECTIONS.map((section) => (
+          <div key={section.id}>
+            <section id={section.id} className="mb-8 scroll-mt-6">
+              <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
+                {section.title}
+              </h2>
+              <DocBlocks blocks={section.blocks} />
+            </section>
 
-        <section id="additive" className="mb-8 scroll-mt-6">
-          <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-            {t('policyAdditiveHeading')}
-          </h2>
-          <ul className="mb-3 max-w-[68ch] list-disc pl-5 text-sm leading-7 text-(--el-text-secondary)">
-            {POLICY_ADDITIVE.map((item) => (
-              <li key={item.adrPhrase}>{item.text}</li>
-            ))}
-          </ul>
-        </section>
+            {/* The two LISTS are the page's load-bearing content, so they land
+                immediately after the guarantee they qualify rather than at the
+                end. Keyed off the section's id, not its index — a positional
+                slice would silently move them the day a section is inserted. */}
+            {section.id === 'the-guarantee' && (
+              <>
+                <section id="additive" className="mb-8 scroll-mt-6">
+                  <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
+                    {t('policyAdditiveHeading')}
+                  </h2>
+                  <ul className="mb-3 max-w-[68ch] list-disc pl-5 text-sm leading-7 text-(--el-text-secondary)">
+                    {POLICY_ADDITIVE.map((item) => (
+                      <li key={item.adrPhrase}>{item.text}</li>
+                    ))}
+                  </ul>
+                </section>
 
-        <section id="forbidden" className="mb-8 scroll-mt-6">
-          <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-            {t('policyForbiddenHeading')}
-          </h2>
-          <ul className="mb-3 max-w-[68ch] list-disc pl-5 text-sm leading-7 text-(--el-text-secondary)">
-            {POLICY_FORBIDDEN.map((item) => (
-              <li key={item.adrPhrase}>{item.text}</li>
-            ))}
-          </ul>
-        </section>
-
-        {POLICY_SECTIONS.slice(1).map((section) => (
-          <section key={section.id} id={section.id} className="mb-8 scroll-mt-6">
-            <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-              {section.title}
-            </h2>
-            <DocBlocks blocks={section.blocks} />
-          </section>
+                <section id="forbidden" className="mb-8 scroll-mt-6">
+                  <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
+                    {t('policyForbiddenHeading')}
+                  </h2>
+                  <ul className="mb-3 max-w-[68ch] list-disc pl-5 text-sm leading-7 text-(--el-text-secondary)">
+                    {POLICY_FORBIDDEN.map((item) => (
+                      <li key={item.adrPhrase}>{item.text}</li>
+                    ))}
+                  </ul>
+                </section>
+              </>
+            )}
+          </div>
         ))}
 
         <p

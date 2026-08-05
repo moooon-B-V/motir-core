@@ -624,6 +624,23 @@ export default defineConfig({
         'lib/apiDocs/reference.ts',
         // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
         'lib/apiDocs/guide.ts',
+        // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the story gate. The docs
+        // SURFACE joins the map, not only the modules behind it: this is the
+        // page a third party reads to decide whether Motir is integrable, and
+        // its branches are the ones that decide what they see when something is
+        // wrong — a spec that would not build, a footer read that failed, a
+        // filter that matches nothing. Each is a way the published reference can
+        // be silently useless while every module beneath it is green.
+        'app/(public)/api-docs/layout.tsx',
+        'app/(public)/api-docs/page.tsx',
+        'app/(public)/api-docs/getting-started/page.tsx',
+        'app/(public)/api-docs/stability/page.tsx',
+        'app/(public)/api-docs/_components/CatalogueNav.tsx',
+        'app/(public)/api-docs/_components/CodeBlock.tsx',
+        'app/(public)/api-docs/_components/DocBlocks.tsx',
+        'app/(public)/api-docs/_components/MethodPill.tsx',
+        'app/(public)/api-docs/_components/OperationSection.tsx',
+        'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
@@ -673,6 +690,45 @@ export default defineConfig({
         'lib/apiDocs/reference.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
         'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
+        'app/(public)/api-docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/api-docs/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/api-docs/getting-started/page.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/api-docs/_components/CatalogueNav.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/CodeBlock.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/DocBlocks.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/MethodPill.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/OperationSection.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/api/v1/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/sprints/route.ts': {
