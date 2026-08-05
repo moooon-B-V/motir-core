@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -59,7 +60,8 @@ const inputSchema = {
  */
 function advisorySummary(dto: DispatchPromptDto): string[] {
   const references = dto.advisories.filter((a) => a.kind !== 'shape');
-  const shapes = dto.advisories.filter((a) => a.kind === 'shape');
+  const shapes = dto.advisories.filter(isOrderingAdvisory);
+  const straddles = dto.advisories.filter(isRepoStraddleAdvisory);
   const lines: string[] = [];
   if (references.length > 0) {
     lines.push(
@@ -73,6 +75,16 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
       `Advisory (NOT a blocker — ${dto.key} still dispatches): acceptance criterion ` +
         `${s.criterionIndex} says "${s.phrase}", state that exists only after this card's own ` +
         'PR has merged. Cut the card there — the remainder belongs to a follow-on card.',
+    );
+  }
+  for (const s of straddles) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): acceptance criterion ` +
+        `${s.criterionIndex} names ${s.path}, which lives in ${s.repo}` +
+        (s.reason === 'contradiction'
+          ? " — not this card's pinned repo."
+          : ', and this card pins no repo while its criteria name more than one.') +
+        ' One subtask, one repo, one PR — check the other repo before branching.',
     );
   }
   return lines;

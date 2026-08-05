@@ -14,9 +14,10 @@ import { resolveAgent, notReadyError } from '../src/commands/dispatch.js';
 import type { LinkConfig } from '../src/config/linkConfig.js';
 import type {
   DispatchAdvisory,
+  DispatchOrderingAdvisory,
   DispatchPrompt,
   DispatchReferenceAdvisory,
-  DispatchShapeAdvisory,
+  DispatchRepoStraddleAdvisory,
 } from '../src/mcpClient.js';
 
 // The PURE dispatch engine: repo routing, the bootstrap post-condition, agent
@@ -197,12 +198,26 @@ describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)',
   });
 
   /** The SHAPE family (MOTIR-2175) — no referenced item anywhere in it. */
-  const shapeAdvisory = (over: Partial<DispatchShapeAdvisory> = {}): DispatchAdvisory => ({
+  const shapeAdvisory = (over: Partial<DispatchOrderingAdvisory> = {}): DispatchAdvisory => ({
     kind: 'shape',
     item: 'PROD-7',
     severity: 'likely-ordering-violation',
     phrase: 'once it lands',
     criterionIndex: 5,
+    ...over,
+  });
+
+  /** The REPO-STRADDLE member of the same family (MOTIR-2177). */
+  const straddleAdvisory = (
+    over: Partial<DispatchRepoStraddleAdvisory> = {},
+  ): DispatchAdvisory => ({
+    kind: 'shape',
+    item: 'PROD-7',
+    severity: 'likely-repo-straddle',
+    path: 'motir-ai/src/services/codeRepoService.ts',
+    repo: 'motir-ai',
+    reason: 'contradiction',
+    criterionIndex: 3,
     ...over,
   });
 
@@ -261,6 +276,48 @@ describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)',
     expect(text).toContain('PROD-5 (in_review)');
     expect(text).toContain('criterion 5 says "once it lands"');
     expect(text).not.toContain('undefined');
+  });
+
+  it('renders a REPO-STRADDLE advisory by its criterion, PATH and repo (MOTIR-2177)', () => {
+    const text = renderDispatchAdvisories(prompt({ advisories: [straddleAdvisory()] })) as string;
+    expect(text).toContain('criterion 3 names motir-ai/src/services/codeRepoService.ts');
+    expect(text).toContain('which lives in motir-ai');
+    expect(text).toContain("not this card's pinned repo");
+    expect(text).toContain('NOT a blocker');
+    // The same regression the ordering variant guards: rendering a straddle
+    // through the ORDERING branch would print `says "undefined"`.
+    expect(text).not.toContain('undefined');
+    expect(text).not.toContain('--force');
+  });
+
+  it('says UNPINNABLE rather than "pinned repo" when the card pins nothing', () => {
+    const text = renderDispatchAdvisories(
+      prompt({ advisories: [straddleAdvisory({ reason: 'unpinnable' })] }),
+    ) as string;
+    expect(text).toContain('pins no repo while its criteria name more than one');
+    expect(text).not.toContain("not this card's pinned repo");
+  });
+
+  it('renders BOTH shape members together — neither is swallowed by the other', () => {
+    const text = renderDispatchAdvisories(
+      prompt({ advisories: [shapeAdvisory(), straddleAdvisory()] }),
+    ) as string;
+    expect(text).toContain('criterion 5 says "once it lands"');
+    expect(text).toContain('criterion 3 names motir-ai/src/services/codeRepoService.ts');
+    expect(text).not.toContain('undefined');
+  });
+
+  it('prints NOTHING for a shape severity this build has never heard of', () => {
+    // Version skew in the OTHER direction: a separately-published CLI pointed at
+    // a NEWER Motir. Selecting by family alone would run the unknown entry
+    // through the ordering renderer and print `says "undefined"`.
+    const future = {
+      kind: 'shape',
+      item: 'PROD-7',
+      severity: 'likely-something-new',
+      criterionIndex: 2,
+    } as unknown as DispatchAdvisory;
+    expect(renderDispatchAdvisories(prompt({ advisories: [future] }))).toBeNull();
   });
 });
 

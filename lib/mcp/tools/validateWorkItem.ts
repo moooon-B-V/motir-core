@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
@@ -49,7 +50,8 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   } either way`;
 
   const references = result.advisories.filter((a) => a.kind !== 'shape');
-  const shapes = result.advisories.filter((a) => a.kind === 'shape');
+  const shapes = result.advisories.filter(isOrderingAdvisory);
+  const straddles = result.advisories.filter(isRepoStraddleAdvisory);
 
   const lines: string[] = [];
   if (references.length > 0) {
@@ -80,6 +82,31 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
       'Cut the card at that criterion: everything from it down belongs to a follow-on card, ' +
         'blocked_by this one (gate 14, ORDERING axis). A deploy / human card that legitimately ' +
         'needs the merge — the release trio\'s "cut" leg — is exempt and never reported here.',
+    );
+  }
+  // The REPO-STRADDLE member of the same family (MOTIR-2177) — gate 1's repo
+  // column, and a different remedy again: not "cut the card at this line" but
+  // "split it per repo", so it gets its own block rather than being folded into
+  // the ordering sentence above.
+  if (straddles.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards have an acceptance criterion discharged in a repo ` +
+        "that is not the card's own — one subtask, one repo, one pull request:",
+      ...straddles.map(
+        (a) =>
+          `  ${a.item} criterion ${a.criterionIndex} names ${a.path} (${a.repo})` +
+          (a.reason === 'contradiction'
+            ? ', while the card pins a different targetRepo'
+            : ', and the card pins no repo while its criteria name more than one — check whether ' +
+              'it is UNPINNABLE rather than unpinned') +
+          ` (${a.severity})`,
+      ),
+      'Split the card per repo (gate 1, the criterion-by-criterion repo column). Two knowingly ' +
+        'uncovered forms remain: a BOUNDARY-CONTRACT card — a producer plus its mirrored ' +
+        'consumer, two coordinated PRs, legitimately one card — is reported here and is an ' +
+        'accepted false positive; and the bare-SYMBOL tell (a symbol whose repo you happen to ' +
+        "know) is invisible to this check, so gate 1's prose still applies.",
     );
   }
   return lines;
@@ -148,8 +175,11 @@ export function registerValidateWorkItem(
         'in-subtree card whose DESCRIPTION names a not-done work item it has no blocked_by edge ' +
         "to (severity `likely-missing-edge` when the reference sits in the card's own acceptance " +
         'criteria, else `advisory`); a `shape` advisory (`kind: "shape"`) names a card whose own ' +
-        'acceptance criterion reads on post-merge state (`likely-ordering-violation`, with the ' +
-        'matched phrase and the 1-based criterion index to cut at). Advisories ' +
+        'acceptance criterion is mis-shaped — `likely-ordering-violation` when the criterion reads ' +
+        'on post-merge state (with the matched phrase), or `likely-repo-straddle` when it names a ' +
+        "path in a repo that is not the card's `targetRepo` (with the path, that repo, and " +
+        '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
+        'name two or more) — both with the 1-based criterion index to cut at. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Read-only.',
       inputSchema,

@@ -1143,10 +1143,10 @@ export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge
 
 /**
  * The severity of a SHAPE advisory (MOTIR-2175) — a defect in what a card's own
- * acceptance criteria ASK FOR, with no second work item involved. One member
- * today; `likely-repo-straddle` is the next (MOTIR-2177).
+ * acceptance criteria ASK FOR, with no second work item involved. Two members:
+ * gate 14's ORDERING axis and gate 1's repo column (MOTIR-2177).
  */
-export type WorkItemProseShapeSeverityDto = 'likely-ordering-violation';
+export type WorkItemProseShapeSeverityDto = 'likely-ordering-violation' | 'likely-repo-straddle';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1187,35 +1187,89 @@ export interface WorkItemProseReferenceAdvisoryDto {
 }
 
 /**
- * ONE SHAPE advisory (MOTIR-2175): a card whose own ACCEPTANCE CRITERIA are
- * mis-shaped, with no second work item involved anywhere in the finding.
- *
- * Today's sole member is `likely-ordering-violation` — gate 14's ORDERING axis,
- * mechanized. A card's boundary ends at *PR opened* (`subtask_pr_merge_mode` is
- * `manual`), so a criterion whose truth requires the merge belongs to a
- * different card, and the remedy is to CUT the card at that line. Hence
- * {@link criterionIndex}: the line number is the actionable half of the finding,
- * not decoration.
+ * What EVERY shape advisory carries (MOTIR-2175): a card whose own ACCEPTANCE
+ * CRITERIA are mis-shaped, with no second work item involved anywhere in the
+ * finding, plus the 1-based index of the criterion the remedy cuts at.
  *
  * ⚠️ Same channel, same never-a-blocker contract as
  * {@link WorkItemProseReferenceAdvisoryDto} — `valid` / `blockers` and the
  * issue-detail `ready` / `openBlockers` are byte-identical whether or not this
- * is emitted. A gate here would be actively harmful for a reason specific to
- * this check: a release *cut* card is DEFINED by needing the merge (see
- * `isOrderingCheckExempt`, which suppresses exactly that shape).
+ * is emitted, at EVERY severity. Each member states its own reason why a gate
+ * here would be actively harmful.
  */
-export interface WorkItemProseShapeAdvisoryDto {
+interface WorkItemProseShapeAdvisoryBaseDto {
   /** The union discriminant — see {@link WorkItemProseAdvisoryDto}. */
   kind: 'shape';
   /** The card whose own acceptance criteria carry the defect. */
   item: string;
   /** Which shape defect this is. */
   severity: WorkItemProseShapeSeverityDto;
-  /** The gate-14 phrase that matched, in its canonical list form. */
-  phrase: string;
-  /** 1-based index of the offending criterion — where gate 14 says to cut. */
+  /**
+   * 1-based index of the offending criterion — where the remedy cuts. The line
+   * number is the actionable half of the finding, not decoration, and both
+   * members number criteria the same way (`criterionRepoPaths` reuses
+   * `firstPostMergeCriterion`'s attribution), so a card carrying both findings
+   * can be read against ONE numbering.
+   */
   criterionIndex: number;
 }
+
+/**
+ * Gate 14's ORDERING axis, mechanized (MOTIR-2175). A card's boundary ends at
+ * *PR opened* (`subtask_pr_merge_mode` is `manual`), so a criterion whose truth
+ * requires the merge belongs to a different card and the remedy is to CUT the
+ * card at that line.
+ *
+ * ⚠️ Never a gate, for a reason specific to this check: a release *cut* card is
+ * DEFINED by needing the merge (see `isOrderingCheckExempt`, which suppresses
+ * exactly that shape).
+ */
+export interface WorkItemProseOrderingAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-ordering-violation';
+  /** The gate-14 phrase that matched, in its canonical list form. */
+  phrase: string;
+}
+
+/**
+ * Gate 1's criterion-by-criterion repo column, mechanized (MOTIR-2177) — as a
+ * CONTRADICTION, never a count. An acceptance criterion names a repo-qualified
+ * path whose owning repo is not the card's `targetRepo`; ONE SUBTASK = ONE REPO
+ * = ONE PR, so that criterion cannot be discharged inside the card's own pull
+ * request. See {@link reason} for the unpinned arm.
+ *
+ * ⚠️ Never a gate, for a reason specific to this check too — and a blunter one:
+ * a BOUNDARY-CONTRACT card (a producer plus its mirrored consumer, two
+ * coordinated PRs, legitimately one card) fires here, knowingly. That accepted
+ * false positive costs one line of output precisely BECAUSE the channel never
+ * blocks; as a gate it would make a legitimate card unbuildable. It is also why
+ * this is the first check to withdraw if advisory fatigue shows.
+ *
+ * ⚠️ It does NOT cover the bare-SYMBOL form of the same tell (MOTIR-1983's
+ * `SHARED_PLANNING_RULES`) — that needs a cross-repo index. Gate 1's prose stays
+ * in force; this narrows the prose's job, it does not retire it.
+ */
+export interface WorkItemProseRepoStraddleAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-repo-straddle';
+  /** The repo-qualified path the criterion names, as it wrote it. */
+  path: string;
+  /** The repo that path resolves to — never the card's own `targetRepo`. */
+  repo: string;
+  /**
+   * `contradiction` — the card pins `targetRepo` and {@link repo} is not it.
+   * `unpinnable` — the card pins nothing and its criteria name two or more
+   * distinct repos, so the pin is not merely missing: there is no single value
+   * it could take.
+   */
+  reason: 'contradiction' | 'unpinnable';
+}
+
+/**
+ * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
+ * once `kind === 'shape'` has narrowed the outer union.
+ */
+export type WorkItemProseShapeAdvisoryDto =
+  | WorkItemProseOrderingAdvisoryDto
+  | WorkItemProseRepoStraddleAdvisoryDto;
 
 /**
  * ONE prose advisory — a discriminated union over `kind` (MOTIR-2175).
@@ -1240,3 +1294,26 @@ export interface WorkItemProseShapeAdvisoryDto {
 export type WorkItemProseAdvisoryDto =
   | WorkItemProseReferenceAdvisoryDto
   | WorkItemProseShapeAdvisoryDto;
+
+/**
+ * Narrow an advisory to the ORDERING shape (MOTIR-2175).
+ *
+ * A predicate rather than an inline `filter(a => a.severity === …)`, because a
+ * boolean predicate does not narrow: every renderer would then read `.phrase`
+ * off the whole union. Kept beside the union — the same disposition
+ * `isManualReadyItem` has in `lib/dto/ready.ts` — so all five server-side
+ * renderers narrow identically and a THIRD member cannot be added without every
+ * one of them failing to compile.
+ */
+export function isOrderingAdvisory(
+  a: WorkItemProseAdvisoryDto,
+): a is WorkItemProseOrderingAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-ordering-violation';
+}
+
+/** Narrow an advisory to the REPO-STRADDLE shape (MOTIR-2177). */
+export function isRepoStraddleAdvisory(
+  a: WorkItemProseAdvisoryDto,
+): a is WorkItemProseRepoStraddleAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-repo-straddle';
+}

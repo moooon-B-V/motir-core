@@ -268,15 +268,38 @@ item they return:
 
 ```jsonc
 "advisories": [
-  { "item": "PROD-7", "referenced": "PROD-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" }
+  { "item": "PROD-7", "referenced": "PROD-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" },
+  { "kind": "shape", "item": "PROD-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
+  { "kind": "shape", "item": "PROD-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 }
 ]
 ```
 
-Each entry names a work item the dispatched card's **acceptance criteria**
-reference while the card carries **no `blocked_by` edge to it**. An acceptance
-criterion is what the card is closed against, so naming a not-done item there is
-consuming it — and the graph, which is the only part a ready set can read, does
-not say so.
+Two families ride one array, discriminated by `kind`. **Narrow with
+`kind === "shape"`; anything else is a `reference`** — the tag is absent on the
+reference variant, deliberately, so widening the union changed no byte of the
+shape three consumers already read.
+
+A **`reference`** entry names a work item the dispatched card's **acceptance
+criteria** reference while the card carries **no `blocked_by` edge to it**. An
+acceptance criterion is what the card is closed against, so naming a not-done
+item there is consuming it — and the graph, which is the only part a ready set
+can read, does not say so.
+
+A **`shape`** entry has no far end at all: the card's own criteria are
+mis-shaped. Two severities, each with its own remedy:
+
+| severity                    | what it found                                                                                        | remedy                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `likely-ordering-violation` | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged | CUT the card at that criterion             |
+| `likely-repo-straddle`      | criterion `criterionIndex` names `path`, which lives in `repo` — not the card's `targetRepo`         | SPLIT the card per repo (one repo, one PR) |
+
+`likely-repo-straddle` carries `reason`: `"contradiction"` when the card pins a
+different `targetRepo`, or `"unpinnable"` when it pins none and its criteria name
+two or more repos — the pin is then not merely missing, there is no single value
+it could take. **It knowingly fires on a boundary-contract card** (a producer
+plus its mirrored consumer, two coordinated PRs, legitimately one card) and
+**cannot see the bare-symbol form** of the same tell (a symbol whose repo you
+happen to know), so it narrows the human check rather than replacing it.
 
 - **Always present, `[]` when there are none** — so a client reads one shape.
 - **The `likely-missing-edge` tier only.** The prose-vs-graph check also emits a
@@ -925,26 +948,36 @@ each gated in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId
 returns a `WORK_ITEM_NOT_FOUND` tool error.
 
 `advisories` is the **prose-vs-graph** channel (MOTIR-1969) and is **never a
-blocker**: an in-subtree card whose `descriptionMd` NAMES a not-`done` work item
-it carries no `blocked_by` edge to. Each entry is
-`{ item, referenced, referencedStatus, severity }`, where `item` is the card
-whose body names `referenced`, and `severity` is:
+blocker**. It carries the same two families the dispatch surfaces return (see
+[the dispatch advisories](#the-dispatch-advisories) for the full shape), except
+that this surface reports **both reference tiers** rather than the
+acceptance-criteria one alone.
+
+A `reference` entry is `{ item, referenced, referencedStatus, severity }`, where
+`item` is the card whose body names `referenced`, and `severity` is:
 
 | severity              | trigger                                                       |
 | --------------------- | ------------------------------------------------------------- |
 | `advisory`            | the not-`done` item is named anywhere in the body             |
 | `likely-missing-edge` | it is named inside the card's own acceptance-criteria section |
 
+A `shape` entry (`kind: "shape"`) reports a defect in the card's OWN criteria,
+with no second work item involved: `likely-ordering-violation` (a criterion that
+turns on the card's own merge — cut there) or `likely-repo-straddle` (a criterion
+naming a path outside the card's `targetRepo` — split per repo).
+
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
-advisories are emitted, at BOTH severities — a card legitimately names cards it
+advisories are emitted, at EVERY severity — a card legitimately names cards it
 does not depend on (out-of-scope sections, context refs, contrast references, a
 boundary-contract card naming both halves of a two-PR split), so this reports the
 gap without enforcing it. Wire a `blocked_by` edge if the card really consumes
 the reference; ignore the advisory if the reference is context only. A `done`
 reference, a self-reference, an ancestor, and anything already in the
-`blocked_by` set never produce one. **Blind spot:** the check reads
+`blocked_by` set never produce one. **Blind spots:** the reference check reads
 `descriptionMd` only, so a `type: decision` card's deferrals — which live in the
-document it produces, not in its card body — are outside its reach.
+document it produces, not in its card body — are outside its reach; and
+`likely-repo-straddle` sees only repo-QUALIFIED paths, never a bare symbol whose
+repo a reader happens to know.
 
 #### `create_sprint`
 

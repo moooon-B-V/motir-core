@@ -4565,9 +4565,11 @@ async function computeSubtreeProseAdvisories(
       item: member.identifier,
       descriptionMd: row?.descriptionMd ?? null,
       exemptIds,
-      // The ORDERING exemption's inputs (MOTIR-2175), from the same batched read.
+      // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE
+      // check's pin (MOTIR-2177), from the same batched read.
       type: row?.type ?? null,
       executor: row?.executor ?? null,
+      targetRepo: row?.targetRepo ?? null,
     };
   });
 

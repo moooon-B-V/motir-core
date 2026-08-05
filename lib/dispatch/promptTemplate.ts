@@ -1,5 +1,6 @@
 import type { DispatchWorkflowMode } from '@/lib/dto/dispatch';
 import { isManualReadyItem } from '@/lib/dto/ready';
+import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
 import type {
   ExecutorDto,
   WorkItemKindDto,
@@ -286,7 +287,8 @@ function section(heading: string, lines: string[]): string[] {
 function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   if (advisories.length === 0) return [];
   const references = advisories.filter((a) => a.kind !== 'shape');
-  const shapes = advisories.filter((a) => a.kind === 'shape');
+  const shapes = advisories.filter(isOrderingAdvisory);
+  const straddles = advisories.filter(isRepoStraddleAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -328,6 +330,32 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       '  an unmerged tree) and do NOT silently drop the criterion. Build everything ABOVE',
       '  the line, then report the split so the remainder can be carded (plan-rules.md,',
       '  gate 14, ORDERING axis).',
+    );
+  }
+
+  // The REPO-STRADDLE advisory (MOTIR-2177). Addressed to the agent for the same
+  // reason: it is about to create ONE worktree in ONE repo, and a criterion
+  // discharged in another repo is one it physically cannot satisfy from there.
+  // Naming the PATH is what makes the finding checkable in a second rather than
+  // taken on faith — and checkable is what it needs to be, because a
+  // boundary-contract card fires here legitimately.
+  if (straddles.length > 0) {
+    lines.push(
+      '',
+      'A CRITERION DISCHARGED IN ANOTHER REPO — read this before you branch:',
+      ...straddles.map((a) =>
+        a.reason === 'contradiction'
+          ? `    - acceptance criterion ${a.criterionIndex} names ${a.path}, which lives in` +
+            ` ${a.repo} — not this card's pinned repo.`
+          : `    - acceptance criterion ${a.criterionIndex} names ${a.path} (${a.repo}), and this` +
+            ' card pins no repo while its criteria name more than one.',
+      ),
+      '  ONE SUBTASK = ONE REPO = ONE PR: one worktree, one pull request, so a criterion',
+      "  discharged outside this card's repo cannot be satisfied inside it. CHECK IT FIRST —",
+      "  if the other repo's half is already merged, or this is a boundary-contract card whose",
+      '  own body pins the producer/mirror split (two coordinated PRs, one card), the finding',
+      '  is a known false positive and you proceed. Otherwise do NOT silently pick one repo and',
+      "  drop the other's criteria: that is run.md guard #5 — surface the split and STOP.",
     );
   }
   return lines;

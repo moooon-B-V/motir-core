@@ -189,30 +189,73 @@ export interface DispatchReferenceAdvisory {
 }
 
 /**
- * One SHAPE advisory (`WorkItemProseShapeAdvisoryDto`, MOTIR-2175) — the
- * dispatched card's OWN acceptance criteria ask for state that exists only after
- * the card's own PR has merged. There is no referenced work item at all, which
- * is why it is a separate variant rather than a severity.
+ * What EVERY SHAPE advisory carries (`WorkItemProseShapeAdvisoryDto`,
+ * MOTIR-2175) — a defect in the dispatched card's OWN acceptance criteria, with
+ * no referenced work item at all, which is why it is a separate variant rather
+ * than a severity.
  *
  * ⚠️ Also never a reason to refuse. Same disposition as above: printed, and the
  * human decides.
+ *
+ * ⚠️ The members below are matched by `severity`, and an UNMATCHED severity
+ * prints nothing. The CLI ships separately and is routinely pointed at a NEWER
+ * Motir, so a severity this build has never heard of must be silent rather than
+ * print some other member's fields as `undefined` —
+ * `renderDispatchAdvisories` selects known severities and lets anything else
+ * fall through. Adding a member to this union is therefore not enough: it has to
+ * be rendered too, or it is invisible.
  */
-export interface DispatchShapeAdvisory {
+interface DispatchShapeAdvisoryBase {
   kind: 'shape';
   /** The dispatched card's key. */
   item: string;
-  severity: string;
-  /** The matched post-merge phrase (e.g. `once it lands`). */
-  phrase: string;
   /** 1-based index of the offending criterion — where the card should be cut. */
   criterionIndex: number;
 }
+
+/** The card's criteria ask for state that exists only after its own PR merged. */
+export interface DispatchOrderingAdvisory extends DispatchShapeAdvisoryBase {
+  severity: 'likely-ordering-violation';
+  /** The matched post-merge phrase (e.g. `once it lands`). */
+  phrase: string;
+}
+
+/**
+ * A criterion names a path in a repo that is not the card's `targetRepo`
+ * (MOTIR-2177) — one subtask, one repo, one pull request.
+ */
+export interface DispatchRepoStraddleAdvisory extends DispatchShapeAdvisoryBase {
+  severity: 'likely-repo-straddle';
+  /** The repo-qualified path the criterion names. */
+  path: string;
+  /** The repo that path belongs to — never the card's own. */
+  repo: string;
+  /** `contradiction`: the card pins a different repo. `unpinnable`: it pins none. */
+  reason: 'contradiction' | 'unpinnable';
+}
+
+/** One SHAPE advisory — narrow by `severity` once `kind === 'shape'` has. */
+export type DispatchShapeAdvisory = DispatchOrderingAdvisory | DispatchRepoStraddleAdvisory;
 
 /**
  * One advisory, either family. Narrow with `a.kind === 'shape'`; anything else —
  * including a payload from a server that predates the union — is a reference.
  */
 export type DispatchAdvisory = DispatchReferenceAdvisory | DispatchShapeAdvisory;
+
+/**
+ * Narrow to the ORDERING member. A predicate rather than an inline `filter`
+ * comparison, because a boolean predicate does not narrow the resulting array
+ * and the renderer would then read `phrase` off the whole union.
+ */
+export function isOrderingAdvisory(a: DispatchAdvisory): a is DispatchOrderingAdvisory {
+  return a.kind === 'shape' && a.severity === 'likely-ordering-violation';
+}
+
+/** Narrow to the REPO-STRADDLE member (MOTIR-2177). */
+export function isRepoStraddleAdvisory(a: DispatchAdvisory): a is DispatchRepoStraddleAdvisory {
+  return a.kind === 'shape' && a.severity === 'likely-repo-straddle';
+}
 
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt
  * text plus the facts the CLI routes on before it runs the agent. */

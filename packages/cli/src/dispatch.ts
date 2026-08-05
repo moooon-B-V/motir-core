@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolveRepo, type LinkConfig, type RepoResolutionSource } from './config/linkConfig.js';
+import { isOrderingAdvisory, isRepoStraddleAdvisory } from './mcpClient.js';
 import type { DispatchPrompt, DispatchWorkflowMode } from './mcpClient.js';
 
 // The PURE half of single dispatch (Story 7.9 · Subtask 7.9.3 · MOTIR-881):
@@ -176,7 +177,11 @@ export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | nul
   const advisories = dispatch.advisories ?? [];
   if (advisories.length === 0) return null;
   const references = advisories.filter((a) => a.kind !== 'shape');
-  const shapes = advisories.filter((a) => a.kind === 'shape');
+  // Matched by SEVERITY, not merely by family: a severity a newer server emits
+  // and this build does not know matches neither filter and prints nothing,
+  // rather than printing another member's fields as `undefined`.
+  const shapes = advisories.filter(isOrderingAdvisory);
+  const straddles = advisories.filter(isRepoStraddleAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -200,7 +205,28 @@ export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | nul
       '            follow-on card. Build what is above the line and report the split.',
     );
   }
-  return lines.join('\n');
+  // The REPO-STRADDLE advisory (MOTIR-2177). The operator is the one who knows
+  // whether the other repo's half already merged, or whether this is a
+  // boundary-contract card — the two shapes that make this a false positive —
+  // so the path is named and the judgement is left with them.
+  for (const s of straddles) {
+    lines.push(
+      `Advisory:   ${dispatch.key}'s acceptance criterion ${s.criterionIndex} names ${s.path},`,
+      `            which lives in ${s.repo}${
+        s.reason === 'contradiction'
+          ? " — not this card's pinned repo."
+          : ', and this card pins no repo while its criteria name more than one.'
+      }`,
+      '            This is NOT a blocker — the dispatch proceeds. One subtask, one repo,',
+      '            one PR: check the other repo before branching. If that half is already',
+      '            merged, or this is a boundary-contract card, proceed; otherwise surface',
+      "            the split rather than dropping the other repo's criteria.",
+    );
+  }
+  // Nothing MATCHED, not merely nothing sent: a payload carrying only advisories
+  // this build cannot render is the same "nothing to say" as an empty array, and
+  // must produce no output rather than a blank line (MOTIR-2177).
+  return lines.length === 0 ? null : lines.join('\n');
 }
 
 export interface DispatchSummaryInput {

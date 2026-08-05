@@ -6,8 +6,12 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import {
   bodyReferenceSeverities,
   firstPostMergeCriterion,
+  firstRepoStraddleCriterion,
+  hasCriterionPathTokens,
   isOrderingCheckExempt,
+  type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
+import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -61,6 +65,19 @@ export interface ProseAdvisorySubject {
    */
   type: string | null;
   executor: string | null;
+  /**
+   * The card's `targetRepo` pin — read ONLY by the REPO-STRADDLE check
+   * (MOTIR-2177), which compares it against the repos its criteria name.
+   *
+   * `null` is a real answer with its own arm ("unpinnable"), not a missing
+   * value, which is why it is required rather than optional: a caller that has
+   * not decided what it knows would otherwise silently take the unpinned branch.
+   * On the PROJECTED plan path a not-yet-materialized `add` genuinely has no
+   * repo NAME — a proposal carries a `targetRepoRole`, resolved to a name only
+   * at materialize — so `null` there is the truth, and the unpinnable arm is
+   * exactly the right question to ask of it.
+   */
+  targetRepo: string | null;
 }
 
 /**
@@ -141,12 +158,31 @@ export async function buildProseVsGraphAdvisories(
     }
   }
 
+  // The REPO-STRADDLE check's second data source (MOTIR-2177): the workspace's
+  // connected repositories, through the SAME `targetRepo` validation accepts, so
+  // the two can never disagree about which names exist. ONE read for the whole
+  // batch, and none at all for the common card whose criteria name no path —
+  // `hasCriterionPathTokens` is pure and candidate-free precisely so this
+  // advisory costs a query only when it could possibly fire.
+  //
+  // Read OUTSIDE any transaction, per `listConnectedRepoNames`' own contract (it
+  // opens its own workspace-RLS context). Every caller of this function is a
+  // read path; do not move it inside one.
+  const repoCandidates: RepoCandidate[] = scanned.some((s) =>
+    hasCriterionPathTokens(s.subject.descriptionMd),
+  )
+    ? await listConnectedRepoNames(ctx)
+    : [];
+
   const advisories: WorkItemProseAdvisoryDto[] = [];
   for (const s of scanned) {
-    // The SHAPE advisory first: it needs no resolution at all (it is a property
-    // of this body alone), so it is emitted even for a card that names nothing.
+    // The SHAPE advisories first: they need no reference resolution at all (each
+    // is a property of this body alone), so they are emitted even for a card
+    // that names nothing. A card can carry BOTH — they are different defects.
     const ordering = orderingAdvisory(s.subject);
     if (ordering) advisories.push(ordering);
+    const straddle = repoStraddleAdvisory(s.subject, repoCandidates);
+    if (straddle) advisories.push(straddle);
     for (const [id, severity] of s.refs) {
       const ref = localRefs?.get(id) ?? resolved.get(id);
       if (!ref || ref.done) continue;
@@ -160,12 +196,13 @@ export async function buildProseVsGraphAdvisories(
   }
   // Deterministic wire order: by scanned card, then SHAPE before reference (a
   // mis-shaped card is a fact about the card itself, and its remedy — cut here —
-  // comes before any question about what it names), then by reference.
+  // comes before any question about what it names), then by the family's own
+  // key.
   advisories.sort(
     (a, b) =>
       a.item.localeCompare(b.item) ||
       familyRank(a) - familyRank(b) ||
-      referenceOf(a).localeCompare(referenceOf(b)),
+      tieKey(a).localeCompare(tieKey(b)),
   );
   return advisories;
 }
@@ -173,9 +210,13 @@ export async function buildProseVsGraphAdvisories(
 /** SHAPE sorts before REFERENCE within one card. */
 const familyRank = (a: WorkItemProseAdvisoryDto): number => (a.kind === 'shape' ? 0 : 1);
 
-/** The reference tie-break key; a shape advisory has no far end, so it is empty. */
-const referenceOf = (a: WorkItemProseAdvisoryDto): string =>
-  a.kind === 'shape' ? '' : a.referenced;
+/**
+ * The within-family tie-break key. A shape advisory has no far end, so it sorts
+ * on its SEVERITY — stated rather than left to `Array.sort` stability, now that
+ * one card can carry two of them (MOTIR-2177).
+ */
+const tieKey = (a: WorkItemProseAdvisoryDto): string =>
+  a.kind === 'shape' ? a.severity : a.referenced;
 
 /**
  * The ORDERING advisory for ONE subject (MOTIR-2175) — gate 14's third axis.
@@ -194,6 +235,33 @@ function orderingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryD
     item: subject.item,
     severity: 'likely-ordering-violation',
     phrase: found.phrase,
+    criterionIndex: found.criterionIndex,
+  };
+}
+
+/**
+ * The REPO-STRADDLE advisory for ONE subject (MOTIR-2177) — gate 1's repo
+ * column, as a contradiction between two things the card itself asserts: its
+ * `targetRepo` pin and the repo a criterion's path is discharged in.
+ *
+ * Pure once `candidates` is in hand. NO exemption predicate, deliberately —
+ * unlike {@link orderingAdvisory}, whose `deploy` / `human` mute is the rule's
+ * own remedy read back. Gate 1 has no such shape, so the boundary-contract card
+ * fires knowingly (see `WorkItemProseRepoStraddleAdvisoryDto`).
+ */
+function repoStraddleAdvisory(
+  subject: ProseAdvisorySubject,
+  candidates: readonly RepoCandidate[],
+): WorkItemProseAdvisoryDto | null {
+  const found = firstRepoStraddleCriterion(subject.descriptionMd, subject.targetRepo, candidates);
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-repo-straddle',
+    path: found.path,
+    repo: found.repo,
+    reason: found.reason,
     criterionIndex: found.criterionIndex,
   };
 }
@@ -239,19 +307,23 @@ export async function buildDispatchProseAdvisories(
     descriptionMd: string | null;
     type?: string | null;
     executor?: string | null;
+    targetRepo?: string | null;
   },
   ctx: ServiceContext,
 ): Promise<WorkItemProseAdvisoryDto[]> {
   const type = item.type ?? null;
   const executor = item.executor ?? null;
-  // Cheap short-circuit on the common shape: a body with neither a reference nor
-  // an ordering phrase needs neither the ancestor walk nor the edge read. BOTH
-  // scans are pure, and both must be clear — a body naming nothing can still
-  // carry an ordering violation (MOTIR-2162's did).
+  const targetRepo = item.targetRepo ?? null;
+  // Cheap short-circuit on the common shape: a body with no reference, no
+  // ordering phrase and no path-like token in its criteria needs neither the
+  // ancestor walk nor the edge read. ALL THREE scans are pure, and all three
+  // must be clear — a body naming nothing can still carry an ordering violation
+  // (MOTIR-2162's did) or a repo straddle (MOTIR-2057's did).
   const namesNothing = bodyReferenceSeverities(item.descriptionMd).size === 0;
   const wellOrdered =
     isOrderingCheckExempt(type, executor) || firstPostMergeCriterion(item.descriptionMd) === null;
-  if (namesNothing && wellOrdered) return [];
+  const namesNoPath = !hasCriterionPathTokens(item.descriptionMd);
+  if (namesNothing && wellOrdered && namesNoPath) return [];
 
   const [ancestors, blockerLinks] = await Promise.all([
     workItemRepository.findAncestors(item.id, ctx.workspaceId),
@@ -262,7 +334,16 @@ export async function buildDispatchProseAdvisories(
   for (const l of blockerLinks) exemptIds.add(l.toId);
 
   const advisories = await buildProseVsGraphAdvisories(
-    [{ item: item.identifier, descriptionMd: item.descriptionMd, exemptIds, type, executor }],
+    [
+      {
+        item: item.identifier,
+        descriptionMd: item.descriptionMd,
+        exemptIds,
+        type,
+        executor,
+        targetRepo,
+      },
+    ],
     ctx,
   );
   return advisories.filter((a) => a.kind === 'shape' || a.severity === 'likely-missing-edge');
