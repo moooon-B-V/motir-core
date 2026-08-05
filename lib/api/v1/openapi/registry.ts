@@ -1,5 +1,6 @@
 import type { z } from 'zod/v4';
 import { operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
+import { PLANNING_COMPONENTS, PLANNING_OPERATIONS } from '@/lib/api/v1/planning/operations';
 import { WORK_ITEM_COMPONENTS, WORK_ITEM_OPERATIONS } from '@/lib/api/v1/workItems/operations';
 
 // The v1 OPERATION REGISTRY (Story 11.4 · Subtask 11.4.4 — MOTIR-2185).
@@ -9,12 +10,12 @@ import { WORK_ITEM_COMPONENTS, WORK_ITEM_OPERATIONS } from '@/lib/api/v1/workIte
 // tools: the declarations live with the thing they describe, and exactly one
 // value knows the whole set.
 //
-// ⚠️ INCOMPLETE BY DESIGN, for now. Subtask 11.4.4 declares the work-item
-// resource as the proving resource; projects, sprints, the backlog, the ready
-// set, workspaces and `/me` are Subtask 11.4.5's, and the route↔spec totality
-// guard that would FAIL on the gap is Subtask 11.4.6's — deliberately after
-// them, because a guard added before the set it guards is complete is a guard
-// that ships red. The gap is named here rather than left to be noticed.
+// COMPLETE as of Subtask 11.4.5: the work-item resource (11.4.4's proving
+// resource) plus identity, workspaces, projects, sprints, the backlog, the
+// membership moves and the ready set. `tests/api/v1/openapi-operations-coverage.test.ts`
+// WALKS `app/api/v1` and fails on any exported method with no declaration, so
+// this list cannot fall behind a route added later — which is the property
+// Subtask 11.4.6 turns into the full route↔spec drift guard.
 
 /** What one per-resource `operations.ts` module contributes. */
 export interface V1ResourceModule {
@@ -25,6 +26,7 @@ export interface V1ResourceModule {
 /** Every resource module contributing to the document. */
 const RESOURCE_MODULES: readonly V1ResourceModule[] = [
   { operations: WORK_ITEM_OPERATIONS, components: WORK_ITEM_COMPONENTS },
+  { operations: PLANNING_OPERATIONS, components: PLANNING_COMPONENTS },
 ];
 
 /**
