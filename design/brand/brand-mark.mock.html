@@ -3447,6 +3447,93 @@
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
       }
+      .chosen {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 24px;
+        align-items: center;
+        border: 1px solid var(--el-accent-on-surface);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 22px 24px;
+        margin-bottom: 20px;
+      }
+      .chosen-art {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .chosen-cap {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .chosen-p {
+        margin: 10px 0 0;
+        font-size: 13.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .chosen-p b {
+        color: var(--el-text);
+      }
+      .prior {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 18px 20px;
+        margin-bottom: 24px;
+      }
+      .prior-title {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent-on-surface);
+      }
+      .prior-note {
+        margin: 0 0 12px;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .prior-note:last-child {
+        margin: 12px 0 0;
+      }
+      .prior-note b {
+        color: var(--el-text);
+      }
+      table.prior-t {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      table.prior-t th {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text-faint);
+        font-size: 10.5px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      table.prior-t td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      table.prior-t td b {
+        color: var(--el-text);
+      }
+      .alts-label {
+        margin-top: 4px;
+      }
       .cand-row-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -4538,12 +4625,32 @@
         <!-- Candidate A — "Lattice". The recommended glyph: the Hasse diagram of a
          fork-join, nested inside itself. Two rhombi, the inner exactly half the
          outer. One stroke weight, no fill, no letterform. -->
-        <g id="mark-a" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">
-          <path d="M12 3.2L20.8 12L12 20.8L3.2 12Z" />
-          <path d="M12 7.6L16.4 12L12 16.4L7.6 12Z" />
+        <!-- THE MARK (chosen by Yue, 2026-08-05). The Hasse diagram of a
+         fork-join, nested inside itself at exactly half scale — and drawn with
+         its NODES, which is what makes it a lattice diagram rather than a
+         decorative diamond. The nodes were added after a prior-art check: a
+         plain concentric rhombus is one of the most occupied marks there is
+         (Renault, Umbro, Mitsubishi, Binance). See Panel 1. -->
+        <g id="mark-a">
+          <path
+            d="M12 3.6L20.4 12L12 20.4L3.6 12Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M12 7.8L16.2 12L12 16.2L7.8 12Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linejoin="round"
+          />
+          <circle cx="12" cy="3.6" r="1.9" fill="currentColor" />
+          <circle cx="20.4" cy="12" r="1.9" fill="currentColor" />
+          <circle cx="12" cy="20.4" r="1.9" fill="currentColor" />
+          <circle cx="3.6" cy="12" r="1.9" fill="currentColor" />
         </g>
-        <!-- Candidate B — "Hypocycloid". The curve traced by a point on a circle
-         rolling inside a circle five times larger. One closed curve, solid. -->
         <g id="mark-b">
           <path
             d="M12.00 2.44L12.00 2.46L12.00 2.50L12.01 2.57L12.02 2.67L12.05 2.80L12.08 2.95L12.13 3.13L12.19 3.33L12.26 3.55L12.36 3.79L12.47 4.04L12.60 4.32L12.75 4.60L12.93 4.90L13.12 5.20L13.34 5.51L13.57 5.82L13.83 6.13L14.10 6.44L14.40 6.74L14.71 7.04L15.03 7.33L15.37 7.61L15.73 7.88L16.09 8.13L16.46 8.37L16.84 8.59L17.22 8.79L17.60 8.98L17.98 9.14L18.35 9.29L18.72 9.42L19.08 9.53L19.43 9.62L19.76 9.69L20.08 9.75L20.38 9.79L20.66 9.82L20.92 9.83L21.15 9.84L21.36 9.83L21.54 9.82L21.70 9.81L21.82 9.79L21.92 9.77L21.99 9.76L22.04 9.75L22.05 9.74L22.04 9.75L22.00 9.76L21.93 9.79L21.84 9.84L21.73 9.90L21.59 9.98L21.44 10.08L21.27 10.19L21.08 10.34L20.88 10.50L20.67 10.69L20.45 10.90L20.23 11.13L20.00 11.38L19.77 11.66L19.55 11.96L19.32 12.28L19.11 12.62L18.90 12.98L18.70 13.35L18.51 13.74L18.34 14.14L18.17 14.55L18.03 14.97L17.90 15.39L17.79 15.82L17.70 16.24L17.62 16.67L17.56 17.09L17.52 17.50L17.50 17.90L17.49 18.29L17.50 18.67L17.52 19.03L17.55 19.37L17.60 19.69L17.65 19.99L17.71 20.26L17.78 20.51L17.84 20.73L17.91 20.93L17.98 21.10L18.04 21.24L18.10 21.36L18.14 21.45L18.18 21.51L18.20 21.55L18.21 21.56L18.20 21.55L18.17 21.51L18.13 21.46L18.06 21.39L17.96 21.30L17.85 21.19L17.71 21.08L17.54 20.95L17.35 20.82L17.13 20.68L16.89 20.54L16.62 20.40L16.33 20.26L16.02 20.12L15.68 19.99L15.33 19.86L14.95 19.75L14.56 19.65L14.16 19.56L13.74 19.49L13.32 19.43L12.88 19.38L12.44 19.36L12.00 19.35L11.56 19.36L11.12 19.38L10.68 19.43L10.26 19.49L9.84 19.56L9.44 19.65L9.05 19.75L8.67 19.86L8.32 19.99L7.98 20.12L7.67 20.26L7.38 20.40L7.11 20.54L6.87 20.68L6.65 20.82L6.46 20.95L6.29 21.08L6.15 21.19L6.04 21.30L5.94 21.39L5.87 21.46L5.83 21.51L5.80 21.55L5.79 21.56L5.80 21.55L5.82 21.51L5.86 21.45L5.90 21.36L5.96 21.24L6.02 21.10L6.09 20.93L6.16 20.73L6.22 20.51L6.29 20.26L6.35 19.99L6.40 19.69L6.45 19.37L6.48 19.03L6.50 18.67L6.51 18.29L6.50 17.90L6.48 17.50L6.44 17.09L6.38 16.67L6.30 16.24L6.21 15.82L6.10 15.39L5.97 14.97L5.83 14.55L5.66 14.14L5.49 13.74L5.30 13.35L5.10 12.98L4.89 12.62L4.68 12.28L4.45 11.96L4.23 11.66L4.00 11.38L3.77 11.13L3.55 10.90L3.33 10.69L3.12 10.50L2.92 10.34L2.73 10.19L2.56 10.08L2.41 9.98L2.27 9.90L2.16 9.84L2.07 9.79L2.00 9.76L1.96 9.75L1.95 9.74L1.96 9.75L2.01 9.76L2.08 9.77L2.18 9.79L2.30 9.81L2.46 9.82L2.64 9.83L2.85 9.84L3.08 9.83L3.34 9.82L3.62 9.79L3.92 9.75L4.24 9.69L4.57 9.62L4.92 9.53L5.28 9.42L5.65 9.29L6.02 9.14L6.40 8.98L6.78 8.79L7.16 8.59L7.54 8.37L7.91 8.13L8.27 7.88L8.63 7.61L8.97 7.33L9.29 7.04L9.60 6.74L9.90 6.44L10.17 6.13L10.43 5.82L10.66 5.51L10.88 5.20L11.07 4.90L11.25 4.60L11.40 4.32L11.53 4.04L11.64 3.79L11.74 3.55L11.81 3.33L11.87 3.13L11.92 2.95L11.95 2.80L11.98 2.67L11.99 2.57L12.00 2.50L12.00 2.46L12.00 2.44Z"
@@ -4787,7 +4894,7 @@
           />
           <path d="M12 0V24M0 12H24" stroke="var(--el-border)" stroke-width="0.4" />
           <path
-            d="M1.95 0V24M22.05 0V24M0 1.95H24M0 22.05H24"
+            d="M1.7 0V24M22.3 0V24M0 1.7H24M0 22.3H24"
             stroke="var(--el-accent-on-surface)"
             stroke-width="0.3"
             stroke-dasharray="1 1"
@@ -5003,153 +5110,163 @@
 
     <!-- ══════════════════════════════════════════════════════════════════════ -->
     <section class="panel">
-      <p class="panel-label">Panel 1 — The logomark: four candidates for MOTIR-1140</p>
+      <p class="panel-label">Panel 1 — The logomark: DECIDED</p>
       <p class="panel-note">
         <b>No letterform.</b> The mark is not an M and is not derived from one — an initial says
-        only what the product is called, and Motir's name is not the interesting thing about it.
-        Each candidate below is a <b>mathematical object</b> that is true of what Motir actually
-        does. MOTIR-1140 (8.3.2) is a <code>decision</code> card, and a decision needs something to
-        decide between: four candidates in two families — three <b>flat</b>, one <b>with depth</b> —
-        all buildable SVG today, and picking any of them changes only the
-        <code>&lt;path&gt;</code> data MOTIR-1150 consumes. The candidate with depth is drawn as an
-        outline, so like the flat three it is a single stroked path in <b>one colour</b> — the
-        Tier-3 token rule holds across the whole set and a <code>data-palette</code> swap re-skins
-        every one of them for free.
+        only what the product is called, and Motir's name is not the interesting thing about it. It
+        is a <b>mathematical object that is true of what Motir does</b>: the Hasse diagram of a
+        fork–join, nested inside itself. <b>Yue chose it on 2026-08-05</b> from the four candidates
+        below, and the <b>nodes</b> were added afterwards, in response to the prior-art check — that
+        change is the subject of this panel.
       </p>
 
-      <p class="fam-label">Flat — one closed form, one stroke weight, one colour</p>
-      <div class="cand-row">
-        <figure class="cand cand-rec">
-          <span class="cand-badge">Recommended</span>
-          <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
-              <use href="#mark-a" />
-            </svg>
-          </div>
-          <figcaption>
-            <b>A · Lattice</b>
-            <p class="cand-math">The Hasse diagram of a fork–join — nested inside itself.</p>
-            <p>
-              A plan is a <b>finite partially ordered set</b>, and the rhombus is how mathematics
-              draws the smallest non-trivial one: one start, two independent paths, one convergence.
-              Nesting a second rhombus at exactly half scale says the other true thing about a plan
-              — it is <b>self-similar</b>. An epic holds stories holds subtasks, and every level is
-              the same object at a different depth (Principle&nbsp;#9, "the plan deepens just in
-              time"). Zoom in and you find the same figure again.
-            </p>
-            <p class="cand-why">
-              <b>Why it wins:</b> two closed paths, one stroke weight, no fill, no counters tighter
-              than 4.4&nbsp;units — the inner rhombus is still an unmistakable rhombus at
-              <b>16&nbsp;px</b>. It is the only candidate that needs no separate small cut, and the
-              1:2 ratio means a consumer can generate any further level from one number.
-            </p>
-          </figcaption>
-        </figure>
+      <div class="chosen">
+        <div class="chosen-art">
+          <svg viewBox="0 0 24 24" width="168" height="168" class="brand-glyph">
+            <use href="#mark-a" />
+          </svg>
+          <p class="chosen-cap">A · Lattice</p>
+        </div>
+        <div>
+          <p class="cand-math">
+            The Hasse diagram of a fork–join — nested inside itself, with nodes.
+          </p>
+          <p class="chosen-p">
+            A plan is a <b>finite partially ordered set</b>, and the rhombus is how mathematics
+            draws the smallest non-trivial one: one start, two independent paths, one convergence.
+            Nesting a second rhombus at exactly half scale says the other true thing about a plan —
+            it is <b>self-similar</b>. An epic holds stories holds subtasks, and every level is the
+            same object at a different depth (Principle&nbsp;#9, "the plan deepens just in time").
+          </p>
+          <p class="chosen-p">
+            <b>The four nodes are load-bearing, not decoration.</b> A Hasse diagram has vertices and
+            edges; a diamond has neither. Drawing the vertices is what makes this a
+            <i>lattice diagram</i> rather than a gem — it states the actual idea, and it is also
+            what separates the mark from the crowd the prior-art check turned up.
+          </p>
+        </div>
+      </div>
 
+      <div class="prior">
+        <p class="prior-title">Prior art — why the nodes exist</p>
+        <p class="prior-note">
+          A plain concentric rhombus is one of the most occupied geometric marks in existence. This
+          was checked against public sources before the mark was locked; a registered-trademark
+          clearance search in classes 9 and 42 is a separate job and still outstanding.
+        </p>
+        <table class="prior-t">
+          <thead>
+            <tr>
+              <th>Mark</th>
+              <th>Construction</th>
+              <th>Distance from a plain concentric rhombus</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-bad">
+              <td><b>Binance</b></td>
+              <td>
+                A large diamond with an intersecting form cut out of it — four outer corner elements
+                around a central diamond
+              </td>
+              <td>
+                <b>The closest, and the most dangerous.</b> Adjacent sector, and at small size the
+                gestalt is exactly diamond-inside-diamond
+              </td>
+            </tr>
+            <tr>
+              <td><b>Renault</b> (2021)</td>
+              <td>Two interlocking diamonds, flat monoline, weaving through each other</td>
+              <td>Different construction, but the most famous monoline diamond mark there is</td>
+            </tr>
+            <tr>
+              <td><b>Umbro</b></td>
+              <td>The "double diamond" — overlapping rhombi, since 1924</td>
+              <td>The mark that defined the nested-diamond category</td>
+            </tr>
+            <tr>
+              <td><b>Mitsubishi</b></td>
+              <td>Three rhombi arranged into an implied fourth</td>
+              <td>The most recognised rhombus mark in the world</td>
+            </tr>
+            <tr>
+              <td>Stock</td>
+              <td>
+                100,000+ "diamond shape logo" assets; "diamond inside a diamond" is a documented
+                stock trope explicitly sold to tech startups
+              </td>
+              <td>The shape carries no ownership at all on its own</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="prior-note">
+          <b>The conclusion, and the fix.</b> The idea behind the mark is Motir's; the plain
+          concentric drawing of it is nobody's. Adding the vertices moves it from
+          <i>decorative shape</i> to <i>the mathematical object it actually is</i>, and walks it out
+          of that neighbourhood without changing the idea by a single degree. Four alternatives were
+          drawn and compared — breaking the edges at the vertices, breaking both rings, a square
+          inside the diamond, and an outer ring with nodes but no inner rhombus. The
+          nodes-on-the-outer-vertices treatment was chosen: it is the smallest change that buys the
+          most separation, and the only one that keeps the mark legible at 16&nbsp;px.
+        </p>
+      </div>
+
+      <p class="fam-label alts-label">The three alternatives, kept on record</p>
+      <div class="cand-row">
         <figure class="cand">
           <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
+            <svg viewBox="0 0 24 24" width="88" height="88" class="brand-glyph">
               <use href="#mark-b" />
             </svg>
           </div>
           <figcaption>
             <b>B · Hypocycloid</b>
-            <p class="cand-math">
-              The curve traced by a point on a circle rolling inside a circle five times larger.
-            </p>
             <p>
-              A small cycle running inside a larger arc, drawing the shape of the whole as it goes —
-              a sprint inside a roadmap. One closed curve, five cusps, solid: the warmest of the
-              three and the closest in feel to a radial mark.
-            </p>
-            <p class="cand-why">
-              <b>Cost:</b> a solid concave star is a <i>silhouette</i>, so it carries no interior
-              and says less than it looks like it does. Five cusps also sit close to the four-cusp
-              astroid — the ✨ every AI product now uses, and which Motir's own "Plan with AI"
-              launcher already renders. The distance is real but it is one cusp wide.
+              The curve traced by a point on a circle rolling inside a circle five times larger — a
+              sprint inside a roadmap. <b>Not chosen:</b> a solid concave star is a silhouette, and
+              five cusps sit one cusp from the four-cusp astroid, the ✨ Motir's own "Plan with AI"
+              launcher already renders.
             </p>
           </figcaption>
         </figure>
-
         <figure class="cand">
           <div class="cand-art">
-            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
+            <svg viewBox="0 0 24 24" width="88" height="88" class="brand-glyph">
               <use href="#mark-c" />
             </svg>
           </div>
           <figcaption>
             <b>C · Borromean</b>
-            <p class="cand-math">
-              Three rings, no two of which are linked, all three inseparable — a Brunnian link.
-            </p>
             <p>
-              Cut any one ring and the other two fall apart, because no two were ever joined. That
-              is
-              <b>exactly</b> Motir's thesis: AI planning, the PM core and agent orchestration are
-              one product, and dropping any pillar leaves the other two holding nothing. The most
-              beautiful of the three, and the most on-message.
-            </p>
-            <p class="cand-why">
-              <b>Cost:</b> six arcs and six crossing gaps. It is superb at 40&nbsp;px and up and it
-              <b>fails below 24&nbsp;px</b> — the interior collapses in the tab strip. Choosing it
-              means shipping a second, simplified cut for the favicon, which is a permanent
-              two-artwork tax the other two do not carry.
+              Three rings, no two linked, all three inseparable — exactly the three-pillar thesis.
+              <b>Not chosen:</b> the most on-message and the least legible; it fails below
+              24&nbsp;px and would cost a permanent second artwork.
             </p>
           </figcaption>
         </figure>
-      </div>
-
-      <p class="fam-label fam-3d">
-        <b>With depth</b> — and, as it turns out, still one stroked path. The band is a real
-        three-dimensional object (swept, twisted, tilted, projected orthographically), but what gets
-        drawn is only its <b>outline</b>. No fill, no shading, no second hue: the depth is carried
-        by where the two edges converge.
-      </p>
-      <div class="cand-row cand-row-1">
-        <figure class="cand cand-wide">
-          <div class="cand-art cand-art-lg">
-            <svg viewBox="0 0 24 24" width="150" height="150" class="brand-glyph">
+        <figure class="cand">
+          <div class="cand-art">
+            <svg viewBox="0 0 24 24" width="88" height="88" class="brand-glyph">
               <use href="#mark-d" />
             </svg>
           </div>
           <figcaption>
             <b>D · Wave</b>
-            <p class="cand-math">
-              The outline of a band swept along one period of a sine, twisted along its length.
-            </p>
             <p>
-              <b>A wave advances while it oscillates.</b> A circle comes back to where it started; a
-              wave does not. That is the sprint — you cycle, and the product still moves forward. It
-              also stays in B's family: a sine is the <i>shadow of uniform circular motion</i>, so B
-              is a circle rolling inside a circle and this is the same generator rolling along a
-              straight one.
-            </p>
-            <p>
-              <b>Depth without shading.</b> The mark is the band's two long edges, closed by its two
-              cut ends — and it reads as three-dimensional because the edges
-              <i>converge wherever the band turns edge-on</i>. The 3D is in the contour, not in a
-              gradient laid over it. Band width 2.8, twisted 45° along its length, tilted 50°,
-              rolled −90° so the wave runs vertically, projected orthographically.
-            </p>
-            <p class="cand-why">
-              <b>What it costs — and what it no longer costs.</b> It is <b>one path</b>:
-              <code>fill="none"</code>, <code>stroke="currentColor"</code>,
-              <code>stroke-width="2.2"</code> — the same construction as A, B and C, so
-              <b>it carries no tonal tax at all</b> and needs no second cut for a flat context. What
-              it does cost is the small end: the interior closes up below ~20&nbsp;px, so its
-              minimum size is 20 rather than 16, and it is a generated polyline (90 samples) that
-              wants re-authoring as Béziers before it ships.
+              The outline of a band swept along one period of a sine — a wave advances while it
+              oscillates, which is the sprint. <b>Not chosen</b>, but it is the one that could
+              <i>animate as itself</i>; its two motions are recorded below in case a motion identity
+              is wanted later.
             </p>
           </figcaption>
         </figure>
       </div>
 
       <p class="fam-label fam-3d">
-        <b>And it moves — as a wave, not as a spinning picture.</b> Both motions re-derive the
-        outline from a changed curve; nothing is rotated or tweened after the fact. Each frame is
-        still a single path, so a whole motion is ten paths.
+        <b>D's motion, kept for the record.</b> Both motions re-derive the outline from a changed
+        curve rather than rotating a finished picture, and each frame is a single path. If a motion
+        identity is ever wanted, this is the candidate that already has one.
       </p>
-
       <div class="motion">
         <div class="motion-cell">
           <div class="motion-live">
@@ -5250,36 +5367,29 @@
 
       <p class="dropped">
         <b>Considered and dropped:</b> the <b>isometric cube</b> (the Hasse diagram of B₃, which
-        would have been candidate A one dimension up) and the <b>Penrose tribar</b> (locally
-        consistent everywhere, globally impossible — a precise description of a plan that does not
-        close). Both are mathematically apt and both were built and rendered. Both are also among
-        the most heavily used marks in software — the cube is lucide's own <code>Box</code> — and a
-        brand mark that reads as a stock icon is not worth the idea behind it. Two more were built,
-        rendered and dropped on the way to D: the <b>astroidal ellipsoid</b>
-        (|x|<sup>2/3</sup>&nbsp;+&nbsp;|y|<sup>2/3</sup>&nbsp;+&nbsp;|z|<sup>2/3</sup>&nbsp;=&nbsp;1,
-        whose every coordinate cross-section is an astroid) — the most literal "hypocycloid in 3D",
-        and too complicated at a faceted mesh of 80 paths needing hand re-authoring; and the
-        <b>hypocycloid plate</b>, candidate B cut thick and tilted, which worked but states one idea
-        where the wave states two. And the wave itself as a <b>shaded solid</b> — swept with a
-        square section and lit per facet — which had the volume but not the elegance, and cost ~120
-        paths to say what one outline says better.
+        would have been the mark one dimension up) and the <b>Penrose tribar</b> (locally consistent
+        everywhere, globally impossible — a precise description of a plan that does not close). Both
+        are mathematically apt and both were built and rendered. Both are also among the most
+        heavily used marks in software — the cube is lucide's own <code>Box</code> — and a brand
+        mark that reads as a stock icon is not worth the idea behind it. Three more were built,
+        rendered and dropped while chasing a three-dimensional form: the
+        <b>astroidal ellipsoid</b>
+        (|x|<sup>2/3</sup>&nbsp;+&nbsp;|y|<sup>2/3</sup>&nbsp;+&nbsp;|z|<sup>2/3</sup>&nbsp;=&nbsp;1),
+        too complicated at a faceted mesh of 80 paths; the <b>hypocycloid plate</b>, candidate B cut
+        thick and tilted; and the wave as a <b>shaded solid</b>, which had the volume but not the
+        elegance. A <b>diagonally-rolled wave</b> was also drawn and rejected for reading plainly as
+        the letter Z — the very thing this card ruled out at the start.
       </p>
 
       <p class="decision-line">
-        <b>Recommendation to MOTIR-1140: A for the mark, D if the brand wants to move.</b> Both are
-        now a single stroked path in one colour, so the choice is no longer about cost — it is about
-        what the brand wants to be. <b>A</b> is the quieter, more structural mark: legible down to
-        16&nbsp;px, and it says the plan is a lattice that repeats at every depth. <b>D</b> is the
-        expressive one: it holds a dark field as strongly as a light one, and it is the only
-        candidate whose animation <i>is</i> the mark rather than an effect applied to it — travel
-        and frequency both fall out of the curve. Its only real cost is the small end, a
-        <b>20&nbsp;px floor</b> instead of 16. <b>C</b> remains the one that needs a second artwork.
-        The honest split:
-        <b>A if the mark must be one fixed thing, D if it is allowed to be alive.</b>
+        <b>DECIDED (Yue, 2026-08-05): A, with the nodes.</b> It is the only candidate that is
+        simultaneously true of the product, legible at every shipped size, and free of a second
+        artwork — two closed paths plus four nodes, one stroke weight, one colour. Everything from
+        Panel&nbsp;2 onward is built on it. <b>MOTIR-1140 is answered</b>; what remains open is the
+        registered-trademark clearance, which is a separate job and does not block MOTIR-1150.
       </p>
     </section>
 
-    <!-- ══════════════════════════════════════════════════════════════════════ -->
     <section class="panel">
       <p class="panel-label">Panel 2 — Construction, clear space and minimum size</p>
 
@@ -5290,7 +5400,7 @@
             <use href="#mark-a" />
           </svg>
           <p class="art-cap">
-            24-unit grid · the dashed box is the mark's true extent (20.1 square)
+            24-unit grid · the dashed box is the mark's true extent (20.6 square)
           </p>
         </div>
         <div class="constr-spec">
@@ -5302,23 +5412,32 @@
             </dd>
             <dt>paths</dt>
             <dd>
-              <code class="path-d">M12 3.2L20.8 12L12 20.8L3.2 12Z</code> and
-              <code class="path-d">M12 7.6L16.4 12L12 16.4L7.6 12Z</code> — two closed rhombi, the
-              inner at exactly <b>half</b> the outer's half-diagonal (8.8 → 4.4). One number
-              generates the whole family: the next level in would be 2.2.
+              <code class="path-d">M12 3.6L20.4 12L12 20.4L3.6 12Z</code> and
+              <code class="path-d">M12 7.8L16.2 12L12 16.2L7.8 12Z</code> — two closed rhombi, the
+              inner at exactly <b>half</b> the outer's half-diagonal (8.4 → 4.2). One number
+              generates the whole family: the next level in would be 2.1.
+            </dd>
+            <dt>nodes</dt>
+            <dd>
+              Four filled circles, <b>r = 1.9</b>, centred on the OUTER rhombus's vertices — (12,
+              3.6), (20.4, 12), (12, 20.4), (3.6, 12). They are the lattice's vertices, not
+              decoration: a Hasse diagram has vertices and edges, and drawing them is what keeps
+              this a diagram rather than a diamond (Panel&nbsp;1). The inner rhombus carries none —
+              the nesting is a change of DEPTH, not another level of the same diagram.
             </dd>
             <dt>paint</dt>
             <dd>
-              <code>fill="none"</code>, <code>stroke="currentColor"</code>,
-              <code>stroke-width="2.5"</code>, <code>stroke-linejoin="round"</code>. No
-              <code>stroke-linecap</code> — both paths are closed.
+              Rhombi: <code>fill="none"</code>, <code>stroke="currentColor"</code>,
+              <code>stroke-width="2.5"</code>, <code>stroke-linejoin="round"</code>. Nodes:
+              <code>fill="currentColor"</code>, no stroke. No <code>stroke-linecap</code> — both
+              paths are closed.
             </dd>
             <dt>extent</dt>
             <dd>
-              x and y both 1.95 → 22.05 (20.1 square), centred on (12, 12) by construction — a
-              consumer centres it by geometry, with no nudge. The mark occupies 84% of the box,
-              which is why it holds its own beside a 24&nbsp;px lucide icon rather than reading
-              smaller.
+              x and y both 1.7 → 22.3 (20.6 square), centred on (12, 12) by construction — a
+              consumer centres it by geometry, with no nudge. The extent is set by the NODES (8.4 +
+              1.9), not by the stroke, so the node radius is what to change if the mark ever needs
+              to sit lighter in its box.
             </dd>
             <dt>clear space</dt>
             <dd>
@@ -5328,9 +5447,9 @@
             </dd>
             <dt>minimum size</dt>
             <dd>
-              <b>16 px</b> for the bare glyph — the stroke lands at 1.67 px and the inner rhombus at
-              2.9 px across, still an unmistakable rhombus. Below 16 px use the tiled form (Panel
-              5), which keeps the glyph at 66% inside a solid field.
+              <b>16 px</b> for the bare glyph — the stroke lands at 1.67 px, the nodes at 2.5 px
+              across and the inner rhombus at 2.8 px, all still legible. Below 16 px use the tiled
+              form (Panel 5), which keeps the glyph at 66% inside a solid field.
             </dd>
             <dt>colour</dt>
             <dd>
@@ -5341,7 +5460,9 @@
         </div>
       </div>
 
-      <p class="sub-label">Scale ladder — the same two paths at every shipped size</p>
+      <p class="sub-label">
+        Scale ladder — the same two paths and four nodes at every shipped size
+      </p>
       <div class="ladder">
         <span
           ><svg viewBox="0 0 24 24" width="16" height="16" class="text-(--el-accent-on-surface)">
@@ -5768,7 +5889,7 @@
         <dd>
           Maskable: the glyph sits inside the centred circle of diameter <b>0.8 × canvas</b>. A
           rhombus makes this cheap — its extreme points lie on the axes, not at bounding-box
-          corners, so its circumradius is only 10.05/24 = <b>0.419 × the glyph box</b>, or 0.55 ×
+          corners, so its circumradius is only 10.3/24 = <b>0.429 × the glyph box</b>, or 0.57 ×
           canvas across at the 66% render used here. Comfortably inside 0.8. (A square or a
           letterform pays √2 for the same extent and has to be shrunk to fit.) Non-maskable: the
           same 66%, centred.
@@ -6110,7 +6231,7 @@
             <img
               class="email-mark"
               alt="Motir"
-              src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20'%3E%3Cg fill='none' stroke='%235645d4' stroke-width='2.5' stroke-linejoin='round'%3E%3Cpath d='M12 3.2L20.8 12L12 20.8L3.2 12Z'/%3E%3Cpath d='M12 7.6L16.4 12L12 16.4L7.6 12Z'/%3E%3C/g%3E%3C/svg%3E"
+              src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20'%3E%3Cg fill='none' stroke='%235645d4' stroke-width='2.5' stroke-linejoin='round'%3E%3Cpath d='M12 3.6L20.4 12L12 20.4L3.6 12Z'/%3E%3Cpath d='M12 7.8L16.2 12L12 16.2L7.8 12Z'/%3E%3C/g%3E%3Cg fill='%235645d4'%3E%3Ccircle cx='12' cy='3.6' r='1.9'/%3E%3Ccircle cx='20.4' cy='12' r='1.9'/%3E%3Ccircle cx='12' cy='20.4' r='1.9'/%3E%3Ccircle cx='3.6' cy='12' r='1.9'/%3E%3C/g%3E%3C/svg%3E"
             />
             <span>Motir</span>
           </div>

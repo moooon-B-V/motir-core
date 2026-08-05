@@ -3,7 +3,8 @@
 **Area:** `brand` · **Surface:** `brand-mark` (`brand-mark.mock.html` + `brand-mark.png`)
 **Story:** MOTIR-656 (8.3 Marketing site + brand mark) · **Subtask:** MOTIR-1139 (8.3.1)
 **Consumed by:** MOTIR-1150 (8.3.5, apply the mark across the app) — layout + token source of truth.
-**Decided by:** MOTIR-1140 (8.3.2, final logomark approval) — Panel 1 is its option set.
+**Decided:** MOTIR-1140 (8.3.2) is **answered** — Yue chose **A · Lattice** on 2026-08-05, and the
+nodes were added afterwards in response to the prior-art check in §1.
 
 This asset defines the logomark, the wordmark and its lockups, the light/dark colour rule, the
 favicon / app-icon set, the 1200 × 630 OG template, and every shipped surface the mark enters.
@@ -54,137 +55,80 @@ literals).
 
 ---
 
-## 1. The logomark — four candidates for MOTIR-1140
+## 1. The logomark — DECIDED
 
-MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Four mathematical
-objects in two families — three **flat** (§1 A–C) and one **with depth** (§1 D) — all on one
-construction grid. Picking any of them changes only the `<path>` data MOTIR-1150 consumes.
-
-The candidate with depth is drawn as an **outline**, so like the flat three it is a single stroked
-path in one colour — the Tier-3 token rule holds across the whole set and a `data-palette` swap
-re-skins every one of them for free.
-
-### A · Lattice _(recommended)_
-
-> _The Hasse diagram of a fork–join — nested inside itself._
+**A · Lattice.** The Hasse diagram of a fork–join, nested inside itself at exactly half scale, drawn
+with its four vertices.
 
 A plan is a **finite partially ordered set**, and the rhombus is how mathematics draws the smallest
-non-trivial one: one start, two independent paths, one convergence. That is the fork–join, the
-atomic unit of every project plan.
+non-trivial one: one start, two independent paths, one convergence. Nesting a second rhombus at
+exactly half scale says the other true thing about a plan — it is **self-similar**. An epic holds
+stories holds subtasks, and every level is the same object at a different depth (Principle #9, _"the
+plan deepens just in time"_; Principle #14, _"the plan is a DAG, not a list"_).
 
-Nesting a second rhombus at exactly **half** scale says the other true thing about a plan — it is
-**self-similar**. An epic holds stories holds subtasks, and every level is the same object at a
-different depth (Principle #9, _"the plan deepens just in time"_; Principle #14, _"the plan is a DAG,
-not a list"_). Zoom in and you find the same figure again.
+**The four nodes are load-bearing, not decoration.** A Hasse diagram has vertices and edges; a
+diamond has neither. Drawing the vertices is what makes this a _lattice diagram_ rather than a gem —
+it states the actual idea, and it is what separates the mark from the crowd the prior-art check
+turned up.
 
-**Why it wins:** two closed paths, one stroke weight, no fill, and no counter tighter than 4.4 units
-— the inner rhombus is still an unmistakable rhombus at **16 px**, so it is the only candidate that
-needs no separate small cut. The 1:2 ratio means one number generates the whole family (the next
-level in is 2.2), and a rhombus's extreme points lie on the axes rather than at bounding-box corners,
-which is what makes the maskable icon (§5) cheap.
+### Prior art — why the nodes exist
 
-### B · Hypocycloid
+A plain concentric rhombus is one of the most occupied geometric marks in existence. Checked against
+public sources on 2026-08-05, before the mark was locked:
 
-> _The curve traced by a point on a circle rolling inside a circle five times larger._
+| Mark               | Construction                                                                                                                  | Distance from a plain concentric rhombus                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Binance**        | A large diamond with an intersecting form cut out of it — four outer corner elements around a central diamond                 | **The closest, and the most dangerous.** Adjacent sector, and at small size the gestalt is exactly diamond-inside-diamond |
+| **Renault** (2021) | Two interlocking diamonds, flat monoline, weaving through each other                                                          | Different construction, but the most famous monoline diamond mark there is                                                |
+| **Umbro**          | The "double diamond" — overlapping rhombi, since 1924                                                                         | The mark that defined the nested-diamond category                                                                         |
+| **Mitsubishi**     | Three rhombi arranged into an implied fourth                                                                                  | The most recognised rhombus mark in the world                                                                             |
+| Stock              | 100,000+ "diamond shape logo" assets; "diamond inside a diamond" is a documented stock trope explicitly sold to tech startups | The shape carries no ownership at all on its own                                                                          |
 
-A small cycle running inside a larger arc, drawing the shape of the whole as it goes — a sprint
-inside a roadmap. One closed curve, five cusps, solid: the warmest of the three and the closest in
-feel to a radial mark.
+**The conclusion, and the fix.** The idea behind the mark is Motir's; the plain concentric drawing of
+it is nobody's. Adding the vertices moves it from _decorative shape_ to _the mathematical object it
+actually is_, and walks it out of that neighbourhood without changing the idea by a single degree.
+Four alternatives were drawn and compared — breaking the edges at the vertices, breaking both rings,
+a square inside the diamond, and an outer ring with nodes but no inner rhombus. Nodes-on-the-outer-
+vertices was chosen: the smallest change that buys the most separation, and the only one that keeps
+the mark legible at 16 px.
 
-**Cost:** a solid concave star is a _silhouette_, so it carries no interior and says less than it
-looks like it does. Five cusps also sit close to the four-cusp astroid — the ✨ every AI product now
-uses, and which Motir's own "Plan with AI" launcher already renders via lucide's `Sparkles`. The
-distance is real but it is one cusp wide.
+**⚠️ Still outstanding:** this is a visual-similarity check against public sources, **not a
+trademark clearance search**. A registered-mark search in classes 9 and 42 is a separate job. It does
+not block MOTIR-1150, but it must happen before launch — surface it as its own `manual` card.
 
-### C · Borromean
+Sources: [Renault 2021 (designboom)](https://www.designboom.com/design/renault-diamond-logo-new-flatified-op-art-version-03-23-2021/) ·
+[Binance logo construction](https://www.binance.com/en/square/post/2023-09-18-binance-logo-design-a-unique-blend-of-symbolism-and-geometry-1164689) ·
+[Famous rhombus logos](https://1000logos.net/most-famous-logos-with-a-rhombus/) ·
+[Diamond-in-diamond as a stock trope](https://smartscience.blog/diamond-inside-diamond-logo-meaning) ·
+[Diamond logo stock volume](https://www.shutterstock.com/search/diamond-shape-logo)
 
-> _Three rings, no two of which are linked, all three inseparable — a Brunnian link._
+### The three alternatives, kept on record
 
-Cut any one ring and the other two fall apart, because no two were ever joined. That is **exactly**
-Motir's thesis: AI planning, the PM core and agent orchestration are one product, and dropping any
-pillar leaves the other two holding nothing. The most beautiful of the three, and the most
-on-message.
-
-**Cost:** six arcs and six crossing gaps. Superb at 40 px and up; it **fails below 24 px** — the
-interior collapses in the tab strip. Choosing it means shipping a second, simplified cut for the
-favicon, a permanent two-artwork tax the other two do not carry.
-
-### D · Wave
-
-> _The outline of a band swept along one period of a sine, twisted along its length._
-
-**A wave advances while it oscillates.** A circle comes back to where it started; a wave does not.
-That is the sprint — you cycle, and the product still moves forward. It also stays in B's family: a
-sine is the **shadow of uniform circular motion**, so B is a circle rolling inside a circle and this
-is the same generator rolling along a straight one.
-
-**Depth without shading.** The mark is the band's two long edges, closed by its two cut ends, and it
-reads as three-dimensional because the edges **converge wherever the band turns edge-on**. The 3D is
-in the contour, not in a gradient laid over it. Band width 2.8, twisted 45° along its length, tilted
-50°, rolled −90° so the wave runs vertically, projected orthographically.
-
-**It is one path** — `fill="none"`, `stroke="currentColor"`, `stroke-width="2.2"`,
-`stroke-linejoin="round"` — the same construction as A, B and C. That is the difference between this
-and every earlier 3D attempt: **no tonal tax, no second cut for a flat context, no palette caveat.**
-
-**And it moves — as a wave, not as a spinning picture.** Both motions re-derive the outline from a
-changed curve; nothing is rotated or tweened after the fact. Each frame is still one path, so a whole
-motion is ten paths.
-
-- **Travel** — the phase advances and the band stays where it is. This is what a wave _is_: the shape
-  moves, the medium does not. One full period is a seamless loop — 10 frames, 2.2 s.
-- **Frequency** — one period stretches to two and back, amplitude easing down as it does. The plan is
-  not a fixed rhythm, and the thing that changes it is one number.
-
-**Motion is decoration, never information.** The mark animates only where it is _already_ decorative
-and large — the OG card, the marketing hero, a loading state. It is static in the shell, in auth, in
-email, in the tab strip, and at every size below 40 px. All of it sits behind
-`prefers-reduced-motion` — the same gate `globals.css` already puts on the Plan-with-AI shimmer and
-the FAB pulse — with the static mark as the reduced-motion state.
-
-**Cost:** the small end. The interior closes up below ~20 px, so its **minimum size is 20 rather than
-16**. And it is a generated polyline (90 samples) that wants re-authoring as Béziers before it ships
-— keep the generator beside the output or it cannot be re-cut at a new tilt, twist or frame count.
+- **B · Hypocycloid** — the curve traced by a point on a circle rolling inside a circle five times
+  larger; a sprint inside a roadmap. _Not chosen:_ a solid concave star is a silhouette, and five
+  cusps sit one cusp from the four-cusp astroid — the ✨ Motir's own "Plan with AI" launcher renders.
+- **C · Borromean** — three rings, no two linked, all three inseparable; exactly the three-pillar
+  thesis. _Not chosen:_ the most on-message and the least legible; it fails below 24 px and would
+  cost a permanent second artwork.
+- **D · Wave** — the outline of a band swept along one period of a sine; a wave advances while it
+  oscillates, which is the sprint. _Not chosen_, but it is the one that could **animate as itself**:
+  travel (the phase advances, the band stays put) and frequency (one period stretches to two), both
+  re-derived from a changed curve rather than tweened, each frame a single path. Kept in the mock in
+  case a motion identity is wanted later.
 
 ### Considered and dropped
 
-The **isometric cube** (the Hasse diagram of B₃ — which would have been candidate A one dimension up,
-since B₂'s diagram is a face of B₃'s) and the **Penrose tribar** (locally consistent everywhere,
-globally impossible — a precise description of a plan that does not close). Both are mathematically
-apt, both were built and rendered at every size, and both are among the most heavily used marks in
-software — the cube is lucide's own `Box`. A brand mark that reads as a stock icon is not worth the
-idea behind it.
+The **isometric cube** (the Hasse diagram of B₃ — the mark one dimension up) and the **Penrose
+tribar** (locally consistent everywhere, globally impossible — a precise description of a plan that
+does not close). Both mathematically apt, both built and rendered, both among the most heavily used
+marks in software — the cube is lucide's own `Box`.
 
-Three more were built, rendered and dropped on the way to D:
-
-- The **astroidal ellipsoid** (|x|^(2/3) + |y|^(2/3) + |z|^(2/3) = 1, whose every coordinate
-  cross-section is an astroid) — the most literal "hypocycloid in 3D", and **too complicated**: a
-  faceted mesh of 80 paths needing hand re-authoring to ship.
-- The **hypocycloid plate** — candidate B cut 1.4 thick and tilted 45°. It worked, and it is a
-  perfectly good mark; a star with a rim simply states one idea where the wave states two.
-- **The wave as a shaded solid** — the same curve swept with a square section and lit per facet,
-  0.30 → 1.00 of one colour. It had the volume but not the elegance, and cost ~120 paths to say what
-  one outline says better. Its shading also had to move from three discrete tone buckets to
-  continuous per-facet opacity, because bucketing stripes a curved surface — a problem the outline
-  does not have at all.
-- **Straight extrusion** of the flat curve, tried before either: extruding a concave star yields
-  slivers of wall that read as a drop shadow rather than a solid. The tilt is what makes a rim
-  visible at all. (Yue, 2026-08-05.)
-
-### Recommendation
-
-**A for the mark, D if the brand wants to move.**
-
-Both are now a single stroked path in one colour, so the choice is no longer about cost — it is about
-what the brand wants to be.
-
-**A** is the quieter, more structural mark: legible down to 16 px, and it says the plan is a lattice
-that repeats at every depth. **D** is the expressive one: it holds a dark field as strongly as a
-light one, and it is the only candidate whose animation _is_ the mark rather than an effect applied
-to it. Its only real cost is a **20 px floor** instead of 16. **C** is still the one that needs a
-second artwork below 24 px.
-
-The honest split: **A if the mark must be one fixed thing, D if it is allowed to be alive.**
+Three more were built and dropped while chasing a three-dimensional form: the **astroidal ellipsoid**
+(|x|^(2/3) + |y|^(2/3) + |z|^(2/3) = 1), too complicated at a faceted mesh of 80 paths; the
+**hypocycloid plate**, candidate B cut thick and tilted; and the wave as a **shaded solid**, which
+had the volume but not the elegance. **Straight extrusion** of a flat curve was tried before any of
+them — it yields slivers of wall that read as a drop shadow. And a **diagonally-rolled wave** was
+rejected for reading plainly as the letter Z, the very thing this card ruled out at the start.
 
 ---
 
@@ -192,27 +136,30 @@ The honest split: **A if the mark must be one fixed thing, D if it is allowed to
 
 ```svg
 <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-  <g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round">
-    <path d="M12 3.2L20.8 12L12 20.8L3.2 12Z" />
-    <path d="M12 7.6L16.4 12L12 16.4L7.6 12Z" />
-  </g>
+  <path d="M12 3.6L20.4 12L12 20.4L3.6 12Z" fill="none" stroke="currentColor"
+        stroke-width="2.5" stroke-linejoin="round" />
+  <path d="M12 7.8L16.2 12L12 16.2L7.8 12Z" fill="none" stroke="currentColor"
+        stroke-width="2.5" stroke-linejoin="round" />
+  <circle cx="12"   cy="3.6"  r="1.9" fill="currentColor" />
+  <circle cx="20.4" cy="12"   r="1.9" fill="currentColor" />
+  <circle cx="12"   cy="20.4" r="1.9" fill="currentColor" />
+  <circle cx="3.6"  cy="12"   r="1.9" fill="currentColor" />
 </svg>
 ```
 
-|                  |                                                                                                                                                                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **viewBox**      | `0 0 24 24` — the same grid every `lucide-react` icon in the app uses, so the mark drops into any icon slot unscaled.                                                                                                                                        |
-| **paths**        | Two closed rhombi, the inner at exactly **half** the outer's half-diagonal (8.8 → 4.4). One number generates the whole family; the next level in would be 2.2.                                                                                               |
-| **paint**        | `fill="none"`, `stroke="currentColor"`, `stroke-width="2.5"`, `stroke-linejoin="round"`. No `stroke-linecap` — both paths are closed.                                                                                                                        |
-| **extent**       | x and y both 1.95 → 22.05 (20.1 square), centred on (12, 12) **by construction** — a consumer centres it by geometry, with no nudge. The mark occupies 84% of the box, which is why it holds its own beside a 24 px lucide icon rather than reading smaller. |
-| **clear space**  | 2 × the stroke weight = **5.0 units** (21% of the box edge) on all four sides, measured from the **extent**, never from the viewBox. A rhombus reads with more air around it than a square of the same extent, so this is the floor, not the target.         |
-| **minimum size** | **16 px** for the bare glyph — the stroke lands at 1.67 px and the inner rhombus at 2.9 px across, still an unmistakable rhombus. Below 16 px use the tiled form (§5).                                                                                       |
-| **colour**       | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                         |
+|                  |                                                                                                                                                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **viewBox**      | `0 0 24 24` — the same grid every `lucide-react` icon in the app uses, so the mark drops into any icon slot unscaled.                                                                                                                                |
+| **paths**        | Two closed rhombi, the inner at exactly **half** the outer's half-diagonal (8.4 → 4.2). One number generates the whole family; the next level in would be 2.1.                                                                                       |
+| **nodes**        | Four filled circles, **r = 1.9**, centred on the **outer** rhombus's vertices. They are the lattice's vertices, not decoration (§1). The inner rhombus carries none — the nesting is a change of _depth_, not another level of the same diagram.     |
+| **paint**        | Rhombi: `fill="none"`, `stroke="currentColor"`, `stroke-width="2.5"`, `stroke-linejoin="round"`. Nodes: `fill="currentColor"`, no stroke. No `stroke-linecap` — both paths are closed.                                                               |
+| **extent**       | x and y both 1.7 → 22.3 (20.6 square), centred on (12, 12) **by construction**. The extent is set by the **nodes** (8.4 + 1.9), not the stroke — so node radius is what to change if the mark ever needs to sit lighter in its box.                  |
+| **clear space**  | 2 × the stroke weight = **5.0 units** (21% of the box edge) on all four sides, measured from the **extent**, never from the viewBox. A rhombus reads with more air around it than a square of the same extent, so this is the floor, not the target. |
+| **minimum size** | **16 px** — the stroke lands at 1.67 px, the nodes at 2.5 px across and the inner rhombus at 2.8 px, all still legible. Below 16 px use the tiled form (§5).                                                                                         |
+| **colour**       | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                 |
 
-`currentColor` is deliberate: it makes the dark variant a token choice rather than a second asset
-(§4).
-
----
+`currentColor` throughout is deliberate: it makes the dark variant a token choice rather than a
+second asset (§4).
 
 ## 3. Wordmark and lockups
 
@@ -308,8 +255,8 @@ Everything else is new — and Next.js only auto-wires files it _finds_, so each
   56 px tile — the app's own container ratio, so the icon reads as the same family as the UI.
 - **Safe zone.** Maskable icons are cropped to an arbitrary OS shape, so the glyph must sit inside the
   centred circle of diameter **0.8 × canvas**. A rhombus makes this cheap: its extreme points lie on
-  the axes, not at bounding-box corners, so its circumradius is only `10.05 / 24 = 0.419 × the glyph
-box`. Rendered at **0.66 × canvas** that is 0.55 × canvas across — comfortably inside 0.8. (A square
+  the axes, not at bounding-box corners, so its circumradius is only `10.3 / 24 = 0.429 × the glyph
+box`. Rendered at **0.66 × canvas** that is 0.57 × canvas across — comfortably inside 0.8. (A square
   or a letterform pays √2 for the same extent and has to be shrunk to fit.) Non-maskable icons use the
   same 0.66, centred.
 - **`app/manifest.ts`** declares both maskable entries plus `name: 'Motir'`, `short_name: 'Motir'`,
@@ -416,17 +363,12 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
 - The artifact this card does **not** produce is the raster set itself (`apple-icon.png`,
   `icon-192/512.png`). Those are build outputs — MOTIR-1150 renders them from the single SVG source
   defined in §2 at the sizes and safe zones in §5.
-- **The glyph is decided by MOTIR-1140, not by this card.** Keep the two `<path>` strings in ONE
-  module so a substitution (to B, C or D) is a single-file change. If C or D wins, that module also owns the
-  simplified ≤24 px cut, and every call site below 24 px must resolve to it — and for D the tonal
-  variant must express its three tones as **opacity on one token**, never as three colours.
-- **If D wins, the animation is a separate, later card, not part of MOTIR-1150.** The frames are
-  generated geometry (10 per motion, one path each), and the motion surfaces (OG card, marketing
-  hero) live in `motir-marketing`, not here. Ship the static wave first.
-- **D is a generated outline.** Keep the generator (curve → sweep → twist → tilt → project → close)
-  beside the output, or the mark cannot be re-cut at a new tilt, twist or frame count without
-  redrawing it by hand. Re-author the shipped path as Béziers; the 90-sample polyline is the
-  reference, not the deliverable.
+- **The glyph is settled** (A, with nodes — §1). Keep the two `<path>` strings and the four node
+  circles in ONE module anyway, so a future change is a single-file edit. - **The prior-art check is done; the trademark clearance is not.** §1 records a visual-similarity
+  check against public sources. A registered-mark search in classes 9 and 42 is a separate `manual`
+  card that must land before launch — it does not block this one.
+- **If a motion identity is ever wanted, D is on file** with two motions already built. That would be
+  its own card, and the motion surfaces live in `motir-marketing`, not here.
 
 ## File-name note
 
