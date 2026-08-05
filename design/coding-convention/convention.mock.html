@@ -3745,5 +3745,367 @@ jobs:
         makes the sentence true on both halves.
       </p>
     </div>
+    <div class="panel-label">
+      Panel 8 · Content region · the audit tab's PER-REPO TRIGGERS — a row action that audits ONE
+      repo, and one header action for every repo with no report (MOTIR-2245)
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </svg>
+        Code health <span class="sep">›</span>
+        <span class="here">Audit tab · the repo list from Panel 7, now actionable</span>
+      </span>
+      <span
+        >— an AMENDMENT to Panel 7. Nothing in Panel 4b, the report panel or the Convention tab is
+        redrawn.</span
+      >
+    </div>
+    <div class="panel">
+      <p class="subtle" style="margin: 0 0 14px">
+        Panel 7 made every repo's state <em>legible</em> and left every row
+        <strong>read-only</strong>. The only thing a person can press still re-derives
+        <strong>all five</strong> repos, so learning about the sixth costs six derivations — and the
+        row's one existing action, <code class="coderef">onRetry</code>, re-<strong>READS</strong> a
+        failed row and is documented as <em>&ldquo;deliberately not a re-audit&rdquo;</em>. This
+        panel gives the list its triggers: one that audits <strong>one repo</strong>, and one that
+        audits <strong>every repo with no report</strong>.
+      </p>
+
+      <!-- ── 8a — the arrival: what the nudge's link lands on ─────────────── -->
+      <div class="eyebrow" style="margin: 4px 0 10px">
+        8a · The ARRIVAL · the first second after clicking the /planning nudge — two repos with no
+        report, both triggers present
+      </div>
+
+      <div class="card">
+        <div class="card-head" style="margin-bottom: 10px">
+          <h3>Repositories</h3>
+          <span class="rr-fill"></span>
+          <span class="count-pill">5 connected</span>
+          <!-- The BULK trigger. Labelled with the COUNT, so the button states its
+               own price; it is the only control on the page that acts on a SET. -->
+          <button class="btn btn-secondary btn-sm">Audit the 2 with no report</button>
+        </div>
+        <p class="rollup">
+          <span><strong>3 of 5</strong> audited</span>
+          <span>·</span>
+          <span><strong>451</strong> findings across them</span>
+          <span>·</span>
+          <span>2 not audited yet</span>
+        </p>
+        <div class="repos" role="group" aria-label="Choose a repository's audit report">
+          <div class="repo-row sel" aria-current="true">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-gateway</span>
+            <span class="rr-grade g-poor">D · 34% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">96 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+            <!-- AUDITED → the quiet ghost. This row already has a report; -->
+            <!-- re-deriving it is the rarer need, so it does not compete. -->
+            <button class="btn btn-ghost btn-sm">Re-audit</button>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-ai</span>
+            <span class="rr-grade g-watch">C · 63% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">143 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+            <button class="btn btn-ghost btn-sm">Re-audit</button>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-core</span>
+            <span class="rr-grade g-good">B · 78% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">212 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+            <button class="btn btn-ghost btn-sm">Re-audit</button>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-meta</span>
+            <span class="rr-state">
+              <svg
+                class="i-warn"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+              Not audited yet
+            </span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">—</span>
+            <!-- NOT AUDITED → the BORDERED secondary. It is the one thing worth
+                 doing on this row, and its weight says so without shouting. -->
+            <button class="btn btn-secondary btn-sm">Audit this repo</button>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/nextjs-prisma-vercel-starter</span>
+            <span class="rr-state">
+              <svg
+                class="i-warn"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+              Not audited yet
+            </span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">—</span>
+            <button class="btn btn-secondary btn-sm">Audit this repo</button>
+          </div>
+        </div>
+        <p class="setup-hint" style="margin: 12px 0 0">
+          <strong>The arrival does NOT re-order the list.</strong> Panel 7 §4's order is
+          worst-first, so an admin arriving from the nudge sees the graded rows before the
+          un-audited ones. That is deliberate: the nudge already NAMED the repos it is about, the
+          header control acts on all of them at once and sits above every row, and re-sorting the
+          list on arrival would mean the same page shows a different order depending on how you got
+          there.
+        </p>
+      </div>
+
+      <!-- ── 8b — the four row states, each with its action ───────────────── -->
+      <div class="eyebrow" style="margin: 18px 0 10px">
+        8b · The FOUR row states with their actions — including the one that gets NO trigger
+      </div>
+
+      <div class="card">
+        <div class="repos">
+          <div class="repo-row sel">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-core</span>
+            <span class="rr-grade g-good">B · 78% conform</span>
+            <span class="rr-fill"></span>
+            <span class="count-pill">212 findings</span>
+            <span class="rr-when">2 minutes ago</span>
+            <button class="btn btn-ghost btn-sm">Re-audit</button>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-ai</span>
+            <span class="rr-state"><span class="spin"></span> Deriving…</span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">started 40 seconds ago</span>
+            <!-- DERIVING → NOTHING. The work is already happening; a second
+                 trigger here can only duplicate it. The state IS the feedback. -->
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-meta</span>
+            <span class="rr-state">
+              <svg
+                class="i-warn"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v3"
+                />
+                <circle cx="13" cy="12" r="2" />
+                <path d="M18 19c-2.8 0-5-2.2-5-5v8" />
+                <circle cx="20" cy="19" r="2" />
+              </svg>
+              Not audited yet
+            </span>
+            <span class="rr-fill"></span>
+            <span class="rr-when">—</span>
+            <button class="btn btn-secondary btn-sm">Audit this repo</button>
+          </div>
+          <div class="repo-row">
+            <svg class="octo"><use href="#octo" /></svg>
+            <span class="rr-name">moooon-B-V/motir-gateway</span>
+            <span class="rr-state">
+              <svg
+                class="i-danger"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              Couldn't load this report
+            </span>
+            <span class="rr-fill"></span>
+            <!-- UNAVAILABLE → the shipped re-READ, and NO audit trigger. -->
+            <button class="btn btn-ghost btn-sm">Try again</button>
+          </div>
+        </div>
+        <div class="anatomy">
+          <span
+            ><b>The action is the row's LAST element</b>, after the timestamp — one trailing slot,
+            one control, never two. The row keeps Panel 7 §6's anatomy exactly; this appends to
+            it.</span
+          >
+          <span
+            ><b
+              >An <code class="coderef">unavailable</code> row gets NO audit trigger — only its
+              shipped &ldquo;Try again&rdquo;.</b
+            >
+            The read FAILED, so nothing on screen knows whether that repo has a report; offering
+            &ldquo;Audit this repo&rdquo; there would spend a derivation to fix what may be a
+            display error. Re-READ first — it is free, and it tells you which state the row is
+            really in. This is also what keeps the two actions from ever sitting one pixel apart:
+            the free recovery and the paid trigger are mutually exclusive per row, so a mis-click
+            between them is not possible rather than merely unlikely.</span
+          >
+          <span
+            ><b>Weight encodes price, and the words differ.</b>
+            <code class="coderef">btn-secondary</code> (bordered) for <em>Audit this repo</em> — the
+            one thing worth doing on a row with no report;
+            <code class="coderef">btn-ghost</code> for <em>Re-audit</em> and <em>Try again</em> —
+            the rarer need and the free recovery. No new button variant: all three are the shipped
+            <code class="coderef">Button</code> primitive at
+            <code class="coderef">size="sm"</code>.</span
+          >
+          <span
+            ><b>A <code class="coderef">deriving</code> row offers nothing at all</b> — REMOVED, not
+            disabled, which is Panel 4b State C's shipped rule (<em
+              >&ldquo;the action is REMOVED, not disabled&rdquo;</em
+            >) applied one altitude down. A disabled button invites a second press and explains
+            nothing; the spinner and the word already say what is happening.</span
+          >
+          <span
+            ><b>Rows stay sibling buttons.</b> The trigger is a SIBLING of the row's select button,
+            exactly as <code class="coderef">onRetry</code> already is — never nested inside it. The
+            <code class="coderef">role="group"</code> wrapper, the one select button per row and its
+            <code class="coderef">aria-current</code> are unchanged, and each trigger carries its
+            OWN accessible name that repeats the repo (<em
+              >&ldquo;Audit moooon-B-V/motir-meta&rdquo;</em
+            >), because &ldquo;Audit this repo&rdquo; alone is meaningless read out of the
+            row.</span
+          >
+        </div>
+      </div>
+
+      <!-- ── 8c — the header control's two states ────────────────────────── -->
+      <div class="eyebrow" style="margin: 18px 0 10px">
+        8c · The header control · labelled with the count, and ABSENT at zero
+      </div>
+
+      <div class="cols">
+        <div class="card">
+          <div class="card-head" style="margin-bottom: 8px">
+            <h3>Repositories</h3>
+            <span class="rr-fill"></span>
+            <span class="count-pill">5 connected</span>
+            <button class="btn btn-secondary btn-sm">Audit the 2 with no report</button>
+          </div>
+          <p class="rollup" style="margin-bottom: 0">
+            <span><strong>3 of 5</strong> audited</span>
+            <span>·</span>
+            <span>2 not audited yet</span>
+          </p>
+          <p class="setup-hint" style="margin: 10px 0 0">
+            <strong>≥1 repo with no report.</strong> The control names the COUNT, so it states its
+            own price before it is pressed — it is the only control on this page that acts on a SET.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-head" style="margin-bottom: 8px">
+            <h3>Repositories</h3>
+            <span class="rr-fill"></span>
+            <span class="count-pill">5 connected</span>
+          </div>
+          <p class="rollup" style="margin-bottom: 0">
+            <span><strong>5 of 5</strong> audited</span>
+            <span>·</span>
+            <span><strong>664</strong> findings across them</span>
+          </p>
+          <p class="setup-hint" style="margin: 10px 0 0">
+            <strong>Zero with no report → the control is ABSENT, not disabled.</strong> Same rule as
+            the deriving row: a disabled button whose only meaning is &ldquo;there is nothing to
+            do&rdquo; is a control that has to be explained. The rollup already says
+            <em>5 of 5 audited</em>. Per-row <em>Re-audit</em> stays available on every row, so
+            nothing becomes unreachable.
+          </p>
+        </div>
+      </div>
+
+      <!-- ── 8d — N = 1 ──────────────────────────────────────────────────── -->
+      <div class="eyebrow" style="margin: 18px 0 10px">
+        8d · N = 1 · the page is UNCHANGED — neither control has a home, and none is invented
+      </div>
+
+      <div class="card">
+        <div class="card-head" style="margin-bottom: 10px">
+          <h3>Code health · moooon-B-V/motir-core</h3>
+          <span class="rr-fill"></span>
+          <button class="btn btn-secondary btn-sm">Re-audit now</button>
+        </div>
+        <p class="setup-hint" style="margin: 0">
+          <strong>With one connected repo the repo list does not render at all</strong> (Panel 7 §7
+          — selection and comparison are both vacuous with one row), so there is no row to hang a
+          row action on and no header to hang a bulk action on. That is not a hole: the panel's
+          existing primary trigger <em>&ldquo;Re-audit now&rdquo;</em> ALREADY audits the only repo,
+          and at N = 1 the whole-set fan-out and a per-repo scope are the same request. The build
+          must not invent a second affordance here — the single-repo page is byte-identical to
+          today's.
+        </p>
+      </div>
+
+      <p class="setup-hint" style="margin: 14px 0 0">
+        <strong
+          >No confirmation dialog, and the reason is on this page rather than in taste.</strong
+        >
+        The shipped whole-project <em>&ldquo;Re-audit now&rdquo;</em> fires on ONE click with no
+        confirm — and it is the <em>expensive</em> action, deriving every connected repo. Every
+        trigger this panel adds costs strictly LESS than that button already costs unconfirmed, so
+        gating the cheaper action while the dearer one stays ungated would teach exactly the wrong
+        lesson about which press is worth pausing over. What replaces a dialog: the row flips to
+        <strong>Deriving…</strong> immediately, so the press is visibly acknowledged; the trigger is
+        then REMOVED from that row, so it cannot be pressed twice; and MOTIR-2223's durable
+        in-flight record means even a reload cannot produce a duplicate run. If a confirm is ever
+        wanted, it belongs on the whole-set button FIRST — that is a separate decision about a
+        control this panel does not touch.
+      </p>
+    </div>
   </body>
 </html>
