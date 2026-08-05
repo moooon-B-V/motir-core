@@ -60,9 +60,9 @@ MOTIR-1140 is a `decision` card, and a decision needs something to decide betwee
 objects in two families — three **flat** (§1 A–C) and one **with depth** (§1 D) — all on one
 construction grid. Picking any of them changes only the `<path>` data MOTIR-1150 consumes.
 
-The candidate with depth is shaded by its own geometry — each facet's opacity is its surface normal,
-0.30 → 1.00 of **one colour**, never a second hue — so the Tier-3 token rule holds and a
-`data-palette` swap re-skins it for free.
+The candidate with depth is drawn as an **outline**, so like the flat three it is a single stroked
+path in one colour — the Tier-3 token rule holds across the whole set and a `data-palette` swap
+re-skins every one of them for free.
 
 ### A · Lattice _(recommended)_
 
@@ -111,24 +111,25 @@ favicon, a permanent two-artwork tax the other two do not carry.
 
 ### D · Wave
 
-> _One period of a sine, swept as a solid band and put on an angle._
+> _The outline of a band swept along one period of a sine, twisted along its length._
 
 **A wave advances while it oscillates.** A circle comes back to where it started; a wave does not.
-That is the sprint — you cycle, and the product still moves forward — and it is the one shape that
-says both things at once.
+That is the sprint — you cycle, and the product still moves forward. It also stays in B's family: a
+sine is the **shadow of uniform circular motion**, so B is a circle rolling inside a circle and this
+is the same generator rolling along a straight one.
 
-It stays in B's family: a sine is the **shadow of uniform circular motion**, the projection of a
-point going round a circle onto a line. B is a circle rolling inside a circle; this is the same
-generator rolling along a straight one.
+**Depth without shading.** The mark is the band's two long edges, closed by its two cut ends, and it
+reads as three-dimensional because the edges **converge wherever the band turns edge-on**. The 3D is
+in the contour, not in a gradient laid over it. Band width 2.8, twisted 45° along its length, tilted
+50°, rolled −90° so the wave runs vertically, projected orthographically.
 
-**How it is built.** A square section 1.7 × 1.7 swept along the curve, tilted **50°** and rolled
-**−28°**, orthographic. **The gradient is the geometry** — each facet's opacity is its own surface
-normal, 0.30 → 1.00 of one colour, never a second hue and never a decorative gradient laid on top. It
-is the only candidate that holds on a dark field as strongly as a light one, which is what the
-reference asked for.
+**It is one path** — `fill="none"`, `stroke="currentColor"`, `stroke-width="2.2"`,
+`stroke-linejoin="round"` — the same construction as A, B and C. That is the difference between this
+and every earlier 3D attempt: **no tonal tax, no second cut for a flat context, no palette caveat.**
 
-**And it moves — as a wave, not as a spinning picture.** Both motions change the curve and re-derive
-the solid from it; nothing is rotated or tweened after the fact.
+**And it moves — as a wave, not as a spinning picture.** Both motions re-derive the outline from a
+changed curve; nothing is rotated or tweened after the fact. Each frame is still one path, so a whole
+motion is ten paths.
 
 - **Travel** — the phase advances and the band stays where it is. This is what a wave _is_: the shape
   moves, the medium does not. One full period is a seamless loop — 10 frames, 2.2 s.
@@ -141,8 +142,9 @@ email, in the tab strip, and at every size below 40 px. All of it sits behind
 `prefers-reduced-motion` — the same gate `globals.css` already puts on the Plan-with-AI shimmer and
 the FAB pulse — with the static mark as the reduced-motion state.
 
-**Cost:** ~120 facets rather than a curve, so it is a _generated_ asset — the frames come out of a
-script, not a pen. The shading also needs a flattened single-tone cut below ~24 px, the same tax as C.
+**Cost:** the small end. The interior closes up below ~20 px, so its **minimum size is 20 rather than
+16**. And it is a generated polyline (90 samples) that wants re-authoring as Béziers before it ships
+— keep the generator beside the output or it cannot be re-cut at a new tilt, twist or frame count.
 
 ### Considered and dropped
 
@@ -160,6 +162,11 @@ Three more were built, rendered and dropped on the way to D:
   faceted mesh of 80 paths needing hand re-authoring to ship.
 - The **hypocycloid plate** — candidate B cut 1.4 thick and tilted 45°. It worked, and it is a
   perfectly good mark; a star with a rim simply states one idea where the wave states two.
+- **The wave as a shaded solid** — the same curve swept with a square section and lit per facet,
+  0.30 → 1.00 of one colour. It had the volume but not the elegance, and cost ~120 paths to say what
+  one outline says better. Its shading also had to move from three discrete tone buckets to
+  continuous per-facet opacity, because bucketing stripes a curved surface — a problem the outline
+  does not have at all.
 - **Straight extrusion** of the flat curve, tried before either: extruding a concave star yields
   slivers of wall that read as a drop shadow rather than a solid. The tilt is what makes a rim
   visible at all. (Yue, 2026-08-05.)
@@ -168,14 +175,14 @@ Three more were built, rendered and dropped on the way to D:
 
 **A for the mark, D if the brand wants to move.**
 
-A is still the only candidate legible at every shipped size with no second artwork, and it is the
-safer system — one stroke weight, two paths, no flat cut to maintain.
+Both are now a single stroked path in one colour, so the choice is no longer about cost — it is about
+what the brand wants to be.
 
-D is the one that behaves like a brand with a motion identity: travel and frequency both come out of
-the curve itself, so the animation **is** the mark rather than an effect applied to it. It is also the
-only candidate that holds on a dark field as strongly as a light one.
-
-**C and D both owe a simplified single-tone cut below ~24 px.** A and B do not.
+**A** is the quieter, more structural mark: legible down to 16 px, and it says the plan is a lattice
+that repeats at every depth. **D** is the expressive one: it holds a dark field as strongly as a
+light one, and it is the only candidate whose animation _is_ the mark rather than an effect applied
+to it. Its only real cost is a **20 px floor** instead of 16. **C** is still the one that needs a
+second artwork below 24 px.
 
 The honest split: **A if the mark must be one fixed thing, D if it is allowed to be alive.**
 
@@ -414,12 +421,12 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
   simplified ≤24 px cut, and every call site below 24 px must resolve to it — and for D the tonal
   variant must express its three tones as **opacity on one token**, never as three colours.
 - **If D wins, the animation is a separate, later card, not part of MOTIR-1150.** The frames are
-  generated geometry (10 per motion, ~70 facets each), so the component needs a build step or a
-  pre-generated frame set; and the motion surfaces (OG card, marketing hero) live in
-  `motir-marketing`, not here. Ship the static wave first.
-- **D is a generated asset.** Keep the generator (curve → sweep → tilt → cull → shade) beside the
-  output, or the mark cannot be re-cut at a new angle, thickness or frame count without redrawing it
-  by hand.
+  generated geometry (10 per motion, one path each), and the motion surfaces (OG card, marketing
+  hero) live in `motir-marketing`, not here. Ship the static wave first.
+- **D is a generated outline.** Keep the generator (curve → sweep → twist → tilt → project → close)
+  beside the output, or the mark cannot be re-cut at a new tilt, twist or frame count without
+  redrawing it by hand. Re-author the shipped path as Béziers; the 90-sample polyline is the
+  reference, not the deliverable.
 
 ## File-name note
 
