@@ -17,6 +17,7 @@ import { createV1Caller, createV1ProjectCaller } from '../../fixtures/apiV1Fixtu
 import { createTestWorkItem } from '../../fixtures';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { truncateAuthTables } from '../../helpers/db';
+import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
 // The Story 11.1 vitest GATE (Subtask 11.1.5 — MOTIR-1861).
 //
@@ -119,9 +120,14 @@ describe('gate — seam: auth × limiter (does a refused request spend budget?)'
   // secret — a denial-of-service against a specific integration, mounted by
   // someone who cannot authenticate at all.
   it('an UNAUTHENTICATED request spends nothing', async () => {
-    budget(2);
+    budget(2, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
     const { GET } = await import('@/app/api/v1/me/route');
+
+    // Fixture setup is done; the assertion below spans several requests and
+    // reads their ACCUMULATED count, so start it at the top of a window (see
+    // `tests/helpers/rateLimitWindow.ts`).
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     for (let i = 0; i < 10; i++) {
       expect((await GET(new Request(ME))).status).toBe(401);
@@ -138,10 +144,16 @@ describe('gate — seam: auth × limiter (does a refused request spend budget?)'
   // costs a full token lookup. If 403s were unmetered, the holder of any valid
   // token could hammer an endpoint whose scope it lacks with no ceiling at all.
   it('a VALID token refused for SCOPE (403) DOES spend budget', async () => {
-    budget(2);
+    budget(2, ALIGNED_WINDOW_MS);
     // A real token that will never satisfy a `read` route.
     const caller = await createV1Caller({ scopes: ['integration'] });
     const { GET } = await import('@/app/api/v1/me/route');
+
+    // MOTIR-2224: this trio reads the ACCUMULATED count, so a grid boundary
+    // falling between its calls resets the counter and serves the third an
+    // ordinary 403 instead of the 429 asserted below. Start at the top of a
+    // window (see `tests/helpers/rateLimitWindow.ts`).
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     expect((await GET(new Request(ME, { headers: caller.headers }))).status).toBe(403);
     expect((await GET(new Request(ME, { headers: caller.headers }))).status).toBe(403);
