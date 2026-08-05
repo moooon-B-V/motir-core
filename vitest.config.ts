@@ -550,6 +550,16 @@ export default defineConfig({
         // inventing attribution on real history — is silent and hard to undo.
         // The service + repository halves are already gated above.
         'lib/workItems/provenanceBackfill.ts',
+        // MOTIR-1965 — the historical-PR mirror backfill, gated for the same
+        // reason its provenance sibling above is: this is operator tooling whose
+        // writes land on real, already-shipped history, and the branches ARE the
+        // safety argument. The merged-only filter, the manual-link stickiness,
+        // and the already-current comparison each prevent a specific wrong claim
+        // (a `byok` stamp from an abandoned PR, a hand-made link overwritten, a
+        // whole mirror's `updated_at` churned by a re-run), and an untested one
+        // is indistinguishable from a missing one.
+        'lib/github/historicalPullRequests.ts',
+        'lib/services/historicalPullRequestBackfillService.ts',
         // Story 7.24 · MOTIR-1812 → gated by MOTIR-1813. The "M" universal AI
         // callout: its action REGISTRY plus the two components that consume it.
         // The registry is the extension point MOTIR-1343 / MOTIR-1344 each land a
@@ -1131,6 +1141,17 @@ export default defineConfig({
         // than asking for new tests: the point of the gate is that the next edit
         // to a rule cannot quietly ship an unexercised branch.
         'lib/workItems/provenanceBackfill.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-1965 — the historical-PR mirror backfill (see the `include`
+        // note). Measured at 98/97/95/100 over its own two suites, so this pins
+        // what the subtask earned rather than asking for catch-up tests; what
+        // stays uncovered is the truncation flag (500 pages to reach) and one
+        // non-Error fallback.
+        'lib/github/historicalPullRequests.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/historicalPullRequestBackfillService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story 7.24 · MOTIR-1812 → gated by MOTIR-1813 (see the `include` note).
         // Measured over the merged surface, all three files sit at 100/100/100
         // from the shell's own units, so this pins what MOTIR-1812 already earned

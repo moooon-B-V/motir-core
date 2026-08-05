@@ -160,7 +160,7 @@ export async function syncChangeRequestStatus(
       // Motir's shared provisioning installation the installation names no
       // workspace at all, and under a user's own grant the two are equal — so
       // this is the one tenancy read on both paths.
-      workItem = await resolveWorkItem(repo.workspaceId, cr, tx);
+      workItem = await resolveChangeRequestWorkItem(repo.workspaceId, cr, tx);
       linkedManually = false;
     }
 
@@ -386,16 +386,31 @@ function strandedMergeCommentBody(args: {
   );
 }
 
+/** The work-item slice the change-request resolver returns — enough for the
+ *  sync's transition decision and for the mirror's link column. */
+export interface ResolvedChangeRequestWorkItem {
+  id: string;
+  projectId: string;
+  status: string;
+}
+
 /** Resolve the change request's linked work item from its head ref + title (the
  *  `MOTIR-<n>` hint the seam leaves for the consumer). Extracts every
  *  `<PREFIX>-<number>` candidate, resolves the project by prefix WITHIN the
  *  connection's workspace, then the work item by its full identifier. First
- *  resolved match wins; null when it references no work item in this workspace. */
-async function resolveWorkItem(
+ *  resolved match wins; null when it references no work item in this workspace.
+ *
+ *  EXPORTED as THE resolver (MOTIR-1965), not merely as this module's helper.
+ *  The historical-PR backfill mirrors change requests that predate the App
+ *  installation, and it must attribute them EXACTLY as a live delivery would —
+ *  a second parser would silently drift (a different key regex, a different
+ *  prefix-resolution order) and hand two different work items the same PR
+ *  depending on which path ingested it. There is one rule; this is it. */
+export async function resolveChangeRequestWorkItem(
   workspaceId: string,
   cr: NormalizedChangeRequest,
   tx: Prisma.TransactionClient,
-): Promise<{ id: string; projectId: string; status: string } | null> {
+): Promise<ResolvedChangeRequestWorkItem | null> {
   const seen = new Set<string>();
   for (const { prefix, number } of parseKeyCandidates(`${cr.headRef} ${cr.title ?? ''}`)) {
     const dedupeKey = `${prefix}-${number}`;
