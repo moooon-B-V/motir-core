@@ -12,24 +12,28 @@
 // resolves it. (notes.html #100 — target env-specific data by a stable marker,
 // never a positional/numeric id.)
 //
-// **The home EPIC ITSELF is the bug parent — ONE hop, no positional read
-// (MOTIR-2201).** Resolution finds the project's `epic` whose title is
-// `PLANNER_BUG_HOME_EPIC_TITLE`; that epic IS the parent. `epic → bug` is
-// matrix-legal (`lib/issues/parentRules.ts`), and it is where the live tenant's
-// auto-filed bugs already sit.
+// **The home STORY is the bug parent, found by its OWN title — ONE hop, no
+// positional read (MOTIR-2201).** Resolution finds the project's `story` whose
+// title is `PLANNER_BUG_HOME_STORY_TITLE`; that story IS the parent. It is
+// looked up PROJECT-WIDE, so **where the story sits in the tree is irrelevant** —
+// which is the whole point.
 //
-// It previously took a SECOND hop — the epic's first child of kind `story` —
-// and that hop is what broke: the live home story was re-parented under another
-// epic on 2026-08-05, the home epic was left with only `bug`/`task` children,
-// and every auto-filed planner bug 404'd silently. `getFirstChildOfKind(epic,
-// 'story')` is a POSITIONAL READ OF MUTABLE STRUCTURE wearing the clothes of a
-// stable marker — precisely the fragility the marker was introduced to escape
-// when it replaced the numeric key. The epic cannot suffer the same fate: `epic`
-// is root-only in the kind-parent matrix, so it cannot be re-parented, and
-// nothing that happens BENEATH it changes what the marker resolves to. A
-// `move_to_parent` can no longer void this invariant. (The helper the second hop
-// used was deleted with it, in both the service and the repository, so the
-// positional read cannot be reintroduced by accident.)
+// It previously took TWO hops — the home `epic` by title, then *the epic's first
+// child of kind `story`* — and hop 2 is what broke: the home story was
+// re-parented on 2026-08-05, the epic was left with only `bug`/`task` children,
+// and the marker stopped resolving. `getFirstChildOfKind(epic, 'story')` is a
+// POSITIONAL READ OF MUTABLE STRUCTURE wearing the clothes of a stable marker —
+// precisely the fragility the marker was introduced to escape when it replaced
+// the numeric key. A title lookup cannot suffer the same fate: no `move_to_parent`
+// anywhere in the tree changes which row it returns. (The helper hop 2 used was
+// deleted with it, in both the service and the repository, so the positional read
+// cannot be reintroduced by accident.)
+//
+// The load-bearing fact is now the story's TITLE, which is why the live row was
+// renamed to match `PLANNER_BUG_HOME_STORY_TITLE` exactly — one literal shared by
+// the constant, the resolver, and the `ensure_planner_bug_home` migration's SQL.
+// `PLANNER_BUG_HOME_EPIC_TITLE` survives as the migration's own join key (and its
+// literal-sync test); resolution no longer reads it.
 //
 // **A missing home is LOUD, never a quiet 404 (MOTIR-2201).** The old code threw
 // `WorkItemNotFoundError`, which the route maps to 404 — indistinguishable from
@@ -70,17 +74,18 @@
  *  to EXACTLY this literal. */
 export const PLANNER_BUG_HOME_MARKER = '@planner-bug-home';
 
-/** The home EPIC's title (a root epic in the `motir` project) — the STABLE join
- *  key the marker resolves through, and the bug parent itself. The
- *  `ensure_planner_bug_home` migration find-or-creates keyed on this title; keep
- *  the two in sync (a migration test asserts it). */
+/** The home EPIC's title (a root epic in the `motir` project) — the
+ *  `ensure_planner_bug_home` migration's join key, kept in sync with its SQL
+ *  literal (a migration test asserts it). NOT a resolution input as of
+ *  MOTIR-2201: the marker resolves the STORY directly, by the title below. */
 export const PLANNER_BUG_HOME_EPIC_TITLE = 'Planner self-improvement — auto-reported quality bugs';
 
-/** The home STORY title the `ensure_planner_bug_home` migration creates under
- *  the epic. MIGRATION HISTORY ONLY — resolution has never keyed on it and, as
- *  of MOTIR-2201, no longer reads a story child at all. It stays exported
- *  because `tests/integration/migrations/ensure-planner-bug-home.test.ts`
- *  asserts the migration's SQL literal matches this constant. */
+/** The home STORY's title — **the load-bearing handle** the marker resolves
+ *  through (MOTIR-2201). Matched EXACTLY, project-wide, so the story is found
+ *  wherever it sits in the tree. The `ensure_planner_bug_home` migration creates
+ *  the story with this same literal, and a migration test asserts the two agree;
+ *  the live row was renamed to match. Renaming the story breaks filing —
+ *  loudly (see the error below), never silently. */
 export const PLANNER_BUG_HOME_STORY_TITLE = 'Captured planning-mistake bugs';
 
 /** Whether a `parentKey` value is the planner-bug-home marker (case-insensitive,
@@ -90,13 +95,13 @@ export function isPlannerBugHomeMarker(parentKey: string): boolean {
 }
 
 /**
- * The planner-bug home epic is missing from the target project — a SERVER
+ * The planner-bug home story is missing from the target project — a SERVER
  * INVARIANT breach, not a caller error (MOTIR-2201).
  *
  * Deliberately NOT `WorkItemNotFoundError`: that maps to 404, which reads as
- * "you named a parent that doesn't exist" and is exactly how a broken home went
- * unnoticed while the self-learning loop's filing path swallowed it. Surfaced as
- * 500 so a mis-provisioned meta tenant is loud — the same choice, for the same
+ * "you named a parent that doesn't exist" and is exactly how a broken home would
+ * go unnoticed while the self-learning loop's filing path swallows it. Surfaced
+ * as 500 so a mis-provisioned meta tenant is loud — the same choice, for the same
  * reason, as `SystemPrincipalNotProvisionedError`.
  */
 export class PlannerBugHomeNotProvisionedError extends Error {
@@ -104,7 +109,7 @@ export class PlannerBugHomeNotProvisionedError extends Error {
   readonly code = 'planner_bug_home_not_provisioned' as const;
   constructor(projectKey: string) {
     super(
-      `The planner-bug home is not provisioned in project ${projectKey}: no epic titled "${PLANNER_BUG_HOME_EPIC_TITLE}". The ${PLANNER_BUG_HOME_MARKER} marker cannot resolve, so no planner bug can be filed. Re-create the home epic with that exact title (see prisma/migrations/20260701130000_ensure_planner_bug_home).`,
+      `The planner-bug home is not provisioned in project ${projectKey}: no story titled "${PLANNER_BUG_HOME_STORY_TITLE}". The ${PLANNER_BUG_HOME_MARKER} marker cannot resolve, so no planner bug can be filed. Restore a story with that exact title (see prisma/migrations/20260701130000_ensure_planner_bug_home).`,
     );
     this.name = 'PlannerBugHomeNotProvisionedError';
   }

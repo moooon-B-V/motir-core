@@ -3,7 +3,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import {
   isPlannerBugHomeMarker,
   PLANNER_BUG_HOME_MARKER,
-  PLANNER_BUG_HOME_EPIC_TITLE,
+  PLANNER_BUG_HOME_STORY_TITLE,
   PlannerBugHomeNotProvisionedError,
 } from '@/lib/ai/plannerBugHome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -31,7 +31,7 @@ export interface FileServiceBugInput {
   descriptionMd?: string | null;
   /** Optional parent work-item key (e.g. `MOTIR-819`) in the SAME project, OR the
    *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`), which
-   *  resolves to the planner-bug home EPIC by TITLE — the reseed-durable handle
+   *  resolves to the planner-bug home STORY by TITLE — the reseed-durable handle
    *  the self-learning loop targets instead of a volatile numeric key
    *  (MOTIR-1466; MOTIR-2201). When omitted, the bug is filed at project-root (a
    *  top-level `bug` is matrix-legal). */
@@ -48,26 +48,25 @@ export const aiWorkItemsService = {
       if (isPlannerBugHomeMarker(rawParentKey)) {
         // MOTIR-1466 — the DRIFT-PROOF path: the config carries the marker, not a
         // numeric key, so it never dangles across deploys. MOTIR-2201 — ONE hop:
-        // the home EPIC, found by its stable title, IS the bug parent (`epic →
-        // bug` is matrix-legal, and it is where the live tenant's auto-filed bugs
-        // already sit). It used to take a second hop to the epic's first `story`
-        // CHILD; that read of mutable structure broke the moment the live story
-        // was re-parented, and an epic — root-only in the kind-parent matrix —
-        // cannot be moved out from under the marker the same way. Browse-gated
-        // here. A missing home is a server invariant breach, not a caller error:
-        // logged + 500 (see below), never a quiet 404 the filing path swallows.
+        // the home STORY, found PROJECT-WIDE by its own title, IS the bug parent.
+        // It used to take a second hop — the home epic by title, then *that epic's
+        // first `story` child* — and that read of mutable tree position broke the
+        // moment the story was re-parented. A project-wide title lookup does not
+        // care where the story sits, so no `move_to_parent` can void it.
+        // Browse-gated here. A missing home is a server invariant breach, not a
+        // caller error: logged + 500, never a quiet 404 the filing path swallows.
         const home = await workItemsService.getWorkItemByProjectKindAndTitle(
           project.id,
-          'epic',
-          PLANNER_BUG_HOME_EPIC_TITLE,
+          'story',
+          PLANNER_BUG_HOME_STORY_TITLE,
           ctx,
         );
         if (!home) {
-          console.error('[aiWorkItemsService] the planner-bug home epic is missing', {
+          console.error('[aiWorkItemsService] the planner-bug home story is missing', {
             projectKey: input.projectKey,
             projectId: project.id,
             marker: PLANNER_BUG_HOME_MARKER,
-            expectedEpicTitle: PLANNER_BUG_HOME_EPIC_TITLE,
+            expectedStoryTitle: PLANNER_BUG_HOME_STORY_TITLE,
           });
           throw new PlannerBugHomeNotProvisionedError(input.projectKey);
         }

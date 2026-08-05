@@ -228,8 +228,24 @@ describe('POST /api/internal/ai/work-items — validation + guards (typed, never
 });
 
 describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-1466 · MOTIR-2201)', () => {
-  /** The home: the root epic the marker resolves to. It IS the bug parent — no
-   *  child row participates in resolution (MOTIR-2201). */
+  /** The home STORY the marker resolves to, by its own title. `parentId` lets a
+   *  test place it anywhere in the tree — resolution must not care (MOTIR-2201). */
+  async function createHomeStory(
+    projectId: string,
+    ctx: ServiceContext,
+    parentId?: string,
+  ): Promise<{ id: string }> {
+    return workItemsService.createWorkItem(
+      {
+        projectId,
+        kind: 'story',
+        title: PLANNER_BUG_HOME_STORY_TITLE,
+        ...(parentId ? { parentId } : {}),
+      },
+      ctx,
+    );
+  }
+
   async function createHomeEpic(projectId: string, ctx: ServiceContext): Promise<{ id: string }> {
     return workItemsService.createWorkItem(
       { projectId, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
@@ -237,13 +253,31 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     );
   }
 
-  it('files under the home EPIC when the epic has ONLY non-story children — the live 2026-08-05 state (MOTIR-2201)', async () => {
+  it('files under the home STORY when it sits under the home epic — the provisioned shape', async () => {
+    const { ownerCtx, project } = await makeMetaTenant();
+    const epic = await createHomeEpic(project.id, ownerCtx);
+    const home = await createHomeStory(project.id, ownerCtx, epic.id);
+
+    const res = await post({
+      projectKey: 'MOTIR',
+      kind: 'bug',
+      title: 'auto-filed planner bug',
+      parentKey: PLANNER_BUG_HOME_MARKER,
+    });
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { id: string };
+    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    expect(row?.parentId).toBe(home.id); // the home story, not the epic, not root
+  });
+
+  it('files under the home STORY even when the home epic has ONLY non-story children — the live 2026-08-05 state (MOTIR-2201)', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
     const epic = await createHomeEpic(project.id, ownerCtx);
     // Exactly the shape that broke the old two-hop resolution: the home story was
-    // re-parented away, leaving the epic with `bug` + `task` children only. Under
-    // the old `getFirstChildOfKind(epic, 'story')` this 404'd; the marker must
-    // still resolve.
+    // re-parented AWAY from the epic, which was left with `bug` + `task` children
+    // only. Under `getFirstChildOfKind(epic, 'story')` this 404'd. A project-wide
+    // title lookup finds the story wherever it went.
+    const home = await createHomeStory(project.id, ownerCtx); // root-level, NOT under the epic
     await workItemsService.createWorkItem(
       {
         projectId: project.id,
@@ -257,9 +291,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
       { projectId: project.id, kind: 'task', title: 'a triage task', parentId: epic.id },
       ownerCtx,
     );
-    const storyChildren = await db.workItem.count({
-      where: { parentId: epic.id, kind: 'story' },
-    });
+    const storyChildren = await db.workItem.count({ where: { parentId: epic.id, kind: 'story' } });
     expect(storyChildren).toBe(0); // the precondition this test exists to cover
 
     const res = await post({
@@ -271,54 +303,50 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
     const row = await db.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(epic.id); // landed under the home epic, not root
+    expect(row?.parentId).toBe(home.id);
   });
 
-  it('files under the home EPIC when it has NO children at all', async () => {
+  it('files under the home STORY when NO home epic exists at all — the epic is not a resolution input', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
-    const epic = await createHomeEpic(project.id, ownerCtx);
+    const home = await createHomeStory(project.id, ownerCtx);
     const res = await post({
       projectKey: 'MOTIR',
       kind: 'bug',
-      title: 'first bug in an empty home',
+      title: 'no epic, still resolves',
       parentKey: PLANNER_BUG_HOME_MARKER,
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
     const row = await db.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(epic.id);
+    expect(row?.parentId).toBe(home.id);
   });
 
-  it('files under the EPIC even when a story child exists — no child row is load-bearing', async () => {
+  it('follows the home STORY when it is re-parented under an UNRELATED epic — no move_to_parent can void the marker', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
     const epic = await createHomeEpic(project.id, ownerCtx);
-    // The migration-created home story. Resolution must NOT prefer it: reading a
-    // child row back into the path is the regression this asserts against.
-    const story = await workItemsService.createWorkItem(
-      {
-        projectId: project.id,
-        kind: 'story',
-        title: PLANNER_BUG_HOME_STORY_TITLE,
-        parentId: epic.id,
-      },
+    const home = await createHomeStory(project.id, ownerCtx, epic.id);
+    // The 2026-08-05 move, replayed: the story goes somewhere else entirely.
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'epic', title: 'Some other epic' },
       ownerCtx,
     );
+    await workItemsService.moveWorkItem(home.id, { newParentId: elsewhere.id }, ownerCtx);
+
     const res = await post({
       projectKey: 'MOTIR',
       kind: 'bug',
-      title: 'bug filed while a story child exists',
+      title: 'filed after the home story moved',
       parentKey: PLANNER_BUG_HOME_MARKER,
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
     const row = await db.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(epic.id);
-    expect(row?.parentId).not.toBe(story.id);
+    expect(row?.parentId).toBe(home.id); // still the home story, now under `elsewhere`
   });
 
   it('resolves the marker case-insensitively (config value casing is not load-bearing)', async () => {
     const { ownerCtx, project } = await makeMetaTenant();
-    const epic = await createHomeEpic(project.id, ownerCtx);
+    const home = await createHomeStory(project.id, ownerCtx);
     const res = await post({
       projectKey: 'MOTIR',
       kind: 'bug',
@@ -328,11 +356,13 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
     const row = await db.workItem.findUnique({ where: { id: json.id } });
-    expect(row?.parentId).toBe(epic.id);
+    expect(row?.parentId).toBe(home.id);
   });
 
-  it('an ABSENT home epic fails LOUDLY — 500 `planner_bug_home_not_provisioned`, logged at error level (MOTIR-2201)', async () => {
-    await makeMetaTenant(); // system principal present, but NO planner-bug home
+  it('an ABSENT home story fails LOUDLY — 500 `planner_bug_home_not_provisioned`, logged at error level (MOTIR-2201)', async () => {
+    const { ownerCtx, project } = await makeMetaTenant();
+    // The epic alone is not a home: resolution keys on the STORY's title.
+    await createHomeEpic(project.id, ownerCtx);
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const res = await post({
@@ -349,24 +379,24 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
       expect(res.status).toBe(500);
       const body = (await res.json()) as { code: string; error: string };
       expect(body.code).toBe('planner_bug_home_not_provisioned');
-      expect(body.error).toContain(PLANNER_BUG_HOME_EPIC_TITLE);
+      expect(body.error).toContain(PLANNER_BUG_HOME_STORY_TITLE);
 
       // The failure signal a human actually sees in the logs.
       expect(logged).toHaveBeenCalledTimes(1);
       const [message, detail] = logged.mock.calls[0]!;
-      expect(message).toContain('planner-bug home epic is missing');
+      expect(message).toContain('planner-bug home story is missing');
       expect(detail).toMatchObject({
         projectKey: 'MOTIR',
         marker: PLANNER_BUG_HOME_MARKER,
-        expectedEpicTitle: PLANNER_BUG_HOME_EPIC_TITLE,
+        expectedStoryTitle: PLANNER_BUG_HOME_STORY_TITLE,
       });
     } finally {
       logged.mockRestore();
     }
   });
 
-  it('a home epic in ANOTHER workspace does not resolve the marker (tenant gate)', async () => {
-    // The meta tenant the route acts in has no home; a same-titled epic in an
+  it('a home story in ANOTHER workspace does not resolve the marker (tenant gate)', async () => {
+    // The meta tenant the route acts in has no home; a same-titled story in an
     // unrelated workspace must not be adopted.
     const other = await usersService.createUser({
       email: 'other@example.com',
@@ -383,10 +413,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
       workspaceId: otherWs.id,
       actorUserId: other.id,
     });
-    await workItemsService.createWorkItem(
-      { projectId: otherProject.id, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
-      { userId: other.id, workspaceId: otherWs.id },
-    );
+    await createHomeStory(otherProject.id, { userId: other.id, workspaceId: otherWs.id });
     await makeMetaTenant();
 
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
