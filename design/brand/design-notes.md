@@ -60,8 +60,9 @@ MOTIR-1140 is a `decision` card, and a decision needs something to decide betwee
 objects in two families — three **flat** (§1 A–C) and one **with depth** (§1 D) — all on one
 construction grid. Picking any of them changes only the `<path>` data MOTIR-1150 consumes.
 
-The candidate with depth uses **one colour at three opacities** (100 / 58 / 36%), never a second hue,
-so the Tier-3 token rule holds and a `data-palette` swap re-skins it for free.
+The candidate with depth is shaded by its own geometry — each facet's opacity is its surface normal,
+0.30 → 1.00 of **one colour**, never a second hue — so the Tier-3 token rule holds and a
+`data-palette` swap re-skins it for free.
 
 ### A · Lattice _(recommended)_
 
@@ -108,30 +109,31 @@ on-message.
 interior collapses in the tab strip. Choosing it means shipping a second, simplified cut for the
 favicon, a permanent two-artwork tax the other two do not carry.
 
-### D · Hypocycloid plate
+### D · Wave
 
-> _Candidate B given thickness and an angle._
+> _One period of a sine, swept as a solid band and put on an angle._
 
-The same curve, cut as a **plate 1.4 units thick**, tilted **45°** away from the reader so the far
-edge lifts and the near rim comes into view, then rolled **−14°** in-plane. Orthographic, not
-isometric. Nothing about the mathematics changes — the silhouette is still the path of a point on a
-circle rolling inside a circle five times larger. It is the same object, given depth and put on an
-angle, which is what turns a flat sign into something that occupies space.
+**A wave advances while it oscillates.** A circle comes back to where it started; a wave does not.
+That is the sprint — you cycle, and the product still moves forward — and it is the one shape that
+says both things at once.
 
-**It is 7 paths, not a mesh.** The top face is one closed path; the rim is merged into contiguous
-tone bands rather than emitted per segment, so the whole solid stays hand-editable. Two numbers — a
-tilt and a roll — describe the entire 3D form.
+It stays in B's family: a sine is the **shadow of uniform circular motion**, the projection of a
+point going round a circle onto a line. B is a circle rolling inside a circle; this is the same
+generator rolling along a straight one.
 
-**And it can move.** The hypocycloid is not a drawn shape, it is _generated_, by a circle rolling
-inside a circle. That gives the mark two motions it owns by construction rather than two effects
-applied to it:
+**How it is built.** A square section 1.7 × 1.7 swept along the curve, tilted **50°** and rolled
+**−28°**, orthographic. **The gradient is the geometry** — each facet's opacity is its own surface
+normal, 0.30 → 1.00 of one colour, never a second hue and never a decorative gradient laid on top. It
+is the only candidate that holds on a dark field as strongly as a light one, which is what the
+reference asked for.
 
-- **Spin** — the curve's own `spin` parameter, not a CSS rotation of the finished image: the rim and
-  the tone bands are recomputed per frame, so the solid genuinely turns rather than sliding around.
-  Five-fold symmetry means a **72° rotation is a seamless loop** — 12 frames, 2.4 s.
-- **Morph** — change the ratio of the two circles and the curve becomes a different member of the
-  same family: **n = 3 → 6** and back. This is the motion worth having, because it is the product's
-  own argument: the plan is not a fixed shape, and the thing that changes it is one number.
+**And it moves — as a wave, not as a spinning picture.** Both motions change the curve and re-derive
+the solid from it; nothing is rotated or tweened after the fact.
+
+- **Travel** — the phase advances and the band stays where it is. This is what a wave _is_: the shape
+  moves, the medium does not. One full period is a seamless loop — 10 frames, 2.2 s.
+- **Frequency** — one period stretches to two and back, amplitude easing down as it does. The plan is
+  not a fixed rhythm, and the thing that changes it is one number.
 
 **Motion is decoration, never information.** The mark animates only where it is _already_ decorative
 and large — the OG card, the marketing hero, a loading state. It is static in the shell, in auth, in
@@ -139,10 +141,8 @@ email, in the tab strip, and at every size below 40 px. All of it sits behind
 `prefers-reduced-motion` — the same gate `globals.css` already puts on the Plan-with-AI shimmer and
 the FAB pulse — with the static mark as the reduced-motion state.
 
-**Cost:** the tones blur below ~20 px, so it owes a flattened single-tone cut for the favicon — the
-same tax as C. And the tilt costs vertical extent: at 45° the star is foreshortened to 71% of its
-height, so it needs a touch more clear space above and below than the flat candidates to read at the
-same optical size.
+**Cost:** ~120 facets rather than a curve, so it is a _generated_ asset — the frames come out of a
+script, not a pen. The shading also needs a flattened single-tone cut below ~24 px, the same tax as C.
 
 ### Considered and dropped
 
@@ -153,26 +153,31 @@ apt, both were built and rendered at every size, and both are among the most hea
 software — the cube is lucide's own `Box`. A brand mark that reads as a stock icon is not worth the
 idea behind it.
 
-Also dropped: the **astroidal ellipsoid** (|x|^(2/3) + |y|^(2/3) + |z|^(2/3) = 1, the surface whose
-every coordinate cross-section is an astroid). It is the most literal 3D answer to "the hypocycloid
-with depth" and it was **too complicated** — a faceted mesh of 80 paths that would need hand
-re-authoring to ship. Tilting the flat curve gets the same volume for 7 paths, and keeps the
-animation. Extruding the curve straight back was tried before that and also discarded: extruding a
-concave star yields slivers of wall that read as a drop shadow rather than a solid. The tilt is what
-makes the rim visible. (Yue, 2026-08-05.)
+Three more were built, rendered and dropped on the way to D:
+
+- The **astroidal ellipsoid** (|x|^(2/3) + |y|^(2/3) + |z|^(2/3) = 1, whose every coordinate
+  cross-section is an astroid) — the most literal "hypocycloid in 3D", and **too complicated**: a
+  faceted mesh of 80 paths needing hand re-authoring to ship.
+- The **hypocycloid plate** — candidate B cut 1.4 thick and tilted 45°. It worked, and it is a
+  perfectly good mark; a star with a rim simply states one idea where the wave states two.
+- **Straight extrusion** of the flat curve, tried before either: extruding a concave star yields
+  slivers of wall that read as a drop shadow rather than a solid. The tilt is what makes a rim
+  visible at all. (Yue, 2026-08-05.)
 
 ### Recommendation
 
 **A for the mark, D if the brand wants to move.**
 
 A is still the only candidate legible at every shipped size with no second artwork, and it is the
-safer system. But D is the only one that can **animate as itself** — spin and morph both fall out of
-the construction rather than being effects laid on top — and if the brand is going to have a motion
-identity at all, that is worth more than the flat cut it costs.
+safer system — one stroke weight, two paths, no flat cut to maintain.
 
-**C and D both owe a simplified cut below ~24 px.** A and B do not. **B and D are the same curve**,
-so picking one does not close the door on the other: B is D seen head-on with no thickness, and a
-brand could ship B flat and use D for motion surfaces.
+D is the one that behaves like a brand with a motion identity: travel and frequency both come out of
+the curve itself, so the animation **is** the mark rather than an effect applied to it. It is also the
+only candidate that holds on a dark field as strongly as a light one.
+
+**C and D both owe a simplified single-tone cut below ~24 px.** A and B do not.
+
+The honest split: **A if the mark must be one fixed thing, D if it is allowed to be alive.**
 
 ---
 
@@ -409,9 +414,12 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
   simplified ≤24 px cut, and every call site below 24 px must resolve to it — and for D the tonal
   variant must express its three tones as **opacity on one token**, never as three colours.
 - **If D wins, the animation is a separate, later card, not part of MOTIR-1150.** The frames are
-  generated geometry (12 per motion), so the component needs a build step or a pre-generated frame
-  set; and the motion surfaces (OG card, marketing hero) live in `motir-marketing`, not here. Ship
-  the static plate first.
+  generated geometry (10 per motion, ~70 facets each), so the component needs a build step or a
+  pre-generated frame set; and the motion surfaces (OG card, marketing hero) live in
+  `motir-marketing`, not here. Ship the static wave first.
+- **D is a generated asset.** Keep the generator (curve → sweep → tilt → cull → shade) beside the
+  output, or the mark cannot be re-cut at a new angle, thickness or frame count without redrawing it
+  by hand.
 
 ## File-name note
 
