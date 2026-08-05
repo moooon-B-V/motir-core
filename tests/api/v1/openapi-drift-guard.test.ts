@@ -1,6 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// motir-ai is STUBBED, and only motir-ai. Story 11.7's expansion submit is the
+// one operation in the registry that reaches outside this process, and the
+// alternative to a stub is an `UNDRIVABLE` excuse — i.e. a declared operation
+// whose real response nothing validates, which is precisely the hole this suite
+// exists to close. The stub replaces the network hop and nothing else: the
+// route, the service, the Plan row it opens and the response it shapes are all
+// real, against real Postgres.
+vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
+  submitJob: vi.fn(async () => ({ jobId: 'job_drift_guard' })),
+}));
 import { z } from 'zod/v4';
 import { V1_OPERATIONS, findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
@@ -194,7 +206,7 @@ describe('every operation’s REAL response validates against its declared schem
     await truncateAuthTables();
     resetRateLimitStore();
     caller = await createV1ProjectCaller({
-      scopes: ['read', 'work_items:write', 'work_items:archive', 'sprints:write'],
+      scopes: ['read', 'work_items:write', 'work_items:archive', 'sprints:write', 'integration'],
     });
     const pk = caller.projectKey;
 
@@ -245,6 +257,15 @@ describe('every operation’s REAL response validates against its declared schem
       'getWorkItem',
       () => import('@/app/api/v1/work-items/[key]/route'),
       get(`/api/v1/work-items/${key}`),
+      { key },
+    );
+    // The work-loop read (Story 11.7). Driven HERE, beside the detail read, so
+    // the assembled prompt is validated against its declared schema on a real
+    // item rather than on a fixture.
+    await drive(
+      'getWorkItemDispatchPrompt',
+      () => import('@/app/api/v1/work-items/[key]/dispatch-prompt/route'),
+      get(`/api/v1/work-items/${key}/dispatch-prompt`),
       { key },
     );
     await drive(
@@ -382,6 +403,91 @@ describe('every operation’s REAL response validates against its declared schem
       'restoreWorkItem',
       () => import('@/app/api/v1/work-items/[key]/restore/route'),
       send(`/api/v1/work-items/${key}/restore`, 'POST'),
+      { key },
+    );
+
+    // ── Session close-out (Story 11.7) ──────────────────────────────────────
+    // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
+    // `in_review` and `completeSession` then closes it, so driving them on the
+    // item every other operation shares would change the state those drives
+    // asserted against.
+    const closing = await createItem('An item to integrate');
+    {
+      const { POST } = await import('@/app/api/v1/work-items/[key]/transitions/route');
+      const res = await POST(
+        send(`/api/v1/work-items/${closing}/transitions`, 'POST', { status: 'in_progress' }),
+        { params: Promise.resolve({ key: closing }) },
+      );
+      expect(res.status, 'seeding the integration item').toBe(200);
+    }
+    await drive(
+      'recordWorkItemIntegration',
+      () => import('@/app/api/v1/work-items/[key]/integration/route'),
+      send(`/api/v1/work-items/${closing}/integration`, 'POST', {
+        sessionBranch: 'session/drift-guard',
+      }),
+      { key: closing },
+    );
+    await drive(
+      'completeSession',
+      () => import('@/app/api/v1/sessions/complete/route'),
+      send('/api/v1/sessions/complete', 'POST', { sessionBranch: 'session/drift-guard' }),
+    );
+
+    // ── Expansion + the two plan reads (Story 11.7) ─────────────────────────
+    // The submit is driven on the STORY (a container — a leaf cannot be
+    // expanded) and its `planId` addresses both reads, so all three validate
+    // against one real chain rather than three fixtures.
+    const submitted = await drive(
+      'submitWorkItemExpansion',
+      () => import('@/app/api/v1/work-items/[key]/expansions/route'),
+      send(`/api/v1/work-items/${key}/expansions`, 'POST'),
+      { key },
+    );
+    const planId = (submitted.body as { planId: string }).planId;
+    await drive(
+      'getPlanStatus',
+      () => import('@/app/api/v1/plans/[planId]/status/route'),
+      get(`/api/v1/plans/${planId}/status`),
+      { planId },
+    );
+    await drive(
+      'getPlan',
+      () => import('@/app/api/v1/plans/[planId]/route'),
+      get(`/api/v1/plans/${planId}`),
+      { planId },
+    );
+
+    // ── The planning conversation (Story 11.7) ──────────────────────────────
+    // Ordered: open, append (a submit on an empty thread is refused), submit.
+    await drive(
+      'openPlanSession',
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/route'),
+      send(`/api/v1/projects/${pk}/plan-session`, 'POST', {}),
+      { projectKey: pk },
+    );
+    await drive(
+      'appendPlanTurn',
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/turns/route'),
+      send(`/api/v1/projects/${pk}/plan-session/turns`, 'POST', {
+        body: 'keep every leaf under three points',
+      }),
+      { projectKey: pk },
+    );
+    await drive(
+      'submitPlanSession',
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/submissions/route'),
+      send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', {}),
+      { projectKey: pk },
+    );
+
+    // ── The activity read (Story 11.7) ──────────────────────────────────────
+    // Driven on the item that has BOTH a comment and a change trail by now, so
+    // the `all` view's union validates against real entries of both types.
+    await drive(
+      'getWorkItemActivity',
+      () => import('@/app/api/v1/work-items/[key]/activity/route'),
+      get(`/api/v1/work-items/${key}/activity`),
       { key },
     );
   }, 120_000);

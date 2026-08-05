@@ -121,6 +121,10 @@ describe('the completed document', () => {
         'GET /api/v1/projects/{projectKey}/backlog',
         'GET /api/v1/sprints/{sprintId}/work-items',
         'GET /api/v1/work-items/{key}/comments',
+        // Story 11.7's activity read joins them for the same reason: BOTH of
+        // its sources already compute their totals as bounded aggregates, so the
+        // count is a number the read has paid for rather than a second query.
+        'GET /api/v1/work-items/{key}/activity',
       ].sort(),
     );
     // The ready set and the project list have no cheap count, so they are plain.

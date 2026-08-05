@@ -258,6 +258,15 @@ export const V1_COLLECTIONS = [
   'backlog',
   'sprintWorkItems',
   'ready',
+  // Story 11.7's activity read, ONE NAME PER VIEW. The three views page over
+  // different sources — the `all` view's cursor is an OPAQUE COMPOSITE carrying
+  // both positions — so a cursor issued for one view and handed to another must
+  // be REFUSED rather than decoded into a meaningless position. Sharing one
+  // collection name across the three would decode cleanly and seek nowhere,
+  // which is the silent-reset failure §5 exists to forbid.
+  'workItemActivityAll',
+  'workItemActivityComments',
+  'workItemActivityHistory',
 ] as const;
 
 /** The name a cursor carries so it can only be replayed at its own collection. */
