@@ -24,6 +24,7 @@
     "db:backfill:boards": "tsx --tsconfig tsconfig.node.json scripts/backfill-default-boards.ts",
     "db:backfill:provenance": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-provenance.ts",
     "db:backfill:code-graph-index": "tsx --tsconfig tsconfig.node.json scripts/backfill-code-graph-index.ts",
+    "db:backfill:pull-requests": "tsx --tsconfig tsconfig.node.json scripts/backfill-historical-pull-requests.ts",
     "db:stamp:onboarding": "tsx --tsconfig tsconfig.node.json scripts/stamp-onboarding-ran.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
