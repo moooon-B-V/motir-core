@@ -189,8 +189,20 @@ clip's — a 1.6-minute walk-through produces a ~113 MB trace beside a 6 MB vide
 Also worth stating plainly, because the failure text hid it: the 100 MB is **not
 a Vercel Blob platform ceiling**. It is Motir's own per-file entitlement
 (`resolvePerFileLimitBytes`), minted into the client upload token as
-`maximumSizeInBytes` — so on the 10 MB baseline (self-hosted / cloud `free`) the
-same failure arrives ten times sooner.
+`maximumSizeInBytes`.
+
+**Which deployments the 10 MB baseline actually reaches: only SELF-HOST.** §1 gates
+publishing on `hasPaidAiPlan`, and by the Axis A ⟹ Axis B bundling above that is the
+very flag which lifts the cap — `pmTierForOrg` short-circuits
+`aiIncludedSeat → 'scaled'` → 100 MB. A cloud org without a paid plan is capped at
+10 MB but is refused at the eligibility gate (402) before any upload, so its cap never
+binds. Off-cloud is the one place the two diverge: `resolvePerFileLimitBytes` returns
+the baseline from its `!isCloudBilling()` branch before any tier is read, while
+eligibility is deliberately ungated (`applicable:false ⇒ eligible`, §1). Open gate,
+tight cap — and at the measured ~59 KiB/s of a 720p paced clip, the VIDEO arm becomes
+reachable there at roughly three minutes of recording rather than ~29. That asymmetry,
+not a tier boundary a customer might sit on, is what `ACCEPTANCE_MAX_ARTIFACT_BYTES`
+exists to let a self-hoster correct.
 
 **The rule, per artifact:**
 
