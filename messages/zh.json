@@ -4822,7 +4822,10 @@
         "discover": "探索",
         "shape": "塑形",
         "validate": "验证",
-        "plan": "计划"
+        "plan": "计划",
+        "noDocs": "暂无文档",
+        "docsCount": "4 份文档中的 {count} 份",
+        "crumb": "规划"
       }
     }
   },

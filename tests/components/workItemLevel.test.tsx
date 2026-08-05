@@ -41,14 +41,29 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
     const origin = nodes.find((n) => n.id === ORIGIN_ID);
     expect(origin).toBeTruthy();
     // Fixed-position (excluded from the auto-layout) and LEFT of the layout origin
-    // so the road reads from its completed-planning start; not drillable.
+    // so the road reads from its completed-planning start.
     expect(origin!.x).toBeLessThan(0);
-    expect(origin!.drillable).toBeFalsy();
     // It renders the 7.3 stages as milestones.
     render(<>{origin!.content}</>);
     expect(screen.getByTestId('planning-origin')).toBeTruthy();
     expect(screen.getByText('Idea')).toBeTruthy();
     expect(screen.getByText('Plan')).toBeTruthy();
+  });
+
+  // MOTIR-2205 — the card became a DOOR. `drillable` flipped; `decorative` did NOT,
+  // and the pair of them is the whole point (see the auto-descend test below).
+  it('makes the origin node DRILLABLE, still DECORATIVE, and never viewable', () => {
+    const { nodes } = buildWorkItemLevel(level([item({ id: 'E1', hasChildren: true })]), {
+      includeOrigin: true,
+      originCrumbLabel: 'Planning',
+    });
+    const origin = nodes.find((n) => n.id === ORIGIN_ID)!;
+    expect(origin.drillable).toBe(true);
+    expect(origin.decorative).toBe(true);
+    // No detail peek of its own — its detail IS the level below it.
+    expect(origin.viewable).toBeFalsy();
+    // The breadcrumb crumb the drill pushes (localized copy, supplied by the consumer).
+    expect(origin.crumbLabel).toBe('Planning');
   });
 
   it('omits the origin without includeOrigin, or when the level has no items', () => {
@@ -172,6 +187,76 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(deps).toEqual([]);
     expect(nodes.some((n) => n.id === 'X')).toBe(false);
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.queryByTestId(A1_FLAG)).toBeNull();
+  });
+
+  it('an off-level blocker with NO stub still anchors, named by its bare id', () => {
+    // The stub list is best-effort: a blocker the read could not resolve still gets
+    // an anchor, so the edge never dangles — it just has nothing but an id to say.
+    const { nodes } = buildWorkItemLevel({
+      items: [item({ id: 'A1', kind: 'subtask' })],
+      edges: [{ blockedId: 'A1', blockerId: 'X' }],
+      offLevelBlockers: [],
+    });
+    const anchor = nodes.find((n) => n.id === 'X')!;
+    expect(anchor.searchText).toBe('X');
+    expect(anchor.crumbLabel).toBeUndefined();
+  });
+
+  it('SPRINT scope: an UNRESOLVED off-level blocker is treated as satisfied', () => {
+    // Nothing is known about it, so there is nothing to flag as out-of-sprint —
+    // the sprint-validity signal only fires on a blocker it can actually judge.
+    const { nodes, deps } = buildWorkItemLevel(
+      {
+        items: [item({ id: 'A1', kind: 'subtask' })],
+        edges: [{ blockedId: 'A1', blockerId: 'X' }],
+        offLevelBlockers: [],
+      },
+      { scope: 'sprint' },
+    );
+    expect(deps).toEqual([]);
+    expect(nodes.some((n) => n.id === 'X')).toBe(false);
+  });
+
+  it('anchors a shared off-level blocker ONCE, however many nodes it blocks', () => {
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [item({ id: 'A1', kind: 'subtask' }), item({ id: 'A2', kind: 'subtask' })],
+      edges: [
+        { blockedId: 'A1', blockerId: 'X' },
+        { blockedId: 'A2', blockerId: 'X' },
+      ],
+      offLevelBlockers: [
+        { id: 'X', identifier: 'PROD-9', title: 'External dep', parentTitle: 'Story Z' },
+      ],
+    });
+    expect(deps.filter((d) => d.from === 'X').length).toBe(2); // both edges drawn…
+    expect(nodes.filter((n) => n.id === 'X').length).toBe(1); // …one anchor
+  });
+});
+
+// WITHIN-LEVEL blocked_by edges — the ordinary case, where both ends are on the
+// level. The variant reports whether the dependency is SETTLED: a done blocker
+// draws firm, an unfinished one dashed.
+describe('buildWorkItemLevel — within-level dependency edges', () => {
+  it('draws a firm edge from a DONE blocker and a pending one from an unfinished blocker', () => {
+    const { deps, nodes } = buildWorkItemLevel({
+      items: [
+        item({ id: 'B1', status: 'done' }),
+        item({ id: 'B2', status: 'todo' }),
+        item({ id: 'B3', status: 'todo' }),
+      ],
+      edges: [
+        { blockedId: 'B3', blockerId: 'B1' },
+        { blockedId: 'B3', blockerId: 'B2' },
+      ],
+      offLevelBlockers: [],
+    });
+    expect(deps).toContainEqual({ from: 'B1', to: 'B3', variant: 'firm' });
+    expect(deps).toContainEqual({ from: 'B2', to: 'B3', variant: 'pending' });
+    // A within-level blocker is not the cross-story tangle — no ghost anchor, and
+    // the blocked node carries no flag.
+    expect(nodes.length).toBe(3);
+    render(<>{nodes.find((n) => n.id === 'B3')!.content}</>);
     expect(screen.queryByTestId(A1_FLAG)).toBeNull();
   });
 });

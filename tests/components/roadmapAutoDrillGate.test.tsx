@@ -166,9 +166,14 @@ describe('the adapter → canvas seam: hasChildren (DTO) reaches drillable (node
     expect(el('E1')).toBeNull();
     expect(crumbLabels()).toEqual(['Roadmap', 'MOTIR-1 · Lone epic']);
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
-    const urls = fetchSpy.mock.calls.map(([u]) => String(u));
-    expect(urls[1]).toBe('/api/projects/MOTIR/roadmap?parentId=E1');
+    // TWO per-level ROADMAP reads (the root, then the level it descended into) —
+    // counted over the roadmap URLs rather than the whole spy, because an ONBOARDED
+    // project also fires the phase card's pre-plan read (MOTIR-2205), which is a
+    // different endpoint and deliberately not on this path.
+    const roadmapUrls = () =>
+      fetchSpy.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('/roadmap'));
+    await waitFor(() => expect(roadmapUrls().length).toBe(2));
+    expect(roadmapUrls()[1]).toBe('/api/projects/MOTIR/roadmap?parentId=E1');
   });
 
   it('an onboarded project with TWO root epics still renders its level — cluster and all', async () => {

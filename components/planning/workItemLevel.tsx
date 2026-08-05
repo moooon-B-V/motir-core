@@ -10,6 +10,7 @@ import {
   type ProjectCanvasNode,
 } from '@/lib/planning/projectCanvasModel';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
 
 // Turn one fetched roadmap LEVEL (items + blocked_by edges + off-level blocker
 // stubs) into the canvas's nodes + deps (Subtask 7.20.2 / MOTIR-1194 + the 1331
@@ -29,7 +30,10 @@ import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 //  - each container item carries its subtree `progress` meter.
 
 // The id of the synthetic planning-origin node (no real work item backs it).
-const ORIGIN_ID = '__planning_origin__';
+// EXPORTED (MOTIR-2205) because the node is now a DOOR: `WorkItemRoadmap.loadLevel`
+// intercepts this id and serves the synthetic pre-plan station level for it, so both
+// halves of the drill must name the same id — never two literals.
+export const ORIGIN_ID = '__planning_origin__';
 
 export interface BuildWorkItemLevelOptions {
   /** Mark the in-progress frontier node "you are here" (the roadmap consumer). */
@@ -50,6 +54,20 @@ export interface BuildWorkItemLevelOptions {
    * committed unit stays visually distinct from the rest of its subtree.
    */
   scope?: 'project' | 'sprint';
+  /**
+   * The planning-origin node's BREADCRUMB label (MOTIR-2205) — the crumb the canvas
+   * shows once the phase card is drilled ("Planning"). Supplied by the consumer
+   * because it is localized copy (`roadmap.canvas.origin.crumb`) and this builder is
+   * a pure function with no translator of its own.
+   */
+  originCrumbLabel?: string;
+  /**
+   * The direction tiers the project's pre-plan journey PRODUCED (MOTIR-2205), or
+   * `null` while the consumer's read is still in flight / failed. Drives the phase
+   * card's honest badge (`PlanningOriginCluster`); `null` renders it chip-less, so
+   * the level can be built — and painted — before the read lands.
+   */
+  originProduced?: readonly DirectionDocKind[] | null;
 }
 
 export function buildWorkItemLevel(
@@ -192,16 +210,28 @@ export function buildWorkItemLevel(
           {
             id: ORIGIN_ID,
             parentId: null,
-            drillable: false,
+            // A DOOR, not a picture (MOTIR-2205): selecting the card surfaces the
+            // canvas's shipped "Open ›" pill and drilling it lands on the pre-plan
+            // STATION level (`buildPreplanStationLevel`, served by the consumer's
+            // `loadLevel`) — the same drill path every epic beside it already uses.
+            // It is deliberately NOT `viewable`: the card has no detail peek of its
+            // own, because its detail IS the level below it.
+            drillable: true,
+            crumbLabel: opts.originCrumbLabel,
             // DECORATION, not a member of the level's work (MOTIR-1824). No real
             // work item backs it, and it is the level's provenance rather than
             // one of its branches — so the canvas's "does this level offer a
             // choice?" test (`autoDescendSingleParent`) must not count it. Left
             // uncounted, an ONBOARDED project's root level was never the
             // single-drillable-node shape and the auto-descend never fired for it.
+            //
+            // ⚠️ This SURVIVES the `drillable: true` above (MOTIR-2205): drillable
+            // and decorative are independent axes. Giving the card a drill path must
+            // not make it a branch, or an onboarded single-epic project stops
+            // auto-descending exactly as it did before MOTIR-1824 was fixed.
             decorative: true,
             searchText: 'Planning origin idea discover shape validate plan',
-            content: <PlanningOriginCluster />,
+            content: <PlanningOriginCluster produced={opts.originProduced ?? null} />,
             // Left of the auto-layout origin (x=40, y=40 in `deterministicLayout`),
             // vertically aligned with the first epic row.
             x: -(ORIGIN_W + 80),
