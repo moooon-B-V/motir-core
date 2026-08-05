@@ -122,6 +122,10 @@ async function statusOf(workItemId: string): Promise<string> {
   return row!.status;
 }
 
+async function statusRevisions(workItemId: string) {
+  return db.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
+}
+
 async function openMr(identifier: string, iid = 7): Promise<number> {
   await gitlabWebhookService.handleEvent(
     'Merge Request Hook',
@@ -301,17 +305,36 @@ describe('gitlabWebhookService — concurrent redelivery + degenerate states (MO
       gitlabWebhookService.handleEvent('Merge Request Hook', payload),
     ]);
 
-    // Both callers race; depending on timing, both may return 'transitioned'
-    // (the second reads the item status before the first's write commits) or
-    // one may return 'noop' (the commit finished first). Either way the item
-    // ends up at in_review and there is exactly one MR row — idempotent under
-    // race.
-    expect([a, b].every((r) => 'outcome' in r && r.outcome === 'transitioned')).toBe(true);
+    // Both callers race, and BOTH outcome labels are legal (MOTIR-2074): both
+    // may return 'transitioned' (the second reads the item status before the
+    // first's write commits) or one may return 'noop' (the commit finished
+    // first). Which one lands is pure timing — asserting a single label pins
+    // the test to ONE interleaving and flakes red on a loaded runner. So assert
+    // the SET of legal labels here, and put the weight on the three invariants
+    // below, which hold under EVERY interleaving.
+    expect(
+      [a, b].every((r) => 'outcome' in r && (r.outcome === 'transitioned' || r.outcome === 'noop')),
+    ).toBe(true);
+
+    // The idempotence invariants — these hold under every interleaving, and are
+    // what the test is actually for:
+    //  · one end state,
+    //  · one MR row — on the interleaving where the two upserts DO collide, the
+    //    unique-(repo, number) P2002 is caught and re-written rather than
+    //    duplicating the row,
+    //  · exactly ONE recorded transition — a second revision would mean the
+    //    redelivery wrote the status again, i.e. the locked no-op arm in
+    //    `applyStatusTransition` stopped holding (mirrors the GitHub twin in
+    //    `tests/github/githubWebhookService.test.ts`).
     expect(await statusOf(s.item.id)).toBe('in_review');
 
-    // Exactly one MR row — the upsert retried on P2002 and survived the race.
     const mrRows = await db.githubPullRequest.findMany({ where: { number: 7 } });
     expect(mrRows).toHaveLength(1);
+
+    const inReviewRevs = (await statusRevisions(s.item.id)).filter(
+      (r) => (r.diff as { status?: { to?: string } }).status?.to === 'in_review',
+    );
+    expect(inReviewRevs).toHaveLength(1);
   });
 
   it('no workspace owner → access_denied (nothing can author the move)', async () => {
