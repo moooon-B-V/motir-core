@@ -536,6 +536,59 @@ which repos it queued; a repo is _deriving_ while it is in that set and its `aud
 changed since the POST. Do NOT invent a status field on the DTO — that would be a motir-ai change and
 a two-repo straddle.
 
+#### 5b · The run must SURVIVE the page — the deriving state cannot live in client memory (Yue, 2026-08-05)
+
+**The promise the copy makes.** Panel 4b State C says _"You can leave this page — the audit keeps
+running."_ §5 above reuses it verbatim for E2. **Half of that is already true and half of it is a
+promise this design, as first drafted, could not keep.**
+
+**True: the job does not stop.** `refreshCodeAudit` POSTs `/v1/code-context/refresh`, motir-ai
+persists each job and answers with its ids; the browser's poll is an OBSERVER, so aborting it by
+navigating away cannot cancel anything. Leaving the page does not stop the audit.
+
+**False as first drafted: the PAGE forgets the run.** `reauditing` and `pollExhausted` are
+`useState`, and §5's per-repo "deriving" set was defined off `reaudit()`'s in-memory return. All
+three are gone on the next mount. So a user who takes the copy at its word and leaves comes back to:
+
+- Panel 4b **State B** — _"No audit for this code yet"_ with a **primary "Run the first audit"** — on
+  a project whose first audit is running right now; and
+- Panel 7 rows reading **"Not audited yet"** for every repo still deriving.
+
+One click then fires a **second fan-out — five `code_audit` + five `propose_convention` jobs for work
+already in flight**. `reaudit()`'s only guard is `if (reauditing) return;`, which is in-memory: the
+MOTIR-2123 ONE-POST invariant holds per click and **not across a page leave**. The fan-out is what
+makes it expensive; the amnesia is older than the fan-out and is true today at N = 1.
+
+**The rule: an in-flight run is RESUMED on mount, from a durable record, before any trigger renders.**
+
+1. **Persist the run when it is fired.** `reaudit()` already receives
+   `ReauditResultDTO { repos: [{ repoKey, auditJobId, conventionJobId }] }`. Write it, keyed by
+   project, to `localStorage` — the mechanism this very component already uses for the
+   deepen-dismissed flag (`dismissKey(projectId)` + `useSyncExternalStore`), so it is a second use of
+   a shipped pattern, not a new one.
+2. **Resume it on mount, against the SERVER.** For each stored `auditJobId`, read the shipped,
+   session-gated **`GET /api/ai/jobs/[jobId]`** (`{ status, result }`, backed by
+   `motirAiClient.getJob`). A `queued` / `running` status restores that repo's **Deriving…** row; a
+   terminal status clears the entry and re-reads the audit surface. **No motir-ai change and no new
+   core route** — the read already exists and is already reachable from the browser.
+3. **The trigger does not render until resumption resolves.** Otherwise the duplicate-POST hole
+   simply narrows to the few hundred milliseconds before the first status answers. This is Panel 4b
+   State C's _"the action is REMOVED, not disabled"_ rule applied to one more moment: while the run's
+   state is unknown, there is no button to press twice.
+4. **`localStorage` is per browser, and the design says so rather than implying more.** Returning on
+   a DIFFERENT device still shows the pre-audit state — the job is still running and still lands, but
+   that browser cannot know it is in flight. The durable fix is a server-side record of the fired run;
+   it is not designed here because nothing on the surface needs it and inventing a store is not this
+   panel's work. What IS required here is that the copy never over-promises: it says the audit keeps
+   running (true everywhere) and never says "we'll show you the progress wherever you are."
+
+> **Ownership.** This is a defect in SHIPPED behaviour — reproducible today with one repo — that the
+> fan-out makes five times more expensive, and it is a PREREQUISITE of §5's per-repo deriving state,
+> which cannot be built on a source that does not survive a mount. It is therefore **not** absorbed
+> into MOTIR-2207 (`notes.html` #27 / #172 — a defect found during a card gets its own card and its
+> own PR): it is filed as **MOTIR-2223**, and MOTIR-2207 is `blocked_by` it so the durable signal
+> lands before the rows that read it.
+
 #### 6 · The four row states, and the row anatomy (7c)
 
 Left to right: the **octocat** + the repo's `owner/name` in mono (`.coderef` grammar) · then EITHER

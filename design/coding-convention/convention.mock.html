@@ -3702,7 +3702,7 @@ jobs:
       </div>
 
       <p class="setup-hint" style="margin: 14px 0 0">
-        <strong>The four rules the consuming card cannot re-decide.</strong>
+        <strong>The five rules the consuming card cannot re-decide.</strong>
         <strong>(1) The poll watches the repo whose report is on screen.</strong>
         <code class="coderef">reaudit()</code> fires ONE
         <code class="coderef">POST /refresh</code> (the MOTIR-2123 invariant) and then polls the
@@ -3720,6 +3720,29 @@ jobs:
         list — the new repo's first page, not an append onto the previous repo's.
         <strong>(4) The list is not drawn at all for a single-repo project</strong> — one row can
         neither be compared nor chosen, so N = 1 renders exactly what ships today.
+        <strong>(5) The run SURVIVES the page (see the notes, §5b).</strong> Every deriving state
+        above is RESUMED on mount from the job ids the trigger already returns, re-read through the
+        shipped <code class="coderef">GET /api/ai/jobs/[jobId]</code> — never from component state,
+        which is gone on the next mount. Until that resumption resolves,
+        <strong>no re-audit trigger renders at all</strong>, or the page offers a returning user a
+        duplicate fan-out on work already in flight. That signal is
+        <code class="coderef">MOTIR-2223</code>'s deliverable and MOTIR-2207 is
+        <code class="coderef">blocked_by</code> it.
+      </p>
+
+      <p class="setup-hint" style="margin: 10px 0 0">
+        <strong
+          >&ldquo;You can leave this page — the audit keeps running&rdquo; is a promise, and half of
+          it was free.</strong
+        >
+        The JOB half is already true: the trigger POSTs once, motir-ai persists each job, and the
+        browser's poll is only an observer — navigating away cancels nothing. The PAGE half was not:
+        <code class="coderef">reauditing</code>, <code class="coderef">pollExhausted</code> and the
+        returned <code class="coderef">ReauditResultDTO</code> are all component state, so a user
+        who took the copy at its word came back to
+        <em>&ldquo;No audit for this code yet&rdquo;</em> and a <strong>primary</strong> button
+        meaning &ldquo;nothing has happened yet&rdquo; — on a project mid-run. Rule (5) is what
+        makes the sentence true on both halves.
       </p>
     </div>
   </body>
