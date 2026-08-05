@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import type {
   ExecutorDto,

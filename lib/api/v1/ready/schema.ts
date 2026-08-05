@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { WorkItemKind, WorkItemPriority } from '@prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { workItemKeySchema } from '@/lib/api/v1/workItems/schema';

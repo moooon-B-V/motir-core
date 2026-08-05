@@ -605,6 +605,42 @@ export default defineConfig({
         'lib/api/v1/sprints/membership.ts',
         'lib/api/v1/ready/schema.ts',
         'lib/api/v1/rankedCollections.ts',
+        // Story 11.4 · Subtask 11.4.3 — the SHARED wire-schema layer.
+        'lib/api/v1/openapi/statuses.ts',
+        'lib/api/v1/openapi/errorResponse.ts',
+        'lib/api/v1/openapi/envelopes.ts',
+        'lib/api/v1/openapi/headers.ts',
+        'lib/api/v1/openapi/security.ts',
+        // Story 11.4 · Subtask 11.4.4 — the registry, the emitter and the route.
+        'lib/api/v1/openapi/operation.ts',
+        'lib/api/v1/openapi/registry.ts',
+        'lib/api/v1/openapi/emit.ts',
+        'lib/api/v1/workItems/operations.ts',
+        'app/api/openapi/v1.json/route.ts',
+        // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
+        'lib/api/v1/identity/schema.ts',
+        'lib/api/v1/planning/operations.ts',
+        // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
+        'lib/apiDocs/reference.ts',
+        // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
+        'lib/apiDocs/guide.ts',
+        // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the story gate. The docs
+        // SURFACE joins the map, not only the modules behind it: this is the
+        // page a third party reads to decide whether Motir is integrable, and
+        // its branches are the ones that decide what they see when something is
+        // wrong — a spec that would not build, a footer read that failed, a
+        // filter that matches nothing. Each is a way the published reference can
+        // be silently useless while every module beneath it is green.
+        'app/(public)/api-docs/layout.tsx',
+        'app/(public)/api-docs/page.tsx',
+        'app/(public)/api-docs/getting-started/page.tsx',
+        'app/(public)/api-docs/stability/page.tsx',
+        'app/(public)/api-docs/_components/CatalogueNav.tsx',
+        'app/(public)/api-docs/_components/CodeBlock.tsx',
+        'app/(public)/api-docs/_components/DocBlocks.tsx',
+        'app/(public)/api-docs/_components/MethodPill.tsx',
+        'app/(public)/api-docs/_components/OperationSection.tsx',
+        'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
@@ -680,6 +716,64 @@ export default defineConfig({
         'lib/api/v1/sprints/membership.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/ready/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/rankedCollections.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.3 — the SHARED wire-schema layer.
+        'lib/api/v1/openapi/statuses.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/envelopes.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/headers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/security.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.4 — the registry, the emitter and the route.
+        'lib/api/v1/openapi/operation.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/registry.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workItems/operations.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/openapi/v1.json/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
+        'lib/api/v1/identity/schema.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/planning/operations.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
+        'lib/apiDocs/reference.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
+        'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
+        'app/(public)/api-docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/api-docs/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/api-docs/getting-started/page.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/api-docs/_components/CatalogueNav.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/CodeBlock.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/DocBlocks.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/MethodPill.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(public)/api-docs/_components/OperationSection.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/api/v1/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/sprints/route.ts': {

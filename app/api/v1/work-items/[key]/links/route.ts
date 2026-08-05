@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { withV1Route } from '@/lib/api/v1/route';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';

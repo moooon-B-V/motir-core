@@ -9,15 +9,26 @@ import { buttonVariants } from '@/components/ui/Button';
 // site, so it carries its own brand + nav + sign-in/CTA. Server component;
 // colour via --el-* tokens, shape via element-semantic tokens.
 //
-// `Explore` is the only nav item that resolves to a real page today (the square
-// itself); `Product` / `Docs` / `Pricing` are future marketing pages, so they
-// render as non-interactive labels rather than dead links a crawler would 404 on.
+// `Product` / `Pricing` are future marketing pages, so they render as
+// non-interactive LABELS rather than dead links a crawler would 404 on.
+//
+// ⚠️ `Docs` used to be one of those labels and is now a LINK (Story 11.4 ·
+// Subtask 11.4.7 — MOTIR-2188 · design `design/api-docs/` Panel 7): it is the
+// first of the three future pages to actually RESOLVE, so it takes the treatment
+// this bar already had for a real page — the one `Explore` uses. That is why the
+// docs entrance is not a new nav pattern: the item was already here, waiting for
+// something to point at.
+//
+// `current` marks which of the two resolving items is the page being read, so
+// this bar can head BOTH the project square and the docs surface without either
+// claiming to be the other.
 
-export async function ExploreTopBar() {
+export async function ExploreTopBar({
+  current = 'explore',
+}: { current?: 'explore' | 'docs' } = {}) {
   const t = await getTranslations('projectSquare');
   const navItems = [
     { key: 'navProduct', label: t('navProduct') },
-    { key: 'navDocs', label: t('navDocs') },
     { key: 'navPricing', label: t('navPricing') },
   ];
   return (
@@ -38,9 +49,24 @@ export async function ExploreTopBar() {
           </span>
         ))}
         <Link
+          href="/api-docs"
+          {...(current === 'docs' ? { 'aria-current': 'page' as const } : {})}
+          className={
+            current === 'docs'
+              ? 'text-[13.5px] font-semibold text-(--el-accent-on-surface)'
+              : 'text-[13.5px] text-(--el-text-secondary)'
+          }
+        >
+          {t('navDocs')}
+        </Link>
+        <Link
           href="/explore"
-          aria-current="page"
-          className="text-[13.5px] font-semibold text-(--el-accent-on-surface)"
+          {...(current === 'explore' ? { 'aria-current': 'page' as const } : {})}
+          className={
+            current === 'explore'
+              ? 'text-[13.5px] font-semibold text-(--el-accent-on-surface)'
+              : 'text-[13.5px] text-(--el-text-secondary)'
+          }
         >
           {t('navExplore')}
         </Link>
