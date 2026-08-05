@@ -173,7 +173,12 @@ export type DispatchWorkflowMode = 'per_item_pr' | 'session_lineage';
  * the same disposition `notReadyError` documents for a real blocker, one notch
  * softer because this one is a hint rather than a fact.
  */
-export interface DispatchAdvisory {
+export interface DispatchReferenceAdvisory {
+  /**
+   * The union discriminant, mirroring the server's — absent on the wire for this
+   * variant, so a payload from ANY server version narrows the same way.
+   */
+  kind?: 'reference';
   /** The dispatched card's key — the item whose body names the reference. */
   item: string;
   /** The referenced item's key. */
@@ -182,6 +187,32 @@ export interface DispatchAdvisory {
   referencedStatus: string;
   severity: string;
 }
+
+/**
+ * One SHAPE advisory (`WorkItemProseShapeAdvisoryDto`, MOTIR-2175) — the
+ * dispatched card's OWN acceptance criteria ask for state that exists only after
+ * the card's own PR has merged. There is no referenced work item at all, which
+ * is why it is a separate variant rather than a severity.
+ *
+ * ⚠️ Also never a reason to refuse. Same disposition as above: printed, and the
+ * human decides.
+ */
+export interface DispatchShapeAdvisory {
+  kind: 'shape';
+  /** The dispatched card's key. */
+  item: string;
+  severity: string;
+  /** The matched post-merge phrase (e.g. `once it lands`). */
+  phrase: string;
+  /** 1-based index of the offending criterion — where the card should be cut. */
+  criterionIndex: number;
+}
+
+/**
+ * One advisory, either family. Narrow with `a.kind === 'shape'`; anything else —
+ * including a payload from a server that predates the union — is a reference.
+ */
+export type DispatchAdvisory = DispatchReferenceAdvisory | DispatchShapeAdvisory;
 
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt
  * text plus the facts the CLI routes on before it runs the agent. */

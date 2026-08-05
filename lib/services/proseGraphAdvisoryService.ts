@@ -3,7 +3,11 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { bodyReferenceSeverities } from '@/lib/workItems/proseVsGraph';
+import {
+  bodyReferenceSeverities,
+  firstPostMergeCriterion,
+  isOrderingCheckExempt,
+} from '@/lib/workItems/proseVsGraph';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -49,6 +53,14 @@ export interface ProseAdvisorySubject {
    * `planItem:<id>` temp-ref on the projected path.
    */
   exemptIds: ReadonlySet<string>;
+  /**
+   * The card's work TYPE and EXECUTOR — read ONLY by the ORDERING check's
+   * exemption ({@link isOrderingCheckExempt}), never by the reference scan.
+   * Required so every caller has to decide what it knows; `null` is a real
+   * answer ("untyped", and therefore not exempt).
+   */
+  type: string | null;
+  executor: string | null;
 }
 
 /**
@@ -95,7 +107,7 @@ export async function buildProseVsGraphAdvisories(
   const scanned = subjects.map((s) => {
     const refs = new Map(bodyReferenceSeverities(s.descriptionMd));
     for (const id of s.exemptIds) refs.delete(id);
-    return { item: s.item, refs };
+    return { item: s.item, refs, subject: s };
   });
 
   const unresolved = new Set<string>();
@@ -131,6 +143,10 @@ export async function buildProseVsGraphAdvisories(
 
   const advisories: WorkItemProseAdvisoryDto[] = [];
   for (const s of scanned) {
+    // The SHAPE advisory first: it needs no resolution at all (it is a property
+    // of this body alone), so it is emitted even for a card that names nothing.
+    const ordering = orderingAdvisory(s.subject);
+    if (ordering) advisories.push(ordering);
     for (const [id, severity] of s.refs) {
       const ref = localRefs?.get(id) ?? resolved.get(id);
       if (!ref || ref.done) continue;
@@ -142,10 +158,44 @@ export async function buildProseVsGraphAdvisories(
       });
     }
   }
+  // Deterministic wire order: by scanned card, then SHAPE before reference (a
+  // mis-shaped card is a fact about the card itself, and its remedy — cut here —
+  // comes before any question about what it names), then by reference.
   advisories.sort(
-    (a, b) => a.item.localeCompare(b.item) || a.referenced.localeCompare(b.referenced),
+    (a, b) =>
+      a.item.localeCompare(b.item) ||
+      familyRank(a) - familyRank(b) ||
+      referenceOf(a).localeCompare(referenceOf(b)),
   );
   return advisories;
+}
+
+/** SHAPE sorts before REFERENCE within one card. */
+const familyRank = (a: WorkItemProseAdvisoryDto): number => (a.kind === 'shape' ? 0 : 1);
+
+/** The reference tie-break key; a shape advisory has no far end, so it is empty. */
+const referenceOf = (a: WorkItemProseAdvisoryDto): string =>
+  a.kind === 'shape' ? '' : a.referenced;
+
+/**
+ * The ORDERING advisory for ONE subject (MOTIR-2175) — gate 14's third axis.
+ *
+ * Pure: no reference resolution, no DB read, no dependency on the graph at all.
+ * A card can carry this finding while naming nothing and having no edges, which
+ * is precisely the case the reference scan cannot see — MOTIR-2162's criterion 5
+ * was a defect about its OWN merge, so there was never a far end to resolve.
+ */
+function orderingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  if (isOrderingCheckExempt(subject.type, subject.executor)) return null;
+  const found = firstPostMergeCriterion(subject.descriptionMd);
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-ordering-violation',
+    phrase: found.phrase,
+    criterionIndex: found.criterionIndex,
+  };
 }
 
 /**
@@ -161,25 +211,47 @@ export async function buildProseVsGraphAdvisories(
  * Story or Epic is not a missing dependency), and everything already in its
  * `blocked_by` set.
  *
- * ⚠️ `likely-missing-edge` ONLY, and that filter lives HERE so all three
- * dispatch consumers agree by construction. The plain `advisory` tier fires on
- * any not-done item named ANYWHERE in a body — an out-of-scope note, a
- * superseded-by pointer, a sibling record card — which is a useful signal when a
- * human is reading a card and pure noise in front of an agent about to branch.
- * `likely-missing-edge` means the reference sits in the card's own ACCEPTANCE
- * CRITERIA, i.e. the card is closed against it. `validate_work_item` remains the
- * surface that reports BOTH tiers; nothing is lost, only scoped.
+ * ⚠️ `likely-missing-edge` ONLY among the REFERENCE tier, and that filter lives
+ * HERE so all three dispatch consumers agree by construction. The plain
+ * `advisory` tier fires on any not-done item named ANYWHERE in a body — an
+ * out-of-scope note, a superseded-by pointer, a sibling record card — which is a
+ * useful signal when a human is reading a card and pure noise in front of an
+ * agent about to branch. `likely-missing-edge` means the reference sits in the
+ * card's own ACCEPTANCE CRITERIA, i.e. the card is closed against it.
+ * `validate_work_item` remains the surface that reports BOTH tiers; nothing is
+ * lost, only scoped.
+ *
+ * ⚠️ Every SHAPE advisory passes that filter (MOTIR-2175) — it is
+ * dispatch-relevant BY CONSTRUCTION, and more so than any reference tier. The
+ * agent about to branch is the one who physically cannot discharge a criterion
+ * that turns on its own merge: its two moves are to stop half-done or to fake
+ * the precondition, and both are rule violations. A shape advisory is already
+ * scoped to the acceptance-criteria span, so there is no quieter tier of it to
+ * filter out.
  *
  * ⚠️ NEVER A GATE — see {@link WorkItemProseAdvisoryDto}. The callers add this to
  * a field of their own; not one of them consults it when computing readiness.
  */
 export async function buildDispatchProseAdvisories(
-  item: { id: string; identifier: string; descriptionMd: string | null },
+  item: {
+    id: string;
+    identifier: string;
+    descriptionMd: string | null;
+    type?: string | null;
+    executor?: string | null;
+  },
   ctx: ServiceContext,
 ): Promise<WorkItemProseAdvisoryDto[]> {
-  // Cheap short-circuit on the common shape: a body naming nothing needs neither
-  // the ancestor walk nor the edge read. `bodyReferenceSeverities` is pure.
-  if (bodyReferenceSeverities(item.descriptionMd).size === 0) return [];
+  const type = item.type ?? null;
+  const executor = item.executor ?? null;
+  // Cheap short-circuit on the common shape: a body with neither a reference nor
+  // an ordering phrase needs neither the ancestor walk nor the edge read. BOTH
+  // scans are pure, and both must be clear — a body naming nothing can still
+  // carry an ordering violation (MOTIR-2162's did).
+  const namesNothing = bodyReferenceSeverities(item.descriptionMd).size === 0;
+  const wellOrdered =
+    isOrderingCheckExempt(type, executor) || firstPostMergeCriterion(item.descriptionMd) === null;
+  if (namesNothing && wellOrdered) return [];
 
   const [ancestors, blockerLinks] = await Promise.all([
     workItemRepository.findAncestors(item.id, ctx.workspaceId),
@@ -190,8 +262,8 @@ export async function buildDispatchProseAdvisories(
   for (const l of blockerLinks) exemptIds.add(l.toId);
 
   const advisories = await buildProseVsGraphAdvisories(
-    [{ item: item.identifier, descriptionMd: item.descriptionMd, exemptIds }],
+    [{ item: item.identifier, descriptionMd: item.descriptionMd, exemptIds, type, executor }],
     ctx,
   );
-  return advisories.filter((a) => a.severity === 'likely-missing-edge');
+  return advisories.filter((a) => a.kind === 'shape' || a.severity === 'likely-missing-edge');
 }

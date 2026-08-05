@@ -1827,11 +1827,20 @@ export const workItemRepository = {
   async findDescriptionsByIds(
     ids: string[],
     workspaceId: string,
-  ): Promise<Array<{ id: string; descriptionMd: string | null }>> {
+  ): Promise<
+    Array<{
+      id: string;
+      descriptionMd: string | null;
+      type: string | null;
+      executor: string | null;
+    }>
+  > {
     if (ids.length === 0) return [];
+    // `type` / `executor` ride along for the prose advisory's ORDERING exemption
+    // (MOTIR-2175) — the same rows, one select wider, rather than a second read.
     return db.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
-      select: { id: true, descriptionMd: true },
+      select: { id: true, descriptionMd: true, type: true, executor: true },
     });
   },
 

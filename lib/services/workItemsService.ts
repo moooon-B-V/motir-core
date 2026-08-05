@@ -4547,7 +4547,7 @@ async function computeSubtreeProseAdvisories(
         notDone.map((m) => m.id),
         ctx.workspaceId,
       )
-    ).map((r) => [r.id, r.descriptionMd]),
+    ).map((r) => [r.id, r]),
   );
 
   const subjects = notDone.map((member) => {
@@ -4560,7 +4560,15 @@ async function computeSubtreeProseAdvisories(
       parentId = membersById.get(parentId)?.parentId ?? null;
     }
     for (const blockerId of blockedByMember.get(member.id) ?? []) exemptIds.add(blockerId);
-    return { item: member.identifier, descriptionMd: bodies.get(member.id) ?? null, exemptIds };
+    const row = bodies.get(member.id);
+    return {
+      item: member.identifier,
+      descriptionMd: row?.descriptionMd ?? null,
+      exemptIds,
+      // The ORDERING exemption's inputs (MOTIR-2175), from the same batched read.
+      type: row?.type ?? null,
+      executor: row?.executor ?? null,
+    };
   });
 
   return buildProseVsGraphAdvisories(subjects, ctx);

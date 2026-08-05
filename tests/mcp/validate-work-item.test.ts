@@ -8,7 +8,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueType } from '@/lib/issues/parentRules';
-import type { WorkItemValidityDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemTypeDto, WorkItemValidityDto } from '@/lib/dto/workItems';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
@@ -619,7 +619,9 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
 
     // The OWNER sees it (an always-pass role) …
     const asOwner = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
-    expect(asOwner.advisories.map((a) => a.referenced)).toEqual([secretItem.identifier]);
+    expect(asOwner.advisories.filter((a) => a.kind !== 'shape').map((a) => a.referenced)).toEqual([
+      secretItem.identifier,
+    ]);
 
     // … a plain workspace member does not.
     const plain = await usersService.createUser({
@@ -714,6 +716,206 @@ describe('validate_work_item MCP tool — advisories in the dual content', () =>
 
     expect(struct(res).advisories).toEqual([]);
     expect(text(res)).not.toContain('NOT a blocker');
+    await client.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ORDERING ADVISORY (MOTIR-2175) — gate 14's third axis, on the surface the
+// SEALING AUTHOR reads. `buildDispatchProseAdvisories`' half is pinned in
+// `tests/dispatch/dispatchAdvisories.test.ts`; this suite pins the subtree walk
+// and the `validate_work_item` rendering.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** MOTIR-2162's shape: criterion 5 turns on the card's OWN merge, naming nobody. */
+const POST_MERGE_BODY = [
+  '## Acceptance criteria',
+  '- the ADR gains an offboarding section',
+  '- it names the order and the idempotency requirement',
+  '- the core→ai trigger is pinned as a named seam',
+  '- every deferral it writes is a card filed in the same action',
+  "- `src/services/codeRepoService.ts`'s header block … is updated to point at the decision " +
+    '**once it lands**, so the pointer does not outlive the gap.',
+].join('\n');
+
+describe('workItemsService.validateWorkItem — the ORDERING advisory', () => {
+  const typed = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    title: string,
+    descriptionMd: string,
+    fields: { type?: WorkItemTypeDto; executor?: ExecutorDto } = {},
+    parentId?: string,
+  ) =>
+    workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title, descriptionMd, parentId, ...fields },
+      fx.ctx,
+    );
+
+  it('MOTIR-2162 REGRESSION: names criterion 5, its phrase, and nothing else', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await typed(fx, 'Offboarding decision', POST_MERGE_BODY);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-ordering-violation',
+        phrase: 'once it lands',
+        criterionIndex: 5,
+      },
+    ]);
+  });
+
+  it('⚠️ `valid` and `blockers` are BYTE-IDENTICAL whether or not it is emitted', async () => {
+    // The never-a-blocker invariant, asserted as an equality between two runs
+    // that differ ONLY by the offending words.
+    const fx = await makeWorkItemFixture();
+    const flagged = await typed(fx, 'Flagged', POST_MERGE_BODY);
+    const clean = await typed(fx, 'Clean', POST_MERGE_BODY.replace(' **once it lands**,', ','));
+
+    const a = await workItemsService.validateWorkItem(fx.projectId, flagged.identifier, fx.ctx);
+    const b = await workItemsService.validateWorkItem(fx.projectId, clean.identifier, fx.ctx);
+    expect(a.advisories).toHaveLength(1);
+    expect(b.advisories).toEqual([]);
+    expect({ valid: a.valid, blockers: a.blockers }).toEqual({
+      valid: b.valid,
+      blockers: b.blockers,
+    });
+    expect(a.valid).toBe(true);
+    expect(a.blockers).toEqual([]);
+
+    // …and the same for the issue-detail readiness both surfaces gate on.
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(flagged.identifier)).toEqual(await readinessOf(clean.identifier));
+  });
+
+  it("EXEMPTS the release trio's CUT leg — `type: deploy` / `executor: human`", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Release @motir/cli 0.1.1', 'story');
+    // The trio, authored in the shape gate 14 prescribes: prep (code) is clean,
+    // cut (deploy/human) legitimately needs the merge and must NOT be reported.
+    await typed(
+      fx,
+      'prep — version bump + release workflow',
+      '## Acceptance criteria\n- `package.json` version is 0.1.1',
+      { type: 'code', executor: 'coding_agent' },
+      story.id,
+    );
+    await typed(
+      fx,
+      'cut — push the tag, watch the lanes',
+      '## Acceptance criteria\n- `cli-v0.1.1` is pushed once this lands on `main`\n' +
+        '- the published image is pullable by digest',
+      { type: 'deploy', executor: 'human' },
+      story.id,
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories).toEqual([]);
+  });
+
+  it('a DONE member is not scanned for it either — its prose is history', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const shipped = await typed(fx, 'Already shipped', POST_MERGE_BODY, {}, story.id);
+    await markDone(shipped.id);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.advisories).toEqual([]);
+  });
+
+  it('orders SHAPE before REFERENCE within one card, then by reference', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await mk(fx, 'Unwired dependency', 'task');
+    const card = await typed(
+      fx,
+      'Both defects',
+      [
+        '## Acceptance criteria',
+        `- consumes ${ref('OTHER', other.id)}`,
+        '- the row is visible on `main`',
+      ].join('\n'),
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-ordering-violation',
+        phrase: 'on main',
+        criterionIndex: 2,
+      },
+      {
+        item: card.identifier,
+        referenced: other.identifier,
+        referencedStatus: 'todo',
+        severity: 'likely-missing-edge',
+      },
+    ]);
+  });
+});
+
+describe('validate_work_item (MCP) — the ORDERING advisory reaches the author', () => {
+  const struct = (r: CallToolResult) => r.structuredContent as unknown as WorkItemValidityDto;
+  const text = (r: CallToolResult) => JSON.stringify(r.content);
+
+  it('renders the criterion index, the phrase, and the CUT remedy — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Offboarding decision',
+        descriptionMd: POST_MERGE_BODY,
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).blockers).toEqual([]);
+    expect(struct(res).advisories).toHaveLength(1);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('NOT a blocker');
+    expect(text(res)).toContain('criterion 5 says \\"once it lands\\"');
+    expect(text(res)).toContain('Cut the card at that criterion');
+    await client.close();
+  });
+
+  it('renders BOTH families as separate blocks when a card carries both', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await mk(fx, 'Unwired dependency', 'task');
+    const card = await mkBody(
+      fx,
+      'Both defects',
+      'task',
+      [
+        '## Acceptance criteria',
+        `- consumes ${ref('OTHER', other.id)}`,
+        '- the row is visible on `main`',
+      ].join('\n'),
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).advisories).toHaveLength(2);
+    // The reference block's sentence …
+    expect(text(res)).toContain('have no blocked_by edge from it');
+    // … and the shape block's, which is about the card itself.
+    expect(text(res)).toContain("which exists only AFTER the card's own PR has merged");
     await client.close();
   });
 });
