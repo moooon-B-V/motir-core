@@ -35,7 +35,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   getConvention: vi.fn(),
   getCodeAudit: vi.fn(),
   saveDesignChoice: vi.fn(),
-  indexCodeGraph: vi.fn(),
   getOrgUsage: vi.fn(),
   getOrgSubscription: vi.fn(),
   createCheckoutSession: vi.fn(),

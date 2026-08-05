@@ -74,7 +74,7 @@ build inside a memory- and time-bounded function. Measured, not characterised:
 | symptom                                | evidence                                                                                                                                                                                                                       | why a container removes it                                  |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
 | **OOM on a large repo**                | `instance was killed because it ran out of available memory` — `motir-core`, **5/5 attempts**, 2026-08-02 (logged as MOTIR-1976, archived when this story superseded the patch)                                                | the fetch happens in a container sized for it               |
-| **180 s motir-ai deadline**            | `MOTIR_AI_INDEX_TIMEOUT_MS = 180_000` (`lib/ai/motirAiClient.ts:94`); **3 repos dead-lettered** on `MotirAiUnavailableError … within 180000ms`                                                                                 | the expensive parse leaves the synchronous call             |
+| **180 s motir-ai deadline**            | the upload call's own client deadline, `180_000` ms in `lib/ai/motirAiClient.ts` (deleted with the call in MOTIR-2138); **3 repos dead-lettered** on `MotirAiUnavailableError … within 180000ms`                               | the expensive parse leaves the synchronous call             |
 | **`maxDuration = 300`**                | `app/api/inngest/route.ts:38`; MOTIR-1974's checkpointing exists only to fit under it                                                                                                                                          | the work is not on Vercel                                   |
 | **200 MB ingress ceiling**             | `CODE_GRAPH_MAX_BODY_BYTES`, `motir-ai/src/app.ts` — recorded in `docs/decisions/code-access-for-planning.md:51`. Never reached, but structurally next                                                                         | the upload becomes an ~8–80 MB graph, not a ~350 MB tarball |
 | **tarball re-fetched PER PROJECT**     | bytes cannot cross an Inngest step boundary — the MOTIR-1974 note, in `lib/jobs/codeGraphSteps.ts` until MOTIR-2057 deleted it                                                                                                 | one container fetches once and builds once                  |
@@ -418,7 +418,7 @@ tarball ingest route is a later decision**, not this one — the route stays.
 > production paid for it.** Leaving one caller on an abandoned path is not a neutral
 > "unchanged" — `system.code-graph-refresh` does architecturally the same work (fetch a
 > repo's bytes, parse a whole tree) and kept doing it inside a Vercel function under the
-> 180 s `MOTIR_AI_INDEX_TIMEOUT_MS` client deadline. `motir-core`'s own graph does not
+> 180 s upload client deadline. `motir-core`'s own graph does not
 > parse in 180 s, so its refresh failed deterministically, and its five idempotent retries
 > then queued against motir-ai's single 1-permit `indexParseGate` and starved every other
 > repo's refresh: a measured **~68% failure rate over three days** (Aug 2 7/18, Aug 3 7/16,
@@ -440,6 +440,22 @@ tarball ingest route is a later decision**, not this one — the route stays.
 > - **The lesson generalizes past this file** (`motir-meta/notes.html` #215): a migration's
 >   unit is the SET OF CALLERS of the path being abandoned, not the one caller that
 >   motivated it.
+
+> **AMENDED AGAIN 2026-08-05 (MOTIR-2138): "the route stays" is no longer the whole
+> picture, because the CLIENT does not.** With both jobs on the fleet, `motir-core`'s
+> byte-upload method sat exported and tested with no call site for weeks — the same
+> "leaving an abandoned path reachable is not neutral" shape the amendment above paid for,
+> one layer down. It is now DELETED, and with it the second deadline this boundary
+> carried; every remaining method on `lib/ai/motirAiClient.ts` is a JSON request under the
+> single 30 s `MOTIR_AI_REQUEST_TIMEOUT_MS`. **motir-core can no longer POST bytes to
+> motir-ai at all** — anything that wants a graph built dispatches a container, which
+> fetches the repo from a pre-signed URL itself.
+>
+> Retiring motir-ai's ingest ROUTE — the "later decision" §11 deferred without filing a
+> card, which is the planning bug MOTIR-2140 records — is now MOTIR-2139, in the other
+> repo. Until it lands the route exists with no caller anywhere; that is the intended
+> ordering, since removing an unused client can break nothing while removing the server
+> first would leave a client whose only possible outcome is a 404.
 
 **Not decided here:** MOTIR-1974's checkpointing is not re-opened; how the product _asks_ for a
 repo or surfaces index _freshness_ stays with MOTIR-1754; motir-ai's graph **engine** and its

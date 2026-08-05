@@ -200,10 +200,10 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     stubIndexFleet();
     containerExitsWith(0);
     // The two ways bytes used to enter this process: the buffering provider
-    // fetch, and the motir-ai upload that carried them. Since MOTIR-2124 the
-    // first is not spy-able because it no longer EXISTS — asserted below as
-    // absence, which is the stronger form of "was not called".
-    const upload = vi.spyOn(motirAiClient, 'indexCodeGraph');
+    // fetch, and the motir-ai upload that carried them. NEITHER is spy-able any
+    // more, because neither EXISTS — MOTIR-2124 removed the first and MOTIR-2138
+    // the second. Both are asserted below as ABSENCE, which is the stronger form
+    // of "was not called".
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
     const { result } = await engine.execute({
@@ -222,7 +222,11 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     expect(
       (githubProvider as unknown as Record<string, unknown>)['fetchRepoTarball'],
     ).toBeUndefined();
-    expect(upload).not.toHaveBeenCalled();
+    // Same form, one layer down: the motir-ai client exports no byte-upload
+    // method at all (MOTIR-2138), so there is nothing left for a future caller
+    // to import. This is what the `indexCodeGraph` spy used to assert, in the
+    // stronger form deletion makes available.
+    expect((motirAiClient as unknown as Record<string, unknown>)['indexCodeGraph']).toBeUndefined();
     // What the container was actually handed: the resolved URL, not a token.
     for (const spec of fakeOrchestrator.specs) {
       expect(spec.env['MOTIR_INDEX_TARBALL_URL']).toBe(TARBALL_URL);
@@ -865,7 +869,7 @@ describe('the job definition carries NO concurrency number', () => {
 // MOTIR-2027 left this job on the in-process shape (§11: "Still building
 // in-process, unchanged") and production then ran the abandoned path at a ~68%
 // failure rate for three days: `motir-core`'s whole-tree parse does not fit in
-// the 180 s `MOTIR_AI_INDEX_TIMEOUT_MS` client deadline, and its five idempotent
+// the 180 s upload client deadline, and its five idempotent
 // retries starved every other repo's refresh against motir-ai's one parse
 // permit. So what these cases pin is that a PUSH refresh dispatches containers,
 // that its per-repo debounce survived the move, and that the first-index path
@@ -878,9 +882,9 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     stubIndexFleet();
     containerExitsWith(0);
     // The two ways bytes used to enter this process on a push: the buffering
-    // provider fetch (removed outright by MOTIR-2124 — see the absence assertion
-    // below) and the motir-ai upload that carried them under the 180 s deadline.
-    const upload = vi.spyOn(motirAiClient, 'indexCodeGraph');
+    // provider fetch (removed outright by MOTIR-2124) and the motir-ai upload
+    // that carried them under the 180 s deadline (removed by MOTIR-2138). Both
+    // are asserted below as absence — see the two checks at the end.
 
     const engine = new InngestTestEngine({ function: codeGraphRefresh });
     const { result, ctx } = await engine.execute({
@@ -913,7 +917,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     expect(
       (githubProvider as unknown as Record<string, unknown>)['fetchRepoTarball'],
     ).toBeUndefined();
-    expect(upload).not.toHaveBeenCalled();
+    expect((motirAiClient as unknown as Record<string, unknown>)['indexCodeGraph']).toBeUndefined();
     expect(fakeOrchestrator.provisioned).toHaveLength(2);
     for (const spec of fakeOrchestrator.specs) {
       expect(spec.env['MOTIR_INDEX_TARBALL_URL']).toBe(TARBALL_URL);

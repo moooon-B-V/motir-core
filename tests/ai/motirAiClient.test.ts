@@ -6,8 +6,7 @@ import {
   parseSseFrame,
   createCheckoutSession,
   createPortalSession,
-  indexCodeGraph,
-  MOTIR_AI_INDEX_TIMEOUT_MS,
+  mintCodeGraphRunCredential,
   MOTIR_AI_REQUEST_TIMEOUT_MS,
   type RequestActor,
 } from '@/lib/ai/motirAiClient';
@@ -324,63 +323,17 @@ describe('createPortalSession', () => {
   });
 });
 
-describe('indexCodeGraph (MOTIR-1500)', () => {
-  const input = {
-    coreOrganizationId: 'org_1',
-    coreWorkspaceId: 'ws_1',
-    coreProjectId: 'pj_1',
-    repoRef: 'moooon/acme',
-    bytes: new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x11, 0x22]),
-  };
-
-  it('POSTs the raw gzip bytes to /v1/code-graph/index with the Bearer + x-core headers', async () => {
-    const result = {
-      status: 'ok',
-      repoRef: 'moooon/acme',
-      filesIndexed: 42,
-      nodesChanged: 100,
-      edgesChanged: 250,
-      commitSha: 'deadbeef',
-    };
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(result));
-    vi.stubGlobal('fetch', fetchMock);
-
-    const got = await indexCodeGraph(input);
-    expect(got).toEqual(result);
-
-    const [reqUrl, init] = fetchMock.mock.calls[0]!;
-    expect(reqUrl).toBe('https://ai.example.test/v1/code-graph/index');
-    expect(init.method).toBe('POST');
-    expect(init.headers).toMatchObject({
-      Authorization: 'Bearer svc-token',
-      'content-type': 'application/gzip',
-      'x-core-organization-id': 'org_1',
-      'x-core-workspace-id': 'ws_1',
-      'x-core-project-id': 'pj_1',
-      'x-repo-ref': 'moooon/acme',
-    });
-    // The body is the raw bytes, NOT a JSON string.
-    expect(typeof init.body).not.toBe('string');
-    expect(new Uint8Array(init.body)).toEqual(input.bytes);
-  });
-
-  it('maps a problem+json error to a typed error', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse({ code: 'validation_error', title: 'bad tarball', status: 400 }, 400),
-        ),
-    );
-    await expect(indexCodeGraph(input)).rejects.toBeInstanceOf(MotirAiBadRequestError);
-  });
-
-  it('maps a transport failure to MotirAiUnavailableError', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
-    await expect(indexCodeGraph(input)).rejects.toBeInstanceOf(MotirAiUnavailableError);
-  });
-});
+// ⚠️ THE BYTE-UPLOAD SUITE IS GONE, AND SO IS WHAT IT TESTED (MOTIR-2138). This
+// file used to carry an `indexCodeGraph` describe block — the raw-gzip POST to
+// motir-ai's ingest route, the one binary method on this boundary. Both
+// code-graph jobs moved onto the container fleet (MOTIR-2027 / MOTIR-2057) and
+// the method then sat here with no caller, kept alive by these very tests. It is
+// deleted; the guarantee that nothing re-adopts it is asserted as ABSENCE where
+// the jobs run (`tests/jobs/code-graph-index.test.ts`,
+// `tests/github/codeGraphIndexService.test.ts`), which no spy could do.
+//
+// The concrete consequence for THIS file: the boundary is JSON-only, so it has
+// ONE deadline, and the cases below pin that rather than the two-tier split.
 
 // ── The deadline (MOTIR-1974) ───────────────────────────────────────────────
 //
@@ -417,21 +370,15 @@ describe('request deadlines', () => {
     vi.useRealTimers();
   });
 
-  it('fails a hanging code-graph upload fast and TYPED, at MOTIR_AI_INDEX_TIMEOUT_MS', async () => {
+  it('fails a hanging call fast and TYPED, at MOTIR_AI_REQUEST_TIMEOUT_MS — not a tick before', async () => {
     vi.stubGlobal('fetch', hangingFetch());
 
-    const pending = indexCodeGraph({
-      coreOrganizationId: 'org_1',
-      coreWorkspaceId: 'ws_1',
-      coreProjectId: 'pj_1',
-      repoRef: 'moooon/acme',
-      bytes: new Uint8Array([0x1f, 0x8b]),
-    });
+    const pending = getPreplanState({ coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' });
     const assertion = expect(pending).rejects.toBeInstanceOf(MotirAiUnavailableError);
 
     // One tick short of the deadline it is still waiting — the timeout is the
     // declared constant, not an incidental shorter one.
-    await vi.advanceTimersByTimeAsync(MOTIR_AI_INDEX_TIMEOUT_MS - 1);
+    await vi.advanceTimersByTimeAsync(MOTIR_AI_REQUEST_TIMEOUT_MS - 1);
     let settled = false;
     void pending.catch(() => {
       settled = true;
@@ -453,14 +400,22 @@ describe('request deadlines', () => {
     await assertion;
   });
 
-  it('gives the ordinary JSON calls the SHORTER deadline, not the upload’s', async () => {
-    // A read surface must not sit for three minutes behind a dead motir-ai just
-    // because the code-graph upload legitimately needs that long.
-    expect(MOTIR_AI_REQUEST_TIMEOUT_MS).toBeLessThan(MOTIR_AI_INDEX_TIMEOUT_MS);
-
+  it('gives the CODE-GRAPH call the same ordinary deadline — there is no long lane left', async () => {
+    // The long lane existed for the tarball upload, which is deleted (MOTIR-2138).
+    // The one code-graph call that survives is a small JSON mint, and pinning it
+    // here is what stops a future slow call from quietly re-opening a second,
+    // multi-minute deadline on a boundary a read surface waits behind.
     vi.stubGlobal('fetch', hangingFetch());
-    const pending = getPreplanState({ coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' });
-    const assertion = expect(pending).rejects.toBeInstanceOf(MotirAiUnavailableError);
+    const pending = mintCodeGraphRunCredential({
+      coreOrganizationId: 'org_1',
+      coreWorkspaceId: 'ws_1',
+      coreProjectId: 'pj_1',
+      repoRef: 'moooon/acme',
+      runId: 'run_1',
+    });
+    const assertion = expect(pending).rejects.toThrow(
+      `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
+    );
     await vi.advanceTimersByTimeAsync(MOTIR_AI_REQUEST_TIMEOUT_MS);
     await assertion;
   });
