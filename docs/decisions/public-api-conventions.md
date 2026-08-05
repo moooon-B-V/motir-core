@@ -212,6 +212,12 @@ Three of those rows are decisions, not defaults:
 **Every response carries a request id header**, success and failure alike, so a
 developer can quote one identifier in a support conversation.
 
+> **⚠️ The table above is the STATUS VOCABULARY the emitted document must cover —
+> see [Amendment 4](#amendment-4-2026-08-05--how-the-openapi-31-document-is-emitted-where-it-is-served-and-what-the-published-reference-is).**
+> Story 11.4 declares it as a value reconciled against `DOMAIN_ERROR_STATUS`, so a
+> status the code can return but this table does not list is a test failure rather
+> than a documentation gap.
+
 ### 5. Pagination — opaque cursor, `?cursor=&limit=`, never offset
 
 > **⚠️ Amended 2026-08-03 — see [Amendment 1](#amendment-1-2026-08-03--a-bounded-read-addressing-carve-out-to-9).**
@@ -335,6 +341,13 @@ Within `v1`:
 
 **Therefore a client MUST tolerate unknown fields.** That obligation is the other
 half of the promise and is stated in the reference docs (11.4).
+
+> **⚠️ Published as `/api-docs/stability` — see
+> [Amendment 4, Q5](#q5--what-the-published-stability--deprecation-policy-says).**
+> The public page is generated from THIS clause's lists rather than re-typed, so the
+> internal record and the published promise cannot say different things. Amendment 4
+> also pins the deprecation channel (`deprecated: true` in the spec) and how a `v2`
+> arrives alongside `v1`.
 
 Deprecation, when it eventually happens: document it, announce it, and keep the
 old behaviour working for the announced window. A field is never removed as a
@@ -816,3 +829,341 @@ transaction, and a projection that would need one is not a projection.
 | **Widen `ReadyItemDto` with the edges**                | Ships an edge payload to the `/ready` page that does not consume it, for the benefit of one API endpoint — a v1 concern reaching into a product DTO, the same direction Q1 rejected. The transport is where the shipped code already draws this line. |
 | **Add a new service method that returns page + edges** | A new service method to satisfy a presentation need, which §9's corollary forbids and which would exist for exactly one caller. The batched projection already exists and is already the pattern.                                                     |
 | **"A route may make any number of read calls"**        | Removes the rule instead of stating it. The thing worth forbidding — a route that reads, branches, reads again and assembles an answer — is business logic in a route, and this wording would permit it.                                              |
+
+### Amendment 4 (2026-08-05) — how the OpenAPI 3.1 document is emitted, where it is served, and what the published reference is
+
+**Amends:** nothing in §1–§9 substantively; it SETTLES the mechanics Story 11.4
+needs and that no clause had answered. It cross-links §4 (the status vocabulary
+the document must cover) and §8 (whose promise the published policy page states).
+**Leaves unchanged:** Amendment 2's ownership split in full — this amendment
+decides mechanism INSIDE that boundary and never re-opens who authors a shape.
+
+#### The problem
+
+Amendment 2 settled _who_ declares a response shape. It did not settle how those
+declarations become a document, where a client fetches it, or what the human-facing
+reference actually is. Those three are load-bearing rather than merely untidy: the
+document has to be _generated_ from the shapes the routes already return or it is a
+second artifact that drifts (the failure Story 11.4 exists to prevent); the spec's
+address is a URL that clients and code generators hard-code, so moving it later
+breaks them; and the reference has to live somewhere that exists.
+
+Six questions, answered below. **Two of the planner's recommendations are overturned
+here on the evidence the card asked for — Q3 and Q4's renderer.** Both are recorded
+with what contradicted them, because a recommendation that survives an unrun check
+is worth less than one that survives a run check.
+
+---
+
+#### Q1 — the emission mechanism: `zod/v4`'s first-party `z.toJSONSchema()`
+
+##### The decision
+
+**Migrate `lib/api/v1/**`to the`zod/v4`subpath and emit with the first-party`z.toJSONSchema()`.\*\* No new dependency, no third-party emitter.
+
+**Rung 2, run rather than assumed.** The installed `zod@3.25.76` already ships the
+v4 core on the `zod/v4` subpath:
+
+```
+$ node -e "const z=require('zod/v4');
+           console.log(JSON.stringify(z.toJSONSchema(z.object({code:z.string(),error:z.string()}))))"
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object",
+ "properties":{"code":{"type":"string"},"error":{"type":"string"}},
+ "required":["code","error"],"additionalProperties":false}
+```
+
+The emitted dialect is **JSON Schema 2020-12**, which _is_ OpenAPI 3.1's schema
+dialect — so there is no down-conversion step, and no lossy 3.0 shim. That is the
+reason §1's document targets 3.1 rather than 3.0 at all.
+
+**Rung 1.** Declaring the schema with the operation and generating the document
+from the operations is how every schema-first HTTP stack works (FastAPI, NestJS,
+`zod-to-openapi`). Amendment 2 already adopted the first half; this adopts the
+second with the emitter the schema library itself now ships.
+
+##### The blast radius, enumerated by grep — the migration is TOTAL or it is broken
+
+Zod 3 and Zod 4 instances do not interoperate, so a half-migrated tree fails at the
+seam. **Eight files** import `zod` inside the v1 surface and must move together
+(`grep -rn "from 'zod'" lib/api/v1 app/api/v1`):
+
+| File                                               | Why it is in the set                                                                                                              |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/api/v1/workItems/schema.ts`                   | the resource schemas + `parseV1Body`                                                                                              |
+| `lib/api/v1/projects/schema.ts`                    | resource schemas                                                                                                                  |
+| `lib/api/v1/sprints/schema.ts`                     | resource schemas                                                                                                                  |
+| `lib/api/v1/sprints/membership.ts`                 | request schemas                                                                                                                   |
+| `lib/api/v1/ready/schema.ts`                       | resource schemas                                                                                                                  |
+| `app/api/v1/work-items/[key]/links/route.ts`       | composes `z.object({ toKey: workItemKeySchema, relationship: relationshipSchema })` — a **direct cross-version composition site** |
+| `app/api/v1/work-items/[key]/transitions/route.ts` | declares an inline body schema passed to `parseV1Body`                                                                            |
+| `app/api/v1/work-items/[key]/comments/route.ts`    | same                                                                                                                              |
+
+The links route is the concrete proof that the migration cannot be partial: it
+builds a `z.object` from the classic entrypoint around two schemas imported from a
+resource module. If the module moves to v4 and the route does not, that expression
+is a Zod-3 object wrapping Zod-4 members — the exact non-interoperation case.
+
+`parseV1Body(req, schema: z.ZodType<T>)` (`lib/api/v1/workItems/schema.ts:592`) is
+the second: its parameter type pins every caller's schema to the same major.
+
+**The other 36 files that import a v1 schema module are NOT in the set** — the 16
+route files and 20 test files that import shapes without importing `zod` themselves
+call `.parse` / `.safeParse` on a value and never compose one, so they need no edit.
+`lib/api/v1/rankedCollections.ts` imports schema modules but no `zod` and is likewise
+outside it. **Zod stays on the classic entrypoint everywhere else in the repo** (the
+MCP tool input schemas, the forms): this amendment migrates the v1 surface only, and
+the boundary is exactly "does this module construct a v1 schema?".
+
+**The invariant that makes the boundary checkable:** no module under `lib/api/v1/**`
+or `app/api/v1/**` may import BOTH `zod` and `zod/v4`. Subtask 11.4.3 asserts it.
+
+##### Rejected alternatives
+
+| Rejected                                                          | Why                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keep Zod 3 + `@asteasolutions/zod-to-openapi`**                 | A third-party emitter tracking a schema library whose successor is already in `node_modules`. It also wants schemas registered through its own `extendZodWithOpenApi` wrapper, which puts a documentation concern into the declaration site Amendment 2 gave to the resource stories. |
+| **Keep Zod 3 + `zod-to-json-schema`, hand-assemble the document** | Most control, and most hand-written OpenAPI — the two-artifact drift this story exists to prevent, reintroduced at the assembly step instead of the schema step.                                                                                                                      |
+| **Migrate the WHOLE repo to `zod/v4`**                            | A far larger diff than any card in this story owns, touching forms and the MCP input schemas that have nothing to do with the spec. The v1 boundary is where the emitter is needed and where the composition graph is closed.                                                         |
+| **Emit OpenAPI 3.0 instead**                                      | Would require down-converting 2020-12 to 3.0's divergent schema subset (nullable, no `examples`, no `$defs`), i.e. adding a lossy step for no gain. Every mirror is on 3.x and Scalar/Redoc/Swagger UI all read 3.1.                                                                  |
+
+---
+
+#### Q2 — an operation is declared beside its schemas, and one registry makes route↔spec totality mechanical
+
+##### The decision
+
+**A per-resource `operations.ts` beside each `schema.ts`**, assembled by ONE
+registry keyed by `` `${METHOD} ${path}` `` — the same "declared with the operation"
+logic Amendment 2 used for shapes, and the same registry-driven totality pattern
+`lib/mcp/registry.ts` + `lib/mcp/scopes.ts` already ship, where `TOOL_SCOPES` is
+typed `Record<McpToolName, TokenScope>` so a tool without a scope is a **compile
+error** rather than a review finding.
+
+An operation declares: method, path template, summary, path/query parameters,
+request body schema (where it has one), the success response's status + schema, the
+error statuses it can produce, and its required scope.
+
+##### The scope is ASSERTED equal to the route's, never sourced from the registry
+
+**The route's `withV1Route({ scope })` stays the single enforcement point.** The
+registry records the scope for the document and the drift guard asserts the two
+agree; it does not feed the request path.
+
+This is deliberate and is the more conservative of the two. Sourcing enforcement
+from the registry would put a documentation artifact on every authenticated request
+and would mean a mistake in the docs is a **security** defect rather than a wrong
+sentence. It would also fight the shipped guard: `declaredScopeByMethod`
+(`tests/helpers/v1RouteAudit.ts`) already reads the scope literal per exported verb
+precisely so a per-operation check is possible, and `auditV1RouteSource`'s
+`no-scope-declared` rule requires the literal to be _in the route file_.
+
+##### Rejected alternatives
+
+| Rejected                                                     | Why                                                                                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **One central `operations.ts` listing every endpoint**       | The file Amendment 2 refused for shapes, rebuilt for operations: a second place to update when a route changes, updated by a different person than the one changing the route. |
+| **Derive operations from the route tree by static analysis** | The tree gives method and path and nothing else — no response schema, no parameters, no scope semantics. A parser guessing at the rest is a third artifact that can be wrong.  |
+| **Make the registry the source of the enforced scope**       | Puts documentation on the request path and turns a docs typo into a privilege bug. It also deletes the independent second opinion the drift guard exists to be.                |
+
+---
+
+#### Q3 — the spec is served at `/api/openapi/v1.json`, OUTSIDE `app/api/v1` — the recommendation to exempt the route audit is OVERTURNED
+
+##### The conflict
+
+`tests/helpers/v1RouteAudit.ts` walks _every_ `route.ts` under `app/api/v1`
+(`v1RouteFiles`, rooted at `join(repoRoot, 'app', 'api', 'v1')`) and raises
+`bypasses-wrapper` for any exported handler not wrapped in `withV1Route` — and
+`withV1Route` authenticates. A spec is public documentation, so a route at
+`/api/v1/openapi.json` cannot pass the shipped guard as written.
+
+The card recommended serving it there **with one named, asserted exemption**,
+_"if rung 1 agrees"_.
+
+##### Rung 1 does NOT agree — checked, not assumed
+
+- **Gitea** serves its specification at **`/swagger.v1.json`** — at the instance
+  ROOT, outside the `/api/v1` tree its endpoints live under — with the interactive
+  UI at `/api/swagger`.
+  ([docs.gitea.com](https://docs.gitea.com/development/api-usage/))
+- **GitLab** does not serve a spec from the versioned API tree at all: the document
+  (`doc/api/openapi/openapi_v3.yaml`) lives in the source tree and is published on
+  the docs site, rendered with Scalar.
+  ([docs.gitlab.com/api/openapi](https://docs.gitlab.com/api/openapi/))
+
+Neither mirror puts its specification inside its authenticated versioned API tree.
+The premise the recommendation was conditioned on is false, so it falls.
+
+##### The decision
+
+**Serve the spec at `/api/openapi/v1.json`** — `app/api/openapi/v1.json/route.ts`.
+Under `app/api/` where every route handler in this repo lives, and **outside**
+`app/api/v1/`, so:
+
+- the route audit's walker never sees it and **no exemption is written** — the guard
+  keeps its current, unconditional form, which is worth more than the tidiness of a
+  neighbouring URL. An exemption is a hole that must be re-justified by every future
+  reader; a path outside the tree is a hole that does not exist;
+- it stays beside the API for discoverability, satisfying the same instinct the
+  recommendation had;
+- the dotted final segment is the documented Next.js App Router idiom for a route
+  handler serving a named file (`app/sitemap.xml/route.ts`), so `v1.json` is a legal
+  segment, not a trick;
+- `proxy.ts`'s matcher covers only `/dashboard`, `/settings` and `/invite`, so no
+  middleware gates it — it is genuinely anonymous, which is what a code generator
+  fetching it needs.
+
+**The URL is public API under §8** the moment it ships: it may gain a sibling
+(`/api/openapi/v2.json`, Q6) but `/api/openapi/v1.json` never moves while `v1` lives.
+
+##### Rejected alternatives
+
+| Rejected                                                                             | Why                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`/api/v1/openapi.json` + an asserted audit exemption** (the card's recommendation) | Weakens a shipped, unconditional security guard for a documentation file, and neither mirror does it. The exemption would also have to be re-argued forever: "this one route may skip auth" is exactly the sentence a later reader copies. |
+| **A root-level `/openapi.v1.json`** (Gitea's literal shape)                          | Gitea's root is where its spec has always lived; ours has an `app/api/` convention every handler already follows. Matching Gitea's _principle_ (outside the versioned tree) beats matching its path.                                       |
+| **Publish only as a build artifact / repo file** (GitLab's shape)                    | §8 promises a stable URL a generator can fetch, and 11.5's CLI generation depends on it. A file in the repo is not fetchable by a client integrating against a running deployment.                                                         |
+| **`/docs/api/openapi.json`**                                                         | Puts a machine artifact under a human-documentation path, and collides with the reference PAGE's own route namespace (Q4).                                                                                                                 |
+
+---
+
+#### Q4 — the reference lives in `motir-core` at `app/(public)/`, rendered from our OWN primitives
+
+##### Home — `motir-core`, public route group
+
+**Rung 2, and it retires the placement question the story left open.**
+`motir-marketing` **does not exist**: `gh repo list moooon-B-V` returns `motir-core`,
+`motir-ai`, `motir-meta`, `motir-gateway`, `nextjs-prisma-vercel-starter`,
+`nextjs-prisma-vercel-starter-with-design` and `moooon` — no marketing repo. Its
+provisioning card (MOTIR-1455, 8.3.10) is `todo` beneath a `todo` story in another
+epic, so planning a page into it would have produced work nobody could do. Epic 11's
+own boundary pins every deliverable to `motir-core`, and `app/(public)/explore/` is
+the shipped precedent for an unauthenticated, indexable page group.
+
+Routes: **`/api-docs`** for the reference, `/api-docs/getting-started` for the guide,
+`/api-docs/stability` for the policy (Q5) — under `app/(public)/api-docs/`.
+
+##### Renderer — our own primitives; the third-party renderers are REJECTED
+
+**This overturns the "pick one and self-host it" framing**, which presumed the answer
+was a spec-rendering library. Weighing it against the repo's shipped constraints, it
+is not:
+
+- **The design system is not optional here.** `CLAUDE.md` requires every colour to
+  route through `--el-*` element tokens and every surface's radius/padding/sizing
+  through element-semantic shape tokens, precisely so `data-palette` and
+  `data-style` can re-skin and re-shape the whole app. Scalar, Redoc and Swagger UI
+  each ship their own complete visual system and their own CSS custom properties;
+  mounted here, one produces the single largest surface in the product that neither
+  axis reaches. Motir dogfoods its own design system — a documentation page that
+  visibly is not Motir is the worst place to make an exception.
+- **11.4.2 is a `type: design` subtask producing a three-file asset for this
+  surface.** A third-party renderer owns its own markup, so there would be nothing
+  for that asset to specify and nothing for a reviewer to compare the built page
+  against. Choosing a library would silently make an approved design undeliverable.
+- **Bundle.** Scalar's React reference and `swagger-ui-react` are each on the order
+  of a megabyte of JS before the spec; Redoc is comparable. Our renderer reads a
+  JSON document we generate and lays it out with primitives already in the bundle —
+  no new dependency, no new licence, no CDN, and it works on a self-hosted install
+  with zero egress (the constraint the question already imposed).
+- **`next-intl` chrome.** The page chrome must go through the shipped catalog gate;
+  a third-party renderer's own strings cannot.
+
+**Rung 1 is acknowledged and deliberately deviated from:** GitLab renders with
+Scalar, Gitea with Swagger UI. Both publish on a docs property rather than inside
+the product, and neither dogfoods a swappable design system. The deviation is
+recorded here rather than left to be discovered.
+
+##### Language
+
+Page chrome goes through `next-intl` with `messages/en.json` + `messages/zh.json`
+parity (the shipped catalog gate). **Spec-derived operation text stays English** —
+summaries, descriptions, parameter and field documentation, error `code` values —
+because the spec is ONE document and a translated contract is a second one that can
+disagree with the first. **Long-form documentation prose follows the same rule as the
+chrome, not the spec:** the getting-started guide and the stability policy (Q5) are
+Motir's own words about the API rather than the contract itself, so they are
+localized like any other page. The line is: _if a client could parse it, it is
+English; if only a human reads it, it is localized._
+
+##### Rejected alternatives
+
+| Rejected                                 | Why                                                                                                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **The reference on a marketing site**    | The repo does not exist and its provisioning card has not started. An undispatchable home.                                                                                                       |
+| **Scalar / Redoc / Swagger UI embedded** | Ships a second visual system into a product whose two design axes are load-bearing, makes 11.4.2's design asset meaningless, and costs ~1 MB of JS to render a document we already hold as JSON. |
+| **A CDN-hosted renderer**                | Breaks on a self-hosted install with no egress, and makes a third party a runtime dependency of our documentation.                                                                               |
+| **Render the reference behind auth**     | Documentation a prospective integrator cannot read before signing up is not published documentation. `app/(public)/` exists for exactly this.                                                    |
+| **Translate the operation text**         | Two versions of a contract, and the translated one is wrong the moment the spec changes.                                                                                                         |
+
+---
+
+#### Q5 — what the PUBLISHED stability + deprecation policy says
+
+§8 is the internal record; `/api-docs/stability` is the promise a third party
+integrates against. **They are the same promise, stated twice for two audiences, and
+the page is generated from §8's lists rather than re-typed** — a second hand-written
+copy of a stability promise is the same drift this story exists to prevent, applied
+to prose.
+
+The page states:
+
+1. **What `v1` guarantees** — the path is stable while `v1` lives; a `code` never
+   changes meaning; an existing condition never changes status; a field never
+   changes type or nullability.
+2. **Additive (allowed without notice)** — a new endpoint; a new optional query
+   parameter; a new field on a response object; a new enum value on a field
+   documented as open-ended; a raised rate-limit budget; a new error `code` for a
+   NEW condition. (§4's own 409 and 412 rows are the worked precedent — both were
+   added as new conditions, not changed ones.)
+3. **Forbidden without a new major** — removing or renaming a field; changing a
+   field's type or nullability; removing or re-purposing an error `code`; changing an
+   existing status for an existing condition; tightening a limit; making an optional
+   parameter required.
+4. **The client's obligation** — a client MUST tolerate unknown fields and unknown
+   enum values, and MUST NOT parse the human `error` sentence. §8 already states the
+   first as "the other half of the promise"; the page is where the other half is
+   actually delivered to the party that owes it.
+5. **The deprecation window and its announcement** — a deprecated operation or field
+   is marked `deprecated: true` **in the spec** (so a generator surfaces it), carries
+   the reason and the replacement in its description, and keeps working for the
+   announced window. The spec is the announcement channel because it is the one
+   artifact every client already reads.
+6. **How `v2` arrives** — as a second document at a second path, served alongside
+   `v1` (Q6). `v1` is not rewritten and does not stop working the day `v2` ships;
+   deprecating it is itself an announcement under the same window.
+
+§8 gains a pointer to this page so the two cannot say different things.
+
+---
+
+#### Q6 — one document per API MAJOR version, keyed from the start
+
+**The emitter is keyed by major version, and the degenerate case is one document
+today.** `v2` becomes a second document at `/api/openapi/v2.json` served beside the
+first, never a rewrite of it — which is the only shape under which §8's "keep the old
+behaviour working for the announced window" is expressible as an artifact rather than
+a promise.
+
+**`info.version` is the API contract's version, NOT the app's release number.** It is
+`MAJOR.MINOR.PATCH` where MAJOR is the path version (`1`), MINOR increments on an
+additive change under §5's allowed list, and PATCH on a documentation-only
+correction. A client reading it learns what the contract offers; the deployment's
+release number tells it nothing it can act on and would churn the document on every
+unrelated deploy. (This is also what 11.5's "read the server's declared API version"
+version-skew gate reads — one number with one meaning.)
+
+---
+
+#### Consequences of this amendment
+
+- **11.4.3** performs the Q1 migration across the eight enumerated files and declares
+  the shared shapes; the both-entrypoints invariant is asserted there.
+- **11.4.4** builds the Q2 registry + emitter and the Q3 route.
+- **11.4.6** asserts the Q2 scope equality and the three route↔spec drifts.
+- **11.4.7 / 11.4.8** build the Q4 surface and the Q5 page.
+- **11.5** generates the CLI's types from the Q3 URL and reads Q6's `info.version` for
+  its skew gate.
+- **11.6** composes MCP payloads from schemas that are now `zod/v4` values, so any
+  MCP-side module that COMPOSES one (rather than calling `.parse` on it) joins the
+  Q1 boundary.
