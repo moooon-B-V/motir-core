@@ -9,6 +9,7 @@ import {
   presentWorkItemDetail,
   updateWorkItemBodySchema,
 } from '@/lib/api/v1/workItems/schema';
+import { readChildDependencyEdges } from '@/lib/api/v1/workItems/childEdges';
 import { commentsService } from '@/lib/services/commentsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -42,7 +43,10 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
 
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  return NextResponse.json(presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id)));
+  const childEdges = await readChildDependencyEdges(detail, ctx.service);
+  return NextResponse.json(
+    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
+  );
 });
 
 // PATCH /api/v1/work-items/{key} (Subtask 11.2.6 — MOTIR-2046) — the partial
@@ -111,7 +115,10 @@ export const PATCH = withV1Route<{ key: string }>({ scope: 'work_items:write' },
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  return NextResponse.json(presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id)));
+  const childEdges = await readChildDependencyEdges(detail, ctx.service);
+  return NextResponse.json(
+    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
+  );
 });
 
 /**

@@ -280,25 +280,28 @@ describe('the v1 work-item ETag', () => {
 
 describe('the v1 work-item presenters', () => {
   it('shape FIELD BY FIELD — an unexpected DTO property does NOT reach the wire', () => {
-    const summary = presentWorkItemSummary({
-      identifier: 'PROD-1',
-      kind: 'task',
-      type: 'code',
-      title: 'T',
-      status: 'todo',
-      priority: 'medium',
-      assigneeId: null,
-      reporterId: 'u1',
-      dueDate: null,
-      estimateMinutes: null,
-      storyPoints: null,
-      createdAt: '2026-08-03T00:00:00.000Z',
-      updatedAt: '2026-08-03T00:00:00.000Z',
-      // A column a later migration adds, arriving through the DTO. It must NOT
-      // become public API by accident — the hazard `GET /api/v1/me` records one
-      // layer down when it refuses to spread a Prisma row.
-      internalSecret: 'do-not-ship',
-    } as Parameters<typeof presentWorkItemSummary>[0] & { internalSecret: string });
+    const summary = presentWorkItemSummary(
+      {
+        identifier: 'PROD-1',
+        kind: 'task',
+        type: 'code',
+        title: 'T',
+        status: 'todo',
+        priority: 'medium',
+        assigneeId: null,
+        reporterId: 'u1',
+        dueDate: null,
+        estimateMinutes: null,
+        storyPoints: null,
+        createdAt: '2026-08-03T00:00:00.000Z',
+        updatedAt: '2026-08-03T00:00:00.000Z',
+        // A column a later migration adds, arriving through the DTO. It must NOT
+        // become public API by accident — the hazard `GET /api/v1/me` records one
+        // layer down when it refuses to spread a Prisma row.
+        internalSecret: 'do-not-ship',
+      } as Parameters<typeof presentWorkItemSummary>[0] & { internalSecret: string },
+      undefined,
+    );
 
     expect(Object.keys(summary)).not.toContain('internalSecret');
     expect(JSON.stringify(summary)).not.toContain('do-not-ship');
@@ -365,6 +368,7 @@ describe('the v1 work-item presenters', () => {
         components: [],
       } as unknown as Parameters<typeof presentWorkItemDetail>[0],
       0,
+      {},
     );
 
     expect(detail.children[0]?.parentKey).toBeNull();
