@@ -674,3 +674,79 @@ function presentProposedFields(
     targetRepo: fields.targetRepo ?? null,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The planning conversation (11.7.6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type V1PlanSession = z.infer<typeof planSessionSchema>;
+
+/**
+ * The optional ANCHOR SET, on all three conversation endpoints.
+ *
+ * It rides in the BODY (ADR Amendment 6 Q1) because it is a SET whose order and
+ * duplicates do not matter — `buildScope` dedupes and sorts before deriving the
+ * thread's key — and a repeated query parameter would encode it as an ordered
+ * list, so two spellings of one thread would look different at the edge before
+ * the service normalised them.
+ *
+ * Omitted or empty means the PROJECT-WIDE thread. There is deliberately no
+ * session id here or anywhere else on this resource: a thread's identity is
+ * `(project, anchor set)`, and handing a client an id is exactly how a second
+ * conversation about one anchor set gets forked.
+ */
+export const planSessionScopeBodySchema = z
+  .object({ targetKeys: z.array(z.string().min(1)).optional() })
+  .strict();
+
+/** `POST …/plan-session/turns` — the scope, plus what to say. */
+export const planTurnBodySchema = z
+  .object({
+    targetKeys: z.array(z.string().min(1)).optional(),
+    /** What you want changed about the plan. */
+    body: z.string().min(1),
+  })
+  .strict();
+
+/** Map the thread to the wire — field by field, never a spread. */
+export function presentPlanSession(session: {
+  id: string;
+  targetKeys: string[];
+  turnCount: number;
+  lastJobId: string | null;
+  lastSubmittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  turns: {
+    id: string;
+    seq: number;
+    role: 'user' | 'system' | 'assistant';
+    body: string;
+    jobId: string | null;
+    question: string | null;
+    isAnswer: boolean;
+    authorId: string | null;
+    createdAt: string;
+  }[];
+}): V1PlanSession {
+  return {
+    id: session.id,
+    targetKeys: session.targetKeys,
+    turnCount: session.turnCount,
+    lastJobId: session.lastJobId,
+    lastSubmittedAt: session.lastSubmittedAt,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    turns: session.turns.map((turn) => ({
+      id: turn.id,
+      seq: turn.seq,
+      role: turn.role,
+      body: turn.body,
+      jobId: turn.jobId,
+      question: turn.question,
+      isAnswer: turn.isAnswer,
+      authorId: turn.authorId,
+      createdAt: turn.createdAt,
+    })),
+  };
+}

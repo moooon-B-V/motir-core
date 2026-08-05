@@ -457,6 +457,29 @@ describe('every operation’s REAL response validates against its declared schem
       get(`/api/v1/plans/${planId}`),
       { planId },
     );
+
+    // ── The planning conversation (Story 11.7) ──────────────────────────────
+    // Ordered: open, append (a submit on an empty thread is refused), submit.
+    await drive(
+      'openPlanSession',
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/route'),
+      send(`/api/v1/projects/${pk}/plan-session`, 'POST', {}),
+      { projectKey: pk },
+    );
+    await drive(
+      'appendPlanTurn',
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/turns/route'),
+      send(`/api/v1/projects/${pk}/plan-session/turns`, 'POST', {
+        body: 'keep every leaf under three points',
+      }),
+      { projectKey: pk },
+    );
+    await drive(
+      'submitPlanSession',
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/submissions/route'),
+      send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', {}),
+      { projectKey: pk },
+    );
   }, 120_000);
 
   it('every driven call SUCCEEDED at the status its operation declares', () => {

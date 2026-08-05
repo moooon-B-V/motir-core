@@ -112,6 +112,12 @@ describe('gate — the work-item route surface exists and is clean', () => {
       // guard would follow it instead of contradicting it.
       if (/\/integration\//.test(file)) return TOOL_SCOPES.mark_integrated;
       if (/\/sessions\//.test(file)) return TOOL_SCOPES.complete_session;
+      // Story 11.7's conversation MOUNT. A `read`-scoped POST, and the one place
+      // on this surface where the verb and the scope deliberately disagree: it
+      // is a POST because get-or-create writes a row and a GET must stay safe,
+      // and it is `read` because the SCOPE mirrors the capability, not the verb
+      // (Amendment 6 Q2). Read off the shipped map, like its two neighbours.
+      if (/\/plan-session\/route\.ts$/.test(file)) return TOOL_SCOPES.open_plan_session;
       return 'work_items:write';
     };
 

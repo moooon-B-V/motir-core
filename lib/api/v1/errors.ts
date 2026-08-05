@@ -277,6 +277,27 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   MOTIR_AI_CONFIG: 503,
   MOTIR_AI_UNAUTHORIZED: 503,
 
+  // 11.7.6 (MOTIR-2240) — the planning conversation.
+  //
+  // 404: the thread does not exist for this scope. Same existence-oracle rule —
+  // a scope in another tenant never reaches the service, because the project
+  // read answers 404 first.
+  PLAN_CHANGE_SESSION_NOT_FOUND: 404,
+  // ⚠️ 409, not 422. Two writers appended to one thread and lost the race for a
+  // `seq`; the body was perfectly valid when it was sent. 422 would tell the
+  // caller to fix its body, which is the wrong instruction — the right one is to
+  // re-read and retry.
+  PLAN_CHANGE_TURN_CONFLICT: 409,
+  // 422: a submit on a thread with nothing on it. The caller can fix that by
+  // appending a turn, and it must NOT be a 500 — an empty thread is an ordinary
+  // state, not a fault.
+  PLAN_CHANGE_EMPTY_INTENT: 422,
+  // 422: an empty turn body.
+  PLAN_CHANGE_EMPTY_TURN: 422,
+  // 422: the anchor set exceeds `MAX_SCOPE_TARGETS`. Refused BEFORE the
+  // resolution fan-out, because the cost of a huge set is that fan-out.
+  PLAN_CHANGE_TOO_MANY_TARGETS: 422,
+
   // ⚠️ DELIBERATELY ABSENT, and this comment is the deliberation:
   //   • `MOTIR_AI_BAD_REQUEST` — motir-ai rejected a payload MOTIR-CORE built.
   //     That is our bug, not the caller's, and §4's bare 500 is exactly the

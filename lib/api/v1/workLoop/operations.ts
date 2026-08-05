@@ -8,6 +8,9 @@ import {
   planJobHandleSchema,
   planOutcomeSchema,
   planSchema,
+  planSessionSchema,
+  planSessionScopeBodySchema,
+  planTurnBodySchema,
   sessionCloseOutBodySchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
@@ -238,6 +241,115 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     errorStatuses: [404],
   }),
+
+  // ── The planning conversation (Subtask 11.7.6 — MOTIR-2240) ─────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/projects/{projectKey}/plan-session',
+    operationId: 'openPlanSession',
+    summary: 'Open or resume the planning conversation for a scope',
+    description:
+      'Open — or RESUME — the planning conversation for a project, and read its thread. ' +
+      'Changing a plan in Motir is a multi-turn CONVERSATION: add turns, then send the ' +
+      'accumulated intent. There is ONE thread per project per anchor set, so calling this ' +
+      'again returns the SAME conversation, with every turn already on it — including the one ' +
+      'the Motir web app shows. Pass `targetKeys` to anchor the conversation at specific work ' +
+      'items ("re-plan these two"); omit it for the project-wide thread. The anchor set is ' +
+      'the thread’s identity: order and duplicates do not matter. ' +
+      'Opening submits nothing and costs nothing — which is why it is `read`-scoped despite ' +
+      'being a POST (a GET that creates a row would not be safe).',
+    scope: 'read',
+    parameters: [
+      {
+        name: 'projectKey',
+        in: 'path',
+        required: true,
+        description: 'The project key, e.g. `MOTIR`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: planSessionScopeBodySchema,
+      description: 'The optional anchor set. Omit for the project-wide thread.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: planSessionSchema },
+      description: 'The thread, with every turn on it.',
+    },
+    errorStatuses: [404, 422],
+  }),
+
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/projects/{projectKey}/plan-session/turns',
+    operationId: 'appendPlanTurn',
+    summary: 'Add one turn to the planning conversation',
+    description:
+      'Add ONE turn — what you want changed about the plan. ' +
+      '⚠️ IMPORTANT: appending does NOT submit. The turn is persisted immediately, but no ' +
+      'job starts, no credits are spent and no work item changes; turns ACCUMULATE until you ' +
+      'post a submission, which is what sends them to the planner. That separation is the ' +
+      'point — a later turn REFINES the earlier ones rather than replacing them, so "add auth ' +
+      'to the billing epic" then "keep them under 3 points" go out as ONE coherent change. ' +
+      'Addresses the thread by scope, so it always extends the same conversation.',
+    scope: 'work_items:write',
+    parameters: [
+      {
+        name: 'projectKey',
+        in: 'path',
+        required: true,
+        description: 'The project key, e.g. `MOTIR`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: planTurnBodySchema,
+      description: 'What to say in this turn, and the optional anchor set it belongs to.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: planSessionSchema },
+      description: 'The thread, with the new turn appended.',
+    },
+    errorStatuses: [404, 409, 422],
+  }),
+
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/projects/{projectKey}/plan-session/submissions',
+    operationId: 'submitPlanSession',
+    summary: 'Send the thread’s accumulated intent to the planner',
+    description:
+      'Send this conversation’s accumulated intent to the planner: every turn on the thread, ' +
+      'in order, as ONE change. Returns `202` with `{ jobId, planId, statusUrl }` the moment ' +
+      'the job is accepted — it does not wait, and the body carries no result because there ' +
+      'is none yet. The thread stays INTACT and can be refined with another turn. ' +
+      '⚠️ This is the act that SPENDS the token owner’s AI credits, and it produces a PLAN of ' +
+      'proposals: approving that plan in Motir is the only thing that turns a proposal into a ' +
+      'work item. Submitting a thread with no turns is refused.',
+    scope: 'work_items:write',
+    parameters: [
+      {
+        name: 'projectKey',
+        in: 'path',
+        required: true,
+        description: 'The project key, e.g. `MOTIR`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: planSessionScopeBodySchema,
+      description: 'The optional anchor set naming which thread to submit.',
+    },
+    response: {
+      status: 202,
+      body: { kind: 'object', schema: planJobHandleSchema },
+      description:
+        'The job was accepted. Nothing has been planned yet — poll `statusUrl` for the outcome.',
+    },
+    errorStatuses: [402, 404, 422, 503],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -248,4 +360,5 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   PlanJobHandle: planJobHandleSchema,
   PlanOutcome: planOutcomeSchema,
   Plan: planSchema,
+  PlanSession: planSessionSchema,
 };
