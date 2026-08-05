@@ -36,11 +36,12 @@ import { truncateAuthTables } from '../helpers/db';
 
 const submitJobMock = vi.fn(async (..._args: unknown[]) => ({ jobId: 'job-contextual-1' }));
 const streamJobMock = vi.fn();
+const getJobMock = vi.fn();
 
 vi.mock('@/lib/ai/motirAiClient', () => ({
   submitJob: (...args: unknown[]) => submitJobMock(...(args as [])),
   streamJob: (...args: unknown[]) => streamJobMock(...(args as [])),
-  getJob: vi.fn(),
+  getJob: (...args: unknown[]) => getJobMock(...(args as [])),
   getConvention: vi.fn(),
   getCodeAudit: vi.fn(),
   refreshCodeAudit: vi.fn(),
@@ -81,6 +82,7 @@ beforeEach(async () => {
   await truncateAuthTables();
   submitJobMock.mockClear();
   streamJobMock.mockClear();
+  getJobMock.mockReset();
   submitJobMock.mockResolvedValue({ jobId: 'job-contextual-1' });
   fx = await makeWorkItemFixture();
   story = await createTestWorkItem(fx, { kind: 'story', title: 'Billing' });
@@ -454,6 +456,70 @@ describe('resubmitFromWorkItem — Retry re-sends, it does not re-say (MOTIR-910
       contextualPlanningService.resubmitFromWorkItem({ anchorId: story.id }, projectCtx(fx)),
     ).rejects.toThrow();
     expect(submitJobMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('recordPlannerTurnForWorkItem — the planner speaks on an ANCHORED thread (MOTIR-2226)', () => {
+  it('files the utterance on the ITEM’s thread, resolved from its anchor set', async () => {
+    const run = await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'add payments' },
+      projectCtx(fx),
+    );
+    getJobMock.mockResolvedValue({
+      jobId: run.jobId,
+      status: 'succeeded',
+      result: {
+        turn: { action: 'ask', message: 'Which direction?', question: 'in, or out?' },
+      },
+      error: null,
+    });
+
+    const dto = await contextualPlanningService.recordPlannerTurnForWorkItem(
+      { anchorId: story.id, jobId: run.jobId },
+      projectCtx(fx),
+    );
+
+    // The anchored thread, NOT the project-wide one: the scope key is the
+    // service's to compute, which is the whole reason this method exists.
+    expect(dto.id).toBe(run.sessionId);
+    const asked = dto.turns.filter((t) => t.role === 'assistant');
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.question).toBe('in, or out?');
+    expect(asked[0]!.jobId).toBe(run.jobId);
+  });
+
+  it('is idempotent per job here too — a replay adds nothing', async () => {
+    const run = await contextualPlanningService.planFromWorkItem(
+      { anchorId: story.id, prompt: 'add payments' },
+      projectCtx(fx),
+    );
+    getJobMock.mockResolvedValue({
+      jobId: run.jobId,
+      status: 'succeeded',
+      result: { turn: { action: 'draft', message: 'a report', question: null } },
+      error: null,
+    });
+
+    await contextualPlanningService.recordPlannerTurnForWorkItem(
+      { anchorId: story.id, jobId: run.jobId },
+      projectCtx(fx),
+    );
+    const dto = await contextualPlanningService.recordPlannerTurnForWorkItem(
+      { anchorId: story.id, jobId: run.jobId },
+      projectCtx(fx),
+    );
+
+    expect(dto.turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('VIEW-GATES the anchor set exactly as a turn does', async () => {
+    const outsider = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
+    await expect(
+      contextualPlanningService.recordPlannerTurnForWorkItem(
+        { anchorId: story.id, jobId: 'job-contextual-1' },
+        projectCtx(outsider),
+      ),
+    ).rejects.toThrow();
   });
 });
 

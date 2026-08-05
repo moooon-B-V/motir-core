@@ -1,4 +1,9 @@
-import { Prisma, type PlanChangeSession, type PlanChangeTurn } from '@prisma/client';
+import {
+  Prisma,
+  type PlanChangeSession,
+  type PlanChangeTurn,
+  type PlanChangeTurnRole,
+} from '@prisma/client';
 
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -8,6 +13,11 @@ import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepos
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
+import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
+import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import { readPlanningTurn } from '@/lib/planning/plannerTurn';
+import { getJob } from '@/lib/ai/motirAiClient';
 import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
 import {
   EmptyPlanChangeIntentError,
@@ -80,14 +90,29 @@ export function buildAccumulatedIntent(
 }
 
 /** Read a session's thread and map both to the DTO. `tx` joins a surrounding
- *  transaction (an append returns the thread it just extended). */
+ *  transaction (an append returns the thread it just extended).
+ *
+ *  The thread's `assistant` bodies carry `[KEY](motir:<id>)` tokens (normalized
+ *  at write time by {@link recordPlannerTurn}), so their summaries are resolved
+ *  here — ONE resolve for the whole thread — and threaded to the rail, which
+ *  renders them through the shipped `WorkItemRefChip` path exactly as the detail
+ *  page and the comment thread do. A thread with no references pays nothing:
+ *  `resolveWorkItemRefSummaries` returns `{}` for an empty ref set. */
 async function toDto(
   row: PlanChangeSession,
-  workspaceId: string,
+  pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
 ): Promise<PlanChangeSessionDto> {
-  const turns = await planChangeTurnRepository.listBySessionId(row.id, workspaceId, tx);
-  return toPlanChangeSessionDto(row, turns);
+  const turns = await planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, tx);
+  const ids = turns
+    .filter((t) => t.role === 'assistant')
+    .flatMap((t) => parseWorkItemTokenIds(t.body));
+  const workItemRefs = await resolveWorkItemRefSummaries(
+    { ids: [...new Set(ids)], keys: [] },
+    pctx.projectId,
+    { userId: pctx.userId, workspaceId: pctx.workspaceId },
+  );
+  return toPlanChangeSessionDto(row, turns, workItemRefs);
 }
 
 /** Resolve ONE of the project's conversations — the shared precondition of append
@@ -113,16 +138,32 @@ async function requireSession(
 }
 
 /**
- * Append one turn under the session's row lock. Shared by the user-turn append
- * and the submission marker so BOTH allocate `seq` the same safe way — a marker
- * written outside the lock would be exactly the race the user path guards.
+ * Append one turn under the session's row lock. Shared by the user-turn append,
+ * the submission marker AND the planner's own turn so ALL THREE allocate `seq`
+ * the same safe way — a second allocation route for assistant turns would
+ * quietly reintroduce exactly the lost-append race this one guards.
  * Returns the updated session row (its `turnCount` bumped, plus any extra patch).
+ *
+ * `skipIf` is an IDEMPOTENCY gate evaluated INSIDE the lock, for callers whose
+ * append may legitimately be replayed (the planner turn, whose recording the
+ * client can re-issue on a reload or from a second tab). Returning true skips
+ * the insert and yields the thread as it already stands. It has to run under the
+ * lock, not before it: checked outside, two concurrent replays would both see
+ * "not there yet" and both insert.
  */
 async function appendLocked(
   session: PlanChangeSession,
   pctx: ProjectContext,
-  turn: { role: 'user' | 'system'; body: string; jobId?: string | null; authorId?: string | null },
+  turn: {
+    role: PlanChangeTurnRole;
+    body: string;
+    jobId?: string | null;
+    authorId?: string | null;
+    question?: string | null;
+    isAnswer?: boolean;
+  },
   patch: Prisma.PlanChangeSessionUncheckedUpdateInput = {},
+  skipIf?: (tx: Prisma.TransactionClient) => Promise<boolean>,
 ): Promise<PlanChangeSessionDto> {
   return withWorkspaceContext(
     { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
@@ -135,6 +176,8 @@ async function appendLocked(
       const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
       if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
 
+      if (skipIf && (await skipIf(tx))) return toDto(fresh, pctx, tx);
+
       const seq = fresh.turnCount;
       try {
         await planChangeTurnRepository.create(
@@ -145,6 +188,8 @@ async function appendLocked(
             role: turn.role,
             body: turn.body,
             jobId: turn.jobId ?? null,
+            question: turn.question ?? null,
+            isAnswer: turn.isAnswer ?? false,
             authorId: turn.authorId ?? null,
           },
           tx,
@@ -164,7 +209,7 @@ async function appendLocked(
         { ...patch, turnCount: seq + 1 },
         tx,
       );
-      return toDto(updated, pctx.workspaceId, tx);
+      return toDto(updated, pctx, tx);
     },
   );
 }
@@ -193,7 +238,7 @@ export const planChangeSessionsService = {
       scope.scopeKey,
       pctx.workspaceId,
     );
-    if (existing) return toDto(existing, pctx.workspaceId);
+    if (existing) return toDto(existing, pctx);
 
     try {
       const row = await withWorkspaceContext(
@@ -210,7 +255,7 @@ export const planChangeSessionsService = {
             tx,
           ),
       );
-      return toDto(row, pctx.workspaceId);
+      return toDto(row, pctx);
     } catch (err) {
       // A concurrent opener won the unique-index race. "Open the conversation" is
       // idempotent, so the right answer is the winner's thread — not an error.
@@ -220,7 +265,7 @@ export const planChangeSessionsService = {
           scope.scopeKey,
           pctx.workspaceId,
         );
-        if (winner) return toDto(winner, pctx.workspaceId);
+        if (winner) return toDto(winner, pctx);
       }
       throw err;
     }
@@ -248,7 +293,7 @@ export const planChangeSessionsService = {
       scope.scopeKey,
       pctx.workspaceId,
     );
-    return existing ? toDto(existing, pctx.workspaceId) : null;
+    return existing ? toDto(existing, pctx) : null;
   },
 
   /**
@@ -267,16 +312,105 @@ export const planChangeSessionsService = {
    * change, which is what makes refinement across turns possible.
    *
    * `scopeKey` selects WHICH thread (default: the project-wide one).
+   *
+   * `isAnswer` marks the turn as the REPLY to the planner's pending question
+   * (MOTIR-2226) — set by the composer's answer bar, and by nothing else. It
+   * changes no behaviour on the way in; it is recorded so the transcript can say
+   * later whether the question was answered or merely superseded, which is a
+   * judgement the words themselves cannot be asked to carry.
    */
   async appendTurn(
     body: string,
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
+    opts: { isAnswer?: boolean } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
     const session = await requireSession(pctx, scopeKey);
-    return appendLocked(session, pctx, { role: 'user', body: trimmed, authorId: pctx.userId });
+    return appendLocked(session, pctx, {
+      role: 'user',
+      body: trimmed,
+      authorId: pctx.userId,
+      isAnswer: opts.isAnswer === true,
+    });
+  },
+
+  /**
+   * Record the PLANNER's turn for a settled job — the consuming half of
+   * MOTIR-2222's contract (MOTIR-2226).
+   *
+   * The planning job's result carries a findings report and, when the request was
+   * not determinate, one question. This persists that utterance as an `assistant`
+   * turn so it lands in the thread's history: the report becomes a checkpoint the
+   * user can act on, and a question becomes something that survives a reload and
+   * can still be answered tomorrow.
+   *
+   * THREE properties this method exists to hold, none of which the caller can be
+   * asked to guarantee:
+   *
+   *  1. **At most one turn per job.** The client records on settle, and a reload,
+   *     a second tab or a re-read replays that call — so the append carries an
+   *     idempotency gate on `(session, jobId, assistant)`, evaluated under the
+   *     session's row lock. Every replay after the first is a no-op that returns
+   *     the thread unchanged.
+   *  2. **Only the thread's OWN job.** The job id arrives from the client, so it
+   *     is checked against the session's `lastJobId` rather than trusted: a job
+   *     this conversation did not submit has no business narrating into it.
+   *  3. **A silent job is not a failure.** No result, no `turn`, or an
+   *     unreadable one (an older engine, a kind that emits none) returns the
+   *     thread as it stands. The run still happened and its proposals are still
+   *     on the canvas; the only thing missing is narration.
+   *
+   * SIDE-EFFECTS-OUTSIDE-TX (CLAUDE.md): the motir-ai read and the reference
+   * normalization both happen BEFORE the short locked append, so no session row
+   * is held across a network round-trip.
+   */
+  async recordPlannerTurn(
+    jobId: string,
+    pctx: ProjectContext,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, scopeKey);
+    // (2) The thread narrates its OWN run. A mismatch is not an error — the
+    // client may simply be replaying a stale settle after a newer turn — so it
+    // yields the current thread rather than throwing at the user.
+    if (session.lastJobId !== jobId) return toDto(session, pctx);
+
+    const job = await getJob(jobId);
+    const utterance = readPlanningTurn(job.result);
+    if (!utterance) return toDto(session, pctx); // (3)
+
+    // The report names work items by bare key; rewriting them to the canonical
+    // `[KEY](motir:<id>)` token is what makes them render as the shipped
+    // `WorkItemRefChip` rather than as plain text — the same write-side
+    // normalization every stored body gets (MOTIR-1440), reused, not reinvented.
+    const [normalized] = await normalizeBodyRefs({
+      projectId: pctx.projectId,
+      projectIdentifier: pctx.project.identifier,
+      fields: [utterance.message],
+    });
+
+    return appendLocked(
+      session,
+      pctx,
+      {
+        role: 'assistant',
+        body: typeof normalized === 'string' ? normalized : utterance.message,
+        jobId,
+        question: utterance.question,
+      },
+      {},
+      // (1) Under the lock, so two concurrent replays cannot both pass it.
+      async (tx) =>
+        (await planChangeTurnRepository.findByJobIdAndRole(
+          session.id,
+          jobId,
+          'assistant',
+          pctx.workspaceId,
+          tx,
+        )) !== null,
+    );
   },
 
   /**

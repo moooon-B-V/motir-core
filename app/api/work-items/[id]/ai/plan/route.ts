@@ -100,7 +100,14 @@ export async function POST(
           ctx,
         )
       : await contextualPlanningService.planFromWorkItem(
-          { anchorId: id, targetKeys: parsed.targetKeys, prompt },
+          {
+            anchorId: id,
+            targetKeys: parsed.targetKeys,
+            prompt,
+            // MOTIR-2226: read strictly — anything but `true` is "not an answer",
+            // which is the disposition the transcript records forever after.
+            isAnswer: (body as { isAnswer?: unknown })?.isAnswer === true,
+          },
           ctx,
         );
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });

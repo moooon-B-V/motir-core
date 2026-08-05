@@ -72,12 +72,37 @@ export async function openPlanChangeSession(signal?: AbortSignal): Promise<PlanC
   return post<PlanChangeSessionDto>('/api/ai/plan-change/session', undefined, signal);
 }
 
-/** Append ONE turn. Appending ACCUMULATES; it does not submit. */
+/** Append ONE turn. Appending ACCUMULATES; it does not submit.
+ *
+ *  `isAnswer` (MOTIR-2226) says the turn was sent from the answer bar, in reply
+ *  to the planner's pending question — which is what lets the transcript later
+ *  distinguish a question that was ANSWERED from one that was superseded. */
 export async function appendPlanChangeTurn(
   body: string,
   signal?: AbortSignal,
+  isAnswer = false,
 ): Promise<PlanChangeSessionDto> {
-  return post<PlanChangeSessionDto>('/api/ai/plan-change/session/turns', { body }, signal);
+  return post<PlanChangeSessionDto>(
+    '/api/ai/plan-change/session/turns',
+    { body, isAnswer },
+    signal,
+  );
+}
+
+/** Record the PLANNER's turn for a settled job (MOTIR-2226) — the report it owes
+ *  on every turn, plus the question when it asked. Safe to call more than once
+ *  for one job: the server keys the append on the job id, so a replay returns the
+ *  same thread rather than a duplicate bubble. */
+export async function recordPlannerTurn(
+  jobId: string,
+  anchor: { anchorId: string; targetKeys: readonly string[] } | null,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  return post<PlanChangeSessionDto>(
+    '/api/ai/plan-change/session/planner-turn',
+    anchor ? { jobId, anchorId: anchor.anchorId, targetKeys: [...anchor.targetKeys] } : { jobId },
+    signal,
+  );
 }
 
 /** Submit the conversation's ACCUMULATED intent — every user turn in order, not
@@ -145,10 +170,11 @@ export async function submitContextualPlan(
   prompt: string,
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
+  isAnswer = false,
 ): Promise<ContextualPlanResponse> {
   return post<ContextualPlanResponse>(
     anchorPath(anchorId),
-    { prompt, ...extra(targetKeys) },
+    { prompt, isAnswer, ...extra(targetKeys) },
     signal,
   );
 }

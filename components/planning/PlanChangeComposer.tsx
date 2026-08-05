@@ -2,7 +2,7 @@
 
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { AtSign, Send } from 'lucide-react';
+import { AtSign, MessageCircleQuestionMark, Send } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
 import { TargetSearchListbox } from '@/components/planning/TargetSearchListbox';
@@ -55,6 +55,21 @@ export interface PlanChangeComposerProps {
   /** Pre-focus, for the re-plan ask (MOTIR-910). */
   autoFocus?: boolean;
   disabled?: boolean;
+  /**
+   * The planner's PENDING question (MOTIR-2226), or null when it is not waiting
+   * on one. Non-null puts the composer in its answer state: the bar above the
+   * input, and Send relabelled **Answer**.
+   *
+   * A report changes only the transcript; a QUESTION changes the composer — which
+   * is the whole reason the state lives here. Questions are rare by construction,
+   * and a rare thing that looks like the common thing gets skimmed; a skimmed
+   * question is a thread that dies silently with each side waiting on the other.
+   * So the ask is carried by the one region that is always on screen, next to the
+   * control whose behaviour it changes.
+   */
+  awaitingQuestion?: string | null;
+  /** Jump to the pending question in the transcript. */
+  onSeeQuestion?: () => void;
 }
 
 export function PlanChangeComposer({
@@ -67,6 +82,8 @@ export function PlanChangeComposer({
   placeholder,
   autoFocus = false,
   disabled = false,
+  awaitingQuestion = null,
+  onSeeQuestion,
 }: PlanChangeComposerProps) {
   const t = useTranslations('planningWorkspace.targets');
   const tc = useTranslations('planningWorkspace.conversation');
@@ -183,6 +200,37 @@ export function PlanChangeComposer({
 
   return (
     <form onSubmit={submit} className="relative border-t border-(--el-border) px-3 py-3">
+      {/* THE ANSWER BAR — a sibling above the input, where the target tray sits.
+          Not an alert: nothing failed, the planner is simply waiting. Its copy
+          names the state in words, so the live region announces it when the log
+          updates, and the state is carried by THREE cues that are not colour —
+          a word, a glyph, and the position of a control that changed. */}
+      {awaitingQuestion !== null ? (
+        <div
+          data-testid="plan-change-awaiting"
+          className="mb-2 flex items-start gap-2 rounded-(--radius-card) bg-(--el-warning-surface) px-3 py-2 text-(--el-warning-text)"
+        >
+          <MessageCircleQuestionMark className="size-4 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <span className="block font-mono text-[10px] font-semibold tracking-wide uppercase">
+              {tc('awaitingAnswer')}
+            </span>
+            <span className="block text-xs">{awaitingQuestion}</span>
+          </div>
+          {onSeeQuestion ? (
+            // A real button, not link-coloured text on a tint (the AA rule for
+            // this recipe).
+            <button
+              type="button"
+              onClick={onSeeQuestion}
+              className="shrink-0 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-[11px] font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {tc('seeQuestion')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {targets.length > 0 ? (
         <div
           role="group"
@@ -280,14 +328,17 @@ export function PlanChangeComposer({
             className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
           />
         </div>
+        {/* Send gains the WORD "Answer" while a question is pending — the third
+            cue, and the one that says what pressing it will do. */}
         <Button
           type="submit"
           variant="primary"
           size="sm"
           disabled={disabled || draft.trim().length === 0}
-          aria-label={tc('send')}
+          aria-label={awaitingQuestion !== null ? tc('answer') : tc('send')}
         >
           <Send className="size-4" aria-hidden="true" />
+          {awaitingQuestion !== null ? <span>{tc('answer')}</span> : null}
         </Button>
       </div>
     </form>

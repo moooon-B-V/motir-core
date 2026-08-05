@@ -9,7 +9,11 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { buildScope, MAX_SCOPE_TARGETS, type PlanChangeScope } from '@/lib/planChange/scope';
 import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
-import type { ContextualPlanResultDto, ContextualSessionResumeDto } from '@/lib/dto/planChange';
+import type {
+  ContextualPlanResultDto,
+  ContextualSessionResumeDto,
+  PlanChangeSessionDto,
+} from '@/lib/dto/planChange';
 
 // CONTEXTUAL PLANNING — the motir-core side (7.12.3 · MOTIR-909).
 //
@@ -56,6 +60,11 @@ export interface ContextualPlanRequest {
   /** The turn the user typed. For a Re-plan this IS the "reason" — the contract
    *  carries no separate reason field, by design (7.12.2). */
   prompt: string;
+  /** The turn is the REPLY to the planner's pending question (MOTIR-2226), sent
+   *  from the composer's answer bar. Carried here for the same reason the project
+   *  thread carries it: the anchored entrance renders the same rail, so a question
+   *  answered on an item's thread must read as answered there too. */
+  isAnswer?: boolean;
 }
 
 /**
@@ -125,7 +134,9 @@ export const contextualPlanningService = {
     // intent with the anchor set attached (the thread's own `targetKeys` are what
     // make the submit contextual — this service does not pass them twice).
     await planChangeSessionsService.getOrCreateForScope(pctx, scope);
-    await planChangeSessionsService.appendTurn(req.prompt, pctx, scope.scopeKey);
+    await planChangeSessionsService.appendTurn(req.prompt, pctx, scope.scopeKey, {
+      isAnswer: req.isAnswer === true,
+    });
     const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
 
     return { jobId, planId, sessionId: session.id, session };
@@ -184,6 +195,25 @@ export const contextualPlanningService = {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
     const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
     return { jobId, planId, sessionId: session.id, session };
+  },
+
+  /**
+   * Record the PLANNER's turn on the ANCHORED thread (MOTIR-2226) — the same
+   * recording the project thread does, addressed by anchor set instead of by
+   * project.
+   *
+   * It exists for one reason: this service owns scope resolution (and its view
+   * gate), so the anchored caller must not be asked to compute a scope key. Every
+   * property of the recording — idempotency per job, the job-belongs-to-this-thread
+   * check, the silent-job tolerance — belongs to `planChangeSessionsService` and is
+   * not re-implemented here.
+   */
+  async recordPlannerTurnForWorkItem(
+    req: Omit<ContextualPlanRequest, 'prompt'> & { jobId: string },
+    pctx: ProjectContext,
+  ): Promise<PlanChangeSessionDto> {
+    const scope = await resolveScope({ ...req, prompt: '' }, pctx);
+    return planChangeSessionsService.recordPlannerTurn(req.jobId, pctx, scope.scopeKey);
   },
 
   /**

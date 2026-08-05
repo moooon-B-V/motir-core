@@ -17,15 +17,23 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 const LAUNCH = parsePlanningLaunch({ mode: 'replan', from: 'project' });
 
-function turn(seq: number, body: string, role: 'user' | 'system' = 'user'): PlanChangeTurnDto {
+function turn(
+  seq: number,
+  body: string,
+  role: PlanChangeTurnDto['role'] = 'user',
+  extra: Partial<PlanChangeTurnDto> = {},
+): PlanChangeTurnDto {
   return {
     id: `t${seq}`,
     seq,
     role,
     body,
-    jobId: role === 'system' ? 'job-1' : null,
+    jobId: role === 'user' ? null : 'job-1',
+    question: null,
+    isAnswer: false,
     authorId: role === 'user' ? 'u1' : null,
     createdAt: '2026-07-27T10:00:00.000Z',
+    ...extra,
   };
 }
 
@@ -40,6 +48,7 @@ function session(turns: PlanChangeTurnDto[], targetKeys: string[] = []): PlanCha
     createdAt: '2026-07-27T09:00:00.000Z',
     updatedAt: '2026-07-27T10:00:00.000Z',
     turns,
+    workItemRefs: {},
   };
 }
 

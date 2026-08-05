@@ -295,6 +295,8 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       role: 'user' as const,
       body: `turn ${seq}`,
       jobId: null,
+      question: null,
+      isAnswer: false,
       authorId: 'u1',
       createdAt: now,
     });
