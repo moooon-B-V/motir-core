@@ -22,7 +22,9 @@ container is the _recommended_ path, not a requirement.
 > then closed the last thing that still needed a prior host login: the
 > credential mount is **optional**, `MOTIR_TOKEN` / `MOTIR_SERVER` are honoured
 > everywhere, and `motir login` runs inside the container (see
-> [the three ways](#three-ways-to-give-it-a-motir-credential)).
+> [the three ways](#three-ways-to-give-it-a-motir-credential)) — reaching the
+> **published** image only with `cli-v0.1.1`, the current release (MOTIR-2131;
+> see [Published images](#published-images)).
 
 ## Run
 
@@ -128,6 +130,27 @@ a transcription, so the registry is always the authority:
 docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 ```
 
+### Release `cli-v0.1.1`
+
+([run 30966874373](https://github.com/moooon-B-V/motir-core/actions/runs/30966874373)).
+Each row's immutable twin — `:<profile>-0.1.1` — points at the same manifest, and
+the moving `:<profile>` tags point here too: this is the current release. Every
+digest below differs from its `cli-v0.1.0` row, which is the whole point of the
+release — see [Current, and asserted to
+be](#current-and-asserted-to-be-motir-2131).
+
+| Tag                                            | Digest                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:f58990cf375dbe35c746f57e44bf47430f16089d4d21b0528f94e251358fe21a` |
+| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:aabc233887475ef147e24beb8f0703964e516087a2fc0988c7b87f470df0dfcc` |
+| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:a39149a096900db72a39bc5d012284a09e9481aade9f573a3751f6a4cdb71532` |
+| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:dda49f319f7b29b392996e0cba7ed81afa7c6018067bbce7c963e2a83b2d04a0` |
+| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:74b43a68481927a908dd0e84bb7e664d395d7bec34eea630e8667286e1caf6f4` |
+| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:f1a826c558a1eaf299b10256d7ce8250be35e7c17a648017d0b14d90fb6aec91` |
+| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:20e6ed2c3781b590a0e465e6bb7731da5d82319a2ee08affc37d6254c3eee8c0` |
+| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:1ae5866f83e9c36bfbb1ae2cd5f07dc0bbbc5013081e25cdfab2e7e8c360308b` |
+| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:f9fdbbcf3588dda3b84cb3e975f5c654d8d0e45558b0350776f73f36ccbccb41` |
+
 ### Release `cli-v0.1.0`
 
 ([run 30547054641](https://github.com/moooon-B-V/motir-core/actions/runs/30547054641)).
@@ -196,6 +219,16 @@ to log in on the host — the exact thing [`docs/cli.md`](../../../docs/cli.md)
 at all. Nothing noticed, and nothing could have: CI was green, the docs were
 accurate about `main`, and `motir auto` in a normal console worked. None of
 those consume the artifact.
+
+**`cli-v0.1.1` is the release cut to close it** ([the table
+above](#release-cli-v011)) — nine new digests, none of them equal to their
+`cli-v0.1.0` row, built from a `main` that has carried `motir login` and the
+three-tier banner since MOTIR-1877. The fix was to the published bytes, not to
+`main`, which had been right the whole time. Note what that argument rests on,
+though: it is build provenance, not an observation of the running image. Nothing
+in CI asserts the banner's text — `assert-current.mjs` compares tags to commits
+and `assert-public.mjs` asks the registry a question about access, and neither
+one reads a line of output. Someone has to run the image and look.
 
 Drift itself is expected here — [Publishing](#publishing) has no push-to-`main`
 trigger on purpose, because a `:latest` that moves on every merge is not a
