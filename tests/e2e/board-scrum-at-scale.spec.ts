@@ -392,11 +392,11 @@ test.afterAll(async () => {
 // PERSISTS the swimlane group-by on the board row (PATCH /api/board), so a test
 // that switches to Assignee would otherwise leak swimlanes into the next test —
 // whose `gotoLoadedBoard` waits on the flat board's `board` testid and times
-// out. (The kanban twin, board-at-scale.spec.ts, has exactly this leak: its
-// Done-window test fails on the first attempt in CI and only passes because the
-// retry spawns a fresh worker that re-runs beforeAll's reseed — a retry-masked
-// flake, logged as a finding. This beforeEach keeps every test here order- and
-// retry-independent instead.)
+// out. This beforeEach keeps every test here order- and retry-independent
+// instead. (The kanban twin, board-at-scale.spec.ts, HAD exactly this leak —
+// retry-masked, so CI stayed green while it failed every first attempt; it now
+// carries the same hook, under the shared-tenant contract stated there.
+// MOTIR-2199.)
 test.beforeEach(async () => {
   if (!big) return; // seam unset → the whole block is skipped
   await db.board.updateMany({
