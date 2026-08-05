@@ -33,6 +33,7 @@
 // here — so it does NOT re-assert 3.8.6's unit-level predicates.
 
 import { expect, test, type Page } from '@playwright/test';
+import { BoardSwimlaneGroupBy } from '@prisma/client';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -277,6 +278,50 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await db.$disconnect();
+});
+
+// ── THE SHARED-TENANT CONTRACT for this file (MOTIR-2199) ────────────────────
+// Seeding happens ONCE, in `beforeAll` — deliberately, because the board-shaped
+// seed is expensive and scale is this file's whole point. The cost of that
+// choice is that this file's tests share ONE mutable tenant: every setting a
+// test PERSISTS survives into its successors, because nothing resets between
+// them. So the contract here is:
+//
+//   A test may NOT depend on shared state a sibling happened to leave behind,
+//   and the READER of a shared setting establishes the value it needs — the
+//   WRITER is not required to put it back.
+//
+// This hook is the reader's half, applied once for the whole file: it restores
+// the FLAT layout on both seeded tenants' boards before every test, so each
+// test starts from the default no matter what ran before it (or whether that
+// test even reached its last line). Putting it here rather than appending a
+// `setGroupBy(page, 'None')` to each writer is what makes the file order- AND
+// retry-independent: a cleanup line at the end of a test is skipped by any
+// failure above it, and a test inserted BETWEEN two existing ones inherits
+// whatever the one above it left behind.
+//
+// The leak this closes: `setGroupBy` PATCHes /api/board, which persists
+// `board.swimlaneGroupBy` on the board ROW (it is project-scoped server state,
+// not per-session), and `gotoLoadedBoard` waits on the FLAT board's `board`
+// testid — which a swimlaned board never renders (BoardContainer renders EITHER
+// `board` OR SwimlaneBoard's `swimlane-board`). Measured before this hook
+// existed: a full `--grep board-at-scale` run failed the "Refine filter" CTA
+// test on EVERY first attempt, and CI never saw it because `retries: 1`
+// (playwright.config.ts) re-runs in a fresh worker, re-running `beforeAll`'s
+// `resetDatabase()` — the reseed erases the leak, so the retry always passes.
+// The blast radius is not one fixed test either: pairing the swimlane writer
+// directly with the Done-window test makes THAT one fail instead. Whichever
+// test happens to read the board next is the one that breaks.
+//
+// If you add a test here that persists any OTHER shared setting (board config,
+// column mapping, a saved filter, WIP limits), extend this hook rather than
+// cleaning up at the end of the writer.
+test.beforeEach(async () => {
+  if (!big || !small) return; // seam unset → the whole block is skipped
+  await db.board.updateMany({
+    where: { projectId: { in: [big.projectId, small.projectId] } },
+    data: { swimlaneGroupBy: BoardSwimlaneGroupBy.none },
+  });
 });
 
 test.describe('board-at-scale — load model (3.5.2)', () => {
