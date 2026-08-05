@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   openPlanChangeSession,
   appendPlanChangeTurn,
+  recordPlannerTurn,
   resubmitContextualPlan,
   resumeContextualSession,
   submitContextualPlan,
@@ -73,6 +74,49 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
     });
   });
 
+  it('flags a reply sent from the ANSWER BAR (MOTIR-2226)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(SESSION));
+
+    await appendPlanChangeTurn('Taking money from customers.', undefined, true);
+
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      body: 'Taking money from customers.',
+      isAnswer: true,
+    });
+  });
+
+  it('records the PLANNER’s turn for a settled job — the project thread', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(SESSION));
+
+    await expect(recordPlannerTurn('job-1', null)).resolves.toEqual(SESSION);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/planner-turn');
+    expect(init.method).toBe('POST');
+    // No anchor: the project-wide thread, addressed by the active project alone.
+    expect(JSON.parse(init.body as string)).toEqual({ jobId: 'job-1' });
+  });
+
+  it('records it on an ANCHORED thread by its anchor set', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(SESSION));
+
+    await recordPlannerTurn('job-1', { anchorId: 'wi_812', targetKeys: ['MOTIR-918'] });
+
+    // The scope key is never computed client-side — the anchor set travels and
+    // the contextual service resolves (and view-gates) it.
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      jobId: 'job-1',
+      anchorId: 'wi_812',
+      targetKeys: ['MOTIR-918'],
+    });
+  });
+
+  it('surfaces a failed recording as a typed client error', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ code: 'MOTIR_AI_UNAVAILABLE' }, 502));
+
+    await expect(recordPlannerTurn('job-1', null)).rejects.toBeInstanceOf(PlanEditsClientError);
+  });
+
   it('appends a turn as { body } to the turns endpoint', async () => {
     fetchMock.mockResolvedValue(jsonResponse(SESSION));
 
@@ -80,7 +124,12 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session/turns');
-    expect(JSON.parse(init.body as string)).toEqual({ body: 'Split the billing epic' });
+    // `isAnswer` rides on every turn (MOTIR-2226) — false unless the composer
+    // sent it from the answer bar.
+    expect(JSON.parse(init.body as string)).toEqual({
+      body: 'Split the billing epic',
+      isAnswer: false,
+    });
   });
 
   it('submits the accumulated intent and returns the shipped job id + session', async () => {
@@ -127,6 +176,7 @@ describe('planChangeClient — the MULTI-TARGET anchors (MOTIR-1491)', () => {
     expect(url).toBe('/api/work-items/wi_812/ai/plan');
     expect(JSON.parse(init.body as string)).toEqual({
       prompt: 'Expand billing.',
+      isAnswer: false,
       // The primary is NOT repeated: it travels as the path item and the service
       // adds it to the scope itself.
       targetKeys: ['MOTIR-918', 'MOTIR-922'],
@@ -138,7 +188,10 @@ describe('planChangeClient — the MULTI-TARGET anchors (MOTIR-1491)', () => {
 
     await submitContextualPlan('wi_812', 'Re-plan this story.');
 
-    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ prompt: 'Re-plan this story.' });
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      prompt: 'Re-plan this story.',
+      isAnswer: false,
+    });
   });
 
   it('a RESUBMIT re-sends to the same anchor SET — retrying must not re-aim the turn', async () => {
@@ -268,7 +321,10 @@ describe('the anchored transport — a work item’s own thread', () => {
     const [url, init] = lastCall();
     expect(url).toBe('/api/work-items/wi_123/ai/plan');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ prompt: 'Split this story.' });
+    expect(JSON.parse(init.body as string)).toEqual({
+      prompt: 'Split this story.',
+      isAnswer: false,
+    });
   });
 
   it('retries with the resubmit flag and NO prompt — nothing new is said', async () => {

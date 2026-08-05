@@ -1,4 +1,4 @@
-import { Prisma, type PlanChangeTurn } from '@prisma/client';
+import { Prisma, type PlanChangeTurn, type PlanChangeTurnRole } from '@prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_turn` table (Story 7.30 ·
@@ -12,6 +12,22 @@ export const planChangeTurnRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn> {
     return tx.planChangeTurn.create({ data });
+  },
+
+  /** The `assistant` turn a given job already produced on this session, if any —
+   *  the IDEMPOTENCY read behind "one planning job, at most one planner turn"
+   *  (MOTIR-2226). The client records the turn when its stream settles, and a
+   *  reload, a second tab or a retried read all replay that call; keying on the
+   *  job makes every replay a no-op instead of a duplicate bubble. Takes `tx`
+   *  because it guards a write and must be read UNDER the session's row lock. */
+  async findByJobIdAndRole(
+    sessionId: string,
+    jobId: string,
+    role: PlanChangeTurnRole,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn | null> {
+    return tx.planChangeTurn.findFirst({ where: { sessionId, workspaceId, jobId, role } });
   },
 
   /** The session's FULL thread in `seq` order — the ordering contract every

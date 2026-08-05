@@ -6,11 +6,13 @@ import type { PlanReviewDto } from '@/lib/dto/planReview';
 import {
   appendPlanChangeTurn,
   openPlanChangeSession,
+  recordPlannerTurn,
   resubmitContextualPlan,
   resumeContextualSession,
   submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
+import { pendingQuestion } from '@/lib/planning/planChangeThread';
 import {
   streamAugmentJob,
   streamContextualPlanJob,
@@ -358,8 +360,24 @@ export function usePlanChangeConversation({
         );
         if (failed || !mountedRef.current) return;
 
-        // SETTLED → read what the run actually PROPOSED, from its Plan. The job
-        // result is not consulted: its `planDelta` is empty by construction.
+        // SETTLED → first, let the PLANNER SPEAK (MOTIR-2226). The run's result
+        // carries the findings report it owes on every turn, and the one question
+        // it asks when the request was not determinate; recording it here is what
+        // puts either into the persisted thread. Best-effort and non-fatal: a
+        // failed recording costs the narration, never the proposals, so it must
+        // not take the run down with it.
+        let asked = false;
+        try {
+          const withTurn = await recordPlannerTurn(jobId, anchor, controller.signal);
+          if (!mountedRef.current) return;
+          asked = pendingQuestion(withTurn.turns) !== null;
+          setState((s) => ({ ...s, session: withTurn }));
+        } catch {
+          /* the run still happened; the thread simply carries no narration */
+        }
+
+        // Then read what the run actually PROPOSED, from its Plan. The job
+        // result's `planDelta` is not consulted: it is empty by construction.
         const pending = planId ? await readPendingProposal(planId, controller.signal) : null;
         if (!mountedRef.current) return;
         if (pending) {
@@ -372,11 +390,16 @@ export function usePlanChangeConversation({
           }));
         } else {
           // Nothing came back. The thread stays; the previous proposal (if any) too.
+          //
+          // A turn that ASKED proposes nothing BY DESIGN — the planner is blocked
+          // on the answer and the canvas stays untouched (design state B) — so
+          // "nothing came back to change" would be a false error on the one turn
+          // where the rail has the most to say. The question is the outcome.
           setState((s) => ({
             ...s,
             phase: s.review ? 'review' : 'idle',
             progress: null,
-            errorCode: 'EMPTY',
+            errorCode: asked ? null : 'EMPTY',
           }));
         }
       } catch (err) {
@@ -412,6 +435,14 @@ export function usePlanChangeConversation({
       const body = text.trim();
       if (!body || abortRef.current) return;
 
+      // Is this turn the REPLY to a question the planner is waiting on? Derived
+      // from the thread the user was actually looking at when they pressed the
+      // button — the same derivation the composer used to decide whether to show
+      // the answer bar, so the recorded disposition and the affordance that sent
+      // it can never disagree. (Not "did the words answer it" — that judgement is
+      // not the code's to make.)
+      const isAnswer = pendingQuestion(stateRef.current.session?.turns ?? []) !== null;
+
       // ANCHORED: appending and submitting are ONE call (MOTIR-909 resolves and
       // view-gates the anchors first, so the contract fuses them) — `run` does
       // the whole hop, and there is no separate append to fail on its own.
@@ -428,7 +459,7 @@ export function usePlanChangeConversation({
           outOfCredits: false,
         }));
         await run(anchor, (signal) =>
-          submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal),
+          submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal, isAnswer),
         );
         return;
       }
@@ -444,7 +475,7 @@ export function usePlanChangeConversation({
       }));
 
       try {
-        const session = await appendPlanChangeTurn(body, controller.signal);
+        const session = await appendPlanChangeTurn(body, controller.signal, isAnswer);
         if (!mountedRef.current) return;
         setState((s) => ({ ...s, session }));
       } catch (err) {

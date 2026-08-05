@@ -2,14 +2,21 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, RefreshCw, Sparkles } from 'lucide-react';
+import { Check, MessageCircleQuestionMark, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
+import { MarkdownView } from '@/components/ui/MarkdownView';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
-import type { PlanChangeTurnDto } from '@/lib/dto/planChange';
+import {
+  dispositionMarkerFor,
+  pendingQuestion,
+  type QuestionDisposition,
+} from '@/lib/planning/planChangeThread';
+import type { PlanChangeTurnDto, PlanChangeTurnRoleDto } from '@/lib/dto/planChange';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
@@ -98,7 +105,12 @@ export function PlanChangeRail({
   const [draft, setDraft] = useState('');
 
   const busy = state.phase === 'streaming' || state.phase === 'deciding';
-  const userTurns = (state.session?.turns ?? []).filter((turn) => turn.role === 'user');
+  const turns = state.session?.turns ?? [];
+  const userTurns = turns.filter((turn) => turn.role === 'user');
+  // AWAITING IS DERIVED FROM THE THREAD, never from local state — which is what
+  // makes a question survive a reload and still be answerable hours later. The
+  // rail, the composer and the markers all read this one derivation.
+  const question = pendingQuestion(turns);
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading';
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
@@ -110,14 +122,16 @@ export function PlanChangeRail({
   // has started the composer returns to its ordinary placeholder.
   const askingForReason =
     launch.mode === 'replan' && launch.itemKey !== null && userTurns.length === 0;
-  // The re-plan ASK wins over every other placeholder: it is a one-time prompt
-  // for the reason, and it stops the moment the conversation starts. Only then
-  // does the targeted variant apply (MOTIR-1491).
-  const composerPlaceholder = askingForReason
-    ? tc('composerPlaceholderReplan')
-    : targets.length > 0
-      ? tc('composerPlaceholderTargets')
-      : tc('composerPlaceholder');
+  // A PENDING QUESTION outranks every other placeholder — including the re-plan
+  // ask, which is itself a one-time prompt: the planner is blocked, and the one
+  // thing the composer should be asking for is the answer that unblocks it.
+  const composerPlaceholder = question
+    ? tc('composerPlaceholderAnswer')
+    : askingForReason
+      ? tc('composerPlaceholderReplan')
+      : targets.length > 0
+        ? tc('composerPlaceholderTargets')
+        : tc('composerPlaceholder');
 
   // What the THREAD is anchored at, per the server (`PlanChangeSessionDto`) —
   // not the local tray. A sent turn is scoped by the session it landed in, so
@@ -172,8 +186,16 @@ export function PlanChangeRail({
           </div>
         ) : null}
 
-        {(state.session?.turns ?? []).map((turn) => (
-          <Turn key={turn.id} turn={turn} userTurns={userTurns} targetKeys={turnTargetKeys} />
+        {turns.map((turn, i) => (
+          <Turn
+            key={turn.id}
+            turn={turn}
+            userTurns={userTurns}
+            targetKeys={turnTargetKeys}
+            workItemRefs={state.session?.workItemRefs ?? {}}
+            disposition={dispositionMarkerFor(turns, i)}
+            isPending={question?.id === turn.id}
+          />
         ))}
 
         {/* The proposal, said in words — the rail mirrors the canvas bar's counts
@@ -278,6 +300,19 @@ export function PlanChangeRail({
         placeholder={composerPlaceholder}
         autoFocus={askingForReason}
         disabled={busy || state.phase === 'loading'}
+        // The pending question travels to the composer, not to a header pill:
+        // measured at the rail's real 22rem the header row is already full, and
+        // the bar belongs beside the control whose behaviour actually changed.
+        awaitingQuestion={question?.question ?? null}
+        onSeeQuestion={() => {
+          // The pending question is the ONE element carrying this id (only one
+          // question can be pending), so a lookup is exact — and focusing it,
+          // not merely scrolling, is what makes "See it" work for a keyboard or
+          // screen-reader user rather than only for a sighted mouse.
+          const el = document.getElementById(PENDING_QUESTION_ID);
+          el?.scrollIntoView({ block: 'center' });
+          el?.focus();
+        }}
       />
     </aside>
   );
@@ -305,62 +340,168 @@ function errorKey(code: string): string {
   }
 }
 
-/** One persisted turn. A `user` turn is a bubble numbered in the thread (the
- *  second and later ones are REFINEMENTS, which is the whole point); a `system`
- *  turn is the submission MARKER — its body is the accumulated intent that went
- *  out, which is provenance, not conversation, so it renders as a quiet divider. */
-function Turn({
-  turn,
-  userTurns,
-  targetKeys,
-}: {
+interface TurnProps {
   turn: PlanChangeTurnDto;
   userTurns: PlanChangeTurnDto[];
   /** The thread's anchor set — rendered on a user turn so the reader SEES what
    *  the planner was pointed at (design panel 3). Empty on the project thread. */
   targetKeys: readonly string[];
-}) {
-  const tc = useTranslations('planningWorkspace.conversation');
-  const tt = useTranslations('planningWorkspace.targets');
+  /** Resolved `motir:` reference summaries for the whole thread — an assistant
+   *  turn's findings report renders its references as the shipped chip. */
+  workItemRefs: WorkItemRefMap;
+  /** How the question preceding this turn was disposed of, when this turn is what
+   *  disposed of it (design states C and E). Null on every other turn. */
+  disposition: QuestionDisposition | null;
+  /** This turn IS the question the thread is currently waiting on. */
+  isPending: boolean;
+}
 
-  if (turn.role === 'system') {
+/** The one pending question's DOM id — the composer's "See it" jump target.
+ *  A constant is exact because at most one question is ever pending. */
+const PENDING_QUESTION_ID = 'plan-change-pending-question';
+
+/**
+ * One persisted turn, by ROLE — a TOTAL `Record` over the role union, not a chain
+ * of branches with a fall-through (MOTIR-2226).
+ *
+ * The totality is the point, and it is a bug fix rather than a style preference.
+ * Before this card the component branched `system` → marker and fell through to a
+ * numbered USER bubble for everything else, so the very first `assistant` turn to
+ * exist would have rendered as if the person had typed it — the wrong speaker, in
+ * a thread whose entire purpose is who said what. A `Record` keyed on the union
+ * makes the next role a COMPILE error instead of a silent mis-attribution, so
+ * this cannot ship twice.
+ */
+const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.ReactNode> = {
+  // The submission MARKER — its body is the accumulated intent that went out,
+  // which is provenance, not conversation, so it renders as a quiet divider.
+  system: function SystemTurn() {
+    const tc = useTranslations('planningWorkspace.conversation');
     return (
       <p className="text-center text-xs text-(--el-text-faint)" data-testid="plan-change-marker">
         {tc('submitted')}
       </p>
     );
-  }
+  },
 
-  const n = userTurns.findIndex((u) => u.id === turn.id) + 1;
-  return (
-    <Bubble role="user" label={n > 1 ? tc('turnRefine', { n }) : tc('turn', { n })}>
-      {targetKeys.length > 0 ? (
-        <span className="mb-1 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] font-semibold tracking-wide uppercase opacity-80">
-            {tt('turnLabel', { count: targetKeys.length })}
-          </span>
-          {targetKeys.map((key) => (
-            <PlanningTargetKeyChip key={key} identifier={key} tone="on-accent" />
-          ))}
-        </span>
-      ) : null}
-      {turn.body}
-    </Bubble>
-  );
+  // The PLANNER speaking. A findings report is an ORDINARY assistant bubble —
+  // same fill, ink, avatar and width as the opener and the proposal summary,
+  // because the design's whole finding is that no new treatment is needed to read
+  // as the planner. A QUESTION is that same bubble with two token values swapped
+  // and the existing label slot filled: the distinction never rests on wording,
+  // and never on colour alone (a word, a glyph, and the composer's own change).
+  assistant: function AssistantTurn({ turn, workItemRefs, isPending }: TurnProps) {
+    const tc = useTranslations('planningWorkspace.conversation');
+    const asking = turn.question !== null;
+    return (
+      <Bubble
+        role="assistant"
+        tone={asking ? 'asking' : 'default'}
+        testId={asking ? 'plan-change-question' : 'plan-change-report'}
+        // Only the PENDING question is the "See it" target, and it is
+        // programmatically focusable so the jump lands for a keyboard user too.
+        anchorId={isPending ? PENDING_QUESTION_ID : undefined}
+        label={
+          asking ? (
+            <>
+              <MessageCircleQuestionMark className="size-3" aria-hidden="true" />
+              {tc('asking')}
+            </>
+          ) : undefined
+        }
+      >
+        {/* The shipped render path, so a report's `[KEY](motir:<id>)` references
+            become the same live `WorkItemRefChip` they are everywhere else —
+            never a second inline treatment invented for this surface. */}
+        <MarkdownView value={turn.body} workItemRefs={workItemRefs} />
+      </Bubble>
+    );
+  },
+
+  // What the person typed. The second and later ones are REFINEMENTS, which is
+  // the whole point of a thread; one sent in reply to a question is labelled as
+  // the ANSWER it is.
+  user: function UserTurn({ turn, userTurns, targetKeys, disposition }: TurnProps) {
+    const tc = useTranslations('planningWorkspace.conversation');
+    const tt = useTranslations('planningWorkspace.targets');
+    const n = userTurns.findIndex((u) => u.id === turn.id) + 1;
+    const label = turn.isAnswer
+      ? tc('turnAnswer', { n })
+      : n > 1
+        ? tc('turnRefine', { n })
+        : tc('turn', { n });
+    return (
+      <>
+        <Bubble role="user" label={label}>
+          {targetKeys.length > 0 ? (
+            <span className="mb-1 flex flex-wrap items-center gap-1">
+              <span className="text-[10px] font-semibold tracking-wide uppercase opacity-80">
+                {tt('turnLabel', { count: targetKeys.length })}
+              </span>
+              {targetKeys.map((key) => (
+                <PlanningTargetKeyChip key={key} identifier={key} tone="on-accent" />
+              ))}
+            </span>
+          ) : null}
+          {turn.body}
+        </Bubble>
+        {/* The question's disposition, in the shipped marker vocabulary. A
+            superseded question is MARKED, never dimmed, struck through or
+            removed: the transcript does not rewrite itself, and the reader has to
+            be able to see later WHY a plan rests on an assumption they never
+            confirmed. */}
+        {disposition ? (
+          <p
+            className="text-center text-xs text-(--el-text-faint)"
+            data-testid={`plan-change-${disposition}`}
+          >
+            {tc(disposition === 'answered' ? 'answeredMarker' : 'supersededMarker')}
+          </p>
+        ) : null}
+      </>
+    );
+  },
+};
+
+function Turn(props: TurnProps) {
+  const Render = TURN_RENDERERS[props.turn.role];
+  return <Render {...props} />;
 }
+
+/** The ASKING variant swaps exactly two token values on the shipped bubble — the
+ *  design's own finding, measured against the real emitted markup: the
+ *  assistant/user contrast already reads, so a question needs a tint and a label,
+ *  not a new component. Charcoal `--el-warning-text` on `--el-warning-surface` is
+ *  the tint-background recipe (finding #35), ~10:1 in both themes. */
+const BUBBLE_FILL: Record<'default' | 'asking', string> = {
+  default: 'bg-(--el-chat-bubble-ai) text-(--el-text)',
+  asking: 'bg-(--el-warning-surface) text-(--el-warning-text)',
+};
 
 function Bubble({
   role,
   label,
+  tone = 'default',
+  testId,
+  anchorId,
   children,
 }: {
   role: 'user' | 'assistant';
-  label?: string;
+  label?: React.ReactNode;
+  /** Assistant only — `asking` is the question variant (design state B). */
+  tone?: 'default' | 'asking';
+  testId?: string;
+  /** A DOM id + programmatic focusability, for a control that jumps here. */
+  anchorId?: string;
   children: React.ReactNode;
 }) {
   const isUser = role === 'user';
   return (
-    <div className={`flex items-start gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div
+      className={`flex items-start gap-2 ${isUser ? 'flex-row-reverse' : ''}`}
+      {...(testId ? { 'data-testid': testId } : {})}
+      {...(anchorId ? { id: anchorId, tabIndex: -1 } : {})}
+    >
       <span
         aria-hidden="true"
         className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
@@ -375,11 +516,11 @@ function Bubble({
         className={
           isUser
             ? 'rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)'
-            : 'rounded-(--radius-card) bg-(--el-chat-bubble-ai) px-3 py-2 text-sm text-(--el-text)'
+            : `rounded-(--radius-card) px-3 py-2 text-sm ${BUBBLE_FILL[tone]}`
         }
       >
         {label ? (
-          <span className="mb-0.5 block font-mono text-[10px] tracking-wide uppercase opacity-80">
+          <span className="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80">
             {label}
           </span>
         ) : null}

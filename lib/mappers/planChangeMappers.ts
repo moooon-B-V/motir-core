@@ -4,6 +4,7 @@ import type {
   PlanChangeTurnDto,
   PlanChangeTurnRoleDto,
 } from '@/lib/dto/planChange';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // Prisma rows → API DTOs for the plan-change conversation (Story 7.30 ·
 // MOTIR-1728). The single place the persisted enum narrows to its string union
@@ -19,6 +20,8 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     role: row.role as PlanChangeTurnRoleDto,
     body: row.body,
     jobId: row.jobId,
+    question: row.question,
+    isAnswer: row.isAnswer,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };
@@ -30,6 +33,7 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
 export function toPlanChangeSessionDto(
   row: PlanChangeSession,
   turns: PlanChangeTurn[],
+  workItemRefs: WorkItemRefMap = {},
 ): PlanChangeSessionDto {
   return {
     id: row.id,
@@ -43,5 +47,6 @@ export function toPlanChangeSessionDto(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     turns: turns.map(toPlanChangeTurnDto),
+    workItemRefs,
   };
 }

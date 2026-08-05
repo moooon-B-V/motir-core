@@ -88,9 +88,12 @@ function session(bodies: string[], targetKeys: string[] = []): PlanChangeSession
       role: 'user' as const,
       body,
       jobId: null,
+      question: null,
+      isAnswer: false,
       authorId: 'u1',
       createdAt: '2026-07-27T10:00:00.000Z',
     })),
+    workItemRefs: {},
   };
 }
 
@@ -234,6 +237,8 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
       'Expand billing.',
       ['MOTIR-918'],
       expect.anything(),
+      // MOTIR-2226: no question is pending, so the turn is not a reply.
+      false,
     );
     // One call does open-or-resume + append + submit, so neither project-thread
     // hop fires — a targeted turn must not land in the project conversation.
@@ -317,7 +322,7 @@ describe('usePlanChangeConversation — a turn', () => {
       await result.current.send('Add recurring invoices.');
     });
 
-    expect(append).toHaveBeenCalledWith('Add recurring invoices.', expect.anything());
+    expect(append).toHaveBeenCalledWith('Add recurring invoices.', expect.anything(), false);
     // The submit takes NO prompt — the server builds it from every turn in order.
     expect(submit).toHaveBeenCalledTimes(1);
     expect(result.current.state.phase).toBe('review');
@@ -670,6 +675,7 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       'Split this story.',
       [],
       expect.anything(),
+      false,
     );
     // The project thread's two-call shape is never used here.
     expect(append).not.toHaveBeenCalled();

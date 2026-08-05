@@ -80,9 +80,12 @@ function session(bodies: string[]): PlanChangeSessionDto {
       role: 'user' as const,
       body,
       jobId: null,
+      question: null,
+      isAnswer: false,
       authorId: 'u1',
       createdAt: '2026-07-27T10:00:00.000Z',
     })),
+    workItemRefs: {},
   };
 }
 

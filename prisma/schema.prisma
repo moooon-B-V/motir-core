@@ -4269,11 +4269,26 @@ model PlanChangeTurn {
   seq         Int
   role        PlanChangeTurnRole
   body        String             @db.Text
-  /// `system` submission markers only — the opaque motir-ai job token that
-  /// submission produced. Null on `user` turns.
+  /// The producing motir-ai job token — set on a `system` submission marker (the
+  /// job that submission produced) AND on an `assistant` turn (the job whose
+  /// result carried the utterance, MOTIR-2226; it is also the idempotency key
+  /// that keeps a re-read job from appending the same turn twice). Null on
+  /// `user` turns.
   jobId       String?            @map("job_id")
-  /// The author of a `user` turn (null for `system` markers, and cleared if the
-  /// author is deleted — SetNull, the session's `createdBy` semantics).
+  /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
+  /// `PlanningTurn.question`), or null when the turn only reported its findings.
+  /// It is what makes the awaiting-your-answer state DERIVABLE from the persisted
+  /// thread rather than held in client state — so re-opening the workspace hours
+  /// later comes back to the same pending question. Null on every other role.
+  question    String?            @db.Text
+  /// A `user` turn sent as the REPLY to the pending question (through the answer
+  /// bar), as opposed to one that changed the subject and SUPERSEDED it. The two
+  /// dispositions render different markers (design state C vs E), and neither may
+  /// rest on reading the words — so which affordance sent it is recorded here.
+  isAnswer    Boolean            @default(false) @map("is_answer")
+  /// The author of a `user` turn (null for `system` / `assistant` turns, and
+  /// cleared if the author is deleted — SetNull, the session's `createdBy`
+  /// semantics).
   authorId    String?            @map("author_id")
   createdAt   DateTime           @default(now()) @map("created_at")
 
@@ -4299,6 +4314,12 @@ model PlanChangeTurn {
 enum PlanChangeTurnRole {
   user
   system
+  /// The PLANNER's own turn (MOTIR-2226) — the findings report it owes on every
+  /// planning turn, plus the one clarifying question when the request was not
+  /// determinate (MOTIR-2222 produces both). A real persisted turn, not client
+  /// chrome: the thread is the record of who said what, and a question the user
+  /// has not answered has to survive a reload to be answerable at all.
+  assistant
 
   @@map("plan_change_turn_role")
 }

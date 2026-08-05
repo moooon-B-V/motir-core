@@ -96,6 +96,7 @@ const IDLE: PlanChangeConversationState = {
     createdAt: '',
     updatedAt: '',
     turns: [],
+    workItemRefs: {},
   },
   progress: null,
   review: null,

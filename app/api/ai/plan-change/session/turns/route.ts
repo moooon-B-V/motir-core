@@ -10,6 +10,11 @@ import { mapPlanChangeError, noActiveProject } from '../../_errors';
 // ACCUMULATES; it does not submit. The response is the updated session with its
 // full ordered thread.
 //
+// `isAnswer` (MOTIR-2226, optional) marks the turn as the reply to the planner's
+// pending question, which the composer sets when it sent from the answer bar. It
+// is read strictly — anything that is not `true` is `false` — because it decides
+// which disposition marker the transcript shows forever after.
+//
 // HTTP only (CLAUDE.md 4-layer): parse the body, call ONE service method, map
 // typed errors. The service owns the row lock + `seq` allocation.
 export async function POST(req: Request): Promise<Response> {
@@ -34,7 +39,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const result = await planChangeSessionsService.appendTurn(rawBody, ctx);
+    const result = await planChangeSessionsService.appendTurn(rawBody, ctx, undefined, {
+      isAnswer: (body as { isAnswer?: unknown })?.isAnswer === true,
+    });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

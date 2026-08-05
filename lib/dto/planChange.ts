@@ -1,3 +1,5 @@
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+
 // DTO types for the plan-change CONVERSATION (Story 7.30 · MOTIR-1728) — the
 // shape that crosses the API boundary. No Prisma row leaks: the
 // `PlanChangeTurnRole` enum becomes a string union and every `Date` becomes an
@@ -6,18 +8,33 @@
 /** Wire form of the Prisma `PlanChangeTurnRole` enum. `user` turns are what the
  *  person typed (and what the accumulated intent is built from); `system` turns
  *  are thread markers Motir wrote — today, "these turns were submitted", carrying
- *  the resulting job id. */
-export type PlanChangeTurnRoleDto = 'user' | 'system';
+ *  the resulting job id; `assistant` turns are the PLANNER speaking (MOTIR-2226)
+ *  — its findings report, and the one question it asks when the request was not
+ *  determinate. */
+export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
 
-/** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set only
- *  on a `system` submission marker; `authorId` only on a `user` turn (and null
- *  once that user is deleted). */
+/** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
+ *  `system` submission marker and on an `assistant` turn (the job that produced
+ *  it); `authorId` only on a `user` turn (and null once that user is deleted). */
 export interface PlanChangeTurnDto {
   id: string;
   seq: number;
   role: PlanChangeTurnRoleDto;
   body: string;
   jobId: string | null;
+  /**
+   * The ONE clarifying question an `assistant` turn asked, or null when it only
+   * reported. Null on every other role. This is what makes the awaiting state
+   * DERIVED from the thread rather than stored on the client — see
+   * `lib/planning/planChangeThread.ts`.
+   */
+  question: string | null;
+  /**
+   * A `user` turn that REPLIED to the pending question (sent through the answer
+   * bar), as opposed to one that changed the subject and superseded it. The two
+   * render different markers — design states C and E.
+   */
+  isAnswer: boolean;
   authorId: string | null;
   createdAt: string;
 }
@@ -48,6 +65,14 @@ export interface PlanChangeSessionDto {
   createdAt: string;
   updatedAt: string;
   turns: PlanChangeTurnDto[];
+  /**
+   * Resolved work-item reference summaries for the `[KEY](motir:<id>)` tokens the
+   * thread's `assistant` bodies carry (MOTIR-2226), keyed by id — the SAME map
+   * the detail page and comments thread into `renderMarkdown`, so a findings
+   * report's references render as the shipped `WorkItemRefChip` and never as a
+   * second inline treatment. Empty when nothing resolved.
+   */
+  workItemRefs: WorkItemRefMap;
 }
 
 /**

@@ -22,6 +22,13 @@ import { normalizeWorkItemRefs, parseWorkItemKeys } from '@/lib/mentions/workIte
  * `field !== undefined` "was it supplied?" distinction the update path relies
  * on). Explicit tokens and keys that don't resolve are left as-is (the pure
  * `normalizeWorkItemRefs` rules). Used inside the caller's write transaction.
+ *
+ * `tx` is OPTIONAL because the only thing this helper does against the database
+ * is a READ (key → id). A caller inside a write transaction passes its `tx` so
+ * the resolve sees the same snapshot; a caller normalizing a body BEFORE opening
+ * its transaction (the planner turn, MOTIR-2226 — whose write is a short locked
+ * append that should not also carry a lookup) omits it and reads through the
+ * singleton, exactly as the repository's own optional-`tx` read allows.
  */
 export async function normalizeBodyRefs(
   args: {
@@ -29,7 +36,7 @@ export async function normalizeBodyRefs(
     projectIdentifier: string;
     fields: ReadonlyArray<string | null | undefined>;
   },
-  tx: Prisma.TransactionClient,
+  tx?: Prisma.TransactionClient,
 ): Promise<Array<string | null | undefined>> {
   const { projectId, projectIdentifier, fields } = args;
 
