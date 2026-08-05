@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
-import { workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import { commentThreadSchema, workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
@@ -749,4 +750,153 @@ export function presentPlanSession(session: {
       createdAt: turn.createdAt,
     })),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The activity stream (11.7.7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The three views, mirroring the product's own Activity tabs. */
+export const ACTIVITY_VIEWS = ['all', 'comments', 'history'] as const;
+export type V1ActivityView = (typeof ACTIVITY_VIEWS)[number];
+
+/** Which collection an activity cursor is scoped to — ONE PER VIEW. */
+export const ACTIVITY_COLLECTION: Record<V1ActivityView, V1Collection> = {
+  all: 'workItemActivityAll',
+  comments: 'workItemActivityComments',
+  history: 'workItemActivityHistory',
+};
+
+/**
+ * ONE entry, in ONE representation, whichever view produced it.
+ *
+ * The three views are not three endpoints and not three shapes: `comments`
+ * yields only `comment` entries, `history` only `change` entries, and `all` both
+ * INTERLEAVED — so a client writes one renderer and switches on `type`, exactly
+ * as the product's own Activity section does.
+ *
+ * The comment side reuses 11.2's `commentThreadSchema` verbatim rather than
+ * declaring a second comment shape: `GET …/comments` and `?view=comments` read
+ * the same service, and one declaration is what stops them from ever disagreeing.
+ */
+export const activityEntrySchema = z.union([
+  z.object({ type: z.literal('comment'), comment: commentThreadSchema }),
+  z.object({ type: z.literal('change'), change: activityChangeSchema }),
+]);
+export type V1ActivityEntry = z.infer<typeof activityEntrySchema>;
+
+/** Map ONE history entry to the wire — field by field, never a spread. */
+export function presentActivityChange(entry: {
+  id: string;
+  changeKind: string;
+  changedAt: string;
+  actor: { userId: string; name: string | null };
+  parts: unknown[];
+}): z.infer<typeof activityChangeSchema> {
+  return {
+    id: entry.id,
+    changeKind: entry.changeKind,
+    changedAt: entry.changedAt,
+    actor: { userId: entry.actor.userId, name: entry.actor.name },
+    parts: entry.parts.map(presentActivityPart),
+  };
+}
+
+/**
+ * ONE renderable piece of a change.
+ *
+ * ⚠️ LOOSE ON PURPOSE, and this is the card's real constraint. A published
+ * client meets NEWER servers: a part kind — or a value type inside one — that
+ * this schema does not know must come back in its GENERIC form rather than fail
+ * the read, because a client that 500s on a part it has never seen cannot be
+ * fixed by upgrading the server. So an unrecognised kind is projected onto
+ * `generic`, which every client already has to render.
+ */
+function presentActivityPart(part: unknown): z.infer<typeof activityPartSchema> {
+  const p = part as Record<string, unknown>;
+  switch (p['kind']) {
+    case 'created':
+    case 'archived':
+    case 'unarchived':
+      return { kind: p['kind'] };
+    case 'field':
+      return {
+        kind: 'field',
+        field: String(p['field']),
+        from: presentActivityValue(p['from']),
+        to: presentActivityValue(p['to']),
+      };
+    case 'fieldEdited':
+      return { kind: 'fieldEdited', field: String(p['field']) };
+    case 'link':
+      return {
+        kind: 'link',
+        op: p['op'] === 'removed' ? 'removed' : 'added',
+        linkKind: String(p['linkKind']),
+        target: presentActivityValue(p['target']),
+      };
+    case 'collection':
+      return {
+        kind: 'collection',
+        field: String(p['field']),
+        op: p['op'] === 'removed' ? 'removed' : 'added',
+        items: Array.isArray(p['items']) ? p['items'].map(String) : [],
+      };
+    case 'commentDeleted':
+      return {
+        kind: 'commentDeleted',
+        author: presentActivityValue(p['author']),
+        replyCount: typeof p['replyCount'] === 'number' ? p['replyCount'] : 0,
+      };
+    default:
+      // Every unknown kind, INCLUDING the DTO's own `generic`, lands here — the
+      // one branch a client is guaranteed to be able to render.
+      return {
+        kind: 'generic',
+        key: typeof p['key'] === 'string' ? p['key'] : String(p['kind'] ?? 'unknown'),
+        from: typeof p['from'] === 'string' ? p['from'] : null,
+        to: typeof p['to'] === 'string' ? p['to'] : null,
+      };
+  }
+}
+
+/** One side of a change, in its display form — same loose contract. */
+function presentActivityValue(value: unknown): z.infer<typeof activityValueSchema> {
+  const v = (value ?? {}) as Record<string, unknown>;
+  switch (v['type']) {
+    case 'text':
+      return { type: 'text', text: String(v['text']) };
+    case 'status':
+      return {
+        type: 'status',
+        key: String(v['key']),
+        label: typeof v['label'] === 'string' ? v['label'] : null,
+      };
+    case 'user':
+      return {
+        type: 'user',
+        userId: String(v['userId']),
+        name: typeof v['name'] === 'string' ? v['name'] : null,
+      };
+    case 'date':
+      return { type: 'date', date: String(v['date']) };
+    case 'sprint':
+      return {
+        type: 'sprint',
+        sprintId: String(v['sprintId']),
+        name: typeof v['name'] === 'string' ? v['name'] : null,
+      };
+    case 'issue':
+      // §7: a work item is named by its KEY. The DTO also carries the internal
+      // `workItemId`, which is DROPPED — an identifier the read could not
+      // resolve becomes `null` rather than a cuid on the wire.
+      return {
+        type: 'issue',
+        workItemKey: typeof v['identifier'] === 'string' ? v['identifier'] : null,
+      };
+    default:
+      // An unknown value type degrades to `none`, the empty side every renderer
+      // already handles — never a validation failure.
+      return { type: 'none' };
+  }
 }

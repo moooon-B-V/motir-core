@@ -11,6 +11,8 @@ import {
   planSessionSchema,
   planSessionScopeBodySchema,
   planTurnBodySchema,
+  ACTIVITY_VIEWS,
+  activityEntrySchema,
   sessionCloseOutBodySchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
@@ -350,6 +352,68 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     errorStatuses: [402, 404, 422, 503],
   }),
+
+  // ── The activity read (Subtask 11.7.7 — MOTIR-2241) ─────────────────────
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/activity',
+    operationId: 'getWorkItemActivity',
+    summary: 'Read a work item’s activity — changes, comments, or both',
+    description:
+      'Read a work item’s activity in one of three views: `all` (default — comments and the ' +
+      'change trail interleaved in timestamp order), `comments` (the discussion), or ' +
+      '`history` (the change trail only). Every entry carries a `type` so one renderer serves ' +
+      'all three. ' +
+      'The `cursor` is OPAQUE and SCOPED TO ITS VIEW: echo it back verbatim, never construct ' +
+      'or parse one, and never hand a cursor from one view to another — that is a 422, not a ' +
+      'silent restart. A page may be SHORTER than you expect while more remains (the change ' +
+      'scan is noise-filtered and a comment page drags whole reply threads along), so walk ' +
+      'until `nextCursor` is `null`, never until a page looks short. ' +
+      '`GET /api/v1/work-items/{key}/comments` still exists and is unchanged — this view is ' +
+      'the same data through the same read, offered so one code path can walk all three.',
+    scope: 'read',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item’s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+      {
+        name: 'view',
+        in: 'query',
+        required: false,
+        description: 'Which stream to read. Defaults to `all`.',
+        schema: z.enum(ACTIVITY_VIEWS),
+      },
+      {
+        name: 'order',
+        in: 'query',
+        required: false,
+        description:
+          'Page-walk direction. Omit for each view’s shipped default — `desc` (newest first) ' +
+          'for `all` and `history`, `asc` for `comments`.',
+        schema: z.enum(['asc', 'desc']),
+      },
+      {
+        name: 'cursor',
+        in: 'query',
+        required: false,
+        description:
+          'An opaque page cursor from a previous response’s `nextCursor`. Omit for the first ' +
+          'page. Scoped to its own VIEW — one issued elsewhere is a 422, never a silent reset.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'rankedPage', item: activityEntrySchema },
+      description:
+        'One page of activity entries, with `totalCount` the number of entries in this view.',
+    },
+    errorStatuses: [404, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -361,4 +425,5 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   PlanOutcome: planOutcomeSchema,
   Plan: planSchema,
   PlanSession: planSessionSchema,
+  ActivityEntry: activityEntrySchema,
 };

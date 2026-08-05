@@ -298,6 +298,11 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // resolution fan-out, because the cost of a huge set is that fan-out.
   PLAN_CHANGE_TOO_MANY_TARGETS: 422,
 
+  // 11.7.7 (MOTIR-2241) — the activity read. Its own failure modes are the
+  // wrapper's (401/403/429), the shared cursor 422, and `WORK_ITEM_NOT_FOUND`
+  // above; the view and order parameters raise `InvalidRequestError` directly,
+  // which is already a v1 error rather than a domain one.
+
   // ⚠️ DELIBERATELY ABSENT, and this comment is the deliberation:
   //   • `MOTIR_AI_BAD_REQUEST` — motir-ai rejected a payload MOTIR-CORE built.
   //     That is our bug, not the caller's, and §4's bare 500 is exactly the

@@ -480,6 +480,16 @@ describe('every operation’s REAL response validates against its declared schem
       send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', {}),
       { projectKey: pk },
     );
+
+    // ── The activity read (Story 11.7) ──────────────────────────────────────
+    // Driven on the item that has BOTH a comment and a change trail by now, so
+    // the `all` view's union validates against real entries of both types.
+    await drive(
+      'getWorkItemActivity',
+      () => import('@/app/api/v1/work-items/[key]/activity/route'),
+      get(`/api/v1/work-items/${key}/activity`),
+      { key },
+    );
   }, 120_000);
 
   it('every driven call SUCCEEDED at the status its operation declares', () => {
