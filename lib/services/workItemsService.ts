@@ -3331,10 +3331,10 @@ export const workItemsService = {
 
   /**
    * Resolve a work item by an EXACT title + kind within a project — a MARKER
-   * lookup for a known, seed-created infra item (MOTIR-1466 — the planner-bug
-   * home story the auto-bug files under). Same tenant + browse gate as
-   * `getWorkItemByIdentifier` (cross-workspace → treated as absent). Returns
-   * `null` (not a throw) when nothing matches, so the caller can raise a
+   * lookup for a known, migration-created infra item (MOTIR-1466 / MOTIR-2201 —
+   * the planner-bug home EPIC the auto-bug files under). Same tenant + browse
+   * gate as `getWorkItemByIdentifier` (cross-workspace → treated as absent).
+   * Returns `null` (not a throw) when nothing matches, so the caller can raise a
    * marker-specific error; the repo returns the lowest-`key` match, so the
    * result is deterministic even if a stray duplicate ever exists.
    */
@@ -3350,24 +3350,10 @@ export const workItemsService = {
     return toWorkItemDto(row);
   },
 
-  /**
-   * The first child of a given kind under a parent (lowest `key`) — MOTIR-1466's
-   * planner-bug-home resolution reads the home epic's first story child as the
-   * bug parent. Same tenant + browse gate as the reads above; returns `null`
-   * (not a throw) when the parent has no such child, so the caller can raise a
-   * marker-specific error.
-   */
-  async getFirstChildOfKind(
-    projectId: string,
-    parentId: string,
-    kind: WorkItemKind,
-    ctx: ServiceContext,
-  ): Promise<WorkItemDto | null> {
-    const row = await workItemRepository.findFirstChildOfKind(parentId, kind);
-    if (!row || row.workspaceId !== ctx.workspaceId || row.projectId !== projectId) return null;
-    await projectAccessService.assertCanBrowse(row.projectId, ctx);
-    return toWorkItemDto(row);
-  },
+  // (MOTIR-2201 removed `getFirstChildOfKind` — the planner-bug-home resolution
+  // was its only caller, and reading "the first child of kind X" as if it were a
+  // stable handle is the bug that card exists to remove. The home EPIC is now
+  // the parent itself; see `lib/ai/plannerBugHome.ts`.)
 
   /**
    * Is a work item FINISHABLE? (Subtask 7.8.23) — the single-item analogue of

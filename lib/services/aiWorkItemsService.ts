@@ -4,8 +4,8 @@ import {
   isPlannerBugHomeMarker,
   PLANNER_BUG_HOME_MARKER,
   PLANNER_BUG_HOME_EPIC_TITLE,
+  PlannerBugHomeNotProvisionedError,
 } from '@/lib/ai/plannerBugHome';
-import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 
@@ -31,10 +31,10 @@ export interface FileServiceBugInput {
   descriptionMd?: string | null;
   /** Optional parent work-item key (e.g. `MOTIR-819`) in the SAME project, OR the
    *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`), which
-   *  resolves to the seeded planner-bug home story by TITLE — the reseed-durable
-   *  handle the self-learning loop targets instead of a volatile numeric key
-   *  (MOTIR-1466). When omitted, the bug is filed at project-root (a top-level
-   *  `bug` is matrix-legal). */
+   *  resolves to the planner-bug home EPIC by TITLE — the reseed-durable handle
+   *  the self-learning loop targets instead of a volatile numeric key
+   *  (MOTIR-1466; MOTIR-2201). When omitted, the bug is filed at project-root (a
+   *  top-level `bug` is matrix-legal). */
   parentKey?: string | null;
 }
 
@@ -47,24 +47,30 @@ export const aiWorkItemsService = {
     if (rawParentKey !== '') {
       if (isPlannerBugHomeMarker(rawParentKey)) {
         // MOTIR-1466 — the DRIFT-PROOF path: the config carries the marker, not a
-        // numeric key, so it never dangles across deploys. Resolve it via the home
-        // EPIC's stable title → its first story child (the actual bug parent). We
-        // key on the EPIC title, not the story's, so resolution is robust to the
-        // story's exact wording (the live home story carries a "(the 7.6.8 inward
-        // loop)" suffix the epic title does not). The home is provisioned by the
-        // `ensure_planner_bug_home` migration, browse-gated here. A missing home
-        // (meta tenant not yet backfilled) is a 404 — same shape the route already
-        // maps for an unknown parentKey.
-        const epic = await workItemsService.getWorkItemByProjectKindAndTitle(
+        // numeric key, so it never dangles across deploys. MOTIR-2201 — ONE hop:
+        // the home EPIC, found by its stable title, IS the bug parent (`epic →
+        // bug` is matrix-legal, and it is where the live tenant's auto-filed bugs
+        // already sit). It used to take a second hop to the epic's first `story`
+        // CHILD; that read of mutable structure broke the moment the live story
+        // was re-parented, and an epic — root-only in the kind-parent matrix —
+        // cannot be moved out from under the marker the same way. Browse-gated
+        // here. A missing home is a server invariant breach, not a caller error:
+        // logged + 500 (see below), never a quiet 404 the filing path swallows.
+        const home = await workItemsService.getWorkItemByProjectKindAndTitle(
           project.id,
           'epic',
           PLANNER_BUG_HOME_EPIC_TITLE,
           ctx,
         );
-        const home = epic
-          ? await workItemsService.getFirstChildOfKind(project.id, epic.id, 'story', ctx)
-          : null;
-        if (!home) throw new WorkItemNotFoundError(PLANNER_BUG_HOME_MARKER);
+        if (!home) {
+          console.error('[aiWorkItemsService] the planner-bug home epic is missing', {
+            projectKey: input.projectKey,
+            projectId: project.id,
+            marker: PLANNER_BUG_HOME_MARKER,
+            expectedEpicTitle: PLANNER_BUG_HOME_EPIC_TITLE,
+          });
+          throw new PlannerBugHomeNotProvisionedError(input.projectKey);
+        }
         parentId = home.id;
       } else {
         // A literal `MOTIR-<n>` identifier. The parent must live in the SAME
