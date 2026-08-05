@@ -572,6 +572,27 @@ export function presentSessionCloseOut(result: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type V1PlanOutcome = z.infer<typeof planOutcomeSchema>;
+
+/**
+ * Turn the page's resolved references into the `keyOfId` {@link presentPlan}
+ * takes.
+ *
+ * A tiny function rather than a closure in the route, because its THREE states
+ * are the whole §7 story and each deserves a test: an id the read returned
+ * nothing for (deleted, or cross-workspace), one it returned as NOT accessible
+ * (it exists, in a project this caller may not browse), and one it resolved. The
+ * first two both become `undefined` → `null` on the wire; neither ever leaks the
+ * cuid, and the second is the arm a route-level closure would leave untested.
+ */
+export function planTargetKeyResolver(
+  refs: Readonly<Record<string, { accessible: boolean; identifier?: string }>>,
+): (id: string) => string | undefined {
+  return (id) => {
+    const ref = refs[id];
+    if (ref === undefined || !ref.accessible) return undefined;
+    return ref.identifier;
+  };
+}
 export type V1Plan = z.infer<typeof planSchema>;
 
 /** The job handle both 202 endpoints return. */

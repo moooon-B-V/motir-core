@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
-import { presentPlan } from '@/lib/api/v1/workLoop/schema';
+import { planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -34,10 +34,5 @@ export const GET = withV1Route<{ planId: string }>({ scope: 'read' }, async (ctx
     plan.projectId,
     ctx.service,
   );
-  const keyOfId = (id: string): string | undefined => {
-    const ref = refs[id];
-    return ref?.accessible === true ? ref.identifier : undefined;
-  };
-
-  return NextResponse.json(presentPlan(plan, keyOfId));
+  return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs)));
 });
