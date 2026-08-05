@@ -7,6 +7,7 @@ import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { startMcpHttpServer, type McpTestServer } from '../../helpers/mcpHttpServer';
 import { createV1Caller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
 // END-TO-END CONFORMANCE for `/api/v1` (Story 11.1 · Subtask 11.1.6 —
 // MOTIR-1862). The API is driven as the client it is built for: something
@@ -194,8 +195,16 @@ describe('/api/v1 conformance — the documented client journey, over a real soc
   // ── 8. Exhaust the budget → 429 with a usable reset ─────────────────────
   it('exhausts the budget and returns a 429 whose reset a client can wait for', async () => {
     process.env['MOTIR_API_V1_RATE_LIMIT'] = '3';
-    process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'] = '60000';
+    process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
+
+    // MOTIR-2224. The four calls below read one ACCUMULATED count, so a
+    // fixed-window boundary falling between them resets it and serves the
+    // fourth a 200 instead of the 429 asserted here — the defect MOTIR-2101
+    // fixed in `rate-limit.test.ts`. This site was missed by both sweeps
+    // because it sets the env directly instead of through a `budget()` helper,
+    // which is why the guard now keys on the ARITHMETIC, not on the helper.
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     const successes = [
       await call('/api/v1/me', caller.token),
@@ -219,7 +228,7 @@ describe('/api/v1 conformance — the documented client journey, over a real soc
     // window it advertises rather than an epoch or a millisecond value.
     const nowSeconds = Math.floor(Date.now() / 1000);
     expect(reset).toBeGreaterThan(nowSeconds - 1);
-    expect(reset).toBeLessThanOrEqual(nowSeconds + 60);
+    expect(reset).toBeLessThanOrEqual(nowSeconds + ALIGNED_WINDOW_MS / 1000 + 1);
     await expect(refused.json()).resolves.toMatchObject({ code: 'RATE_LIMIT_EXCEEDED' });
   });
 });

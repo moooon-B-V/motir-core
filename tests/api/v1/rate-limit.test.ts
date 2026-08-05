@@ -12,6 +12,7 @@ import {
 } from '@/lib/api/v1/rateLimit';
 import { createV1Caller, withTokenFor } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
 // Per-token rate limiting for `/api/v1` (Story 11.1 · Subtask 11.1.4 —
 // MOTIR-1860). Real Postgres, real PATs, the real wrapper.
@@ -99,8 +100,9 @@ describe('rate limiting — the wrapper', () => {
   });
 
   it('counts down and then returns 429 with the envelope and the headers', async () => {
-    budget(3, 60_000);
+    budget(3, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     const remaining: Array<string | null> = [];
     for (let i = 0; i < 3; i++) {
@@ -126,8 +128,9 @@ describe('rate limiting — the wrapper', () => {
   // read-compare-write implementation; simultaneous requests do not.
   it('fires N SIMULTANEOUS requests against a budget of N−1 and refuses exactly one', async () => {
     const N = 12;
-    budget(N - 1, 60_000);
+    budget(N - 1, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     const responses = await Promise.all(Array.from({ length: N }, () => GET(req(caller.headers))));
     const statuses = responses.map((r) => r.status);
@@ -137,10 +140,11 @@ describe('rate limiting — the wrapper', () => {
   });
 
   it('gives two tokens of the SAME user independent budgets', async () => {
-    budget(2, 60_000);
+    budget(2, ALIGNED_WINDOW_MS);
     const first = await createV1Caller();
     // Same user, same workspace — only the token differs.
     const second = await withTokenFor(first.user, first.workspace, { label: 'second' });
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     // Spend the first token's whole budget.
     expect((await GET(req(first.headers))).status).toBe(200);
@@ -151,25 +155,18 @@ describe('rate limiting — the wrapper', () => {
     expect((await GET(req(second.headers))).status).toBe(200);
   });
 
-  // ── Why this window is SECONDS, and why the pair starts on a boundary ──────
+  // ── Why this test gets a window of its OWN ─────────────────────────────────
   // MOTIR-2101. This test used `budget(1, 120)` and flaked in CI three times in
   // one day (`expected 200 to be 429`), on three PRs that touched no API, route
-  // or limiter file. The limiter's window is a FIXED GRID aligned to the epoch
-  // — `windowStart = Math.floor(now / windowMs) * windowMs` — NOT a window that
-  // opens at the first request. So the pair below is refused only if no grid
-  // boundary falls BETWEEN the two calls, and the odds of one falling there are
-  // roughly (gap between the calls / windowMs). Each call runs the real route
-  // handler against real Postgres, so that gap is milliseconds even when
-  // nothing is wrong: at 120 ms a mere 8 ms gap refuses nothing whenever the
-  // pair happens to start in the last 8 ms of a cell. The failure never needed
-  // a 120 ms stall — only unlucky phase, which is why re-running "fixed" it.
+  // or limiter file — the epoch-aligned-grid mechanism now written up once in
+  // `tests/helpers/rateLimitWindow.ts`, which every accumulating test in these
+  // suites aligns against.
   //
-  // Widening the window alone only makes the flake rarer, never impossible, so
-  // this does BOTH:
-  //   1. waits for a grid boundary before the pair, handing it the WHOLE window
-  //      instead of whatever was left of a randomly-phased one, and
-  //   2. sizes that window in seconds, past any plausible round-trip.
-  // Both requests would now have to be ~2 s apart to cross a boundary.
+  // This one alone does NOT reuse `ALIGNED_WINDOW_MS`, because it has the
+  // opposite requirement to its siblings: it must WAIT OUT a whole rollover, so
+  // its window has to stay short enough to sit through. The siblings only have
+  // to OUTLAST a handful of requests, and pay for the alignment in proportion
+  // to the window they pick. Two different constraints, two constants.
   //
   // ⚠️ Do NOT "optimise" this back down to milliseconds — that is the exact
   // change that produced the flake. The added wall clock is ~2 s: the rollover
@@ -177,11 +174,6 @@ describe('rate limiting — the wrapper', () => {
   // as the window actually has left, and the boundary wait replaces time the
   // window was going to consume anyway.
   const ROLLOVER_WINDOW_MS = 2_000;
-
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  /** Sleep to just past the next fixed-window boundary of `windowMs`. */
-  const waitForWindowBoundary = (windowMs: number) => sleep(windowMs - (Date.now() % windowMs) + 5);
 
   it('resets the budget when the window rolls over', async () => {
     budget(1, ROLLOVER_WINDOW_MS);
@@ -226,9 +218,10 @@ describe('rate limiting — the wrapper', () => {
   // The limiter is a property of the WRAPPER, so a route added later cannot
   // forget to opt in — this fixture route contains no limiter code at all.
   it('limits a brand-new route that adds no limiter code of its own', async () => {
-    budget(1, 60_000);
+    budget(1, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
     const newRoute = withV1Route({ scope: 'read' }, async () => NextResponse.json({ ok: true }));
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     expect((await newRoute(req(caller.headers))).status).toBe(200);
     expect((await newRoute(req(caller.headers))).status).toBe(429);
@@ -253,8 +246,9 @@ describe('rate limiting — the wrapper', () => {
   // The budget belongs to the credential, so a request we never authenticated
   // must not be able to spend one. (MOTIR-1861 revisits this seam explicitly.)
   it('does NOT spend budget on an unauthenticated request', async () => {
-    budget(2, 60_000);
+    budget(2, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     for (let i = 0; i < 5; i++) {
       expect((await GET(new Request(ME))).status).toBe(401);
