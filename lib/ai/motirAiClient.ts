@@ -103,38 +103,35 @@ function describe(err: unknown): string {
 // invocation kill it could not distinguish from a crashed app.
 //
 // The deadline bounds TIME-TO-RESPONSE-HEADERS, not body consumption: the timer
-// is cleared the moment `fetch` resolves. So it covers connect + request-send
-// (including a multi-megabyte tarball upload) + the server's think time, while
-// leaving a long-lived response body — `streamJob`'s SSE stream — free to run
-// as long as it needs. A stream that never connects still fails fast.
+// is cleared the moment `fetch` resolves. So it covers connect + request-send +
+// the server's think time, while leaving a long-lived response body —
+// `streamJob`'s SSE stream — free to run as long as it needs. A stream that
+// never connects still fails fast.
+//
+// It is now the ONLY deadline on this boundary. The second, much longer one
+// existed for the tarball-upload call, which shipped a whole repo and waited for
+// the graph build; that call is gone (MOTIR-2138) and every remaining method is
+// a JSON request whose answer is either fast or broken. A NEW slow call does not
+// get an exemption here — it gets a job.
 export const MOTIR_AI_REQUEST_TIMEOUT_MS = 30_000;
-
-// The code-graph upload is the one call that is legitimately slow: it ships a
-// whole repo tarball and motir-ai answers only once the graph is built, on a
-// scale-to-zero machine whose cold start measured ~23s (2026-08-02). It gets a
-// much larger deadline — still well inside `/api/inngest`'s `maxDuration`, so a
-// hang surfaces as a typed error rather than as an invocation kill.
-export const MOTIR_AI_INDEX_TIMEOUT_MS = 180_000;
 
 /**
  * `fetch` with a deadline, mapping BOTH a transport failure and a timeout to
  * `MotirAiUnavailableError` — the single typed error every caller (and every
  * job retry budget) already understands.
  */
-async function aiFetch(
-  input: string,
-  init: RequestInit,
-  timeoutMs: number = MOTIR_AI_REQUEST_TIMEOUT_MS,
-): Promise<Response> {
+async function aiFetch(input: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), MOTIR_AI_REQUEST_TIMEOUT_MS);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (err) {
     // The abort is OURS, so report the deadline rather than the opaque
     // "This operation was aborted" the runtime throws.
     if (controller.signal.aborted) {
-      throw new MotirAiUnavailableError(`motir-ai did not respond within ${timeoutMs}ms`);
+      throw new MotirAiUnavailableError(
+        `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
+      );
     }
     throw new MotirAiUnavailableError(describe(err));
   } finally {
@@ -588,18 +585,6 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   return (await res.json()) as RawConventionSurface;
 }
 
-// The motir-ai code-graph index response (MOTIR-1500) — a summary of what the
-// index run produced for one project's code-graph store. Read only for the
-// job-run ledger / logging; the durable effect is on the motir-ai side.
-export interface CodeGraphIndexResult {
-  status: string;
-  repoRef: string;
-  filesIndexed: number;
-  nodesChanged: number;
-  edgesChanged: number;
-  commitSha: string;
-}
-
 // The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai
 // (MOTIR-1989 / MOTIR-1986). `credential` is OPAQUE to motir-core: motir-ai signs
 // it and motir-ai verifies it, and nothing here parses, inspects or re-signs it.
@@ -640,8 +625,8 @@ export interface CodeGraphRunCredential {
  * The `(org, workspace, project)` triple find-or-creates the `AiProject`, exactly
  * as a job submit does. A non-2xx maps through the §5 problem+json taxonomy to a
  * typed error; a motir-ai that never answers becomes `MotirAiUnavailableError`
- * under the standard deadline. It is a small JSON round trip, so it takes the
- * ORDINARY timeout, never the index upload's long one.
+ * under the standard deadline — which since MOTIR-2138 is the only one this
+ * boundary has. It is a small JSON round trip, as every method here now is.
  */
 export async function mintCodeGraphRunCredential(input: {
   coreOrganizationId: string;
@@ -690,59 +675,24 @@ export async function mintCodeGraphRunCredential(input: {
   return { credential: body.credential, expiresAt: body.expiresAt };
 }
 
-// POST /v1/code-graph/index — hand a repo's raw gzipped-tarball BYTES to motir-ai
-// to build/refresh a project's code graph (MOTIR-1500, the producer half). This
-// is the ONE binary method on the boundary: unlike every JSON method above, the
-// body is the tarball itself (`content-type: application/gzip`, NOT a JSON
-// envelope), and the tenant tuple + repo ref ride as `x-core-*` / `x-repo-ref`
-// headers. The GitHub installation token + the tarball fetch stay in motir-core;
-// motir-ai receives BYTES, never a host credential (the open-core invariant). The
-// caller has already resolved the tenant and minted the token. A transport
-// failure / non-2xx (problem+json) maps to a typed error the caller's retry
-// budget absorbs — as does a motir-ai that never answers, under this call's own
-// longer `MOTIR_AI_INDEX_TIMEOUT_MS` deadline (MOTIR-1974).
+// ⚠️ THE BYTE-UPLOAD METHOD IS GONE, AND MUST NOT COME BACK (MOTIR-2138). This
+// client used to carry the boundary's ONE binary method — a POST of a repo's raw
+// gzipped tarball to motir-ai's ingest route (MOTIR-1500), under a 180 s deadline
+// of its own — and MOTIR-2027 / MOTIR-2057 moved BOTH code-graph jobs off it onto
+// the container fleet without removing it. It then sat here for weeks with no
+// caller: exported, tested, and one import away from re-creating the defect
+// MOTIR-2057 fixed — `motir-core`'s whole-tree parse does not fit in 180 s, so
+// the abandoned path failed ~68% of refreshes for three days before anyone
+// connected the symptom to it.
 //
-// ⚠️ NOTHING IN THE APP CALLS THIS ANY MORE, AND ADOPTING IT IS A REGRESSION
-// (MOTIR-2057). Both code-graph jobs build on the container fleet now, so the
-// bytes never enter a Vercel function; this remains only because motir-ai's
-// ingest ROUTE remains — retiring it is a separate decision
-// (`docs/decisions/code-graph-index-fleet.md` §11) — and because it is the
-// boundary's only binary method, whose contract tests document that shape. A new
-// caller here re-creates the exact defect MOTIR-2057 fixed: a whole-tree parse
-// bounded by a 180 s client deadline that the largest repo cannot meet.
-export async function indexCodeGraph(input: {
-  coreOrganizationId: string;
-  coreWorkspaceId: string;
-  coreProjectId: string;
-  repoRef: string;
-  bytes: ArrayBuffer | Uint8Array;
-}): Promise<CodeGraphIndexResult> {
-  const { url, serviceToken } = config();
-  // Normalize to a Buffer so `fetch` sends the raw bytes verbatim (never a JSON
-  // stringify). Buffer.from(Uint8Array) copies; Buffer.from(ArrayBuffer) via a
-  // Uint8Array view — either way the exact tarball bytes cross the wire.
-  const body = Buffer.from(
-    input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes),
-  );
-  const res = await aiFetch(
-    `${url}/v1/code-graph/index`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${serviceToken}`,
-        'content-type': 'application/gzip',
-        'x-core-organization-id': input.coreOrganizationId,
-        'x-core-workspace-id': input.coreWorkspaceId,
-        'x-core-project-id': input.coreProjectId,
-        'x-repo-ref': input.repoRef,
-      },
-      body,
-    },
-    MOTIR_AI_INDEX_TIMEOUT_MS,
-  );
-  if (!res.ok) throw errorFromProblem(await readProblem(res));
-  return (await res.json()) as CodeGraphIndexResult;
-}
+// Anything that wants a graph built dispatches a CONTAINER: the pre-signed
+// tarball URL is resolved above (`mintCodeGraphRunCredential` +
+// `codeGraphIndexDispatchService` in `lib/jobs/indexFleetSteps.ts`) and the
+// container fetches the repo itself, so the bytes never enter a Vercel function.
+// This boundary is JSON-only, and every method on it now rides the single
+// `MOTIR_AI_REQUEST_TIMEOUT_MS` deadline. Retiring the motir-ai ROUTE this used
+// to call is MOTIR-2139, in the other repo
+// (`docs/decisions/code-graph-index-fleet.md` §11).
 
 // GET /v1/jobs/:id/stream — yield SSE frames (status / done / error) as they
 // arrive; the generator ends when the stream closes (motir-ai closes it on a

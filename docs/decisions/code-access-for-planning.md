@@ -55,6 +55,23 @@ of a repo's source. Its shape is the point:
 The closed layer therefore already ingests code. What it does not ingest — and what
 887 assumed — is a _second_, _client-supplied_, _request-scoped_ path.
 
+> **SUPERSEDED IN MECHANISM, NOT IN CONCLUSION (2026-08-05, MOTIR-2138).** The bullets
+> above describe the door as it stood at MOTIR-1500 and are kept because the decision they
+> support was reasoned from them. **`motir-core` no longer POSTs bytes to motir-ai** — the
+> upload client is deleted, and this repo has no method that can. Since MOTIR-2027 /
+> MOTIR-2057 both code-graph jobs dispatch a CONTAINER (`docs/decisions/code-graph-index-fleet.md`):
+> `motir-core` resolves a pre-signed tarball URL and mints a run-scoped credential
+> (`mintCodeGraphRunCredential`), and the container fetches the repo and builds the graph
+> itself. The ingest route survives on the motir-ai side with no caller anywhere; deleting
+> it is MOTIR-2139.
+>
+> Every property the decision leans on is unchanged: the channel is still service-auth
+> gated and unreachable from a client, motir-ai still never receives a host credential,
+> the ingress is still ONE door, and the derived index is still durable. So the answer to
+> 887 stands — what moved is which process reads the bytes, not whether a second,
+> client-supplied path exists. It still does not. Point 5 of the decision below should now
+> be read as naming the FLEET dispatch, not the byte upload, as the extension point.
+
 ## Decision
 
 **NO. The closed AI layer does not ingest a CLI-uploaded, request-scoped code bundle.

@@ -109,14 +109,6 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     });
 
     const fetchMock = stubGithubTarball();
-    const indexSpy = vi.spyOn(motirAiClient, 'indexCodeGraph').mockResolvedValue({
-      status: 'ok',
-      repoRef: 'moooon/acme',
-      filesIndexed: 3,
-      nodesChanged: 5,
-      edgesChanged: 7,
-      commitSha: 'abc',
-    });
 
     const input = {
       installationId: 'inst-cg',
@@ -139,7 +131,6 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     });
     expect(target.indexed && target.projectIds).toHaveLength(2);
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
-    expect(indexSpy).not.toHaveBeenCalled();
 
     // ⚠️ AND THERE IS NO PHASE 2 IN THIS SERVICE ANY MORE (MOTIR-2057). It owned
     // `indexRepoIntoProject` — one project's tarball fetch + bytes upload — which
@@ -150,7 +141,10 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     // `motir-core`'s refreshes. Building now happens in a container, dispatched
     // by `codeGraphIndexDispatchService` from `lib/jobs/indexFleetSteps.ts`.
     expect('indexRepoIntoProject' in codeGraphIndexService).toBe(false);
-    expect(indexSpy).not.toHaveBeenCalled();
+    // The upload it used to drive is gone too (MOTIR-2138), so "never called"
+    // has become "cannot be called" — there is no byte-upload method left on the
+    // motir-ai client for a future phase 2 to reach for.
+    expect((motirAiClient as unknown as Record<string, unknown>)['indexCodeGraph']).toBeUndefined();
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
   });
 
@@ -177,7 +171,6 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     await db.project.deleteMany({ where: { workspaceId: workspace.id } });
 
     const fetchMock = stubGithubTarball();
-    const indexSpy = vi.spyOn(motirAiClient, 'indexCodeGraph');
 
     const res = await codeGraphIndexService.resolveIndexTarget({
       installationId: 'inst-empty',
@@ -188,9 +181,10 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     });
 
     expect(res).toEqual({ indexed: false, reason: 'no_projects' });
-    // Never fetched a tarball, never called motir-ai.
+    // Never fetched a tarball, and there is no motir-ai upload left to call
+    // (MOTIR-2138).
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
-    expect(indexSpy).not.toHaveBeenCalled();
+    expect((motirAiClient as unknown as Record<string, unknown>)['indexCodeGraph']).toBeUndefined();
   });
 
   it('no-ops when the installation is gone', async () => {

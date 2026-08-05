@@ -253,8 +253,8 @@ export const codeGraphIndexService = {
 
   // ⚠️ PHASE 2 IS NOT HERE ANY MORE, AND MUST NOT COME BACK (MOTIR-2057). This
   // service used to own `indexRepoIntoProject` — fetch the repo's tarball into
-  // this process, POST the bytes to motir-ai under
-  // `MOTIR_AI_INDEX_TIMEOUT_MS` — and MOTIR-2027 left it in place for
+  // this process, POST the bytes to motir-ai under a 180 s client deadline — and
+  // MOTIR-2027 left it in place for
   // `system.code-graph-refresh` after moving first-index to the container fleet.
   // Production then ran the abandoned path for weeks at a ~68% failure rate:
   // `motir-core`'s whole-tree parse does not fit in 180 s, and its retries

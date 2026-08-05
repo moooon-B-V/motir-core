@@ -351,8 +351,9 @@ invocation, and that arrives as a bare `FUNCTION_INVOCATION_TIMEOUT` 504 with no
 step output — indistinguishable from a crashed app, and nothing a retry budget
 can reason about. A bounded call fails as a typed error instead, INSIDE the
 budget, and retries meaningfully. The deadlines in play:
-`MOTIR_AI_REQUEST_TIMEOUT_MS` (30s) and `MOTIR_AI_INDEX_TIMEOUT_MS` (180s) in
-`lib/ai/motirAiClient.ts`, `REPO_TARBALL_TIMEOUT_MS` (60s) in
+`MOTIR_AI_REQUEST_TIMEOUT_MS` (30s) in `lib/ai/motirAiClient.ts` — the only one
+left on that boundary since the 180s tarball-upload deadline went with the
+upload client itself (MOTIR-2138) — `REPO_TARBALL_TIMEOUT_MS` (60s) in
 `lib/git/provider.ts`, `RUNNER_JIT_REQUEST_TIMEOUT_MS` (15s) in
 `lib/github/runnerJitConfig.ts`, and `ORCHESTRATOR_REQUEST_TIMEOUT_MS` (30s) in
 `lib/orchestrator/errors.ts`. **Their sum along the slowest step must stay under

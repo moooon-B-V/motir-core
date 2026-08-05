@@ -19,8 +19,8 @@ import type { CodeGraphRefreshData } from '../types';
 // WHY IT MOVED (MOTIR-2057). MOTIR-1981 moved `system.code-graph-index` onto the
 // fleet and left this job — architecturally the same work — on the
 // serverless→HTTP path it was retiring: fetch the whole tarball into the Vercel
-// function, POST the bytes to motir-ai, all under a 180 s
-// `MOTIR_AI_INDEX_TIMEOUT_MS` client deadline. `motir-core`'s own whole-tree
+// function, POST the bytes to motir-ai, all under a 180 s client deadline (the
+// upload client that carried it is itself deleted — MOTIR-2138). `motir-core`'s own whole-tree
 // parse does not fit in 180 s, so its refresh failed DETERMINISTICALLY, and its
 // five idempotent retries then queued against motir-ai's single 1-permit parse
 // gate and starved every other repo's refresh — a ~68% failure rate for three
