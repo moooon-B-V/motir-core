@@ -615,6 +615,15 @@ export default defineConfig({
         'app/api/v1/sprints/[sprintId]/start/route.ts',
         'app/api/v1/sprints/[sprintId]/complete/route.ts',
         'app/api/v1/sprints/[sprintId]/work-items/route.ts',
+        // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph OFFBOARDING
+        // QUEUE (`docs/decisions/code-graph-index-fleet.md` §14). Gated because
+        // the value it protects is a promise the product states in its own copy:
+        // a 30-day retention window on customer-derived data. An untested branch
+        // here is a graph retained past a window the dialogs claim, or one
+        // removed inside a grace period the user thought they had.
+        'lib/codeGraph/offboarding.ts',
+        'lib/repositories/codeGraphOffboardingRepository.ts',
+        'lib/services/codeGraphOffboardingService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -629,6 +638,14 @@ export default defineConfig({
         'lib/api/v1/rateLimit.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/me/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/workspaces/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph offboarding queue.
+        'lib/codeGraph/offboarding.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/codeGraphOffboardingRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/codeGraphOffboardingService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.3 · Subtask 11.3.10 — the planning resources.
         'lib/api/v1/projects/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/sprints/schema.ts': { branches: 90, functions: 90, lines: 90 },

@@ -34,6 +34,7 @@ import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ProjectDTO } from '@/lib/dto/projects';
@@ -403,6 +404,29 @@ export const projectsService = {
     await projectRunnerGroupService.deleteQuietly({
       projectId: input.projectId,
       workspaceId: input.workspaceId,
+    });
+
+    // POST-COMMIT, BEST-EFFORT — enqueue the project's derived CODE GRAPH for
+    // removal after the retention window (MOTIR-2166 ·
+    // `docs/decisions/code-graph-index-fleet.md` §14.3). Archive is the trigger
+    // for the same reason it is the runner-group trigger above: it is this
+    // product's terminal project lifecycle action, and there is no hard delete to
+    // hang one on.
+    //
+    // WHOLE PROJECT, no `repoRefs` — the graph set is enumerated on motir-ai's
+    // side from its own coordination rows, not from this workspace's connected
+    // repos. That difference is load-bearing: §14.1's finding is that the
+    // inventory here can be gone while the artifacts remain, so enumerating
+    // locally would silently skip exactly the orphans the decision is about.
+    //
+    // WINDOWED, not immediate: the project row survives an archive, so the scope
+    // stays readable and the removal is reversible for 30 days. Quiet by
+    // contract — the project IS archived, and failing that because a queue write
+    // did not land would report a false failure for work the database kept.
+    await codeGraphOffboardingService.enqueueQuietly({
+      coreWorkspaceId: input.workspaceId,
+      coreProjectIds: [input.projectId],
+      reason: 'project_archived',
     });
   },
 

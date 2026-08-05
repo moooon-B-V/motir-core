@@ -5474,3 +5474,76 @@ enum ProjectRepoOwnership {
 
   @@map("project_repo_ownership")
 }
+
+/// THE CODE-GRAPH OFFBOARDING QUEUE (MOTIR-2166 ·
+/// `docs/decisions/code-graph-index-fleet.md` §14). One pending removal of a
+/// tenant's derived code graph: motir-core's four lifecycle triggers enqueue,
+/// `system.code-graph-offboard-sweep` drains, and motir-ai's
+/// `POST /v1/code-graph/offboard` performs the three deletions.
+///
+/// **Why a table rather than the `deleteQuietly` precedent (§14.5).**
+/// `projectsService.archiveProject` already fires a post-commit, best-effort
+/// external cleanup at a runner group, and that is the right SHAPE — outside the
+/// transaction, never failing the user's action. It is the wrong MECHANISM twice:
+/// a retention WINDOW cannot be implemented by a call that happens now (deferral
+/// needs stored state), and a dropped `deleteQuietly` leaves a stale access list
+/// somebody tidies later, while a dropped call here leaves customer-derived data
+/// retained forever underneath a promise that it was not.
+///
+/// ⚠️ **THE ABSENCE OF A FOREIGN KEY IS THE FEATURE — do not "fix" it.** This row
+/// must OUTLIVE the workspace and project it names, because the workspace-delete
+/// arm is precisely the case where everything else about that tenant is gone. An
+/// FK to `workspace` or `project` would cascade the row away at the exact moment
+/// it becomes the only record that anything needs removing — reproducing, one
+/// repo over, the defect §14.1 is about: the `AiProject` FK cascade destroys the
+/// `CodeRepo` rows that are the only inventory of which snapshots exist, turning
+/// retained data into UNREFERENCED retained data. `FleetInFlightSlot` carries the
+/// same reasoning for the same reason ("a slot must survive the deletion of
+/// whatever it pointed at"). This is the rare place where a reviewer's correct
+/// instinct — every id column should be a relation — is the bug.
+model CodeGraphOffboarding {
+  id String @id @default(cuid())
+
+  /// The tenant coordinates motir-ai resolves its `AiProject` by — the same pair
+  /// every other core→ai call carries. Deliberately NOT relations (see above):
+  /// they are a NAME for something that may already be deleted, not a pointer to
+  /// something that must still exist.
+  coreWorkspaceId String @map("core_workspace_id")
+  coreProjectId   String @map("core_project_id")
+
+  /// WHICH repo's graph — `owner/name`, or {@link OFFBOARD_ALL_REPOS} (`*`) for
+  /// every repo of the project (the project-archive and workspace-delete arms of
+  /// §14.3, which motir-ai serves by OMITTING `repoRef`).
+  ///
+  /// A SENTINEL rather than NULL, and that is load-bearing rather than lazy:
+  /// Postgres treats NULLs as distinct in a unique index, so a nullable column
+  /// would let two project-wide rows for the same project both insert, and Prisma
+  /// cannot express a null component in the compound-unique `where` an upsert
+  /// needs. The sentinel is what makes "enqueue is an upsert" — §14's own design
+  /// — actually hold. `*` can never collide with a real value: a `repoRef` is
+  /// always `owner/name`, and no host permits `*` in either segment.
+  repoRef String @map("repo_ref")
+
+  /// WHEN the removal becomes due. `now + CODE_GRAPH_RETENTION_WINDOW` for the
+  /// three windowed triggers; `now` for a workspace delete, which has no window
+  /// because a hard delete leaves no surface to undo into (§14.3 — "a grace
+  /// period the user cannot reach is not a grace period").
+  dueAt DateTime @map("due_at")
+
+  /// Which trigger enqueued this — a `CodeGraphOffboardReason`
+  /// (`lib/codeGraph/offboarding.ts`). TEXT rather than an enum for the reason
+  /// `FleetInFlightSlot.workload` is text: a new trigger should be a registry
+  /// edit, not a migration.
+  reason String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Enqueue is an UPSERT on this key, so a repo disconnected, reconnected and
+  /// disconnected again holds ONE row with the latest `dueAt` rather than a
+  /// stack of them.
+  @@unique([coreWorkspaceId, coreProjectId, repoRef])
+  /// The sweep's only read: rows whose `dueAt` has passed, oldest first.
+  @@index([dueAt])
+  @@map("code_graph_offboarding")
+}

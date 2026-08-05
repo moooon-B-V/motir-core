@@ -177,6 +177,29 @@ export const projectRepository = {
     });
   },
 
+  /**
+   * EVERY project id in a workspace, ARCHIVED INCLUDED — the unfiltered
+   * counterpart of `findByWorkspace` (MOTIR-2166).
+   *
+   * Its caller is `workspacesService.deleteWorkspace`, which must enumerate the
+   * projects whose derived code graphs need offboarding BEFORE the cascade takes
+   * them (`docs/decisions/code-graph-index-fleet.md` §14.3). An archived project's
+   * graph still exists, so the archive filter would silently skip it and leave
+   * that graph an unreachable orphan — the exact failure the decision is about.
+   */
+  async findAllIdsByWorkspace(
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const client = tx ?? db;
+    const rows = await client.project.findMany({
+      where: { workspaceId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => row.id);
+  },
+
   async create(
     data: { workspaceId: string; name: string; slug: string; identifier: string },
     tx: Prisma.TransactionClient,

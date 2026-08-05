@@ -1,6 +1,7 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { getGitProvider } from '@/lib/git';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
@@ -42,7 +43,7 @@ export const githubInstallationService = {
     installation: { installationId: string; accountLogin: string; accountType: string };
     repos: NormalizedRepo[];
   }): Promise<GithubInstallationDTO> {
-    return withSystemContext(async (tx) => {
+    const { dto, prunedRefs, selectedRefs } = await withSystemContext(async (tx) => {
       const installation = await githubInstallationRepository.upsert(
         {
           installationId: input.installation.installationId,
@@ -52,6 +53,17 @@ export const githubInstallationService = {
         },
         tx,
       );
+
+      // WHICH repos this reconcile is about to DROP (MOTIR-2166 ·
+      // `docs/decisions/code-graph-index-fleet.md` §14.3). Read BEFORE
+      // `deleteExcept` runs, because a pruned row's `owner/name` — the `repoRef`
+      // the offboarding queue is keyed by — is gone the moment it is deleted.
+      // Same ordering trap as the workspace-delete arm, one scale down.
+      const selectedIds = new Set(input.repos.map((repo) => repo.providerRepoId));
+      const beforePrune = await githubRepoRepository.listByInstallation(installation.id, tx);
+      const prunedRefs = beforePrune
+        .filter((repo) => !selectedIds.has(repo.repoId))
+        .map((repo) => `${repo.owner}/${repo.name}`);
 
       for (const repo of input.repos) {
         await githubRepoRepository.upsert(
@@ -80,8 +92,32 @@ export const githubInstallationService = {
       );
 
       const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
-      return toGithubInstallationDTO(installation, repos);
+      return {
+        dto: toGithubInstallationDTO(installation, repos),
+        prunedRefs,
+        selectedRefs: repos.map((repo) => `${repo.owner}/${repo.name}`),
+      };
     });
+
+    // POST-COMMIT, BEST-EFFORT — the repo-disconnect arm of §14.3, reached from
+    // the GitHub side. A repo dropped from the installation's SELECTION is a
+    // disconnect: its `github_repo` row is gone, so nothing here will ever index
+    // it again, and its derived graph must go with it after the window.
+    await codeGraphOffboardingService.enqueueForRepos(
+      input.workspaceId,
+      prunedRefs,
+      'repo_disconnected',
+    );
+
+    // …and the mirror: a repo that IS in the selection has a pending removal
+    // called off. A reconcile is exactly how a user re-selects a repo they
+    // de-selected earlier, which is the re-onboard §14.3 says must cancel the
+    // window. Unconditional over the whole selection, because it is idempotent
+    // and a no-op when nothing is pending — cheaper than tracking which of these
+    // rows is new.
+    await codeGraphOffboardingService.cancelForRepos(input.workspaceId, selectedRefs);
+
+    return dto;
   },
 
   /**
