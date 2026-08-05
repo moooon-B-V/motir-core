@@ -684,6 +684,11 @@ export default defineConfig({
         'lib/codeHealth/errors.ts',
         'app/api/ai/coding-convention/_shared.ts',
         'app/api/ai/coding-convention/refresh/route.ts',
+        // Subtask MOTIR-2248 — the audit-COVERAGE read. Its whole contract is
+        // what it does when a repo's read FAILS: an untested branch is a nudge
+        // that counts an unreadable repo as un-audited and cries wolf.
+        'lib/services/auditCoverageService.ts',
+        'app/api/ai/coding-convention/audit-coverage/route.ts',
         'lib/codeGraph/offboarding.ts',
         'lib/repositories/codeGraphOffboardingRepository.ts',
         'lib/services/codeGraphOffboardingService.ts',
@@ -726,6 +731,13 @@ export default defineConfig({
         'lib/codeHealth/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/ai/coding-convention/_shared.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/ai/coding-convention/refresh/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Subtask MOTIR-2248 — the audit-coverage read.
+        'lib/services/auditCoverageService.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/coding-convention/audit-coverage/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,
