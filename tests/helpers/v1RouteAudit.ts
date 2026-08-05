@@ -231,6 +231,17 @@ export async function loadV1RouteModules(): Promise<Map<string, V1RouteModule>> 
 }
 
 /**
+ * Blank out comments only, keeping string literals (import specifiers, for
+ * one). Exported because the same hazard applies to any source-level assertion
+ * ABOUT a route file, not only to the rules below — Story 11.4's spec-route
+ * suite asserts that its handler names no auth or request API, and its own
+ * header comment explains why by naming them.
+ */
+export function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+}
+
+/**
  * Blank out comments and string literals so a rule cannot fire on prose.
  * (Without this, the file-header comment explaining "no `db.*` in a route"
  * would itself trip the `db.` guard — a guard that flags its own

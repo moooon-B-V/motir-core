@@ -99,6 +99,7 @@
     "@inngest/test": "1.0.0",
     "@pencil.dev/cli": "^0.2.7",
     "@playwright/test": "^1.60.0",
+    "@seriousme/openapi-schema-validator": "^2.9.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",

@@ -611,6 +611,12 @@ export default defineConfig({
         'lib/api/v1/openapi/envelopes.ts',
         'lib/api/v1/openapi/headers.ts',
         'lib/api/v1/openapi/security.ts',
+        // Story 11.4 · Subtask 11.4.4 — the registry, the emitter and the route.
+        'lib/api/v1/openapi/operation.ts',
+        'lib/api/v1/openapi/registry.ts',
+        'lib/api/v1/openapi/emit.ts',
+        'lib/api/v1/workItems/operations.ts',
+        'app/api/openapi/v1.json/route.ts',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
@@ -647,6 +653,12 @@ export default defineConfig({
         'lib/api/v1/openapi/envelopes.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/openapi/headers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/openapi/security.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.4 — the registry, the emitter and the route.
+        'lib/api/v1/openapi/operation.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/registry.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workItems/operations.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/openapi/v1.json/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/sprints/route.ts': {
