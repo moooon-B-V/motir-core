@@ -15,6 +15,8 @@
 // (there is no stable contract for it), no stack, and no driver text. See
 // `INTERNAL_ERROR_BODY`.
 
+import type { V1ErrorStatus } from '@/lib/api/v1/openapi/statuses';
+
 /** The wire body of a v1 failure. */
 export interface ApiV1ErrorBody {
   code: string;
@@ -99,8 +101,17 @@ export class InvalidRequestError extends ApiV1Error {
  *
  * Seeded with exactly what Story 11.1's endpoints can raise. Stories 11.2 /
  * 11.3 extend it as their resources land.
+ *
+ * ⚠️ The VALUE type is `V1ErrorStatus` (Story 11.4 · Subtask 11.4.3), not
+ * `number`: the statuses this API documents are a closed vocabulary
+ * (`lib/api/v1/openapi/statuses.ts`, ADR §4's table in code), so a row mapped to
+ * a status the emitted OpenAPI document has no word for is a COMPILE error here
+ * rather than an undocumented response discovered by a client. Adding a status
+ * is a contract change — ADR §8 permits a new CONDITION getting one (409 and 412
+ * arrived that way) and forbids an existing condition changing one — so it is
+ * made in the vocabulary, deliberately, and this map then compiles against it.
  */
-export const DOMAIN_ERROR_STATUS: Readonly<Record<string, number>> = Object.freeze({
+export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Object.freeze({
   // A token bound to workspace A asking about workspace B. 404, never 403 —
   // a 403 would confirm the resource EXISTS, an existence oracle over another
   // tenant's data. 403 answers "your token may not do this KIND of thing";

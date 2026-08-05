@@ -605,6 +605,12 @@ export default defineConfig({
         'lib/api/v1/sprints/membership.ts',
         'lib/api/v1/ready/schema.ts',
         'lib/api/v1/rankedCollections.ts',
+        // Story 11.4 · Subtask 11.4.3 — the SHARED wire-schema layer.
+        'lib/api/v1/openapi/statuses.ts',
+        'lib/api/v1/openapi/errorResponse.ts',
+        'lib/api/v1/openapi/envelopes.ts',
+        'lib/api/v1/openapi/headers.ts',
+        'lib/api/v1/openapi/security.ts',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
@@ -635,6 +641,12 @@ export default defineConfig({
         'lib/api/v1/sprints/membership.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/ready/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/rankedCollections.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.3 — the SHARED wire-schema layer.
+        'lib/api/v1/openapi/statuses.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/envelopes.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/headers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/openapi/security.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/sprints/route.ts': {

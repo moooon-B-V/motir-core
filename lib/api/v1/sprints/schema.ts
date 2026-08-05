@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import type { SprintDto, SprintStateDto } from '@/lib/dto/sprints';
 
 // The v1 SPRINT resource, declared once (Story 11.3 · Subtask 11.3.4 —

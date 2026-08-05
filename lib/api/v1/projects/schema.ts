@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // The v1 PROJECT resource, declared once (Story 11.3 · Subtask 11.3.3 —
