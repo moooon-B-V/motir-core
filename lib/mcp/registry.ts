@@ -28,6 +28,7 @@ import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
+import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
@@ -88,6 +89,7 @@ export const MCP_TOOL_NAMES = [
   SEARCH_WORK_ITEMS_TOOL_NAME,
   WHOAMI_TOOL_NAME,
   LIST_PROJECTS_TOOL_NAME,
+  GET_PROJECT_STATE_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -175,6 +177,11 @@ export function registerMcpTools(
   // companion: whoami answers "who + which workspace", this answers "which
   // projects in it".
   registerListProjects(target, resolveContext);
+  // Project CONFIGURATION (MOTIR-1968) — the planning preconditions a planning
+  // agent must be able to VERIFY: established?, code connected + indexed?, the
+  // project's repo set, where onboarding stopped. list_projects answers "which
+  // projects"; this answers "what state is one in". Read-only by design.
+  registerGetProjectState(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

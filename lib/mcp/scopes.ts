@@ -67,6 +67,12 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // read, and the narrowest one: it takes no arguments and cannot leave the
   // token's own workspace.
   list_projects: 'read',
+  // get_project_state reports a project's PLANNING PRECONDITIONS (MOTIR-1968) —
+  // established?, code connected + indexed?, repo set, onboarding run. Every
+  // branch of it is a table read: it cannot stamp the marker, kick an index or
+  // advance a migrate run, so reporting the state is strictly `read` even though
+  // the state it reports is what the write paths produce.
+  get_project_state: 'read',
   list_sprints: 'read',
   validate_sprint: 'read',
   validate_work_item: 'read',
