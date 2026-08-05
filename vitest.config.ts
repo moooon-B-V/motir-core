@@ -629,6 +629,14 @@ export default defineConfig({
         // real: an endpoint nobody calls and a queue nobody reads are both green.
         'lib/services/codeGraphOffboardSweepService.ts',
         'lib/jobs/definitions/codeGraphOffboardSweep.ts',
+        // Subtask MOTIR-2197 — the LIVE-PROJECT read seam the offboarding backstop
+        // subtracts from. Gated because a wrong answer here is not a bug report,
+        // it is a deleted customer code index: the consumer removes what this
+        // says is absent. (The route itself stays out, like every other
+        // `app/api/internal/*` transport — the logic is what is gated.)
+        'lib/codeGraph/liveProjects.ts',
+        'lib/services/liveProjectsService.ts',
+        'lib/internalApi/serviceAuth.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -662,6 +670,10 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Subtask MOTIR-2197 — the live-project read seam.
+        'lib/codeGraph/liveProjects.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/liveProjectsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/internalApi/serviceAuth.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.3 · Subtask 11.3.10 — the planning resources.
         'lib/api/v1/projects/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/sprints/schema.ts': { branches: 90, functions: 90, lines: 90 },

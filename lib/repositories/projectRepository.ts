@@ -200,6 +200,43 @@ export const projectRepository = {
     return rows.map((row) => row.id);
   },
 
+  /**
+   * The `(workspaceId, id)` pairs among `pairs` that name a project which EXISTS
+   * and whose workspace EXISTS — the live set motir-ai's offboarding backstop
+   * subtracts from what it has stored (MOTIR-2197).
+   *
+   * ARCHIVED COUNTS AS LIVE HERE, and the choice is load-bearing rather than
+   * incidental: an archive already enqueues its own windowed removal
+   * (`docs/decisions/code-graph-index-fleet.md` §14.3), so treating an archived
+   * project as absent would let the BACKSTOP delete its graph immediately and
+   * silently overrule the 30-day grace period the user was promised. The archive
+   * path owns that timing; this read must not second-guess it.
+   *
+   * The `workspaceId` in the WHERE is not redundant with the project id: it makes
+   * the answer wrong-scoped rather than merely wrong if a caller pairs a real
+   * project with someone else's workspace, and the join to `workspace` is what
+   * covers the cascade case (the project row goes with its workspace, but a
+   * caller can still ask about a pair whose workspace alone is gone).
+   */
+  async findLivePairs(
+    pairs: { workspaceId: string; projectId: string }[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ workspaceId: string; projectId: string }[]> {
+    if (pairs.length === 0) return [];
+    const client = tx ?? db;
+    const rows = await client.project.findMany({
+      where: {
+        OR: pairs.map((pair) => ({ id: pair.projectId, workspaceId: pair.workspaceId })),
+        // The project row cascades with its workspace, so a surviving row implies
+        // a surviving workspace — asserted rather than assumed, because this read
+        // is what stands between a reconciler and a live tenant's data.
+        workspace: { is: {} },
+      },
+      select: { id: true, workspaceId: true },
+    });
+    return rows.map((row) => ({ workspaceId: row.workspaceId, projectId: row.id }));
+  },
+
   async create(
     data: { workspaceId: string; name: string; slug: string; identifier: string },
     tx: Prisma.TransactionClient,
