@@ -3447,6 +3447,26 @@
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
       }
+      .cand-row-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .fam-label {
+        margin: 4px 0 12px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text);
+      }
+      .fam-3d {
+        margin-top: 26px;
+        max-width: 92ch;
+        font-weight: 400;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .fam-3d b {
+        color: var(--el-text);
+      }
       .cand {
         margin: 0;
         border: 1px solid var(--el-border);
@@ -4082,6 +4102,77 @@
           <path d="M10.87 19.22A6.2 6.2 0 0 1 10.87 10.18 M13.29 8.78A6.2 6.2 0 1 1 13.29 20.62" />
           <path d="M7.09 8.76A6.2 6.2 0 0 1 14.92 13.29 M14.93 16.07A6.2 6.2 0 1 1 4.67 10.15" />
         </g>
+        <!-- Candidate D — "Cube". The isometric cube IS the Hasse diagram of B3,
+         the Boolean lattice on three elements — candidate A one dimension up.
+         Each visible face is exactly A's outer rhombus. ONE colour, three
+         opacities; no second hue, so a palette swap re-skins it for free. -->
+        <g id="mark-d">
+          <path
+            d="M12.00 2.45L19.97 7.05L12.00 11.65L4.03 7.05Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+          />
+          <path
+            d="M20.27 7.57L12.30 12.17L12.30 21.38L20.27 16.78Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+          />
+          <path
+            d="M3.73 7.57L11.70 12.17L11.70 21.38L3.73 16.78Z"
+            fill="currentColor"
+            fill-opacity="0.32"
+          />
+        </g>
+        <!-- Candidate E — "Tribar". Penrose's impossible triangle: every local
+         join is consistent, only the global loop fails. Same one-colour /
+         three-opacity rule. -->
+        <g id="mark-e">
+          <path
+            d="M6.93 1.60L21.01 9.72L17.07 12.00L2.99 3.87Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+          />
+          <path
+            d="M21.01 9.72L17.07 12.00L17.07 16.55L21.01 14.28Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+          />
+          <path
+            d="M2.99 3.87L17.07 12.00L17.07 16.55L2.99 8.42Z"
+            fill="currentColor"
+            fill-opacity="0.32"
+          />
+          <path
+            d="M17.07 7.45L21.01 9.72L6.93 17.85L2.99 15.58Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+          />
+          <path
+            d="M21.01 9.72L6.93 17.85L6.93 22.40L21.01 14.28Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+          />
+          <path
+            d="M2.99 15.58L6.93 17.85L6.93 22.40L2.99 20.12Z"
+            fill="currentColor"
+            fill-opacity="0.32"
+          />
+          <path
+            d="M6.93 1.60L10.87 3.87L6.93 6.15L2.99 3.87Z"
+            fill="currentColor"
+            fill-opacity="1.0"
+          />
+          <path
+            d="M10.87 3.87L6.93 6.15L6.93 22.40L10.87 20.12Z"
+            fill="currentColor"
+            fill-opacity="0.58"
+          />
+          <path
+            d="M2.99 3.87L6.93 6.15L6.93 22.40L2.99 20.12Z"
+            fill="currentColor"
+            fill-opacity="0.32"
+          />
+        </g>
         <!-- The construction grid overlay (documentation only — never shipped). -->
         <g id="mark-grid">
           <rect
@@ -4311,17 +4402,20 @@
 
     <!-- ══════════════════════════════════════════════════════════════════════ -->
     <section class="panel">
-      <p class="panel-label">Panel 1 — The logomark: three candidates for MOTIR-1140</p>
+      <p class="panel-label">Panel 1 — The logomark: five candidates for MOTIR-1140</p>
       <p class="panel-note">
         <b>No letterform.</b> The mark is not an M and is not derived from one — an initial says
         only what the product is called, and Motir's name is not the interesting thing about it.
         Each candidate below is a <b>mathematical object</b> that is true of what Motir actually
-        does, drawn on one construction grid with one stroke system and one colour rule. MOTIR-1140
-        (8.3.2) is a <code>decision</code> card, and a decision needs something to decide between;
-        all three are buildable SVG today, and picking any of them changes only the
-        <code>&lt;path&gt;</code> data MOTIR-1150 consumes.
+        does. MOTIR-1140 (8.3.2) is a <code>decision</code> card, and a decision needs something to
+        decide between: five candidates in two families — three <b>flat</b>, two <b>isometric</b> —
+        all buildable SVG today, and picking any of them changes only the
+        <code>&lt;path&gt;</code> data MOTIR-1150 consumes. The isometric pair uses
+        <b>one colour at three opacities</b> (100 / 58 / 32%), never a second hue, so the Tier-3
+        token rule holds and a <code>data-palette</code> swap re-skins them for free.
       </p>
 
+      <p class="fam-label">Flat — one closed form, one stroke weight, one colour</p>
       <div class="cand-row">
         <figure class="cand cand-rec">
           <span class="cand-badge">Recommended</span>
@@ -4403,12 +4497,79 @@
         </figure>
       </div>
 
+      <p class="fam-label fam-3d">
+        <b>Isometric</b> — the same kind of objects, with depth. Both are drawn in
+        <b>true isometric projection</b>, which is what makes them mathematical rather than
+        decorative: the three axes meet at 120° on screen, so the direction (1,&nbsp;1,&nbsp;1)
+        projects to a single point. That degeneracy is the whole trick — it is <i>why</i> the tribar
+        closes.
+      </p>
+      <div class="cand-row cand-row-2">
+        <figure class="cand">
+          <div class="cand-art">
+            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
+              <use href="#mark-d" />
+            </svg>
+          </div>
+          <figcaption>
+            <b>D · Cube</b>
+            <p class="cand-math">
+              The Hasse diagram of B₃ — the Boolean lattice on three elements.
+            </p>
+            <p>
+              <b>This is A one dimension up, not a different idea.</b> Order the subsets of {plan,
+              track, build} by inclusion and the lattice you get is drawn as a cube — and because
+              B₂'s diagram is a <i>face</i> of B₃'s,
+              <b>each visible face of this cube is exactly candidate A's outer rhombus</b>. Three
+              faces, three pillars, one object.
+            </p>
+            <p class="cand-why">
+              <b>Cost:</b> depth needs tone, and the three tones blur below ~20&nbsp;px, so the
+              favicon takes a flattened single-tone cut. An isometric cube is also the most-used 3D
+              icon there is — it is lucide's own <code>Box</code> — so the gapped faces are doing
+              the differentiating work.
+            </p>
+          </figcaption>
+        </figure>
+        <figure class="cand">
+          <div class="cand-art">
+            <svg viewBox="0 0 24 24" width="112" height="112" class="brand-glyph">
+              <use href="#mark-e" />
+            </svg>
+          </div>
+          <figcaption>
+            <b>E · Tribar</b>
+            <p class="cand-math">
+              Penrose's impossible triangle — locally consistent everywhere, globally impossible.
+            </p>
+            <p>
+              The tribar is not a drawing error: its impossibility is a genuine invariant, which
+              Penrose formalised as a non-zero class in the first cohomology group of the figure's
+              cover. <b>Every local join checks out; only the whole loop fails.</b> That is the
+              exact failure mode of a project plan — every card reads fine on its own and the plan
+              still does not close — and seeing the whole loop is the thing Motir is for (the
+              dependency DAG, <code>validate_sprint</code>, blocked-by).
+            </p>
+            <p class="cand-why">
+              <b>Cost:</b> the same tonal floor as D, plus a semantic risk worth saying out loud — a
+              mark whose one-word summary is "impossible" has to be explained to be read the right
+              way, and a brand mark rarely gets to explain itself. It also skews toward a play/next
+              arrow at 16&nbsp;px.
+            </p>
+          </figcaption>
+        </figure>
+      </div>
+
       <p class="decision-line">
-        <b>Recommendation to MOTIR-1140: A.</b> It is the only one that is simultaneously true of
-        the product, legible at every shipped size, and free of a second cut. <b>C</b> is the better
-        story and the worse mark — if the brand can accept a separate favicon artwork, it is a
-        defensible choice and the notes say what that costs. <b>B</b> is the fallback if a solid
-        silhouette is wanted for stamping, embroidery or single-colour print.
+        <b>Recommendation to MOTIR-1140: still A.</b> It is the only candidate that is
+        simultaneously true of the product, legible at every shipped size, and free of a second
+        artwork. Of the isometric pair, <b>D</b> is the stronger — it is A's own object one
+        dimension up, so choosing it keeps the whole system coherent and costs only the flattened
+        favicon cut. <b>E</b> is the most striking mark here and carries the sharpest idea, at the
+        price of needing that idea explained. <b>C</b> remains the best story and the worst
+        legibility; <b>B</b> is the fallback for single-colour print.
+        <b>C, D and E all carry the same tax:</b> a second, simplified cut below ~24&nbsp;px. A and
+        B do not.
       </p>
     </section>
 

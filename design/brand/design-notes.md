@@ -54,11 +54,17 @@ literals).
 
 ---
 
-## 1. The logomark — three candidates for MOTIR-1140
+## 1. The logomark — five candidates for MOTIR-1140
 
-MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Three
-mathematical objects, one construction grid, one stroke system, one colour rule. Picking any of them
-changes only the `<path>` data MOTIR-1150 consumes.
+MOTIR-1140 is a `decision` card, and a decision needs something to decide between. Five mathematical
+objects in two families — three **flat** (§1 A–C) and two **isometric** (§1 D–E) — all on one
+construction grid. Picking any of them changes only the `<path>` data MOTIR-1150 consumes.
+
+The isometric pair uses **one colour at three opacities** (100 / 58 / 32%), never a second hue, so
+the Tier-3 token rule holds and a `data-palette` swap re-skins them for free. Both are drawn in
+**true isometric projection**, which is what makes them mathematical rather than decorative: the
+three axes meet at 120° on screen, so the direction (1, 1, 1) projects to a single point. That
+degeneracy is the whole trick — it is _why_ the tribar closes.
 
 ### A · Lattice _(recommended)_
 
@@ -105,12 +111,47 @@ on-message.
 interior collapses in the tab strip. Choosing it means shipping a second, simplified cut for the
 favicon, a permanent two-artwork tax the other two do not carry.
 
+### D · Cube _(isometric)_
+
+> _The Hasse diagram of B₃ — the Boolean lattice on three elements._
+
+**This is A one dimension up, not a different idea.** Order the subsets of {plan, track, build} by
+inclusion and the lattice you get is drawn as a cube — and because B₂'s diagram is a _face_ of B₃'s,
+**each visible face of this cube is exactly candidate A's outer rhombus**. Three faces, three
+pillars, one object.
+
+**Cost:** depth needs tone, and the three tones blur below ~20 px, so the favicon takes a flattened
+single-tone cut. An isometric cube is also the most-used 3D icon there is — it is lucide's own `Box`
+— so the gapped faces are doing the differentiating work.
+
+### E · Tribar _(isometric)_
+
+> _Penrose's impossible triangle — locally consistent everywhere, globally impossible._
+
+The tribar is not a drawing error: its impossibility is a genuine invariant, which Penrose formalised
+as a non-zero class in the first cohomology group of the figure's cover. **Every local join checks
+out; only the whole loop fails.** That is the exact failure mode of a project plan — every card reads
+fine on its own and the plan still does not close — and seeing the whole loop is the thing Motir is
+for (the dependency DAG, `validate_sprint`, blocked-by).
+
+**Cost:** the same tonal floor as D, plus a semantic risk worth saying out loud — a mark whose
+one-word summary is "impossible" has to be explained to be read the right way, and a brand mark
+rarely gets to explain itself. It also skews toward a play/next arrow at 16 px.
+
 ### Recommendation
 
-**A.** It is the only candidate that is simultaneously true of the product, legible at every shipped
-size, and free of a second cut. **C** is the better story and the worse mark — if the brand will
-accept a separate favicon artwork it is defensible, and the cost is stated above. **B** is the
-fallback if a solid silhouette is wanted for stamping, embroidery or single-colour print.
+**Still A.** It is the only candidate that is simultaneously true of the product, legible at every
+shipped size, and free of a second artwork.
+
+Of the isometric pair, **D** is the stronger: it is A's own object one dimension up, so choosing it
+keeps the whole system coherent and costs only the flattened favicon cut. **E** is the most striking
+mark of the five and carries the sharpest idea, at the price of needing that idea explained. **C**
+remains the best story and the worst legibility. **B** is the fallback if a solid silhouette is
+wanted for stamping, embroidery or single-colour print.
+
+**C, D and E all carry the same tax: a second, simplified cut below ~24 px.** A and B do not. That is
+the single biggest practical difference between the two families, and it is a permanent cost — every
+future palette, every future size, two artworks to keep in agreement.
 
 ---
 
@@ -343,8 +384,9 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
   `icon-192/512.png`). Those are build outputs — MOTIR-1150 renders them from the single SVG source
   defined in §2 at the sizes and safe zones in §5.
 - **The glyph is decided by MOTIR-1140, not by this card.** Keep the two `<path>` strings in ONE
-  module so a substitution (to B or C) is a single-file change. If C wins, that module also owns the
-  simplified ≤24 px cut, and every call site below 24 px must resolve to it.
+  module so a substitution (to B, C, D or E) is a single-file change. If C, D or E wins, that module also owns the
+  simplified ≤24 px cut, and every call site below 24 px must resolve to it — and for D/E the tonal
+  variant must express its three tones as **opacity on one token**, never as three colours.
 
 ## File-name note
 
