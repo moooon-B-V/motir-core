@@ -622,6 +622,8 @@ export default defineConfig({
         'lib/api/v1/planning/operations.ts',
         // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
         'lib/apiDocs/reference.ts',
+        // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
+        'lib/apiDocs/guide.ts',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
@@ -669,6 +671,8 @@ export default defineConfig({
         'lib/api/v1/planning/operations.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
         'lib/apiDocs/reference.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
+        'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/projects/[projectKey]/sprints/route.ts': {

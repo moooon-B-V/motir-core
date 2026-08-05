@@ -5669,6 +5669,14 @@
     "unavailableOpenSpec": "打开规范文档",
     "doorHeading": "基于 API 构建",
     "doorBody": "全部接口、其权限范围与可复制示例 —— 外加一份从新令牌到首次调用的五步指南。",
-    "doorReferenceCta": "API 参考"
+    "doorReferenceCta": "API 参考",
+    "guideTitle": "快速入门",
+    "guideLede": "从拥有账号到成功调用，共五步。以下所有步骤都使用第 1 步创建的同一个令牌。",
+    "guideNext": "下一步：",
+    "policyTitle": "稳定性与废弃",
+    "policyLede": "v1 承诺什么、哪些改动无需事先通知，以及任何东西被移除时会怎样。",
+    "policyAdditiveHeading": "增量变更 —— 无需事先通知",
+    "policyForbiddenHeading": "除非发布新主版本，否则绝不",
+    "policyAdrNote": "本页是对外的公开承诺。其生成来源的内部记录是 API 决策记录，"
   }
 }

@@ -5673,6 +5673,14 @@
     "unavailableOpenSpec": "Open the spec",
     "doorHeading": "Build against the API",
     "doorBody": "Every endpoint, its scopes and a copy-pasteable example — plus a five-step guide from a fresh token to a working call.",
-    "doorReferenceCta": "API reference"
+    "doorReferenceCta": "API reference",
+    "guideTitle": "Getting started",
+    "guideLede": "From an account to a working call, in five steps. Everything below uses the same token you mint in step 1.",
+    "guideNext": "Next:",
+    "policyTitle": "Stability & deprecation",
+    "policyLede": "What v1 promises, what may change without notice, and how anything is ever taken away.",
+    "policyAdditiveHeading": "Additive — allowed without notice",
+    "policyForbiddenHeading": "Never, without a new major version",
+    "policyAdrNote": "This page is the published commitment. The internal record it is generated from is the API decision record,"
   }
 }
