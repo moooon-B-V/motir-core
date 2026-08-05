@@ -48,6 +48,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { keyForAppend } from '@/lib/workItems/positioning';
 import {
   seedLargeBoard,
   seedLargeScrumSprint,
@@ -281,11 +282,32 @@ async function main() {
     if (created % 250 === 0) process.stdout.write(`  …${created} issues\n`);
   };
 
+  // A VALID, GLOBALLY-UNIQUE fractional-index `position` per item, chained in
+  // creation order. `position` MUST be a real fractional-index key (the shape
+  // `lib/workItems/positioning.ts` mints) — NOT a zero-padded number. A padded
+  // number like "00000612" has head '0', which `generateKeyBetween` rejects
+  // ("invalid order key head: 0"), so ANY board drag landing next to such a card
+  // throws → the move API 500s and the board shows "Move not allowed". This is a
+  // DEV-DATA script a human drags cards in, so the failure is one `pnpm
+  // db:seed:large` away from being met by hand.
+  //
+  // The chain is GLOBAL, not per-parent: a board column orders cards by
+  // `position` ACROSS parents, so two items must never share a key — otherwise
+  // dropping a card between two equal-keyed neighbours calls keyBetween(k, k),
+  // which throws "prev >= next" → another 500. A single ascending chain keeps
+  // every key distinct while staying valid; siblings are created consecutively
+  // so each parent's children still sort correctly under the tree.
+  //
+  // (Same trap, same fix, in `scripts/plan-seed/seed.ts` and the board-shaped
+  // sibling `scripts/seedLargeBoard.ts` — MOTIR-2198 closed the class.)
+  let lastPosition: string | null = null;
+
   async function createItem(
     kind: WorkItemKind,
     title: string,
     parentId: string | null,
   ): Promise<string> {
+    const position = (lastPosition = keyForAppend(lastPosition));
     const id = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const key = await projectRepository.allocateWorkItemNumber(project.id, tx);
       const row = await workItemRepository.create(
@@ -298,7 +320,7 @@ async function main() {
           identifier: `${project.identifier}-${key}`,
           title,
           reporterId: owner.id,
-          position: String(key).padStart(8, '0'),
+          position,
         },
         tx,
       );
