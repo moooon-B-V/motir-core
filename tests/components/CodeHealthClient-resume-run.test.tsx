@@ -101,7 +101,11 @@ function render() {
     <CodeHealthClient
       projectId="proj_1"
       repoRefs={REPOS}
-      initialAudit={null}
+      // Nothing derived anywhere yet — the state a first fan-out is resumed
+      // into, and the one State B used to be offered in.
+      initialAudits={REPOS.map((repoKey) => ({ repoKey, surface: EMPTY_AUDIT }))}
+      initialSelectedRepoKey={REPOS[0]!}
+      initialSelectedAudit={null}
       initialConventions={[]}
       loadError={false}
     />,
@@ -170,10 +174,14 @@ describe('CodeHealthClient — an in-flight audit survives the page (MOTIR-2223)
     await act(async () => {});
 
     expect(localStorage.getItem(RUN_KEY)).toBeNull();
-    // Asserted on the URLs actually fetched, not by reading the component: the
-    // re-read is one scoped audit request, and it happened once.
-    expect(auditCalls()).toHaveLength(1);
-    expect(new URL(auditCalls()[0]!.url, 'http://t').searchParams.get('repoKey')).toBe(REPOS[0]);
+    // Asserted on the URLs actually fetched, not by reading the component. The
+    // re-read is now one SCOPED request per connected repo (MOTIR-2207: the
+    // audit surface is a set), plus the selected repo's full report — and it
+    // still happens exactly once, never in a loop.
+    const urls = auditCalls().map((c) => new URL(c.url, 'http://t'));
+    expect(urls.every((u) => u.searchParams.get('repoKey') !== null)).toBe(true);
+    const summaries = urls.filter((u) => u.searchParams.get('findingsLimit') === '1');
+    expect(summaries.map((u) => u.searchParams.get('repoKey')).sort()).toEqual([...REPOS].sort());
     // The report the run produced is now on screen, so no pre-audit state at all.
     expect(firstAuditButton()).toBeNull();
     expect(screen.queryByText('Deriving your first audit…')).toBeNull();

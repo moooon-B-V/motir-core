@@ -74,7 +74,10 @@ function render(overrides: { loadError?: string | false } = {}) {
     <CodeHealthClient
       projectId="proj_1"
       repoRefs={REPOS}
-      initialAudit={null}
+      // No repo has an audit yet — the pre-fan-out state these paths exercise.
+      initialAudits={REPOS.map((repoKey) => ({ repoKey, surface: EMPTY_AUDIT }))}
+      initialSelectedRepoKey={REPOS[0]!}
+      initialSelectedAudit={null}
       initialConventions={[]}
       loadError={overrides.loadError ?? false}
     />,
@@ -98,13 +101,19 @@ describe('CodeHealthClient — per-repo reads (MOTIR-2123)', () => {
     ).toEqual(REPOS);
   });
 
-  it('scopes the audit read to the repo the page renders — never an unscoped fetch', async () => {
+  it('reloads EVERY repo’s audit, each scoped — never an unscoped fetch (MOTIR-2207)', async () => {
     render({ loadError: 'MOTIR_AI_UNAVAILABLE: down' });
     await clickRetry();
 
+    // One summary read PER connected repo: the list needs every repo's
+    // `healthSummary` + `total`, so a reload that refreshed only the first
+    // repo's audit would leave N−1 rows showing whatever they showed before.
     const auditCalls = calls.filter((c) => c.url.includes('/audit'));
-    expect(auditCalls).toHaveLength(1);
-    expect(new URL(auditCalls[0]!.url, 'http://t').searchParams.get('repoKey')).toBe(REPOS[0]);
+    const scoped = auditCalls.map((c) => new URL(c.url, 'http://t'));
+    expect(scoped.map((u) => u.searchParams.get('repoKey')).sort()).toEqual([...REPOS].sort());
+    // Read at SUMMARY depth — `findingsLimit=1`, the cheapest limit motir-ai's
+    // `parsePositiveInt` accepts (it rejects `0`).
+    expect(scoped.every((u) => u.searchParams.get('findingsLimit') === '1')).toBe(true);
     // Both endpoints REQUIRE the param — an unscoped read is a 400, not a
     // first-repo default (motir-ai `requireQuery`).
     expect(calls.every((c) => c.url.includes('repoKey='))).toBe(true);

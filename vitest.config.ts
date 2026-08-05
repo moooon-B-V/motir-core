@@ -667,6 +667,15 @@ export default defineConfig({
         // a 30-day retention window on customer-derived data. An untested branch
         // here is a graph retained past a window the dialogs claim, or one
         // removed inside a grace period the user thought they had.
+        // Subtask MOTIR-2207 — the /code-health audit tab going MULTI-REPO. Both
+        // files are new with the card, so they join the gate at birth rather
+        // than waiting for a later coverage story. The row model is what decides
+        // WHICH repo's report a reader sees (worst-first order also picks the
+        // repo the re-audit poll watches), and the list is the only affordance
+        // saying the other repos exist at all — an untested branch in either is
+        // a project silently showing one repo's grade as if it were its own.
+        'lib/codeHealth/repoAuditRows.ts',
+        'app/(authed)/code-health/_components/AuditRepoList.tsx',
         'lib/codeGraph/offboarding.ts',
         'lib/repositories/codeGraphOffboardingRepository.ts',
         'lib/services/codeGraphOffboardingService.ts',
@@ -698,6 +707,13 @@ export default defineConfig({
         'app/api/v1/me/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/workspaces/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph offboarding queue.
+        // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
+        'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/(authed)/code-health/_components/AuditRepoList.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'lib/codeGraph/offboarding.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/codeGraphOffboardingRepository.ts': {
           branches: 90,

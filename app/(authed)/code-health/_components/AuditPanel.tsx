@@ -1,7 +1,16 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Clock, FileSearch, FolderGit2, GitCompare, Loader2, Play, RefreshCw } from 'lucide-react';
+import {
+  Clock,
+  FileSearch,
+  FolderGit2,
+  GitCompare,
+  Loader2,
+  Play,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +43,9 @@ export function AuditPanel({
   scanner,
   reauditing,
   onReaudit,
+  partiallyDerivedRepoRef,
+  unavailableRepoRef,
+  onRetryRepo,
   pollExhausted,
   onCheckAgain,
   deepenDismissed,
@@ -52,6 +64,16 @@ export function AuditPanel({
   scanner: ExternalScannerStateDTO | null;
   reauditing: boolean;
   onReaudit: () => void;
+  /** Panel 7 §5 · E2 (MOTIR-2207): the SELECTED repo has no report while a
+   * sibling does. Non-null names that repo and REPLACES states A–D, which were
+   * drawn for one report and are all-or-nothing by construction — here the
+   * project is not waiting, one repository is. */
+  partiallyDerivedRepoRef: string | null;
+  /** The selected repo's read FAILED (Panel 7 §6's fourth row state, in the
+   * report area). Distinct from the above in the one way that matters: nothing
+   * is coming unless the reader retries. */
+  unavailableRepoRef: string | null;
+  onRetryRepo: () => void;
   /** The page stopped waiting on a FIRST audit while the job kept running
    * (MOTIR-2080). Selects the pre-audit resting state, never an error. */
   pollExhausted: boolean;
@@ -63,6 +85,14 @@ export function AuditPanel({
   onDeepenReopen: () => void;
 }) {
   if (!audit) {
+    // The PARTIAL cases first — both say something true about ONE repository
+    // while its siblings stay readable, which is exactly what A–D cannot say.
+    if (unavailableRepoRef !== null) {
+      return <UnavailableRepoState repoRef={unavailableRepoRef} onRetry={onRetryRepo} />;
+    }
+    if (partiallyDerivedRepoRef !== null) {
+      return <DerivingOneRepoState repoRef={partiallyDerivedRepoRef} />;
+    }
     return (
       <PreAuditEmptyState
         repoRefs={repoRefs}
@@ -100,6 +130,56 @@ export function AuditPanel({
         onLoadMore={onLoadMore}
       />
     </div>
+  );
+}
+
+// Panel 7 §5 · E2 (MOTIR-2207) — one repo is waiting while the rest are
+// readable, so the report AREA (and only the report area) is empty.
+//
+// ⚠️ THIS IS NOT PANEL 4b STATE C, and the copy is what separates them. C reads
+// "Motir is reading the code graph for THESE repos" over a chip row of the whole
+// set — correct when nothing has been derived and the whole project is waiting.
+// Here the headline names ONE repository and the body points at the list. It is
+// not D either: D is the 60-second cut-off with nothing at all on screen. The
+// duration line is REUSED verbatim — it is true of one repo exactly as of five.
+function DerivingOneRepoState({ repoRef }: { repoRef: string }) {
+  const t = useTranslations('codeHealth');
+  return (
+    <EmptyState
+      icon={<Loader2 className="size-6 animate-spin text-(--el-accent-on-surface)" aria-hidden />}
+      title={t('audit.derivingOneTitle', { repoRef })}
+      description={
+        <>
+          {t('audit.derivingOneDescription')}
+          <span className="mt-(--spacing-sm) block text-(--el-text-muted)">
+            {t('audit.derivingDuration')}
+          </span>
+        </>
+      }
+    />
+  );
+}
+
+// The selected repo's read failed (Panel 7 §6's `unavailable` row, in the report
+// area). The design draws this state on the ROW and leaves the report area's
+// copy for it unspecified — an unspecified DETAIL inside a surface the design
+// DOES depict, so it falls to the named primitive: the same `EmptyState` every
+// other report-area state composes, carrying the row's own drawn word and its
+// ghost recovery. The retry re-READS one repo; it never re-audits, because a
+// read that failed says nothing about whether the code needs deriving.
+function UnavailableRepoState({ repoRef, onRetry }: { repoRef: string; onRetry: () => void }) {
+  const t = useTranslations('codeHealth');
+  return (
+    <EmptyState
+      icon={<TriangleAlert className="text-(--el-danger)" aria-hidden />}
+      title={t('audit.unavailableOneTitle', { repoRef })}
+      description={t('audit.unavailableOneDescription')}
+      action={
+        <Button variant="secondary" size="sm" leftIcon={<RefreshCw />} onClick={onRetry}>
+          {t('audit.repos.retry')}
+        </Button>
+      }
+    />
   );
 }
 

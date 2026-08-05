@@ -277,6 +277,41 @@ describe('aiConventionService — project-admin gate', () => {
     expect(dto.nextOffset).toBe(1);
   });
 
+  // The `findingsLimit` PASSTHROUGH (MOTIR-2207 · Panel 7 §3). The multi-repo
+  // list needs `healthSummary` + `total` for every connected repo and `findings`
+  // for only the selected one, so reading N surfaces at the full page size would
+  // ship N × 100 findings to draw an N-row list.
+  it('defaults findingsLimit to the full page size', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getCodeAuditMock.mockResolvedValue(rawAuditSurface());
+
+    await aiConventionService.getAudit(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+
+    const q = getCodeAuditMock.mock.calls[0]![0] as { findingsLimit?: number };
+    expect(q.findingsLimit).toBe(100);
+  });
+
+  it('forwards an explicit findingsLimit for a SUMMARY read', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getCodeAuditMock.mockResolvedValue(rawAuditSurface());
+
+    await aiConventionService.getAudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      { repoKey: 'acme/web', findingsLimit: 1 },
+    );
+
+    // 1, never 0: motir-ai's `parsePositiveInt` REJECTS 0 with a
+    // validation_error, so the cheapest legal summary read is one row.
+    const q = getCodeAuditMock.mock.calls[0]![0] as { findingsLimit?: number; repoKey?: string };
+    expect(q).toMatchObject({ repoKey: 'acme/web', findingsLimit: 1 });
+  });
+
   it('maps the §10.3 scanner state onto the audit DTO when present', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });

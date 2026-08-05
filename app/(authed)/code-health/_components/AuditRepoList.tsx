@@ -1,0 +1,223 @@
+'use client';
+
+import { useFormatter, useTranslations } from 'next-intl';
+import { FolderGit2, Loader2, TriangleAlert } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Pill } from '@/components/ui/Pill';
+import { Button } from '@/components/ui/Button';
+import { GithubMark } from '@/components/icons/GithubMark';
+import type { RepoAuditRow } from '@/lib/codeHealth/repoAuditRows';
+import { orderRepoAuditRows, rollupRepoAuditRows } from '@/lib/codeHealth/repoAuditRows';
+
+// Panel 7 (MOTIR-2207): the layer ABOVE the audit report that chooses whose
+// report is on screen — a worst-first list of the connected repos, each row
+// carrying that repo's OWN grade, with the selected repo's report rendering
+// beneath it unchanged.
+//
+// ⚠️ THE LIST IS NOT DRAWN AT N = 1 (Panel 7 §7). Its only two jobs are
+// selection and comparison and both are vacuous with one row, so a single-repo
+// project renders exactly the tab it renders today. This is a deliberate
+// departure from design/repository-set §15.5's "design it as a SET whose
+// degenerate case is one" — there the strip still answered a per-repository
+// question at N = 1; here it answers nothing.
+//
+// ⚠️ ROWS ARE SIBLING BUTTONS, NEVER A LISTBOX. A row carries a per-row action
+// (the unavailable state's "Try again"), and a `role="listbox"` of
+// `role="option"` rows may not contain interactive children — the shipped
+// `SavedFilterDropdown` failed the 6.2.6 axe sweep on exactly that
+// (`aria-required-children` critical + `nested-interactive` serious). So: a
+// `role="group"` wrapper, ONE button per row whose accessible name is the repo
+// plus its state, the recovery as a SIBLING button, and `aria-current` on the
+// selected row.
+//
+// ⚠️ COLOUR IS NEVER ALONE. The grade chip puts the hue in the TINT with
+// `--el-text-strong` ink and repeats the grade LETTER and the percentage as
+// text; the three non-graded states carry colour on the ICON and meaning in the
+// WORD. Selection reuses this page's existing current-row highlight (an
+// `--el-accent-on-surface` border on `--el-surface-soft`) PLUS a semibold repo
+// name, so it is not colour-only either.
+
+/** The SHIPPED tone rule, unchanged: the same thresholds `HealthSummary`'s grade
+ *  tile uses, so a repo's chip and its tile can never disagree. */
+function gradeTint(pct: number | null): string {
+  if (pct === null) return 'bg-(--el-muted)';
+  if (pct >= 70) return 'bg-(--el-tint-mint)';
+  if (pct >= 40) return 'bg-(--el-tint-yellow)';
+  return 'bg-(--el-tint-peach)';
+}
+
+export function AuditRepoList({
+  rows,
+  selectedRepoKey,
+  onSelect,
+  onRetry,
+}: {
+  rows: RepoAuditRow[];
+  selectedRepoKey: string | null;
+  onSelect: (repoKey: string) => void;
+  /** Re-read ONE repo's surface after its read failed. Never a re-audit: the
+   *  row failed to LOAD, which says nothing about whether it needs deriving. */
+  onRetry: (repoKey: string) => void;
+}) {
+  const t = useTranslations('codeHealth.audit.repos');
+  const format = useFormatter();
+
+  // §7 — with one connected repo there is nothing to choose between.
+  if (rows.length <= 1) return null;
+
+  const ordered = orderRepoAuditRows(rows);
+  const rollup = rollupRepoAuditRows(rows);
+
+  return (
+    <Card
+      header={
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-(--el-text-strong)">{t('title')}</span>
+          <Pill tone="neutral">{t('connected', { count: rollup.connected })}</Pill>
+        </div>
+      }
+    >
+      {/* Counts that are TRUE BY ADDITION — never a project-level mean (§2). */}
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--el-text-secondary)">
+        <span>{t('rollupAudited', { audited: rollup.audited, total: rollup.connected })}</span>
+        <span aria-hidden>·</span>
+        <span>{t('rollupFindings', { count: rollup.findings })}</span>
+        {rollup.deriving > 0 ? (
+          <>
+            <span aria-hidden>·</span>
+            <span>{t('rollupDeriving', { count: rollup.deriving })}</span>
+          </>
+        ) : null}
+        {rollup.notAudited > 0 ? (
+          <>
+            <span aria-hidden>·</span>
+            <span>{t('rollupNotAudited', { count: rollup.notAudited })}</span>
+          </>
+        ) : null}
+        {rollup.unavailable > 0 ? (
+          <>
+            <span aria-hidden>·</span>
+            <span>{t('rollupUnavailable', { count: rollup.unavailable })}</span>
+          </>
+        ) : null}
+      </p>
+
+      <div role="group" aria-label={t('groupLabel')} className="mt-3 flex flex-col">
+        {ordered.map((row) => (
+          <RepoRow
+            key={row.repoKey}
+            row={row}
+            selected={row.repoKey === selectedRepoKey}
+            onSelect={onSelect}
+            onRetry={onRetry}
+            when={row.auditedAt === null ? null : format.relativeTime(new Date(row.auditedAt))}
+          />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function RepoRow({
+  row,
+  selected,
+  onSelect,
+  onRetry,
+  when,
+}: {
+  row: RepoAuditRow;
+  selected: boolean;
+  onSelect: (repoKey: string) => void;
+  onRetry: (repoKey: string) => void;
+  when: string | null;
+}) {
+  const t = useTranslations('codeHealth.audit.repos');
+
+  // The row's state, as an icon PLUS a word — the accessible name carries the
+  // same pair, so the button announces "<repo>, Deriving…" rather than a bare
+  // repo name whose meaning lives only in a colour.
+  const stateLabel =
+    row.state === 'audited'
+      ? row.grade !== null && row.conformancePct !== null
+        ? t('grade', { grade: row.grade, pct: row.conformancePct })
+        : t('stateAudited')
+      : row.state === 'deriving'
+        ? t('stateDeriving')
+        : row.state === 'not_audited'
+          ? t('stateNotAudited')
+          : t('stateUnavailable');
+
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-control-x) py-(--spacing-control-y) last:border-b-0 ${
+        selected ? 'rounded-(--radius-control) border-(--el-accent-on-surface) bg-(--el-surface-soft)' : ''
+      }`}
+    >
+      {/* ONE button per row, named "<the action> · <the state>" (§6). The name is
+          set explicitly rather than left to the row's contents: a grade chip, a
+          count pill and a timestamp concatenate into an announcement nobody can
+          parse, and the STATE is the part that must survive into it. */}
+      <button
+        type="button"
+        aria-current={selected ? 'true' : undefined}
+        aria-label={`${t('pick', { repoRef: row.repoKey })} · ${stateLabel}`}
+        onClick={() => onSelect(row.repoKey)}
+        className="flex flex-1 flex-wrap items-center gap-2 rounded-(--radius-control) text-left focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      >
+        <GithubMark className="size-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+        <span
+          className={`font-mono text-xs text-(--el-text-identifier) ${selected ? 'font-semibold' : ''}`}
+        >
+          {row.repoKey}
+        </span>
+
+        {row.state === 'audited' ? (
+          <span
+            className={`rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong) ${gradeTint(row.conformancePct)}`}
+          >
+            {stateLabel}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-xs text-(--el-text-secondary)">
+            <StateIcon state={row.state} />
+            {stateLabel}
+          </span>
+        )}
+
+        <span className="flex-1" />
+
+        {row.state === 'audited' ? (
+          <Pill tone="neutral">{t('findingCount', { count: row.findingCount })}</Pill>
+        ) : null}
+        {/* `--el-text-muted` is 4.34:1 on `--el-surface-soft` (below AA), so the
+            timestamp on the SELECTED row steps up a level (§6). */}
+        <span
+          className={`text-xs ${selected ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)'}`}
+        >
+          {row.state === 'deriving'
+            ? when === null
+              ? t('startedRecently')
+              : t('startedWhen', { when })
+            : (when ?? '—')}
+        </span>
+      </button>
+
+      {/* The recovery is a SIBLING of the row button, never nested inside it. */}
+      {row.state === 'unavailable' ? (
+        <Button variant="ghost" size="sm" onClick={() => onRetry(row.repoKey)}>
+          {t('retry')}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function StateIcon({ state }: { state: RepoAuditRow['state'] }) {
+  if (state === 'deriving') {
+    return <Loader2 className="size-4 animate-spin text-(--el-accent-on-surface)" aria-hidden />;
+  }
+  if (state === 'not_audited') {
+    return <FolderGit2 className="size-4 text-(--el-warning)" aria-hidden />;
+  }
+  return <TriangleAlert className="size-4 text-(--el-danger)" aria-hidden />;
+}

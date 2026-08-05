@@ -5123,7 +5123,31 @@
         "low": "Low"
       },
       "conventionRuleRef": "§ Convention · {rule}",
-      "cleanCodeBaseline": "Clean-code baseline"
+      "cleanCodeBaseline": "Clean-code baseline",
+      "derivingOneTitle": "Deriving the audit for {repoRef}…",
+      "derivingOneDescription": "Motir is reading this repository’s code graph, deriving its convention, and scoring the code against it. The other repositories are unaffected — pick one above to read its report while this finishes.",
+      "unavailableOneTitle": "Couldn’t load the report for {repoRef}",
+      "unavailableOneDescription": "This repository’s audit couldn’t be read just now. The other repositories are unaffected — pick one above, or try this one again.",
+      "repos": {
+        "title": "Repositories",
+        "connected": "{count, plural, one {# connected} other {# connected}}",
+        "rollupAudited": "{audited} of {total} audited",
+        "rollupFindings": "{count, plural, one {# finding across them} other {# findings across them}}",
+        "rollupDeriving": "{count} deriving",
+        "rollupNotAudited": "{count} not audited yet",
+        "rollupUnavailable": "{count} couldn’t be loaded",
+        "grade": "{grade} · {pct}% conform",
+        "stateAudited": "Audited",
+        "findingCount": "{count, plural, one {# finding} other {# findings}}",
+        "stateDeriving": "Deriving…",
+        "stateNotAudited": "Not audited yet",
+        "stateUnavailable": "Couldn’t load this report",
+        "startedWhen": "started {when}",
+        "startedRecently": "just started",
+        "retry": "Try again",
+        "pick": "Show the audit for {repoRef}",
+        "groupLabel": "Choose a repository’s audit report"
+      }
     },
     "convention": {
       "emptyTitle": "No convention yet",

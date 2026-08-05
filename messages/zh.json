@@ -5119,7 +5119,31 @@
         "low": "低"
       },
       "conventionRuleRef": "§ 规范 · {rule}",
-      "cleanCodeBaseline": "清洁代码基线"
+      "cleanCodeBaseline": "清洁代码基线",
+      "derivingOneTitle": "正在为 {repoRef} 推导审核…",
+      "derivingOneDescription": "Motir 正在读取这个仓库的代码图、推导它的规范，并据此为代码评分。其他仓库不受影响 —— 可以先在上方选一个查看它的报告。",
+      "unavailableOneTitle": "无法加载 {repoRef} 的报告",
+      "unavailableOneDescription": "此刻读不到这个仓库的审核。其他仓库不受影响 —— 可以在上方选其他仓库，或重试这个。",
+      "repos": {
+        "title": "仓库",
+        "connected": "{count, plural, other {已连接 #}}",
+        "rollupAudited": "{total} 个中已审核 {audited} 个",
+        "rollupFindings": "{count, plural, other {合计 # 项发现}}",
+        "rollupDeriving": "{count} 个正在推导",
+        "rollupNotAudited": "{count} 个尚未审核",
+        "rollupUnavailable": "{count} 个无法加载",
+        "grade": "{grade} · 符合度 {pct}%",
+        "stateAudited": "已审核",
+        "findingCount": "{count, plural, other {# 项发现}}",
+        "stateDeriving": "正在推导…",
+        "stateNotAudited": "尚未审核",
+        "stateUnavailable": "无法加载此报告",
+        "startedWhen": "{when}开始",
+        "startedRecently": "刚刚开始",
+        "retry": "重试",
+        "pick": "查看 {repoRef} 的审核",
+        "groupLabel": "选择要查看审核报告的仓库"
+      }
     },
     "convention": {
       "emptyTitle": "尚无规范",
