@@ -324,31 +324,18 @@ describe('gitlab provider fetch methods (through the seam, real connection)', ()
     ]);
   });
 
-  it('fetchRepoTarball mints the token, GETs the URL-encoded archive path, and returns the bytes', async () => {
-    const { workspace } = await makeWorkspace('f@example.com');
-    const installationId = `gitlab-ws-${workspace.id}`;
-    await seedConnection({
-      workspaceId: workspace.id,
-      installationId,
-      accessToken: 'tar-token',
-      refreshToken: 'r',
-      expiresAt: new Date(Date.now() + 3_600_000),
-    });
-    const bytes = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x42]);
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
-      const u = String(url);
-      expect(u).toContain('/api/v4/projects/moooon%2Fmotir-core/repository/archive');
-      expect(u).toContain('sha=main');
-      expect((init as RequestInit | undefined)?.headers).toMatchObject({
-        authorization: 'Bearer tar-token',
-      });
-      return new Response(bytes, { status: 200 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const buf = await gitlab.fetchRepoTarball(installationId, 'moooon', 'motir-core', 'main');
-    expect(new Uint8Array(buf)).toEqual(bytes);
-  });
+  // ⚠️ `gitlab.fetchRepoTarball` HAD A TEST HERE UNTIL MOTIR-2124. It proved the
+  // provider could pull a project's archive bytes with the connection's token —
+  // which was true, had no production caller, and was precisely the reason the
+  // real gap went unnoticed: implementing the byte method satisfied the required
+  // interface, so `gitlabProvider` READ as complete while the capability the
+  // shipped fleet path needs (`resolveRepoTarballUrl`) was missing. GitLab cannot
+  // back that capability at all — its archive endpoint answers 200 with the bytes
+  // and never redirects to a self-authorizing URL — so the method is gone and the
+  // limitation is declared instead. The replacement coverage is the refusal:
+  // `tests/github/codeGraphIndexService.test.ts` (a GitLab installation resolves
+  // to `provider_cannot_index` and dispatches nothing) and
+  // `tests/git/repoTarballUrl.test.ts` (the capability predicate).
 });
 
 describe('gitlabConnectionService.getConnectionForWorkspace + disconnect', () => {

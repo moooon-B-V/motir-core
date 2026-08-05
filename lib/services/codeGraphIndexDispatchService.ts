@@ -738,10 +738,19 @@ export const codeGraphIndexDispatchService = {
    *     container-facing routes refuse the service token by design
    *     (`ServiceTokenNotAcceptedError`), so reaching for one would be a silent
    *     privilege escalation that the closed layer would then refuse anyway.
-   *   • THE TARBALL URL COULD NOT BE RESOLVED — the lenient alternative is
-   *     `fetchRepoTarball`, i.e. buffering a whole repo into this function's
-   *     heap, which is the OOM (§2: `motir-core`, 5/5 attempts) that moving
-   *     indexing onto containers exists to remove.
+   *   • THE TARBALL URL COULD NOT BE RESOLVED — the lenient alternative would be
+   *     to buffer a whole repo into this function's heap, which is the OOM (§2:
+   *     `motir-core`, 5/5 attempts) that moving indexing onto containers exists
+   *     to remove. (The byte-fetching provider method that made that alternative
+   *     reachable is gone since MOTIR-2124.)
+   *
+   *     ⚠️ A HOST THAT CAN *NEVER* RESOLVE ONE SHOULD NOT REACH THIS FUNCTION AT
+   *     ALL. Throwing is right for a resolve that FAILED; it is wrong as the
+   *     discovery mechanism for a host that structurally cannot, because a throw
+   *     here costs five retries and a dead-letter per trigger and explains
+   *     nothing. `codeGraphIndexService.resolveIndexTarget` refuses those up
+   *     front (`provider_cannot_index`), so what still throws here is a GitHub
+   *     repo whose resolve genuinely broke — which IS worth the retry budget.
    *
    * A PROVISION that fails is different in kind — it is about this dispatch, the
    * port guarantees no container was left behind, and its reason is diagnostic —

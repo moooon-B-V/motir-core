@@ -183,78 +183,13 @@ describe('github.parseCiStatusEvent', () => {
   });
 });
 
-describe('github.fetchRepoTarball (MOTIR-1500)', () => {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
-
-  beforeEach(() => {
-    _resetInstallationTokenCache();
-    vi.stubEnv('GITHUB_APP_ID', '999');
-    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-
-  it('mints the token, GETs /repos/{owner}/{name}/tarball/{ref} with the Bearer, and returns the bytes', async () => {
-    const tarballBytes = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x42, 0x99]); // gzip magic + noise
-    const fetchMock = vi.fn(async (url: string, _init?: RequestInit): Promise<Response> => {
-      const u = String(url);
-      if (u.includes('/access_tokens')) {
-        return new Response(
-          JSON.stringify({
-            token: 'ghs_tarball',
-            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-      }
-      if (u.includes('/tarball/')) {
-        return new Response(tarballBytes, { status: 200 });
-      }
-      throw new Error(`unexpected fetch to ${u}`);
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const buf = await github.fetchRepoTarball('inst-1', 'moooon', 'acme', 'main');
-    expect(new Uint8Array(buf)).toEqual(tarballBytes);
-
-    // The tarball call hit the right URL with the minted installation token.
-    const tarballCall = fetchMock.mock.calls.find(([u]) => String(u).includes('/tarball/'));
-    expect(tarballCall).toBeTruthy();
-    const [tarballUrl, init] = tarballCall!;
-    expect(tarballUrl).toBe('https://api.github.com/repos/moooon/acme/tarball/main');
-    expect((init as RequestInit | undefined)?.headers).toMatchObject({
-      authorization: 'Bearer ghs_tarball',
-    });
-  });
-
-  it('throws on a non-OK tarball response', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string): Promise<Response> => {
-        if (String(url).includes('/access_tokens')) {
-          return new Response(
-            JSON.stringify({
-              token: 'ghs_x',
-              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-          );
-        }
-        return new Response('nope', { status: 404 });
-      }),
-    );
-    await expect(github.fetchRepoTarball('inst-1', 'moooon', 'acme', 'main')).rejects.toThrow(
-      /tarball endpoint returned 404/,
-    );
-  });
-});
+// ⚠️ `github.fetchRepoTarball` HAD ITS OWN SUITE HERE UNTIL MOTIR-2124, and it
+// went with the method. It proved the byte-returning path minted a token, hit
+// `/repos/{owner}/{name}/tarball/{ref}` and returned the bytes — all true, and
+// all about a method that had had ZERO production callers since MOTIR-2057 moved
+// both code-graph jobs onto containers. What replaced the capability is
+// `resolveRepoTarballUrl`, covered end to end in `tests/git/repoTarballUrl.test.ts`,
+// which asserts the STRONGER property: the body is never read at all.
 
 describe('github.parsePushEvent (MOTIR-893)', () => {
   const SHA = 'f'.repeat(40);

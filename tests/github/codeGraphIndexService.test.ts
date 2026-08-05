@@ -203,4 +203,121 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     });
     expect(res).toEqual({ indexed: false, reason: 'installation_missing' });
   });
+
+  it('refuses a provider that cannot resolve a pre-signed tarball URL (MOTIR-2124)', async () => {
+    // ⚠️ THE UNIT-LEVEL HALF of the dispatch regression in
+    // `tests/jobs/code-graph-index.test.ts`. The fleet hands a container a URL and
+    // no host credential, so a provider with no `resolveRepoTarballUrl` can never
+    // index — GitLab's archive endpoint serves bytes and never redirects to a
+    // self-authorizing URL, so it has none. Before this gate the fact surfaced as
+    // a THROW at `bootIndexContainer`, i.e. five retries and a dead-letter per
+    // trigger; the verdict is what makes it terminal, legible and free.
+    const user = await usersService.createUser({
+      email: 'gitlab-cannot-index@example.com',
+      password: PASSWORD,
+      name: 'Owner',
+    });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Gitlab',
+      ownerUserId: user.id,
+    });
+    // The workspace needs a project: the three tenant verdicts are checked
+    // BEFORE the capability gate (a vanished tenant is a truer description of
+    // that run than "the host cannot index"), so an empty workspace would
+    // short-circuit to `no_projects` and prove nothing about the provider.
+    await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      name: 'Gitlab P',
+      identifier: 'PRJGL',
+    });
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-gitlab',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: [
+        { providerRepoId: '9', owner: 'moooon', name: 'r', defaultBranch: 'main', archived: false },
+      ],
+    });
+    // How a GitLab connection is really stored: the same entity under a different
+    // discriminator (`gitlabConnectionService` writes `provider: 'gitlab'`).
+    await db.githubInstallation.update({
+      where: { installationId: 'inst-gitlab' },
+      data: { provider: 'gitlab' },
+    });
+
+    const res = await codeGraphIndexService.resolveIndexTarget({
+      installationId: 'inst-gitlab',
+      workspaceId: workspace.id,
+      repoOwner: 'moooon',
+      repoName: 'r',
+      defaultBranch: 'main',
+    });
+
+    expect(res).toEqual({ indexed: false, reason: 'provider_cannot_index' });
+    // The verdict carries NO repoRef — a repo nothing indexed must never look
+    // indexed to `listSucceededCodeGraphIndexRepoRefs` (§6).
+    expect(res).not.toHaveProperty('repoRef');
+  });
+
+  it('an UNREGISTERED provider collapses into the same verdict, never a throw', async () => {
+    // `getGitProvider` throws on an unknown id, and this step's shipped contract
+    // is that it never throws (the vanished-tenant verdicts have to reach the
+    // ledger). A provider nothing registered is also the strongest possible case
+    // of "cannot be indexed", so it belongs in the same arm rather than crashing
+    // the run.
+    const user = await usersService.createUser({
+      email: 'unknown-provider@example.com',
+      password: PASSWORD,
+      name: 'Owner',
+    });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Unknown',
+      ownerUserId: user.id,
+    });
+    // The workspace needs a project: the three tenant verdicts are checked
+    // BEFORE the capability gate (a vanished tenant is a truer description of
+    // that run than "the host cannot index"), so an empty workspace would
+    // short-circuit to `no_projects` and prove nothing about the provider.
+    await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      name: 'Unknown P',
+      identifier: 'PRJUN',
+    });
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-unknown',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: [
+        {
+          providerRepoId: '11',
+          owner: 'moooon',
+          name: 'r',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
+    });
+    await db.githubInstallation.update({
+      where: { installationId: 'inst-unknown' },
+      data: { provider: 'bitbucket' },
+    });
+
+    await expect(
+      codeGraphIndexService.resolveIndexTarget({
+        installationId: 'inst-unknown',
+        workspaceId: workspace.id,
+        repoOwner: 'moooon',
+        repoName: 'r',
+        defaultBranch: 'main',
+      }),
+    ).resolves.toEqual({ indexed: false, reason: 'provider_cannot_index' });
+  });
 });

@@ -199,9 +199,10 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-bytes', 2);
     stubIndexFleet();
     containerExitsWith(0);
-    // The two ways bytes used to enter this process: the buffering fetch, and
-    // the motir-ai upload that carried them.
-    const fetchBytes = vi.spyOn(githubProvider, 'fetchRepoTarball');
+    // The two ways bytes used to enter this process: the buffering provider
+    // fetch, and the motir-ai upload that carried them. Since MOTIR-2124 the
+    // first is not spy-able because it no longer EXISTS — asserted below as
+    // absence, which is the stronger form of "was not called".
     const upload = vi.spyOn(motirAiClient, 'indexCodeGraph');
 
     const engine = new InngestTestEngine({ function: codeGraphIndex });
@@ -215,7 +216,12 @@ describe('system.code-graph-index — durable steps, never a supervision loop', 
     // the old path because the function buffered a whole repo; the pre-signed URL
     // now goes to the container and the body is never read here at all.
     expect(tarballBodyWasTouched()).toBe(false);
-    expect(fetchBytes).not.toHaveBeenCalled();
+    // Not "was not called" but "cannot be called": the byte-returning provider
+    // method is gone from the seam entirely (MOTIR-2124), so no future edit can
+    // reintroduce the buffering path by reaching for it.
+    expect(
+      (githubProvider as unknown as Record<string, unknown>)['fetchRepoTarball'],
+    ).toBeUndefined();
     expect(upload).not.toHaveBeenCalled();
     // What the container was actually handed: the resolved URL, not a token.
     for (const spec of fakeOrchestrator.specs) {
@@ -351,6 +357,120 @@ describe('resolveIndexTarget’s no-op verdicts still reach the ledger unchanged
     // The verdict is still the run's RESULT, which is what the assertion above
     // pins — and a workspace that exists (the two cases above) does get the row.
     expect(await indexRuns()).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A PROVIDER THAT CAN NEVER BE INDEXED (MOTIR-2124) — refused, not retried.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times', () => {
+  // ⚠️ THE REGRESSION THIS FILE DID NOT HAVE. The GitLab feed's own suite
+  // (`tests/gitlab/gitlabCodeGraphFeed.test.ts`) asserts the job is ENQUEUED and
+  // stops there, so both MOTIR-2027 (first index → containers) and MOTIR-2057
+  // (refresh → containers) went green while every GitLab index actually threw at
+  // `index-boot`, burned all five Inngest attempts and dead-lettered. What was
+  // missing was a test that drove a GitLab installation through the DISPATCH path.
+  // These do.
+  //
+  // The seed flips the installation's `provider` column, which is exactly how a
+  // GitLab connection is stored in production — `gitlabConnectionService` reuses
+  // the same `GithubInstallation` entity under `provider: 'gitlab'` — so what is
+  // under test is the shipped discriminator, not a mock.
+  async function seedGitlabWorkspace(slug: string, projectCount: number) {
+    const seeded = await seedWorkspace(slug, projectCount);
+    await db.githubInstallation.update({
+      where: { installationId: seeded.installationId },
+      data: { provider: 'gitlab' },
+    });
+    return seeded;
+  }
+
+  it('index: resolves to provider_cannot_index, boots NOTHING, and never throws', async () => {
+    const { workspaceId, installationId } = await seedGitlabWorkspace('cgf-gitlab', 2);
+    // The fleet is fully configured on purpose: the refusal must come from the
+    // PROVIDER's capability, not from an unconfigured deployment that would have
+    // refused a GitHub repo too.
+    stubIndexFleet();
+    containerExitsWith(0);
+    const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result, error, ctx } = (await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps([]),
+    })) as { result?: unknown; error?: unknown; ctx: Parameters<typeof stepIds>[0] };
+
+    // ⚠️ NO THROW IS THE WHOLE POINT. A throw is what Inngest retries, and five
+    // retries of a host that structurally cannot succeed is the dead-letter storm
+    // — 35 rows in 48 h, per push, explaining nothing.
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ indexed: false, reason: 'provider_cannot_index' });
+
+    // Nothing was spent, in dispatch order: no config gate, no admission slot, no
+    // boot, no container.
+    const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
+    expect(ids).toEqual(['resolve-target']);
+    expect(boot).not.toHaveBeenCalled();
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(await db.fleetInFlightSlot.count()).toBe(0);
+  });
+
+  it('index: records the reason on a SUCCEEDED ledger row that claims no repoRef', async () => {
+    const { workspaceId, installationId } = await seedGitlabWorkspace('cgf-gitlab-led', 1);
+    stubIndexFleet();
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    await engine.execute({ events: [indexEvent(installationId, workspaceId)] });
+
+    const runs = await indexRuns();
+    expect(runs).toHaveLength(1);
+    // `succeeded` means "this run is finished and will not be retried" — it does
+    // NOT mean the repo has a graph, and the two must stay distinguishable: the
+    // row carries NO `output.repoRef`, which is the key
+    // `listSucceededCodeGraphIndexRepoRefs` and the onboarding wizard read
+    // (`docs/decisions/code-graph-index-fleet.md` §6). A verdict that claimed one
+    // would tell every downstream reader this repo is indexed, forever.
+    expect(runs[0]!.status).toBe('succeeded');
+    expect(runs[0]!.output).toEqual({ indexed: false, reason: 'provider_cannot_index' });
+    expect(runs[0]!.output).not.toHaveProperty('repoRef');
+  });
+
+  it('refresh: a PUSH takes the same refusal — the five-dead-letters-per-push case', async () => {
+    const { workspaceId, installationId } = await seedGitlabWorkspace('cgj-gitlab-push', 2);
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { result, error } = (await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps([]),
+    })) as { result?: unknown; error?: unknown };
+
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ indexed: false, reason: 'provider_cannot_index' });
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    const runs = await refreshJobRuns();
+    expect(runs[0]!.status).toBe('succeeded');
+    expect(runs[0]!.output).toEqual({ indexed: false, reason: 'provider_cannot_index' });
+  });
+
+  it('the SAME workspace on GitHub still indexes — the refusal is the provider, not the seed', async () => {
+    // ⚠️ THE CONTROL. Without it, every assertion above would still pass if the
+    // gate refused everything, and "GitLab is not indexed" would be indistinguishable
+    // from "indexing is broken".
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgf-github-ctl', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+
+    const engine = new InngestTestEngine({ function: codeGraphIndex });
+    const { result } = await engine.execute({
+      events: [indexEvent(installationId, workspaceId)],
+      steps: sleepSteps(projectIds),
+    });
+
+    expect(result).toMatchObject({ indexed: true, repoRef: REPO_REF });
+    expect(fakeOrchestrator.provisioned.length).toBeGreaterThan(0);
   });
 });
 
@@ -758,8 +878,8 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     stubIndexFleet();
     containerExitsWith(0);
     // The two ways bytes used to enter this process on a push: the buffering
-    // fetch, and the motir-ai upload that carried them under the 180 s deadline.
-    const fetchBytes = vi.spyOn(githubProvider, 'fetchRepoTarball');
+    // provider fetch (removed outright by MOTIR-2124 — see the absence assertion
+    // below) and the motir-ai upload that carried them under the 180 s deadline.
     const upload = vi.spyOn(motirAiClient, 'indexCodeGraph');
 
     const engine = new InngestTestEngine({ function: codeGraphRefresh });
@@ -787,7 +907,12 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     // into this function and POST it; one container per (repo × project) now
     // fetches it from the pre-signed URL instead, and the body is never read here.
     expect(tarballBodyWasTouched()).toBe(false);
-    expect(fetchBytes).not.toHaveBeenCalled();
+    // Not "was not called" but "cannot be called": the byte-returning provider
+    // method is gone from the seam entirely (MOTIR-2124), so no future edit can
+    // reintroduce the buffering path by reaching for it.
+    expect(
+      (githubProvider as unknown as Record<string, unknown>)['fetchRepoTarball'],
+    ).toBeUndefined();
     expect(upload).not.toHaveBeenCalled();
     expect(fakeOrchestrator.provisioned).toHaveLength(2);
     for (const spec of fakeOrchestrator.specs) {

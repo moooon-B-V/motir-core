@@ -5385,7 +5385,7 @@
       "title": "Projects",
       "caption": "The GitLab projects Motir syncs. Connecting a project lets Motir read its merge requests and pipelines.",
       "empty": "No projects connected yet. Connect a project to start syncing merge requests and pipelines.",
-      "foot": "Connecting a project adds a webhook for merge-request and pipeline events.",
+      "foot": "Connecting a project adds a webhook for merge-request and pipeline events. Motir does not build a code index for GitLab projects, so AI planning cannot read their source.",
       "synced": "Synced",
       "syncLabel": "Sync {project}",
       "connectProject": "Connect a project",

@@ -112,47 +112,6 @@ export const githubProvider: GitProvider = {
     return list.map(normalizeRepo).filter((repo): repo is NormalizedRepo => repo !== null);
   },
 
-  async fetchRepoTarball(
-    installationId: string,
-    owner: string,
-    name: string,
-    ref: string,
-  ): Promise<ArrayBuffer> {
-    const { token } = await mintInstallationToken(installationId);
-    let res: Response;
-    // The fetch runs inside a background-job invocation with a finite platform
-    // budget, so it carries a deadline (MOTIR-1974) — an unanswered request must
-    // fail as an Error the job's retry budget can absorb, not by outliving the
-    // invocation.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
-    try {
-      // GitHub 302-redirects `/tarball` to a PRE-SIGNED codeload.github.com URL.
-      // `fetch` follows the redirect and (per the fetch spec) STRIPS the
-      // `Authorization` header on the cross-origin hop — which is fine: the
-      // codeload URL is already authorized by its signed query string, so the
-      // token is only needed on the first (api.github.com) hop.
-      res = await fetch(`${GITHUB_API}/repos/${owner}/${name}/tarball/${ref}`, {
-        headers: {
-          authorization: `Bearer ${token}`,
-          accept: 'application/vnd.github+json',
-          'user-agent': 'motir',
-        },
-        signal: controller.signal,
-      });
-    } catch (err) {
-      throw new Error(
-        controller.signal.aborted
-          ? `GitHub tarball endpoint timed out after ${REPO_TARBALL_TIMEOUT_MS}ms`
-          : `GitHub tarball endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!res.ok) throw new Error(`GitHub tarball endpoint returned ${res.status}`);
-    return res.arrayBuffer();
-  },
-
   async resolveRepoTarballUrl(
     installationId: string,
     owner: string,
@@ -167,11 +126,12 @@ export const githubProvider: GitProvider = {
     //
     // What comes back in `Location` is a `codeload.github.com` URL authorized by
     // its OWN signed query string. That is not an assumption: it is the mechanism
-    // `fetchRepoTarball` already depends on (see its comment — `fetch` strips
-    // `Authorization` on the cross-origin hop and the fetch still works), so the
-    // installation token does not reach `codeload` today either. Handing the URL
-    // to a container therefore leaks nothing and is strictly less privilege than
-    // handing over the token (`docs/decisions/code-graph-index-fleet.md` §10).
+    // the removed byte-fetching sibling depended on too — `fetch` follows the 302
+    // and (per the fetch spec) STRIPS `Authorization` on the cross-origin hop,
+    // yet the download still works — so the installation token does not reach
+    // `codeload` on either path. Handing the URL to a container therefore leaks
+    // nothing and is strictly less privilege than handing over the token
+    // (`docs/decisions/code-graph-index-fleet.md` §10).
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REPO_TARBALL_TIMEOUT_MS);
     let res: Response;
