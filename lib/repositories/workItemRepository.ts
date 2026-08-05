@@ -4120,6 +4120,46 @@ function joinListConditionSql(entity: 'lbl' | 'cmp', condition: FilterCondition)
   }
 }
 
+/**
+ * "Today", anchored in **UTC** — the boundary every relative date window
+ * (`in_last_days` / `in_next_days`) is measured from. NEVER `CURRENT_DATE`
+ * (MOTIR-2056).
+ *
+ * **The defect this replaces.** `CURRENT_DATE` is evaluated in the Postgres
+ * **session** timezone, while the stored values it was compared against are
+ * UTC: `w."createdAt"` / `"updatedAt"` / `"dueDate"` are `timestamp(3)`
+ * WITHOUT time zone holding UTC instants (so `col::date` is the UTC calendar
+ * date), and `custom_field_value.value_date` is a `date` written from the
+ * date-only-ISO/UTC convention. On any session whose timezone is not UTC the
+ * two sides are different calendars, so the window was off by one day for the
+ * hours where the local and UTC dates disagree — a row created one second ago
+ * did not match `created in_last_days 1`. It never showed up in CI because CI
+ * runs a UTC session; it was a real defect on every other deployment. Same
+ * class as the `NOW()`-vs-naive-`timestamp(3)` rule already pinned in
+ * `CLAUDE.md`: never let a naive UTC column meet a session-local instant.
+ *
+ * **The decision: UTC, not session-local and not viewer-local.** UTC is what
+ * the storage means, and it is already the app's pinned display zone
+ * (`lib/utils/datetime.ts` renders every issue timestamp in UTC, and the
+ * dashboard/reports/filter surfaces pass it explicitly). Anchoring here keeps
+ * the relative operators agreeing with both the stored value and what the user
+ * is shown, and makes the result independent of whichever timezone the
+ * database session happens to carry. `now()` is `timestamptz`, so
+ * `AT TIME ZONE 'UTC'` re-reads that instant as a naive UTC timestamp and
+ * `::date` truncates it to the UTC calendar day.
+ *
+ * **The ABSOLUTE operators (`on_or_before` / `on_or_after` / `between`) stay
+ * as they are — deliberately.** They compare `col::date` against a
+ * caller-supplied `'YYYY-MM-DD'::date`. Neither side reads the session
+ * timezone, so unlike the relative windows they were never skewed; a client
+ * date already means a *UTC calendar day*, which is the same meaning the
+ * relative windows now carry and the same one the UI renders. Making them
+ * viewer-local instead would need a timezone threaded from the request down
+ * into this compiler and would then disagree with every rendered timestamp —
+ * a product change, not a bug fix. Recorded here so the choice stays explicit.
+ */
+const UTC_TODAY_SQL = Prisma.sql`(now() AT TIME ZONE 'UTC')::date`;
+
 /** The typed value column a custom field's conditions probe (the 5.3.1
  * `[fieldId, value*]` index family), per field type. */
 const CF_VALUE_COLUMN_SQL: Record<CustomFieldFilterType, Prisma.Sql> = {
@@ -4190,15 +4230,17 @@ function customFieldConditionSql(
       const [from, to] = value as [string, string];
       return cfExistsSql(cf.id, Prisma.sql`${column} BETWEEN (${from})::date AND (${to})::date`);
     }
+    // `value_date` is a `date` written from the date-only-ISO/UTC convention,
+    // so the window boundary is UTC too — see UTC_TODAY_SQL (MOTIR-2056).
     case 'in_last_days':
       return cfExistsSql(
         cf.id,
-        Prisma.sql`${column} >= CURRENT_DATE - (${value as number})::int AND ${column} <= CURRENT_DATE`,
+        Prisma.sql`${column} >= ${UTC_TODAY_SQL} - (${value as number})::int AND ${column} <= ${UTC_TODAY_SQL}`,
       );
     case 'in_next_days':
       return cfExistsSql(
         cf.id,
-        Prisma.sql`${column} >= CURRENT_DATE AND ${column} <= CURRENT_DATE + (${value as number})::int`,
+        Prisma.sql`${column} >= ${UTC_TODAY_SQL} AND ${column} <= ${UTC_TODAY_SQL} + (${value as number})::int`,
       );
   }
 }
@@ -4239,10 +4281,12 @@ function compileConditionSql(condition: FilterCondition, def: FilterFieldDef): P
       const [from, to] = value as [string, string];
       return Prisma.sql`${column}::date BETWEEN (${from})::date AND (${to})::date`;
     }
+    // `col::date` on a naive-UTC `timestamp(3)` is the UTC calendar date, so
+    // the window boundary must be UTC too — see UTC_TODAY_SQL (MOTIR-2056).
     case 'in_last_days':
-      return Prisma.sql`${column}::date >= CURRENT_DATE - (${value as number})::int AND ${column}::date <= CURRENT_DATE`;
+      return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} - (${value as number})::int AND ${column}::date <= ${UTC_TODAY_SQL}`;
     case 'in_next_days':
-      return Prisma.sql`${column}::date >= CURRENT_DATE AND ${column}::date <= CURRENT_DATE + (${value as number})::int`;
+      return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} AND ${column}::date <= ${UTC_TODAY_SQL} + (${value as number})::int`;
     /* istanbul ignore next -- defensive: validateFilterAst rejects text ops on non-text fields before this switch */
     case 'contains':
     case 'not_contains':

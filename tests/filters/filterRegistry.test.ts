@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FILTER_ROW_CAP,
+  customFieldFilterFieldId,
   type FilterAst,
   type FilterCondition,
   type FilterFieldId,
@@ -12,6 +13,7 @@ import {
   filterValueEditorKind,
   validateFilterAst,
   validateFilterCondition,
+  type ProjectFilterReferents,
 } from '@/lib/filters/registry';
 import {
   FilterTooLargeError,
@@ -206,5 +208,67 @@ describe('compiled fragments are parameterized-only (the injection AC)', () => {
     expect(fragment.text).toContain('w."storyPoints" >= $');
     expect(fragment.text).toContain('w."dueDate"::date');
     expect(fragment.values).toEqual([3, 7]);
+  });
+
+  // MOTIR-2056 — the standing guard. `CURRENT_DATE` is evaluated in the
+  // Postgres SESSION timezone, so measuring a relative window from it while
+  // comparing against a naive-UTC column made the window off by one day on
+  // every non-UTC session. The compiled text must never contain it again: the
+  // boundary is `(now() AT TIME ZONE 'UTC')::date`. This is the enumerated
+  // form of the card's grep criterion — it covers every registered date
+  // field, built-in and custom, so a new date operator cannot reintroduce the
+  // skew without turning this red.
+  it('no date operator measures from a session-local CURRENT_DATE', () => {
+    const DATE_OPERATORS: FilterOperatorId[] = [
+      'on_or_before',
+      'on_or_after',
+      'between',
+      'in_last_days',
+      'in_next_days',
+    ];
+    const CF_DATE_ID = 'cf-date-field-id';
+    const referents: ProjectFilterReferents = {
+      customFields: new Map([
+        [CF_DATE_ID, { fieldType: 'date' as const, optionIds: new Set<string>() }],
+      ]),
+      labelIds: new Set<string>(),
+      componentIds: new Set<string>(),
+    };
+
+    const compile = (field: FilterFieldId, operator: FilterOperatorId): string =>
+      compileFilterConditionsSql(
+        {
+          combinator: 'and',
+          conditions: [{ field, operator, value: sampleValue(field, operator) } as FilterCondition],
+        },
+        referents,
+      ).text;
+
+    // Every registered date field × its date operators — built-ins from the
+    // registry, plus the custom-field date arm, which is a separate compiler
+    // (`customFieldConditionSql`) that carried the identical defect.
+    const compiled = [
+      ...FILTER_FIELDS.flatMap((def) =>
+        def.operators
+          .filter((operator) => DATE_OPERATORS.includes(operator))
+          .map((operator) => ({ label: `${def.id} ${operator}`, text: compile(def.id, operator) })),
+      ),
+      ...DATE_OPERATORS.map((operator) => ({
+        label: `cf:date ${operator}`,
+        text: compile(customFieldFilterFieldId(CF_DATE_ID), operator),
+      })),
+    ];
+
+    // Guard the guard: a vacuous enumeration (a renamed operator, a field that
+    // stopped resolving) would let the assertion below pass while checking
+    // nothing, so require that the UTC anchor is actually present somewhere.
+    expect(compiled.length).toBeGreaterThan(0);
+    expect(
+      compiled.filter(({ text }) => text.includes("(now() AT TIME ZONE 'UTC')::date")).length,
+    ).toBeGreaterThan(0);
+
+    for (const { label, text } of compiled) {
+      expect(text, `${label} must not read CURRENT_DATE`).not.toContain('CURRENT_DATE');
+    }
   });
 });
