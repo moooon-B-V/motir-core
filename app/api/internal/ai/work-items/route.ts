@@ -5,6 +5,7 @@ import {
   SystemPrincipalNotProvisionedError,
 } from '@/lib/ai/serviceAuth';
 import { aiWorkItemsService } from '@/lib/services/aiWorkItemsService';
+import { PlannerBugHomeNotProvisionedError } from '@/lib/ai/plannerBugHome';
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import {
   WorkItemNotFoundError,
@@ -34,6 +35,10 @@ import {
 // Typed errors → status:
 //   ServiceAuthError                     → 401 (bad/missing/unset bearer)
 //   SystemPrincipalNotProvisionedError   → 500 (the seed didn't run — invariant)
+//   PlannerBugHomeNotProvisionedError    → 500 (the `@planner-bug-home` marker
+//                                          cannot resolve — invariant, MOTIR-2201:
+//                                          LOUD, so a deaf self-learning loop is
+//                                          never mistaken for a quiet one)
 //   ProjectNotFoundError / WorkItemNotFoundError → 404 (unknown projectKey /
 //                                          parentKey — cross-tenant 404-not-403)
 //   ProjectAccessDeniedError             → 404 browse / 403 edit
@@ -96,6 +101,13 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json({ key: dto.identifier, id: dto.id }, { status: 201 });
   } catch (err) {
+    // The marker resolved to nothing: core's own meta tenant is mis-provisioned,
+    // so this is 500 — never the 404 an unknown `parentKey` gets. The consumer
+    // treats a failed file as non-fatal by design, which is exactly why the
+    // signal has to be unambiguous on THIS side (MOTIR-2201).
+    if (err instanceof PlannerBugHomeNotProvisionedError) {
+      return fail(err.code, err.message, err.httpStatus);
+    }
     if (err instanceof ProjectNotFoundError || err instanceof WorkItemNotFoundError) {
       return fail(err.code, err.message, 404);
     }

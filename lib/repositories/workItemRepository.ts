@@ -1461,11 +1461,12 @@ export const workItemRepository = {
 
   /**
    * The FIRST non-archived work item of a given kind carrying an EXACT title in
-   * a project, lowest `key` first (MOTIR-1466 — the planner-bug home resolution).
-   * Titles are not unique in general, so this is a marker lookup for a KNOWN,
-   * seed-created infra item (the home story) where exactly one match is expected;
-   * the `key asc` order makes the result deterministic if a stray duplicate ever
-   * exists. Read-only path → `db` singleton (optional `tx` for a guarded read).
+   * a project, lowest `key` first (MOTIR-1466 / MOTIR-2201 — the planner-bug home
+   * resolution). Titles are not unique in general, so this is a marker lookup for
+   * a KNOWN, migration-created infra item (the home epic) where exactly one match
+   * is expected; the `key asc` order makes the result deterministic if a stray
+   * duplicate ever exists. Read-only path → `db` singleton (optional `tx` for a
+   * guarded read).
    */
   async findByProjectKindAndTitle(
     projectId: string,
@@ -1480,23 +1481,8 @@ export const workItemRepository = {
     });
   },
 
-  /**
-   * The FIRST non-archived child of a given kind under a parent, lowest `key`
-   * first (MOTIR-1466 — the planner-bug home resolves its bug parent as the home
-   * epic's first story child, robust to the child's exact title). Read-only path
-   * → `db` singleton (optional `tx` for a guarded read).
-   */
-  async findFirstChildOfKind(
-    parentId: string,
-    kind: WorkItemKind,
-    tx?: Prisma.TransactionClient,
-  ): Promise<WorkItem | null> {
-    const client = tx ?? db;
-    return client.workItem.findFirst({
-      where: { parentId, kind, archivedAt: null },
-      orderBy: { key: 'asc' },
-    });
-  },
+  // (MOTIR-2201 removed `findFirstChildOfKind` — the planner-bug home was its
+  // only caller and no longer resolves through a child row at all.)
 
   /**
    * Non-archived work items in a project, cursor-paginated. Ordered by `key`
