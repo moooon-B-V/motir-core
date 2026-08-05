@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
+import { presentMe } from '@/lib/api/v1/identity/schema';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 
 // GET /api/v1/me (Story 11.1 · Subtask 11.1.2 — MOTIR-1858) — the identity
@@ -16,15 +17,10 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 // CLI side.
 //
 // 4-layer: parse nothing, call ONE service method (`apiTokensService.verify`),
-// return. No `db.*`, no `$transaction`. The response is shaped explicitly
-// rather than spread, because `verify` returns the raw Prisma `User` row and a
-// public API must never leak one (`emailVerified`, `image`, timestamps and
-// whatever a later migration adds would all become contract by accident).
+// return. No `db.*`, no `$transaction`. The response is `presentMe`'s output —
+// shaped field by field, never spread; that mapper's header records why (ADR
+// Amendment 5 §4: a v1 route MAPS THROUGH its schema).
 export const GET = withV1Route({ scope: 'read' }, async (ctx) => {
-  const { user, workspaceId, scopes } = await apiTokensService.verify(ctx.presentedToken);
-  return NextResponse.json({
-    user: { id: user.id, name: user.name, email: user.email },
-    workspaceId,
-    scopes,
-  });
+  const verified = await apiTokensService.verify(ctx.presentedToken);
+  return NextResponse.json(presentMe(verified));
 });

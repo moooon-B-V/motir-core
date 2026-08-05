@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { paginateKeyset, parsePageRequest } from '@/lib/api/v1/pagination';
+import { presentWorkspaceSummary } from '@/lib/api/v1/identity/schema';
 import { workspacesService } from '@/lib/services/workspacesService';
 
 // GET /api/v1/workspaces (Story 11.1 · Subtask 11.1.3 — MOTIR-1859) — the
@@ -21,18 +22,12 @@ import { workspacesService } from '@/lib/services/workspacesService';
 // holding a fresh token has no way to learn which workspace ids exist for it.
 //
 // 4-layer: parse the page params, call ONE service method, shape the envelope,
-// return. No `db.*`, no `$transaction`. Rows are shaped explicitly rather than
-// spread, so no Prisma column on `workspace` becomes public API by accident.
+// return. No `db.*`, no `$transaction`. Rows are `presentWorkspaceSummary`'s
+// output — shaped field by field, never spread; that mapper's header records
+// why (ADR Amendment 5 §4: a v1 route MAPS THROUGH its schema).
 export const GET = withV1Route({ scope: 'read' }, async (ctx) => {
   const page = parsePageRequest(ctx.req);
   const workspaces = await workspacesService.listUserWorkspaces(ctx.userId);
 
-  return NextResponse.json(
-    paginateKeyset(workspaces, page, (workspace) => ({
-      id: workspace.id,
-      name: workspace.name,
-      slug: workspace.slug,
-      createdAt: workspace.createdAt.toISOString(),
-    })),
-  );
+  return NextResponse.json(paginateKeyset(workspaces, page, presentWorkspaceSummary));
 });

@@ -63,12 +63,14 @@ describe('GET /api/v1/me', () => {
   it('leaks no Prisma column beyond id / name / email', async () => {
     const caller = await createV1Caller();
 
-    const body = (await (await GET(req(caller.headers))).json()) as {
+    const body = (await (await GET(req(caller.headers))).json()) as Record<string, unknown> & {
       user: Record<string, unknown>;
     };
 
-    // Shaped explicitly in the route, so a later migration adding a column to
-    // `user` cannot silently make it public API.
+    // Shaped by `presentMe` (MOTIR-2202), so a later migration adding a column
+    // to `user` cannot silently make it public API. Asserted on the REAL
+    // response the route returned, not on a fixture built from the schema.
+    expect(Object.keys(body).sort()).toEqual(['scopes', 'user', 'workspaceId']);
     expect(Object.keys(body.user).sort()).toEqual(['email', 'id', 'name']);
   });
 
