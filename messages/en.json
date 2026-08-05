@@ -5725,5 +5725,10 @@
     "policyAdditiveHeading": "Additive — allowed without notice",
     "policyForbiddenHeading": "Never, without a new major version",
     "policyAdrNote": "This page is the published commitment. The internal record it is generated from is the API decision record,"
+  },
+  "auditCoverage": {
+    "count": "{count, plural, one {# repository has no code-health audit.} other {# repositories have no code-health audit.}}",
+    "consequence": "Plans that touch them are made without their recorded standards.",
+    "action": "Review code health"
   }
 }
