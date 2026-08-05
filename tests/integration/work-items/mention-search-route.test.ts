@@ -10,7 +10,7 @@ import { usersService } from '@/lib/services/usersService';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { makeWorkItemFixture, type WorkItemFixture, nextTestPosition } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 5.8.4 — `GET /api/work-items/mention-search`, the candidate read behind
@@ -94,7 +94,7 @@ async function seedItem(args: {
         identifier: `${args.identifier}-${key}`,
         title: args.title,
         reporterId: args.reporterId,
-        position: String(key).padStart(6, '0'),
+        position: await nextTestPosition(args.projectId, tx),
       },
       tx,
     );

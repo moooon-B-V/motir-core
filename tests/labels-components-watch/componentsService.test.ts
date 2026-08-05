@@ -410,11 +410,15 @@ describe('componentsService.deleteComponent — the move-or-remove flow', () => 
 });
 
 describe('createWorkItem — components at create + the default-assignee rule', () => {
-  // These tests create items through the REAL service, so they use a fresh
-  // project with no fixture-minted rows: `createTestWorkItem` pads its
-  // `position` ('000001'), which is NOT a valid fractional-index key, and a
-  // service create appended after such a sibling would throw in
-  // `keyForAppend` (the known fixture/runtime position-key mismatch).
+  // A fresh project beside the fixture's own, so the last case below has a
+  // genuinely CROSS-project component to reject.
+  //
+  // It was originally introduced to dodge a fixture defect — `createTestWorkItem`
+  // wrote a zero-padded `position` ('000001'), which is not a valid
+  // fractional-index key, so a REAL service create appending after such a
+  // sibling threw in `keyForAppend`. That is fixed (MOTIR-2196): the fixture
+  // now mints the same key the service does, and a service create in the
+  // fixture's own project is safe.
   async function buildCreateScenario() {
     const s = await buildScenario();
     const project = await createTestProject({

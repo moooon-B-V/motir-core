@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { isValidOrderKey } from '@/lib/workItems/positioning';
 import { createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
@@ -124,6 +125,31 @@ describe('POST /api/v1/projects/{projectKey}/work-items', () => {
     );
     const leaked = (JSON.stringify(body).match(CUID) ?? []).filter((id) => !allowed.has(id));
     expect(leaked, 'parentKey included — no cuid names a work item').toEqual([]);
+  });
+
+  // MOTIR-2196. The case above creates a CHILD of the seeded row, so its
+  // sibling list is empty and `keyForAppend(null)` is reached — which is why
+  // the fixture's zero-padded `position` stayed dormant for so long. This one
+  // creates a true TOP-LEVEL SIBLING of a fixture-seeded row, so the service
+  // reads that row's `position` as the append bound. Against the padded
+  // fixture it was a bare 500 (`invalid order key head: 0`, unrecognised by
+  // `classifyApiV1Error`); it is a 201 now, and the minted key sorts after
+  // the seeded one.
+  it('creates a TOP-LEVEL sibling of a fixture-seeded row (no invalid order key)', async () => {
+    const seeded = await createTestWorkItem(caller.fixture, { kind: 'story', title: 'A story' });
+
+    const res = await post(caller, { kind: 'task', title: 'Its top-level sibling' });
+    const body = await res.json();
+
+    expect(res.status, JSON.stringify(body)).toBe(201);
+
+    const rows = await db.workItem.findMany({
+      where: { projectId: caller.fixture.projectId, parentId: null },
+      orderBy: { position: 'asc' },
+      select: { identifier: true, position: true },
+    });
+    expect(rows.map((r) => r.identifier)).toEqual([seeded.identifier, body.key]);
+    expect(rows.every((r) => isValidOrderKey(r.position))).toBe(true);
   });
 
   it('carries the leaf-authoring fields through', async () => {
