@@ -1302,6 +1302,7 @@
       "deleteErrorTitle": "无法删除工作区",
       "deleteModalTitle": "删除 {workspaceName}？",
       "deleteModalDesc": "这将永久删除该工作区及其所有数据（项目、工作项、成员）。此操作无法撤销。",
+      "deleteModalCodeIndex": "Motir 为该工作区的仓库建立的代码索引会被立即删除——删除工作区没有任何恢复期。",
       "confirmLabel": "输入 {workspaceName} 以确认",
       "deleteConfirmButton": "删除工作区"
     },
@@ -1320,7 +1321,8 @@
       "archivedToast": "项目已归档",
       "archiveErrorTitle": "无法归档项目",
       "modalTitle": "归档 {projectName}？",
-      "modalDesc": "归档会将该项目从切换器和列表中隐藏。其工作项和历史记录会保留——你之后可以恢复该项目。此操作不会删除任何数据。",
+      "modalDesc": "归档会将该项目从切换器和列表中隐藏。其工作项和历史记录会保留——你之后可以恢复该项目。",
+      "modalCodeIndex": "Motir 还会在 {days} 天后删除它为该项目的仓库建立的代码索引。在此之前重新建立索引即可取消该删除。",
       "confirmLabel": "输入 {identifier} 以确认",
       "modalConfirm": "归档项目"
     },
@@ -4869,7 +4871,8 @@
       "title": "仓库",
       "caption": "仅包含你在 GitHub 上选择的仓库。Motir 只能读取这些仓库，看不到其他任何仓库。",
       "empty": "尚未选择任何仓库。在 GitHub 上选择仓库即可开始。",
-      "foot": "如需添加或移除仓库，请在 GitHub 上更新 Motir App 的访问权限。"
+      "foot": "如需添加或移除仓库，请在 GitHub 上更新 Motir App 的访问权限。",
+      "codeIndex": "在那里移除某个仓库，Motir 也会在 {days} 天后删除它为该仓库建立的代码索引。在此之前重新选择该仓库即可取消该删除。"
     },
     "needsAccess": {
       "pill": "需要操作",

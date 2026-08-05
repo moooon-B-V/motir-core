@@ -147,6 +147,16 @@ function DeleteConfirmModal({
           <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
             {t('danger.deleteModalDesc')}
           </p>
+          {/* IMMEDIATE, and the copy must say so (MOTIR-2171 · §14.3). The other
+              three offboarding triggers leave the project row standing, so their
+              30-day window is a real grace period; a workspace delete is a hard
+              cascade with no surface left to undo into. Copy that flattened the two
+              into one reassuring sentence would promise a recovery window that does
+              not exist for the most destructive action the product offers — worse
+              than saying nothing, because the user would rely on it. */}
+          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
+            {t('danger.deleteModalCodeIndex')}
+          </p>
         </div>
       </div>
 

@@ -14,6 +14,7 @@ import {
   notificationFanInOnTransitioned,
 } from './definitions/notificationFanIn';
 import { attachmentGc } from './definitions/attachmentGc';
+import { codeGraphOffboardSweep } from './definitions/codeGraphOffboardSweep';
 import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
 import { filterSubscriptionDeliver } from './definitions/filterSubscriptionDeliver';
 import {
@@ -49,6 +50,7 @@ export const jobFunctions = [
   notificationFanInOnWorkItemMentioned,
   notificationFanInOnTransitioned,
   attachmentGc,
+  codeGraphOffboardSweep,
   filterSubscriptionTick,
   filterSubscriptionDeliver,
   automationEngineOnCreated,

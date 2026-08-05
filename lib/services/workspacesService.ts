@@ -11,6 +11,7 @@ import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { entitlementsService } from '@/lib/services/entitlementsService';
+import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import {
   AlreadyMemberError,
@@ -614,10 +615,46 @@ export const workspacesService = {
    */
   async deleteWorkspace(input: { workspaceId: string; actorUserId: string }): Promise<void> {
     await workspacesService.assertMembership(input.actorUserId, input.workspaceId);
+
+    // ⚠️ ENUMERATE THE PROJECTS BEFORE THE CASCADE TAKES THEM
+    // (MOTIR-2166 · `docs/decisions/code-graph-index-fleet.md` §14.3).
+    //
+    // This read has to happen HERE, above the delete, and it is the one ordering
+    // trap in Decision 10 that is easy to get wrong and impossible to notice
+    // afterwards. The other three offboarding triggers leave the project rows
+    // standing, so their scope is still readable post-commit; `workspaceRepository
+    // .delete` cascades the projects away. Read the list after it and there is
+    // nothing to enumerate — the graphs then have no queue row naming them and
+    // become permanently unreachable orphans, which is the precise end state §14
+    // exists to prevent, produced by the code meant to prevent it.
+    //
+    // INCLUDING ARCHIVED projects: an archived project's graph still exists (its
+    // own archive enqueued a WINDOWED row), and a workspace delete must supersede
+    // that with an immediate one. `findByWorkspace` filters archived out, so this
+    // deliberately uses the unfiltered read.
+    const projectIds = await withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      (tx) => projectRepository.findAllIdsByWorkspace(input.workspaceId, tx),
+    );
+
     await withWorkspaceContext(
       { userId: input.actorUserId, workspaceId: input.workspaceId },
       (tx) => workspaceRepository.delete(input.workspaceId, tx),
     );
+
+    // POST-COMMIT, BEST-EFFORT — and IMMEDIATE, with no retention window (§14.3).
+    // The other three arms leave a surface to undo into, so their window is a real
+    // grace period; a hard delete leaves none, and "a grace period the user cannot
+    // reach is not a grace period" — a window here would only extend retention.
+    //
+    // The queue row survives this delete because `code_graph_offboarding` carries
+    // NO foreign key to workspace or project. That is the single most important
+    // property in the story, and this is the call that depends on it.
+    await codeGraphOffboardingService.enqueueQuietly({
+      coreWorkspaceId: input.workspaceId,
+      coreProjectIds: projectIds,
+      reason: 'workspace_deleted',
+    });
   },
 
   /**

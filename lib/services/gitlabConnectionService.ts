@@ -1,6 +1,7 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { encryptToken, decryptToken } from '@/lib/gitlab/tokenCrypto';
 import {
@@ -285,6 +286,21 @@ export const gitlabConnectionService = {
         defaultBranch: match.defaultBranch,
       });
     }
+
+    // CANCEL any pending offboarding for this repo (MOTIR-2166 ·
+    // `docs/decisions/code-graph-index-fleet.md` §14.3). This is what makes the
+    // 30-day window a GRACE PERIOD rather than a delay: without it, a user who
+    // disconnects a repo by mistake and re-connects an hour later still loses
+    // their index 30 days later, for no reason anyone could explain.
+    //
+    // ⚠️ OUTSIDE the `isNewlyConnected` branch, deliberately. A re-connect of a
+    // repo whose row was never removed does not re-index — but it is exactly the
+    // case where a pending removal must be called off, and gating the cancel on
+    // "newly connected" would leave that user's graph queued for deletion by an
+    // action that plainly reversed the deletion's cause.
+    await codeGraphOffboardingService.cancelForRepos(ctx.workspaceId, [
+      `${match.owner}/${match.name}`,
+    ]);
   },
 
   /**
@@ -296,15 +312,40 @@ export const gitlabConnectionService = {
     ctx: { userId: string; workspaceId: string },
     repoId: string,
   ): Promise<void> {
-    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
-      const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
+    // Read the row BEFORE deleting it — `owner/name` is the `repoRef` the
+    // offboarding queue is keyed by, and it is gone once the row is (MOTIR-2166 ·
+    // `docs/decisions/code-graph-index-fleet.md` §14.3). Same shape as the
+    // workspace-delete arm's project enumeration, one scale down.
+    const disconnected = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
+          ctx.workspaceId,
+          'gitlab',
+          tx,
+        );
+        if (!conn) return null;
+        const repo = await githubRepoRepository.findByInstallationAndRepoId(conn.id, repoId, tx);
+        await githubRepoRepository.deleteByInstallationAndRepoId(conn.id, repoId, tx);
+        return repo;
+      },
+    );
+
+    // POST-COMMIT, BEST-EFFORT — enqueue this repo's derived code graph for
+    // removal after the retention window (§14.3, the per-repo arm). Windowed, and
+    // cancelled if the user re-connects: a re-index is a metered container per
+    // (repo × project), so an immediate purge would bill a user for their own
+    // misclick.
+    //
+    // ONE ROW PER PROJECT: a graph is per (project × repo) on motir-ai's side, so
+    // a repo disconnect fans out across the workspace's projects.
+    if (disconnected) {
+      await codeGraphOffboardingService.enqueueForRepos(
         ctx.workspaceId,
-        'gitlab',
-        tx,
+        [`${disconnected.owner}/${disconnected.name}`],
+        'repo_disconnected',
       );
-      if (!conn) return;
-      await githubRepoRepository.deleteByInstallationAndRepoId(conn.id, repoId, tx);
-    });
+    }
   },
 
   /**
@@ -313,13 +354,30 @@ export const gitlabConnectionService = {
    * FK `onDelete: Cascade`.
    */
   async disconnect(ctx: { userId: string; workspaceId: string }): Promise<void> {
-    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
-      const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
-        ctx.workspaceId,
-        'gitlab',
-        tx,
-      );
-      if (conn) await githubInstallationRepository.deleteByInstallationId(conn.installationId, tx);
-    });
+    // Enumerate the connection's repos BEFORE the cascade removes them — the same
+    // ordering trap as the workspace-delete arm (MOTIR-2166 · §14.3). The
+    // `github_repo` rows cascade off the installation, so after this transaction
+    // there is nothing left to name.
+    const disconnectedRefs = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
+          ctx.workspaceId,
+          'gitlab',
+          tx,
+        );
+        if (!conn) return [];
+        const repos = await githubRepoRepository.listByInstallation(conn.id, tx);
+        await githubInstallationRepository.deleteByInstallationId(conn.installationId, tx);
+        return repos.map((repo) => `${repo.owner}/${repo.name}`);
+      },
+    );
+
+    // POST-COMMIT, BEST-EFFORT — every repo on the connection, windowed (§14.3).
+    await codeGraphOffboardingService.enqueueForRepos(
+      ctx.workspaceId,
+      disconnectedRefs,
+      'connection_disconnected',
+    );
   },
 };

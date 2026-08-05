@@ -9,6 +9,7 @@ import {
   type IndexPollResult,
   type IndexSession,
 } from '@/lib/services/codeGraphIndexDispatchService';
+import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import type { IndexAdmissionVerdict } from '@/lib/services/codeGraphIndexAdmissionService';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
@@ -264,6 +265,28 @@ export async function runIndexFleetSteps(
       throw dispatchFailure(target.repoRef, projectId, outcome);
     }
   }
+
+  // CANCEL any pending code-graph offboarding for this repo (MOTIR-2166 ·
+  // `docs/decisions/code-graph-index-fleet.md` §14.3 — "a repo reconnected, or
+  // RE-INDEXED, before its due date clears the queue row").
+  //
+  // The re-index arm matters independently of the re-connect one: a repo can be
+  // indexed again without any connect event — a default-branch push runs
+  // `system.code-graph-refresh` through this very function — and a graph that was
+  // just rebuilt is plainly not one the tenant has finished with. Leaving the row
+  // would delete a live, current index on a 30-day timer nobody could account for.
+  //
+  // Its OWN step, and the LAST one: it runs only when every project's container
+  // exited 0 (the loop above throws otherwise), so a partial index never cancels a
+  // removal it did not actually reverse. Quiet by construction — `cancelQuietly`
+  // swallows, because a queue write must never fail an index that succeeded.
+  await ctx.step.run('cancel-offboarding', async () => ({
+    cancelled: await codeGraphOffboardingService.cancelQuietly({
+      coreWorkspaceId: input.workspaceId,
+      coreProjectIds: target.projectIds,
+      repoRefs: [target.repoRef],
+    }),
+  }));
 
   // The ledger's row: ONE per repo, with ONE `output.repoRef`, reached only when
   // EVERY project's container exited 0.

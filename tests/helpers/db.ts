@@ -29,3 +29,17 @@ export async function truncateAuthTables(): Promise<void> {
 export async function truncateJobRuns(): Promise<void> {
   await db.$executeRawUnsafe('TRUNCATE TABLE "job_run", "job_run_dlq" RESTART IDENTITY CASCADE');
 }
+
+// `code_graph_offboarding` (MOTIR-2166) carries NO foreign key to workspace or
+// project — deliberately, so a pending removal OUTLIVES the workspace-delete
+// cascade that makes it necessary (`docs/decisions/code-graph-index-fleet.md`
+// §14.5). The consequence for tests is the same one `idea_draft` and `job_run`
+// have: a `TRUNCATE "workspace" CASCADE` never reaches it, so a suite that writes
+// these rows must clear them explicitly or they leak into the next test.
+//
+// That leak is worth understanding rather than routing around: it is the table's
+// load-bearing property, observed. A row that survived `truncateAuthTables` is a
+// row that will survive a customer's workspace delete.
+export async function truncateCodeGraphOffboarding(): Promise<void> {
+  await db.$executeRawUnsafe('TRUNCATE TABLE "code_graph_offboarding" RESTART IDENTITY CASCADE');
+}
