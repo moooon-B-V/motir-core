@@ -1257,6 +1257,20 @@
       "rules": "Rules",
       "repositories": "Repositories"
     },
+    "roles": {
+      "admin": {
+        "name": "Admin",
+        "description": "Full control of the project — its settings, its members and all of its work."
+      },
+      "member": {
+        "name": "Member",
+        "description": "Does the work: creates and edits work items, comments and attaches files."
+      },
+      "viewer": {
+        "name": "Viewer",
+        "description": "Read-only. Sees everything in the project and changes nothing."
+      }
+    },
     "area": {
       "noProjectTitle": "No project selected",
       "noProjectDescription": "Choose a project from the switcher, or create one from the dashboard, to manage its settings."

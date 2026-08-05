@@ -1257,6 +1257,20 @@
       "rules": "规则",
       "repositories": "代码仓库"
     },
+    "roles": {
+      "admin": {
+        "name": "管理员",
+        "description": "对项目拥有完全控制权——设置、成员及全部工作内容。"
+      },
+      "member": {
+        "name": "成员",
+        "description": "负责推进工作：创建和编辑工作项、发表评论、上传附件。"
+      },
+      "viewer": {
+        "name": "访客",
+        "description": "只读。可查看项目中的全部内容，但不能做任何更改。"
+      }
+    },
     "area": {
       "noProjectTitle": "未选择项目",
       "noProjectDescription": "从切换器中选择一个项目，或从工作台创建一个项目，以管理其设置。"
