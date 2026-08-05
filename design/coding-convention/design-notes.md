@@ -57,6 +57,14 @@ Built from the real design system: the mock inlines the token layer from
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Coding-convention review / approve (all states + access path) | `convention.mock.html` (source of truth) · `convention.png` (light export) · `convention.dark.png` (dark-parity export) |
 
+> **Amendment (MOTIR-2245, 2026-08-05):** adds **Panel 8 — the audit tab's PER-REPO TRIGGERS**:
+> a row action that audits ONE repo and a header action that audits every repo with no report, over
+> the repo-scoped trigger MOTIR-2247 ships. It **amends Panel 7 and redraws nothing** — Panel 7's row
+> anatomy, states, ordering, selection model and N = 1 rule all stand. It settles two questions the
+> build card would otherwise invent answers to: an `unavailable` row gets **no** audit trigger (only
+> its free re-READ), and **no trigger confirms** (the shipped whole-set button, which costs more,
+> already does not). Panel 8 §8 records what it gives and takes, by key.
+
 ## The model: convention ↔ audit (the load-bearing relationship)
 
 **Corrected by MOTIR-1660 (7.14.2e, 2026-07-06).** The two artifacts are **linked**, and the
@@ -682,6 +690,141 @@ So the card's own escape hatch applies, and this is how it is honoured:
   named here so the choice is made deliberately in one place instead of discovered as drift.
 
 ---
+
+### Panel 8 — the audit tab's PER-REPO TRIGGERS (MOTIR-2245)
+
+**An AMENDMENT to Panel 7, not a redraw of it.** Panel 7's row anatomy, its four states, its
+ordering, its selection model, its rollup and its N = 1 rule all stand exactly as written; this
+panel appends ONE element to the row and ONE to the card header. Panel 4b's A–D pre-audit states,
+the report panel and the Convention tab are untouched.
+
+**The problem it answers.** MOTIR-2207 made every connected repo's state legible and left every row
+**read-only**. `AuditRepoList`'s only per-row action is `onRetry`, which re-**READS** a failed row
+and is documented in the shipped component as _"Never a re-audit: the row failed to LOAD, which says
+nothing about whether it needs deriving."_ So the page can tell an admin that `motir-meta` has never
+been assessed and offers them exactly one way to act on it: a button that re-derives **all five**
+repos. Learning about the sixth repo costs six derivations, which is why people leave repos
+un-audited instead.
+
+#### 1 · The two controls
+
+| Control                            | Where                                               | Scope                                 | Weight                                                          |
+| ---------------------------------- | --------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------- |
+| **Audit this repo** / **Re-audit** | the row's **last** element, after the timestamp     | that repo alone                       | `Button` `variant="secondary"` / `variant="ghost"`, `size="sm"` |
+| **Audit the {n} with no report**   | the card **header**, after the `{n} connected` Pill | every repo in the `not_audited` state | `Button` `variant="secondary"` `size="sm"`                      |
+
+Both post MOTIR-2247's scoped `POST /api/ai/coding-convention/refresh` with an explicit `repoKeys`.
+No new primitive, no new variant: all of it is the shipped `Button` at `size="sm"`.
+
+#### 2 · Per row state — and the one that gets NO trigger
+
+| Row state       | Trailing action                                              | Why                                                                                                      |
+| --------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **audited**     | **Re-audit** (ghost)                                         | the row already has a report; re-deriving is the rarer need, so it must not compete with the row's grade |
+| **not_audited** | **Audit this repo** (secondary, bordered)                    | the one thing worth doing on this row — its weight says so without shouting                              |
+| **deriving**    | **nothing**                                                  | the work is already happening; a second trigger can only duplicate it                                    |
+| **unavailable** | the shipped **Try again** (ghost) — and **NO audit trigger** | ⚠️ see below                                                                                             |
+
+**⚠️ An `unavailable` row gets NO audit trigger, and this is the panel's sharpest decision.** The
+read FAILED, so nothing on screen knows whether that repo has a report at all; offering "Audit this
+repo" there spends a derivation to fix what may be a display error. **Re-READ first — it is free,
+and it tells you which state the row is really in**, after which the row renders its own correct
+action. This also disposes of the adjacency hazard the card was filed over rather than merely
+mitigating it: the free recovery and the paid trigger are **mutually exclusive per row**, so the two
+never sit one pixel apart and a mis-click between them is not possible rather than unlikely.
+
+**A `deriving` row's action is REMOVED, not disabled** — Panel 4b State C's shipped rule
+(_"the action is REMOVED, not disabled"_) applied one altitude down. A disabled button invites a
+second press and explains nothing; the spinner and the word already say what is happening.
+
+**A11y — the row stays a `role="group"` of sibling buttons.** The trigger is a **sibling** of the
+row's select button, exactly as `onRetry` already is, never nested inside it (Panel 7 §6's recorded
+constraint: a `role="option"` row may not contain interactive children — the `SavedFilterDropdown`
+6.2.6 axe failure). The select button's `aria-current` and its `"<pick> · <state>"` accessible name
+are unchanged. **Each trigger carries its OWN accessible name that repeats the repo** —
+_"Audit moooon-B-V/motir-meta"_ — because "Audit this repo" alone is meaningless read out of context.
+
+#### 3 · The header control, and its ZERO state
+
+It is labelled with the **count** — _"Audit the 2 with no report"_ — so the button states its own
+price before it is pressed; it is the only control on this page that acts on a SET.
+
+**At zero un-audited repos the control is ABSENT, not disabled** — the same rule as the deriving
+row. A disabled button whose only meaning is "there is nothing to do" is a control that has to be
+explained, and the rollup already says _5 of 5 audited_. Nothing becomes unreachable: per-row
+**Re-audit** stays on every row.
+
+#### 4 · The ARRIVAL from the /planning nudge
+
+MOTIR-2246's nudge links here, so this panel owes the first second after that click (drawn as 8a).
+**The arrival does NOT re-order the list and adds no deep-link parameter.** Panel 7 §4's order is
+worst-first, so an admin arriving from the nudge sees the graded rows before the un-audited ones —
+deliberately: the nudge already NAMED the repos it is about, the header control acts on all of them
+at once and sits above every row, and re-sorting on arrival would mean the same page shows a
+different order depending on how you reached it.
+
+#### 5 · The CONFIRM question, answered
+
+**No confirmation dialog**, and the evidence is on this page rather than in taste. The shipped
+whole-project **"Re-audit now"** fires on ONE click with no confirm — and it is the _expensive_
+action, deriving every connected repo. Every trigger this panel adds costs strictly LESS than that
+button already costs unconfirmed, so gating the cheaper action while the dearer one stays ungated
+would teach exactly the wrong lesson about which press is worth pausing over.
+
+What replaces a dialog, all of it already shipped: the row flips to **Deriving…** immediately, so the
+press is visibly acknowledged; the trigger is then REMOVED from that row, so it cannot be pressed
+twice; and MOTIR-2223's durable in-flight record means even a reload cannot produce a duplicate run.
+If a confirm is ever wanted it belongs on the **whole-set** button FIRST — a separate decision about
+a control this panel does not touch.
+
+#### 6 · N = 1 — the page is UNCHANGED, and no second affordance is invented
+
+`AuditRepoList` returns `null` at one connected repo (Panel 7 §7 — selection and comparison are both
+vacuous with one row), so there is no row to hang a row action on and no header to hang a bulk action
+on. **That is not a hole.** `AuditPanel`'s existing primary **"Re-audit now"** ALREADY audits the only
+repo, and at N = 1 the whole-set fan-out and a per-repo scope are the same request. The single-repo
+page is byte-identical to today's, and the build card must not invent a second affordance for it.
+
+#### 7 · Copy — new keys under `codeHealth.audit.repos` (each needs its `zh.json` twin)
+
+| Key                     | Copy                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `repos.auditOne`        | Audit this repo                                                                      |
+| `repos.auditOneLabel`   | Audit {repoRef}                                                                      |
+| `repos.reauditOne`      | Re-audit                                                                             |
+| `repos.reauditOneLabel` | Re-audit {repoRef}                                                                   |
+| `repos.auditUnaudited`  | {count, plural, one {Audit the # with no report} other {Audit the # with no report}} |
+
+#### 8 · What this amendment GIVES and TAKES, by key (`notes.html` #214)
+
+| Card                                 | Gives                                                                                                                                                                                   | Takes               |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **MOTIR-2249** (the build card)      | both controls, their per-state placement, the weight/word rule, the ABSENT-at-zero rule, the accessible-name rule, the arrival behaviour, the confirm decision, and the copy keys in §7 | **YES — see below** |
+| **MOTIR-2246** (the nudge design)    | the arrival target: what the nudge's link lands on (8a), so its own asset can describe where it sends people                                                                            | —                   |
+| **MOTIR-2247** (the scoped trigger)  | nothing — it ships the server half and is `in_review`; this panel is its first consumer                                                                                                 | —                   |
+| MOTIR-2207 / MOTIR-2087 / MOTIR-2206 | nothing — their panels are not redrawn                                                                                                                                                  | —                   |
+
+**The TAKE, applied to MOTIR-2249 in this same pass.** MOTIR-2249's body reads: the row action
+_"sits beside — and must stay visually and semantically distinct from — the shipped `onRetry`
+recovery."_ §2 above decides that the two are **mutually exclusive per row** — an `unavailable` row
+offers only the free re-read — so they never sit beside each other at all. Built as written, the card
+would place a paid trigger next to a free recovery in exactly the row state where a user is most
+confused, which is the hazard the card itself was filed to avoid. MOTIR-2249's criteria are amended
+in this pass to require the opposite: **the `unavailable` row renders its re-read and no audit
+trigger**, asserted.
+
+#### 9 · Designed against a RENDER of the shipped surface (`notes.html` #73)
+
+The `AuditRepoList` this amends is SHIPPED, so it was rendered rather than reasoned about: the real
+component was dumped through the repo's own vitest + RTL setup across all four row states, and 8a/8b
+compose from that output. Two things the render settled that reading the `.tsx` would not have:
+
+- **The rollup carries a FIFTH clause the notes' §6 table never listed** — `rollupUnavailable`
+  (_"1 couldn't be loaded"_) renders whenever a read failed. Panel 8's rollups are written against
+  the real set of clauses, not the table.
+- **The trailing timestamp already occupies the row's last slot** (`—` in the non-audited states), so
+  the trigger appends AFTER it rather than replacing it — which is why §2 specifies "the row's last
+  element" rather than "the trailing slot".
 
 ## Per-element `--el-*` colour role (the token map)
 
