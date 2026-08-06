@@ -68,12 +68,39 @@ import { InvalidSearchCursorError } from './searchCursor';
 //
 // Two jobs:
 //  1. `toolOk` builds the MCP DUAL-CONTENT result every tool returns — a
-//     compact human-readable `text` block AND `structuredContent` (the DTO).
-//     Agents parse `structuredContent`; a human watching the session reads the
-//     text. (We deliberately do NOT declare an `outputSchema` on the tools, so
+//     compact human-readable `text` block AND `structuredContent`. Agents parse
+//     `structuredContent`; a human watching the session reads the text.
+//
+//     ⚠️ SUPERSEDED 2026-08-06 (MOTIR-2227 · ADR Amendment 7). This comment used
+//     to say: "We deliberately do NOT declare an `outputSchema` on the tools, so
 //     `structuredContent` is free-form DTO JSON — the route layer ships these
 //     exact DTOs already; re-deriving a zod mirror of every DTO would be
-//     duplicate surface for no gain.)
+//     duplicate surface for no gain." That was SOUND under Story 7.8's premises:
+//     the only routes then were the internal cookie-authenticated ones, and they
+//     do pass DTOs through. ADR Amendment 2 (2026-08-03) then pinned that a v1
+//     response is a v1 SCHEMA's output and never a DTO passed through, and
+//     11.2/11.3 shipped it — so the premise died, and with it the conclusion.
+//     `structuredContent` now has a SECOND consumer whose shape is versioned, and
+//     a schema two surfaces are checked against is not duplicate surface; it is
+//     the only place they meet. (The founding defect: `list_ready` and
+//     `search_work_items` carried a `dependencies` block, `get_work_item` did
+//     not, invisibly — MOTIR-1849.)
+//
+//     What Amendment 7 decides, so this file is not read as the old rule:
+//      · `structuredContent` DERIVES from the shared `lib/api/v1/*/schema.ts`
+//        shapes — every field a v1 resource schema declares appears under the
+//        same key with the same value, from the same `present*` mapper the route
+//        calls. Extras are a declared `.extend`, omissions a declared
+//        `.pick`/`.omit`; a hand-authored look-alike is what is forbidden.
+//      · We still do NOT declare the SDK's `outputSchema`, for NEW reasons: it is
+//        published in `tools/list` (caller-visible churn on the surface that
+//        exists to churn freely) and the SDK VALIDATES against it and THROWS, so
+//        a drift would surface as a runtime `McpError` in front of an agent
+//        instead of a red build. The guarantee comes from deriving plus the CI
+//        drift guard, not from advertising.
+//      · Tool names, descriptions, argument shapes and scopes stay MCP's OWN and
+//        SHOULD churn. Only the DATA SHAPE — the half with two consumers — is
+//        frozen.
 //  2. `toToolError` maps the typed service errors to a clean `isError` tool
 //     result, preserving the 404-not-403 cross-tenant contract: a missing work
 //     item and a cross-tenant one both surface as the SAME "not found" message

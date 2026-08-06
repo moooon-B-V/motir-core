@@ -1666,3 +1666,370 @@ never a missing key, so a typed client never branches on presence — the proper
 - **The MCP surface is untouched.** No tool is re-pointed, re-shaped, renamed or
   deprecated by anything decided here; `lib/mcp/` was read as the reference for
   argument shapes and semantics and left exactly as it is.
+
+### Amendment 7 (2026-08-06) — the MCP surface DERIVES its payloads from the v1 resource schemas; the no-`outputSchema` decision is overturned
+
+**Amends:** Amendment 2's corollary, which gains a second consumer — the shared
+response schemas are now imported by `lib/mcp/` as well as by the v1 routes; and
+Amendment 4 Q1's zod boundary, whose enumerated file set was v1-only and now has a
+stated rule for `lib/mcp/`.
+**Overturns:** the header comment in `lib/mcp/toolResult.ts` (Story 7.8 · 7.8.4),
+quoted in full below.
+**Leaves unchanged:** §1–§9 in full; Amendment 1's carve-out; Amendment 3's cursor,
+envelope and bounded-call rules; Amendment 4's emission mechanism and published
+reference; Amendment 5's ownership walk; Amendment 6 in full. **No `/api/v1` shape,
+path, scope or status changes here.**
+**Card:** MOTIR-2227 (Subtask 11.6.1), under Story 11.6 (MOTIR-1856).
+
+#### The problem
+
+Motir has two programmatic descriptions of one domain. They answer to opposite
+pressures — the MCP tool surface _should_ churn, because rewording a description or
+renaming an argument is how an agent's behaviour is tuned; `/api/v1` _must not_,
+because published clients break. Both are correct, and neither is the problem.
+
+The problem is that they can differ **about the same fact**, silently. That has
+already happened once: `list_ready` and `search_work_items` attached a
+`dependencies` block to their rows and `get_work_item` did not, so a card was
+planned on the assumption all three agreed and nothing discovered otherwise until
+someone tried to build it (MOTIR-1849). Nobody made a mistake at any single point.
+Each tool was hand-shaped correctly in isolation, and there was **no place where
+the two shapes were compared**. `lib/mcp/dependencyEdges.ts` still carries the
+codebase's own cheerful record of it — a comment describing "ONE seam, TWO tools"
+as though two of three were the design.
+
+This amendment makes that comparison a build step.
+
+---
+
+#### Q1 — the recorded decision this overturns, and the position on `outputSchema`
+
+##### What is being overturned, quoted
+
+`lib/mcp/toolResult.ts` has said, since Story 7.8 · Subtask 7.8.4:
+
+> "We deliberately do NOT declare an `outputSchema` on the tools, so
+> `structuredContent` is free-form DTO JSON — **the route layer ships these exact
+> DTOs already**; re-deriving a zod mirror of every DTO would be duplicate surface
+> for no gain."
+
+**That was true when it was written, and one of its premises died on 2026-08-03.**
+When 7.8 wrote it the only routes were the internal cookie-authenticated ones, and
+those do pass DTOs through — so "the route layer ships these exact DTOs already"
+was a plain description of the codebase. **Amendment 2** then pinned that _a v1
+response is a v1 schema's output, never a service DTO passed through_, and
+11.2/11.3 shipped exactly that. The premise is now false, and with it the
+conclusion: there is a second consumer of the shape, it is versioned, and a
+"duplicate surface" that two surfaces are checked against is not duplicate — it is
+the only place they meet.
+
+The comment is rewritten in the file by this card, dated, and noting that the old
+reasoning was sound under 7.8's premises. **An overturn that does not name what it
+overturns is how the next reader re-adopts the old reasoning**, which is exactly
+what would have happened here: an agent opening `toolResult.ts` to do Story 11.6's
+work would have found a confident, well-argued paragraph telling it not to.
+
+##### The decision: DERIVE internally; do NOT declare `outputSchema`
+
+The tools derive `structuredContent` from the shared schemas. They do **not** pass
+those schemas to the SDK's `outputSchema` affordance. Rung 2, read from the
+installed SDK (`@modelcontextprotocol/sdk@1.26.0`) rather than assumed — declaring
+one has two runtime consequences, both of which this story's own criteria forbid:
+
+1. **It is PUBLISHED in `tools/list`.** `server/mcp.js:88–91` emits
+   `toolDefinition.outputSchema` for any tool that declares one. Story 11.6's
+   criteria require `tools/list` output to be untouched, and more fundamentally the
+   whole architecture rests on the tool surface staying free to churn. Declaring the
+   shape would convert every additive widening into a published-contract change —
+   importing v1's stability constraint onto the surface that exists precisely to not
+   have it.
+2. **The SDK VALIDATES against it and THROWS.** `validateToolOutput`
+   (`server/mcp.js:185–207`) `safeParse`s `structuredContent` and raises an
+   `McpError` on mismatch. That converts a shape defect into a **runtime failure in
+   front of an agent**, at request time, in production — strictly worse than the
+   same defect failing a CI guard at build time. We want the drift to be a red
+   build, not a red tool call.
+
+There is a third, smaller reason: `outputSchema` is typed `ZodRawShapeCompat |
+AnySchema` against the SDK's own zod integration, so feeding it a `zod/v4` schema
+would push the version boundary of Q3 into the tool-registration path — the one
+place in `lib/mcp` where the classic entrypoint is genuinely load-bearing (every
+tool's `inputSchema` is a classic `ZodRawShape`).
+
+**The guarantee comes from derivation plus the CI guard, not from advertising.**
+Publishing the output shape to agents is a real and arguable product feature; it is
+simply a different decision, with a different consumer, and it can be taken later
+without re-opening this one.
+
+| Rejected                                   | Why                                                                                                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Declare `outputSchema` on every tool**   | Publishes the shape in `tools/list` (a caller-visible change 11.6 forbids) and turns a drift into a production `McpError` instead of a red build. The benefit — agents see the shape — is real but is a separate product call. |
+| **Keep the 7.8 comment and derive anyway** | Leaves a confident, well-argued paragraph in the file arguing against what the file now does. The most reliable way to lose a decision is to leave its expiry invisible.                                                       |
+| **Delete the comment**                     | Loses the record that the old reasoning was correct under its own premises, which is the part that tells a future reader whether this was a correction or a reversal of taste.                                                 |
+
+---
+
+#### Q2 — where the shared schemas live: `lib/api/v1/**`, unmoved, and `TOKEN_SCOPES` stays put
+
+##### The decision — option (a)
+
+**Both surfaces import the response schemas from `lib/api/v1/<resource>/schema.ts`,
+exactly where Amendments 2 and 5 put them. Nothing hoists, and `TOKEN_SCOPES` stays
+in `lib/mcp/scopes.ts`.** The version in the path is INFORMATION, not debt.
+
+The worry the question raises is real — `lib/api/v1/**` becomes a shared kernel with
+a version-specific name. The answer is that the name is _accurate_. These are the
+**v1** shapes; MCP deriving from them means MCP tracks v1. When `/api/v2` arrives,
+"which version does the MCP surface track?" becomes a live question, and the best
+possible place for its answer is the import statement in every file that depends on
+it — not hidden behind a neutral alias that makes the coupling invisible at exactly
+the moment someone needs to see it.
+
+**The asymmetry is accepted and documented rather than fixed.** `lib/mcp/scopes.ts`
+owns `TOKEN_SCOPES`, and `lib/api/v1/route.ts`, `openapi/security.ts` and
+`openapi/operation.ts` already import it (three shipped sites, verified on
+`origin/main`). After this amendment the dependency runs both ways: v1 imports MCP's
+capability model, MCP imports v1's response shapes. That is not a cycle in any
+meaningful sense — they are disjoint concerns, each owned where it originated, each
+imported by the other surface that needs it — and it is the honest description of
+two adapters over one set of services.
+
+**Nothing in the shipped guards forbids this direction.** `tests/helpers/v1RouteAudit.ts`
+carries an `imports-mcp-tools` rule, and its own detail string is an endorsement:
+_"a v1 route imports from `lib/mcp/tools` — the two surfaces align through schemas."_
+It constrains **routes → tools**, which stays forbidden. `lib/mcp` →
+`lib/api/v1/*/schema.ts` is the direction that sentence was written to recommend.
+
+| Rejected                                                             | Why                                                                                                                                                                                                            |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **(b) Hoist the schemas to a neutral home; `lib/api/v1` re-exports** | An indirection that hides which version MCP tracks, at the cost of touching ~20 modules and every import site for zero behaviour change. It makes the v2 question harder to see, not easier.                   |
+| **(c) Hoist the schemas AND `TOKEN_SCOPES`**                         | Symmetry for its own sake, across two surfaces, in the same PR as a 30-tool payload migration. It also relocates the capability model away from the surface that originated it, making its owner _less_ clear. |
+| **Copy the shapes into `lib/mcp`**                                   | Two declarations of one shape is the defect this story exists to remove, re-introduced as its implementation.                                                                                                  |
+
+---
+
+#### Q3 — the zod v3 → v4 boundary, now stated for `lib/mcp/`
+
+Amendment 4 Q1 established the rule and enumerated it for the eight v1 files it
+touched. **The rule is unchanged; this states it for the directory that amendment
+did not reach.** Zod 3 and Zod 4 instances do not interoperate, so the line is a
+correctness boundary, not tidiness: a module on the wrong side does not misbehave,
+it fails to compile.
+
+**The operational line:**
+
+- A module that **COMPOSES** a v1 schema — wraps it, `.extend`s, `.pick`s or
+  `.omit`s it, or declares a type against it ⇒ imports **`zod/v4`**, and never both
+  entrypoints in one file.
+- A module that **only CALLS** `.parse` / `.safeParse` on one, or only calls a
+  `present*` mapper, ⇒ **unchanged**, stays on classic `zod`.
+- **Every tool's `inputSchema` stays classic `zod`.** They are `ZodRawShape`s handed
+  to `server.registerTool`, they compose no response schema, and they are the
+  prompt-engineering surface Story 11.6 leaves free.
+
+**Verified on `origin/main` @ `6d472611`** — `lib/mcp/**` is 100% classic zod today:
+25 import sites, **zero** `zod/v4`. `lib/api/v1/**` is the mirror: 18 sites, all
+`zod/v4`.
+
+**The crossing set is kept to the seam, deliberately.** Because composition is
+confined to the derivation modules Subtask 11.6.2 introduces (`lib/mcp/payloads/**`)
+and the per-family payload schemas that extend them, **no existing
+`lib/mcp/tools/*.ts` file crosses**: a tool imports a `present*` mapper or a declared
+payload schema and calls it, which is the "only calls" arm. That is what makes _"no
+file imports both `zod` and `zod/v4`"_ trivially true rather than a property someone
+has to maintain — the files that compose v4 declare no input schemas, and the files
+that declare input schemas compose nothing. A tool that ever needs both is the
+signal to extract the composition into the seam, not to import twice.
+
+The property is asserted over the tree by Subtask 11.6.7 rather than reasoned about
+per file.
+
+---
+
+#### Q4 — what makes coverage TOTAL: a branded payload, checked at the `toolOk` chokepoint
+
+##### The luck this exploits
+
+`toolOk(text, structuredContent: Record<string, unknown>)` is a single chokepoint:
+**33 of the 37 modules in `lib/mcp/tools/` return through it.** The four that do not
+are `listSprints.ts` — the one real tool outside it — plus three non-tool helpers
+(`readyFilters.ts`, `sprintRef.ts`, `workItemRef.ts`). That means "every tool derives
+its payload from a declared schema" can be a **type error** rather than a review
+habit, which is the same guarantee `TOOL_SCOPES: Record<McpToolName, TokenScope>`
+already gives the scope model.
+
+##### The decision — `toolOk` takes a BRANDED payload with exactly two constructors
+
+`toolOk`'s second parameter changes from `Record<string, unknown>` to an opaque
+branded type. A value of that type cannot be written literally; it has exactly two
+constructors, and every tool must reach one of them:
+
+1. **`derived(schema, value)`** — validates `value` against a **declared shared
+   schema** (a v1 resource schema, or a declared narrowing/widening of one per Q6)
+   and brands the result.
+2. **`exempt(toolName, value)`** — brands a value for a tool whose payload has no
+   shared schema to derive from. Its parameter is typed to the **exemption
+   registry's** key union, so passing a non-exempt tool name is a compile error.
+
+A tool that is neither derived nor registered as exempt therefore **cannot construct
+an argument for `toolOk` at all**. That is the totality property, and it is proven
+the way the scope model's is — with `@ts-expect-error` compile-failure fixtures
+(Subtask 11.6.2), not by inspection.
+
+**`listSprints.ts` comes through `toolOk`** rather than receiving an exemption. It is
+the single tool the mechanism would otherwise not see, and a mechanism with one
+invisible member is not a mechanism. Its payload is a sprint collection, which has a
+v1 counterpart (`Sprint`), so there is nothing to exempt it for; it is outside the
+helper for historical reasons only. Subtask 11.6.4 lands it with its family.
+
+##### The shared-resource set is DERIVED, never listed
+
+The set of "resources exposed by BOTH surfaces" is computed from
+**`V1_RESOURCE_COMPONENTS`** in `lib/api/v1/openapi/registry.ts` — the merged
+component map, itself assembled from the per-resource `operations.ts` modules
+(`WORK_ITEM_COMPONENTS`, `PLANNING_COMPONENTS`, `WORK_LOOP_COMPONENTS`; 20 named
+schemas today). A resource added later joins the guard's scope when it is registered
+for the OpenAPI document, with no second list to remember.
+
+That is deliberate reuse of the value Amendment 4 Q2 already created: the registry
+exists so exactly one value knows the whole set, and a hand-written mirror of it in
+`lib/mcp` would be the story's own defect one level up — **a guard that reports
+success over a set nobody defined.**
+
+| Rejected                                                         | Why                                                                                                                                                                                     |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A `Record<McpToolName, Schema>` map, mirroring `TOOL_SCOPES`** | Total over TOOLS but says nothing about whether the payload a tool actually returns went through its schema — the map would be satisfied by a tool that declares one and ignores it.    |
+| **A runtime-only test that walks the registry**                  | Catches it one layer too late and only for tools a test exercises. 11.6.7 ships that walk too, as the belt to this braces — but the compile error is what stops the code being written. |
+| **Leave `listSprints.ts` outside and exempt it**                 | Exempts the one tool the mechanism cannot see, which is precisely the shape of the defect the story exists to remove.                                                                   |
+| **Hand-list the shared resources in `lib/mcp`**                  | A guard whose coverage is a list someone maintains reports success while the newest resource drifts.                                                                                    |
+
+---
+
+#### Q5 — the exemption list, and how a tool joins it
+
+**An exemption means one thing and nothing else: _this tool's payload has no shared
+resource schema to derive from, because no v1 operation returns that resource._** It
+is not "we didn't get to it", and it is not a per-tool opt-out.
+
+Each entry carries a `reason` string in the typed registry (Subtask 11.6.2), so the
+table below is executable rather than prose:
+
+| Exempt tool          | Reason                                                                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validate_work_item` | Returns a subtree FINISHABILITY verdict (`valid`, `blockers`, `advisories`) — a planning judgement, not a resource. No v1 operation exposes it (Amendment 6's boundary).   |
+| `validate_sprint`    | Same verdict shape over a sprint's membership. Same boundary, same reason.                                                                                                 |
+| `get_project_state`  | Reports a project's PLANNING PRECONDITIONS (established?, code connected + indexed?, onboarding run) — an agent-facing readiness report with no REST client asking for it. |
+
+**`claim_next_ready` is NOT exempt**, correcting the four-tool set Story 11.6 and
+Amendment 6's boundary both name. Those are lists of tools with no v1 **endpoint**,
+which is the right list for a different question. `claim_next_ready` has no endpoint
+and still returns a **work-item row plus advisories** — both shared shapes — so it
+derives like the rest of its family (Subtask 11.6.3). Exemption tracks the RESOURCE,
+not the endpoint; a tool can be MCP-only and still return something v1 describes.
+
+**The rule for joining the list:** a new tool is derived by default, because
+`toolOk` will not accept it otherwise. Adding an exemption is an explicit edit to the
+registry with a reason string, in the same PR as the tool. **Subtask 11.6.5 SEALS
+the list against `lib/mcp/registry.ts`** — walking the registered tool names and
+asserting every one resolves to derived-or-exempt, so a tool in neither column fails
+the run rather than being skipped. The three above are the expectation the seal is
+checked against; the registry is the authority.
+
+---
+
+#### Q6 — the derivation DIRECTION: narrowing, widening, and the envelope (added by this card)
+
+##### Why this question is here
+
+Q4 pins the mechanism and presupposes an answer to this; without it, "derive from
+the shared schema" has two readings that build different software, and Story 11.6's
+own criteria pull in both directions. **Rung 2, comparing the shipped surfaces
+rather than assuming they nearly agree** — they do not:
+
+| Resource           | MCP emits today                                                                                                                                                                      | `/api/v1` emits today                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ready row          | `{ id, key, kind, title, priority, status{}, assignee{ id,name,avatarUrl }                                                                                                           | null, …, dependencies }`                                    | `{ key, kind, title, priority, status{}, type, executor, assigneeId, descriptionExcerpt, dependencies }` |
+| integration result | `WorkItemDto` — `identifier`, no `key`                                                                                                                                               | `{ key, status, sessionBranch, updatedAt, …provenance }`    |
+| work-item detail   | the `IssueDetailDto` AGGREGATE — `{ item{}, ancestors, parent, children, blockedBy, blocks, relatesTo, duplicates, clones, readiness, workflow, watcherCount, viewerIsWatching, … }` | FLAT — `{ key, kind, …, children[], links{}, readiness{} }` |
+
+Neither side is a subset of the other. MCP carries `id`, an `assignee` object and a
+`workflow` block that v1 deliberately omits; v1 carries `assigneeId` and `key` where
+MCP says `assignee` and `identifier`. So a literal "the two payloads validate against
+one schema" is unreachable without breaking every shipped MCP consumer, and a literal
+"no payload changes" is unreachable without the guard being vacuous.
+
+##### The decision — three rules, in this order
+
+**1. A payload's resource-valued parts are the SHARED schema's output.** Every field
+a v1 resource schema declares appears in the MCP payload under the **same key with
+the same value**, produced by the same `present*` mapper the route calls. This is the
+half that makes the guard real: because a `zod` object strips unknown keys rather
+than rejecting them, an MCP payload that satisfies this rule **validates against the
+v1 schema unchanged**, and a field added on one surface and forgotten on the other
+fails that parse.
+
+**2. Agent-only extras are a DECLARED WIDENING; agent-only omissions are a DECLARED
+NARROWING.** A tool that carries more than v1 does declares
+`sharedSchema.extend({ … })`; a tool that wants less declares `.pick`/`.omit`. Both
+are derivations, so a change to the base breaks them loudly. What is forbidden is the
+third thing — an independently-authored object that happens to resemble the schema
+and goes on compiling while quietly meaning something else. **Those two look
+identical in a diff and are opposite in kind**, and telling them apart is the entire
+point.
+
+**3. The ENVELOPE stays MCP's own.** `{ items, nextCursor }`, the detail aggregate's
+`{ item, parent, children, … }`, a claim result's `{ item, advisories }` — the
+container a tool wraps its resources in is transport shape, not resource shape, and
+it is shaped for how an agent reads a result. The guard walks the **resource-valued
+members** of a payload, not its envelope.
+
+##### What this means concretely, and what it costs
+
+Payload changes are **additive only**: `list_ready` rows gain `assigneeId` beside
+`assignee`; `mark_integrated` gains `key` beside `identifier`. Nothing is removed and
+nothing is renamed, so no shipped consumer — including `@motir/cli` — breaks, and
+Story 11.6's promise that a caller sees no behaviour change holds in the sense that
+matters: **the surface only ever grows.**
+
+**The honest cost, stated rather than discovered:** an existing MCP suite that asserts
+a WHOLE payload with `toEqual` will fail on the added field, and there is at least one
+(`tests/mcp/integration-state.test.ts:176`,
+`expect(result).toEqual({ sessionBranch: …, results: [] })`). Story 11.6's family
+cards ask for their suites to pass **unmodified**, and that instruction is exactly
+right about what it is protecting — freezing the expectations is what turns a silent
+behaviour change into a visible act. So the rule is:
+
+> **A REMOVED or RENAMED key, or a changed VALUE, is a violation — fix the code.
+> A whole-payload `toEqual` that fails only because a v1 field was ADDED beside the
+> existing ones is the one edit those cards permit, and it must be justified in the
+> PR body by naming the added field.** Any other edit to an expected payload is the
+> tell those cards were written to catch.
+
+| Rejected                                                                  | Why                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Replace each MCP payload with the v1 shape outright**                   | Renames `identifier`→`key`, drops `id`, `assignee`, `workflow`, `viewerIsWatching`, and flattens the detail aggregate. It breaks every shipped MCP consumer and `@motir/cli`, to buy a guarantee the additive form already gives.     |
+| **Change nothing; have the guard compare only fields that already agree** | A guard that checks the subset both surfaces already got right is green by construction on the day it ships and blind to exactly the drift it exists to catch. A partial drift guard is worse than none, because it is read as total. |
+| **Make the envelopes match too**                                          | Forces `{ items, nextCursor }` and the detail aggregate into v1's envelope for no consumer's benefit, and makes agent-facing result shape — genuinely MCP's own — a versioned contract.                                               |
+| **Declare the MCP payloads as v1 §8 additions and widen the v1 schemas**  | Makes `id` and the `assignee` object public API forever because an agent surface wanted them. §8 is additive-only, so the mistake would be permanent.                                                                                 |
+
+---
+
+#### Consequences of this amendment
+
+- **`lib/mcp/toolResult.ts`'s header comment is rewritten** by this card, dated, and
+  naming the premise that died and when. No other code changes here.
+- **The shared response schemas stay in `lib/api/v1/**`** and gain a second importer.
+`TOKEN_SCOPES`stays in`lib/mcp/scopes.ts`; the two-way dependency is accepted and
+  recorded above.
+- **`lib/mcp/payloads/**`(11.6.2) is the only part of`lib/mcp`on`zod/v4`.** No
+`lib/mcp/tools/\*.ts` file crosses, and no file imports both entrypoints — asserted
+  over the tree by 11.6.7.
+- **`toolOk` gates totality** — derived-or-exempt, or it does not compile.
+- **The exempt set is expected to be three** (`validate_work_item`, `validate_sprint`,
+  `get_project_state`), **not the four** Story 11.6 and Amendment 6 name;
+  `claim_next_ready` derives. 11.6.5 seals it against `lib/mcp/registry.ts`.
+- **MCP payloads grow, never shrink or rename** — the additive rule of Q6, which is
+  what lets the drift guard be total without breaking a caller.
+- **No `/api/v1` shape changes.** If the alignment shows a v1 schema is wrong, that is
+  a card against the owning story (Amendment 5 §3's standing procedure), never a
+  widening made at the MCP end to make both sides fit.
