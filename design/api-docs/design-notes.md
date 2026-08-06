@@ -7,12 +7,22 @@ reach them. One area, one three-file asset:
 | File                 | What it is                                                     |
 | -------------------- | -------------------------------------------------------------- |
 | `design-notes.md`    | this spec — primitives, tokens, copy, ownership                |
-| `api-docs.mock.html` | the SOURCE, built from the real design system (nine panels)    |
+| `api-docs.mock.html` | the SOURCE, built from the real design system (eleven panels)  |
 | `api-docs.png`       | the full-page export a reviewer skims without opening the HTML |
 
 Built against ADR **Amendment 4** (`docs/decisions/public-api-conventions.md`),
 which pins the routes, the renderer and the spec URL. This asset draws to that
 answer; it does not re-decide it.
+
+> **⚠️ Amended 2026-08-06 — Story MOTIR-2268 · Subtask MOTIR-2270.** The area
+> gains a FOURTH page, the agent sandbox guide, and with it Panels 10–11 and the
+> rail's fourth entry. Built against ADR **Amendment 8**, which renamed the area
+> from `/api-docs` to `/docs` (Q1), drew the page's ownership line against
+> `packages/cli/sandbox/README.md` (Q2), and pinned `AGENT_PROFILES` as the
+> profile table's single source (Q3). **The routes below moved; this asset's own
+> folder name did not** — Amendment 8's rule is that addresses move and internal
+> identifiers do not, so `design/api-docs/`, `lib/apiDocs/` and the `apiDocs`
+> message namespace all keep their names. See _The agent sandbox guide_ below.
 
 ---
 
@@ -33,15 +43,23 @@ designs and would otherwise read as a redesign of them.
 
 ## Routes
 
-| Route                       | Page                                      | Auth          |
-| --------------------------- | ----------------------------------------- | ------------- |
-| `/api-docs`                 | The API reference (catalogue + operation) | none (public) |
-| `/api-docs/getting-started` | The five-step guide                       | none (public) |
-| `/api-docs/stability`       | The stability & deprecation policy        | none (public) |
-| `/api/openapi/v1.json`      | The spec the reference renders FROM       | none (public) |
+| Route                   | Page                                      | Auth          |
+| ----------------------- | ----------------------------------------- | ------------- |
+| `/docs/api`             | The API reference (catalogue + operation) | none (public) |
+| `/docs/getting-started` | The five-step guide                       | none (public) |
+| `/docs/stability`       | The stability & deprecation policy        | none (public) |
+| **`/docs/sandbox`**     | **The agent sandbox guide** (MOTIR-2268)  | none (public) |
+| `/api/openapi/v1.json`  | The spec the reference renders FROM       | none (public) |
 
-All three pages live in `app/(public)/api-docs/`, the route group
+All four pages live in `app/(public)/docs/`, the route group
 `app/(public)/explore/` already established for unauthenticated, indexable pages.
+
+> **The routes were `/api-docs*` when this asset was first drawn** and moved when
+> the area gained its first non-API page (ADR Amendment 8 Q1; the migration is
+> **MOTIR-2286**, with permanent 308 redirects from every old path). The
+> reference left the area ROOT for `/docs/api` so a growing area never has to
+> re-argue which page owns `/docs`. **`/api/openapi/v1.json` did not move** — it
+> is a machine address under §8, and Amendment 4 Q3 is untouched.
 
 ---
 
@@ -265,6 +283,134 @@ the reference). Copy:
 
 ---
 
+## The agent sandbox guide — Panels 10–11 (Story MOTIR-2268 · Subtask MOTIR-2270)
+
+The area's FOURTH page. Everything structural about it is already drawn: same
+shell, same rail, same content column, same heading rhythm as Panel 4. **One
+element is genuinely new — the profile matrix — and it is the reason this
+subtask exists.** The rest of this section says what the page card implements
+and, just as importantly, what it must NOT invent.
+
+### Panel 10 — `/docs/sandbox`, full width
+
+Sections, in reading order, and each is the FIRST-RUN half of its subject per
+ADR Amendment 8 Q2 (_a fact belongs on the page when a reader needs it for their
+first successful run AND a test can hold it true_):
+
+1. **What it confines — and what it does not.** A three-row `table.spec`
+   (`Filesystem` / `Network` / `Privileges`). The middle row is the one that
+   earns the section: the network is **open by design**, and a guide that let a
+   reader infer otherwise would be worse than no guide.
+2. **The one command.** A `codeblock` with the `Copy` affordance, carrying the
+   README's own `docker run` verbatim. Followed by the run-from-your-workspace-root
+   caveat, because pasting it in a single checkout is the first thing that goes wrong.
+3. **What each part is for.** A two-column `table.spec` — mount/variable → why —
+   which answers the mounts-table question the card raised: **it reuses
+   `table.spec` as-is** rather than introducing a second table treatment. Two
+   columns of short prose is exactly what that primitive already draws, and it
+   is not the case that fails at a narrow viewport.
+4. **Three ways to give it a Motir credential**, as prose with the three tiers
+   inline and a `callout` (info) carrying the one non-obvious constraint:
+   `motir login` needs the credential mount to be ABSENT.
+5. **Choosing a profile** — the matrix (below), plus a `callout` (info) placing
+   `motir-sandbox:base` beside it. **`base` is a TAG, not a profile**, so it is
+   deliberately drawn OUTSIDE the table: putting it in as a ninth row is exactly
+   the confusion the callout exists to prevent.
+6. **Or stay in your editor** — one paragraph pointing at the dev-container
+   variants, then a `callout` (warning) handing the reader to
+   `packages/cli/sandbox/README.md` for everything past the first ten minutes.
+
+The right-hand `toc` aside carries the five section links (`docs-aside toc`,
+unchanged from Panels 2 and 4).
+
+### ⚠️ The PROFILE MATRIX — the decision the page card implements
+
+**Wide: a FOUR-column `table.spec`, not five.** The card framed this as
+five columns × eight rows, and five is the version that fails. The `binary` fact
+folds into column 1 as the spec table's **existing `.nm` / `.ty` two-line cell**
+— the same treatment the parameter tables already use for `name` + `type` — so
+the table keeps four columns of real width:
+
+| Column                    | Content                                                    |
+| ------------------------- | ---------------------------------------------------------- |
+| **Profile · binary**      | `.nm` = the profile id · `.ty` = the binary it installs as |
+| **Tier**                  | `pill--tier1` / `pill--tier2`                              |
+| **Installed from**        | prose + `code` for the package name                        |
+| **Credential mount (ro)** | one `.mount` chip per path, stacked                        |
+
+- **`pill--tier1` = `--el-tint-mint`, `pill--tier2` = `--el-tint-yellow`** — two
+  tint SLOTS rather than two shades of one hue, so the distinction survives a
+  palette swap and reads without a legend. Both carry `--el-text-strong` on the
+  tint for AA, and the tier is in the TEXT, never colour alone.
+- **A mount is a PATH, so each is its own `.mount` chip** (`--el-code-bg` /
+  `--el-code-text`, `--radius-kbd`), stacked when a profile has several.
+  `opencode` has two; wrapping them as one line would read as one path.
+- **The empty case is `.mount--none`** — an em dash plus the reason (`— OS
+keyring`), in `--el-text-faint`, non-mono. A blank cell reads as "we forgot".
+- **Eight rows.** `AGENT_PROFILES`, `sandbox/smoke/profiles.json` and the
+  README's own prose all say eight; `base` is the agent-less image tag.
+
+**Narrow (below the docs breakpoint): one CARD per profile — `.pcard`.** Drawn
+in Panel 11 at 390 px. A `.pcard-head` (profile id + tier pill) over a two-column
+`<dl>` with `78px` label column: BINARY / INSTALLED / MOUNTS. Not a horizontally
+scrolling table and **not hidden columns** — every fact a reader is choosing on
+stays visible, and a reader deciding whether to trust a container with their
+credentials is exactly the person reading this on a phone first.
+
+**It is a SHARED `table` block kind in `_components/DocBlocks.tsx`, not a
+page-local component.** This is the sentence the page card implements.
+`DocBlocks` today branches on `prose` (`:43`) and `code` (`:50`) only, and the
+`table.spec` markup this matrix uses is already shipped inside
+`_components/OperationSection.tsx` — so the choice is not _"invent a table"_ but
+_"which of the two existing homes does the second caller live in"_. Promoting it
+into `DocBlocks` gives the whole docs surface one table treatment; leaving it
+page-local guarantees the next documentation page draws a second one slightly
+differently. The block declares `{ kind: 'table', caption?, columns, rows }`,
+renders `table.spec` at width and the `.pcard` stack below the breakpoint, and
+the mounts table (section 3) is its first other consumer.
+
+### Panel 11 — the matrix at 390 px
+
+- The rail collapses to the same disclosure button Panel 9 uses, labelled
+  `Agent sandbox`.
+- The `docker run` **scrolls inside its own container**; the page does not
+  scroll sideways. Same rule, same caption treatment as Panel 9.
+- Four of the eight profiles are drawn, chosen for the cells that break a naive
+  layout: `opencode` (two mounts), `antigravity` (no mount at all), `cursor`
+  (the longest path in the set, `~/.local/share/cursor-agent`) and `claude` (the
+  ordinary case). The remaining four repeat one of these shapes.
+
+### Ownership — GIVES / TAKES
+
+| `MOTIR-` key                         | GIVES / TAKES | What                                                                                                                             |
+| ------------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-2270** (this card)           | GIVES         | Panels 10–11, the rail's fourth entry, the matrix presentation, `.pcard` / `.mount` / `pill--tier*`                              |
+| **MOTIR-2271** (the page)            | TAKES         | builds Panel 10, the `table` block kind in `DocBlocks`, and the rail's fourth entry — its criteria carry the derivation contract |
+| **MOTIR-2286** (the route migration) | TAKES         | moves `/api-docs*` → `/docs*`; this asset draws the destination, not the migration                                               |
+| **MOTIR-2269** (the decision)        | GIVES         | ADR Amendment 8 — the route, the ownership rule, the derivation source. Drawn to, not re-decided                                 |
+| **MOTIR-2188** (11.4.7, `done`)      | —             | owns the shell, the rail component and `table.spec`. This design MOUNTS into them and changes the rail's ENTRY LIST only         |
+| **MOTIR-2189** (11.4.8, `done`)      | —             | owns `DocBlocks`' `prose` / `code` / `callout` kinds. The `table` kind is ADDED beside them, changing none                       |
+
+**Nothing is TAKEN from a card that is not already amended.** MOTIR-2271's
+acceptance criteria carry the `table` block kind, the eight-row matrix and the
+`sandboxMounts` derivation; MOTIR-2286 carries the route move. No criterion on a
+`done` card changes.
+
+### What this design does NOT own, restated for this page
+
+- **The sandbox itself.** Not the `Dockerfile`, `entrypoint.sh`,
+  `install-agent.sh`, the compose file, the devcontainer variants or the smoke
+  suite. Every fact drawn here is READ from the shipped artifact.
+- **The README's territory.** Digest tables, the confinement proof, the
+  validation harness and the tier-3 escape hatch are deliberately absent from
+  the drawing — Amendment 8 Q2's second limb keeps facts the page cannot test
+  off the page.
+- **The three Motir credential tiers are NOT the profile table's credential
+  mount.** Different secrets, different failure modes; the page keeps them in
+  separate sections and the drawing never puts them in one table.
+
+---
+
 ## Light and dark
 
 Every colour resolves to an `--el-*` token, so dark mode is the token layer's
@@ -331,3 +477,6 @@ checks the message, the retry and the still-reachable sibling pages.
 | **11.4.7** (MOTIR-2188)  | the docs shell, the reference (Panels 1–3, 6), and BOTH doors (7, 8)                                                  |
 | **11.4.8** (MOTIR-2189)  | the getting-started and stability pages' COPY, into Panels 4–5's rhythm                                               |
 | **11.4.10** (MOTIR-2191) | the E2E: a developer finds the reference, reads an operation, follows getting-started, and reaches it from both doors |
+| **MOTIR-2286**           | the `/api-docs` → `/docs` route migration + the 308 redirect map (ADR Amendment 8 Q1)                                 |
+| **MOTIR-2271**           | Panel 10, the shared `table` block kind, and the rail's fourth entry                                                  |
+| **MOTIR-2273**           | the E2E: a reader with no session finds the sandbox guide from the rail and leaves with a runnable `docker run`       |
