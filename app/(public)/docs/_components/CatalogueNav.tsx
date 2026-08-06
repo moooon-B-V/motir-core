@@ -65,9 +65,9 @@ export function CatalogueNav({
   const shown = filtered.reduce((sum, group) => sum + group.operations.length, 0);
 
   const pages: { key: DocsPage; href: string; label: string }[] = [
-    { key: 'reference', href: '/api-docs', label: t('navReference') },
-    { key: 'gettingStarted', href: '/api-docs/getting-started', label: t('navGettingStarted') },
-    { key: 'stability', href: '/api-docs/stability', label: t('navStability') },
+    { key: 'reference', href: '/docs/api', label: t('navReference') },
+    { key: 'gettingStarted', href: '/docs/getting-started', label: t('navGettingStarted') },
+    { key: 'stability', href: '/docs/stability', label: t('navStability') },
   ];
 
   return (

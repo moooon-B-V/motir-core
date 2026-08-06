@@ -377,8 +377,10 @@ Within `v1`:
 **Therefore a client MUST tolerate unknown fields.** That obligation is the other
 half of the promise and is stated in the reference docs (11.4).
 
-> **⚠️ Published as `/api-docs/stability` — see
-> [Amendment 4, Q5](#q5--what-the-published-stability--deprecation-policy-says).**
+> **⚠️ Published as `/docs/stability` — see
+> [Amendment 4, Q5](#q5--what-the-published-stability--deprecation-policy-says)**
+> (the area was renamed from `/api-docs` by
+> [Amendment 8, Q1](#q1--the-area-is-renamed-to-docs-with-permanent-redirects-the-sandbox-guide-is-docssandbox)).
 > The public page is generated from THIS clause's lists rather than re-typed, so the
 > internal record and the published promise cannot say different things. Amendment 4
 > also pins the deprecation channel (`deprecated: true` in the spec) and how a `v2`
@@ -1087,8 +1089,15 @@ epic, so planning a page into it would have produced work nobody could do. Epic 
 own boundary pins every deliverable to `motir-core`, and `app/(public)/explore/` is
 the shipped precedent for an unauthenticated, indexable page group.
 
-Routes: **`/api-docs`** for the reference, `/api-docs/getting-started` for the guide,
-`/api-docs/stability` for the policy (Q5) — under `app/(public)/api-docs/`.
+Routes: **`/docs/api`** for the reference, `/docs/getting-started` for the guide,
+`/docs/stability` for the policy (Q5) — under `app/(public)/docs/`.
+
+> **⚠️ Amended 2026-08-06 — these routes were `/api-docs*` as originally decided.**
+> [Amendment 8, Q1](#q1--the-area-is-renamed-to-docs-with-permanent-redirects-the-sandbox-guide-is-docssandbox)
+> renamed the area to `/docs` when it gained its first non-API page, with permanent
+> redirects from every `/api-docs*` path. Only the ADDRESSES moved: the `apiDocs`
+> next-intl namespace, `lib/apiDocs/`, `design/api-docs/` and `tests/api-docs/` keep
+> their names.
 
 ##### Renderer — our own primitives; the third-party renderers are REJECTED
 
@@ -1147,7 +1156,8 @@ English; if only a human reads it, it is localized._
 
 #### Q5 — what the PUBLISHED stability + deprecation policy says
 
-§8 is the internal record; `/api-docs/stability` is the promise a third party
+§8 is the internal record; `/docs/stability` (`/api-docs/stability` as originally
+routed — Amendment 8 Q1) is the promise a third party
 integrates against. **They are the same promise, stated twice for two audiences, and
 the page is generated from §8's lists rather than re-typed** — a second hand-written
 copy of a stability promise is the same drift this story exists to prevent, applied

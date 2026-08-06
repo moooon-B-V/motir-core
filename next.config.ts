@@ -38,7 +38,37 @@ if (process.env['NODE_ENV'] !== 'production') {
   process.env['BETTER_AUTH_SECRET'] ??= 'build-time-placeholder-secret-32-bytes-minimum';
 }
 
+/**
+ * The documentation area moved from `/api-docs` to `/docs` (MOTIR-2286 · ADR
+ * `public-api-conventions.md` Amendment 8 Q1), so every address it ever served
+ * keeps working — PERMANENTLY.
+ *
+ * `permanent: true` is a 308, which is the point: a 307 tells a crawler and a
+ * bookmark to keep asking the old address forever, and the whole reason the area
+ * was renamed one day after it shipped is that a URL is a promise to strangers.
+ *
+ * The order matters. Next matches these top-to-bottom, and `/api-docs/:path*`
+ * would swallow the bare `/api-docs` only if `:path*` matched empty — it does,
+ * so the exact rule is declared FIRST and the reference keeps its own
+ * destination (`/docs/api`) rather than landing on the area root.
+ *
+ * The third entry exists because the reference deliberately does NOT own the
+ * area root: `/docs` is a directory, not a page, and a reader who trims the URL
+ * should land on the reference rather than a 404.
+ *
+ * Exported separately from `nextConfig` so `tests/api-docs/docs-redirects.test.ts`
+ * can assert the map without booting a server.
+ */
+export const DOCS_REDIRECTS = [
+  { source: '/api-docs', destination: '/docs/api', permanent: true },
+  { source: '/api-docs/:path*', destination: '/docs/:path*', permanent: true },
+  { source: '/docs', destination: '/docs/api', permanent: true },
+] as const;
+
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [...DOCS_REDIRECTS];
+  },
   // The Next.js dev-mode tools indicator renders a fixed portal in the
   // bottom-left corner by default — directly over the app shell's sidebar
   // footer (the collapse toggle). In `next dev` that portal intercepts pointer

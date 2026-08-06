@@ -88,7 +88,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     const docs = page.getByRole('link', { name: 'Docs', exact: true });
     await expect(docs).toBeVisible();
     await docs.click();
-    await page.waitForURL('**/api-docs');
+    await page.waitForURL('**/docs/api');
     await beat();
 
     await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
@@ -148,7 +148,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
   // ── 4 — the first call, and the promise ───────────────────────────────────
   await chapter('Follow getting started — mint, call, paginate, err, back off', async () => {
     await page.getByRole('link', { name: 'Getting started' }).first().click();
-    await page.waitForURL('**/api-docs/getting-started');
+    await page.waitForURL('**/docs/getting-started');
     await expect(page.getByRole('heading', { name: 'Getting started', level: 1 })).toBeVisible();
     await beat();
 
@@ -172,7 +172,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
 
   await chapter('Read what v1 promises — and what it asks in return', async () => {
     await page.getByRole('link', { name: 'Stability & deprecation' }).first().click();
-    await page.waitForURL('**/api-docs/stability');
+    await page.waitForURL('**/docs/stability');
     await expect(
       page.getByRole('heading', { name: 'Stability & deprecation', level: 1 }),
     ).toBeVisible();
@@ -200,7 +200,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     // reader with the sharpest need is holding a freshly-minted secret.
     await expect(page.getByText('Build against the API')).toBeVisible();
     await page.getByRole('link', { name: 'API reference' }).first().click();
-    await page.waitForURL('**/api-docs');
+    await page.waitForURL('**/docs/api');
     await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
     await beat();
   });
@@ -238,7 +238,7 @@ test('the reference is readable on a phone — the code block scrolls, the page 
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/api-docs');
+  await page.goto('/docs/api');
   await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
 
   const section = operationSection(page, READ_OPERATION);
@@ -261,7 +261,7 @@ test('the reference is readable on a phone — the code block scrolls, the page 
 });
 
 test('the catalogue filters in place, and says so when nothing matches', async ({ page }) => {
-  await page.goto('/api-docs');
+  await page.goto('/docs/api');
   const find = page.getByRole('searchbox');
   await expect(find).toBeVisible();
 

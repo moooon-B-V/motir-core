@@ -212,7 +212,7 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4`,
 // The published stability + deprecation policy
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// ⚠️ ONE PROMISE IN TWO PLACES. ADR §8 is the INTERNAL record; `/api-docs/stability`
+// ⚠️ ONE PROMISE IN TWO PLACES. ADR §8 is the INTERNAL record; `/docs/stability`
 // is the PUBLISHED commitment. They must never say different things, so each item
 // below carries `adrPhrase` — a distinctive substring of the §8 bullet it
 // publishes — and `tests/api-docs/guide-truth.test.ts` asserts every phrase is

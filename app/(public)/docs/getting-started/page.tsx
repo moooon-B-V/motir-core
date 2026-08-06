@@ -4,7 +4,7 @@ import { GUIDE_STEPS } from '@/lib/apiDocs/guide';
 import { CatalogueNav } from '../_components/CatalogueNav';
 import { DocBlocks } from '../_components/DocBlocks';
 
-// GET /api-docs/getting-started (Story 11.4 · Subtask 11.4.8 — MOTIR-2189 ·
+// GET /docs/getting-started (Story 11.4 · Subtask 11.4.8 — MOTIR-2189 ·
 // design Panel 4).
 //
 // A single LINEAR read, and the order is the deliverable: mint → first call →
@@ -61,11 +61,11 @@ export default async function GettingStartedPage() {
 
         <p className="mt-10 border-t border-(--el-border-soft) pt-6 max-w-[68ch] text-sm text-(--el-text-muted)">
           {t('guideNext')}{' '}
-          <a className="text-(--el-link) underline" href="/api-docs">
+          <a className="text-(--el-link) underline" href="/docs/api">
             {t('navReference')}
           </a>
           {' · '}
-          <a className="text-(--el-link) underline" href="/api-docs/stability">
+          <a className="text-(--el-link) underline" href="/docs/stability">
             {t('navStability')}
           </a>
         </p>
