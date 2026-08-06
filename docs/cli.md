@@ -939,6 +939,10 @@ then `motir done --via in_review <key>` once you merge.
 
 ## The sandbox
 
+> The published setup guide — **<https://app.motir.co/docs/sandbox>** — walks the
+> same path without a checkout: pick a profile, start the container, sign in, link,
+> check.
+
 An unattended agent running with permissions bypassed is worth confining. Motir
 publishes a container image for exactly that — `motir auto` in a normal console
 stays **fully supported**; the container is the _recommended_ path, not a

@@ -33,7 +33,30 @@ import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 export type GuideBlock =
   | { kind: 'prose'; text: string }
   | { kind: 'code'; caption: string; code: string; copyable?: boolean }
-  | { kind: 'callout'; tone: 'info' | 'warning'; text: string };
+  | { kind: 'callout'; tone: 'info' | 'warning'; text: string }
+  /**
+   * A small comparison table — one header row, then rows of cells that carry the
+   * same `**bold**` / `` `code` `` marks the prose does.
+   *
+   * Added by Story MOTIR-2268 (design `design/agent-sandbox/`), which needed to
+   * publish an eight-row profile matrix and found the renderer had no table at
+   * all. It landed HERE rather than as that page's private component because
+   * `table.spec` markup already ships inside `_components/OperationSection.tsx`
+   * — so the question was never "invent a table", it was which of the two
+   * existing homes the second caller lives in. One treatment for the whole docs
+   * surface beats a second one drawn slightly differently by the next page.
+   *
+   * ⚠️ It is for SMALL tables a reader compares rows in, not for layout: below
+   * the docs breakpoint it renders as one card per row, because four columns of
+   * paths cannot shrink and hiding a column hides the fact a reader is choosing
+   * on.
+   */
+  | {
+      kind: 'table';
+      caption?: string;
+      columns: readonly string[];
+      rows: readonly (readonly string[])[];
+    };
 
 /** One numbered step of the guide. */
 export interface GuideStep {
@@ -224,7 +247,7 @@ X-Motir-Api-Version:   ${V1_CONTRACT_VERSION}`,
 // The published stability + deprecation policy
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// ⚠️ ONE PROMISE IN TWO PLACES. ADR §8 is the INTERNAL record; `/api-docs/stability`
+// ⚠️ ONE PROMISE IN TWO PLACES. ADR §8 is the INTERNAL record; `/docs/stability`
 // is the PUBLISHED commitment. They must never say different things, so each item
 // below carries `adrPhrase` — a distinctive substring of the §8 bullet it
 // publishes — and `tests/api-docs/guide-truth.test.ts` asserts every phrase is

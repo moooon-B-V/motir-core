@@ -49,7 +49,7 @@ export async function ExploreTopBar({
           </span>
         ))}
         <Link
-          href="/api-docs"
+          href="/docs/api"
           {...(current === 'docs' ? { 'aria-current': 'page' as const } : {})}
           className={
             current === 'docs'

@@ -42,6 +42,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedCliConnect } from './_helpers/cli-connect-seed';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
+import { AGENT_PROFILES } from '../../packages/cli/src/agentProfiles';
 import { EXAMPLE_TOKEN, SPEC_PATH } from '@/lib/apiDocs/reference';
 
 test.describe.configure({ timeout: 180_000 });
@@ -88,7 +89,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     const docs = page.getByRole('link', { name: 'Docs', exact: true });
     await expect(docs).toBeVisible();
     await docs.click();
-    await page.waitForURL('**/api-docs');
+    await page.waitForURL('**/docs/api');
     await beat();
 
     await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
@@ -148,7 +149,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
   // ── 4 — the first call, and the promise ───────────────────────────────────
   await chapter('Follow getting started — mint, call, paginate, err, back off', async () => {
     await page.getByRole('link', { name: 'Getting started' }).first().click();
-    await page.waitForURL('**/api-docs/getting-started');
+    await page.waitForURL('**/docs/getting-started');
     await expect(page.getByRole('heading', { name: 'Getting started', level: 1 })).toBeVisible();
     await beat();
 
@@ -173,7 +174,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
 
   await chapter('Read what v1 promises — and what it asks in return', async () => {
     await page.getByRole('link', { name: 'Stability & deprecation' }).first().click();
-    await page.waitForURL('**/api-docs/stability');
+    await page.waitForURL('**/docs/stability');
     await expect(
       page.getByRole('heading', { name: 'Stability & deprecation', level: 1 }),
     ).toBeVisible();
@@ -201,7 +202,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     // reader with the sharpest need is holding a freshly-minted secret.
     await expect(page.getByText('Build against the API')).toBeVisible();
     await page.getByRole('link', { name: 'API reference' }).first().click();
-    await page.waitForURL('**/api-docs');
+    await page.waitForURL('**/docs/api');
     await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
     await beat();
   });
@@ -235,11 +236,133 @@ test('a developer finds the API reference, reads an operation, copies its exampl
 // Deliberately NOT narrated into the video: a reviewer accepts this Story by
 // watching it work, not by watching it be narrow.
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Story MOTIR-2268 — the agent sandbox setup guide, the surface's FOURTH page.
+//
+// It publishes to its OWN story (`acceptanceStory('MOTIR-2268')`) from inside
+// this file, because the file is the surface's journey and the guide is a page
+// on that surface — extending it beats a parallel spec that would re-drive the
+// same shell to reach one more link.
+//
+// ⚠️ The journey starts at the RAIL, never at the route. The whole premise of
+// this story is that the sandbox was undiscoverable, so a test that navigates
+// straight to `/docs/sandbox` would pass while the door was bricked up — and the
+// rail entry is the only thing in the product that points here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('a reader with no session finds the sandbox guide from the rail and leaves with a runnable docker run', async ({
+  page,
+  chapter,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-2268');
+
+  await chapter('Arrive at the documentation with no account', async () => {
+    await page.goto('/docs/api');
+    await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
+    // Anonymous: the marketing bar's sign-in is still on offer, so nothing
+    // about this surface assumes a session.
+    await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+  });
+
+  await chapter('Find the agent sandbox in the rail — by CLICKING it', async () => {
+    const rail = page.getByRole('navigation', { name: 'API reference' });
+    await rail.getByRole('link', { name: 'Agent sandbox' }).click();
+    await page.waitForURL('**/docs/sandbox');
+    // The entry marks itself current, which is what makes the surface read as
+    // one thing rather than four pages that happen to look alike.
+    await expect(rail.getByRole('link', { name: 'Agent sandbox' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  await chapter('See which agents the sandbox supports', async () => {
+    const matrix = page.locator('#pick-your-profile table');
+    await expect(matrix).toBeVisible();
+    // The row COUNT comes from the CLI's own list, never a literal here: this
+    // spec must fail when the page stops deriving, not when someone adds a
+    // ninth agent.
+    await expect(matrix.locator('tbody tr')).toHaveCount(AGENT_PROFILES.length);
+
+    // …and each row shows the credential directory that agent keeps its sign-in
+    // in, which is the fact a reader is choosing on.
+    for (const profile of AGENT_PROFILES.filter((candidate) => candidate.sandboxMounts.length)) {
+      await expect(
+        matrix.getByRole('cell', { name: profile.sandboxMounts[0]!, exact: false }).first(),
+      ).toBeVisible();
+    }
+  });
+
+  await chapter('Copy the command it came for', async () => {
+    const block = page.locator('#start-the-container pre').first();
+    await expect(block).toBeVisible();
+
+    await page.locator('#start-the-container').getByRole('button', { name: 'Copy' }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+
+    // The whole command, not a truncated or placeholder string — a copy button
+    // that quietly yields half a command looks identical to one that works.
+    expect(copied).toContain('docker run');
+    expect(copied).toContain('ghcr.io/moooon-b-v/motir-sandbox:');
+    expect(copied).toContain('-v "$PWD:/workspace"');
+    // It sets the container UP; it does not start a work loop.
+    expect(copied).not.toContain('motir auto');
+  });
+
+  await chapter('Leave for any of the other three pages', async () => {
+    const rail = page.getByRole('navigation', { name: 'API reference' });
+    for (const [label, url] of [
+      ['Getting started', '**/docs/getting-started'],
+      ['Stability & deprecation', '**/docs/stability'],
+      ['API reference', '**/docs/api'],
+    ] as const) {
+      await rail.getByRole('link', { name: label }).click();
+      await page.waitForURL(url);
+      await rail.getByRole('link', { name: 'Agent sandbox' }).click();
+      await page.waitForURL('**/docs/sandbox');
+    }
+  });
+});
+
+test('the sandbox guide is readable on a phone — the command scrolls, the page does not', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/docs/sandbox');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+  const overflows = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  );
+  expect(overflows, 'the page body scrolls horizontally at 390px').toBe(false);
+
+  // The `docker run` is wider than any phone, so it must scroll inside its own
+  // block rather than truncating.
+  const scrollable = await page
+    .locator('#start-the-container pre')
+    .first()
+    .evaluate((node) => node.scrollWidth > node.clientWidth);
+  expect(scrollable, 'the docker run is not reachable by scrolling its own block').toBe(true);
+
+  // …and the four-column matrix becomes one card per profile rather than a
+  // shrunken table, so every fact a reader chooses on stays visible.
+  await expect(page.locator('#pick-your-profile table')).toBeHidden();
+  const cards = page.locator('#pick-your-profile dl');
+  await expect(cards).toHaveCount(AGENT_PROFILES.length);
+  // The credential mount is the fact a reader is choosing on, so it is the one
+  // that must survive the collapse — asserted on the first profile's own value
+  // rather than on its id, which appears several times inside one card.
+  await expect(
+    cards.first().getByText(AGENT_PROFILES[0]!.sandboxMounts[0]!, { exact: true }),
+  ).toBeVisible();
+});
+
 test('the reference is readable on a phone — the code block scrolls, the page does not', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/api-docs');
+  await page.goto('/docs/api');
   await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
 
   const section = operationSection(page, READ_OPERATION);
@@ -262,7 +385,7 @@ test('the reference is readable on a phone — the code block scrolls, the page 
 });
 
 test('the catalogue filters in place, and says so when nothing matches', async ({ page }) => {
-  await page.goto('/api-docs');
+  await page.goto('/docs/api');
   const find = page.getByRole('searchbox');
   await expect(find).toBeVisible();
 

@@ -301,7 +301,7 @@ describe('the published policy and ADR §8 are ONE promise', () => {
     expect(ADR_PATH).toBe('docs/decisions/public-api-conventions.md');
     // The ADR→page half, added by Amendment 4. Without it a reader who finds §8
     // has no way to know a published version exists.
-    expect(section8).toContain('/api-docs/stability');
+    expect(section8).toContain('/docs/stability');
   });
 });
 

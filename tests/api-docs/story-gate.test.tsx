@@ -146,7 +146,7 @@ describe('seam: 11.4.4’s emitter → the served route', () => {
 
 describe('seam: the document → 11.4.7’s reference page', () => {
   it('renders every operation the DOCUMENT carries — the whole page, not a sample', async () => {
-    const { default: Page } = await import('@/app/(public)/api-docs/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/page');
     const html = await renderPageToHtml(await Page());
 
     const document = emitOpenApiDocument();
@@ -165,7 +165,7 @@ describe('seam: the document → 11.4.7’s reference page', () => {
   });
 
   it('renders no operation the document does NOT carry', async () => {
-    const { default: Page } = await import('@/app/(public)/api-docs/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/page');
     const html = await renderPageToHtml(await Page());
     const rendered = [...html.matchAll(/data-operation-id="([^"]+)"/g)].map(([, id]) => id);
     for (const id of new Set(rendered)) {
@@ -179,7 +179,7 @@ describe('seam: the document → 11.4.7’s reference page', () => {
   });
 
   it('shows the scope the DOCUMENT declares, on the page, for every operation', async () => {
-    const { default: Page } = await import('@/app/(public)/api-docs/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/page');
     const html = await renderPageToHtml(await Page());
     for (const operation of V1_OPERATIONS) {
       expect(html, `${operation.operationId}: scope missing`).toContain(operation.scope);
@@ -283,16 +283,21 @@ describe('guard: the emitter is REQUEST-INDEPENDENT', () => {
 describe('guard: the reference page does not fetch its own public URL', () => {
   it('reads the emitter directly — the app must not need to be up to describe itself', () => {
     for (const file of [
-      'app/(public)/api-docs/page.tsx',
-      'app/(public)/api-docs/getting-started/page.tsx',
-      'app/(public)/api-docs/stability/page.tsx',
+      'app/(public)/docs/api/page.tsx',
+      'app/(public)/docs/getting-started/page.tsx',
+      'app/(public)/docs/stability/page.tsx',
+      // Story MOTIR-2268's fourth page. It derives its profile table from the
+      // CLI's own record at BUILD time, which is the same principle this guard
+      // protects: a documentation page describes the system by reading it, never
+      // by calling it over the network.
+      'app/(public)/docs/sandbox/page.tsx',
     ]) {
       const source = stripComments(readFileSync(join(REPO_ROOT, file), 'utf8'));
       expect(source, `${file} fetches`).not.toMatch(/\bfetch\s*\(/);
       expect(source, `${file} names its own spec URL`).not.toContain('/api/openapi/v1.json');
     }
     expect(
-      stripComments(readFileSync(join(REPO_ROOT, 'app/(public)/api-docs/page.tsx'), 'utf8')),
+      stripComments(readFileSync(join(REPO_ROOT, 'app/(public)/docs/api/page.tsx'), 'utf8')),
     ).toContain('buildApiReference');
   });
 });
@@ -360,7 +365,7 @@ describe('the code block’s COPY affordance', () => {
   it('copies the sample and confirms IN THE BUTTON, not in a toast', async () => {
     // The reader is looking at the thing they clicked; a toast would announce a
     // success they can already see.
-    const { CodeBlock } = await import('@/app/(public)/api-docs/_components/CodeBlock');
+    const { CodeBlock } = await import('@/app/(public)/docs/_components/CodeBlock');
     render(<CodeBlock caption="curl" code="curl https://app.motir.co/api/v1/me" copyable />);
 
     const button = screen.getByRole('button', { name: 'Copy' });
@@ -373,7 +378,7 @@ describe('the code block’s COPY affordance', () => {
   it('RETURNS to “Copy” — the confirmation is transient, not a new resting state', async () => {
     vi.useFakeTimers();
     try {
-      const { CodeBlock } = await import('@/app/(public)/api-docs/_components/CodeBlock');
+      const { CodeBlock } = await import('@/app/(public)/docs/_components/CodeBlock');
       render(<CodeBlock caption="curl" code="curl x" copyable />);
       fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
       await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy());
@@ -387,7 +392,7 @@ describe('the code block’s COPY affordance', () => {
   });
 
   it('gives a SCHEMA block no copy button — a schema is read, not run', async () => {
-    const { CodeBlock } = await import('@/app/(public)/api-docs/_components/CodeBlock');
+    const { CodeBlock } = await import('@/app/(public)/docs/_components/CodeBlock');
     render(<CodeBlock caption="application/json" code="{}" />);
     expect(screen.queryByRole('button')).toBeNull();
   });
@@ -395,7 +400,7 @@ describe('the code block’s COPY affordance', () => {
 
 describe('the catalogue’s in-page FIND', () => {
   it('filters in place, KEEPS the group headings, and counts honestly', async () => {
-    const { CatalogueNav } = await import('@/app/(public)/api-docs/_components/CatalogueNav');
+    const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     const groups = buildApiReference().groups;
     render(<CatalogueNav current="reference" groups={groups} />);
 
@@ -416,7 +421,7 @@ describe('the catalogue’s in-page FIND', () => {
   });
 
   it('matches on the VERB too — a reader looking for a write types “post”', async () => {
-    const { CatalogueNav } = await import('@/app/(public)/api-docs/_components/CatalogueNav');
+    const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     render(<CatalogueNav current="reference" groups={buildApiReference().groups} />);
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'patch' } });
@@ -428,7 +433,7 @@ describe('the catalogue’s in-page FIND', () => {
   });
 
   it('says so when nothing matches, and Escape clears the box', async () => {
-    const { CatalogueNav } = await import('@/app/(public)/api-docs/_components/CatalogueNav');
+    const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     render(<CatalogueNav current="reference" groups={buildApiReference().groups} />);
 
     const box = screen.getByRole('searchbox');
@@ -446,7 +451,7 @@ describe('the verb chip’s fallback', () => {
     // The registry restricts verbs to four, so this is unreachable today — which
     // is exactly why it is worth pinning: the fallback must stay a quiet default
     // rather than an exception on a documentation page.
-    const { MethodPill } = await import('@/app/(public)/api-docs/_components/MethodPill');
+    const { MethodPill } = await import('@/app/(public)/docs/_components/MethodPill');
     render(<MethodPill method="PUT" />);
     expect(screen.getAllByText('PUT').length).toBeGreaterThan(0);
   });
@@ -454,8 +459,7 @@ describe('the verb chip’s fallback', () => {
 
 describe('the operation section’s envelope headings', () => {
   it('labels a PLAIN page’s row schema, a RANKED page’s, and a single resource’s', async () => {
-    const { OperationSection } =
-      await import('@/app/(public)/api-docs/_components/OperationSection');
+    const { OperationSection } = await import('@/app/(public)/docs/_components/OperationSection');
 
     for (const [id, key] of [
       ['listProjectWorkItems', 'sectionRowSchema'],
@@ -477,10 +481,10 @@ describe('the docs SHELL', () => {
     vi.doMock('@/lib/services/projectTagsService', () => ({
       projectTagsService: { listCategories: async () => [{ slug: 'ai', label: 'AI' }] },
     }));
-    const { default: Layout } = await import('@/app/(public)/api-docs/layout');
+    const { default: Layout } = await import('@/app/(public)/docs/layout');
     const html = await renderPageToHtml(await Layout({ children: <p>content</p> }));
 
-    expect(html).toContain('href="/api-docs"');
+    expect(html).toContain('href="/docs/api"');
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('content');
     // The footer's topic crawl links made it through.
@@ -498,7 +502,7 @@ describe('the docs SHELL', () => {
         },
       },
     }));
-    const { default: Layout } = await import('@/app/(public)/api-docs/layout');
+    const { default: Layout } = await import('@/app/(public)/docs/layout');
     const html = await renderPageToHtml(await Layout({ children: <p>content</p> }));
 
     expect(html).toContain('content');
@@ -507,7 +511,7 @@ describe('the docs SHELL', () => {
   });
 
   it('titles the surface from the catalog', async () => {
-    const { generateMetadata } = await import('@/app/(public)/api-docs/layout');
+    const { generateMetadata } = await import('@/app/(public)/docs/layout');
     expect(await generateMetadata()).toEqual({
       title: 'metaTitle',
       description: 'metaDescription',
@@ -524,13 +528,13 @@ describe('the guide and policy pages survive a broken registry', () => {
       },
     }));
 
-    const { default: Guide } = await import('@/app/(public)/api-docs/getting-started/page');
+    const { default: Guide } = await import('@/app/(public)/docs/getting-started/page');
     render(await Guide());
     expect(screen.getByText('Mint a token')).toBeTruthy();
     expect(document.querySelectorAll('[data-operation-id]')).toHaveLength(0);
     cleanup();
 
-    const { default: Policy } = await import('@/app/(public)/api-docs/stability/page');
+    const { default: Policy } = await import('@/app/(public)/docs/stability/page');
     render(await Policy());
     expect(screen.getByText('A new endpoint.')).toBeTruthy();
   });

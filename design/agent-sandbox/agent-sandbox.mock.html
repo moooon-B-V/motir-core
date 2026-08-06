@@ -1,0 +1,1604 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The agent sandbox guide (MOTIR-2268 · MOTIR-2270)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE AGENT SANDBOX GUIDE.
+      Story MOTIR-2268 · Subtask MOTIR-2270. Route: /docs/sandbox.
+
+      A NEW page, in its OWN design area. It MOUNTS INTO the documentation shell
+      that Story 11.4 designed and shipped (`design/api-docs/`) and changes
+      nothing about it except adding one row to its rail — so that asset is not
+      touched, and the shell markup reproduced here is 11.4's, drawn only as the
+      frame this page sits in.
+
+      Built against ADR Amendment 9 (`docs/decisions/public-api-conventions.md`,
+      MOTIR-2269), which pins the route, the page's ownership boundary against
+      `packages/cli/sandbox/README.md`, and AGENT_PROFILES as the profile
+      table's single derivation source.
+
+      THE PAGE IS A PROCEDURE, and is drawn as one: context, then the
+      preconditions, then numbered steps. That is the rhythm the sibling
+      getting-started page already ships (`1 · Mint a token`, `2 · Your first
+      call`, ...), and this page has the stronger claim to it — a reader here is
+      not learning an API, they are setting a thing up, and the whole page is
+      the difference between an agent running loose on their laptop and one
+      that cannot reach it.
+
+      Panels — review EACH (notes.html mistake #31):
+        (1) /docs/sandbox at 1200 px — the whole procedure.
+        (2) The same guide at 390 px — the profile step as cards, the code
+            blocks scrolling inside themselves, the page never sideways.
+        (3) The rail's fourth entry, close up — the page's ONLY entrance.
+
+      Colour strictly via --el-*; shape strictly via element-semantic tokens; NO
+      invented colour. The token block and the shell classes below are copied
+      1:1 from `design/api-docs/api-docs.mock.html` (which took them from
+      app/globals.css), so this page cannot drift from the surface it mounts in.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label .note {
+        display: block;
+        margin-top: 4px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+
+      /* ── The shipped marketing chrome — markup mirrored 1:1 from
+           app/(public)/explore/_components/ExploreTopBar.tsx ─────────────── */
+      .site-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px var(--spacing-card-padding);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand .tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .brand .name {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .site-nav {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      /* The SHIPPED treatment: a future page renders as a non-interactive label. */
+      .site-nav .nav-label {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      /* The SHIPPED treatment for a nav item that resolves to a real page. */
+      .site-nav .nav-link {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-nav .nav-current {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+        text-decoration: none;
+      }
+      .site-foot {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 32px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 32px var(--spacing-card-padding);
+      }
+      .site-foot h2 {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .site-foot ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .site-foot a {
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-foot .tagline {
+        margin: 8px 0 0;
+        max-width: 22rem;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The docs shell (THIS design) ───────────────────────────────────── */
+      .docs {
+        display: flex;
+        min-height: 660px;
+      }
+      .docs-nav {
+        flex: none;
+        width: 264px;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-sidebar-bg);
+        padding: 16px 12px 24px;
+        overflow: hidden;
+      }
+      .docs-main {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 36px 40px;
+      }
+      .docs-aside {
+        flex: none;
+        width: 200px;
+        border-left: 1px solid var(--el-border);
+        padding: 28px 16px;
+      }
+      .searchbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text-faint);
+        font-size: 13px;
+      }
+      .searchbox .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        color: var(--el-text-faint);
+      }
+      .navgroup {
+        margin-top: 18px;
+      }
+      .navgroup > h3 {
+        margin: 0 0 6px;
+        padding-left: var(--spacing-control-x);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .navrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .navrow:hover {
+        background: var(--el-sidebar-item-bg-hover);
+      }
+      .navrow.is-active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .navrow .op {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── HTTP method chip — a Pill, hue in the BACKGROUND, --el-text-strong ── */
+      .verb {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .verb--get {
+        background: var(--el-tint-sky);
+      }
+      .verb--post {
+        background: var(--el-tint-mint);
+      }
+      .verb--patch {
+        background: var(--el-tint-peach);
+      }
+      .verb--delete {
+        background: var(--el-tint-rose);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--scope {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-head .hsub {
+        margin-top: 3px;
+        max-width: 54ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+
+      /* ── Docs typography ────────────────────────────────────────────────── */
+      .doc h1 {
+        margin: 0 0 6px;
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h2 {
+        margin: 28px 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h3 {
+        margin: 20px 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .doc p {
+        margin: 0 0 12px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .doc .lede {
+        max-width: 68ch;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .doc code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        padding: 1px 5px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .doc ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+      }
+
+      /* ⚠️ WIDE CONTENT SCROLLS INSIDE ITS OWN CONTAINER, never the page. */
+      .codeblock {
+        position: relative;
+        margin: 0 0 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-code-bg);
+        overflow: hidden;
+      }
+      .codeblock > pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-code-text);
+        white-space: pre;
+      }
+      .codeblock .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+      }
+      .codeblock .cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+
+      .callout {
+        display: flex;
+        gap: 10px;
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        max-width: 68ch;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .callout--warn {
+        background: var(--el-tint-peach);
+      }
+
+      /* ── The operation-detail tables ────────────────────────────────────── */
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 16px;
+        font-size: 13px;
+      }
+      table.spec th {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      table.spec td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      table.spec td .nm {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      table.spec td .ty {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .status {
+        display: inline-flex;
+        min-width: 34px;
+        justify-content: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .status--ok {
+        background: var(--el-tint-mint);
+      }
+      .status--client {
+        background: var(--el-tint-peach);
+      }
+      .status--server {
+        background: var(--el-tint-rose);
+      }
+
+      .op-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .op-path {
+        font-family: var(--font-mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .toc {
+        font-size: 12px;
+      }
+      .toc h4 {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .toc a {
+        display: block;
+        padding: 4px 0;
+        color: var(--el-text-muted);
+        text-decoration: none;
+      }
+      .toc a.is-active {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 72px 24px;
+        text-align: center;
+      }
+      .empty h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        max-width: 46ch;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .empty .glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        font-size: 20px;
+      }
+
+      .phone {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .phone .docs-main {
+        padding: 18px 16px 24px;
+      }
+      .row2 {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      /* The settings-page row grammar (mirrors design/settings/*) */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow .lbl {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .desc {
+        margin-top: 2px;
+        max-width: 58ch;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .settings-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .settings-head p {
+        margin: 4px 0 0;
+        max-width: 34rem;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      .anno {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      /* ── THIS design's own additions (MOTIR-2270) ───────────────────────── */
+      /* Tier 1 = pinned by the sandbox matrix; tier 2 = also-supported. Two tint
+         SLOTS rather than two shades of one hue, so the distinction survives a
+         palette swap and reads without the legend. */
+      .pill--tier1 {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        font-size: 11px;
+      }
+      .pill--tier2 {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-size: 11px;
+      }
+      /* A credential mount is a PATH, so each is its own code chip; a profile
+         with several gets several, stacked, because wrapping one long line
+         reads as one path. */
+      .mount {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-code-text);
+        background: var(--el-code-bg);
+        border-radius: var(--radius-kbd);
+        padding: 1px 6px;
+        margin-bottom: 3px;
+        width: fit-content;
+      }
+      .mount--none {
+        font-family: var(--font-sans);
+        background: transparent;
+        color: var(--el-text-faint);
+        padding-left: 0;
+      }
+      /* Narrow: the profile matrix as one card per profile. Not a scrolling
+         table and not hidden columns — every fact a reader chooses on stays
+         visible. */
+      .pcard {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        background: var(--el-surface);
+      }
+      .pcard-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .pcard-head .nm {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .pcard dl {
+        display: grid;
+        grid-template-columns: 78px 1fr;
+        gap: 4px 10px;
+        margin: 0;
+      }
+      .pcard dt {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding-top: 2px;
+      }
+      .pcard dd {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The agent sandbox guide</h1>
+        <p>
+          Story MOTIR-2268 · Subtask MOTIR-2270 — <code>/docs/sandbox</code>, the fourth page of the
+          public documentation surface.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════ PANEL 1 — /docs/sandbox, the whole procedure ════════ -->
+    <div class="panel-label">
+      Panel 1 · /docs/sandbox — the whole procedure, 1200 px
+      <span class="note">
+        THE PAGE IS A PROCEDURE and is drawn as one: two sections of context (what the thing
+        confines, what you need), then numbered steps a reader works down. That is the rhythm the
+        sibling getting-started page already ships, and it is what makes the VS Code path a visible
+        FOURTH STEP rather than a paragraph at the bottom nobody scrolls to. It mounts in 11.4's
+        shell unchanged — same rail, same content column, same heading scale — and adds one row to
+        the rail, which is this page's only entrance.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+
+        <div class="docs">
+          <nav class="docs-nav" aria-label="API reference">
+            <div class="searchbox">
+              <span aria-hidden="true">⌕</span>Find an operation<span class="kbd">/</span>
+            </div>
+
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/docs/api">API reference</a>
+              <a class="navrow" href="/docs/getting-started">Getting started</a>
+              <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
+              <a class="navrow is-active" href="/docs/sandbox" aria-current="page">Agent sandbox</a>
+            </div>
+
+            <div class="navgroup">
+              <h3>Work items</h3>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>List</a>
+              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Create</a>
+              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Read</a>
+              <a class="navrow" href="#"><span class="verb verb--patch">PATCH</span>Update</a>
+            </div>
+          </nav>
+
+          <div class="docs-main doc">
+            <h1>Set up the agent sandbox</h1>
+            <p class="lede">
+              Motir asks you to hand work to a coding agent that runs unattended, with approvals
+              off. This is where it should run: a published container that can reach your workspace
+              tree and nothing else on your machine. Setting it up is a <code>docker run</code>, not
+              a <code>git clone</code> — and this page ends when you have a working one.
+              <strong
+                >What you then do inside it is the work loop, and it is documented with the
+                CLI</strong
+              >, not here.
+            </p>
+
+            <h2>What it confines — and what it does not</h2>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 18%">Surface</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">Filesystem</span></td>
+                  <td>
+                    <strong>Confined.</strong> The only host surfaces inside the container are a
+                    writable <code>/workspace</code> and your agent's own credential, mounted
+                    read-only. No docker socket, no other host bind.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Network</span></td>
+                  <td>
+                    <strong>Open, by design.</strong> Every agent needs its provider API, and every
+                    dispatched item needs git remotes. This image confines the filesystem blast
+                    radius, not egress — reach for docker's own <code>--network</code> controls if
+                    your threat model needs more.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Privileges</span></td>
+                  <td>
+                    Runs as the unprivileged <code>node</code> user (uid 1000), so files written
+                    into the mount stay owned by you rather than by root.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h2>Before you start</h2>
+            <p>
+              Two things, and neither is a Motir account detail — you sign in
+              <em>inside</em> the container in step 4, so there is nothing to mint or copy first.
+              You do not need the Motir CLI on this machine either; it ships in the image.
+            </p>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 26%">What you need</th>
+                  <th>How to get it</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">Docker</span><br /><span class="ty">running</span></td>
+                  <td>
+                    Docker Desktop or any engine. The images are built for
+                    <code>linux/amd64</code> <em>and</em> <code>linux/arm64</code>, so Apple Silicon
+                    is a first-class machine and nothing is emulated. There is no build step — you
+                    pull.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="nm">Your agent's own sign-in</span><br /><span class="ty"
+                      >on this machine</span
+                    >
+                  </td>
+                  <td>
+                    Sign in to your coding agent <em>once, here</em>, before you start — or have its
+                    API key in your environment. Its credential mount is <strong>read-only</strong>,
+                    so the container can use a sign-in and can never perform one.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>And know which folder you are mounting</h3>
+            <p>
+              A Motir project usually spans several repositories and the work loop runs across all
+              of them — so what you mount is the folder that <em>contains</em> your checkouts, not
+              any one of them. Start the container from there:
+            </p>
+            <div class="codeblock">
+              <div class="cap">your machine</div>
+              <pre>
+~/work/                 ← start the container from HERE
+├── motir-core/         ← a checkout
+└── motir-ai/           ← another</pre
+              >
+            </div>
+
+            <h2>1 · Pick your profile</h2>
+            <p>
+              One image per agent, each layer fetching that CLI from its own official source at
+              build time. Find the row for the agent you already use — you need its
+              <strong>tag</strong> and its <strong>credential mount</strong> in step 3.
+            </p>
+            <p>
+              <strong>Tier is how closely we track the vendor, not whether it works.</strong> Every
+              profile here is published, and every one is built and smoke-tested before a release
+              ships. <span class="pill pill--tier1">Tier 1</span> means we pin both the install
+              source and the credential location and verify them on every change.
+              <span class="pill pill--tier2">Tier 2</span> installs from a vendor endpoint we do not
+              control, so day-to-day breakage there is reported rather than blocking — it is caught
+              at release, not necessarily the hour it happens.
+            </p>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 20%">Profile · binary</th>
+                  <th style="width: 12%">Tier</th>
+                  <th style="width: 30%">Installed from</th>
+                  <th>Credential mount (read-only)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">claude</span><br /><span class="ty">claude</span></td>
+                  <td><span class="pill pill--tier1">Tier 1</span></td>
+                  <td>npm <code>@anthropic-ai/claude-code</code></td>
+                  <td><span class="mount">~/.claude</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">codex</span><br /><span class="ty">codex</span></td>
+                  <td><span class="pill pill--tier1">Tier 1</span></td>
+                  <td>npm <code>@openai/codex</code></td>
+                  <td><span class="mount">~/.codex</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">opencode</span><br /><span class="ty">opencode</span></td>
+                  <td><span class="pill pill--tier1">Tier 1</span></td>
+                  <td>npm <code>opencode-ai</code></td>
+                  <td>
+                    <span class="mount">~/.config/opencode</span
+                    ><span class="mount">~/.local/share/opencode</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">kimi</span><br /><span class="ty">kimi</span></td>
+                  <td><span class="pill pill--tier1">Tier 1</span></td>
+                  <td>npm <code>@moonshot-ai/kimi-code</code></td>
+                  <td><span class="mount">~/.kimi-code</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">antigravity</span><br /><span class="ty">agy</span></td>
+                  <td><span class="pill pill--tier2">Tier 2</span></td>
+                  <td>the Antigravity install script</td>
+                  <td><span class="mount mount--none">— OS keyring</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">cursor</span><br /><span class="ty">agent</span></td>
+                  <td><span class="pill pill--tier2">Tier 2</span></td>
+                  <td>the Cursor install script</td>
+                  <td><span class="mount">~/.local/share/cursor-agent</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">aider</span><br /><span class="ty">aider</span></td>
+                  <td><span class="pill pill--tier2">Tier 2</span></td>
+                  <td>PyPI <code>aider-chat</code>, in a venv</td>
+                  <td><span class="mount">~/.aider.conf.yml</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">goose</span><br /><span class="ty">goose</span></td>
+                  <td><span class="pill pill--tier2">Tier 2</span></td>
+                  <td>the Goose installer (Block)</td>
+                  <td><span class="mount">~/.config/goose</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                >Using something else? <code>motir-sandbox:base</code> ships the sandbox with
+                <strong>no agent at all</strong> — bring your own binary and pass it as
+                <code>--agent "&lt;your command&gt;"</code>. Motir is agent-agnostic; the profiles
+                make eight CLIs first-class, they do not make Motir depend on any of them.</span
+              >
+            </div>
+
+            <h2>2 · Start the container</h2>
+            <p>
+              Two of its parts come from the row you just picked; everything else is the same for
+              every profile. It drops you into a shell in <code>/workspace</code>:
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · the shape</div>
+              <pre>
+docker run -it --name motir-sandbox \
+  -v "$PWD:/workspace" \
+  -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt;</pre
+              >
+            </div>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 26%">The part</th>
+                  <th style="width: 38%">Comes from</th>
+                  <th>For <code>claude</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">&lt;profile&gt;</span></td>
+                  <td>the <strong>Profile</strong> column in step 1</td>
+                  <td><span class="mount">claude</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">&lt;credential mount&gt;</span></td>
+                  <td>
+                    the <strong>Credential mount</strong> column in step 1, with its
+                    <code>~/</code> written as <code>$HOME/</code>
+                  </td>
+                  <td><span class="mount">.claude</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              A profile with <strong>two</strong> credential mounts (<code>opencode</code>) takes
+              two <code>-v</code> lines; one with <strong>none</strong> (<code>antigravity</code>)
+              takes none at all. Filled in for <code>claude</code>, that is:
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · copy, then swap the two parts for your row</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+docker run -it --name motir-sandbox \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.claude:/home/node/.claude:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox:claude</pre
+              >
+            </div>
+            <div class="callout callout--warn">
+              <span aria-hidden="true">▲</span>
+              <span
+                >Note there is <strong>no <code>--rm</code></strong
+                >, and the container has a name. The sign-in in step 4 is written inside the
+                container, so a <code>--rm</code> run would throw it away the moment you exit. Set
+                it up once and come back to it with
+                <code>docker start -ai motir-sandbox</code>.</span
+              >
+            </div>
+
+            <h2>3 · Or start it from VS Code instead</h2>
+            <p>
+              The same confined image, as a dev container: VS Code opens
+              <code>/workspace</code> inside it with the same mounts, so your editor, terminal and
+              agent all run behind the same boundary. Three sub-steps, and they
+              <strong>replace step 2</strong> rather than following it — steps 4 onwards are the
+              same either way.
+            </p>
+
+            <h3>3.1 · Install the Dev Containers extension</h3>
+            <p>
+              From the Extensions view, or the command palette's
+              <strong>Extensions: Install Extensions</strong>. It is what starts the container on
+              your behalf — VS Code does not ship it, and it drives the same Docker engine step 2
+              uses.
+            </p>
+
+            <h3>
+              3.2 · Add <code>.devcontainer/devcontainer.json</code> to the folder you are mounting
+            </h3>
+            <p>
+              The same folder step 2 would have started from. It pins the published image and passes
+              the mount your profile needs:
+            </p>
+            <div class="codeblock">
+              <div class="cap">.devcontainer/devcontainer.json</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+{
+  "name": "Motir sandbox (Claude Code)",
+  "image": "ghcr.io/moooon-b-v/motir-sandbox:claude",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true
+}</pre
+              >
+            </div>
+            <p>
+              Swap <code>:claude</code> and the <code>mounts</code> entry for your row from step 1.
+              A dev container is not torn down when you close the window, so the sign-in in step 4
+              persists here without any extra flag.
+            </p>
+
+            <h3>3.3 · Reopen in Container</h3>
+            <p>
+              Command palette → <strong>Dev Containers: Reopen in Container</strong>. VS Code pulls
+              the image and attaches; its terminal is the same shell step 2 would have dropped you
+              into.
+            </p>
+            <div class="callout callout--warn">
+              <span aria-hidden="true">▲</span>
+              <span
+                >The <code>devcontainer.json</code> files inside the motir-core repository are
+                <strong>not</strong> this file. They carry a <code>build</code> block pointing at
+                that repository's own <code>Dockerfile</code>, because they are <em>its</em> dev
+                containers and a checkout is what those are for. For your own workspace, pin the
+                image as above.</span
+              >
+            </div>
+
+            <h2>4 · Sign in</h2>
+            <p>
+              From the shell inside the container. It prints a code and a URL, you approve it in a
+              browser on any device, and the container polls until the token is minted — a device
+              grant, headless by construction, which is exactly what a container is.
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · inside the container</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>motir login</pre>
+            </div>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                ><strong>Self-hosting?</strong> The CLI talks to
+                <code>https://app.motir.co</code> unless told otherwise, so nothing here names a
+                server. Point it at your own instance by adding
+                <code>-e MOTIR_SERVER=https://motir.example.com</code> to step 2's command — Motir
+                is open-core and self-hostable, and that variable is the whole difference.</span
+              >
+            </div>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                ><strong>Two other ways in, for the machines that need them.</strong> A CI runner or
+                a brand-new box has no browser to approve anything, so pass a token straight
+                through: <code>-e MOTIR_TOKEN</code> on step 2's command, minted under
+                <strong>Settings → Account → API tokens</strong>. And a laptop that has already run
+                <code>motir login</code> can mount its credential read-only (<code
+                  >-v "$HOME/.config/motir:/home/node/.config/motir:ro"</code
+                >) — but then <code>motir login</code> has nowhere to write, and says so.</span
+              >
+            </div>
+
+            <h2>5 · Link the folder to your project</h2>
+            <p>
+              Still inside the container. This binds <code>/workspace</code> — the folder you
+              mounted — to a Motir project, so every command knows what it is working on:
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · inside the container</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>motir link</pre>
+            </div>
+            <p>
+              <strong>If your workspace has exactly one project, that is the whole step</strong> —
+              it is chosen for you and nothing is asked. With more than one, the command lists them
+              and asks which; pass <code>--project &lt;key&gt;</code> to answer up front, which is
+              also what a non-interactive shell needs.
+            </p>
+
+            <h2>6 · Check it</h2>
+            <p>The last thing, and the one that tells you the setup actually took:</p>
+            <div class="codeblock">
+              <div class="cap">sh · inside the container</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>motir doctor</pre>
+            </div>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 30%">It checks</th>
+                  <th>Which tells you</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">the workspace</span></td>
+                  <td>
+                    <code>/workspace</code> is writable and the link from step 5 resolves — so you
+                    mounted the right folder, not a checkout inside it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">the Motir credential</span></td>
+                  <td>Step 4's sign-in landed, and it names where the credential came from.</td>
+                </tr>
+                <tr>
+                  <td><span class="nm">your agent</span></td>
+                  <td>
+                    The binary is on <code>PATH</code>, and its own credential is present where that
+                    profile keeps it — step 2's read-only mount actually landed.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              All three green is the end of this page: you have a confined container that can see
+              your work and hold your credentials, and nothing else on your machine.
+            </p>
+
+            <h2>What next</h2>
+            <p>
+              <strong
+                >Setting the sandbox up and using it are different things, and this page only owns
+                the first.</strong
+              >
+              Inside the container the CLI behaves exactly as it does on a host —
+              <code>motir next</code> to take one item, <code>motir run &lt;key&gt;</code> for a
+              specific one, or <code>motir auto</code> to drain the ready set unattended, which is
+              what the confinement is really for. All three are documented with the CLI, because
+              none of them is about the container.
+            </p>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                >The unattended loop takes your agent's own non-interactive and auto-approve flags
+                (<code>motir auto --agent "&lt;your agent's command&gt;"</code>). Those drift
+                between vendor releases, so the current set lives beside the image in
+                <code>packages/cli/sandbox/README.md</code> — which is also where the digests to
+                pin, the confinement proof, the validation harness and the escape hatch for an
+                unlisted agent live.</span
+              >
+            </div>
+          </div>
+
+          <aside class="docs-aside toc">
+            <h4>On this page</h4>
+            <a class="is-active" href="#">What it confines</a>
+            <a href="#">Before you start</a>
+            <a href="#">1 · Pick your profile</a>
+            <a href="#">2 · Start the container</a>
+            <a href="#">3 · From VS Code</a>
+            <a href="#">4 · Sign in</a>
+            <a href="#">5 · Link your project</a>
+            <a href="#">6 · Check it</a>
+            <a href="#">What next</a>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 2 — the same guide at 390 px ════════ -->
+    <div class="panel-label">
+      Panel 2 · The same procedure at 390 px
+      <span class="note">
+        The rail collapses to a disclosure button; the contents aside drops entirely. Two rules
+        matter here. A <code>docker run</code> is wider than any phone, so the CODE BLOCK scrolls
+        inside its own container and the PAGE never scrolls sideways. And the step-1 matrix — four
+        columns of paths and package names — becomes one CARD PER PROFILE rather than a scrolling
+        table or hidden columns: every fact a reader is choosing on stays visible, and someone
+        deciding whether to trust a container with their credentials is exactly the person reading
+        this on a phone first. Drawn against the real values: <code>opencode</code> has two mounts,
+        <code>antigravity</code> none, <code>cursor</code> the longest path in the set.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="phone">
+        <header class="site-top" style="padding: 10px 16px">
+          <span class="brand"
+            ><span
+              class="tile"
+              style="width: 24px; height: 24px; font-size: 12px"
+              aria-hidden="true"
+              >M</span
+            ><span class="name" style="font-size: 14px">Motir</span></span
+          >
+          <a class="btn btn-sm btn-primary" href="/sign-up">Start free</a>
+        </header>
+        <div class="docs-main doc">
+          <button
+            class="btn btn-sm btn-secondary"
+            type="button"
+            style="width: 100%; justify-content: space-between; margin-bottom: 16px"
+          >
+            <span>Agent sandbox</span><span aria-hidden="true">▾</span>
+          </button>
+
+          <h2 style="margin-top: 0">1 · Pick your profile</h2>
+          <div class="pcard">
+            <div class="pcard-head">
+              <span class="nm">claude</span>
+              <span class="pill pill--tier1">Tier 1</span>
+            </div>
+            <dl>
+              <dt>Binary</dt>
+              <dd><code>claude</code></dd>
+              <dt>Installed</dt>
+              <dd>npm <code>@anthropic-ai/claude-code</code></dd>
+              <dt>Mounts</dt>
+              <dd><span class="mount">~/.claude</span></dd>
+            </dl>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <span class="nm">opencode</span>
+              <span class="pill pill--tier1">Tier 1</span>
+            </div>
+            <dl>
+              <dt>Binary</dt>
+              <dd><code>opencode</code></dd>
+              <dt>Installed</dt>
+              <dd>npm <code>opencode-ai</code></dd>
+              <dt>Mounts</dt>
+              <dd>
+                <span class="mount">~/.config/opencode</span
+                ><span class="mount">~/.local/share/opencode</span>
+              </dd>
+            </dl>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <span class="nm">antigravity</span>
+              <span class="pill pill--tier2">Tier 2</span>
+            </div>
+            <dl>
+              <dt>Binary</dt>
+              <dd><code>agy</code></dd>
+              <dt>Installed</dt>
+              <dd>the Antigravity install script</dd>
+              <dt>Mounts</dt>
+              <dd><span class="mount mount--none">— its token lives in the OS keyring</span></dd>
+            </dl>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <span class="nm">cursor</span>
+              <span class="pill pill--tier2">Tier 2</span>
+            </div>
+            <dl>
+              <dt>Binary</dt>
+              <dd>
+                <code>agent</code> <span class="ty">(alias <code>cursor-agent</code>)</span>
+              </dd>
+              <dt>Installed</dt>
+              <dd>the Cursor install script</dd>
+              <dt>Mounts</dt>
+              <dd><span class="mount">~/.local/share/cursor-agent</span></dd>
+            </dl>
+          </div>
+
+          <h2>2 · Start the container</h2>
+          <div class="codeblock">
+            <div class="cap">sh · scrolls here, not the page →</div>
+            <pre>
+docker run -it --name motir-sandbox -v "$PWD:/workspace" ghcr.io/moooon-b-v/motir-sandbox:claude</pre
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 3 — the rail's fourth entry ════════ -->
+    <div class="panel-label">
+      Panel 3 · The rail's fourth entry — the page's ONLY entrance
+      <span class="note">
+        The one thing this design changes in someone else's surface: 11.4's rail gains a fourth row.
+        It is a plain label row like the other three, active state and
+        <code>aria-current</code> unchanged, and the group still reads as a list of documents rather
+        than a menu that has outgrown its box — at four rows it needs no treatment it did not need
+        at three, which is the check this panel exists to make. Nothing else in the product routes
+        to this page, so if this row is not drawn, the page is unreachable.
+      </span>
+    </div>
+    <div class="panel">
+      <div style="display: flex; gap: 32px; align-items: flex-start">
+        <nav
+          class="docs-nav"
+          aria-label="API reference"
+          style="border-right: none; border-radius: var(--radius-card)"
+        >
+          <div class="navgroup">
+            <h3>Documentation</h3>
+            <a class="navrow" href="/docs/api">API reference</a>
+            <a class="navrow" href="/docs/getting-started">Getting started</a>
+            <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
+            <a class="navrow is-active" href="/docs/sandbox" aria-current="page">Agent sandbox</a>
+          </div>
+        </nav>
+        <div style="padding-top: 8px; max-width: 42ch">
+          <p style="font-size: 13.5px; color: var(--el-text-secondary); line-height: 1.6">
+            <strong>GIVES</strong> — this design adds the fourth row and nothing else.
+            <strong>TAKES</strong> — the rail component, its group heading, its row treatment and
+            its active state are Story 11.4's (MOTIR-2188, <code>design/api-docs/</code>), mounted
+            here unchanged.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

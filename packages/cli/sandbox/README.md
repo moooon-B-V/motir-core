@@ -28,6 +28,11 @@ container is the _recommended_ path, not a requirement.
 
 ## Run
 
+> **Setting it up for the first time?** The published guide at
+> **<https://app.motir.co/docs/sandbox>** is the first ten minutes — pick a profile,
+> start the container, `motir login`, `motir link`, `motir doctor` — and needs no
+> checkout. This README is the reference for everything past that.
+
 Pull and go — no checkout, no build, and no prior host login:
 
 ```sh
