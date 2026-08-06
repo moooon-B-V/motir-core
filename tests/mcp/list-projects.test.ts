@@ -5,11 +5,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { TOOL_SCOPES } from '@/lib/mcp/scopes';
-import {
-  LIST_PROJECTS_TOOL_NAME,
-  type McpProjectRow,
-  toProjectRow,
-} from '@/lib/mcp/tools/listProjects';
+// `toProjectRow` is no longer imported here: the payload assertion below
+// compares through `presentMcpProjectRow`, the presenter the tool's
+// `structuredContent` actually goes through since MOTIR-2230. The old helper is
+// still live in the tool — it shapes the human-readable TEXT block — so this is
+// a change of what this suite asserts against, not a deletion.
+import { LIST_PROJECTS_TOOL_NAME, type McpProjectRow } from '@/lib/mcp/tools/listProjects';
 import { presentMcpProjectRow } from '@/lib/mcp/payloads/planning';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
