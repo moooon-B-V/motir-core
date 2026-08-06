@@ -6,6 +6,8 @@ import type { CarryOverDestination, CompleteSprintInput } from '@/lib/dto/sprint
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { presentMcpSprint, sprintWritePayload } from '../payloads/planning';
 import { sprintIdField, summarizeSprint } from './sprintRef';
 
 // `complete_sprint` (Story 7.8 · Subtask 7.8.10) — close out an active sprint.
@@ -50,7 +52,7 @@ export async function runCompleteSprint(
       args.carryOverTo === 'backlog' ? 'the backlog' : `sprint ${args.carryOverTo.sprintId}`;
     return toolOk(
       `Completed ${summarizeSprint(dto)} (unfinished items → ${where})`,
-      dto as unknown as Record<string, unknown>,
+      derived(sprintWritePayload, presentMcpSprint(dto)),
     );
   } catch (err) {
     return toToolError(err);

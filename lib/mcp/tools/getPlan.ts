@@ -7,6 +7,8 @@ import { isTempRef, tempRefId } from '@/lib/plans/refs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { planPayload, presentMcpPlan } from '../payloads/workLoop';
 import { GET_PLAN_STATUS_TOOL_NAME } from './expandItem';
 
 // `get_plan` (Story 7.9 · MOTIR-1837) — the plan read that returns WHAT was
@@ -183,7 +185,7 @@ export async function runGetPlan(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const plan = await plansService.getPlan(args.planId, ctx);
-  return toolOk(summarizePlan(plan), plan as unknown as Record<string, unknown>);
+  return toolOk(summarizePlan(plan), derived(planPayload, presentMcpPlan(plan)));
 }
 
 export function registerGetPlan(server: McpServer, resolveContext: McpContextResolver): void {

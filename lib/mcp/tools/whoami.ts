@@ -4,6 +4,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { presentMcpWhoami, whoamiPayload } from '../payloads/planning';
 import type { McpContextResolver } from '../context';
 
 // `whoami` (Story 7.8 seam · added by Subtask 7.9.1) — resolve the identity
@@ -42,7 +44,7 @@ export async function runWhoami(ctx: ServiceContext): Promise<CallToolResult> {
   const text = workspace
     ? `${user.name || user.email} <${user.email}> · workspace ${workspace.name} (${workspace.slug})`
     : `${user.name || user.email} <${user.email}>`;
-  return toolOk(text, { user, workspace });
+  return toolOk(text, derived(whoamiPayload, presentMcpWhoami(user, workspace)));
 }
 
 export function registerWhoami(server: McpServer, resolveContext: McpContextResolver): void {

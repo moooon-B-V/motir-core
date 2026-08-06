@@ -5,6 +5,8 @@ import { backlogService } from '@/lib/services/backlogService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { membershipMovePayload, presentMcpMembershipMove } from '../payloads/planning';
 import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { sprintIdField, summarizeMovedItems } from './sprintRef';
 
@@ -35,7 +37,10 @@ export async function runMoveToSprint(
   try {
     const ids = await resolveWorkItemIdsByKeys(args.keys, ctx);
     const moved = await backlogService.bulkAssignToSprint(ids, args.sprintId, ctx);
-    return toolOk(summarizeMovedItems(moved, `sprint ${args.sprintId}`), { items: moved });
+    return toolOk(
+      summarizeMovedItems(moved, `sprint ${args.sprintId}`),
+      derived(membershipMovePayload, presentMcpMembershipMove(moved)),
+    );
   } catch (err) {
     return toToolError(err);
   }

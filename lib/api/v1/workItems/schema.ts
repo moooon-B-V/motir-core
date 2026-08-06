@@ -828,7 +828,10 @@ export function presentTransitionTargets(
 // nothing else to call it, and a client that cannot name a comment cannot reply
 // to one. The same reasoning covers a user id and a sprint id.
 
-const commentSchema = z.object({
+// Exported (MOTIR-2229) so `lib/mcp/payloads/` can DERIVE the MCP comment
+// payload from this exact declaration rather than re-authoring a look-alike.
+// An added export, not a shape change: no field, name or nullability moves.
+export const commentSchema = z.object({
   id: z.string(),
   parentCommentId: z.string().nullable(),
   authorId: z.string(),

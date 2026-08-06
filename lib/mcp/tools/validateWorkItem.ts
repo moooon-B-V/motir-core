@@ -8,6 +8,7 @@ import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { exempt } from '../payloads/define';
 import { conditionField } from './sprintRef';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
@@ -148,7 +149,10 @@ export async function runValidateWorkItem(
       ctx,
       args.condition,
     );
-    return toolOk(summarize(result), result as unknown as Record<string, unknown>);
+    return toolOk(
+      summarize(result),
+      exempt('validate_work_item', result as unknown as Record<string, unknown>),
+    );
   } catch (err) {
     return toToolError(err);
   }
