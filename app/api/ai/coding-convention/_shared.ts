@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject, type ProjectContext } from '@/lib/projects';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import { MotirAiError } from '@/lib/ai/errors';
+import { CodeHealthError } from '@/lib/codeHealth/errors';
 
 // Shared plumbing for the /api/ai/coding-convention/* routes (MOTIR-926). Each
 // route operates on the ACTIVE project (the /code-health page is active-project
@@ -29,15 +30,72 @@ export async function resolveActiveProjectContext(): Promise<
 
 // Map a thrown error to its HTTP response: the project gate errors
 // (ProjectNotFoundError → 404, NotProjectAdminError → 403) via the shared mapper,
-// then a motir-ai boundary failure → 502 (the surface's error/retry state). An
-// unknown error rethrows to a genuine 500.
+// then a code-health domain error → 422, then a motir-ai boundary failure → 502
+// (the surface's error/retry state). An unknown error rethrows to a genuine 500.
+//
+// The 422 arm (MOTIR-2247) carries the repo-scope rejections: the body parsed and
+// the caller is authorized, but the VALUE it named is wrong (a repo the project is
+// not connected to, or an explicitly empty target set). That is the same line
+// `projectErrorResponse` already draws between 422 and 400 — a body that is not
+// parseable at all is answered 400 by the route, before the service is reached.
 export function mapCodeHealthError(err: unknown): NextResponse {
   const mapped = projectErrorResponse(err);
   if (mapped) return mapped;
+  if (err instanceof CodeHealthError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
   if (err instanceof MotirAiError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
   }
   throw err;
+}
+
+// The outcome of reading the refresh route's OPTIONAL repo-scope body
+// (MOTIR-2247). `ok: false` is a malformed body — the route answers 400 without
+// reaching the service.
+export type RepoScopeParse = { ok: true; repoKeys: string[] | undefined } | { ok: false };
+
+// Read `POST /api/ai/coding-convention/refresh`'s optional `{ repoKeys }` body.
+//
+// **An ABSENT body must keep meaning "every connected repo", forever** — that is
+// exactly what the shipped island sends (`fetch(REFRESH_URL, { method: 'POST' })`
+// — no body, no content-type), so an empty request is `repoKeys: undefined`, not a
+// parse failure. A body that IS present and unparseable is a 400; the route never
+// silently downgrades one to a whole-set fan-out, which would spend N derivations
+// on a client bug.
+//
+// An EMPTY array is passed THROUGH to the service, which rejects it (422). It is a
+// well-formed request naming zero targets — a different failure from a malformed
+// one, and the distinction is the point: a client that computes zero targets must
+// not look like one that meant "everything".
+export async function parseRepoScopeBody(req: Request): Promise<RepoScopeParse> {
+  // A body that cannot be READ is malformed, NOT absent. Swallowing the failure
+  // into `''` would read an unreadable request as "no scope" — i.e. answer a
+  // broken request by deriving every connected repo, the exact spend this card
+  // exists to stop. A genuinely bodyless POST resolves to `''` and never throws.
+  let raw: string;
+  try {
+    raw = await req.text();
+  } catch {
+    return { ok: false };
+  }
+  if (raw.trim() === '') return { ok: true, repoKeys: undefined };
+
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return { ok: false };
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return { ok: false };
+
+  // An explicit `null` reads as "no scope" — JSON serializers emit it for an
+  // absent optional, and the whole-set fan-out is the safe reading of "unset".
+  const value = (body as Record<string, unknown>)['repoKeys'];
+  if (value === undefined || value === null) return { ok: true, repoKeys: undefined };
+  if (!Array.isArray(value)) return { ok: false };
+  if (!value.every((key) => typeof key === 'string' && key.trim() !== '')) return { ok: false };
+  return { ok: true, repoKeys: value as string[] };
 }
 
 // Parse an optional non-negative-integer offset query param; absent/invalid →

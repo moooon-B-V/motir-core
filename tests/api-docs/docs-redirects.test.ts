@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DOCS_REDIRECTS } from '../../next.config';
 
 // The `/api-docs` -> `/docs` redirect map (MOTIR-2286 · ADR
-// `public-api-conventions.md` Amendment 8 Q1).
+// `public-api-conventions.md` Amendment 9 Q1).
 //
 // ── Why a test at all, for three lines of config ────────────────────────────
 // The area was renamed one day after it shipped, on the argument that a URL is a
@@ -28,7 +28,7 @@ describe('the documentation area keeps every address it ever served', () => {
   });
 
   it('sends the bare `/api-docs` to the REFERENCE, not to the area root', () => {
-    // The reference deliberately does not own `/docs` (Amendment 8 Q1: a
+    // The reference deliberately does not own `/docs` (Amendment 9 Q1: a
     // four-page area whose root is one of the four cannot grow a fifth without
     // re-opening the argument). So the old reference URL must land on the
     // reference itself — sending it to `/docs` would cost a second hop and,

@@ -15,6 +15,7 @@ import type {
   RepoAuditSurfaceDTO,
 } from '@/lib/dto/codeHealth';
 import { buildRepoAuditRows, defaultSelectedRepoKey } from '@/lib/codeHealth/repoAuditRows';
+import { mergeReauditRun } from '@/lib/codeHealth/reauditRun';
 import type { JobStatus } from '@/lib/ai/types';
 
 type Tab = 'audit' | 'convention';
@@ -222,6 +223,13 @@ export function CodeHealthClient({
   );
   const pageSeq = useRef(0);
   const reauditSeq = useRef(0);
+  // ⚠️ The ONE-POST latch, and it must be a REF. `reauditing` is `useState`, so
+  // it does not flip until React re-renders — two presses dispatched before that
+  // render both read `false` and both POST. That hole was invisible while a
+  // single whole-set button was the only trigger; MOTIR-2249 adds one per row
+  // plus a bulk action, so it is now easy to hit. A ref updates synchronously,
+  // which is what makes MOTIR-2123's invariant true rather than merely intended.
+  const reauditInFlight = useRef(false);
   // The report currently being fetched for a repo switch. Guards the same stale
   // race `pageSeq` guards for pagination: a slow read for repo A must not land
   // after the user has already moved to repo B.
@@ -519,17 +527,32 @@ export function CodeHealthClient({
     else setError(t('deepen.reauditPending'));
   }
 
-  async function reaudit() {
+  // `repoKeys` SCOPES the run to those repos (MOTIR-2249, over MOTIR-2247's
+  // scoped trigger). Omitted = the shipped whole-set fan-out, byte for byte:
+  // the request then carries NO body, which is exactly what the route's
+  // "an absent body means every connected repo" contract is pinned on.
+  async function reaudit(repoKeys?: string[]) {
     // `resuming` closes the hole the in-memory guard alone left open: a mount
     // that is still asking the server about a run must not fire a second one.
-    if (reauditing || resuming) return;
+    // `reauditInFlight` closes the other one: two presses in the same tick.
+    if (reauditing || resuming || reauditInFlight.current) return;
+    reauditInFlight.current = true;
     const seq = ++reauditSeq.current;
     const prevAuditId = report?.surface.audit?.id ?? null;
     setReauditing(true);
     setError(null);
     setPollExhausted(false);
     try {
-      const res = await fetch(REFRESH_URL, { method: 'POST' });
+      const res = await fetch(
+        REFRESH_URL,
+        repoKeys === undefined
+          ? { method: 'POST' }
+          : {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ repoKeys }),
+            },
+      );
       if (!res.ok) throw new Error('refresh failed');
       // ONE POST per click, whatever the poll does — the trigger's own fan-out
       // over the repo set happens server-side, so a poll tick must never re-POST.
@@ -540,25 +563,33 @@ export function CodeHealthClient({
       resumeStarted.current = true;
       const result = (await res.json()) as ReauditResultDTO;
       const repos = (result?.repos ?? []).filter((r) => typeof r?.auditJobId === 'string');
-      if (repos.length > 0) writeRun(projectId, { repos });
+      // MERGED, not overwritten — a scoped run may only ever ADD to what a later
+      // mount will resume (see `mergeRun`).
+      if (repos.length > 0) writeRun(projectId, mergeReauditRun(readRun(projectId), repos));
       // The fan-out told us exactly which repos it queued, so the list can show
       // each of them deriving rather than the whole tab going vague. Their audit
       // ids AS OF NOW are the baseline every later read is measured against.
       const queued = repos
         .map((r) => r.repoKey)
         .filter((repoKey): repoKey is string => repoKey !== null);
-      runBaseline.current = Object.fromEntries(
-        queued.map((repoKey) => [
-          repoKey,
-          audits.find((a) => a.repoKey === repoKey)?.surface?.audit?.id ?? null,
-        ]),
-      );
-      setDerivingRepos(queued);
+      runBaseline.current = {
+        ...runBaseline.current,
+        ...Object.fromEntries(
+          queued.map((repoKey) => [
+            repoKey,
+            audits.find((a) => a.repoKey === repoKey)?.surface?.audit?.id ?? null,
+          ]),
+        ),
+      };
+      setDerivingRepos((prev) => [...new Set([...prev, ...queued])]);
       await observeRun(seq, prevAuditId);
     } catch {
       setError(t('errorReaudit'));
     } finally {
-      if (seq === reauditSeq.current) setReauditing(false);
+      if (seq === reauditSeq.current) {
+        setReauditing(false);
+        reauditInFlight.current = false;
+      }
     }
   }
 
@@ -614,6 +645,11 @@ export function CodeHealthClient({
             selectedRepoKey={selectedRepo}
             onSelect={(repoKey) => void selectRepo(repoKey)}
             onRetry={(repoKey) => void retryRepo(repoKey)}
+            // ONE POST per press, whatever the poll does — the same invariant the
+            // whole-set trigger holds, extended rather than bypassed: both go
+            // through `reaudit`, which owns the `reauditing || resuming` guard.
+            onAuditRepos={(repoKeys) => void reaudit(repoKeys)}
+            busy={reauditing || resuming}
           />
           <AuditPanel
             audit={shownReport?.audit ?? null}

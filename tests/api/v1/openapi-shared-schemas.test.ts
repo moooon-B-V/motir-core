@@ -26,9 +26,11 @@ import {
 } from '@/lib/api/v1/openapi/errorResponse';
 import {
   V1_RATE_LIMIT_HEADERS,
+  V1_API_VERSION_HEADER,
   V1_REQUEST_ID_HEADER,
   V1_SHARED_RESPONSE_HEADERS,
 } from '@/lib/api/v1/openapi/headers';
+import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 import {
   V1_EXPOSED_SCOPES,
   V1_SCOPE_DESCRIPTIONS,
@@ -271,9 +273,10 @@ describe('the two v1 page envelopes', () => {
 });
 
 describe('the shared response headers', () => {
-  it('declares the request id and the three rate-limit headers', () => {
+  it('declares the request id, the contract version and the three rate-limit headers', () => {
     expect(V1_SHARED_RESPONSE_HEADERS.map((h) => h.name)).toEqual([
       'X-Request-Id',
+      'X-Motir-Api-Version',
       'X-RateLimit-Limit',
       'X-RateLimit-Remaining',
       'X-RateLimit-Reset',
@@ -293,6 +296,19 @@ describe('the shared response headers', () => {
       expect(header.schema.safeParse('not-a-number').success).toBe(false);
     }
     expect(V1_REQUEST_ID_HEADER.schema.safeParse('req-1').success).toBe(true);
+  });
+
+  it('types the api-version value as the MAJOR.MINOR.PATCH it is, and accepts the shipped one', () => {
+    // Read FROM the constant, never restated: a bump must not need this test
+    // edited, and a header value that stopped matching the contract version
+    // must fail here (MOTIR-2275).
+    expect(V1_API_VERSION_HEADER.schema.safeParse(V1_CONTRACT_VERSION).success).toBe(true);
+    expect(V1_API_VERSION_HEADER.schema.safeParse('1.2').success).toBe(false);
+    expect(V1_API_VERSION_HEADER.schema.safeParse('v1.2.3').success).toBe(false);
+    // It reports the CONTRACT, not the deployment — Amendment 4 Q6, and the one
+    // thing the description must not let a reader mistake it for.
+    expect(V1_API_VERSION_HEADER.description).toMatch(/contract/i);
+    expect(V1_API_VERSION_HEADER.description).toMatch(/release number/i);
   });
 });
 

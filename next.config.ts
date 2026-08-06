@@ -40,7 +40,7 @@ if (process.env['NODE_ENV'] !== 'production') {
 
 /**
  * The documentation area moved from `/api-docs` to `/docs` (MOTIR-2286 · ADR
- * `public-api-conventions.md` Amendment 8 Q1), so every address it ever served
+ * `public-api-conventions.md` Amendment 9 Q1), so every address it ever served
  * keeps working — PERMANENTLY.
  *
  * `permanent: true` is a 308, which is the point: a 307 tells a crawler and a
