@@ -233,6 +233,57 @@ describe('the derivation seam actually derives — read off the RENDERED page', 
   });
 });
 
+describe('a profile that declares NO binaries falls back to its id', () => {
+  it('is the one branch `sandboxProfileRows` has that the shipped profiles never take', async () => {
+    // `AgentProfile.binaries` is `readonly string[]`, not a non-empty tuple, so
+    // `binaries[0] ?? profile.id` is a REAL defensive branch rather than dead
+    // code TypeScript forces on us — and every shipped profile declares at
+    // least one binary, so nothing in the live data reaches it. Left untested
+    // it is 50% branch coverage on this module and a red CI gate.
+    //
+    // Covered by injection rather than a `v8 ignore`, using the same
+    // push/finally-pop the derivation test above established: the fallback is a
+    // CONTRACT ("the canonical binary is `binaries[0]`, or the id when there is
+    // none"), and a contract deserves an assertion rather than an exemption.
+    const { AGENT_PROFILES: live } = await import('../../packages/cli/src/agentProfiles');
+    const { sandboxProfileRows: rows } = await import('@/lib/apiDocs/sandbox');
+
+    const binaryless = { ...live[0]!, id: 'zzz-no-binaries', binaries: [] as const };
+    (live as unknown as (typeof binaryless)[]).push(binaryless);
+    try {
+      const row = rows().find((candidate) => candidate.id === 'zzz-no-binaries');
+      expect(row, 'the injected profile should produce a row').toBeDefined();
+      expect(row?.binary).toBe('zzz-no-binaries');
+    } finally {
+      (live as unknown as unknown[]).pop();
+    }
+  });
+
+  it('still prefers binaries[0] when there IS one — the fallback is not the default', async () => {
+    // The negative control: without it, the assertion above would also pass if
+    // `binary` were hard-wired to `id`. It has to INJECT a profile whose id and
+    // binary genuinely differ — reading a shipped one does not discriminate,
+    // because `claude`'s id and its only binary are both `'claude'` (which is
+    // how the first draft of this control failed).
+    const { AGENT_PROFILES: live } = await import('../../packages/cli/src/agentProfiles');
+    const { sandboxProfileRows: rows } = await import('@/lib/apiDocs/sandbox');
+
+    const distinct = {
+      ...live[0]!,
+      id: 'zzz-distinct-id',
+      binaries: ['zzz-distinct-binary'] as const,
+    };
+    (live as unknown as (typeof distinct)[]).push(distinct);
+    try {
+      const row = rows().find((candidate) => candidate.id === 'zzz-distinct-id');
+      expect(row?.binary).toBe('zzz-distinct-binary');
+      expect(row?.binary).not.toBe('zzz-distinct-id');
+    } finally {
+      (live as unknown as unknown[]).pop();
+    }
+  });
+});
+
 describe('the coverage floor covers what this story shipped', () => {
   it('gives the page and its data module per-file thresholds at the CI floor', () => {
     // The story's own files must be inside the ≥90% gate rather than diluted

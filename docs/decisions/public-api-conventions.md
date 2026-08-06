@@ -2489,3 +2489,131 @@ Nothing here re-opens Q4. It is stated so the page card does not have to ask.
 - **Amendment 4 Q4's route line and §8's `/api-docs/stability` pointer** are
   updated by the migration card, not by this one — this amendment is the decision,
   and rewriting the clauses it amends is the shape every amendment here avoids.
+
+### Amendment 10 (2026-08-06) — a v1 collection row EMBEDS a minimal actor; `targetRepo` stays off it; and how a key-addressed collection is enumerated
+
+> **Written by Story 11.5 · Subtask 11.5.13 (MOTIR-2279), from a defect its own consumer found at RUN time.**
+>
+> **Numbered 10.** Three amendments were authored in parallel on 2026-08-06 as this epic and the docs work ran side by side; each merge race pushed this record one number along (8 → 9 → 10). The content is unaffected — 8 makes the contract version legible on every response, 9 moves the documentation area to `/docs`, and 10 says what a collection row contains.
+
+Story 11.5 makes `@motir/cli` a peer consumer of this API, on the argument that an
+API is only real once something in-house depends on it. Running it produced the
+first case where that consumer contradicted a decision recorded here. All three
+questions below are about the READY row, and two of them are answered by
+**confirming** what was already decided.
+
+#### Q1 — a v1 collection row embeds a minimal ACTOR object
+
+##### The conflict
+
+`lib/api/v1/ready/schema.ts` carried an explicit exclusion:
+
+> `assignee.avatarUrl` / `name` — a public API must not acquire a second, accidental
+> user resource. The id is what a client can act on (it is what 11.2's PATCH takes
+> back); the display fields are the web app's.
+
+`@motir/cli` renders an ASSIGNEE column from `assignee.name`
+(`packages/cli/src/render.ts:255`). Migrating it onto `/api/v1` would print
+_unassigned_ for every assigned row — silently, since a blank cell looks exactly
+like unassigned work.
+
+##### Why the recorded reason does not hold
+
+**It is right about what it fears and wrong about what counts as one.** A second
+user RESOURCE would be an endpoint, a collection, an expansion, something a
+client can query — and none of that is being proposed. **An embedded, minimal,
+read-only actor is a FIELD.** It cannot be listed, filtered, paged or fetched;
+it is two strings on a row the client already has.
+
+And the cost of omitting it is not one CLI's inconvenience. **`assigneeId` alone
+means NO client can render a work-item list showing who owns what**, because v1
+has no user endpoint to resolve an id against and Q1 is not proposing one. That
+is every integration that draws a table.
+
+##### Rung 1 — checked, not assumed
+
+| Product    | Issue-row shape                                                                                                          | Source                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| **GitHub** | `assignees: [ Simple User ]` — an embedded object carrying `login`, `id`, `name`, `avatar_url`, …                        | REST "List repository issues" response schema |
+| **GitLab** | `assignees: [{ id, name, username, state, avatar_url, web_url }]`, plus a deprecated single `assignee` of the same shape | "List issues" JSON response example           |
+
+Neither returns a bare id. Both embed a display name on the row. The recorded
+rationale is out of step with every product this API is measured against, and on
+a product question rung 1 outranks a local preference.
+
+##### The decision
+
+**Every `/api/v1` collection row that references a person embeds a minimal actor
+object: `{ id, name }`, nullable.** Not just the ready row — the rule is general,
+so the next collection to carry one imports `actorRefSchema` rather than
+re-deciding.
+
+- **`avatarUrl` stays OFF.** No terminal or script renders one, and it is the
+  part of the mirrors' shape that genuinely is web-app furniture.
+- **`assigneeId` is KEPT beside it.** Removing a shipped field is a §8 violation,
+  and it remains the cheaper read for a client that only routes on identity.
+  `assignee.id` and `assigneeId` are the same value, asserted by a test.
+- **This is additive under §8**, so `V1_CONTRACT_VERSION` moves to **`1.1.0`**.
+- **No new query.** `ReadyItemDto` already carries `assignee`; the route already
+  reads it; the mapper was dropping it.
+
+##### Rejected alternatives
+
+| Rejected                                                            | Why it lost                                                                                                                               |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keep `assigneeId` only** (the status quo)                         | No client can render a name without a user endpoint v1 does not have; the cost lands on every integration, not one CLI.                   |
+| **Add a `GET /api/v1/users` directory**                             | This is the "second, accidental user resource" the original rationale correctly feared, and an N+1 for any client drawing a list.         |
+| **Embed the full mirror shape (`avatarUrl`, `username`, `webUrl`)** | Ships web-app furniture as public contract; each extra field is one more thing §8 forbids removing.                                       |
+| **Let the CLI hold a local id→name map**                            | A cache with no invalidation, wrong for every other client, and it makes one consumer special — the precise inversion 11.5 exists to end. |
+| **Replace `assigneeId` with `assignee`**                            | Removes a shipped field. §8 forbids it, and there is no benefit to pay for the break.                                                     |
+
+#### Q2 — `targetRepo` stays OFF the public row (the existing rationale is CONFIRMED)
+
+The same schema excluded `runCommand` / `contextRefs` / `sessionBranch` /
+`targetRepo` because they _"live on `ReadyItemDispatchDto`, the payload for
+Motir's OWN CLI dispatch path"_ and _"encode assumptions about a local checkout
+that a third-party integration does not share."_
+
+**That reasoning holds and is reaffirmed here.** Unlike Q1 there is no gap: a
+client that needs `targetRepo` reads
+**`GET /api/v1/work-items/{key}/dispatch-prompt`**, which Story 11.7 ships and
+which carries `targetRepo`, `workflowMode` and `sessionBranch` together. The
+ready row answers _"what can I pick up?"_; the dispatch prompt answers _"what do
+I need in order to do it?"_. Keeping the second question's fields off the first
+question's row is the split working as designed.
+
+`@motir/cli`'s own use confirms it: `batch.ts:343` already reads
+`dispatch.targetRepo` for the actual work, and only its printed plan snapshot
+(`batch.ts:135`) reaches for the ready row's copy. That snapshot moves to the
+dispatch read.
+
+#### Q3 — how a KEY-addressed collection answers "not these" (a §7 corollary)
+
+§7 pins that v1 addresses work items by `MOTIR-<n>` key and never by internal id.
+No v1 collection had yet needed to express _"give me the next one that is not one
+of these"_ — the MCP `next_ready` tool does it with an `excludeIds` argument over
+internal ids, which §7 forbids here.
+
+**The corollary: exclusion is a CLIENT-side filter over the page, keyed by
+`key`.** The server owns the ORDER — the ready set already arrives in the
+dispatch rank `(type asc, priority desc, key asc)`, so `items[0]` is what to take
+next — and a client that wants to skip rows filters them out and pages forward,
+never re-sorting. No `exclude` query parameter is added:
+
+- it would have to grow without bound as a caller skips more rows;
+- it would put a client's transient session state in a URL;
+- and the client already holds the exclusion set, so a round trip buys nothing.
+
+A client with a persisted exclusion list keyed by internal id migrates it to
+`key`, which is the only identifier v1 exposes.
+
+#### Consequences of this amendment
+
+- **11.5.13** implements Q1 on `readyItemSchema`, declares `actorRefSchema`, and
+  bumps `V1_CONTRACT_VERSION` to `1.1.0`.
+- **11.5.4** consumes it, reads `targetRepo` from the dispatch prompt per Q2, and
+  filters exclusions by `key` per Q3.
+- **A future collection row referencing a person** imports `actorRefSchema` —
+  the rule is general and does not need re-deciding per resource.
+- **Story 11.6's `list_ready` re-base** becomes a true no-op on the MCP payload
+  once this lands, rather than a change that would drop `assignee` from it.

@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as GET_DETAIL } from '@/app/api/v1/work-items/[key]/route';
 import { GET as GET_COLLECTION } from '@/app/api/v1/projects/[projectKey]/work-items/route';
+import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import type { V1ReadyItem } from '@/lib/api/v1/ready/schema';
 import type { WorkItemDetail, WorkItemSummary } from '@/lib/api/v1/workItems/schema';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   assignChildWaves,
   renderChildrenSection,
   renderReadinessLine,
+  renderReadyTable,
   renderSprintItems,
 } from '../../../packages/cli/src/render';
 import type {
+  ReadyItemSummary,
   SearchItemSummary,
   WorkItemChild,
   WorkItemDetail as CliWorkItemDetail,
@@ -65,6 +69,25 @@ function toCliSearchRow(row: WorkItemSummary): SearchItemSummary {
     title: row.title,
     status: row.status,
     priority: row.priority,
+    dependencies: row.dependencies,
+  };
+}
+
+/**
+ * A v1 ready row → the CLI's `ReadyItemSummary` (Amendment 10 Q1 · MOTIR-2279).
+ *
+ * A RENAME of nothing at all: `key`, `kind`, `title`, `priority`, `assignee` and
+ * `dependencies` are all already the names the renderer reads. That is the point
+ * — before Amendment 10 this adapter could not be written, because `assignee` did
+ * not exist on the row and `assigneeId` is not a name.
+ */
+function toCliReadyRow(row: V1ReadyItem): ReadyItemSummary {
+  return {
+    key: row.key,
+    kind: row.kind,
+    title: row.title,
+    priority: row.priority,
+    assignee: row.assignee,
     dependencies: row.dependencies,
   };
 }
@@ -126,6 +149,16 @@ async function readCollection(caller: V1ProjectCaller): Promise<WorkItemSummary[
   );
   expect(res.status).toBe(200);
   return ((await res.json()) as { items: WorkItemSummary[] }).items;
+}
+
+async function readReady(caller: V1ProjectCaller): Promise<V1ReadyItem[]> {
+  const key = caller.projectKey;
+  const res = await GET_READY(
+    new Request(`${BASE}/projects/${key}/ready`, { headers: caller.headers }),
+    { params: Promise.resolve({ projectKey: key }) },
+  );
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { items: V1ReadyItem[] }).items;
 }
 
 async function makeItem(
@@ -239,6 +272,62 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     expect(table).toContain('BLOCKS');
     const blockedRow = table.split('\n').find((line) => line.includes(second.identifier));
     expect(blockedRow).toContain(first.identifier);
+  });
+
+  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 10 Q1)', async () => {
+    // The regression this whole card exists to prevent. Before Amendment 10 the
+    // v1 row carried `assigneeId` and no name, so this table printed
+    // "unassigned" for an item that plainly has an assignee — silently, because
+    // a blank ASSIGNEE column looks exactly like unassigned work.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'an assigned task');
+    await workItemsService.updateWorkItem(item.id, { assigneeId: caller.user.id }, caller.ctx);
+
+    const rows = await readReady(caller);
+    const row = rows.find((r) => r.key === item.identifier);
+    expect(row, 'the assigned item should be ready').toBeDefined();
+
+    // The wire carries BOTH, and they are the same person.
+    expect(row?.assignee).toEqual({ id: caller.user.id, name: caller.user.name });
+    expect(row?.assigneeId).toBe(row?.assignee?.id);
+
+    const table = renderReadyTable(rows.map(toCliReadyRow));
+    expect(table).toContain(caller.user.name);
+    expect(table).not.toContain('unassigned');
+  });
+
+  it('renderReadyTable prints `unassigned` when the row genuinely has no assignee', async () => {
+    // The other half: `null` must survive the projection as `null`, so the
+    // renderer's own fallback fires for the real reason rather than because a
+    // field went missing.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    await makeItem(caller, 'nobody owns this');
+
+    const rows = await readReady(caller);
+    expect(rows.every((r) => r.assignee === null && r.assigneeId === null)).toBe(true);
+    expect(renderReadyTable(rows.map(toCliReadyRow))).toContain('unassigned');
+  });
+
+  it('adds NO query — the assignee comes off the page the route already read', async () => {
+    // Amendment 10 permits the widening because it is a mapper change. An N+1
+    // here would be invisible until a 50-row page, so it is asserted rather
+    // than reasoned about: two service calls for the whole page, whatever its
+    // size (`listReady`, then the bounded edge projection).
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    for (let i = 0; i < 5; i += 1) {
+      const made = await makeItem(caller, `assigned ${i}`);
+      await workItemsService.updateWorkItem(made.id, { assigneeId: caller.user.id }, caller.ctx);
+    }
+
+    const listReady = vi.spyOn(workItemsService, 'listReady');
+    const edges = vi.spyOn(workItemsService, 'getDependencyEdgesForItems');
+
+    const rows = await readReady(caller);
+
+    expect(rows.length).toBeGreaterThanOrEqual(5);
+    expect(listReady).toHaveBeenCalledTimes(1);
+    expect(edges).toHaveBeenCalledTimes(1);
+    expect(rows.every((r) => r.assignee?.name === caller.user.name)).toBe(true);
   });
 
   it('renderReadinessLine prints `<key> — <title>` for a cascade-blocked item', async () => {
