@@ -38,8 +38,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **13** are
-enforced by a gate today; **18** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **14** are
+enforced by a gate today; **17** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -51,7 +51,7 @@ A `planned` key is never offered in the grid or the role editor.
 > are read on this branch, not as of the day the document was written — `tests/permissions/catalog.test.ts`
 > pins them against the code, so a key that flips without a gate behind it (or a gate that lands
 > without the catalog being told) fails the build rather than drifting here. Wired so far:
-> **`member:manage` · `project:manage_access`** (MOTIR-2295).
+> **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300).
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -66,7 +66,7 @@ A `planned` key is never offered in the grid or the role editor.
 
 | Domain               | Permissions                                                                       |
 | -------------------- | --------------------------------------------------------------------------------- |
-| `ai` (3)             | `ai:configure` ᵖ · `ai:plan` ᵖ · `ai:view_plan` ᵖ                                 |
+| `ai` (3)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ                                   |
 | `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                     |
 | `board` (1)          | `board:configure` ᵖ                                                               |
 | `comment` (2)        | `comment:add` · `comment:moderate`                                                |
@@ -229,45 +229,46 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `ai`
 
-| Operation                                     | Verbs     | Gate today                                                     | Permission     | Decision | Why |
-| --------------------------------------------- | --------- | -------------------------------------------------------------- | -------------- | -------- | --- |
-| `/api/ai/access`                              | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/augment`                             | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/chat`                                | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`             | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`         | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`        | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`              | `ai:plan`      | new      | R5  |
-| `/api/ai/expand`                              | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/explanation`                         | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/explanation/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/jobs/[jobId]`                        | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session`                 | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session/planner-turn`    | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session/submit`          | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session/turns`           | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/generate`                       | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/generate/[jobId]/stream`        | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint`                         | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint/[jobId]/review`          | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint/approve`                 | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/pre-plan`                            | GET/PATCH | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/replan`                              | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/replan/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/canvas-layout`                          | GET/PATCH | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/idea-draft`                             | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/idea-draft/[id]/claim`                  | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                 | `ai:view_plan` | new      | R11 |
-| `/api/plans/[id]/approve`                     | POST      | workspace only                                                 | `ai:view_plan` | new      | R11 |
-| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                | `ai:view_plan` | new      | R11 |
-| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                 | `ai:view_plan` | new      | R11 |
-| `/api/projects/[key]/ai-settings`             | GET/PATCH | `assertCanBrowse`, `assertCanManage`                           | `ai:configure` | new      | R17 |
-| `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService.getSessionForWorkItem` (transitive) | `ai:plan`      | new      | R5  |
-| `/api/work-items/[id]/ai/plan/[jobId]/stream` | GET       | `contextualPlanningService.streamPlanJob` (transitive)         | `ai:plan`      | new      | R5  |
+| Operation                                     | Verbs     | Gate today                                                     | Permission       | Decision | Why |
+| --------------------------------------------- | --------- | -------------------------------------------------------------- | ---------------- | -------- | --- |
+| `/api/ai/access`                              | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/augment`                             | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/chat`                                | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`             | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`         | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`        | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`              | `ai:plan`        | new      | R5  |
+| `/api/ai/expand`                              | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/explanation`                         | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/explanation/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/jobs/[jobId]`                        | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session`                 | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session/planner-turn`    | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session/submit`          | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session/turns`           | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/generate`                       | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/generate/[jobId]/stream`        | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint`                         | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint/[jobId]/review`          | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint/approve`                 | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/pre-plan`                            | GET/PATCH | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/replan`                              | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/replan/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/canvas-layout`                          | GET/PATCH | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/idea-draft`                             | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/idea-draft/[id]/claim`                  | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                 | `ai:view_plan`   | new      | R11 |
+| `/api/plans/[id]/approve`                     | POST      | workspace only                                                 | `ai:view_plan`   | new      | R11 |
+| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                | `ai:view_plan`   | new      | R11 |
+| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                 | `ai:view_plan`   | new      | R11 |
+| `/api/projects/[key]/ai-settings`             | GET       | `assertCanBrowse`                                              | `project:browse` | existing | R17 |
+| `/api/projects/[key]/ai-settings`             | PATCH     | `assertPermission(ai:configure)`                               | `ai:configure`   | existing | R17 |
+| `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService.getSessionForWorkItem` (transitive) | `ai:plan`        | new      | R5  |
+| `/api/work-items/[id]/ai/plan/[jobId]/stream` | GET       | `contextualPlanningService.streamPlanJob` (transitive)         | `ai:plan`        | new      | R5  |
 
 ### `api`
 

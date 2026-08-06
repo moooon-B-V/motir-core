@@ -191,7 +191,7 @@ const PERMISSION_META: Record<
   'repository:manage': { domain: 'repository', enforcement: 'planned' },
   'repository:manage_access': { domain: 'repository', enforcement: 'planned' },
   'import:run': { domain: 'import', enforcement: 'planned' },
-  'ai:configure': { domain: 'ai', enforcement: 'planned' },
+  'ai:configure': { domain: 'ai', enforcement: 'enforced' },
   'ai:plan': { domain: 'ai', enforcement: 'planned' },
   'ai:view_plan': { domain: 'ai', enforcement: 'planned' },
 };

@@ -139,7 +139,11 @@ describe('every domain in the render order earns its heading', () => {
  * change. The list is the story's progress bar: it is empty before MOTIR-2295
  * and holds all twelve when the story closes.
  */
-const ADMINISTRATIVE_ENFORCED: PermissionKey[] = ['member:manage', 'project:manage_access'];
+const ADMINISTRATIVE_ENFORCED: PermissionKey[] = [
+  'member:manage',
+  'project:manage_access',
+  'ai:configure',
+];
 
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
