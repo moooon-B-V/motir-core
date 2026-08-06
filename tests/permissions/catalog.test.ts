@@ -146,6 +146,8 @@ const ADMINISTRATIVE_ENFORCED: PermissionKey[] = [
   'repository:manage',
   'repository:manage_access',
   'board:configure',
+  'workflow:manage',
+  'automation:manage',
 ];
 
 describe('enforcement — the seam that lets naming and wiring land separately', () => {

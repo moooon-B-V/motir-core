@@ -17,6 +17,7 @@ import {
   WorkflowStatusNotFoundError,
   WorkflowTransitionNotFoundError,
 } from '@/lib/workflows/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import type { StatusCategoryDto, WorkflowPolicyModeDto } from '@/lib/dto/workflows';
 
 // Server Actions for the workflow-management settings page (Subtask 2.2.5).
@@ -50,6 +51,11 @@ type ErrorTranslator = (key: string, values?: Record<string, string | number>) =
 
 /** Map a known workflow/management error to a translated message, or rethrow. */
 function toMessage(err: unknown, t: ErrorTranslator): string {
+  // MOTIR-2297 — `workflowsService` now refuses through the shared gate, so the
+  // error is `PermissionDeniedError` carrying `workflow:manage`. It maps to the
+  // SAME translated copy the old `NotProjectAdminError` did, so nothing a user
+  // reads changes; only the class the action catches.
+  if (err instanceof PermissionDeniedError) return t('workflow.NOT_PROJECT_ADMIN');
   if (err instanceof NotProjectAdminError) return t('workflow.NOT_PROJECT_ADMIN');
   if (err instanceof ProjectNotFoundError) return t('actions.projectGone');
   if (err instanceof StatusKeyConflictError)

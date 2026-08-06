@@ -3,13 +3,12 @@ import { createTranslator } from 'next-intl';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import {
@@ -22,7 +21,6 @@ import {
   CannotDeleteLastTerminalStatusError,
   DefaultStatusProtectedError,
   InvalidReassignTargetError,
-  NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
   WorkflowStatusNotFoundError,
@@ -44,22 +42,39 @@ import type { WorkItemRefStatusDto } from '@/lib/dto/workItems';
  * project belongs to the workspace (404 no-existence-leak) so a foreign
  * projectId can't probe membership.
  */
+/**
+ * Assert the actor may change this project's WORKFLOW — its statuses, their
+ * transitions and the policy mode (Story MOTIR-2256 · Subtask MOTIR-2297). A thin
+ * adapter onto the ONE shared gate; the name is kept because a dozen methods call
+ * it and it says what the call means.
+ *
+ * ⚠️ IT REPLACES A GATE THAT ASKED A DIFFERENT QUESTION, AND THAT IS A DELIBERATE
+ * WIDENING. Until this card the body resolved `isOwnerRole(membership?.role)` —
+ * the workspace OWNER, and nobody else. A workflow status is a PROJECT-wide
+ * contract (every work item's state, every board column, every automation rule
+ * and every ready-set computation reads it), so restricting who defines one is
+ * reasonable; restricting it to a workspace-level role is not, because the
+ * person accountable for the project is the project admin. `workflow:manage` is
+ * held by the workspace owner, a workspace admin and a project admin.
+ *
+ * Required rather than optional: MOTIR-2293 put `workflow:manage` into
+ * `BUILTIN_ROLE_PERMISSIONS.admin`, so leaving the old gate would have the
+ * catalog advertise a permission the code refuses.
+ *
+ * The 404-before-403 ordering comes with the shared gate — an actor who cannot
+ * BROWSE the project still gets `ProjectNotFoundError`, exactly as the old body's
+ * own workspace-mismatch branch did.
+ */
 async function assertProjectAdmin(
   userId: string,
   projectId: string,
   workspaceId: string,
 ): Promise<void> {
-  const project = await projectRepository.findById(projectId);
-  if (!project || project.workspaceId !== workspaceId) {
-    throw new ProjectNotFoundError(projectId);
-  }
-  const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
-    userId,
-    workspaceId,
+  await projectAccessService.assertPermission(
+    projectId,
+    { userId, workspaceId },
+    'workflow:manage',
   );
-  if (!isOwnerRole(membership?.role)) {
-    throw new NotProjectAdminError();
-  }
 }
 
 export interface CreateStatusInput {

@@ -38,8 +38,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **17** are
-enforced by a gate today; **14** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **19** are
+enforced by a gate today; **12** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -52,7 +52,8 @@ A `planned` key is never offered in the grid or the role editor.
 > pins them against the code, so a key that flips without a gate behind it (or a gate that lands
 > without the catalog being told) fails the build rather than drifting here. Wired so far:
 > **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300) ·
-> **`repository:manage` · `repository:manage_access`** (MOTIR-2299) · **`board:configure`** (MOTIR-2296).
+> **`repository:manage` · `repository:manage_access`** (MOTIR-2299) · **`board:configure`** (MOTIR-2296) ·
+> **`workflow:manage` · `automation:manage`** (MOTIR-2297).
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -82,7 +83,7 @@ A `planned` key is never offered in the grid or the role editor.
 | `sprint` (1)         | `sprint:manage` ᵖ                                                                 |
 | `watcher` (1)        | `watcher:manage`                                                                  |
 | `work_item` (4)      | `project:browse` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
-| `workflow` (2)       | `automation:manage` ᵖ · `workflow:manage` ᵖ                                       |
+| `workflow` (2)       | `automation:manage` · `workflow:manage`                                           |
 
 ᵖ = `planned` — justified here, not yet enforced.
 
@@ -97,9 +98,9 @@ claims neutrality for a row in the LOOSENS column is wrong.
 | Domain       | The gate that actually runs                                    | Admits today                              | The split |
 | ------------ | -------------------------------------------------------------- | ----------------------------------------- | --------- |
 | `board`      | `assertPermission(board:configure)` (wired, MOTIR-2296)        | was workspace OWNER only                  | LOOSENED  |
-| `workflow`   | `workflowsService.assertProjectAdmin` → `isOwnerRole(...)`     | workspace OWNER                           | LOOSENS   |
+| `workflow`   | `assertPermission(workflow:manage)` (wired, MOTIR-2297)        | was workspace OWNER only                  | LOOSENED  |
 | `estimation` | `estimationService.assertEstimationAdmin` → `isOwnerRole(...)` | workspace OWNER                           | LOOSENS   |
-| `automation` | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
+| `automation` | `assertPermission(automation:manage)` (wired, MOTIR-2297)      | `project:administer`-equivalent           | neutral   |
 | `component`  | `componentsService`'s module-private `assertCanManage`         | `project:administer`-equivalent           | neutral   |
 | `field`      | `customFieldsService`'s module-private `assertCanManage`       | `project:administer`-equivalent           | neutral   |
 | `label`      | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
@@ -561,15 +562,16 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `workflow`
 
-| Operation                                                  | Verbs            | Gate today                               | Permission          | Decision | Why |
-| ---------------------------------------------------------- | ---------------- | ---------------------------------------- | ------------------- | -------- | --- |
-| `/api/board/columns/[columnId]/statuses`                   | PUT              | `assertBoardConfigAdmin` — ws OWNER only | `workflow:manage`   | new      | R10 |
-| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | `assertBoardConfigAdmin` — ws OWNER only | `workflow:manage`   | new      | R10 |
-| `/api/projects/[key]/automation-rules`                     | GET/POST         | workspace only                           | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | workspace only                           | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | workspace only                           | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | workspace only                           | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/status-automation`                    | GET/PATCH        | `assertCanBrowse`, `assertCanManage`     | `automation:manage` | new      | R28 |
+| Operation                                                  | Verbs            | Gate today                                                    | Permission          | Decision | Why |
+| ---------------------------------------------------------- | ---------------- | ------------------------------------------------------------- | ------------------- | -------- | --- |
+| `/api/board/columns/[columnId]/statuses`                   | PUT              | `assertPermission(workflow:manage)` — was ws OWNER only       | `workflow:manage`   | existing | R10 |
+| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | `assertPermission(workflow:manage)` — was ws OWNER only       | `workflow:manage`   | existing | R10 |
+| `/api/projects/[key]/automation-rules`                     | GET/POST         | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/status-automation`                    | GET              | `assertCanBrowse`                                             | `project:browse`    | existing | R28 |
+| `/api/projects/[key]/status-automation`                    | PATCH            | `assertPermission(automation:manage)`                         | `automation:manage` | existing | R28 |
 
 ### `workspace`
 

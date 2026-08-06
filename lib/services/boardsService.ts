@@ -862,7 +862,7 @@ export const boardsService = {
   ): Promise<BoardColumnStatusDto> {
     const board = await boardRepository.findById(boardId, ctx.workspaceId);
     if (!board) throw new BoardNotFoundError(boardId);
-    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+    await assertWorkflowMappingAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
     const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
     if (!column || column.boardId !== boardId) throw new BoardColumnNotFoundError(columnId);
@@ -917,7 +917,7 @@ export const boardsService = {
   async unmapStatus(boardId: string, statusId: string, ctx: ServiceContext): Promise<void> {
     const board = await boardRepository.findById(boardId, ctx.workspaceId);
     if (!board) throw new BoardNotFoundError(boardId);
-    await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
+    await assertWorkflowMappingAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
     await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
       boardColumnStatusRepository.deleteByStatus(boardId, statusId, tx),
@@ -1161,6 +1161,29 @@ export const boardsService = {
  * cannot BROWSE the project gets `ProjectNotFoundError`, so a board they may not
  * see stays invisible rather than merely forbidden.
  */
+/**
+ * Assert the actor may change which STATUSES a board column projects (Story
+ * MOTIR-2256 · Subtask MOTIR-2297). Distinct from {@link assertBoardConfigAdmin}
+ * on purpose: the column→status mapping is a WORKFLOW decision surfaced on a
+ * board (the inventory's R10 says so), so it asks `workflow:manage`, while the
+ * board's own SHAPE — its columns, swimlanes and WIP limits — asks
+ * `board:configure`. A role holder who tunes the board should not thereby get to
+ * redefine what its columns MEAN.
+ *
+ * Same widening as its sibling: this replaced a workspace-OWNER-only gate.
+ */
+async function assertWorkflowMappingAdmin(
+  userId: string,
+  projectId: string,
+  workspaceId: string,
+): Promise<void> {
+  await projectAccessService.assertPermission(
+    projectId,
+    { userId, workspaceId },
+    'workflow:manage',
+  );
+}
+
 async function assertBoardConfigAdmin(
   userId: string,
   projectId: string,
