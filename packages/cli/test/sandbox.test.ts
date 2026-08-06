@@ -369,6 +369,24 @@ describe('sandbox mounts and blast radius', () => {
     expect(devcontainerRaw).not.toContain('docker.sock');
   });
 
+  it('gives every profile a `sandboxMounts` equal to what its compose service BINDS', () => {
+    // The published `/docs/sandbox` guide derives its credential-mount column
+    // from `sandboxMounts`, so a mount added to (or moved in) the compose file
+    // without the profile record following makes the public page wrong. This is
+    // the arm that stops that: the field is a RESTATEMENT of the compose volumes
+    // and is only safe while something compares the two.
+    //
+    // Deliberately NOT `credentialPaths` — that field is `motir doctor`'s probe
+    // and diverges from the mount on four of the eight profiles by design.
+    for (const profile of AGENT_PROFILES) {
+      const block = serviceBlock(`sandbox-${profile.id}`);
+      const bound = volumesOf(block)
+        .slice(2) // the two base mounts every service carries
+        .map((volume) => volume.replace(/^\$\{HOME\}/, '~').replace(/:.*$/, ''));
+      expect(profile.sandboxMounts, `${profile.id} sandboxMounts`).toEqual(bound);
+    }
+  });
+
   it('binds no host path beyond the workspace, the PAT config and the agent credential', () => {
     // Scoped PER SERVICE rather than over the whole file: every service must
     // carry the two base mounts FIRST, and anything it adds beyond them has to

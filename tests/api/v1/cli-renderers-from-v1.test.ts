@@ -80,11 +80,11 @@ function toCliSearchRow(row: WorkItemSummary): SearchItemSummary {
 }
 
 /**
- * A v1 ready row → the CLI's `ReadyItemSummary` (Amendment 9 Q1 · MOTIR-2279).
+ * A v1 ready row → the CLI's `ReadyItemSummary` (Amendment 10 Q1 · MOTIR-2279).
  *
  * A RENAME of nothing at all: `key`, `kind`, `title`, `priority`, `assignee` and
  * `dependencies` are all already the names the renderer reads. That is the point
- * — before Amendment 9 this adapter could not be written, because `assignee` did
+ * — before Amendment 10 this adapter could not be written, because `assignee` did
  * not exist on the row and `assigneeId` is not a name.
  */
 function toCliReadyRow(row: V1ReadyItem): ReadyItemSummary {
@@ -177,7 +177,7 @@ async function readComments(caller: V1ProjectCaller, key: string): Promise<V1Com
 }
 
 /**
- * A v1 comment thread → the CLI's `ActivityCommentThread` (Amendment 9 Q1 ·
+ * A v1 comment thread → the CLI's `ActivityCommentThread` (Amendment 10 Q1 ·
  * MOTIR-2283).
  *
  * Another adapter that renames NOTHING — and, like the ready row's, one that
@@ -314,7 +314,7 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     expect(blockedRow).toContain(first.identifier);
   });
 
-  it('renderComment prints the AUTHOR NAME from `GET …/comments` (Amendment 9 Q1)', async () => {
+  it('renderComment prints the AUTHOR NAME from `GET …/comments` (Amendment 10 Q1)', async () => {
     // The MCP-era `render.ts:915` reads `comment.author.name`. Before this
     // amendment the v1 thread carried `authorId` alone, so the adapter could not
     // be written at all — and a naive one would have THROWN on `undefined.name`
@@ -373,8 +373,8 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     expect(threads.every((t) => t.author.name === caller.user.name)).toBe(true);
   });
 
-  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 9 Q1)', async () => {
-    // The regression this whole card exists to prevent. Before Amendment 9 the
+  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 10 Q1)', async () => {
+    // The regression this whole card exists to prevent. Before Amendment 10 the
     // v1 row carried `assigneeId` and no name, so this table printed
     // "unassigned" for an item that plainly has an assignee — silently, because
     // a blank ASSIGNEE column looks exactly like unassigned work.
@@ -408,7 +408,7 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
   });
 
   it('adds NO query — the assignee comes off the page the route already read', async () => {
-    // Amendment 9 permits the widening because it is a mapper change. An N+1
+    // Amendment 10 permits the widening because it is a mapper change. An N+1
     // here would be invisible until a 50-row page, so it is asserted rather
     // than reasoned about: two service calls for the whole page, whatever its
     // size (`listReady`, then the bounded edge projection).

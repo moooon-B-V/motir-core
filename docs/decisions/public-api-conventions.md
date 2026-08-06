@@ -383,8 +383,10 @@ Within `v1`:
 **Therefore a client MUST tolerate unknown fields.** That obligation is the other
 half of the promise and is stated in the reference docs (11.4).
 
-> **⚠️ Published as `/api-docs/stability` — see
-> [Amendment 4, Q5](#q5--what-the-published-stability--deprecation-policy-says).**
+> **⚠️ Published as `/docs/stability` — see
+> [Amendment 4, Q5](#q5--what-the-published-stability--deprecation-policy-says)**
+> (the area was renamed from `/api-docs` by
+> [Amendment 9, Q1](#q1--the-area-is-renamed-to-docs-with-permanent-redirects-the-sandbox-guide-is-docssandbox)).
 > The public page is generated from THIS clause's lists rather than re-typed, so the
 > internal record and the published promise cannot say different things. Amendment 4
 > also pins the deprecation channel (`deprecated: true` in the spec) and how a `v2`
@@ -1093,8 +1095,15 @@ epic, so planning a page into it would have produced work nobody could do. Epic 
 own boundary pins every deliverable to `motir-core`, and `app/(public)/explore/` is
 the shipped precedent for an unauthenticated, indexable page group.
 
-Routes: **`/api-docs`** for the reference, `/api-docs/getting-started` for the guide,
-`/api-docs/stability` for the policy (Q5) — under `app/(public)/api-docs/`.
+Routes: **`/docs/api`** for the reference, `/docs/getting-started` for the guide,
+`/docs/stability` for the policy (Q5) — under `app/(public)/docs/`.
+
+> **⚠️ Amended 2026-08-06 — these routes were `/api-docs*` as originally decided.**
+> [Amendment 9, Q1](#q1--the-area-is-renamed-to-docs-with-permanent-redirects-the-sandbox-guide-is-docssandbox)
+> renamed the area to `/docs` when it gained its first non-API page, with permanent
+> redirects from every `/api-docs*` path. Only the ADDRESSES moved: the `apiDocs`
+> next-intl namespace, `lib/apiDocs/`, `design/api-docs/` and `tests/api-docs/` keep
+> their names.
 
 ##### Renderer — our own primitives; the third-party renderers are REJECTED
 
@@ -1153,7 +1162,8 @@ English; if only a human reads it, it is localized._
 
 #### Q5 — what the PUBLISHED stability + deprecation policy says
 
-§8 is the internal record; `/api-docs/stability` is the promise a third party
+§8 is the internal record; `/docs/stability` (`/api-docs/stability` as originally
+routed — Amendment 9 Q1) is the promise a third party
 integrates against. **They are the same promise, stated twice for two audiences, and
 the page is generated from §8's lists rather than re-typed** — a second hand-written
 copy of a stability promise is the same drift this story exists to prevent, applied
@@ -2176,11 +2186,315 @@ pays its own toll: adding a response header is additive, so the constant moves
 | **Report the deployment's release number instead**          | Amendment 4 Q6 already settled what the number means: a release number churns on every unrelated deploy and tells a client nothing it can act on.                                               |
 | **Stamp it inside the try block, beside the response body** | It would then be absent from exactly the 401 / 403 / 429 / 500 responses where a client most wants to know whether it is speaking the right contract.                                           |
 
-### Amendment 9 (2026-08-06) — a v1 collection row EMBEDS a minimal actor; `targetRepo` stays off it; and how a key-addressed collection is enumerated
+---
+
+### Amendment 9 (2026-08-06) — the documentation area is `/docs`, not `/api-docs`; what the sandbox guide OWNS; and the profile table DERIVES from the CLI's own profile record
+
+**Amends:** Amendment 4 Q4's **routes** only — `/api-docs*` becomes `/docs*`. Q4's
+home (`motir-core`, `app/(public)/`), its renderer decision and its language rule
+are untouched, and this amendment is written INSIDE them.
+**Leaves unchanged:** §1–§9 in full; Amendment 4 **Q3 in particular — the spec
+stays at `/api/openapi/v1.json` and does not move**; Amendments 1, 2, 3, 5, 6 and
+7 in full. **No `/api/v1` shape, path, scope or status changes here.**
+**Card:** MOTIR-2269, under Story MOTIR-2268 (the published sandbox setup guide).
+
+#### The problem
+
+Amendment 4 Q4 routed the developer-documentation surface at `/api-docs` because
+everything on it was about the API. Story MOTIR-2268 adds the first page that is
+not: how to run a coding agent inside the published sandbox image. That page has
+no route it can be written to until three questions are settled, and all three
+are cheap now and expensive later.
+
+The surface is already broader than its address, in two places a reader can see:
+`app/(public)/explore/_components/ExploreTopBar.tsx:52` labels the entrance
+**`Docs`** (`t('navDocs')`), and `app/(public)/api-docs/layout.tsx:8` calls itself
+_"the developer-documentation shell"_. So the name a visitor clicks, the name the
+code gives itself, and the URL they land on already disagree — and the first
+non-API page is where that stops being cosmetic.
+
+---
+
+#### Q1 — the area is renamed to `/docs`, with permanent redirects; the sandbox guide is `/docs/sandbox`
+
+##### The decision
+
+**Rename `app/(public)/api-docs/` to `app/(public)/docs/`**, serving:
+
+| Page                  | Route                   |
+| --------------------- | ----------------------- |
+| API reference         | `/docs/api`             |
+| Getting started       | `/docs/getting-started` |
+| Stability policy      | `/docs/stability`       |
+| **The sandbox guide** | **`/docs/sandbox`**     |
+
+with **permanent (308) redirects** from `/api-docs` → `/docs/api` and
+`/api-docs/:path*` → `/docs/:path*`, added to `next.config.ts` (which carries no
+`redirects()` today — the migration adds the first one). The reference moves off
+the area ROOT to `/docs/api` because a four-page area whose root is one of the
+four pages cannot grow a fifth without the same argument again; `/docs` itself
+redirects to `/docs/api` until an index page earns its place.
+
+##### Why now, and not "when it hurts"
+
+`/api-docs` shipped on **2026-08-05** — one day before this amendment — and is
+linked from nothing outside this repository. Every cost below is at its global
+minimum today and rises monotonically: with each further page, each external
+link, and each search-engine impression. The card that asked this question is the
+last cheap moment to ask it.
+
+##### The cost, enumerated by grep rather than estimated
+
+`grep -rn "api-docs"` over the tree, excluding `node_modules` / `.next`:
+
+| Site                                                                                            | Count                         |
+| ----------------------------------------------------------------------------------------------- | ----------------------------- |
+| The route directory `app/(public)/api-docs/` (4 pages, 5 `_components`)                         | 1 move                        |
+| In-product links — `ExploreTopBar.tsx:52`, `ExploreFooter.tsx:62`, `ApiDocsLinkPanel.tsx:34,39` | 4                             |
+| ADR self-references — §8's pointer (`:380`), Q4's route line (`:1090`), Q5's opening (`:1150`)  | 3                             |
+| `lib/apiDocs/guide.ts` — the `/api-docs/stability` note at `:215`                               | 1                             |
+| Vitest — `reference-page`, `guide-pages`, `guide-truth`, `story-gate`                           | ~14 assertions in 4 files     |
+| E2E — `tests/e2e/acceptance-api-docs.spec.ts`                                                   | 8 URL waits / gotos in 1 spec |
+| `next.config.ts` redirects                                                                      | 1 new block                   |
+
+Nothing outside `motir-core` names the path: `docs/cli.md` does not, and neither
+does `packages/cli`. `proxy.ts`'s matcher covers only `/dashboard`, `/settings`
+and `/invite`, so no middleware follows the route and none has to be edited.
+
+##### The rule that decides what ELSE moves — ADDRESSES move, internal identifiers do not
+
+The question "does `X` rename too?" recurs for the i18n namespace, the content
+module directory and the design-asset folder. It is settled once, by a rule:
+
+> **A name that is a promise to a stranger moves with the surface. A name only
+> this repository can see does not.**
+
+So, and this is exhaustive:
+
+- **Moves:** the URL path, and every in-product link and test that names it. A URL
+  is quoted, bookmarked and indexed by people who cannot be told it changed.
+- **Stays:** the **`apiDocs` next-intl namespace** (45 keys × 2 catalogs), the
+  content module directory **`lib/apiDocs/`**, the design-asset area
+  **`design/api-docs/`**, and the test directory **`tests/api-docs/`**. None is
+  addressable, none is quotable, and renaming them buys tidiness at the price of
+  ~100 mechanical edits plus a rewrite of a card (MOTIR-2270) already written
+  against `design/api-docs/`.
+
+This deliberately NARROWS the option as the card sketched it (which paired the
+route rename with the namespace rename). The narrowing is the point: the misnomer
+that costs anything is the one a stranger reads.
+
+##### The migration is its OWN card
+
+The rename is a route migration touching four link sites, five test files, an E2E
+spec and a redirect map. The guide page (MOTIR-2271) is a `content`-shaped card
+that writes one page. **They are not one card**, so the migration is a separate
+subtask in Story MOTIR-2268, `blocked_by` this decision and blocking the page.
+
+##### Rejected alternatives
+
+| Rejected                                                        | Why                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A fourth page at `/api-docs/sandbox`** (the cheapest option)  | Costs nothing today and is wrong permanently. The page it addresses is about running a container, not about the API; every later non-API guide inherits the misnomer, and by the time it is worth fixing there are external links pinned to it. It also leaves `Docs` → `/api-docs` reading as a bug to every visitor who notices. |
+| **A page OUTSIDE the docs shell** (e.g. `/sandbox`)             | Forks the navigation: the rail would list three documents while a fourth existed somewhere the rail never mentions, so the only entrance is a link someone remembers. The story's own access-path requirement rules it out.                                                                                                        |
+| **Rename the `apiDocs` namespace and `lib/apiDocs/` too**       | ~100 edits across both message catalogs and every `useTranslations('apiDocs')` call, for a name no reader can see — and it would invalidate MOTIR-2270, which is written against `design/api-docs/`. Excluded by the addresses-move rule above.                                                                                    |
+| **Keep `/api-docs` and rename the top-bar entry to "API docs"** | Fixes the disagreement by making the surface narrower than it already is, one day after shipping a shell that calls itself the developer-documentation shell. It answers the wrong question: the area's content is broadening, and the name should follow the content.                                                             |
+
+---
+
+#### Q2 — the ownership boundary: the page owns the FIRST RUN; the README owns everything after it
+
+##### The rule
+
+> **A fact belongs on the published page when a reader needs it to make their
+> FIRST successful run happen, AND a test can hold it true. Otherwise it belongs
+> in `packages/cli/sandbox/README.md`.**
+
+Two limbs, and the second is the one that matters. The first limb allocates by
+audience; the second allocates by **staleness cadence**, which is where this
+documentation has actually failed. The sandbox's two published-documentation
+defects were both drift, not error: MOTIR-2010 (the image was private while the
+docs told everyone to pull it) and MOTIR-2131 (the published image was eleven CLI
+commits stale while the docs described newer behaviour). Both were found by a
+person. So a fact whose truth cannot be asserted by a check — a digest, a vendor's
+current auto-approve flag, a release-specific tag — does not go on the page at
+all, however useful it would be there. The page carries only what the build can
+refuse.
+
+##### The allocation this produces today
+
+| The PAGE owns                                                                                                               | The README keeps                                                        |
+| --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| What the sandbox confines and what it does **not** (filesystem confined, **network open by design**, unprivileged uid 1000) | The full confinement proof and its per-surface argument                 |
+| The copy-pasteable `docker run`, with exactly the mounts the entrypoint requires                                            | `docker compose` profiles, the devcontainer variants' internals         |
+| The three **Motir**-credential tiers (env / mounted `~/.config/motir` / `motir login`) — named, not re-derived              | The tier-3 escape hatch and the mount-free CI recipe in full            |
+| The profile table: id, tier, install source, binary, agent-credential mount                                                 | The auto-approve flag matrix (vendor-versioned — fails the second limb) |
+| That a dev-container path exists, and where it is                                                                           | The published **digest tables** (per release — fails the second limb)   |
+| A link back to the README for everything above                                                                              | The validation harness and the smoke suite                              |
+
+**One conflation the page must not make:** the _three credential tiers_ are ways
+to give the container a **Motir** credential; the _credential mount_ column of the
+profile table is the **agent's own** credential. They are different secrets with
+different failure modes, and the README keeps them apart (`§ Credentials` vs
+`§ The profile matrix`). The page does too.
+
+##### Rejected alternatives
+
+| Rejected                                                    | Why                                                                                                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Publish the README wholesale as the page**                | 57 KB written for someone who has already cloned the repo, including digest tables and a validation harness. Publishing it moves the clone requirement rather than removing it. |
+| **Split by TOPIC ("security here, running there")**         | Every new fact re-opens the argument, because most facts are about both. Splitting by the reader's POSITION (before or after the first run) decides each one on sight.          |
+| **Let the page carry the digest table so a reader can pin** | A per-release fact on a page no release lane edits — precisely the MOTIR-2131 shape, rebuilt on the surface built to prevent it. The page links the README's table instead.     |
+
+---
+
+#### Q3 — the profile table DERIVES from `AGENT_PROFILES`; `credentialPaths` is NOT the mount, so the profile record gains `sandboxMounts`
+
+##### How the shipped surface reaches its own source — checked, not assumed
+
+`lib/apiDocs/reference.ts:8` imports `V1_OPERATIONS` from
+`@/lib/api/v1/openapi/registry` and derives a view model from it **at build time,
+by direct module import** — no fetch of its own public URL, no generated file, no
+copy. Its own header says why: _"The page and `/api/openapi/v1.json` have ONE
+source… A page that fetched its own public URL would add a network round trip, a
+failure mode and a bootstrapping problem for no gain."_
+
+That is the pattern this page copies. The one thing it does NOT establish is a
+package boundary: `lib/api/v1/**` is the same Next application, and `packages/cli`
+is not.
+
+##### The finding that changes the answer — `credentialPaths` is a different fact
+
+The card named `AGENT_PROFILES.credentialPaths` as the source of the table's
+credential-mount column. **It is not, and deriving from it would publish three
+wrong rows and one incomplete one.** `agentProfiles.ts`'s own header states the
+divergence: _"The matrix pins a MOUNT, which is not always proof of AUTH… Where
+they diverge the profile tests the narrower thing… or declines to test a path at
+all."_ `credentialPaths` answers **"where can `motir doctor` prove a sign-in
+happened?"**; the page's column answers **"which of my host directories does the
+container bind?"**. Concretely:
+
+| Profile       | `credentialPaths(dirs)` (the doctor probe) | What `sandbox/docker-compose.yml` actually mounts `:ro` |
+| ------------- | ------------------------------------------ | ------------------------------------------------------- |
+| `claude`      | `~/.claude`                                | `~/.claude`                                             |
+| `codex`       | `~/.codex`                                 | `~/.codex`                                              |
+| `opencode`    | `~/.local/share/opencode/auth.json`        | `~/.config/opencode` **and** `~/.local/share/opencode`  |
+| `kimi`        | `~/.kimi-code`                             | `~/.kimi-code`                                          |
+| `antigravity` | _(none — OS keyring)_                      | _(none)_                                                |
+| `cursor`      | **_(none — the mount proves an install)_** | **`~/.local/share/cursor-agent`**                       |
+| `aider`       | **_(none — the key is an env var)_**       | **`~/.aider.conf.yml`**                                 |
+| `goose`       | **_(none — keyring by default)_**          | **`~/.config/goose`**                                   |
+
+Three rows would publish "no credential mount" for a profile the image does mount
+one for, and `opencode` would publish one of its two. A derivation is only worth
+having if it derives the fact the reader is being told.
+
+**A second card-level correction, recorded so it is not re-derived:** the cards
+say "nine profiles including `base`". `AGENT_PROFILES` has **eight**, and
+`sandbox/smoke/profiles.json` has the same eight; the README's matrix says
+"**eight**" in its own prose. `base` is the agent-less **image tag**
+(`Dockerfile:156`, `ARG AGENT=base`, a deliberate no-op arm), not a profile. The
+page's table therefore has eight rows, and `base` is documented beside it as the
+tag to run when you bring your own agent binary.
+
+##### The decision
+
+1. **`AgentProfile` gains a `sandboxMounts: readonly string[]` field** — the
+   host paths `sandbox/docker-compose.yml` binds read-only for that profile,
+   `~`-relative, in mount order, `[]` where the profile mounts nothing. It sits
+   beside `credentialPaths` with a comment naming the distinction above, so the
+   next reader cannot repeat the conflation this amendment just caught.
+   `packages/cli/test/sandbox.test.ts` — which already parses the compose
+   volumes (`'binds no host path beyond the workspace, the PAT config and the
+agent credential'`) — gains the arm asserting the two agree.
+2. **`AGENT_PROFILES` in `packages/cli/src/agentProfiles.ts` is then the SINGLE
+   derivation source** for every column: `id`, `tier`, `installSource`,
+   `binaries[0]` (canonical first, by its own contract), and `sandboxMounts`.
+   Nothing in the table is retyped.
+3. **A new `lib/apiDocs/sandbox.ts` imports it by RELATIVE path** —
+   `import { AGENT_PROFILES } from '../../packages/cli/src/agentProfiles'` — and
+   exports the rendered rows plus the page's prose, exactly as `guide.ts` does for
+   the getting-started guide. The `@/*` alias is rooted at the app, so it cannot
+   express a path outside it; the relative climb is the honest spelling and is
+   greppable as the one boundary crossing.
+
+##### The boundary this opens, and the invariants that bound it
+
+This is the first **runtime** import from the app into `packages/cli` (today's
+crossings are comments and tests: `tests/api/v1/cli-renderers-from-v1.test.ts`
+imports `../../../packages/cli/src/render`, and
+`tests/components/ConnectCliPanel.test.tsx` reads the CLI's manifest to assert a
+literal the app hardcodes). It is permitted, narrowly, under three invariants the
+story's vitest gate (MOTIR-2272) asserts:
+
+- **`lib/apiDocs/sandbox.ts` is the ONLY module under `app/` or `lib/` that
+  imports from `packages/cli/**`.\*\* One crossing is a documented seam; a habit is
+  a merged build.
+- **`packages/cli/src/agentProfiles.ts` imports nothing but `node:` builtins**
+  (today: `node:path`). That is what keeps the app from acquiring the CLI's
+  dependency graph through a documentation page.
+- **The derived rows are plain serializable data**, so the page may hand them to a
+  client component without `node:path` reaching a browser bundle.
+
+**Rung 2, run rather than assumed.** A probe module doing exactly this import,
+typechecked with the repo's own `tsc --noEmit -p tsconfig.json`, produced **zero
+errors of its own** — `tsconfig.json`'s `"exclude": ["node_modules", "packages"]`
+filters the program's ROOT set and does not refuse a file reached by an import.
+(The run surfaced only pre-existing `PlanChangeTurn` errors from a stale generated
+Prisma client, unrelated to this.) The remaining unverified step is bundling:
+`next build` must compile the module for the server, which MOTIR-2271 confirms as
+an acceptance criterion rather than this amendment asserting it.
+
+##### Rejected alternatives
+
+| Rejected                                                                                   | Why                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Derive the mount column from `credentialPaths`** (the card's source)                     | Publishes "no credential mount" for `cursor`, `aider` and `goose`, and half of `opencode`'s. It answers the doctor's question, not the reader's — the table above is the evidence.                                                                                                         |
+| **Restate the table in the page and assert it against the CLI in a test**                  | The pattern `ConnectCliPanel` uses, and it satisfies "a wrong claim fails the build". It does NOT satisfy the story's other half — a profile added to `AGENT_PROFILES` must APPEAR on the page with no edit — which is the property that survives the person who wrote the page leaving.   |
+| **Parse `sandbox/docker-compose.yml` at build time for the mounts**                        | Puts a YAML parse and a repo-relative `fs` read on a rendered page, with an output-file-tracing dependency on a file no deployment ships. The same fact, declared in the profile record instead, costs one field and is guarded by a test that already reads that file.                    |
+| **Give `@motir/cli` an `exports` subpath and add it as a workspace dependency of the app** | Architecturally the cleaner boundary, and it breaks the published package: `@motir/cli` ships `files: ["dist"]`, so a source-pointing export is a dangling path for every npm consumer, and a `dist`-pointing one couples `next build` to the CLI being built first (including on Vercel). |
+| **Generate a checked-in data module from `AGENT_PROFILES`**                                | A third artifact, kept in step by a generator someone must remember to run — the two-artifact drift Story 11.4 exists to prevent, moved down one level.                                                                                                                                    |
+
+---
+
+#### Q4 — localization: recorded, not re-decided
+
+The sandbox guide follows **Amendment 4 Q4's** split unchanged: _"if a client
+could parse it, it is English; if only a human reads it, it is localized."_ Its
+long-form prose lives as data in `lib/apiDocs/sandbox.ts` for the same reason
+`lib/apiDocs/guide.ts:18` records for the getting-started guide — a catalog entry
+per paragraph makes a document unreadable to edit and puts shell commands inside a
+localization file — while the page CHROME goes through the `apiDocs` next-intl
+namespace with `messages/en.json` + `messages/zh.json` parity. The `docker run`
+command, the profile ids, the binaries and the mount paths are English by the same
+rule that keeps operation text English: they are strings a machine consumes.
+
+Nothing here re-opens Q4. It is stated so the page card does not have to ask.
+
+---
+
+#### Consequences of this amendment
+
+- **A new subtask in Story MOTIR-2268** performs the Q1 migration — the route
+  move, the four link sites, the redirect map, and the test + E2E path strings.
+  It is `blocked_by` MOTIR-2269 and blocks MOTIR-2271.
+- **MOTIR-2270** (design) draws the rail's fourth entry against `/docs/sandbox`
+  and the renamed sibling routes. Its asset area stays `design/api-docs/` per the
+  addresses-move rule.
+- **MOTIR-2271** (the page) adds `sandboxMounts` to `AgentProfile`, writes
+  `lib/apiDocs/sandbox.ts` deriving the eight-row table from `AGENT_PROFILES`, and
+  confirms `next build` compiles the cross-package import.
+- **MOTIR-2272** (the vitest gate) asserts the three boundary invariants above,
+  the eight-row derivation, and the compose ↔ `sandboxMounts` agreement.
+- **Amendment 4 Q4's route line and §8's `/api-docs/stability` pointer** are
+  updated by the migration card, not by this one — this amendment is the decision,
+  and rewriting the clauses it amends is the shape every amendment here avoids.
+
+### Amendment 10 (2026-08-06) — a v1 collection row EMBEDS a minimal actor; `targetRepo` stays off it; and how a key-addressed collection is enumerated
 
 > **Written by Story 11.5 · Subtask 11.5.13 (MOTIR-2279), from a defect its own consumer found at RUN time.**
 >
-> **Numbered 9.** Two amendments were authored in parallel on 2026-08-06 and both reached for 8; MOTIR-2275's (the contract-version header) merged first and keeps it. The two are independent — 8 makes the contract version legible on every response, 9 says what a collection row contains — and they compose: 9 is the first additive change 8's header has to report, which is why `V1_CONTRACT_VERSION` moves to `1.2.0` here.
+> **Numbered 10.** Three amendments were authored in parallel on 2026-08-06 as this epic and the docs work ran side by side; each merge race pushed this record one number along (8 → 9 → 10). The content is unaffected — 8 makes the contract version legible on every response, 9 moves the documentation area to `/docs`, and 10 says what a collection row contains.
 
 Story 11.5 makes `@motir/cli` a peer consumer of this API, on the argument that an
 API is only real once something in-house depends on it. Running it produced the

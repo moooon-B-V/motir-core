@@ -26,7 +26,7 @@ import { MethodPill } from './MethodPill';
 // signal at 28 operations and rising.
 
 /** Which docs page is being read — the nav's `aria-current` target. */
-export type DocsPage = 'reference' | 'gettingStarted' | 'stability';
+export type DocsPage = 'reference' | 'gettingStarted' | 'stability' | 'sandbox';
 
 export function CatalogueNav({
   current,
@@ -65,9 +65,12 @@ export function CatalogueNav({
   const shown = filtered.reduce((sum, group) => sum + group.operations.length, 0);
 
   const pages: { key: DocsPage; href: string; label: string }[] = [
-    { key: 'reference', href: '/api-docs', label: t('navReference') },
-    { key: 'gettingStarted', href: '/api-docs/getting-started', label: t('navGettingStarted') },
-    { key: 'stability', href: '/api-docs/stability', label: t('navStability') },
+    { key: 'reference', href: '/docs/api', label: t('navReference') },
+    { key: 'gettingStarted', href: '/docs/getting-started', label: t('navGettingStarted') },
+    { key: 'stability', href: '/docs/stability', label: t('navStability') },
+    // Story MOTIR-2268's setup guide. This row is the page's ONLY entrance —
+    // nothing else in the product routes to it.
+    { key: 'sandbox', href: '/docs/sandbox', label: t('navSandbox') },
   ];
 
   return (

@@ -2,10 +2,10 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { buildApiReference, SPEC_PATH, type ApiReference } from '@/lib/apiDocs/reference';
 import { Button } from '@/components/ui/Button';
-import { CatalogueNav } from './_components/CatalogueNav';
-import { OperationSection } from './_components/OperationSection';
+import { CatalogueNav } from '../_components/CatalogueNav';
+import { OperationSection } from '../_components/OperationSection';
 
-// GET /api-docs — the published API reference (Story 11.4 · Subtask 11.4.7 —
+// GET /docs/api — the published API reference (Story 11.4 · Subtask 11.4.7 —
 // MOTIR-2188 · design Panels 1–3, 6).
 //
 // ── Read from the EMITTER, not over HTTP ────────────────────────────────────
@@ -48,7 +48,7 @@ export default async function ApiReferencePage() {
               {t('unavailableBody')}
             </p>
             <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-              <Link href="/api-docs/getting-started">
+              <Link href="/docs/getting-started">
                 <Button variant="primary" size="sm">
                   {t('navGettingStarted')}
                 </Button>

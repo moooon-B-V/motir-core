@@ -31,8 +31,8 @@
  * - `1.0.0` — the contract as Stories 11.1–11.4 and 11.7 shipped it.
  * - `1.1.0` — MOTIR-2275 adds the `X-Motir-Api-Version` response header.
  * - `1.2.0` — MOTIR-2279 adds the minimal ACTOR object to a collection row
- *   (`ReadyItem.assignee`), the rule Amendment 9 Q1 states for every one.
+ *   (`ReadyItem.assignee`), the rule Amendment 10 Q1 states for every one.
  * - `1.3.0` — MOTIR-2283 applies that rule to `Comment.author`, the one shape
- *   that had kept the rationale Amendment 9 overturned.
+ *   that had kept the rationale Amendment 10 overturned.
  */
 export const V1_CONTRACT_VERSION = '1.3.0';

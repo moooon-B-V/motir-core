@@ -5886,7 +5886,16 @@
     "policyLede": "What v1 promises, what may change without notice, and how anything is ever taken away.",
     "policyAdditiveHeading": "Additive — allowed without notice",
     "policyForbiddenHeading": "Never, without a new major version",
-    "policyAdrNote": "This page is the published commitment. The internal record it is generated from is the API decision record,"
+    "policyAdrNote": "This page is the published commitment. The internal record it is generated from is the API decision record,",
+    "navSandbox": "Agent sandbox",
+    "sandboxTitle": "Set up the agent sandbox",
+    "sandboxLede": "Motir asks you to hand work to a coding agent that runs unattended, with approvals off. This is where it should run: a published container that can reach your workspace tree and nothing else on your machine. This page ends when you have a working one.",
+    "sandboxWhatNext": "What next",
+    "sandboxThProfile": "Profile · binary",
+    "sandboxThTier": "Tier",
+    "sandboxThInstalled": "Installed from",
+    "sandboxThMount": "Credential mount (read-only)",
+    "sandboxRunCaption": "sh · the {profile} row — swap the tag and the mount for yours"
   },
   "auditCoverage": {
     "count": "{count, plural, one {# repository has no code-health audit.} other {# repositories have no code-health audit.}}",

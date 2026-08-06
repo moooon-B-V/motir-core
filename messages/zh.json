@@ -5882,7 +5882,16 @@
     "policyLede": "v1 承诺什么、哪些改动无需事先通知，以及任何东西被移除时会怎样。",
     "policyAdditiveHeading": "增量变更 —— 无需事先通知",
     "policyForbiddenHeading": "除非发布新主版本，否则绝不",
-    "policyAdrNote": "本页是对外的公开承诺。其生成来源的内部记录是 API 决策记录，"
+    "policyAdrNote": "本页是对外的公开承诺。其生成来源的内部记录是 API 决策记录，",
+    "navSandbox": "代理沙箱",
+    "sandboxTitle": "配置代理沙箱",
+    "sandboxLede": "Motir 让你把工作交给无人值守、免审批运行的编码代理。它应该跑在这里：一个已发布的容器，只能访问你的工作区目录，碰不到机器上的其他任何东西。读完本页，你就有了一个可用的容器。",
+    "sandboxWhatNext": "接下来",
+    "sandboxThProfile": "配置 · 可执行文件",
+    "sandboxThTier": "层级",
+    "sandboxThInstalled": "安装来源",
+    "sandboxThMount": "凭据挂载（只读）",
+    "sandboxRunCaption": "sh · {profile} 这一行 —— 把标签和挂载换成你自己的"
   },
   "auditCoverage": {
     "count": "{count, plural, other {# 个仓库尚无代码健康度审计。}}",

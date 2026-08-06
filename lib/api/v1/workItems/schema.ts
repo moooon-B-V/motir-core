@@ -782,15 +782,15 @@ export const illegalTransitionSchema = z.object({
 });
 
 /**
- * The MINIMAL ACTOR a v1 collection row embeds (Amendment 9 Q1).
+ * The MINIMAL ACTOR a v1 collection row embeds (Amendment 10 Q1).
  *
  * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes
  * back) and the name a client displays. Deliberately NOT a user resource — it
  * has no endpoint, no collection, no expansion and cannot be queried — which is
- * the distinction the pre-Amendment-9 rationale collapsed.
+ * the distinction the pre-Amendment-10 rationale collapsed.
  *
  * Declared HERE, beside the other cross-resource shapes, because two resource
- * modules now use it: the ready row (Amendment 9 Q1) and the comment author
+ * modules now use it: the ready row (Amendment 10 Q1) and the comment author
  * (11.5.14). `ready/schema.ts` already imports from this module, so declaring it
  * there and importing back would invert the dependency.
  */
@@ -859,7 +859,7 @@ export const commentSchema = z.object({
    * they cannot diverge.
    */
   authorId: z.string(),
-  /** Who wrote it, for a client that renders a name (Amendment 9 Q1). */
+  /** Who wrote it, for a client that renders a name (Amendment 10 Q1). */
   author: actorRefSchema,
   bodyMd: z.string(),
   createdAt: isoDateTimeSchema,
@@ -890,7 +890,7 @@ export function presentComment(source: CommentSource): V1Comment {
   return {
     id: source.id,
     parentCommentId: source.parentCommentId,
-    // The author's ID and NAME. The name arrived with ADR Amendment 9 Q1
+    // The author's ID and NAME. The name arrived with ADR Amendment 10 Q1
     // (MOTIR-2283), which overturned the rationale this comment used to state —
     // "a public API must not acquire a second, accidental user resource".
     // That fear is right about a user RESOURCE and wrong about an embedded,

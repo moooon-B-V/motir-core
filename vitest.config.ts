@@ -676,15 +676,17 @@ export default defineConfig({
         // wrong — a spec that would not build, a footer read that failed, a
         // filter that matches nothing. Each is a way the published reference can
         // be silently useless while every module beneath it is green.
-        'app/(public)/api-docs/layout.tsx',
-        'app/(public)/api-docs/page.tsx',
-        'app/(public)/api-docs/getting-started/page.tsx',
-        'app/(public)/api-docs/stability/page.tsx',
-        'app/(public)/api-docs/_components/CatalogueNav.tsx',
-        'app/(public)/api-docs/_components/CodeBlock.tsx',
-        'app/(public)/api-docs/_components/DocBlocks.tsx',
-        'app/(public)/api-docs/_components/MethodPill.tsx',
-        'app/(public)/api-docs/_components/OperationSection.tsx',
+        'app/(public)/docs/layout.tsx',
+        'app/(public)/docs/api/page.tsx',
+        'app/(public)/docs/getting-started/page.tsx',
+        'app/(public)/docs/stability/page.tsx',
+        'app/(public)/docs/_components/CatalogueNav.tsx',
+        'app/(public)/docs/_components/CodeBlock.tsx',
+        'app/(public)/docs/_components/DocBlocks.tsx',
+        'app/(public)/docs/_components/MethodPill.tsx',
+        'app/(public)/docs/_components/OperationSection.tsx',
+        'app/(public)/docs/sandbox/page.tsx',
+        'lib/apiDocs/sandbox.ts',
         'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
@@ -876,35 +878,37 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
         'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
-        'app/(public)/api-docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/api-docs/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/api-docs/getting-started/page.tsx': {
+        'app/(public)/docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/docs/api/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/docs/getting-started/page.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/api-docs/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/api-docs/_components/CatalogueNav.tsx': {
+        'app/(public)/docs/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/docs/_components/CatalogueNav.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/api-docs/_components/CodeBlock.tsx': {
+        'app/(public)/docs/_components/CodeBlock.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/api-docs/_components/DocBlocks.tsx': {
+        'app/(public)/docs/_components/DocBlocks.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/api-docs/_components/MethodPill.tsx': {
+        'app/(public)/docs/_components/MethodPill.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/api-docs/_components/OperationSection.tsx': {
+        'app/(public)/docs/sandbox/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiDocs/sandbox.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/docs/_components/OperationSection.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

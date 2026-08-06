@@ -59,7 +59,7 @@ function sourcesUnder(dir: string): { file: string; source: string }[] {
 }
 
 describe('the docs surface is PUBLIC by construction', () => {
-  const sources = sourcesUnder('app/(public)/api-docs');
+  const sources = sourcesUnder('app/(public)/docs');
 
   it('has files to check — the sweep is not vacuous', () => {
     expect(sources.length).toBeGreaterThan(3);
@@ -84,15 +84,14 @@ describe('the docs surface is PUBLIC by construction', () => {
         /await.*openapi\/v1\.json/,
       );
     }
-    const page = sources.find((s) => s.file.endsWith(join('api-docs', 'page.tsx')));
+    const page = sources.find((s) => s.file.endsWith(join('docs', 'api', 'page.tsx')));
     expect(page?.source).toContain('buildApiReference');
   });
 });
 
 describe('an operation section', () => {
   it('shows the method, path, scope, parameters, example and every status', async () => {
-    const { OperationSection } =
-      await import('@/app/(public)/api-docs/_components/OperationSection');
+    const { OperationSection } = await import('@/app/(public)/docs/_components/OperationSection');
     const { toReferenceOperation } = await import('@/lib/apiDocs/reference');
     const { findV1Operation } = await import('@/lib/api/v1/openapi/registry');
 
@@ -119,8 +118,7 @@ describe('an operation section', () => {
   });
 
   it('gives a 204 operation no response-body block to read', async () => {
-    const { OperationSection } =
-      await import('@/app/(public)/api-docs/_components/OperationSection');
+    const { OperationSection } = await import('@/app/(public)/docs/_components/OperationSection');
     const { toReferenceOperation } = await import('@/lib/apiDocs/reference');
     const { findV1Operation } = await import('@/lib/api/v1/openapi/registry');
 
@@ -143,7 +141,7 @@ describe('the SPEC-UNAVAILABLE state', () => {
         throw new Error('registry unavailable');
       },
     }));
-    const { default: Page } = await import('@/app/(public)/api-docs/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/page');
 
     render(await Page());
 
@@ -158,13 +156,13 @@ describe('the SPEC-UNAVAILABLE state', () => {
 });
 
 describe('THE PUBLIC DOOR — the shipped marketing chrome', () => {
-  it('renders `Docs` as a LINK to /api-docs, where it used to be a dead label', async () => {
+  it('renders `Docs` as a LINK to /docs/api, where it used to be a dead label', async () => {
     const { ExploreTopBar } = await import('@/app/(public)/explore/_components/ExploreTopBar');
     render(await ExploreTopBar());
 
     const docs = screen.getByText('navDocs').closest('a');
     expect(docs, 'Docs is still a non-interactive label').not.toBeNull();
-    expect(docs?.getAttribute('href')).toBe('/api-docs');
+    expect(docs?.getAttribute('href')).toBe('/docs/api');
   });
 
   it('keeps Product and Pricing as labels — they still resolve to nothing', () => {
@@ -199,7 +197,7 @@ describe('THE PUBLIC DOOR — the shipped marketing chrome', () => {
     render(await ExploreFooter({ topics: [{ slug: 'ai', label: 'AI' }] }));
 
     const link = screen.getByText('footProductApiDocs').closest('a');
-    expect(link?.getAttribute('href')).toBe('/api-docs');
+    expect(link?.getAttribute('href')).toBe('/docs/api');
     // The other Product entries stay labels.
     expect(screen.getByText('footProductOverview').closest('a')).toBeNull();
   });
@@ -213,10 +211,10 @@ describe('THE IN-APP DOOR — the API-tokens settings page', () => {
 
     expect(screen.getByText('doorHeading')).toBeTruthy();
     expect(screen.getByText('doorReferenceCta').closest('a')?.getAttribute('href')).toBe(
-      '/api-docs',
+      '/docs/api',
     );
     expect(screen.getByText('navGettingStarted').closest('a')?.getAttribute('href')).toBe(
-      '/api-docs/getting-started',
+      '/docs/getting-started',
     );
   });
 
@@ -249,8 +247,8 @@ describe('THE IN-APP DOOR — the API-tokens settings page', () => {
 });
 
 describe('the catalogue rail', () => {
-  it('lists every operation the reference holds, grouped, with the three pages on top', async () => {
-    const { CatalogueNav } = await import('@/app/(public)/api-docs/_components/CatalogueNav');
+  it('lists every operation the reference holds, grouped, with the four pages on top', async () => {
+    const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     const { buildApiReference } = await import('@/lib/apiDocs/reference');
 
     render(<CatalogueNav current="reference" groups={buildApiReference().groups} />);
@@ -260,20 +258,21 @@ describe('the catalogue rail', () => {
     );
     expect(listed.sort()).toEqual(V1_OPERATIONS.map((o) => o.operationId).sort());
 
-    // The three pages are the top group in the SAME nav — what makes the
-    // reference, the guide and the policy read as one surface.
+    // The pages are the top group in the SAME nav — what makes the reference,
+    // the guides and the policy read as one surface. Story MOTIR-2268 made this
+    // group four: the sandbox row is that page's ONLY entrance, so an assertion
+    // that stopped at three would let it go missing silently.
     const reference = screen.getByText('API reference', { selector: 'a' });
     expect(reference.getAttribute('aria-current')).toBe('page');
-    expect(screen.getByText('Getting started').getAttribute('href')).toBe(
-      '/api-docs/getting-started',
-    );
+    expect(screen.getByText('Getting started').getAttribute('href')).toBe('/docs/getting-started');
     expect(screen.getByText('Stability & deprecation').getAttribute('href')).toBe(
-      '/api-docs/stability',
+      '/docs/stability',
     );
+    expect(screen.getByText('Agent sandbox').getAttribute('href')).toBe('/docs/sandbox');
   });
 
   it('renders the pages even when the spec could not be built', async () => {
-    const { CatalogueNav } = await import('@/app/(public)/api-docs/_components/CatalogueNav');
+    const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     render(<CatalogueNav current="reference" groups={[]} />);
 
     expect(screen.getByText('Getting started')).toBeTruthy();
