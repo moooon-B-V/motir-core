@@ -277,4 +277,130 @@ describe('WorkItemRoadmap', () => {
       ),
     );
   });
+  // ── SUBTREE ROOT (MOTIR-2287) ─────────────────────────────────────────────
+  // The adapter's ROOT level can be one work item's children instead of the
+  // project's roots. Opt-in: absent, every assertion above still holds.
+
+  describe('subtreeRootId', () => {
+    it('roots the first level at the item: level 0 reads that item, a drill reads the child', async () => {
+      const calls: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          calls.push(u);
+          if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => root };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" />);
+      await screen.findByText('Epic one');
+      // The canvas asked for its ROOT level; the adapter asked the API for P9's
+      // children — never the project roots (`parentId=` with no value).
+      const levelCalls = calls.filter((u) => u.includes('/roadmap'));
+      expect(levelCalls.length).toBe(1);
+      expect(levelCalls[0]).toContain('parentId=P9');
+      // A drill from that level is unchanged — it carries the drilled node's id.
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(calls.some((u) => u.includes('parentId=E1'))).toBe(true);
+    });
+
+    it('never pins the planning-origin cluster, even when showPlanningOrigin is set', async () => {
+      const calls: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          calls.push(String(url));
+          return { ok: true, json: async () => root };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      expect(screen.queryByTestId('planning-origin')).toBeNull();
+      expect(el('__planning_origin__')).toBeNull();
+      // …and the pre-plan read that feeds its badge is never fired.
+      expect(calls.some((u) => u.includes('preplan'))).toBe(false);
+    });
+
+    it('does NOT auto-descend a single drillable child (MOTIR-1807 opted out)', async () => {
+      // ONE drillable node at the level. Unrooted, the adapter descends past it
+      // (that is MOTIR-1807). Rooted, it must show the item's only child AS the
+      // level — descending would be showing a different item's children.
+      const onlyChild = { nodes: [root.nodes[0]], edges: [] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => onlyChild };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" />);
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+      expect(el('E1')).not.toBeNull();
+      expect(screen.queryByText('Story one')).toBeNull(); // no silent descent
+    });
+
+    it('unrooted, the same single-drillable level DOES auto-descend (the opt-out is the root)', async () => {
+      const onlyChild = { nodes: [root.nodes[0]], edges: [] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => onlyChild };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" />);
+      expect(await screen.findByText('Story one')).toBeTruthy();
+    });
+
+    it("labels the breadcrumb root with the caller's label once drilled", async () => {
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" rootLabel="MOTIR-2284" />);
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      const crumbs = screen.getByLabelText('Breadcrumb');
+      expect(crumbs.textContent).toContain('MOTIR-2284');
+      expect(crumbs.textContent).not.toContain('Roadmap'); // not the project default
+    });
+
+    it('keys the level cache by root, so a rooted and an unrooted mount cannot share a root level', async () => {
+      const rootedLevel = {
+        nodes: [
+          {
+            id: 'C1',
+            parentId: 'P9',
+            kind: 'subtask',
+            identifier: 'MOTIR-77',
+            title: 'Rooted child',
+            status: 'todo',
+            isDone: false,
+            hasChildren: false,
+          },
+        ],
+        edges: [],
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('parentId=P9')) return { ok: true, json: async () => rootedLevel };
+          return { ok: true, json: async () => root };
+        }),
+      );
+      const rooted = render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" />);
+      expect(await screen.findByText('Rooted child')).toBeTruthy();
+      rooted.unmount();
+      render(<WorkItemRoadmap projectKey="MOTIR" />);
+      // The unrooted mount reads the PROJECT roots — it must not be served the
+      // rooted mount's cached level (a per-mount ref, plus a root-keyed entry).
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+      expect(screen.queryByText('Rooted child')).toBeNull();
+    });
+  });
 });
