@@ -47,6 +47,10 @@ export const EXEMPT_TOOLS = {
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +
     'enforces it with a `reaches-cascade-delete` rule — so no v1 resource exists, by decision ' +
     'rather than by omission (MOTIR-2229).',
+  delete_sprint:
+    'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
+    '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +
+    'to derive from (MOTIR-2230).',
 } as const satisfies Partial<Record<McpToolName, string>>;
 
 /** A tool the exemption registry covers. */
@@ -71,17 +75,7 @@ export type ExemptToolName = keyof typeof EXEMPT_TOOLS;
  */
 export const MIGRATING_TOOLS = {
   // ── 11.6.3 (MOTIR-2229) — the work-item family: LANDED, none left ─────────
-  // ── 11.6.4 (MOTIR-2230) — project / sprint / backlog / identity ───────────
-  list_projects: 'MOTIR-2230',
-  whoami: 'MOTIR-2230',
-  list_sprints: 'MOTIR-2230',
-  create_sprint: 'MOTIR-2230',
-  update_sprint: 'MOTIR-2230',
-  delete_sprint: 'MOTIR-2230',
-  start_sprint: 'MOTIR-2230',
-  complete_sprint: 'MOTIR-2230',
-  move_to_sprint: 'MOTIR-2230',
-  move_to_backlog: 'MOTIR-2230',
+  // ── 11.6.4 (MOTIR-2230) — project / sprint / backlog / identity: LANDED ───
   // ── 11.6.5 (MOTIR-2231) — the work-loop family ────────────────────────────
   dispatch_prompt: 'MOTIR-2231',
   mark_integrated: 'MOTIR-2231',

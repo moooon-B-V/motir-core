@@ -6,7 +6,8 @@ import type { StartSprintInput } from '@/lib/dto/sprints';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { unmigrated } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { presentMcpSprint, sprintWritePayload } from '../payloads/planning';
 import { sprintIdField, summarizeSprint } from './sprintRef';
 
 // `start_sprint` (Story 7.8 · Subtask 7.8.10) — activate a planned sprint. A
@@ -54,7 +55,7 @@ export async function runStartSprint(
     const dto = await sprintsService.startSprint(args.sprintId, input, ctx);
     return toolOk(
       `Started ${summarizeSprint(dto)}`,
-      unmigrated('start_sprint', dto as unknown as Record<string, unknown>),
+      derived(sprintWritePayload, presentMcpSprint(dto)),
     );
   } catch (err) {
     return toToolError(err);

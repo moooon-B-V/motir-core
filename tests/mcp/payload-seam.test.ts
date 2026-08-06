@@ -34,6 +34,17 @@ import {
   searchWorkItemsPayload,
   workItemWritePayload,
 } from '@/lib/mcp/payloads/workItems';
+import {
+  listProjectsPayload,
+  listSprintsPayload,
+  membershipMovePayload,
+  presentMcpMembershipMove,
+  presentMcpProjectRow,
+  presentMcpSprint,
+  presentMcpWhoami,
+  sprintWritePayload,
+  whoamiPayload,
+} from '@/lib/mcp/payloads/planning';
 import { toolOk } from '@/lib/mcp/toolResult';
 
 // The PAYLOAD SEAM guard (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
@@ -81,8 +92,8 @@ describe('toolOk totality — a payload must come from a constructor', () => {
     expect(toolOk('t', exempt('validate_work_item', { valid: true })).structuredContent).toEqual({
       valid: true,
     });
-    expect(toolOk('t', unmigrated('list_projects', { projects: [] })).structuredContent).toEqual({
-      projects: [],
+    expect(toolOk('t', unmigrated('get_plan', { plan: null })).structuredContent).toEqual({
+      plan: null,
     });
   });
 });
@@ -136,6 +147,16 @@ describe('the exemption + migration registries', () => {
       'change_kind',
       'move_to_parent',
       'add_comment',
+      // … and 11.6.4's planning family (MOTIR-2230).
+      'list_projects',
+      'whoami',
+      'list_sprints',
+      'create_sprint',
+      'update_sprint',
+      'start_sprint',
+      'complete_sprint',
+      'move_to_sprint',
+      'move_to_backlog',
     ]);
     for (const name of MCP_TOOL_NAMES) {
       const resolved = derivedTools.has(name) || isExemptTool(name) || isMigratingTool(name);
@@ -555,5 +576,140 @@ describe('presentMcpComment', () => {
   it('carries an edit timestamp when the comment was edited', () => {
     const edited = presentMcpComment({ ...commentDto, editedAt: '2026-08-06T01:00:00.000Z' });
     expect(edited.editedAt).toBe('2026-08-06T01:00:00.000Z');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The PROJECT / SPRINT / IDENTITY family (Subtask 11.6.4 — MOTIR-2230)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('presentMcpSprint — the DTO and the v1 schema already agreed', () => {
+  const sprintDto = {
+    id: 'sp-1',
+    name: 'Sprint 4',
+    goal: 'Ship 11.6',
+    state: 'active' as const,
+    startDate: '2026-08-01T00:00:00.000Z',
+    endDate: '2026-08-14T00:00:00.000Z',
+    completedAt: null,
+    sequence: 4,
+    issueCount: 8,
+    committedPoints: 21,
+    committedIssueCount: 8,
+  };
+
+  it('IS the v1 resource — it validates against `Sprint` with no widening', () => {
+    const row = presentMcpSprint(sprintDto);
+    expect(sharedResourceSchema('Sprint').safeParse(row).success).toBe(true);
+  });
+
+  it('passes every nullable THROUGH rather than defaulting it', () => {
+    const planned = presentMcpSprint({
+      ...sprintDto,
+      state: 'planned' as const,
+      startDate: null,
+      endDate: null,
+      committedPoints: null,
+      committedIssueCount: null,
+    });
+    expect(planned.committedPoints).toBeNull();
+    expect(planned.committedIssueCount).toBeNull();
+    expect(planned.startDate).toBeNull();
+  });
+
+  it('the write and list payloads probe against Sprint', () => {
+    const row = presentMcpSprint(sprintDto);
+    const one = derived(sprintWritePayload, row);
+    expect(sprintWritePayload.probes[0]!.select(one as never)).toEqual([row]);
+    const page = derived(listSprintsPayload, { sprints: [row] });
+    expect(listSprintsPayload.probes[0]!.select(page as never)).toEqual([row]);
+    for (const part of listSprintsPayload.probes[0]!.select(page as never)) {
+      expect(sharedResourceSchema('Sprint').safeParse(part).success).toBe(true);
+    }
+  });
+});
+
+describe('presentMcpProjectRow', () => {
+  const projectDto = {
+    id: 'proj-1',
+    name: 'Motir',
+    slug: 'motir',
+    identifier: 'PROD',
+    archivedAt: null as string | null,
+    accessLevel: 'open' as const,
+    avatarIcon: null,
+    avatarColor: null,
+    onboardingRanAt: null,
+    aiGenerateExplanations: false,
+  };
+
+  it('is a pure WIDENING — it validates against v1’s `Project`', () => {
+    const row = presentMcpProjectRow(projectDto);
+    expect(sharedResourceSchema('Project').safeParse(row).success).toBe(true);
+  });
+
+  it('keeps the addressing fields the picker row carried', () => {
+    const row = presentMcpProjectRow(projectDto);
+    expect(row.key).toBe('PROD');
+    expect(row.id).toBe('proj-1');
+    expect(row.slug).toBe('motir');
+    expect(row.accessLevel).toBe('open');
+  });
+
+  it('reports `archived` from `archivedAt`, in both directions', () => {
+    expect(presentMcpProjectRow(projectDto).archived).toBe(false);
+    expect(
+      presentMcpProjectRow({ ...projectDto, archivedAt: '2026-08-01T00:00:00.000Z' }).archived,
+    ).toBe(true);
+  });
+
+  it('the collection probes its rows against Project', () => {
+    const page = derived(listProjectsPayload, { projects: [presentMcpProjectRow(projectDto)] });
+    for (const part of listProjectsPayload.probes[0]!.select(page as never)) {
+      expect(sharedResourceSchema('Project').safeParse(part).success).toBe(true);
+    }
+  });
+});
+
+describe('presentMcpWhoami', () => {
+  const user = { id: 'u-1', name: 'Yue', email: 'zhuyue11@gmail.com', image: null };
+  const workspace = { id: 'ws-1', name: 'moooon', slug: 'moooon' };
+
+  it('widens the v1 user shape with the avatar, and narrows the workspace', () => {
+    const row = presentMcpWhoami(user, workspace);
+    expect(row.user).toEqual(user);
+    expect(row.workspace).toEqual(workspace);
+    expect(row.workspace).not.toHaveProperty('createdAt');
+  });
+
+  it('a revoked membership mid-request reads `workspace: null`', () => {
+    expect(presentMcpWhoami(user, null).workspace).toBeNull();
+  });
+
+  it('validates through the payload constructor', () => {
+    expect(derived(whoamiPayload, presentMcpWhoami(user, workspace)).user).toEqual(user);
+    expect(() => derived(whoamiPayload, { user: { id: 'u-1' } } as never)).toThrow();
+  });
+});
+
+describe('presentMcpMembershipMove', () => {
+  it('adds `movedKeys` from v1’s presenter beside the rows MCP already returned', () => {
+    const moved = presentMcpMembershipMove([workItemDto]);
+    expect(moved.movedKeys).toEqual(['PROD-2229']);
+    expect(moved.items).toHaveLength(1);
+    expect(moved.items[0]!.key).toBe('PROD-2229');
+  });
+
+  it('an EMPTY move is an empty batch, not an error', () => {
+    const moved = presentMcpMembershipMove([]);
+    expect(moved.movedKeys).toEqual([]);
+    expect(moved.items).toEqual([]);
+  });
+
+  it('probes against the shared MembershipMoveResult', () => {
+    const built = derived(membershipMovePayload, presentMcpMembershipMove([workItemDto]));
+    for (const part of membershipMovePayload.probes[0]!.select(built as never)) {
+      expect(sharedResourceSchema('MembershipMoveResult').safeParse(part).success).toBe(true);
+    }
   });
 });

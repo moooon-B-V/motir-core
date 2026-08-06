@@ -5,7 +5,8 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { unmigrated } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { listSprintsPayload, presentMcpSprint } from '../payloads/planning';
 import { projectKeyField, summarizeSprint } from './sprintRef';
 
 // `list_sprints` (Story 7.8 · Subtask 7.8.10) — the read an agent runs BEFORE
@@ -42,7 +43,7 @@ export async function runListSprints(
     // see — and a mechanism with a single invisible member is not a mechanism
     // (ADR Amendment 7 Q4). It is not exempt: a sprint collection has a v1
     // counterpart, so it derives with its family in MOTIR-2230.
-    return toolOk(text, unmigrated('list_sprints', { sprints }));
+    return toolOk(text, derived(listSprintsPayload, { sprints: sprints.map(presentMcpSprint) }));
   } catch (err) {
     return toToolError(err);
   }
