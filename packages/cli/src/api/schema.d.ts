@@ -986,6 +986,10 @@ export interface components {
             id: string;
             parentCommentId: string | null;
             authorId: string;
+            author: {
+                id: string;
+                name: string;
+            };
             bodyMd: string;
             /** Format: date-time */
             createdAt: string;
@@ -995,6 +999,10 @@ export interface components {
                 id: string;
                 parentCommentId: string | null;
                 authorId: string;
+                author: {
+                    id: string;
+                    name: string;
+                };
                 bodyMd: string;
                 /** Format: date-time */
                 createdAt: string;
@@ -1230,6 +1238,10 @@ export interface components {
                 id: string;
                 parentCommentId: string | null;
                 authorId: string;
+                author: {
+                    id: string;
+                    name: string;
+                };
                 bodyMd: string;
                 /** Format: date-time */
                 createdAt: string;
@@ -1239,6 +1251,10 @@ export interface components {
                     id: string;
                     parentCommentId: string | null;
                     authorId: string;
+                    author: {
+                        id: string;
+                        name: string;
+                    };
                     bodyMd: string;
                     /** Format: date-time */
                     createdAt: string;
@@ -3009,6 +3025,10 @@ export interface operations {
                         id: string;
                         parentCommentId: string | null;
                         authorId: string;
+                        author: {
+                            id: string;
+                            name: string;
+                        };
                         bodyMd: string;
                         /** Format: date-time */
                         createdAt: string;

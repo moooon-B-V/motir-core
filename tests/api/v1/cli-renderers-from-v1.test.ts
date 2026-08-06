@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as GET_DETAIL } from '@/app/api/v1/work-items/[key]/route';
 import { GET as GET_COLLECTION } from '@/app/api/v1/projects/[projectKey]/work-items/route';
 import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import { GET as GET_COMMENTS } from '@/app/api/v1/work-items/[key]/comments/route';
+import type { V1CommentThread } from '@/lib/api/v1/workItems/schema';
+import { commentsService } from '@/lib/services/commentsService';
 import type { V1ReadyItem } from '@/lib/api/v1/ready/schema';
 import type { WorkItemDetail, WorkItemSummary } from '@/lib/api/v1/workItems/schema';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -9,10 +12,13 @@ import {
   assignChildWaves,
   renderChildrenSection,
   renderReadinessLine,
+  renderComment,
+  renderCommentThread,
   renderReadyTable,
   renderSprintItems,
 } from '../../../packages/cli/src/render';
 import type {
+  ActivityCommentThread,
   ReadyItemSummary,
   SearchItemSummary,
   WorkItemChild,
@@ -161,6 +167,40 @@ async function readReady(caller: V1ProjectCaller): Promise<V1ReadyItem[]> {
   return ((await res.json()) as { items: V1ReadyItem[] }).items;
 }
 
+async function readComments(caller: V1ProjectCaller, key: string): Promise<V1CommentThread[]> {
+  const res = await GET_COMMENTS(
+    new Request(`${BASE}/work-items/${key}/comments`, { headers: caller.headers }),
+    { params: Promise.resolve({ key }) },
+  );
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { items: V1CommentThread[] }).items;
+}
+
+/**
+ * A v1 comment thread → the CLI's `ActivityCommentThread` (Amendment 9 Q1 ·
+ * MOTIR-2283).
+ *
+ * Another adapter that renames NOTHING — and, like the ready row's, one that
+ * could not be written before the amendment, because `author` did not exist on
+ * the wire and `authorId` is not a name.
+ */
+function toCliThread(thread: V1CommentThread): ActivityCommentThread {
+  return {
+    id: thread.id,
+    author: thread.author,
+    bodyMd: thread.bodyMd,
+    createdAt: thread.createdAt,
+    editedAt: thread.editedAt,
+    replies: thread.replies.map((reply) => ({
+      id: reply.id,
+      author: reply.author,
+      bodyMd: reply.bodyMd,
+      createdAt: reply.createdAt,
+      editedAt: reply.editedAt,
+    })),
+  };
+}
+
 async function makeItem(
   caller: V1ProjectCaller,
   title: string,
@@ -272,6 +312,65 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     expect(table).toContain('BLOCKS');
     const blockedRow = table.split('\n').find((line) => line.includes(second.identifier));
     expect(blockedRow).toContain(first.identifier);
+  });
+
+  it('renderComment prints the AUTHOR NAME from `GET …/comments` (Amendment 9 Q1)', async () => {
+    // The MCP-era `render.ts:915` reads `comment.author.name`. Before this
+    // amendment the v1 thread carried `authorId` alone, so the adapter could not
+    // be written at all — and a naive one would have THROWN on `undefined.name`
+    // rather than degrading. That is why this is asserted through the real
+    // renderer rather than on the payload.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'a discussed task');
+    await commentsService.addComment(item.id, { bodyMd: 'the first word' }, caller.ctx);
+
+    const threads = await readComments(caller, item.identifier);
+    expect(threads).toHaveLength(1);
+
+    const thread = threads[0];
+    expect(thread?.author).toEqual({ id: caller.user.id, name: caller.user.name });
+    // The id is KEPT beside the name, and they cannot diverge.
+    expect(thread?.authorId).toBe(thread?.author.id);
+
+    const rendered = renderComment(toCliThread(thread!), '', new Date());
+    expect(rendered).toContain(caller.user.name);
+    expect(rendered).not.toContain(caller.user.id);
+  });
+
+  it('renderCommentThread prints the author on a REPLY too', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'a threaded task');
+    const root = await commentsService.addComment(item.id, { bodyMd: 'root' }, caller.ctx);
+    await commentsService.addComment(
+      item.id,
+      { bodyMd: 'a reply', parentCommentId: root.id },
+      caller.ctx,
+    );
+
+    const threads = await readComments(caller, item.identifier);
+    const thread = threads.find((t) => t.replies.length > 0);
+    expect(thread, 'the reply should be nested under its root').toBeDefined();
+    expect(thread?.replies[0]?.author.name).toBe(caller.user.name);
+
+    const rendered = renderCommentThread(toCliThread(thread!), new Date());
+    // Both the root and the reply render a name, not a cuid.
+    expect(rendered.match(new RegExp(caller.user.name, 'g'))?.length).toBe(2);
+    expect(rendered).not.toContain(caller.user.id);
+  });
+
+  it('adds NO query — the author name comes off the page already read', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'many comments');
+    for (let i = 0; i < 5; i += 1) {
+      await commentsService.addComment(item.id, { bodyMd: `comment ${i}` }, caller.ctx);
+    }
+
+    const list = vi.spyOn(commentsService, 'listComments');
+    const threads = await readComments(caller, item.identifier);
+
+    expect(threads.length).toBeGreaterThanOrEqual(5);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(threads.every((t) => t.author.name === caller.user.name)).toBe(true);
   });
 
   it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 9 Q1)', async () => {

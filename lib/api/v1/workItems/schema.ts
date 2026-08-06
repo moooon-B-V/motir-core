@@ -782,6 +782,24 @@ export const illegalTransitionSchema = z.object({
 });
 
 /**
+ * The MINIMAL ACTOR a v1 collection row embeds (Amendment 9 Q1).
+ *
+ * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes
+ * back) and the name a client displays. Deliberately NOT a user resource — it
+ * has no endpoint, no collection, no expansion and cannot be queried — which is
+ * the distinction the pre-Amendment-9 rationale collapsed.
+ *
+ * Declared HERE, beside the other cross-resource shapes, because two resource
+ * modules now use it: the ready row (Amendment 9 Q1) and the comment author
+ * (11.5.14). `ready/schema.ts` already imports from this module, so declaring it
+ * there and importing back would invert the dependency.
+ */
+export const actorRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+/**
  * The statuses legal FROM `fromStatusKey`, presented from a project's workflow.
  *
  * ONE function, used by BOTH the `GET` and the refusal path, so the two surfaces
@@ -834,7 +852,15 @@ export function presentTransitionTargets(
 export const commentSchema = z.object({
   id: z.string(),
   parentCommentId: z.string().nullable(),
+  /**
+   * The author's id — KEPT beside `author`, not replaced by it. Removing a
+   * shipped field is a §8 violation, and it stays the cheaper read for a client
+   * that only routes on identity. `author.id` is the same value; a test asserts
+   * they cannot diverge.
+   */
   authorId: z.string(),
+  /** Who wrote it, for a client that renders a name (Amendment 9 Q1). */
+  author: actorRefSchema,
   bodyMd: z.string(),
   createdAt: isoDateTimeSchema,
   editedAt: isoDateTimeSchema.nullable(),
@@ -852,7 +878,7 @@ export type V1CommentThread = z.infer<typeof commentThreadSchema>;
 export interface CommentSource {
   id: string;
   parentCommentId: string | null;
-  author: { id: string };
+  author: { id: string; name: string };
   bodyMd: string;
   createdAt: string;
   editedAt: string | null;
@@ -864,10 +890,16 @@ export function presentComment(source: CommentSource): V1Comment {
   return {
     id: source.id,
     parentCommentId: source.parentCommentId,
-    // The AUTHOR's id only: `CommentAuthorDTO` also carries the display name and
-    // avatar the web app renders, and a public API must not acquire a second,
-    // accidental user resource. 11.3 owns users if they are ever exposed.
+    // The author's ID and NAME. The name arrived with ADR Amendment 9 Q1
+    // (MOTIR-2283), which overturned the rationale this comment used to state —
+    // "a public API must not acquire a second, accidental user resource".
+    // That fear is right about a user RESOURCE and wrong about an embedded,
+    // minimal, read-only actor: it has no endpoint, no collection, no expansion
+    // and cannot be queried. Without it no client can render a comment thread
+    // showing who wrote what, because v1 has no user endpoint to resolve an id
+    // against — and both mirror products embed one. `avatarUrl` stays off.
     authorId: source.author.id,
+    author: { id: source.author.id, name: source.author.name },
     bodyMd: source.bodyMd,
     createdAt: source.createdAt,
     editedAt: source.editedAt,

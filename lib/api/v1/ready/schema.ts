@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { WorkItemKind, WorkItemPriority } from '@prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import {
+  actorRefSchema,
   dependencyEdgesSchema,
   presentDependencyEdges,
   workItemKeySchema,
@@ -106,23 +107,6 @@ void [_kindsTotal, _prioritiesTotal, _typesTotal, _executorsTotal];
 // the detail aggregate. For a ready row `blockedBy` is terminal by definition —
 // that is what makes it ready — and `blocks` is the payload that matters: what
 // finishing this item unblocks, i.e. why it is worth doing first.
-
-/**
- * The MINIMAL ACTOR a v1 collection row embeds (Amendment 9 Q1).
- *
- * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes
- * back) and the name a client displays. Deliberately NOT a user resource — it
- * has no endpoint, no collection, no expansion and cannot be queried — which is
- * the distinction the pre-Amendment-8 rationale collapsed.
- *
- * Declared here because the ready row is the first collection to carry one;
- * Amendment 9 states the rule for every v1 collection row, so a second consumer
- * imports THIS rather than restating it.
- */
-export const actorRefSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-});
 
 /** The v1 ready row. */
 export const readyItemSchema = z.object({
