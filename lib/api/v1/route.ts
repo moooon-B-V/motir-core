@@ -4,6 +4,7 @@ import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import type { TokenScope } from '@/lib/mcp/scopes';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { presentedBearerToken, tokenFingerprint } from '@/lib/api/v1/bearer';
+import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 import {
   classifyApiV1Error,
   INTERNAL_ERROR_BODY,
@@ -33,7 +34,8 @@ import {
 //      the token owner and the product's own access checks apply unchanged.
 //   4. ERROR MAPPING — a typed service error becomes `{ code, error }` + its
 //      status; anything unrecognised becomes a bare 500 that leaks nothing.
-//   5. A REQUEST ID on every response, success and failure alike.
+//   5. A REQUEST ID and the CONTRACT VERSION on every response, success and
+//      failure alike (`x-request-id`, `x-motir-api-version` — MOTIR-2275).
 //
 // Ordering is a contract, not an implementation detail: auth runs BEFORE the
 // limiter and before the handler does any parsing or reading, so an
@@ -45,6 +47,24 @@ import {
 
 /** Correlation id echoed on every v1 response, for support conversations. */
 export const REQUEST_ID_HEADER = 'x-request-id';
+
+/**
+ * The CONTRACT version this response was served by (MOTIR-2275).
+ *
+ * ⚠️ This ADVERTISES a version; it does not NEGOTIATE one. ADR §1 rejected
+ * header VERSIONING — a request header that selects which contract to serve —
+ * and that rejection stands: `/api/v1` is still the only thing that picks a
+ * contract, and this header is never read off a request. What it removes is the
+ * client's need to download a specification to learn one string: the value is
+ * `V1_CONTRACT_VERSION`, the same number `info.version` carries, so a client
+ * can compare majors/minors off a response it was already making.
+ *
+ * Stamped BEFORE the try block, exactly as the request id is, so it arrives on
+ * the 401, the 403, the 429, a mapped domain error and the 500 as well — which
+ * is when a client most wants to know whether it is speaking the right
+ * contract at all.
+ */
+export const API_VERSION_HEADER = 'x-motir-api-version';
 
 /** A client-supplied request id we are willing to echo (id-shaped, bounded). */
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,128}$/;
@@ -122,7 +142,10 @@ export function withV1Route<P = Record<string, never>>(
 ): (req: Request, args?: NextRouteArgs<P>) => Promise<Response> {
   return async function v1Route(req: Request, args?: NextRouteArgs<P>): Promise<Response> {
     const requestId = resolveRequestId(req);
-    const responseHeaders = new Headers({ [REQUEST_ID_HEADER]: requestId });
+    const responseHeaders = new Headers({
+      [REQUEST_ID_HEADER]: requestId,
+      [API_VERSION_HEADER]: V1_CONTRACT_VERSION,
+    });
 
     try {
       // ── 1. Authenticate, BEFORE any parsing or reading ──────────────────

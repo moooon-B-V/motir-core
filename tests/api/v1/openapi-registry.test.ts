@@ -149,6 +149,33 @@ describe('the emitted document', () => {
     expect(V1_CONTRACT_VERSION).toMatch(/^1\.\d+\.\d+$/);
   });
 
+  // MOTIR-2275. Asserted against the EMITTED DOCUMENT and by LITERAL name, not
+  // against `V1_SHARED_RESPONSE_HEADERS` — a check that maps over the same
+  // constant the emitter reads would pass on a document that declared nothing
+  // at all. This is the criterion "it appears on every operation" as a reader
+  // of the published spec would verify it.
+  it('declares X-Motir-Api-Version on EVERY response of EVERY operation', () => {
+    const paths = document['paths'] as unknown as Record<
+      string,
+      Record<string, { responses: Record<string, { headers?: Record<string, unknown> }> }>
+    >;
+    let checked = 0;
+    for (const operation of V1_OPERATIONS) {
+      const responses = paths[operation.path]?.[operation.method.toLowerCase()]?.responses ?? {};
+      for (const [status, response] of Object.entries(responses)) {
+        const header = response.headers?.['X-Motir-Api-Version'] as
+          | { description?: string; schema?: unknown }
+          | undefined;
+        expect(header, `${operation.path} ${operation.method} ${status}`).toBeDefined();
+        expect(header?.description ?? '').toMatch(/contract/i);
+        expect(header?.schema).toBeDefined();
+        checked += 1;
+      }
+    }
+    // The sweep is not vacuous — every operation carries its wrapper statuses.
+    expect(checked).toBeGreaterThan(100);
+  });
+
   it('carries every declared operation at its own path and verb', () => {
     const paths = document['paths'] as unknown as Record<string, Record<string, unknown>>;
     for (const operation of V1_OPERATIONS) {
@@ -217,6 +244,7 @@ describe('the emitted document', () => {
     for (const status of ['200', '404', '429']) {
       expect(Object.keys(responses[status]?.headers ?? {})).toEqual([
         'X-Request-Id',
+        'X-Motir-Api-Version',
         'X-RateLimit-Limit',
         'X-RateLimit-Remaining',
         'X-RateLimit-Reset',

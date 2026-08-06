@@ -617,6 +617,7 @@ export default defineConfig({
         // path that leaks a stack. Stories 11.2 / 11.3 add endpoints ON TOP of
         // these files, so the gate must already be load-bearing when they land.
         'lib/api/v1/route.ts',
+        'lib/api/v1/contractVersion.ts',
         'lib/api/v1/errors.ts',
         'lib/api/v1/bearer.ts',
         'lib/api/v1/pagination.ts',
@@ -751,6 +752,9 @@ export default defineConfig({
       thresholds: {
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.
         'lib/api/v1/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-2275 — the ONE definition of the contract version, read by both
+        // the emitted document and the header the wrapper stamps.
+        'lib/api/v1/contractVersion.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },

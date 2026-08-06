@@ -158,7 +158,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
       'Your first authenticated call',
       'Paginate a collection',
       'Read an error',
-      'Read the rate-limit headers',
+      'Read the response headers',
     ]) {
       await expect(page.getByRole('heading', { name: step })).toBeVisible();
     }
@@ -167,6 +167,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     // The two facts a reader would otherwise discover the hard way.
     await expect(page.getByText(/OPAQUE/)).toBeVisible();
     await expect(page.getByText(/X-RateLimit-Reset/).first()).toBeVisible();
+    await expect(page.getByText(/X-Motir-Api-Version/).first()).toBeVisible();
     await beat();
   });
 
