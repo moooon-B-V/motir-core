@@ -13,6 +13,7 @@ import {
   planTurnBodySchema,
   ACTIVITY_VIEWS,
   activityEntrySchema,
+  activityTotalsSchema,
   sessionCloseOutBodySchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
@@ -408,9 +409,11 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     ],
     response: {
       status: 200,
-      body: { kind: 'rankedPage', item: activityEntrySchema },
+      body: { kind: 'rankedPage', item: activityEntrySchema, extend: activityTotalsSchema },
       description:
-        'One page of activity entries, with `totalCount` the number of entries in this view.',
+        'One page of activity entries. `totalCount` is the number of entries in this view; ' +
+        '`totalComments` / `totalChanges` break that down for the merged `all` view, and each ' +
+        'is null on a view that did not count that source.',
     },
     errorStatuses: [404, 422],
   }),

@@ -142,6 +142,12 @@ function responseBodySchema(body: V1ResponseBody): JsonObject | undefined {
             type: 'object',
             properties: { items: { type: 'array', items: bodySchema(body.item) } },
           },
+          // The extension rides as its OWN `allOf` member rather than being
+          // merged into the one above: the envelope's contribution and the
+          // read's stay separately readable in the emitted document, which is
+          // what lets a reader see at a glance which fields are paging and
+          // which belong to this operation.
+          ...(body.extend ? [toOpenApiSchema(body.extend, 'output')] : []),
         ],
       };
   }

@@ -70,8 +70,18 @@ export type V1ResponseBody =
   | { kind: 'object'; schema: z.ZodType }
   /** A cursor page — the PLAIN envelope, no `totalCount`. */
   | { kind: 'page'; item: z.ZodType }
-  /** A ranked collection page — the envelope carrying `totalCount`. */
-  | { kind: 'rankedPage'; item: z.ZodType }
+  /**
+   * A ranked collection page — the envelope carrying `totalCount`.
+   *
+   * `extend` adds fields BESIDE the envelope's, for a page that answers
+   * something the envelope cannot express. It exists for exactly one shape
+   * today: the activity `all` view merges two streams and reports each one's
+   * total separately, which a single `totalCount` cannot carry (ADR Amendment
+   * 12). Reaching for it is a signal to check whether the envelope is really
+   * the wrong shape — extending is right when the extra field is a property of
+   * THIS read, and wrong when it is a property of paging.
+   */
+  | { kind: 'rankedPage'; item: z.ZodType; extend?: z.ZodType }
   /** No body at all (a 204). */
   | { kind: 'empty' };
 

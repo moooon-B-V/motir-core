@@ -2723,3 +2723,75 @@ regenerates.
   `/count` operation — rather than being promoted to the ranked envelope. The
   ranked envelope stays reserved for reads that compute the number anyway, which
   is the property Amendment 3 Q2 gave it.
+
+---
+
+### Amendment 12 (2026-08-06) — a merged page reports what it is made of; the ranked envelope is EXTENDED, not reshaped
+
+**Status:** accepted. Raised by **11.5.18** (MOTIR-2320), the fourth wire gap
+Story 11.5's port surfaced.
+
+#### The problem
+
+`GET /api/v1/work-items/{key}/activity` returns the ranked envelope, so it
+answers one `totalCount`. Its `all` view merges TWO streams, and the CLI's
+footer reports them separately — `render.ts:1025` prints "3 of 47 comments, 2 of
+18 changes", and when a next page exists, "…and 44 more comments, 16 more
+changes". Both are `total − shown`.
+
+A client cannot derive them. They are whole-STREAM totals, so counting a page's
+own items yields "3 of 3" on every page but the last.
+
+#### Q1 — reshape the envelope, or extend the response? **Extend.**
+
+The ranked envelope is not wrong. For `comments` and `history` the stream is one
+kind, and one total is the complete answer. Only `all` is a merge, and a merge
+wanting a breakdown is a property of THAT READ, not a defect in how pages are
+counted — so the fix belongs on the response, not on the envelope every ranked
+collection shares.
+
+`V1ResponseBody`'s `rankedPage` therefore gains an optional `extend`, emitted as
+its own `allOf` member beside the envelope's. Reader-visible separation is the
+point: the envelope's contribution and the operation's stay distinguishable in
+the document, so "which of these fields are paging?" has an answer you can see.
+
+**Reaching for `extend` is a signal, not a convenience.** It is right when the
+extra field is a property of the read; it is wrong when it is a property of
+paging, which is what the two envelopes already model (Amendment 3 Q2). A third
+envelope was rejected for the reason the second one exists: envelopes describe
+how a collection is WALKED, and there is no third way to walk one.
+
+#### Q2 — what do the single-kind views report? **The one they counted; `null` for the other.**
+
+`totalComments` and `totalChanges` are **nullable, and the null is
+load-bearing**: it means _this view did not count that source_, which is not the
+same as counting it and finding none.
+
+- `comments` → `totalComments = totalCount`, `totalChanges = null`
+- `history` → `totalChanges = totalCount`, `totalComments = null`
+- `all` → both, and `totalCount` is their sum
+
+Reporting `0` on the view that did not look would state that the item has no
+history, which is usually false and always unfounded. Making the fields OPTIONAL
+instead was rejected on the rule this API already follows for edge groups: to a
+typed client an absent key and a null value are different things, and "the
+server cannot tell you" is a value, not an absence.
+
+#### Q3 — does `totalCount` change meaning? **No, on any view.**
+
+It remains the number of entries in the view that was asked for. On `all` that
+is the sum of the two, which the route already computed before this amendment —
+so no read changes, no aggregate is paid for twice, and nothing generated
+against `1.4.0` reads differently. A test asserts the sum rather than assuming
+it.
+
+#### Q4 — the version step. **MINOR — `1.5.0`.** Two new fields, additive under §8.
+
+#### Consequences of this amendment
+
+- **11.5.18** ships the two fields, the `extend` mechanism, and the ADR text.
+- **11.5.4** consumes them: `ActivityAllPage`'s `totalComments` / `totalChanges`
+  map straight across, and the adapter is what turns the nullable wire fields
+  into the numbers the `all` page's view model declares.
+- **A future page whose read answers something the envelope cannot express**
+  uses `extend`, having first checked that the field is not really about paging.

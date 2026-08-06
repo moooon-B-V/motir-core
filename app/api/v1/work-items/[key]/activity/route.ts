@@ -99,6 +99,11 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
       ),
       nextCursor: wrap(page.nextCursor),
       totalCount: page.totalCount,
+      // This view counted comments and nothing else. `totalChanges: 0` would
+      // say the item has no history, which is a different — and usually false —
+      // claim than "this read did not look" (ADR Amendment 12).
+      totalComments: page.totalCount,
+      totalChanges: null,
     });
   }
 
@@ -110,6 +115,8 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
       ),
       nextCursor: wrap(page.nextCursor),
       totalCount: page.totalCount,
+      totalComments: null,
+      totalChanges: page.totalCount,
     });
   }
 
@@ -126,5 +133,10 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
     // aggregates the read already paid for, so this is the ranked envelope's
     // documented condition rather than an extra query.
     totalCount: page.totalComments + page.totalChanges,
+    // The split behind that sum. Both are bounded aggregates the read already
+    // paid for, so publishing them costs nothing — and the merged view is the
+    // one place a single total cannot answer "how many are there".
+    totalComments: page.totalComments,
+    totalChanges: page.totalChanges,
   });
 });

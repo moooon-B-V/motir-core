@@ -1,5 +1,5 @@
 import { join, relative, sep } from 'node:path';
-import type { ZodType } from 'zod/v4';
+import type { ZodObject, ZodType } from 'zod/v4';
 import { v1PageEnvelopeSchema, v1RankedPageEnvelopeSchema } from '@/lib/api/v1/openapi/envelopes';
 import { operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { declaredScopeByMethod } from './v1RouteAudit';
@@ -183,7 +183,15 @@ export function responseSchemaFor(operation: V1Operation): ZodType | undefined {
       return body.schema;
     case 'page':
       return v1PageEnvelopeSchema(body.item);
-    case 'rankedPage':
-      return v1RankedPageEnvelopeSchema(body.item);
+    case 'rankedPage': {
+      const envelope = v1RankedPageEnvelopeSchema(body.item);
+      // A ranked page may EXTEND the envelope with fields belonging to its own
+      // read (ADR Amendment 12). The envelope is `.strict()`, so an extension
+      // the emitter publishes but this builder does not know about makes every
+      // real response fail here — which is exactly how the drift guard caught
+      // `totalComments` / `totalChanges` being added on one side only.
+      if (!body.extend) return envelope;
+      return envelope.extend((body.extend as unknown as ZodObject).shape);
+    }
   }
 }

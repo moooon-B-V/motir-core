@@ -7271,7 +7271,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of activity entries, with `totalCount` the number of entries in this view. */
+            /** @description One page of activity entries. `totalCount` is the number of entries in this view; `totalComments` / `totalChanges` break that down for the merged `all` view, and each is null on a view that did not count that source. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7289,6 +7289,9 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RankedPageEnvelope"] & {
                         items?: components["schemas"]["ActivityEntry"][];
+                    } & {
+                        totalComments: number | null;
+                        totalChanges: number | null;
                     };
                 };
             };

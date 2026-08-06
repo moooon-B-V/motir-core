@@ -806,6 +806,29 @@ export const activityEntrySchema = z.union([
 ]);
 export type V1ActivityEntry = z.infer<typeof activityEntrySchema>;
 
+/**
+ * The activity page's PER-SOURCE totals, beside the envelope's `totalCount`
+ * (ADR Amendment 12).
+ *
+ * The `all` view merges two streams, and "how many are there" has two answers
+ * for it. `totalCount` keeps meaning what it means on every other ranked page —
+ * the whole view's size, here the sum — and these two say what it is made of.
+ *
+ * ⚠️ NULLABLE, and the null is load-bearing: it means **this view did not count
+ * that source**, which is different from counting it and finding none. The
+ * single-kind views each populate the one they actually counted and null the
+ * other — `comments` knows its comment total and nothing about changes, and
+ * `history` the reverse. Reporting `0` there would state, falsely, that the
+ * item has no changes.
+ */
+export const activityTotalsSchema = z.object({
+  /** Every comment on the item, replies included — `null` on the `history` view. */
+  totalComments: z.number().int().nonnegative().nullable(),
+  /** Displayable revisions in the whole trail — `null` on the `comments` view. */
+  totalChanges: z.number().int().nonnegative().nullable(),
+});
+export type V1ActivityTotals = z.infer<typeof activityTotalsSchema>;
+
 /** Map ONE history entry to the wire — field by field, never a spread. */
 export function presentActivityChange(entry: {
   id: string;

@@ -205,6 +205,38 @@ describe('the emitted document', () => {
   // GENERATED from this document and inherited a type that cannot express two
   // kinds. The declaration and the wire form are asserted together, off the
   // emitted document rather than a fixture, so the two cannot drift apart again.
+  // MOTIR-2320 / ADR Amendment 12. A ranked page may EXTEND the envelope with
+  // fields that belong to its own read. The separation is the point: a reader
+  // must be able to see which fields are paging and which are this operation's,
+  // so the extension rides as its own `allOf` member rather than being merged.
+  it('emits a ranked page’s EXTENSION as its own allOf member, beside the envelope', () => {
+    const paths = document['paths'] as unknown as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >;
+    const responses = paths['/api/v1/work-items/{key}/activity']?.['get']?.['responses'] as Record<
+      string,
+      { content: { 'application/json': { schema: { allOf: Record<string, unknown>[] } } } }
+    >;
+    const branches = responses['200']?.content['application/json'].schema.allOf ?? [];
+
+    expect(branches).toHaveLength(3);
+    expect(branches[0]?.['$ref']).toBe(`#/components/schemas/${V1_RANKED_PAGE_ENVELOPE_COMPONENT}`);
+    expect(Object.keys((branches[1]?.['properties'] ?? {}) as object)).toEqual(['items']);
+    expect(Object.keys((branches[2]?.['properties'] ?? {}) as object)).toEqual([
+      'totalComments',
+      'totalChanges',
+    ]);
+
+    // A ranked page WITHOUT an extension still emits exactly two members — the
+    // branch has both sides, and this is the one that is easy to lose.
+    const comments = paths['/api/v1/work-items/{key}/comments']?.['get']?.['responses'] as Record<
+      string,
+      { content: { 'application/json': { schema: { allOf: unknown[] } } } }
+    >;
+    expect(comments['200']?.content['application/json'].schema.allOf).toHaveLength(2);
+  });
+
   it('declares the ready set’s repeatable filters as exploded ARRAYS', () => {
     const paths = document['paths'] as unknown as Record<
       string,

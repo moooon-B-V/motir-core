@@ -36,6 +36,8 @@ interface ActivityPage {
   items: V1ActivityEntry[];
   nextCursor: string | null;
   totalCount: number;
+  totalComments: number | null;
+  totalChanges: number | null;
 }
 
 function req(caller: V1ProjectCaller, key: string, query = ''): Promise<Response> {
@@ -104,6 +106,51 @@ describe('GET /api/v1/work-items/{key}/activity', () => {
     expect(comments.items).toHaveLength(1);
     expect(history.items.every((e) => e.type === 'change')).toBe(true);
     expect(history.items.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── The per-source totals (ADR Amendment 12 · MOTIR-2320) ────────────────
+  //
+  // The `all` view merges two streams, so "how many are there" has two answers.
+  // `render.ts` prints both — "3 of 47 comments, 2 of 18 changes" — and derives
+  // each as `total - shown`, which a single `totalCount` cannot supply.
+  it('breaks the merged view’s total down by source, and the parts SUM to it', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'busy item');
+    await change(caller, item.id, 'in_progress');
+    await comment(caller, item.id, 'one');
+    await comment(caller, item.id, 'two');
+
+    const body = await page(caller, item.identifier);
+
+    expect(body.totalComments).toBe(2);
+    expect(body.totalChanges).toBeGreaterThanOrEqual(1);
+    // Asserted, not assumed: `totalCount` keeps meaning the size of the view
+    // that was asked for, which on `all` is the two together.
+    expect(body.totalCount).toBe((body.totalComments ?? 0) + (body.totalChanges ?? 0));
+  });
+
+  it('reports NULL — never zero — for the source a narrow view did not count', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'busy item');
+    await change(caller, item.id, 'in_progress');
+    await comment(caller, item.id, 'a remark');
+
+    const comments = await page(caller, item.identifier, '?view=comments');
+    const history = await page(caller, item.identifier, '?view=history');
+
+    // Each view knows its own total and nothing about the other source. A `0`
+    // here would claim the item has no history / no comments, which is false —
+    // this read simply did not look.
+    expect(comments.totalComments).toBe(comments.totalCount);
+    expect(comments.totalChanges).toBeNull();
+
+    expect(history.totalChanges).toBe(history.totalCount);
+    expect(history.totalComments).toBeNull();
+
+    // …and the item demonstrably HAS both, which is what makes the nulls a
+    // statement about the read rather than about the item.
+    expect(comments.totalCount).toBeGreaterThan(0);
+    expect(history.totalCount).toBeGreaterThan(0);
   });
 
   it('handles a source with NOTHING in it, in both directions', async () => {
