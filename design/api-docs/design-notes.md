@@ -310,25 +310,53 @@ first successful run AND a test can hold it true_):
    `.motir.json`; that folder is the one you run from, not a checkout inside it).
    The `motir doctor` callout is the affordance that turns all four into one
    command, and it is the same command inside the container.
+   0b. **What a workspace root IS, and what `.motir.json` is.** An `h3` under the
+   preconditions with a directory-tree code block and one paragraph. The page
+   named `.motir.json` four times before it defined it, which is the shape of a
+   document written by someone who already knows. A Motir project spans several
+   repositories and `motir auto` dispatches across all of them, so what gets
+   mounted is the folder that CONTAINS the checkouts — the tree makes that
+   visible in a way the sentence "not a checkout inside it" does not. The
+   paragraph states the file's contents (`serverUrl`, `workspace`, `project`,
+   optional `repos`), that it holds **no secret** and is safe to commit, and
+   that commands resolve it by walking upward — with the one exception that
+   matters here: **the `docker run` must start at the root, because the root is
+   what gets mounted.**
 1. **What it confines — and what it does not.** A three-row `table.spec`
    (`Filesystem` / `Network` / `Privileges`). The middle row is the one that
    earns the section: the network is **open by design**, and a guide that let a
    reader infer otherwise would be worse than no guide.
-2. **The one command.** A `codeblock` with the `Copy` affordance, carrying the
-   README's own `docker run` verbatim. Followed by the run-from-your-workspace-root
-   caveat, because pasting it in a single checkout is the first thing that goes wrong.
-3. **What each part is for.** A two-column `table.spec` — mount/variable → why —
+2. **Choosing a profile** — the matrix (below), plus a `callout` (info) placing
+   `motir-sandbox:base` beside it. **`base` is a TAG, not a profile**, so it is
+   deliberately drawn OUTSIDE the table: putting it in as a ninth row is exactly
+   the confusion the callout exists to prevent.
+3. **Run it.** ⚠️ **The matrix comes BEFORE the command, and that ordering is the
+   fix for a real defect in the first pass.** It drew a single `docker run` under
+   the heading _"The one command"_ — and that command was `claude`'s, in three
+   separate places (the tag, the credential mount, and the `--agent` invocation).
+   Seven of the eight profiles would have copied a command that was wrong three
+   times over, from a section whose heading promised it was universal. You cannot
+   write the command until you know your row, so the row is now chosen first, and
+   the section is drawn as **shape → what changes → filled-in example**:
+   a non-copyable `codeblock` with `<profile>` / `<credential mount>` /
+   `<your agent's command>` in place; a three-row `table.spec` naming where each
+   comes from; then the `claude` version with the `Copy` affordance and a caption
+   that says to swap the three parts. Two notes carry the cases the placeholders
+   flatten: a profile with two mounts takes two `-v` lines, one with none takes
+   none.
+   **The `--agent` command is the one part the page cannot source from itself.**
+   Per Amendment 8 Q2's second limb the vendor auto-approve flags stay in the
+   README (they drift between releases and no check on this page can refuse a
+   stale one), so the table's third row points there by name rather than
+   restating them — the honest form of a fact this page must not own.
+4. **What each part is for.** A two-column `table.spec` — mount/variable → why —
    which answers the mounts-table question the card raised: **it reuses
    `table.spec` as-is** rather than introducing a second table treatment. Two
    columns of short prose is exactly what that primitive already draws, and it
    is not the case that fails at a narrow viewport.
-4. **Three ways to give it a Motir credential**, as prose with the three tiers
+5. **Three ways to give it a Motir credential**, as prose with the three tiers
    inline and a `callout` (info) carrying the one non-obvious constraint:
    `motir login` needs the credential mount to be ABSENT.
-5. **Choosing a profile** — the matrix (below), plus a `callout` (info) placing
-   `motir-sandbox:base` beside it. **`base` is a TAG, not a profile**, so it is
-   deliberately drawn OUTSIDE the table: putting it in as a ninth row is exactly
-   the confusion the callout exists to prevent.
 6. **Or set it up in VS Code** — three numbered `h3` steps with a real
    `.devcontainer/devcontainer.json` to copy (below), then a `callout` (warning)
    about which file NOT to copy, and a closing `callout` (info) handing the

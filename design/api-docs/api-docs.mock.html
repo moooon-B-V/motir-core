@@ -2060,13 +2060,40 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
                     >
                   </td>
                   <td>
-                    Run <code>motir link</code> at your workspace root — the folder holding your
-                    checkouts, not one of them. It writes <code>.motir.json</code>, which carries no
-                    secret, and that folder is the one you run from.
+                    Run <code>motir link</code> in the folder that HOLDS your checkouts — not inside
+                    one of them. See below.
                   </td>
                 </tr>
               </tbody>
             </table>
+
+            <h3>Your workspace root, and <code>.motir.json</code></h3>
+            <p>
+              A Motir project usually spans several repositories, and
+              <code>motir auto</code> dispatches across all of them — so the thing the container
+              mounts is the folder that <em>contains</em> your checkouts, not any one checkout. That
+              folder is your <strong>workspace root</strong>, and <code>motir link</code> marks it
+              by writing <code>.motir.json</code> there:
+            </p>
+            <div class="codeblock">
+              <div class="cap">your machine</div>
+              <pre>
+~/work/                 ← the workspace root. Run docker from HERE.
+├── .motir.json         ← motir link writes this
+├── motir-core/         ← a checkout
+└── motir-ai/           ← another</pre
+              >
+            </div>
+            <p>
+              <code>.motir.json</code> is just the link — <code>serverUrl</code>,
+              <code>workspace</code>, <code>project</code>, and an optional <code>repos</code> map
+              for a checkout that is not named after its repo. It holds
+              <strong>no secret</strong> and is safe to commit. Commands resolve it by walking
+              upward from wherever you are, so they work from inside any checkout — but the
+              <code>docker run</code> is the one thing that must start at the root, because that is
+              what gets mounted.
+            </p>
+
             <div class="callout">
               <span aria-hidden="true">◆</span>
               <span
@@ -2111,83 +2138,6 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
                 </tr>
               </tbody>
             </table>
-
-            <h2>The one command</h2>
-            <div class="codeblock">
-              <div class="cap">sh</div>
-              <button class="copy" type="button">Copy</button>
-              <pre>
-docker run --rm -it \
-  -v "$PWD:/workspace" \
-  -e MOTIR_TOKEN -e MOTIR_SERVER \
-  -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude \
-  motir auto --agent "claude --dangerously-skip-permissions"</pre
-              >
-            </div>
-            <p>
-              Run it from your <strong>workspace root</strong> — the directory holding
-              <code>.motir.json</code>, not a single checkout. With no command you get an
-              interactive shell in <code>/workspace</code> instead.
-            </p>
-
-            <h3>What each part is for</h3>
-            <table class="spec">
-              <thead>
-                <tr>
-                  <th style="width: 30%">Mount / variable</th>
-                  <th>Why</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span class="nm">$PWD:/workspace</span></td>
-                  <td>
-                    <strong>Required, writable.</strong> Your <code>.motir.json</code> tree — the
-                    only host path the agent can change.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">MOTIR_TOKEN · MOTIR_SERVER</span></td>
-                  <td>
-                    The Motir credential, from the environment. Needs no host state at all, so it is
-                    the CI and fresh-machine path.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">~/.config/motir:…:ro</span></td>
-                  <td>
-                    <strong>Optional</strong>, read-only. A credential you already have on this host
-                    — an alternative to the two variables above, not a requirement.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">~/.claude:…:ro</span></td>
-                  <td>
-                    Read-only. The <em>agent's</em> own credential — swap it for your profile's row
-                    in the matrix below.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h2>Three ways to give it a Motir credential</h2>
-            <p>
-              The container needs a token for your Motir server, and has the same three tiers the
-              CLI has anywhere else. <strong>1 · Pass them through</strong> with
-              <code>-e MOTIR_TOKEN -e MOTIR_SERVER</code> — nothing mounted, nothing written to
-              disk. <strong>2 · Run <code>motir login</code> inside the container</strong> — a
-              device grant you approve in a browser on any device.
-              <strong>3 · Mount a credential you already have</strong>, read-only.
-            </p>
-            <div class="callout">
-              <span aria-hidden="true">◆</span>
-              <span
-                ><code>motir login</code> needs the credential mount to be <strong>absent</strong> —
-                with a read-only bind over it, <code>~/.config/motir</code> is not writable and the
-                login has nowhere to land.</span
-              >
-            </div>
 
             <h2>Choosing a profile</h2>
             <p>
@@ -2269,17 +2219,162 @@ docker run --rm -it \
               >
             </div>
 
+            <h2>Run it</h2>
+            <p>
+              One command, shaped by the row you just picked. Three of its parts come from that row
+              — everything else is the same for every profile:
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · the shape</div>
+              <pre>
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -e MOTIR_TOKEN -e MOTIR_SERVER \
+  -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt; \
+  motir auto --agent "&lt;your agent's command&gt;"</pre
+              >
+            </div>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 26%">The part</th>
+                  <th style="width: 32%">Comes from</th>
+                  <th>For <code>claude</code></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">&lt;profile&gt;</span></td>
+                  <td>the <strong>Profile</strong> column above</td>
+                  <td><span class="mount">claude</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">&lt;credential mount&gt;</span></td>
+                  <td>
+                    the <strong>Credential mount</strong> column above, with its
+                    <code>~/</code> written as <code>$HOME/</code>
+                  </td>
+                  <td><span class="mount">.claude</span></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">&lt;your agent's command&gt;</span></td>
+                  <td>
+                    your agent's own non-interactive + auto-approve flags. They drift between vendor
+                    releases, so the current set lives beside the image in
+                    <code>packages/cli/sandbox/README.md</code> § <em>Auto-approve flags</em> —
+                    check yours there rather than here.
+                  </td>
+                  <td>
+                    <span class="mount">claude --dangerously-skip-permissions</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              A profile with <strong>two</strong> credential mounts (<code>opencode</code>) takes
+              two <code>-v</code> lines; one with <strong>none</strong> (<code>antigravity</code>)
+              takes none at all, and signs in through its own keyring on the host. Filled in for
+              <code>claude</code>, that is:
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · copy, then swap the three parts for your row</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -e MOTIR_TOKEN -e MOTIR_SERVER \
+  -v "$HOME/.claude:/home/node/.claude:ro" \
+  ghcr.io/moooon-b-v/motir-sandbox:claude \
+  motir auto --agent "claude --dangerously-skip-permissions"</pre
+              >
+            </div>
+            <p>
+              Run it from your <strong>workspace root</strong> — the folder holding
+              <code>.motir.json</code>, not a checkout inside it. With no command after the image
+              name you get an interactive shell in <code>/workspace</code> instead.
+            </p>
+
+            <h3>What each part is for</h3>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 30%">Mount / variable</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">$PWD:/workspace</span></td>
+                  <td>
+                    <strong>Required, writable.</strong> Your <code>.motir.json</code> tree — the
+                    only host path the agent can change.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">MOTIR_TOKEN · MOTIR_SERVER</span></td>
+                  <td>
+                    The Motir credential, from the environment. Needs no host state at all, so it is
+                    the CI and fresh-machine path.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">~/.config/motir:…:ro</span></td>
+                  <td>
+                    <strong>Optional</strong>, read-only. A credential you already have on this host
+                    — an alternative to the two variables above, not a requirement.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">~/.claude:…:ro</span></td>
+                  <td>
+                    Read-only. The <em>agent's</em> own credential — the row you picked above.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h2>Three ways to give it a Motir credential</h2>
+            <p>
+              The container needs a token for your Motir server, and has the same three tiers the
+              CLI has anywhere else. <strong>1 · Pass them through</strong> with
+              <code>-e MOTIR_TOKEN -e MOTIR_SERVER</code> — nothing mounted, nothing written to
+              disk. <strong>2 · Run <code>motir login</code> inside the container</strong> — a
+              device grant you approve in a browser on any device.
+              <strong>3 · Mount a credential you already have</strong>, read-only.
+            </p>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                ><code>motir login</code> needs the credential mount to be <strong>absent</strong> —
+                with a read-only bind over it, <code>~/.config/motir</code> is not writable and the
+                login has nowhere to land.</span
+              >
+            </div>
+
             <h2>Or set it up in VS Code</h2>
             <p>
               The same confined image, as a dev container: VS Code opens
               <code>/workspace</code> inside it with the same mounts, so your editor, terminal and
               agent all run behind the same boundary. Three steps.
             </p>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                >It is the SAME image, so
+                <strong>everything in <em>Before you start</em> still applies</strong> — Docker
+                running, a Motir credential, your agent's sign-in already on the host, and a linked
+                workspace root. The dev container adds exactly one thing to that list: the extension
+                in step 1.</span
+              >
+            </div>
 
             <h3>1 · Install the Dev Containers extension</h3>
             <p>
               From the Extensions view, or the command palette's
-              <strong>Extensions: Install Extensions</strong>. Docker must be running, as above.
+              <strong>Extensions: Install Extensions</strong>. It is what starts the container on
+              your behalf — VS Code does not ship it, and it drives the same Docker engine the
+              command above uses.
             </p>
 
             <h3>2 · Add <code>.devcontainer/devcontainer.json</code> to your workspace root</h3>
@@ -2347,9 +2442,9 @@ docker run --rm -it \
             <h4>On this page</h4>
             <a class="is-active" href="#">Before you start</a>
             <a href="#">What it confines</a>
-            <a href="#">The one command</a>
-            <a href="#">Credential tiers</a>
             <a href="#">Choosing a profile</a>
+            <a href="#">Run it</a>
+            <a href="#">Credential tiers</a>
             <a href="#">Set it up in VS Code</a>
           </aside>
         </div>
