@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { db } from '@/lib/db';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
 
@@ -210,28 +209,45 @@ describe('seam · a scoped run round-trips the in-flight record as ITSELF', () =
 
 // ── GUARD 1 · no boundary drift ──────────────────────────────────────────────
 describe('guard · the story crosses no boundary', () => {
-  it('touches no file under motir-ai/ and adds no field to the 7.1 envelope', () => {
-    // The diff this story contributes, measured against the branch point.
-    const base = execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-    }).trim();
-    const changed = execFileSync('git', ['diff', '--name-only', `${base}..HEAD`], {
-      cwd: ROOT,
-      encoding: 'utf8',
-    })
-      .split('\n')
-      .filter(Boolean);
+  // ⚠️ This deliberately does NOT diff against `origin/main`. An earlier version
+  // did, and it was wrong twice over: CI's checkout has no `origin/main` ref (it
+  // fetches the PR merge ref only), so the guard threw rather than asserted; and
+  // the property it claimed — "no file under `motir-ai/` changed" — is
+  // unfalsifiable from inside `motir-core`, where that directory does not exist.
+  // A guard that cannot fail for the reason it names is worse than no guard.
+  //
+  // What CAN drift, and is what the story actually promises, is the SHAPE of what
+  // crosses the seam. That is asserted from source below.
 
-    expect(changed.filter((f) => f.startsWith('motir-ai/'))).toEqual([]);
-
-    // The scoped trigger rides the EXISTING envelope: `repoRef` on `context.code`,
-    // which motir-ai already treats as authoritative. If the service ever starts
-    // sending a new key, this is where it shows up.
+  it('sends only `repoRef` on the reaudit envelope — no new field', () => {
     const service = read('lib/services/aiConventionService.ts');
     const envelope = service.slice(service.indexOf('async reaudit('));
     expect(envelope).toMatch(/repoRef/);
-    expect(envelope).not.toMatch(/repoKeys\s*:/); // never sent over the wire
+    // The scope is a motir-core CONCEPT: it resolves to per-repo `repoRef`
+    // submits and must never appear on the wire itself.
+    expect(envelope).not.toMatch(/repoKeys\s*:/);
+  });
+
+  it('the coverage read composes EXISTING client calls — it adds no boundary function', () => {
+    const service = read('lib/services/auditCoverageService.ts');
+    const clientImports = [
+      ...service.matchAll(/import \{([^}]+)\} from '@\/lib\/ai\/motirAiClient'/g),
+    ]
+      .flatMap((m) => m[1]!.split(',').map((x) => x.trim()))
+      .filter(Boolean);
+    // ONE shipped read, nothing new. A second name here would mean the story
+    // grew a boundary call it claims not to have.
+    expect(clientImports).toEqual(['getCodeAudit']);
+  });
+
+  it('adds no query parameter to GET /v1/code-audit', () => {
+    const client = read('lib/ai/motirAiClient.ts');
+    const fn = client.slice(client.indexOf('export async function getCodeAudit'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    const params = [...body.matchAll(/params\.set\('([^']+)'/g)].map((m) => m[1]);
+    // The shipped set. `findingsLimit` is what this story's cheap per-repo read
+    // rides on; anything NEW here would be a boundary change the cards deny.
+    expect([...params].sort()).toEqual(['findingsLimit', 'findingsOffset', 'repoKey'].sort());
   });
 });
 
