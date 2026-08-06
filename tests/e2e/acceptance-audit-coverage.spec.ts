@@ -1,5 +1,7 @@
 import { test, expect } from './_helpers/acceptance-video';
 import type { Page, Route } from '@playwright/test';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -29,75 +31,77 @@ import {
 
 test.describe.configure({ timeout: 180_000 });
 
-const COVERAGE_URL = '**/api/ai/coding-convention/audit-coverage';
-// ⚠️ `audit?*` — NOT `audit*`. The looser glob ALSO matches `audit-coverage`,
-// and Playwright resolves routes newest-registered-first, so it silently
-// swallowed the banner's own read and the banner never rendered.
-const AUDIT_URL = '**/api/ai/coding-convention/audit?*';
-const CONVENTION_URL = '**/api/ai/coding-convention/convention*';
-const REFRESH_URL = '**/api/ai/coding-convention/refresh';
-
-/** Repos the stubbed boundary reports as HAVING a derived audit. */
-let auditedRepos = new Set<string>([AUDITED_REPO]);
 /** The bodies the page POSTed to the trigger, in order. */
 let refreshBodies: { repoKeys?: string[] }[] = [];
 
-function auditSurface(repoKey: string) {
-  return auditedRepos.has(repoKey)
-    ? {
-        audit: {
-          id: `audit_${repoKey}`,
-          healthSummary: { grade: 'B', conformancePct: 78 },
-          codeGraphRef: null,
+// ── The SERVER-side boundary fixture (MOTIR-2253) ────────────────────────────
+//
+// `/code-health` is server rendered: `loadCodeHealthSurfaces` calls motir-ai
+// INSIDE the Next process, where `page.route` cannot reach. `lib/test-code-health-mock`
+// (E2E_TEST_CODE_HEALTH=1, wired in this lane's webServer env) answers those
+// reads from this file. Rewriting it between steps is how a repo changes state.
+const FIXTURE =
+  process.env['MOTIR_AI_CODE_HEALTH_FIXTURE_PATH'] ??
+  path.join(process.cwd(), 'out', 'e2e-code-health-fixture.json');
+
+function writeFixture(auditedKeys: readonly string[]): void {
+  mkdirSync(path.dirname(FIXTURE), { recursive: true });
+  writeFileSync(
+    FIXTURE,
+    JSON.stringify(
+      {
+        repos: [AUDITED_REPO, ...UNAUDITED_REPOS].map((repoKey) => ({
           repoKey,
-          createdAt: '2026-08-05T00:00:00.000Z',
-        },
-        findings: [],
-        total: 6,
-        nextOffset: null,
-        scanner: null,
-      }
-    : { audit: null, findings: [], total: 0, nextOffset: null, scanner: null };
+          audited: auditedKeys.includes(repoKey),
+        })),
+        refreshes: [],
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+/** The `repoRef`s the SERVER actually submitted, in order — the authoritative
+ *  answer to "which repos did that press pay to derive". */
+function submittedRefs(): (string | null)[] {
+  try {
+    const f = JSON.parse(readFileSync(FIXTURE, 'utf8')) as {
+      refreshes?: { repoRef: string | null }[];
+    };
+    return (f.refreshes ?? []).map((r) => r.repoRef);
+  } catch {
+    return [];
+  }
 }
 
 const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
-/** Stub the three motir-ai-backed reads/writes this story drives. */
-async function stubBoundary(page: Page, opts: { coverageFails?: boolean } = {}): Promise<void> {
-  await page.route(COVERAGE_URL, async (route) => {
-    if (opts.coverageFails) return json(route, { code: 'MOTIR_AI_UNAVAILABLE' }, 502);
-    const repos = [AUDITED_REPO, ...UNAUDITED_REPOS].map((repoKey) => ({
-      repoKey,
-      state: auditedRepos.has(repoKey) ? 'audited' : 'not_audited',
-    }));
-    return json(route, {
-      repos,
-      notAuditedCount: repos.filter((r) => r.state === 'not_audited').length,
-    });
-  });
-
-  await page.route(AUDIT_URL, async (route) => {
-    const repoKey = new URL(route.request().url()).searchParams.get('repoKey') ?? '';
-    return json(route, auditSurface(repoKey));
-  });
-
-  await page.route(CONVENTION_URL, async (route) =>
-    json(route, { repoKey: '', convention: null, versions: [], nextCursor: null }),
+// ⚠️ NOTHING in the app is stubbed in the browser any more.
+//
+// The audit reads, the convention reads and the derivation trigger all run
+// through the REAL routes and the REAL services; only motir-ai itself is faked,
+// server-side, by `lib/test-code-health-mock` off the fixture this spec writes.
+// An earlier draft stubbed `/api/ai/coding-convention/*` with `page.route` and
+// it was worse than useless: the trigger's POST never reached the route handler,
+// so the spec asserted its own fake rather than the story.
+//
+// The one browser-level override left is the FAILURE case below, which forces
+// the banner's own read to 502 — a condition the boundary mock cannot express.
+async function failCoverageRead(page: Page): Promise<void> {
+  await page.route('**/api/ai/coding-convention/audit-coverage', (route) =>
+    json(route, { code: 'MOTIR_AI_UNAVAILABLE' }, 502),
   );
+}
 
-  await page.route(REFRESH_URL, async (route) => {
-    const raw = route.request().postData();
-    const body = (raw === null ? {} : JSON.parse(raw)) as { repoKeys?: string[] };
-    refreshBodies.push(body);
-    const queued = body.repoKeys ?? [AUDITED_REPO, ...UNAUDITED_REPOS];
-    return json(route, {
-      repos: queued.map((r) => ({
-        repoKey: r,
-        auditJobId: `job_${r}`,
-        conventionJobId: `cj_${r}`,
-      })),
-    });
+/** Record the trigger POSTs the BROWSER made, without intercepting them. */
+function recordRefreshPosts(page: Page): void {
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && req.url().includes('/coding-convention/refresh')) {
+      const raw = req.postData();
+      refreshBodies.push((raw === null ? {} : JSON.parse(raw)) as { repoKeys?: string[] });
+    }
   });
 }
 
@@ -121,26 +125,15 @@ async function openPlanning(page: Page): Promise<void> {
 
 test.beforeEach(async () => {
   await resetDatabase();
-  auditedRepos = new Set<string>([AUDITED_REPO]);
   refreshBodies = [];
+  writeFixture([AUDITED_REPO]);
 });
 
 test.afterAll(async () => {
   await db.$disconnect();
 });
 
-// ⚠️ INCOMPLETE — the /code-health half needs a motir-ai HTTP stub, not a
-// browser route stub (MOTIR-2253, remaining work).
-//
-// The banner chapter passes: /planning's banner is a CLIENT island that fetches
-// its own state, so `page.route` reaches it. `/code-health` is the opposite —
-// `loadCodeHealthSurfaces` runs on the SERVER and calls `motirAiClient` directly,
-// so a browser-level route stub never sees those reads and the page renders with
-// no repo rows. Seeding it needs `MOTIR_AI_URL` pointed at a fake HTTP server for
-// `GET /v1/code-audit` + `GET /v1/convention`, which is a harness addition this
-// spec does not yet carry. The three absence tests below need none of it and
-// pass today.
-test.fixme('an admin is told, reaches /code-health, and audits one repo then the rest', async ({
+test('an admin is told, reaches /code-health, and audits one repo then the rest', async ({
   page,
   chapter,
   beat,
@@ -149,7 +142,7 @@ test.fixme('an admin is told, reaches /code-health, and audits one repo then the
   acceptanceStory('MOTIR-2244');
 
   const seed: AuditCoverageSeed = await seedAuditCoverage(`audit-coverage-${Date.now()}`);
-  await stubBoundary(page);
+  recordRefreshPosts(page);
   await signIn(page, seed.adminEmail, seed.password);
 
   await chapter('The planning workspace says two repositories were never assessed', async () => {
@@ -181,8 +174,12 @@ test.fixme('an admin is told, reaches /code-health, and audits one repo then the
     await rowAuditButton(page, target).click();
     expect((await posted).status()).toBe(202);
 
-    // The request the page ACTUALLY issued named that repo and nothing else.
+    // The request the page ACTUALLY issued named that repo and nothing else…
     expect(refreshBodies.at(-1)).toEqual({ repoKeys: [target] });
+    // …and the SERVER submitted exactly one derivation, for that repo. This is
+    // the fact the story turns on, read back from the boundary rather than
+    // inferred from the browser.
+    expect(submittedRefs()).toEqual([target]);
 
     // That row is deriving, and its trigger is gone — removed, not disabled.
     await expect(repoGroup(page).getByText('Deriving…')).toBeVisible();
@@ -191,6 +188,11 @@ test.fixme('an admin is told, reaches /code-health, and audits one repo then the
   });
 
   await chapter('And one action audits every repository with no report', async () => {
+    // The boundary records EVERY submission for the life of the test, so the
+    // bulk press is measured against a mark rather than the whole history —
+    // the per-repo run above is already in there.
+    const before = submittedRefs().length;
+
     // Back to a settled page so the bulk action is offered again.
     await page.reload();
     await expect(repoGroup(page)).toBeVisible();
@@ -207,13 +209,17 @@ test.fixme('an admin is told, reaches /code-health, and audits one repo then the
     const body = refreshBodies.at(-1)!;
     expect([...(body.repoKeys ?? [])].sort()).toEqual([...UNAUDITED_REPOS].sort());
     expect(body.repoKeys).not.toContain(AUDITED_REPO);
+    // The boundary agrees: one derivation per un-audited repo, and the repo that
+    // already HAS a report was never re-derived — the whole point of the story.
+    const queued = submittedRefs().slice(before);
+    expect([...queued].sort()).toEqual([...UNAUDITED_REPOS].sort());
+    expect(queued).not.toContain(AUDITED_REPO);
     await beat();
   });
 });
 
 test('a project MEMBER is never shown the banner', async ({ page }) => {
   const seed = await seedAuditCoverage(`audit-coverage-member-${Date.now()}`);
-  await stubBoundary(page);
   await signIn(page, seed.memberEmail, seed.password);
 
   await openPlanning(page);
@@ -227,8 +233,7 @@ test('a project MEMBER is never shown the banner', async ({ page }) => {
 
 test('no banner when every repository already has a report', async ({ page }) => {
   const seed = await seedAuditCoverage(`audit-coverage-all-${Date.now()}`);
-  auditedRepos = new Set([AUDITED_REPO, ...UNAUDITED_REPOS]);
-  await stubBoundary(page);
+  writeFixture([AUDITED_REPO, ...UNAUDITED_REPOS]);
   await signIn(page, seed.adminEmail, seed.password);
 
   await openPlanning(page);
@@ -238,7 +243,7 @@ test('no banner when every repository already has a report', async ({ page }) =>
 
 test('a FAILED coverage read shows no banner and no error strip', async ({ page }) => {
   const seed = await seedAuditCoverage(`audit-coverage-fail-${Date.now()}`);
-  await stubBoundary(page, { coverageFails: true });
+  await failCoverageRead(page);
   await signIn(page, seed.adminEmail, seed.password);
 
   await openPlanning(page);

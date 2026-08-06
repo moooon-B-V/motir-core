@@ -64,6 +64,11 @@ process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 // is the E2E_TEST_BILLING boundary mock (no live Stripe / motir-ai). Set on the
 // runner too so seed-side reads (setOrgBillingState) match the server.
 const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
+// The code-health boundary fixture (MOTIR-2253): the audit-coverage spec drives
+// the SERVER-rendered /code-health page, whose motir-ai reads no browser
+// `page.route` can reach. `lib/test-code-health-mock` answers them from this
+// file, which the spec rewrites between steps.
+const CODE_HEALTH_FIXTURE = path.join(__dirname, 'out', 'e2e-code-health-fixture.json');
 const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-billing-fixture.json');
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
@@ -182,6 +187,8 @@ export default defineConfig({
         MOTIR_CLOUD: 'true',
         E2E_TEST_BILLING: '1',
         MOTIR_AI_URL,
+        E2E_TEST_CODE_HEALTH: '1',
+        MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
         MOTIR_AI_BILLING_FIXTURE_PATH,
         // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
